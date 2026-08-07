@@ -20,108 +20,132 @@
 <p class="hc-alert" data-variant="success" role="status"
    th:if="${signedout == 'all'}">Signed out everywhere. All of this user's sessions have ended.</p>
 <section class="hc-card" th:if="${#lists.isEmpty(user)}">
-  <div class="hc-empty"><p class="hc-empty__title">User not found.</p></div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty"><p class="hc-empty__title">User not found.</p></div>
+  </div>
 </section>
 <th:block th:each="u : ${user}">
 <section class="hc-card">
-  <h2>Summary</h2>
-  <table class="hc-table" data-variant="kv"><tbody>
-    <tr><th scope="row">User id</th><td th:text="${u.user_id}"></td></tr>
-    <tr><th scope="row">Display name</th><td th:text="${u.display_name}"></td></tr>
-    <tr><th scope="row">Email</th><td th:text="${u.email}"></td></tr>
-    <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td></tr>
-    <tr><th scope="row">Tenant</th><td th:text="${u.tenant_id}"></td></tr>
-  </tbody></table>
+  <div class="hc-card__header">Summary</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-table-scroll">
+      <table class="hc-table" data-variant="kv"><tbody>
+        <tr><th scope="row">User id</th><td th:text="${u.user_id}"></td></tr>
+        <tr><th scope="row">Display name</th><td th:text="${u.display_name}"></td></tr>
+        <tr><th scope="row">Email</th><td th:text="${u.email}"></td></tr>
+        <tr><th scope="row">Status</th><td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : (u.status == 'INVITED' ? 'info' : 'error')}" th:text="${u.status}"></td></tr>
+        <tr><th scope="row">Tenant</th><td th:text="${u.tenant_id}"></td></tr>
+      </tbody></table>
+    </div>
+  </div>
 </section>
 <section class="hc-card" id="actions">
-  <h2>Actions</h2>
-  <div class="hc-cluster">
-    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|">
-      <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
-    </form>
-    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|">
-      <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <button type="submit" class="hc-button" data-variant="error"
-              th:attr="data-hc-confirm=|Disable user ${u.login_id}? Their active sessions end immediately.|"
-              data-hc-confirm-title="Confirm disable"
-              data-hc-confirm-label="Disable" data-hc-confirm-variant="error">Disable user</button>
-    </form>
+  <div class="hc-card__header">Actions</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-cluster">
+      <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|" th:if="${u.status != 'ACTIVE'}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
+      </form>
+      <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|" th:if="${u.status == 'ACTIVE'}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <button type="submit" class="hc-button" data-variant="error"
+                th:attr="data-hc-confirm=|Disable user ${u.login_id}? Their active sessions end immediately.|"
+                data-hc-confirm-title="Confirm disable"
+                data-hc-confirm-label="Disable" data-hc-confirm-variant="error">Disable user</button>
+      </form>
+    </div>
   </div>
 </section>
 <section class="hc-card" id="sessions">
-  <h2>Active sessions</h2>
-  <div class="hc-empty" th:if="${#lists.isEmpty(sessions)}"><p class="hc-empty__title">No active sessions.</p></div>
-  <th:block th:unless="${#lists.isEmpty(sessions)}">
-    <p class="hc-field__message" th:text="|${sessionCount} active ${sessionCount == 1 ? 'session' : 'sessions'}.|"></p>
-    <table class="hc-table">
-      <thead><tr><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th>Expires</th><th></th></tr></thead>
-      <tbody>
-        <tr th:each="s : ${sessions}">
-          <td th:text="${s.createdAt}"></td>
-          <td th:text="${#strings.isEmpty(s.lastSeenAt)} ? '&mdash;' : ${s.lastSeenAt}"></td>
-          <td th:text="${#strings.isEmpty(s.userAgent)} ? '&mdash;' : ${s.userAgent}"></td>
-          <td th:text="${#strings.isEmpty(s.remoteAddr)} ? '&mdash;' : ${s.remoteAddr}"></td>
-          <td th:text="${#strings.isEmpty(s.expiresAt)} ? '&mdash;' : ${s.expiresAt}"></td>
-          <td>
-            <form th:if="${!#strings.isEmpty(s.handle)}" method="post"
-                  th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke-one|">
-              <input type="hidden" name="_csrf" th:value="${_csrf}">
-              <input type="hidden" name="handle" th:value="${s.handle}">
-              <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
-                      th:attr="data-hc-confirm=|Sign this device of ${u.login_id} out?|"
-                      data-hc-confirm-title="Confirm sign-out"
-                      data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error">Sign out</button>
-            </form>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-    <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke|">
-      <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <button type="submit" class="hc-button" data-variant="error"
-              th:attr="data-hc-confirm=|Sign ${u.login_id} out everywhere?|"
-              data-hc-confirm-title="Confirm sign-out"
-              data-hc-confirm-label="Sign out everywhere" data-hc-confirm-variant="error">Sign out everywhere</button>
-    </form>
-  </th:block>
+  <div class="hc-card__header">Active sessions</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(sessions)}"><p class="hc-empty__title">No active sessions.</p></div>
+    <th:block th:unless="${#lists.isEmpty(sessions)}">
+      <p class="hc-field__message" th:text="|${sessionCount} active ${sessionCount == 1 ? 'session' : 'sessions'}.|"></p>
+      <div class="hc-table-scroll">
+        <table class="hc-table">
+          <thead><tr><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th>Expires</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="s : ${sessions}">
+              <td th:text="${s.createdAt}"></td>
+              <td th:text="${#strings.isEmpty(s.lastSeenAt)} ? '&mdash;' : ${s.lastSeenAt}"></td>
+              <td th:text="${#strings.isEmpty(s.userAgent)} ? '&mdash;' : ${s.userAgent}"></td>
+              <td th:text="${#strings.isEmpty(s.remoteAddr)} ? '&mdash;' : ${s.remoteAddr}"></td>
+              <td th:text="${#strings.isEmpty(s.expiresAt)} ? '&mdash;' : ${s.expiresAt}"></td>
+              <td>
+                <form th:if="${!#strings.isEmpty(s.handle)}" method="post"
+                      th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke-one|">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}">
+                  <input type="hidden" name="handle" th:value="${s.handle}">
+                  <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+                          th:attr="data-hc-confirm=|Sign this device of ${u.login_id} out?|"
+                          data-hc-confirm-title="Confirm sign-out"
+                          data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error">Sign out</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke|">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <button type="submit" class="hc-button" data-variant="error"
+                th:attr="data-hc-confirm=|Sign ${u.login_id} out everywhere?|"
+                data-hc-confirm-title="Confirm sign-out"
+                data-hc-confirm-label="Sign out everywhere" data-hc-confirm-variant="error">Sign out everywhere</button>
+      </form>
+    </th:block>
+  </div>
 </section>
 </th:block>
 <section class="hc-card" id="roles">
-  <h2>Roles</h2>
-  <div class="hc-empty" th:if="${#lists.isEmpty(roles)}"><p class="hc-empty__title">No roles assigned.</p></div>
-  <table class="hc-table">
-    <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
-    <tbody>
-      <tr th:each="r : ${roles}">
-        <td th:text="${r.role_code}"></td><td th:text="${r.role_name}"></td><td th:text="${r.grant_type}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-card__header">Roles</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(roles)}"><p class="hc-empty__title">No roles assigned.</p></div>
+    <div class="hc-table-scroll">
+      <table class="hc-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Grant</th></tr></thead>
+        <tbody>
+          <tr th:each="r : ${roles}">
+            <td th:text="${r.role_code}"></td><td th:text="${r.role_name}"></td><td th:text="${r.grant_type}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <section class="hc-card" id="groups">
-  <h2>Groups</h2>
-  <div class="hc-empty" th:if="${#lists.isEmpty(groups)}"><p class="hc-empty__title">No groups assigned.</p></div>
-  <table class="hc-table">
-    <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
-    <tbody>
-      <tr th:each="g : ${groups}">
-        <td th:text="${g.group_code}"></td><td th:text="${g.group_name}"></td><td th:text="${g.tenant_id}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-card__header">Groups</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(groups)}"><p class="hc-empty__title">No groups assigned.</p></div>
+    <div class="hc-table-scroll">
+      <table class="hc-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Tenant</th></tr></thead>
+        <tbody>
+          <tr th:each="g : ${groups}">
+            <td th:text="${g.group_code}"></td><td th:text="${g.group_name}"></td><td th:text="${g.tenant_id}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 <section class="hc-card" id="permissions">
-  <h2>Effective permissions</h2>
-  <div class="hc-empty" th:if="${#lists.isEmpty(permissions)}"><p class="hc-empty__title">No permissions granted.</p></div>
-  <table class="hc-table">
-    <thead><tr><th>Code</th><th>Name</th></tr></thead>
-    <tbody>
-      <tr th:each="p : ${permissions}">
-        <td th:text="${p.permission_code}"></td><td th:text="${p.permission_name}"></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="hc-card__header">Effective permissions</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(permissions)}"><p class="hc-empty__title">No permissions granted.</p></div>
+    <div class="hc-table-scroll">
+      <table class="hc-table">
+        <thead><tr><th>Code</th><th>Name</th></tr></thead>
+        <tbody>
+          <tr th:each="p : ${permissions}">
+            <td th:text="${p.permission_code}"></td><td th:text="${p.permission_name}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 </div>
 </html>

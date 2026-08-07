@@ -16,26 +16,30 @@
 </div>
 <!-- Invite a user (roadmap Phase 50 slice 2): created INVITED - unable to sign in - and
      mailed a one-time accept link; the operator never knows a password. -->
-<section class="hc-card hc-stack">
-  <h2>Invite user</h2>
-  <form method="post" action="/_tesseraql/admin/users/invite" class="hc-cluster">
-    <input type="hidden" name="_csrf" th:value="${_csrf}">
-    <label class="hc-field">
-      <span class="hc-field__label">Login</span>
-      <input class="hc-input" name="loginId" required>
-    </label>
-    <label class="hc-field">
-      <span class="hc-field__label">Display name</span>
-      <input class="hc-input" name="displayName">
-    </label>
-    <label class="hc-field">
-      <span class="hc-field__label">Email</span>
-      <input class="hc-input" name="email" type="email" required>
-    </label>
-    <button class="hc-button" data-variant="primary" type="submit">Invite</button>
-  </form>
+<section class="hc-card">
+  <div class="hc-card__header">Invite user</div>
+  <div class="hc-card__body hc-stack">
+    <form method="post" action="/_tesseraql/admin/users/invite" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Login</span>
+        <input class="hc-input" name="loginId" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Display name</span>
+        <input class="hc-input" name="displayName">
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Email</span>
+        <input class="hc-input" name="email" type="email" required>
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Invite</button>
+    </form>
+  </div>
 </section>
 <section class="hc-card">
+  <div class="hc-card__header">Users</div>
+  <div class="hc-card__body hc-stack">
   <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title">No users found.</p></div>
   <!-- Bulk actions (the kit's datagrid-bulk-actions recipe, docs/hypermedia-ui.md): the form
        wraps the grid, row checkboxes serialize as repeated `ids`, the header's select-all
@@ -75,7 +79,7 @@
               <td class="hc-datagrid__cell"><a th:href="|/_tesseraql/admin/users/${u.user_id}|" th:text="${u.login_id}"></a></td>
               <td class="hc-datagrid__cell" th:text="${u.display_name}"></td>
               <td class="hc-datagrid__cell" th:text="${u.email}"></td>
-              <td class="hc-datagrid__cell hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td>
+              <td class="hc-datagrid__cell hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : (u.status == 'INVITED' ? 'info' : 'error')}" th:text="${u.status}"></td>
               <td class="hc-datagrid__cell" th:text="${u.tenant_id}"></td>
             </tr>
           </tbody>
@@ -83,6 +87,7 @@
       </div>
     </div>
   </form>
+  </div>
 </section>
 </div>
 </html>

@@ -34,31 +34,30 @@
      th:if="${saved == 'signed-out-others'}">Signed out everywhere else. Only this session remains.</p>
   <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'signed-out-device'}">Device signed out.</p>
-  <section class="hc-card hc-stack">
-    <h1 th:text="${profile.name}">User</h1>
-    <dl>
-      <dt>Login</dt>
-      <dd th:text="${profile.loginId}">user</dd>
-      <dt>Subject</dt>
-      <dd th:text="${profile.subject}">subject</dd>
-      <dt th:if="${!#strings.isEmpty(profile.tenantId)}">Tenant</dt>
-      <dd th:if="${!#strings.isEmpty(profile.tenantId)}" th:text="${profile.tenantId}">tenant</dd>
-      <dt>Roles</dt>
-      <dd>
-        <span th:if="${#lists.isEmpty(profile.roles)}">&mdash;</span>
-        <span class="hc-badge" th:each="role : ${profile.roles}" th:text="${role}">ROLE</span>
-      </dd>
-      <dt>Permissions</dt>
-      <dd>
-        <span th:if="${#lists.isEmpty(profile.permissions)}">&mdash;</span>
-        <span class="hc-badge" th:each="permission : ${profile.permissions}"
-              th:text="${permission}">permission</span>
-      </dd>
-    </dl>
-    <p class="hc-field__message">These facts come from your sign-in.</p>
+  <section class="hc-card">
+    <div class="hc-card__header"><h1 th:text="${profile.name}">User</h1></div>
+    <div class="hc-card__body hc-stack">
+      <div class="hc-table-scroll">
+        <table class="hc-table" data-variant="kv"><tbody>
+          <tr><th scope="row">Login</th><td th:text="${profile.loginId}">user</td></tr>
+          <tr><th scope="row">Subject</th><td th:text="${profile.subject}">subject</td></tr>
+          <tr th:if="${!#strings.isEmpty(profile.tenantId)}"><th scope="row">Tenant</th><td th:text="${profile.tenantId}">tenant</td></tr>
+          <tr><th scope="row">Roles</th><td>
+            <span th:if="${#lists.isEmpty(profile.roles)}">&mdash;</span>
+            <span class="hc-badge" th:each="role : ${profile.roles}" th:text="${role}">ROLE</span>
+          </td></tr>
+          <tr><th scope="row">Permissions</th><td>
+            <span th:if="${#lists.isEmpty(profile.permissions)}">&mdash;</span>
+            <span class="hc-badge" th:each="permission : ${profile.permissions}" th:text="${permission}">permission</span>
+          </td></tr>
+        </tbody></table>
+      </div>
+      <p class="hc-field__message">These facts come from your sign-in.</p>
+    </div>
   </section>
-  <section class="hc-card hc-stack">
-    <h2>Language</h2>
+  <section class="hc-card">
+    <div class="hc-card__header">Language</div>
+    <div class="hc-card__body hc-stack">
     <form method="post" action="/_tesseraql/account/language" class="hc-stack">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-field">
@@ -72,9 +71,11 @@
         Until you choose, the language follows your sign-in profile or browser.</p>
       <button class="hc-button" data-variant="primary" type="submit">Save language</button>
     </form>
+    </div>
   </section>
-  <section class="hc-card hc-stack">
-    <h2>Appearance</h2>
+  <section class="hc-card">
+    <div class="hc-card__header">Appearance</div>
+    <div class="hc-card__body hc-stack">
     <form method="post" action="/_tesseraql/account/appearance" class="hc-stack">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-radio-label">
@@ -87,32 +88,36 @@
       </label>
       <button class="hc-button" data-variant="primary" type="submit">Save appearance</button>
     </form>
+    </div>
   </section>
-  <section class="hc-card hc-stack" th:if="${!#lists.isEmpty(profile.notifyChannels)}">
-    <h2>Notifications</h2>
+  <section class="hc-card" th:if="${!#lists.isEmpty(profile.notifyChannels)}">
+    <div class="hc-card__header">Notifications</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Notifications addressed to you personally honor these choices.
       Channel-level announcements are not affected.</p>
     <form th:each="channel : ${profile.notifyChannels}" method="post"
           action="/_tesseraql/account/notifications" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="channel" th:value="${channel.name}">
-      <label class="hc-radio-label">
+      <label class="hc-switch-label">
         <input class="hc-switch" type="checkbox" name="optOut" value="true"
                th:checked="${channel.optedOut}">
         <span>Opt out of <strong th:text="${channel.name}">channel</strong></span>
       </label>
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
     </form>
+    </div>
   </section>
-  <section class="hc-card hc-stack" th:if="${profile.shortcuts.available}">
-    <h2>Pinned &amp; recent</h2>
+  <section class="hc-card" th:if="${profile.shortcuts.available}">
+    <div class="hc-card__header">Pinned &amp; recent</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Pin any page from its header - a pinned URL keeps its query,
       so a filtered list stays filtered. Records you open collect under Recent.</p>
     <h3>Pinned</h3>
     <div class="hc-empty" th:if="${#lists.isEmpty(profile.shortcuts.pins)}">
       <p class="hc-empty__title">Nothing pinned yet.</p>
     </div>
-    <ul class="hc-stack" th:unless="${#lists.isEmpty(profile.shortcuts.pins)}" style="list-style:none; padding:0">
+    <ul class="hc-stack tql-plain-list" th:unless="${#lists.isEmpty(profile.shortcuts.pins)}">
       <li th:each="pin : ${profile.shortcuts.pins}" class="hc-cluster">
         <a th:href="${pin.href}" th:text="${pin.label}">pin</a>
         <span class="hc-spacer"></span>
@@ -128,7 +133,7 @@
     <div class="hc-empty" th:if="${#lists.isEmpty(profile.shortcuts.recents)}">
       <p class="hc-empty__title">No recently viewed records yet.</p>
     </div>
-    <ul class="hc-stack" th:unless="${#lists.isEmpty(profile.shortcuts.recents)}" style="list-style:none; padding:0">
+    <ul class="hc-stack tql-plain-list" th:unless="${#lists.isEmpty(profile.shortcuts.recents)}">
       <li th:each="recent : ${profile.shortcuts.recents}" class="hc-cluster">
         <a th:href="${recent.href}" th:text="${recent.label}">recent</a>
         <span class="hc-spacer"></span>
@@ -140,9 +145,11 @@
         </form>
       </li>
     </ul>
+    </div>
   </section>
-  <section class="hc-card hc-stack" th:if="${profile.delegation.available}">
-    <h2>Out of office</h2>
+  <section class="hc-card" th:if="${profile.delegation.available}">
+    <div class="hc-card__header">Out of office</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">While the window is open, approval tasks meant for you are
       assigned to your delegate instead — they act as themselves, and every task records
       who it was meant for. Tasks you already hold are not moved.</p>
@@ -172,9 +179,11 @@
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Clear</button>
     </form>
+    </div>
   </section>
-  <section class="hc-card hc-stack" th:if="${!#lists.isEmpty(profile.appPreferences)}">
-    <h2>App settings</h2>
+  <section class="hc-card" th:if="${!#lists.isEmpty(profile.appPreferences)}">
+    <div class="hc-card__header">App settings</div>
+    <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Settings this application declares
       (<code>config/preferences.yml</code>); routes read them back as
       <code>preference.&lt;key&gt;</code>.</p>
@@ -183,7 +192,7 @@
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="key" th:value="${pref.key}">
       <th:block th:if="${pref.type == 'boolean'}">
-        <label class="hc-radio-label">
+        <label class="hc-switch-label">
           <input class="hc-switch" type="checkbox" name="value" value="true"
                  th:checked="${pref.value == 'true'}">
           <span th:text="${#messages.msgOrNull(pref.label)} ?: ${pref.key}">setting</span>
@@ -208,11 +217,14 @@
       </th:block>
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Save</button>
     </form>
+    </div>
   </section>
-  <section class="hc-card hc-stack">
-    <h2>Sessions</h2>
+  <section class="hc-card">
+    <div class="hc-card__header">Sessions</div>
+    <div class="hc-card__body hc-stack">
     <p th:text="|${#lists.size(profile.sessions)} active ${#lists.size(profile.sessions) == 1 ? 'session' : 'sessions'}, including this one.|">1 active session, including this one.</p>
-    <table class="hc-table" th:if="${!#lists.isEmpty(profile.sessions)}">
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(profile.sessions)}">
+    <table class="hc-table">
       <thead><tr><th>Signed in</th><th>Last active</th><th>Device</th><th>Address</th><th>Expires</th><th></th></tr></thead>
       <tbody>
         <tr th:each="session : ${profile.sessions}">
@@ -227,19 +239,26 @@
             <form th:if="${!#strings.isEmpty(session.handle)}" method="post" action="/_tesseraql/logout-device">
               <input type="hidden" name="_csrf" th:value="${_csrf}">
               <input type="hidden" name="handle" th:value="${session.handle}">
-              <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Sign out</button>
+              <button class="hc-button" data-variant="ghost" data-size="sm" type="submit"
+                      data-hc-confirm="Sign this device out?" data-hc-confirm-title="Confirm sign-out"
+                      data-hc-confirm-label="Sign out device" data-hc-confirm-variant="error">Sign out</button>
             </form>
           </td>
         </tr>
       </tbody>
     </table>
+    </div>
     <form method="post" action="/_tesseraql/logout-others">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
-      <button class="hc-button" data-variant="ghost" type="submit">Sign out other sessions</button>
+      <button class="hc-button" data-variant="ghost" type="submit"
+              data-hc-confirm="Sign out every other session?" data-hc-confirm-title="Confirm sign-out"
+              data-hc-confirm-label="Sign out others" data-hc-confirm-variant="error">Sign out other sessions</button>
     </form>
+    </div>
   </section>
-  <section class="hc-card hc-stack">
-    <h2>Password</h2>
+  <section class="hc-card">
+    <div class="hc-card__header">Password</div>
+    <div class="hc-card__body hc-stack">
     <th:block th:if="${profile.passwordEnabled}">
       <form method="post" action="/_tesseraql/account/password" class="hc-stack">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
@@ -256,9 +275,11 @@
     </th:block>
     <p class="hc-field__message" th:unless="${profile.passwordEnabled}">Your credentials are
       managed by your identity provider; there is nothing to change here.</p>
+    </div>
   </section>
-  <section class="hc-card hc-stack" th:if="${profile.totp.available}">
-    <h2>Two-factor authentication</h2>
+  <section class="hc-card" th:if="${profile.totp.available}">
+    <div class="hc-card__header">Two-factor authentication</div>
+    <div class="hc-card__body hc-stack">
     <th:block th:if="${profile.totp.enrolled}">
       <p>A second factor protects this account: signing in also asks for a 6-digit code.</p>
       <form method="post" action="/_tesseraql/account/totp/disable" class="hc-stack">
@@ -301,6 +322,7 @@
                 th:text="${profile.totp.pendingSecret != null} ? 'Generate a new secret' : 'Set up two-factor authentication'">Set up</button>
       </form>
     </th:block>
+    </div>
   </section>
 </div>
 </html>
