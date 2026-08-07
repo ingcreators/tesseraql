@@ -1,0 +1,16 @@
+version: tesseraql/v1
+id: tql.studio.mail
+kind: route
+recipe: query-html
+
+sql:
+  service: studio.mail
+  params:
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: mail.html
+    model:
+      mail: sql

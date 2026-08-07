@@ -92,6 +92,10 @@ web/_tesseraql/studio/ui/health/health.html
 web/_tesseraql/studio/ui/jobs/get.yml
 web/_tesseraql/studio/ui/jobs/jobs.html
 web/_tesseraql/studio/ui/jobs/save/post.yml
+web/_tesseraql/studio/ui/mail/composer/composer.html
+web/_tesseraql/studio/ui/mail/composer/get.yml
+web/_tesseraql/studio/ui/mail/get.yml
+web/_tesseraql/studio/ui/mail/mail.html
 web/_tesseraql/studio/ui/menu/add/post.yml
 web/_tesseraql/studio/ui/menu/get.yml
 web/_tesseraql/studio/ui/menu/menu.html

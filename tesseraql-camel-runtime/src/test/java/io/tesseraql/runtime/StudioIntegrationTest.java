@@ -199,6 +199,37 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiMailListsTheManifestMailChannels() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/mail", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The example app's user-mail channel, raw (the ${MAIL_HOST:…} placeholders are
+        // display-only) — a .txt body offers the source editor, not the composer.
+        assertThat(response.body()).contains("user-mail")
+                .contains("templates/mail/provisioned.txt")
+                .doesNotContain("ui/mail/composer?path=templates%2Fmail%2Fprovisioned.txt");
+        // The webhook channel is not a mail channel.
+        assertThat(response.body()).doesNotContain("audit-webhook");
+    }
+
+    @Test
+    void uiMailComposerOpensAStarterForAMissingHtmlTemplate() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/mail/composer?path=" + enc("templates/mail/welcome.html"),
+                true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The starter document loads as canvas blocks, the palette lists the bundled
+        // tql/email fragments, and the hidden content field carries the exported template
+        // (the save/render flows reuse the source editor's endpoints against it).
+        assertThat(response.body()).contains("id=\"mail-canvas\"")
+                .contains("data-tql-fragment=\"hcHeading\"")
+                .contains("data-tql-fragment=\"hcKvTable\"")
+                .contains("new template")
+                .contains("tql/email/hc-email-layout :: hcLayout");
+    }
+
+    @Test
     void sourceReturnsFileContents() throws Exception {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/source?path=" + enc("web/api/users/search.sql"), true);

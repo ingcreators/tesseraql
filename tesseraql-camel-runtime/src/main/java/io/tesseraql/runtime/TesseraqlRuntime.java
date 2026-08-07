@@ -1815,6 +1815,85 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return model;
                         })
+                        // The mail composer (docs/html-email.md D4). The channel list reads
+                        // the manifest's mail channels raw — display never resolves ${ENV}
+                        // placeholders — and the composer page opens a template as blocks
+                        // only when it matches the composer grammar (MailComposer.parse);
+                        // anything else keeps the source editor as its authoring surface.
+                        .register("studio.mail", params -> {
+                            java.util.List<Map<String, Object>> channels = new java.util.ArrayList<>();
+                            for (String name : notificationChannels.names()) {
+                                io.tesseraql.yaml.notify.NotificationChannels.Channel channel = notificationChannels
+                                        .require(name);
+                                if (!io.tesseraql.yaml.notify.NotificationChannels.MAIL
+                                        .equals(channel.type())) {
+                                    continue;
+                                }
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("name", name);
+                                row.put("from", channel.raw("from").orElse(""));
+                                row.put("to", channel.raw("to").orElse(""));
+                                row.put("subject", channel.raw("subject").orElse(""));
+                                String template = channel.raw("template").orElse("");
+                                row.put("template", template);
+                                boolean html = template.endsWith(".html");
+                                row.put("isHtml", html);
+                                String draft = template.isEmpty()
+                                        ? null
+                                        : studio.readDraft(template);
+                                String text = draft != null
+                                        ? draft
+                                        : template.isEmpty()
+                                                ? null
+                                                : studio.sourceIfExists(template);
+                                row.put("exists", text != null);
+                                row.put("composable", html && (text == null
+                                        || io.tesseraql.studio.MailComposer.parse(text)
+                                                .isPresent()));
+                                channels.add(row);
+                            }
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("channels", channels);
+                            model.put("hasChannels", !channels.isEmpty());
+                            model.put("editable", studioAccess.canEdit(params.get("roles")));
+                            return model;
+                        })
+                        .register("studio.mailComposer", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            String draft = studio.readDraft(path);
+                            String source = studio.sourceIfExists(path);
+                            String text = draft != null ? draft : source;
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("path", path);
+                            model.put("isNew", text == null);
+                            model.put("hasDraft", draft != null);
+                            model.put("conflict", draft != null && studio.draftConflicts(path));
+                            model.put("confirmApply", studioAccess.confirmApply());
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            // The preview model mirrors MailNotifier's: payload + event.
+                            String sample = studio.sampleModel(path);
+                            model.put("sampleModel", sample == null || sample.isBlank()
+                                    ? "payload:\n  name: Example\nevent:\n  app: app\n  id: evt-1\n"
+                                    : sample);
+                            java.util.Optional<io.tesseraql.studio.MailComposer.Composition> parsed = text == null
+                                    ? java.util.Optional
+                                            .of(io.tesseraql.studio.MailComposer.starter())
+                                    : io.tesseraql.studio.MailComposer.parse(text);
+                            model.put("composable", parsed.isPresent());
+                            model.put("source", text == null ? "" : text);
+                            parsed.ifPresent(composition -> {
+                                model.put("title", composition.title());
+                                model.put("preheader", composition.preheader());
+                                model.put("content",
+                                        io.tesseraql.studio.MailComposer.write(composition));
+                                model.put("blocks",
+                                        io.tesseraql.studio.MailComposer.blockRows(composition));
+                            });
+                            model.put("palette", io.tesseraql.studio.MailComposer.paletteRows());
+                            return model;
+                        })
                         .register("studio.save", params -> {
                             studioAccess.requireEdit(params.get("roles"));
                             String path = String.valueOf(params.get("path"));
