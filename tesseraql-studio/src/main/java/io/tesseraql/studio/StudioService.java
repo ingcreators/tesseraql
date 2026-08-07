@@ -410,6 +410,15 @@ public final class StudioService {
                 Map<String, Object> context);
     }
 
+    /**
+     * The parsed sample model — the Studio mail test-send renders the body through
+     * {@link #render} and needs the same {@code payload}/{@code event} maps for the
+     * subject line's inline template.
+     */
+    public Map<String, Object> sampleModelMap(String relativePath, String sampleModel) {
+        return parseSample(relativePath, sampleModel);
+    }
+
     private RenderResult renderTemplateFile(String relativePath, String content,
             String sampleModel) {
         String text = content != null ? content : source(relativePath);

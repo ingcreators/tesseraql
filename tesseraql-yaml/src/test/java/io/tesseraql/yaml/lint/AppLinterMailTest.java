@@ -117,6 +117,7 @@ class AppLinterMailTest {
                         type: mail
                         host: localhost
                         from: app@example.com
+                        to: ops@example.com
                         subject: "Ticket [(${ticket})] needs you"
                         template: templates/mail/assigned.txt
                 """);
@@ -142,5 +143,28 @@ class AppLinterMailTest {
         writeApp(dir, "${MAIL_TEMPLATE:templates/mail/nope.html}");
 
         assertThat(mailFindings(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
+    void aChannelWithoutADefaultRecipientWarns(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  notifications:
+                    channels:
+                      agent-mail:
+                        type: mail
+                        host: localhost
+                        from: app@example.com
+                        template: ${MAIL_TEMPLATE:templates/mail/nope.html}
+                """);
+
+        List<LintFinding> findings = mailFindings(new AppLinter().lint(dir));
+
+        assertThat(findings).singleElement().satisfies(f -> {
+            assertThat(f.code()).isEqualTo("TQL-BATCH-5304");
+            assertThat(f.severity()).isEqualTo("warning");
+            assertThat(f.message()).contains("no to:");
+        });
     }
 }

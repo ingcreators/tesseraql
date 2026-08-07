@@ -116,31 +116,7 @@ public final class MailNotifier {
             throw new TqlException(MAIL_CHANNEL, "Mail channel '" + channel.name()
                     + "': transport must be smtp or smtps");
         }
-        boolean overridden = hostOverride != null;
-        String host = overridden ? hostOverride : channel.require("host");
-        String port = overridden
-                ? String.valueOf(portOverride)
-                : channel.setting("port").orElse("25");
-
-        Properties properties = new Properties();
-        properties.put("mail.smtp.host", host);
-        properties.put("mail.smtp.port", port);
-        if (!overridden && "smtps".equals(transport)) {
-            properties.put("mail.smtp.ssl.enable", "true");
-        }
-        String username = overridden ? null : channel.setting("username").orElse(null);
-        String password = overridden ? null : channel.setting("password").orElse(null);
-        if (username != null) {
-            properties.put("mail.smtp.auth", "true");
-        }
-        Session session = username == null
-                ? Session.getInstance(properties)
-                : Session.getInstance(properties, new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(username, password);
-                    }
-                });
+        Session session = session(channel, transport, hostOverride, portOverride);
         String bodyType = template.endsWith(".html")
                 ? "text/html; charset=UTF-8"
                 : "text/plain; charset=UTF-8";
@@ -160,6 +136,70 @@ public final class MailNotifier {
             throw new TqlException(DELIVERY_FAILED, "Mail channel '" + channel.name()
                     + "' delivery failed: " + ex.getMessage());
         }
+    }
+
+    /**
+     * The Studio test send (docs/pages-and-mail-lints.md follow-ups): delivers an
+     * already-rendered body over the channel's own transport to an explicit recipient —
+     * the draft need not be applied first, so the caller renders (draft-aware) and hands
+     * the result in. The subject renders exactly like a real delivery (the channel's
+     * inline TEXT template against the same model); no attachment, no outbox — a direct,
+     * synchronous send whose failure surfaces to the caller.
+     */
+    public void sendTest(NotificationChannels.Channel channel, Map<String, Object> model,
+            String body, boolean html, String to) {
+        String subject = INLINE.process(channel.raw("subject").orElse("Test mail"),
+                new Context(java.util.Locale.ROOT, model));
+        String transport = channel.setting("transport").orElse("smtp");
+        if (!"smtp".equals(transport) && !"smtps".equals(transport)) {
+            throw new TqlException(MAIL_CHANNEL, "Mail channel '" + channel.name()
+                    + "': transport must be smtp or smtps");
+        }
+        try {
+            MimeMessage message = new MimeMessage(session(channel, transport, null, null));
+            message.setFrom(new InternetAddress(channel.require("from")));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
+            message.setSubject(subject, "UTF-8");
+            message.setContent(body,
+                    html ? "text/html; charset=UTF-8" : "text/plain; charset=UTF-8");
+            Transport.send(message);
+        } catch (jakarta.mail.MessagingException ex) {
+            throw new TqlException(DELIVERY_FAILED, "Mail channel '" + channel.name()
+                    + "' test delivery failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * The channel's SMTP session; a host/port override (the declarative test runner's
+     * capture server) is plain SMTP with no TLS and no credentials.
+     */
+    private static Session session(NotificationChannels.Channel channel, String transport,
+            String hostOverride, Integer portOverride) {
+        boolean overridden = hostOverride != null;
+        String host = overridden ? hostOverride : channel.require("host");
+        String port = overridden
+                ? String.valueOf(portOverride)
+                : channel.setting("port").orElse("25");
+
+        Properties properties = new Properties();
+        properties.put("mail.smtp.host", host);
+        properties.put("mail.smtp.port", port);
+        if (!overridden && "smtps".equals(transport)) {
+            properties.put("mail.smtp.ssl.enable", "true");
+        }
+        String username = overridden ? null : channel.setting("username").orElse(null);
+        String password = overridden ? null : channel.setting("password").orElse(null);
+        if (username != null) {
+            properties.put("mail.smtp.auth", "true");
+        }
+        return username == null
+                ? Session.getInstance(properties)
+                : Session.getInstance(properties, new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(username, password);
+                    }
+                });
     }
 
     /**

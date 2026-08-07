@@ -239,11 +239,15 @@ warns (`TQL-TPL-2003`) — binds like `${ticket}` instead of `${payload.ticket}`
 empty at delivery and are otherwise invisible to tests. A `template:` value carrying a
 `${...}` config placeholder is environment-dependent and skipped.
 
-**Studio.** Studio's Mail page (explorer → Create with → Mail) lists the app's mail
-channels and opens an `.html` template composed from these blocks in a no-code composer:
-add/reorder/remove blocks, edit their arguments, and preview the rendered mail against
-sample data before applying — the draft/apply flow is the source editor's. A template
-outside the block grammar opens read-only with the source editor as the escape hatch.
+**Studio.** Studio's Mail page (sidebar → Mail) lists the app's mail channels and opens
+an `.html` template composed from these blocks in a no-code composer: add/reorder/remove
+blocks, edit their arguments, and preview the rendered mail against sample data before
+applying — the draft/apply flow is the source editor's. A template outside the block
+grammar opens read-only with the source editor as the escape hatch. **Send test mail**
+delivers the exact draft body the preview shows over the channel's own SMTP to one
+explicit recipient (subject rendered like a real delivery) — the last gap between the
+preview and a real client. It needs the sandboxed dev tools opt-in
+(`tesseraql.studio.testRunner.enabled`) and a mail channel declaring the template.
 
 ## Webhook channels
 
@@ -350,6 +354,8 @@ the build like any other kind.
   fragment (`TQL-TPL-2002`), and a `${...}` root outside `payload`/`event`/template
   aliases in the body or `subject` (`TQL-TPL-2003`, warning) — see
   [HTML mail](#html-mail)
+- a mail channel with no default `to:` (`TQL-BATCH-5304`, warning — delivery fails
+  unless every notification payload carries a `to` key)
 
 ## Error codes
 

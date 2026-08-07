@@ -199,6 +199,17 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void mailTestSendReportsAMissingChannelInsteadOfFailing() throws Exception {
+        // No mail channel declares this template — the composer's test send answers with
+        // a message, never a 500 (the fixture's channel template is a .txt body).
+        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/mail/test-send",
+                "path=" + enc("templates/mail/welcome.html") + "&to=" + enc("dev@example.com"));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("No mail channel declares template");
+    }
+
+    @Test
     void uiPagesListsHtmlRoutesWithTheirLadderState() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/pages", true);
 
