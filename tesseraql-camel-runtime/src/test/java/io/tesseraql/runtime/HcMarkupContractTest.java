@@ -154,7 +154,13 @@ class HcMarkupContractTest {
                 .isEmpty();
     }
 
-    /** Every template under the sibling modules' main resources. */
+    /**
+     * Every template under the sibling modules' main resources — except the bundled
+     * {@code tql/email/*} artifacts: their {@code hc-em-*} classes are defined by the
+     * layout's own embedded enhancement partial, not the kit stylesheet (the load-bearing
+     * styling is inline; docs/html-email.md), and their fragment contract has its own
+     * drift guard (BundledEmailTemplatesTest).
+     */
     private static List<Path> templates() throws IOException {
         List<Path> templates = new ArrayList<>();
         try (DirectoryStream<Path> modules = Files.newDirectoryStream(REPO_ROOT, "tesseraql-*")) {
@@ -164,7 +170,10 @@ class HcMarkupContractTest {
                     continue;
                 }
                 try (Stream<Path> files = Files.walk(resources)) {
-                    files.filter(p -> p.toString().endsWith(".html")).forEach(templates::add);
+                    files.filter(p -> p.toString().endsWith(".html"))
+                            .filter(p -> !p.toString().replace('\\', '/')
+                                    .contains("/templates/tql/email/"))
+                            .forEach(templates::add);
                 }
             }
         }

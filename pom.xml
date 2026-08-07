@@ -122,7 +122,7 @@
     <htmx.version>2.0.10</htmx.version>
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
     <commonmark.version>0.24.0</commonmark.version>
-    <hypermedia-components.version>0.1.13</hypermedia-components.version>
+    <hypermedia-components.version>0.1.14</hypermedia-components.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.4</webjars-locator.version>
     <flyway.version>13.0.0</flyway.version>
