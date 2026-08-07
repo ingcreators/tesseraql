@@ -157,7 +157,9 @@ class MountedAppIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/css"));
-        assertThat(response.body()).contains("h2{font-size");
+        // The card-header heading rule: the one heading idiom every framework surface uses
+        // since the console UX refresh (no global heading override remains).
+        assertThat(response.body()).contains(".hc-card__header :is(h1,h2,h3)");
     }
 
     @Test

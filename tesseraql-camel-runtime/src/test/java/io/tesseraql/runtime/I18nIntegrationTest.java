@@ -75,7 +75,7 @@ class I18nIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("lang=\"en\"")
-                .contains("<h2>Users</h2>")
+                .contains("hc-card__header\">Users<")
                 .contains("/assets/_tesseraql/messages.js?locale=en");
     }
 
@@ -85,7 +85,7 @@ class I18nIntegrationTest {
         String original = Files.readString(en);
         try {
             // The page title (#{users.list.title}) and the client catalog both read "Users".
-            assertThat(get("/users", Map.of()).body()).contains("<h2>Users</h2>");
+            assertThat(get("/users", Map.of()).body()).contains("hc-card__header\">Users<");
             assertThat(get("/assets/_tesseraql/messages.js?locale=en", Map.of()).body())
                     .contains("Users");
 
@@ -93,8 +93,8 @@ class I18nIntegrationTest {
             Files.writeString(en, original.replace("title: Users", "title: PeopleLive"));
 
             // The very next render (server #{}) and the client catalog both reflect the edit.
-            assertThat(get("/users", Map.of()).body()).contains("<h2>PeopleLive</h2>")
-                    .doesNotContain("<h2>Users</h2>");
+            assertThat(get("/users", Map.of()).body()).contains("hc-card__header\">PeopleLive<")
+                    .doesNotContain("hc-card__header\">Users<");
             assertThat(get("/assets/_tesseraql/messages.js?locale=en", Map.of()).body())
                     .contains("PeopleLive");
         } finally {
@@ -107,7 +107,7 @@ class I18nIntegrationTest {
         HttpResponse<String> response = get("/users", Map.of("Accept-Language", "ja, en;q=0.5"));
 
         assertThat(response.body()).contains("lang=\"ja\"")
-                .contains("<h2>ユーザー一覧</h2>")
+                .contains("hc-card__header\">ユーザー一覧<")
                 .contains("名前で検索...")
                 .contains("/assets/_tesseraql/messages.js?locale=ja");
     }
@@ -117,7 +117,7 @@ class I18nIntegrationTest {
         HttpResponse<String> response = get("/users?lang=ja", Map.of("Accept-Language", "en"));
 
         assertThat(response.body()).contains("lang=\"ja\"")
-                .contains("<h2>ユーザー一覧</h2>");
+                .contains("hc-card__header\">ユーザー一覧<");
     }
 
     @Test

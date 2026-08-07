@@ -4,12 +4,11 @@
    (the Studio editor, source display, SQL coverage gutter) are now the hc-code component, and
    coverage-trend charts the hc-sparkline component (hc >= 0.1.3), both served from the WebJar
    (dist/hc.min.css). */
-/* The bare-h2 scale stays for the generated view templates (tql/view/*) and user apps;
-   the framework consoles themselves are fully on the card anatomy since
-   docs/console-ux-refresh.md slice 4. */
-h2{font-size:15px;margin:0 0 12px}
 /* A heading kept inside a card header (dynamic titles, SR structure) inherits the
-   header's size instead of re-introducing the heading scale or its margin. */
+   header's size instead of re-introducing the heading scale or its margin. Every surface
+   the framework renders — consoles AND the generated view templates — is on the card
+   anatomy (docs/console-ux-refresh.md), so there is no global heading override; a bare
+   heading outside a card is a page title and keeps the UA scale. */
 .hc-card__header :is(h1,h2,h3){font-size:inherit;margin:0}
 /* A stack that is semantically a list (pins, recents, inbox messages): the list markup
    stays for SRs, the bullets go. */
