@@ -15,4 +15,4 @@ sql:
 
 response:
   redirect:
-    location: /_tesseraql/admin/users/{path.id}
+    location: /_tesseraql/admin/users/{path.id}?signedout=all

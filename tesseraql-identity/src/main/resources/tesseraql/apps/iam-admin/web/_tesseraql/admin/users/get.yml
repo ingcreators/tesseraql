@@ -10,6 +10,9 @@ input:
   invited:
     type: string
     required: false
+  bulk:
+    type: string
+    required: false
 
 sql:
   contract: identity.list-users
@@ -26,3 +29,4 @@ response:
       users: sql.rows
       total: total.rows
       invited: params.invited
+      bulk: params.bulk

@@ -6,6 +6,19 @@ recipe: query-html
 security:
   policy: iam.admin.view
 
+# The post/redirect/get flash flags: each action lands back here naming what it did, and
+# the page confirms it (docs/console-ux-refresh.md slice 2).
+input:
+  enabled:
+    type: string
+    required: false
+  disabled:
+    type: string
+    required: false
+  signedout:
+    type: string
+    required: false
+
 sql:
   contract: identity.find-user-by-id
   params:
@@ -40,3 +53,6 @@ response:
       permissions: permissions.rows
       sessions: sessions.rows
       sessionCount: sessions.count
+      enabled: params.enabled
+      disabled: params.disabled
+      signedout: params.signedout

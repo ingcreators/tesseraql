@@ -128,6 +128,8 @@ class AccountSurfaceIntegrationTest {
             HttpResponse<String> saved = postForm(runtime, sessionCookie,
                     "/_tesseraql/account/language", "locale=ja");
             assertThat(saved.statusCode()).isEqualTo(303);
+            assertThat(saved.headers().firstValue("location").orElse(""))
+                    .contains("saved=language");
 
             // Any shell page now renders in the stored locale (the html lang attribute),
             // even though the request carries no Accept-Language.
@@ -140,6 +142,18 @@ class AccountSurfaceIntegrationTest {
         } finally {
             preferenceStore().remove(null, "account-user", "ui.locale");
         }
+    }
+
+    /** Every save lands back with ?saved=<what> and the page confirms it out loud. */
+    @Test
+    void everySaveConfirmsWithAFlashAlert() throws Exception {
+        assertThat(get(runtime, sessionCookie, "/_tesseraql/account?saved=language").body())
+                .contains("Language saved.");
+        assertThat(get(runtime, sessionCookie, "/_tesseraql/account?saved=totp-on").body())
+                .contains("Two-factor authentication is on.");
+        assertThat(get(runtime, sessionCookie,
+                "/_tesseraql/account?saved=signed-out-others").body())
+                .contains("Only this session remains.");
     }
 
     /** Slice 2: a language the app does not serve is refused (TQL-ACCOUNT-4802). */
@@ -469,7 +483,7 @@ class AccountSurfaceIntegrationTest {
                 "/_tesseraql/logout-device", "handle=" + phoneHandle);
         assertThat(other.statusCode()).isEqualTo(303);
         assertThat(other.headers().firstValue("location").orElse(""))
-                .isEqualTo("/_tesseraql/account");
+                .isEqualTo("/_tesseraql/account?saved=signed-out-device");
         assertThat(sessions.session(phone)).isNull();
         assertThat(get(runtime, sessionCookie, "/_tesseraql/account").statusCode())
                 .isEqualTo(200);

@@ -33,4 +33,4 @@ sql:
 response:
   redirect:
     status: 303
-    location: /_tesseraql/account
+    location: /_tesseraql/account?saved=delegation

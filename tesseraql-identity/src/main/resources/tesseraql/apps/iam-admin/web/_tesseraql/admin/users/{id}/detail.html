@@ -9,6 +9,16 @@
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
+<!-- Every action confirms (docs/console-ux-refresh.md slice 2): the post/redirect/get
+     lands back here with a flag naming what it did. -->
+<p class="hc-alert" data-variant="success" role="status"
+   th:if="${enabled != null}">User enabled. They can sign in again.</p>
+<p class="hc-alert" data-variant="success" role="status"
+   th:if="${disabled != null}">User disabled. Their active sessions have ended.</p>
+<p class="hc-alert" data-variant="success" role="status"
+   th:if="${signedout == 'one'}">Device signed out.</p>
+<p class="hc-alert" data-variant="success" role="status"
+   th:if="${signedout == 'all'}">Signed out everywhere. All of this user's sessions have ended.</p>
 <section class="hc-card" th:if="${#lists.isEmpty(user)}">
   <div class="hc-empty"><p class="hc-empty__title">User not found.</p></div>
 </section>

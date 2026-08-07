@@ -24,4 +24,4 @@ sql:
 
 response:
   redirect:
-    location: /_tesseraql/admin/sessions
+    location: /_tesseraql/admin/sessions?signedout=1
