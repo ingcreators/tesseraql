@@ -4475,6 +4475,13 @@ public final class AppLinter {
                 lintMailExpressionRoots(name, "subject", subject, Set.of(), configSource,
                         findings);
             }
+            // No default recipient: delivery fails at send unless every notification's
+            // payload carries a to key — legal, but worth saying at build time.
+            if (channel.get("to") == null) {
+                findings.add(new LintFinding("TQL-BATCH-5304", "warning", configSource,
+                        "Mail channel '" + name + "' declares no to: — delivery fails"
+                                + " unless every notification payload carries a to key"));
+            }
             if (!(channel.get("template") instanceof String template)
                     || template.contains("${")) {
                 continue;

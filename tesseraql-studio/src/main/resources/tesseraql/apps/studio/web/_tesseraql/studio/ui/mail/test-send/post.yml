@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.mail.testSend
+kind: route
+recipe: query-html
+
+input:
+  path:
+    type: string
+    required: true
+  to:
+    type: string
+    required: true
+  content:
+    type: string
+    required: false
+  sampleModel:
+    type: string
+    required: false
+
+sql:
+  service: studio.mailTestSend
+  params:
+    roles: principal.roles
+    path: params.path
+    to: params.to
+    content: params.content
+    sampleModel: params.sampleModel
+
+response:
+  html:
+    status: 200
+    template: test-send.html
+    model:
+      send: sql

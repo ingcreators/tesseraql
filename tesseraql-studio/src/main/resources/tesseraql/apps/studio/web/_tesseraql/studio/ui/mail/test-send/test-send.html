@@ -1,0 +1,6 @@
+<div class="hc-stack" xmlns:th="http://www.thymeleaf.org" th:fragment="result">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${send.ok}"
+     th:text="${send.message}"></p>
+  <p class="hc-alert" data-variant="error" role="alert" th:unless="${send.ok}"
+     th:text="${send.message}"></p>
+</div>

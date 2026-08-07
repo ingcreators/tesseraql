@@ -154,6 +154,45 @@ class NotificationDeliveryTest {
     }
 
     @Test
+    void sendTestDeliversTheRenderedBodyToTheExplicitRecipient() throws Exception {
+        // The Studio test send (docs/pages-and-mail-lints.md follow-ups): a pre-rendered
+        // body over the channel's own transport, subject rendered like a real delivery,
+        // recipient explicit — no outbox, no template-path indirection.
+        io.tesseraql.yaml.notify.NotificationChannels channels = io.tesseraql.yaml.notify.NotificationChannels
+                .load(
+                        new io.tesseraql.yaml.config.AppConfig(Map.of("tesseraql", Map.of(
+                                "notifications", Map.of("channels", Map.of("user-mail",
+                                        Map.of(
+                                                "type", "mail",
+                                                "host", "localhost",
+                                                "port", MAIL.getSmtp().getPort(),
+                                                "from", "noreply@example.com",
+                                                "to", "fallback@example.com",
+                                                "subject", "Test [(${payload.userName})]",
+                                                "template", "templates/mail/welcome.txt"))))),
+                                name -> null));
+        int before = MAIL.getReceivedMessages().length;
+
+        new io.tesseraql.yaml.notify.MailNotifier(appHome).sendTest(
+                channels.require("user-mail"),
+                Map.of("payload", Map.of("userName", "sato")),
+                "<p>Hello test</p>", true, "dev@example.com");
+
+        MAIL.waitForIncomingEmail(before + 1);
+        MimeMessage message = java.util.Arrays.stream(MAIL.getReceivedMessages())
+                .filter(m -> {
+                    try {
+                        return "Test sato".equals(m.getSubject());
+                    } catch (jakarta.mail.MessagingException ex) {
+                        return false;
+                    }
+                }).findFirst().orElseThrow();
+        assertThat(message.getAllRecipients()[0].toString()).isEqualTo("dev@example.com");
+        assertThat(message.getContentType()).contains("text/html");
+        assertThat(GreenMailUtil.getBody(message)).contains("<p>Hello test</p>");
+    }
+
+    @Test
     void attachesTheTransferredFileAsMultipartMail() throws Exception {
         Map<String, Object> channel = Map.of(
                 "type", "mail",

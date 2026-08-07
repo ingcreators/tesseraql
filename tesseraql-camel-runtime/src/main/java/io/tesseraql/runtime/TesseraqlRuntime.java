@@ -1946,6 +1946,69 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return model;
                         })
+                        // The mail test send (docs/pages-and-mail-lints.md follow-ups): the
+                        // composer's draft body renders (content-aware) and delivers over
+                        // the channel's own transport to an explicit recipient. Gated like
+                        // the other outward-reaching dev tools (edit roles + the test
+                        // runner opt-in); failures return as a message, never a 500.
+                        .register("studio.mailTestSend", params -> {
+                            studioAccess.requireEdit(params.get("roles"));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            if (!studioTests.isEnabled()) {
+                                model.put("ok", false);
+                                model.put("message", "Test send is disabled — it needs the"
+                                        + " sandboxed dev tools opt-in"
+                                        + " (tesseraql.studio.testRunner.enabled)");
+                                return model;
+                            }
+                            String path = String.valueOf(params.get("path"));
+                            String to = String.valueOf(params.get("to"));
+                            Object content = params.get("content");
+                            Object sample = params.get("sampleModel");
+                            String channelName = null;
+                            for (String name : notificationChannels.names()) {
+                                io.tesseraql.yaml.notify.NotificationChannels.Channel candidate = notificationChannels
+                                        .require(name);
+                                if (io.tesseraql.yaml.notify.NotificationChannels.MAIL
+                                        .equals(candidate.type())
+                                        && path.equals(candidate.raw("template")
+                                                .orElse(null))) {
+                                    channelName = name;
+                                    break;
+                                }
+                            }
+                            if (channelName == null) {
+                                model.put("ok", false);
+                                model.put("message", "No mail channel declares template '"
+                                        + path + "' — wire one under"
+                                        + " tesseraql.notifications.channels first");
+                                return model;
+                            }
+                            io.tesseraql.studio.StudioService.RenderResult render = studio.render(
+                                    path,
+                                    content == null ? null : String.valueOf(content),
+                                    sample == null ? null : String.valueOf(sample));
+                            if (!render.ok()) {
+                                model.put("ok", false);
+                                model.put("message", "Render failed: " + render.error());
+                                return model;
+                            }
+                            try {
+                                new io.tesseraql.yaml.notify.MailNotifier(appHome).sendTest(
+                                        notificationChannels.require(channelName),
+                                        studio.sampleModelMap(path, sample == null
+                                                ? null
+                                                : String.valueOf(sample)),
+                                        render.output(), path.endsWith(".html"), to);
+                                model.put("ok", true);
+                                model.put("message", "Sent to " + to + " via channel '"
+                                        + channelName + "'");
+                            } catch (RuntimeException ex) {
+                                model.put("ok", false);
+                                model.put("message", ex.getMessage());
+                            }
+                            return model;
+                        })
                         // The Pages overview (docs/pages-and-mail-lints.md D1): every route
                         // with an HTML response and its rendering mode, from a fresh
                         // manifest load (the eject precedent — the boot snapshot may be

@@ -112,6 +112,21 @@
           <input type="checkbox" id="render-scripts" name="scripts" value="true">
           Run scripts in the preview &mdash; note real mail clients never run scripts
         </label>
+        <!-- The test send (docs/pages-and-mail-lints.md follow-ups): the exact draft body
+             the preview shows, delivered over the channel's own SMTP to one recipient —
+             the last gap between the preview and a real client. -->
+        <form class="hc-cluster" hx-post="/_tesseraql/studio/ui/mail/test-send"
+              hx-target="#test-send-result" hx-swap="innerHTML" hx-disabled-elt="find button"
+              hx-include="#composer-path, #composer-content, #sample-editor">
+          <div class="hc-field">
+            <label class="hc-field__label" for="test-send-to">Send a test to</label>
+            <input class="hc-input" id="test-send-to" name="to" type="email" required
+                   placeholder="you@example.com" autocomplete="email">
+          </div>
+          <button type="submit" class="hc-button" data-size="sm">Send test mail</button>
+          <th:block th:replace="~{tql/shell :: busy('Sending…')}"/>
+        </form>
+        <div id="test-send-result" class="hc-stack" aria-live="polite"></div>
         <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
         <div id="render-result" class="hc-stack" aria-live="polite"
              hx-post="/_tesseraql/studio/ui/render"
