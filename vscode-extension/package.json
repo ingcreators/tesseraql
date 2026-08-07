@@ -2,7 +2,7 @@
   "name": "tesseraql-vscode",
   "displayName": "TesseraQL",
   "description": "TesseraQL application authoring: real lint findings in the Problems panel, the CLI verbs as commands, and an app explorer.",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "publisher": "ingcreators",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -135,6 +135,10 @@
       {
         "language": "yaml",
         "path": "./snippets/tesseraql.code-snippets"
+      },
+      {
+        "language": "html",
+        "path": "./snippets/hc-email.code-snippets"
       }
     ]
   },

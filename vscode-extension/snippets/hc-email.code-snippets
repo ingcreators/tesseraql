@@ -1,0 +1,44 @@
+{
+  "tql-mail": {
+    "prefix": "tql-mail",
+    "description": "HTML mail template composed from the bundled tql/email fragment library (single-file wrapper + content fragment)",
+    "body": [
+      "<div th:replace=\"~{tql/email/hc-email-layout :: hcLayout('${1:Title}',",
+      "    |${2:Preheader with \\${payload.field\\}}|, ~{:: content})}\">",
+      "  <div th:fragment=\"content\">",
+      "    <div th:replace=\"~{tql/email/hc-email :: hcHeading('${1:Title}')}\"></div>",
+      "    <div th:replace=\"~{tql/email/hc-email :: hcText(|${3:Body with \\${payload.field\\}}|)}\"></div>",
+      "    <div th:replace=\"~{tql/email/hc-email :: hcFooter(|Sent by \\${event.app\\}|)}\"></div>",
+      "  </div>",
+      "</div>"
+    ]
+  },
+  "tql-mail-block": {
+    "prefix": "tql-mail-block",
+    "description": "One tql/email fragment block inside a mail content fragment",
+    "body": [
+      "<div th:replace=\"~{tql/email/hc-email :: ${1:hcText}(${2:|Text with \\${payload.field\\}|})}\"></div>"
+    ]
+  },
+  "tql-mail-button": {
+    "prefix": "tql-mail-button",
+    "description": "Bulletproof button block (tql/email hcButton)",
+    "body": [
+      "<div th:replace=\"~{tql/email/hc-email :: hcButton(\\${payload.${1:url}}, '${2:Open}')}\"></div>"
+    ]
+  },
+  "tql-mail-kvtable": {
+    "prefix": "tql-mail-kvtable",
+    "description": "Key-value table block (tql/email hcKvTable — rows iterable with key/value)",
+    "body": [
+      "<div th:replace=\"~{tql/email/hc-email :: hcKvTable(\\${payload.${1:rows}})}\"></div>"
+    ]
+  },
+  "tql-mail-alert": {
+    "prefix": "tql-mail-alert",
+    "description": "Callout block (tql/email hcAlertInfo/Success/Warning/Error)",
+    "body": [
+      "<div th:replace=\"~{tql/email/hc-email :: hcAlert${1|Info,Success,Warning,Error|}('${2:Title}', |${3:Text}|)}\"></div>"
+    ]
+  }
+}
