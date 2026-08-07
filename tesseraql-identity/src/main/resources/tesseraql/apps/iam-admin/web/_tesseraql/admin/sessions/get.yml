@@ -12,6 +12,9 @@ input:
   q:
     type: string
     required: false
+  signedout:
+    type: string
+    required: false
 
 sql:
   service: iam.sessions
@@ -24,3 +27,4 @@ response:
     template: sessions.html
     model:
       sessions: sql
+      signedout: params.signedout

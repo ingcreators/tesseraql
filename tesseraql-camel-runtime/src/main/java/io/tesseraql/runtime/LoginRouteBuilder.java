@@ -228,7 +228,7 @@ final class LoginRouteBuilder extends RouteBuilder {
             redirect(exchange, 303, LOGIN_PATH);
             return;
         }
-        redirect(exchange, 303, "/_tesseraql/account");
+        redirect(exchange, 303, "/_tesseraql/account?saved=signed-out-device");
     }
 
     /** Invalidates the caller's other sessions, keeping the one that made this request. */
@@ -246,7 +246,7 @@ final class LoginRouteBuilder extends RouteBuilder {
         }
         new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
         sessions.invalidateOthersFor(session.principal().subject(), sessionId);
-        redirect(exchange, 303, "/_tesseraql/account");
+        redirect(exchange, 303, "/_tesseraql/account?saved=signed-out-others");
     }
 
     /** Shared with the recovery endpoints (roadmap Phase 50), same package. */

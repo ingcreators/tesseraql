@@ -113,16 +113,21 @@ class IamAdminIntegrationTest {
                 .contains(
                         "data-hc-confirm=\"Disable user bob? Their active sessions end immediately.\"");
 
-        // post/redirect/get: the command answers 303 back to the detail page.
+        // post/redirect/get: the command answers 303 back to the detail page with the
+        // flash flag, and the landing page confirms out loud.
         HttpResponse<String> disabled = post("/_tesseraql/admin/users/u2/disable");
         assertThat(disabled.statusCode()).isEqualTo(303);
         assertThat(disabled.headers().firstValue("location"))
-                .hasValue("/_tesseraql/admin/users/u2");
-        assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("DISABLED");
+                .hasValue("/_tesseraql/admin/users/u2?disabled=1");
+        assertThat(get("/_tesseraql/admin/users/u2?disabled=1", true).body())
+                .contains("User disabled.").contains("DISABLED");
 
         HttpResponse<String> enabled = post("/_tesseraql/admin/users/u2/enable");
         assertThat(enabled.statusCode()).isEqualTo(303);
-        assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("ACTIVE");
+        assertThat(enabled.headers().firstValue("location"))
+                .hasValue("/_tesseraql/admin/users/u2?enabled=1");
+        assertThat(get("/_tesseraql/admin/users/u2?enabled=1", true).body())
+                .contains("User enabled.").contains("ACTIVE");
     }
 
     /**
@@ -237,7 +242,9 @@ class IamAdminIntegrationTest {
                     "subject=u2&handle=" + handle);
             assertThat(revoked.statusCode()).isEqualTo(303);
             assertThat(revoked.headers().firstValue("location").orElse(""))
-                    .isEqualTo("/_tesseraql/admin/sessions");
+                    .isEqualTo("/_tesseraql/admin/sessions?signedout=1");
+            assertThat(get("/_tesseraql/admin/sessions?signedout=1", true).body())
+                    .contains("Device signed out.");
             assertThat(sessions.session(bobPhone)).isNull();
         } finally {
             sessions.invalidateOthersFor("u2", "");
@@ -276,7 +283,9 @@ class IamAdminIntegrationTest {
                     "action=disable&ids=u1&ids=u2");
             assertThat(bulk.statusCode()).isEqualTo(303);
             assertThat(bulk.headers().firstValue("location"))
-                    .hasValue("/_tesseraql/admin/users");
+                    .hasValue("/_tesseraql/admin/users?bulk=2");
+            assertThat(get("/_tesseraql/admin/users?bulk=2", true).body())
+                    .contains("2 user(s) disabled.");
             assertThat(get("/_tesseraql/admin/users/u1", true).body()).contains("DISABLED");
             assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("DISABLED");
         } finally {

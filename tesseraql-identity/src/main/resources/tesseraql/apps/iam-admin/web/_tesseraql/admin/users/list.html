@@ -11,6 +11,9 @@
 <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
   <p class="hc-alert__title">Invitation sent. The account stays INVITED until it is accepted.</p>
 </div>
+<div th:if="${bulk != null}" class="hc-alert" data-variant="success" role="status">
+  <p class="hc-alert__title" th:text="|${bulk} user(s) disabled. Their active sessions have ended.|">users disabled</p>
+</div>
 <!-- Invite a user (roadmap Phase 50 slice 2): created INVITED - unable to sign in - and
      mailed a one-time accept link; the operator never knows a password. -->
 <section class="hc-card hc-stack">

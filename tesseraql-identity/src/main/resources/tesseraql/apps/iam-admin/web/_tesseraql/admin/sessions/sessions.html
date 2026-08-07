@@ -7,6 +7,8 @@
   <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/delegations">Delegations</a>
 </th:block>
 <div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status"
+   th:if="${signedout != null}">Device signed out.</p>
 <section class="hc-card hc-stack">
   <h2>Active sessions</h2>
   <!-- Live store state: the page lists exactly what the store holds right now

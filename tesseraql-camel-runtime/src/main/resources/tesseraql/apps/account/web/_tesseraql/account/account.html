@@ -10,6 +10,30 @@
   <a class="hc-item" href="/_tesseraql/inbox"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg></span><span class="hc-item__title">Inbox</span></a>
 </th:block>
 <div id="page-content" class="hc-stack">
+  <!-- Every save confirms (docs/console-ux-refresh.md slice 2): the post/redirect/get
+       lands back here with ?saved=<what> and the page says it out loud. -->
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'language'}">Language saved. It applies from your next page.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'appearance'}">Appearance saved.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'notifications'}">Notification preference saved.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'app'}">Setting saved.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'delegation'}">Out-of-office delegation saved.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'delegation-cleared'}">Out-of-office delegation cleared.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'shortcuts'}">Removed.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'totp-on'}">Two-factor authentication is on. Signing in now also asks for a code.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'totp-off'}">Two-factor authentication is off.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'signed-out-others'}">Signed out everywhere else. Only this session remains.</p>
+  <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'signed-out-device'}">Device signed out.</p>
   <section class="hc-card hc-stack">
     <h1 th:text="${profile.name}">User</h1>
     <dl>

@@ -8,6 +8,13 @@ recipe: query-html
 # principal's — the route maps principal.* into the service params, so the page can only
 # ever describe the caller.
 
+# The post/redirect/get flash flag: every save lands back here naming what it did, and
+# the page confirms it (docs/console-ux-refresh.md slice 2).
+input:
+  saved:
+    type: string
+    required: false
+
 sql:
   service: account.settings.view
   params:
@@ -24,5 +31,6 @@ response:
     template: account.html
     model:
       profile: sql
+      saved: params.saved
     headers:
       Cache-Control: "no-store"
