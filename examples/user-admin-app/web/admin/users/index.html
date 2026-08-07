@@ -5,7 +5,8 @@
       th:replace="~{tql/shell :: shell('User Management (IAM)', ~{templates/nav.html :: app-nav}, ~{}, ~{:: #page-content})}">
 <div id="page-content" class="hc-stack">
 <section class="hc-card">
-  <h2>User Management</h2>
+  <div class="hc-card__header">User Management</div>
+  <div class="hc-card__body hc-stack">
   <p>Registered users: <strong th:text="${count}"></strong></p>
   <table class="hc-table">
     <thead>
@@ -21,11 +22,12 @@
         <td th:text="${u.login_id}"></td>
         <td th:text="${u.display_name}"></td>
         <td th:text="${u.email}"></td>
-        <td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : 'error'}" th:text="${u.status}"></td>
+        <td class="hc-status" th:attr="data-variant=${u.status == 'ACTIVE' ? 'success' : (u.status == 'INVITED' ? 'info' : 'error')}" th:text="${u.status}"></td>
       </tr>
       <tr th:if="${#lists.isEmpty(users)}"><td colspan="4">No users</td></tr>
     </tbody>
   </table>
+  </div>
 </section>
 </div>
 </html>
