@@ -1,0 +1,16 @@
+version: tesseraql/v1
+id: tql.studio.pages
+kind: route
+recipe: query-html
+
+sql:
+  service: studio.pages
+  params:
+    roles: principal.roles
+
+response:
+  html:
+    status: 200
+    template: pages.html
+    model:
+      pg: sql

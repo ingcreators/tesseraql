@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Pages', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <div class="hc-card__header">Pages</div>
+    <div class="hc-card__body hc-stack">
+      <p class="hc-field__message">Every route that renders HTML, with its place on the view
+        customization ladder (docs: declarative views): a declarative <strong>view</strong>
+        document, or a hand-owned <strong>template</strong> — which opens in the visual builder
+        when eligible. Actions link into the existing surfaces; a view route's
+        "Eject&hellip;" lives on its route page.</p>
+
+      <div class="hc-empty" th:unless="${pg.hasPages}">
+        <p class="hc-empty__title">No HTML routes.</p>
+        <p class="hc-empty__description">Routes with a <code>response.html</code> block appear
+          here once declared.</p>
+      </div>
+
+      <div class="hc-datagrid" th:if="${pg.hasPages}">
+        <div class="hc-datagrid__scroll">
+          <table class="hc-datagrid__table">
+            <thead>
+            <tr>
+              <th>Route</th>
+              <th>Path</th>
+              <th>Rendering</th>
+              <th>Definition</th>
+              <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="p : ${pg.pages}">
+              <td th:text="${p.id}"></td>
+              <td><code><span th:text="${p.method}"></span> <span th:text="${p.path}"></span></code></td>
+              <td>
+                <span class="hc-badge" data-variant="info" th:if="${p.mode == 'view'}"
+                      th:text="${#strings.isEmpty(p.kind)} ? 'view' : |view · ${p.kind}|"></span>
+                <span class="hc-badge" th:if="${p.mode == 'template'}">template</span>
+                <span class="hc-badge" data-variant="warning" th:if="${p.refPath == null}">missing</span>
+              </td>
+              <td><code th:text="${p.ref}"></code></td>
+              <td>
+                <div class="hc-cluster">
+                  <a class="hc-button" data-variant="ghost" data-size="sm"
+                     th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(p.source)}|"
+                     th:text="${p.ejectable} ? 'Route · Eject…' : 'Route'"></a>
+                  <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${p.refPath != null}"
+                     th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(p.refPath)}|"
+                     th:text="${p.mode == 'view'} ? 'View doc' : 'Template'"></a>
+                  <a class="hc-button" data-variant="primary" data-size="sm" th:if="${p.builderEligible}"
+                     th:href="|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(p.refPath)}|">Edit visually</a>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</html>

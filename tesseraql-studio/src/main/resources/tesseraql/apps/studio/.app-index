@@ -125,6 +125,8 @@ web/_tesseraql/studio/ui/migration/post.yml
 web/_tesseraql/studio/ui/new/drawer.html
 web/_tesseraql/studio/ui/new/get.yml
 web/_tesseraql/studio/ui/new/post.yml
+web/_tesseraql/studio/ui/pages/get.yml
+web/_tesseraql/studio/ui/pages/pages.html
 web/_tesseraql/studio/ui/preview/post.yml
 web/_tesseraql/studio/ui/preview/preview.html
 web/_tesseraql/studio/ui/render/post.yml

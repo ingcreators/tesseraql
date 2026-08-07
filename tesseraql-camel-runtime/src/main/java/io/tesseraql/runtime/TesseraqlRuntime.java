@@ -1946,6 +1946,81 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             return model;
                         })
+                        // The Pages overview (docs/pages-and-mail-lints.md D1): every route
+                        // with an HTML response and its rendering mode, from a fresh
+                        // manifest load (the eject precedent — the boot snapshot may be
+                        // stale). Read-only: actions link into the existing surfaces.
+                        .register("studio.pages", params -> {
+                            io.tesseraql.yaml.manifest.AppManifest fresh = new ManifestLoader()
+                                    .load(appHome);
+                            java.nio.file.Path home = appHome.toAbsolutePath().normalize();
+                            java.util.List<Map<String, Object>> pages = new java.util.ArrayList<>();
+                            for (io.tesseraql.yaml.manifest.RouteFile route : fresh.routes()) {
+                                var response = route.definition().response();
+                                var html = response == null ? null : response.html();
+                                if (html == null
+                                        || (html.view() == null && html.template() == null)) {
+                                    continue;
+                                }
+                                Map<String, Object> row = new java.util.LinkedHashMap<>();
+                                row.put("id", route.definition().id());
+                                row.put("method", route.httpMethod());
+                                row.put("path", route.urlPath());
+                                row.put("source", home.relativize(route.source()).toString()
+                                        .replace('\\', '/'));
+                                java.nio.file.Path routeDir = route.source().getParent();
+                                boolean isView = html.view() != null;
+                                String ref = isView ? html.view() : html.template();
+                                row.put("mode", isView ? "view" : "template");
+                                row.put("ref", ref);
+                                java.nio.file.Path file = routeDir.resolve(ref).normalize();
+                                if (!java.nio.file.Files.isRegularFile(file)) {
+                                    file = home.resolve("templates").resolve(ref).normalize();
+                                }
+                                String refPath = java.nio.file.Files.isRegularFile(file)
+                                        && file.startsWith(home)
+                                                ? home.relativize(file).toString()
+                                                        .replace('\\', '/')
+                                                : null;
+                                row.put("refPath", refPath);
+                                String kind = "";
+                                boolean ejectable = false;
+                                boolean builderEligible = false;
+                                if (isView && refPath != null) {
+                                    try {
+                                        kind = io.tesseraql.yaml.view.ViewSpec.parse(file)
+                                                .view();
+                                        // The ejector renders list/detail/form; a dashboard
+                                        // stays declarative.
+                                        ejectable = io.tesseraql.yaml.view.ViewSpec.LIST
+                                                .equals(kind)
+                                                || io.tesseraql.yaml.view.ViewSpec.DETAIL
+                                                        .equals(kind)
+                                                || io.tesseraql.yaml.view.ViewSpec.FORM
+                                                        .equals(kind);
+                                    } catch (RuntimeException ex) {
+                                        // Unparseable view document: listed without a kind.
+                                    }
+                                } else if (!isView && refPath != null
+                                        && refPath.endsWith(".html")) {
+                                    String text = studio.sourceIfExists(refPath);
+                                    builderEligible = io.tesseraql.studio.PageBuilder
+                                            .parse(text).isPresent()
+                                            && io.tesseraql.studio.MailComposer.parse(text)
+                                                    .isEmpty();
+                                }
+                                row.put("kind", kind);
+                                row.put("ejectable", ejectable);
+                                row.put("builderEligible", builderEligible);
+                                pages.add(row);
+                            }
+                            pages.sort(java.util.Comparator
+                                    .comparing(page -> String.valueOf(page.get("path"))));
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("pages", pages);
+                            model.put("hasPages", !pages.isEmpty());
+                            return model;
+                        })
                         // The eject ramp (docs/page-builder.md D2): the CLI's eject-view
                         // orchestration, edit-gated. The manifest re-loads from disk so the
                         // route state is the on-disk truth, not the boot snapshot; a
