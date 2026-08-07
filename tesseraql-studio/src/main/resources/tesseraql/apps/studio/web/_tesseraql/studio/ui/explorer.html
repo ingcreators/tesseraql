@@ -81,11 +81,11 @@
   <span class="hc-tree__row">
     <span class="hc-tree__toggle" aria-hidden="true"></span>
     <span class="hc-tree__label" th:text="${folder.name}"></span>
-    <!-- Contextual create (Studio sidebar IA), now a hover/focus-revealed row action: opens the
+    <!-- Contextual create (Studio sidebar IA), a hover/focus-revealed row action: opens the
          New-route drawer with its Path seeded to this folder's prefix, so a new route lands where
-         you are browsing. Same remote-dialog root as the top "New route" trigger. An <a href>
-         deliberately, not a <button>: the tree behavior's click handler only exempts links from
-         branch toggling (hc-briefs.md brief 5), and the href is the honest no-JS fallback. -->
+         you are browsing. Same remote-dialog root as the top "New route" trigger. Stays an
+         <a href> for the honest no-JS fallback; since hc 0.1.13 the tree's click guard exempts
+         buttons too (hc-briefs.md brief 5, shipped), so either form is safe now. -->
     <a th:if="${studio.editable}" class="hc-button tql-tree-action"
        data-variant="ghost" data-size="sm"
        th:href="|/_tesseraql/studio/ui/new?prefix=${folder.path}/|"

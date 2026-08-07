@@ -213,8 +213,10 @@ this.
 
 *Filed: [ingcreators/hypermedia-components#421](https://github.com/ingcreators/hypermedia-components/issues/421) (found 2026-08-06, Studio UX refresh slice 0).*
 
-> **Status: resolved upstream** (#421 closed). The `tesseraql.js` plain-form stand-in stays
-> until the release carrying the fix is adopted here, then retires per the note below.
+> **Status: shipped and adopted.** Landed in **hc 0.1.13** — `installConfirm` calls
+> `form.requestSubmit(source)` for a confirmed plain-form submit button, with the htmx-verb
+> exemption. TesseraQL bumped to 0.1.13 and DELETED the `tesseraql.js` stand-in (keeping it
+> would double-submit).
 
 ### Problem
 
@@ -262,6 +264,11 @@ submit") — delete once the kit owns this.
 *Filed: [ingcreators/hypermedia-components#427](https://github.com/ingcreators/hypermedia-components/issues/427)
 (found 2026-08-06, Studio UX refresh slice 4, migrating the Studio explorer to `hc-tree`).*
 
+> **Status: shipped and adopted.** Landed in **hc 0.1.13** — the click guard now exempts
+> `a[href], input, button, select, textarea`, matching the keydown guard. The explorer's
+> "+ New route" row action deliberately stays an `<a href>` (the href is the no-JS fallback);
+> buttons in rows are simply safe now.
+
 ### Problem
 
 `installTree()`'s keyboard handler deliberately ignores keys originating from widgets inside
@@ -301,6 +308,11 @@ actions are free to be buttons again.
 
 *Filed: [ingcreators/hypermedia-components#428](https://github.com/ingcreators/hypermedia-components/issues/428)
 (found 2026-08-06, Studio UX refresh slice 5, converging the Studio builders on one recipe).*
+
+> **Status: shipped and adopted.** Landed in **hc 0.1.13** as the proposed contract
+> (`data-hc-show-switch` / `data-hc-show-when` / `data-hc-show-src`, auto-installed).
+> TesseraQL migrated the SQL and validation builders onto it and DELETED the
+> `data-tql-switch` / `data-tql-show-for` stand-in from `tesseraql.js`.
 
 ### Problem
 
@@ -346,6 +358,13 @@ validation builders) — delete once the kit owns this.
 
 *Filed: [ingcreators/hypermedia-components#430](https://github.com/ingcreators/hypermedia-components/issues/430)
 (found 2026-08-06, extending the Studio governance dashboards' number alignment).*
+
+> **Status: shipped and adopted.** Landed in **hc 0.1.13**: tabular figures are the table and
+> datagrid cell default (nothing to adopt — it applies to every table on the bump), and
+> `data-numeric` end-aligns a cell/column when a page opts in. The Studio data browser opts
+> its numeric columns in, decided from the result set's JDBC metadata (the result's truth,
+> not a schema guess). No TesseraQL stand-in existed; the stat tiles' own `tabular-nums`
+> stays (app-owned class).
 
 ### Problem
 

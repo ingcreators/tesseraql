@@ -140,7 +140,7 @@
               </select>
             </div>
             <div class="hc-field"><label class="hc-field__label">Operation</label>
-              <select class="hc-select" name="operation" data-tql-switch>
+              <select class="hc-select" name="operation" data-hc-show-switch>
                 <option value="select-by-pk">select by primary key</option>
                 <option value="select-by-column">select by column (=)</option>
                 <option value="select-by-column-in">select by column (in list)</option>
@@ -150,7 +150,7 @@
                 <option value="delete-by-pk">delete by primary key</option>
               </select>
             </div>
-            <div class="hc-field" data-tql-show-for="select-by-column select-by-column-in select-by-column-optional">
+            <div class="hc-field" data-hc-show-when="select-by-column select-by-column-in select-by-column-optional">
               <label class="hc-field__label">Filter column</label>
               <select class="hc-select" name="column" id="sb-col"></select>
             </div>
