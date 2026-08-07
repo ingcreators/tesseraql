@@ -199,6 +199,36 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiBuilderOpensAShellWrappedPage() throws Exception {
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/ui/builder?path=" + enc("web/users/index.html"), true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The canvas iframe mounts, the verbatim prefix carries the shell wrapper, and the
+        // hidden content field holds the full template for the reused save/render flows.
+        assertThat(response.body()).contains("id=\"builder-frame\"")
+                .contains("shell-wrapped page")
+                .contains("tql/shell :: shell")
+                .contains("id=\"builder-content\"");
+    }
+
+    @Test
+    void uiBuilderFallsBackForIneligibleFilesAndSourceOffersTheEntry() throws Exception {
+        // A .txt mail body is not builder material — read-only with the escape hatch.
+        HttpResponse<String> fallback = get(
+                "/_tesseraql/studio/ui/builder?path=" + enc("templates/mail/provisioned.txt"),
+                true);
+        assertThat(fallback.statusCode()).isEqualTo(200);
+        assertThat(fallback.body()).contains("not builder-eligible");
+
+        // The source page offers "Edit visually" for the eligible page template.
+        HttpResponse<String> source = get(
+                "/_tesseraql/studio/ui/source?path=" + enc("web/users/index.html"), true);
+        assertThat(source.statusCode()).isEqualTo(200);
+        assertThat(source.body()).contains("Edit visually");
+    }
+
+    @Test
     void uiMailListsTheManifestMailChannels() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/mail", true);
 

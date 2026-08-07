@@ -13,6 +13,8 @@ web/_tesseraql/studio/get.yml
 web/_tesseraql/studio/ui/apply/post.yml
 web/_tesseraql/studio/ui/audit/audit.html
 web/_tesseraql/studio/ui/audit/get.yml
+web/_tesseraql/studio/ui/builder/builder.html
+web/_tesseraql/studio/ui/builder/get.yml
 web/_tesseraql/studio/ui/config/config.html
 web/_tesseraql/studio/ui/config/get.yml
 web/_tesseraql/studio/ui/config/set/post.yml

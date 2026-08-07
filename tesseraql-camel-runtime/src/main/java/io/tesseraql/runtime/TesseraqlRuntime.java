@@ -1805,6 +1805,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             boolean canEdit = studioAccess.canEdit(params.get("roles"));
                             model.put("editable", canEdit);
                             model.put("readOnly", !canEdit);
+                            // The visual builder's entry (docs/page-builder.md D1): eligible
+                            // page templates offer "Edit visually"; composable mail templates
+                            // route to the mail composer instead.
+                            String current = draft != null ? draft : studio.sourceIfExists(path);
+                            model.put("builderEligible", path.endsWith(".html")
+                                    && io.tesseraql.studio.PageBuilder.parse(current).isPresent()
+                                    && io.tesseraql.studio.MailComposer.parse(current).isEmpty());
+                            model.put("mailComposable", path.endsWith(".html")
+                                    && io.tesseraql.studio.MailComposer.parse(current)
+                                            .isPresent());
                             // On a route SQL file, offer the 2-way SQL builder inline (insert into the
                             // editor): populate its table dropdown from the schema overlay.
                             if (Boolean.TRUE.equals(model.get("isRouteSql"))) {
@@ -1892,6 +1902,40 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         io.tesseraql.studio.MailComposer.blockRows(composition));
                             });
                             model.put("palette", io.tesseraql.studio.MailComposer.paletteRows());
+                            return model;
+                        })
+                        // The visual page builder (docs/page-builder.md D1): the split's prefix
+                        // and suffix are verbatim captures — the client's canvas edits only the
+                        // region, and export is plain concatenation, so the wrapper (and any
+                        // scaffold-checksum header) survives byte-for-byte.
+                        .register("studio.pageBuilder", params -> {
+                            String path = String.valueOf(params.get("path"));
+                            String draft = studio.readDraft(path);
+                            String text = draft != null ? draft : studio.sourceIfExists(path);
+                            Map<String, Object> model = new java.util.LinkedHashMap<>();
+                            model.put("path", path);
+                            model.put("hasDraft", draft != null);
+                            model.put("conflict", draft != null && studio.draftConflicts(path));
+                            model.put("confirmApply", studioAccess.confirmApply());
+                            boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                            model.put("editable", canEdit);
+                            model.put("readOnly", !canEdit);
+                            String sample = studio.sampleModel(path);
+                            model.put("sampleModel", sample == null ? "" : sample);
+                            model.put("source", text == null ? "" : text);
+                            java.util.Optional<io.tesseraql.studio.PageBuilder.Parts> parts = io.tesseraql.studio.PageBuilder
+                                    .parse(text);
+                            boolean composable = path.endsWith(".html") && parts.isPresent()
+                                    && io.tesseraql.studio.MailComposer.parse(text).isEmpty();
+                            model.put("composable", composable);
+                            if (composable) {
+                                io.tesseraql.studio.PageBuilder.Parts split = parts.orElseThrow();
+                                model.put("prefix", split.prefix());
+                                model.put("region", split.region());
+                                model.put("suffix", split.suffix());
+                                model.put("regionClass", split.regionClass());
+                                model.put("shellWrapped", split.shellWrapped());
+                            }
                             return model;
                         })
                         .register("studio.save", params -> {
