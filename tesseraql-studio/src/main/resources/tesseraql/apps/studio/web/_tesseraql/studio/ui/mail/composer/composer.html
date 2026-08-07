@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|Mail · ${cmp.path}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm"
+       th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(cmp.path)}|">Open in source editor</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/mail">&larr; mail</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${saved}">Draft saved.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${applied}">Draft applied and routes reloaded.</p>
+
+  <!-- Outside the composer grammar (hand-authored Thymeleaf, a .txt body): read-only,
+       with the source editor as the escape hatch — the strict round-trip rule
+       (docs/html-email.md D4) means the composer never risks a lossy rewrite. -->
+  <th:block th:unless="${cmp.composable}">
+    <p class="hc-alert" data-variant="warning" role="status">This template is not composed from the
+      <code>tql/email/*</code> block grammar, so the composer opens it read-only — use the source
+      editor to change it.</p>
+    <pre class="hc-code"><code th:text="${cmp.source}"></code></pre>
+  </th:block>
+
+  <th:block th:if="${cmp.composable and cmp.readOnly}">
+    <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
+    <pre class="hc-code"><code th:text="${cmp.source}"></code></pre>
+  </th:block>
+
+  <th:block th:if="${cmp.composable and cmp.editable}">
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="info" th:if="${cmp.isNew}">new template &middot; not written yet</span>
+      <span class="hc-badge" th:unless="${cmp.isNew}">mail template</span>
+      <span class="hc-badge" data-variant="warning" th:if="${cmp.hasDraft}">unsaved draft</span>
+    </div>
+    <p class="hc-field__message" th:if="${cmp.isNew}">The channel points at a template that does not
+      exist yet: a starter document is loaded — saving keeps a draft, applying writes the file.</p>
+
+    <div class="tql-editor-layout">
+      <!-- The composer half: layout fields, block canvas, palette, inspector. The save form
+           reuses the source editor's draft flow verbatim — the canvas exports the template
+           text into the hidden content field, so /save, /apply and /render stay unchanged. -->
+      <form id="save-form" method="post" action="/_tesseraql/studio/ui/save" class="hc-stack" data-tql-hotkey-save>
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" id="composer-path" name="path" th:value="${cmp.path}">
+        <textarea id="composer-content" name="content" hidden th:text="${cmp.content}"
+                  aria-hidden="true" tabindex="-1"></textarea>
+
+        <div class="hc-cluster">
+          <div class="hc-field">
+            <label class="hc-field__label" for="composer-title">Title (subject line shown in the client tab)</label>
+            <input class="hc-input" id="composer-title" type="text" th:value="${cmp.title}"
+                   spellcheck="false" autocomplete="off">
+          </div>
+          <div class="hc-field">
+            <label class="hc-field__label" for="composer-preheader">Preheader (preview text next to the subject)</label>
+            <input class="hc-input" id="composer-preheader" type="text" th:value="${cmp.preheader}"
+                   spellcheck="false" autocomplete="off">
+          </div>
+        </div>
+        <p class="hc-field__message">Values are Thymeleaf expressions: <code>'plain text'</code>,
+          <code>|text with ${payload.field}|</code>, or a bare <code>${payload.field}</code>.
+          The model carries <code>payload</code> (the notification payload) and
+          <code>event</code> (<code>id</code>, <code>source</code>, <code>app</code>).</p>
+
+        <div class="hc-cluster" role="toolbar" aria-label="Composer actions">
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" id="composer-undo">Undo</button>
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" id="composer-redo">Redo</button>
+          <span class="hc-spacer"></span>
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" id="composer-remove"
+                  disabled>Remove block</button>
+        </div>
+
+        <!-- The canvas: each child is one fragment invocation, held as data attributes
+             (data-tql-fragment / data-tql-args) — never literal th:replace, which this very
+             page's render would evaluate. The exporter writes the template text from them. -->
+        <div class="hc-stack" id="mail-canvas" data-hc-editor-container aria-label="Mail blocks">
+          <div class="tql-mail-block" th:each="b : ${cmp.blocks}" tabindex="0"
+               th:attr="data-tql-fragment=${b.fragment},data-tql-args=${b.argsJson}">
+            <span class="hc-badge" data-variant="info" th:text="${b.fragment}"></span>
+            <span class="tql-mail-block__chip" th:text="${b.summary}"></span>
+          </div>
+        </div>
+
+        <div class="hc-field" id="mail-inspector" hidden>
+          <span class="hc-field__label">Selected block</span>
+          <div class="hc-stack" id="mail-inspector-fields"></div>
+        </div>
+
+        <div class="hc-field">
+          <span class="hc-field__label">Add a block</span>
+          <div class="hc-cluster" id="mail-palette">
+            <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+                    th:each="p : ${cmp.palette}" th:text="${p.fragment}"
+                    th:attr="data-tql-fragment=${p.fragment},data-tql-args=${p.argsJson},data-tql-params=${p.paramsJson}"></button>
+          </div>
+        </div>
+      </form>
+
+      <!-- The preview half: the exact source-editor render loop — the hidden content field
+           joins the hx-include, so what renders is always what would be saved. -->
+      <div class="hc-stack">
+        <span class="hc-field__label">Rendered preview</span>
+        <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
+        <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="yaml">
+          <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
+                    aria-label="Sample data" th:text="${cmp.sampleModel}"></textarea>
+        </div>
+        <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
+        <div id="render-result" class="hc-stack" aria-live="polite"
+             hx-post="/_tesseraql/studio/ui/render"
+             hx-trigger="load, change delay:400ms from:#composer-content, keyup changed delay:400ms from:#sample-editor"
+             hx-include="#composer-path, #composer-content, #sample-editor"
+             hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
+      </div>
+    </div>
+
+    <p class="hc-alert" data-variant="warning" role="alert" th:if="${cmp.conflict}">The saved source
+      changed since this draft was started &mdash; applying overwrites those changes.</p>
+    <div id="apply-result" class="hc-stack" aria-live="polite"></div>
+    <div class="tql-editor-bar">
+      <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
+      <form class="hc-cluster" hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <input type="hidden" name="path" th:value="${cmp.path}">
+        <label class="hc-field" th:if="${cmp.conflict}">
+          <input type="checkbox" name="force" value="true" required>
+          I reviewed the changes &mdash; overwrite the updated source
+        </label>
+        <label class="hc-field" th:if="${cmp.confirmApply and not cmp.conflict}">
+          <input type="checkbox" name="confirm" value="true" required>
+          I reviewed the preview &mdash; apply this draft
+        </label>
+        <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
+      </form>
+      <span class="hc-spacer"></span>
+      <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${cmp.hasDraft}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="path" th:value="${cmp.path}">
+        <button type="submit" class="hc-button" data-variant="error"
+                data-hc-confirm="Discard this draft? The saved source stays as-is; the draft's changes are lost."
+                data-hc-confirm-title="Discard draft" data-hc-confirm-label="Discard"
+                data-hc-confirm-variant="error">Discard draft</button>
+      </form>
+    </div>
+    <script type="module" src="/assets/_tesseraql/mail-composer.js"></script>
+  </th:block>
+</section>
+</div>
+</html>

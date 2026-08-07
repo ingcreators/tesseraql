@@ -1,7 +1,11 @@
 # HTML email
 
-> **Status: design.** This is an internal design document (docs-site `EXCLUDED`);
-> the user-facing documentation lands in `notifications.md` as the slices ship.
+> **Status: complete.** Both slices landed 2026-08-07: slice 1 (bundled `tql/email/*`
+> fragment library, override-resolver shadowing, hc 0.1.14, helpdesk HTML mail example,
+> `notifications.md` "HTML mail") and slice 2 (Studio mail composer — `ui/mail` channel
+> list + editor-kit block canvas over the strict grammar, reusing the source editor's
+> save/apply/render flows). This is an internal design document (docs-site `EXCLUDED`);
+> the user-facing documentation lives in `notifications.md`.
 > Scope: first-class HTML mail via the hypermedia-components email fragment
 > library, bundled as framework-shared templates, plus a no-code mail template
 > composer in Studio. The page/view WYSIWYG builder (editor-kit canvas over

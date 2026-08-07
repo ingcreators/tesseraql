@@ -229,6 +229,12 @@ npx @hypermedia-components/cli email eject --tokens my-theme.json \
 The generated files carry a manifest comment (core version, axes, regen command) — edit
 the theme and regenerate rather than hand-editing.
 
+**Studio.** Studio's Mail page (explorer → Create with → Mail) lists the app's mail
+channels and opens an `.html` template composed from these blocks in a no-code composer:
+add/reorder/remove blocks, edit their arguments, and preview the rendered mail against
+sample data before applying — the draft/apply flow is the source editor's. A template
+outside the block grammar opens read-only with the source editor as the escape hatch.
+
 ## Webhook channels
 
 Settings: `url` (required) and `secret` (optional but recommended — without it the POST is

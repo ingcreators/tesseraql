@@ -43,6 +43,12 @@
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-core</artifactId>
     </dependency>
+    <!-- The mail composer's canvas engine (docs/html-email.md D4), served version-lessly
+         at /assets/vendor/hypermedia-components__editor-kit/ by the runtime. -->
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>hypermedia-components__editor-kit</artifactId>
+    </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>

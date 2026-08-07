@@ -50,6 +50,15 @@ a:hover{text-decoration-thickness:2px}
    grows. Surface + border from tokens so both themes hold. */
 .tql-editor-bar{position:sticky;inset-block-end:0;z-index:2;display:flex;align-items:center;gap:var(--hc-space-2,.5rem);flex-wrap:wrap;padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);background:var(--hc-color-surface);border-block-start:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px) var(--hc-radius-md,6px) 0 0}
 
+/* The mail composer's block canvas (docs/html-email.md D4): each block is one fragment
+   invocation held in data attributes; the editor-kit overlay draws selection/drop chrome in a
+   layer over the canvas, so the form column anchors it. */
+#save-form{position:relative}
+.tql-mail-overlay{position:absolute;inset:0;pointer-events:none;z-index:1}
+.tql-mail-block{display:flex;align-items:center;gap:var(--hc-space-2,.5rem);padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px);background:var(--hc-color-surface);cursor:grab;touch-action:none}
+.tql-mail-block:focus-visible{outline:2px solid var(--hc-color-accent,#4c8dff);outline-offset:1px}
+.tql-mail-block__chip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--hc-color-text-muted,#8a8f98);font-size:.9em}
+
 /* Governance stat tiles (docs/studio-ux-refresh.md slice 6): the dashboard's headline counts as
    quiet tiles — tabular numerals so columns of digits align, semantic color ONLY when the count
    flags a problem (data-tone), neutral otherwise. hc ships no stat/KPI primitive, so these are

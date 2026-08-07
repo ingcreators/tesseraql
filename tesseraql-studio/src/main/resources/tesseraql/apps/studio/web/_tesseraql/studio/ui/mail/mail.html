@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page('TesseraQL Studio · Mail', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+  <section class="hc-card">
+    <div class="hc-card__header">Mail templates</div>
+    <div class="hc-card__body hc-stack">
+      <p class="hc-field__message">The app's mail notification channels
+        (<code>notifications.channels</code>, <code>type: mail</code>) and their body templates. An
+        <code>.html</code> template composed from the bundled <code>tql/email/*</code> fragment
+        library opens in the block composer; anything else opens in the source editor.</p>
+
+      <div class="hc-empty" th:unless="${mail.hasChannels}">
+        <p class="hc-empty__title">No mail channels.</p>
+        <p class="hc-empty__description">Declare a <code>type: mail</code> channel under
+          <code>notifications.channels</code> in <code>config/tesseraql.yml</code> first
+          (docs: notifications).</p>
+      </div>
+
+      <div class="hc-datagrid" th:if="${mail.hasChannels}">
+        <div class="hc-datagrid__scroll">
+          <table class="hc-datagrid__table">
+            <thead>
+            <tr>
+              <th>Channel</th>
+              <th>From &rarr; To</th>
+              <th>Subject</th>
+              <th>Template</th>
+              <th>Body</th>
+              <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="ch : ${mail.channels}">
+              <td th:text="${ch.name}"></td>
+              <td><span th:text="${ch.from}"></span> &rarr; <span th:text="${ch.to}"></span></td>
+              <td><code th:text="${ch.subject}"></code></td>
+              <td><code th:text="${ch.template}"></code></td>
+              <td>
+                <span class="hc-badge" data-variant="info" th:if="${ch.isHtml}">HTML</span>
+                <span class="hc-badge" th:unless="${ch.isHtml}">text</span>
+                <span class="hc-badge" data-variant="warning" th:unless="${ch.exists}">missing</span>
+              </td>
+              <td>
+                <div class="hc-cluster">
+                  <a class="hc-button" data-variant="primary" data-size="sm"
+                     th:if="${ch.composable}"
+                     th:href="|/_tesseraql/studio/ui/mail/composer?path=${#uris.escapeQueryParam(ch.template)}|">Compose</a>
+                  <a class="hc-button" data-variant="ghost" data-size="sm"
+                     th:if="${ch.exists}"
+                     th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(ch.template)}|">Source</a>
+                </div>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</html>
