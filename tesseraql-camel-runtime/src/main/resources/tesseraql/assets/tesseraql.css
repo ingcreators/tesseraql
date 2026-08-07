@@ -55,6 +55,13 @@ a:hover{text-decoration-thickness:2px}
    layer over the canvas, so the form column anchors it. */
 #save-form{position:relative}
 .tql-mail-overlay{position:absolute;inset:0;pointer-events:none;z-index:1}
+
+/* The page builder's canvas (docs/page-builder.md D1): the template's editable region lives
+   in a same-origin srcdoc iframe with the kit stylesheets; the overlay layer anchors to the
+   host so selection/drop chrome draws over the frame, never inside the artifact. */
+.tql-builder-host{position:relative}
+.tql-builder-overlay{position:absolute;inset:0;pointer-events:none;z-index:1}
+.tql-builder-frame{width:100%;height:32rem;border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px);background:#fff}
 .tql-mail-block{display:flex;align-items:center;gap:var(--hc-space-2,.5rem);padding:var(--hc-space-2,.5rem) var(--hc-space-3,.75rem);border:1px solid var(--hc-color-border);border-radius:var(--hc-radius-md,6px);background:var(--hc-color-surface);cursor:grab;touch-action:none}
 .tql-mail-block:focus-visible{outline:2px solid var(--hc-color-accent,#4c8dff);outline-offset:1px}
 .tql-mail-block__chip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--hc-color-text-muted,#8a8f98);font-size:.9em}

@@ -35,14 +35,18 @@ markup is literal, so the builder gets the full editor-kit architecture — lite
 DOM in the canvas, `serialize()` as the exporter.
 
 **The server-render hazard and the iframe.** Template text must never be emitted
-into the builder page as markup — the builder page's own Thymeleaf render would
-evaluate it (the exact hazard the mail composer dodged). The template text
-travels in a hidden `<textarea>` (escaped, the source editor's shape); the
-builder's JS parses it with `DOMParser` and mounts the editable region into a
-same-origin `srcdoc` iframe that links `hc.min.css` + neutral tokens +
-`tesseraql.css`. `th:*` attributes never reach a server-side template engine, and
-the canvas renders with real kit styling. editor-kit's `Overlay({frame})` exists
-precisely for iframe-hosted canvases; the drag controller operates on
+where the builder page's own Thymeleaf render would *evaluate* it (the hazard the
+mail composer dodged). The full file travels escaped in the hidden save-form
+`<textarea>`; the editable region is seeded through an inert `<template>` element
+the server fills with `th:utext` — `th:utext` inserts verbatim without processing
+`th:*` (the render-preview precedent), the browser's own HTML parser parses it
+once into inert template content (nothing executes or loads), and the builder's
+JS only *imports* that content into a same-origin `srcdoc` iframe that links
+`hc.min.css` + neutral tokens + `tesseraql.css` and is sandboxed **without**
+`allow-scripts`. No string-to-HTML conversion happens in script, and a region
+containing `</template>` is ineligible (it could break out of the seed). The
+canvas renders with real kit styling; editor-kit's `Overlay({frame})` exists
+precisely for iframe-hosted canvases, and the drag controller operates on
 `root.ownerDocument`, so both work unchanged.
 
 ## Design

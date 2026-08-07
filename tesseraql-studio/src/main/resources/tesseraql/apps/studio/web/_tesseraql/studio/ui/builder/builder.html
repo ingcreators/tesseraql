@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: studio-page(|Builder · ${cmp.path}|, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm"
+       th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(cmp.path)}|">Open in source editor</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <p class="hc-alert" data-variant="success" role="status" th:if="${saved}">Draft saved.</p>
+  <p class="hc-alert" data-variant="success" role="status" th:if="${applied}">Draft applied and routes reloaded.</p>
+
+  <!-- Outside the builder grammar (docs/page-builder.md D1): read-only with the source
+       editor escape hatch — the builder never risks a lossy rewrite. -->
+  <th:block th:unless="${cmp.composable}">
+    <p class="hc-alert" data-variant="warning" role="status">This template is not builder-eligible
+      (a shell-wrapped page or a bare fragment file) — use the source editor to change it.</p>
+    <pre class="hc-code"><code th:text="${cmp.source}"></code></pre>
+  </th:block>
+
+  <th:block th:if="${cmp.composable and cmp.readOnly}">
+    <p class="hc-field__message">Read-only mode &mdash; edit drafts via the Studio API.</p>
+    <pre class="hc-code"><code th:text="${cmp.source}"></code></pre>
+  </th:block>
+
+  <th:block th:if="${cmp.composable and cmp.editable}">
+    <div class="hc-cluster">
+      <span class="hc-badge" data-variant="info" th:if="${cmp.shellWrapped}">shell-wrapped page</span>
+      <span class="hc-badge" data-variant="info" th:unless="${cmp.shellWrapped}">fragment file</span>
+      <span class="hc-badge" data-variant="warning" th:if="${cmp.hasDraft}">unsaved draft</span>
+    </div>
+    <p class="hc-field__message">Click an element in the canvas to select it, drag to reorder
+      (Alt+&uarr;/&darr; from the keyboard), and edit its attributes in the inspector.
+      <code>th:*</code> expressions are edited verbatim; the wrapper around the editable region
+      is preserved byte-for-byte. The editable region is re-serialized on save — check the
+      source editor's Compare tab before applying.</p>
+
+    <div class="tql-editor-layout">
+      <!-- The builder half: toolbar, canvas iframe, palette, inspector. The save form
+           reuses the source editor's draft flow — the exporter concatenates
+           prefix + serialized region + suffix into the hidden content field. -->
+      <form id="save-form" method="post" action="/_tesseraql/studio/ui/save" class="hc-stack" data-tql-hotkey-save>
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" id="builder-path" name="path" th:value="${cmp.path}">
+        <textarea id="builder-content" name="content" hidden th:text="${cmp.source}"
+                  aria-hidden="true" tabindex="-1"></textarea>
+        <textarea id="builder-prefix" hidden th:text="${cmp.prefix}" aria-hidden="true" tabindex="-1"></textarea>
+        <textarea id="builder-suffix" hidden th:text="${cmp.suffix}" aria-hidden="true" tabindex="-1"></textarea>
+        <!-- The canvas seed: the region parses ONCE, by the browser's own HTML parser at
+             page parse time, into this inert template element (scripts never run, nothing
+             loads) — the JS only imports its content into the canvas, no string-to-HTML
+             conversion anywhere. Unescaped emission is the render-preview precedent
+             (render.html th:utext); PageBuilder rejects regions containing </template>,
+             and Thymeleaf does not process th:* inside a th:utext value. -->
+        <template id="builder-region-seed" th:utext="${cmp.region}"></template>
+
+        <div class="hc-cluster" role="toolbar" aria-label="Builder actions">
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" id="builder-undo">Undo</button>
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" id="builder-redo">Redo</button>
+          <span class="hc-spacer"></span>
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm" id="builder-remove"
+                  disabled>Remove element</button>
+        </div>
+
+        <!-- allow-same-origin keeps contentDocument reachable and the kit stylesheets
+             loading; the missing allow-scripts means nothing in the canvas can ever
+             execute — the template markup is styled, inert DOM. -->
+        <div class="tql-builder-host" id="builder-canvas-host" th:attr="data-region-class=${cmp.regionClass}">
+          <iframe id="builder-frame" class="tql-builder-frame" title="Page canvas"
+                  sandbox="allow-same-origin"></iframe>
+        </div>
+
+        <div class="hc-field">
+          <span class="hc-field__label">Add an element</span>
+          <div class="hc-cluster" id="builder-palette"></div>
+          <p class="hc-field__message">Inserts into the selected container (or the end of the page).</p>
+        </div>
+
+        <div class="hc-field" id="builder-inspector" hidden>
+          <span class="hc-field__label" id="builder-inspector-title">Selected element</span>
+          <div class="hc-stack" id="builder-inspector-fields"></div>
+        </div>
+      </form>
+
+      <!-- The preview half: the source editor's render loop over the hidden content field —
+           what renders is always what would be saved, shell and all. -->
+      <div class="hc-stack">
+        <span class="hc-field__label">Rendered preview</span>
+        <label class="hc-field__label" for="sample-editor">Sample data (YAML)</label>
+        <div class="hc-code" data-editable data-gutter="line-numbers" data-lang="yaml">
+          <textarea id="sample-editor" name="sampleModel" class="hc-code__input" spellcheck="false"
+                    aria-label="Sample data" th:text="${cmp.sampleModel}"></textarea>
+        </div>
+        <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
+        <div id="render-result" class="hc-stack" aria-live="polite"
+             hx-post="/_tesseraql/studio/ui/render"
+             hx-trigger="load, change delay:400ms from:#builder-content, keyup changed delay:400ms from:#sample-editor"
+             hx-include="#builder-path, #builder-content, #sample-editor"
+             hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
+      </div>
+    </div>
+
+    <p class="hc-alert" data-variant="warning" role="alert" th:if="${cmp.conflict}">The saved source
+      changed since this draft was started &mdash; applying overwrites those changes.</p>
+    <div id="apply-result" class="hc-stack" aria-live="polite"></div>
+    <div class="tql-editor-bar">
+      <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
+      <form class="hc-cluster" hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <input type="hidden" name="path" th:value="${cmp.path}">
+        <label class="hc-field" th:if="${cmp.conflict}">
+          <input type="checkbox" name="force" value="true" required>
+          I reviewed the changes &mdash; overwrite the updated source
+        </label>
+        <label class="hc-field" th:if="${cmp.confirmApply and not cmp.conflict}">
+          <input type="checkbox" name="confirm" value="true" required>
+          I reviewed the preview &mdash; apply this draft
+        </label>
+        <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
+      </form>
+      <span class="hc-spacer"></span>
+      <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${cmp.hasDraft}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="path" th:value="${cmp.path}">
+        <button type="submit" class="hc-button" data-variant="error"
+                data-hc-confirm="Discard this draft? The saved source stays as-is; the draft's changes are lost."
+                data-hc-confirm-title="Discard draft" data-hc-confirm-label="Discard"
+                data-hc-confirm-variant="error">Discard draft</button>
+      </form>
+    </div>
+    <script type="module" src="/assets/_tesseraql/page-builder.js"></script>
+  </th:block>
+</section>
+</div>
+</html>

@@ -6,6 +6,10 @@
   <div class="hc-cluster">
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.isRouteDoc}"
        th:href="|/_tesseraql/studio/ui/route-form?path=${#uris.escapeQueryParam(src.path)}|">Edit as form</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.builderEligible}"
+       th:href="|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(src.path)}|">Edit visually</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.mailComposable}"
+       th:href="|/_tesseraql/studio/ui/mail/composer?path=${#uris.escapeQueryParam(src.path)}|">Compose mail</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.editorHref != null}"
        th:href="${src.editorHref}">Open in editor</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
