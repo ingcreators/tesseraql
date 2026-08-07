@@ -8,6 +8,7 @@ import { ReferenceLinkProvider } from './vscode/referenceLinks';
 import { SuiteTestController } from './vscode/testing';
 import { ServeStatus } from './vscode/serveStatus';
 import { SymbolCompletionProvider, SymbolDefinitionProvider, SymbolIndex } from './vscode/language';
+import { EmailFragmentCompletionProvider } from './vscode/mailTemplate';
 import { registerMcpServer } from './vscode/mcpRegistration';
 import { studioSourceUrl } from './core/studio';
 import { routeDescription } from './core/symbols';
@@ -74,6 +75,10 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.languages.registerDefinitionProvider('yaml', new SymbolDefinitionProvider(symbols)),
       vscode.languages.registerCompletionItemProvider('yaml',
           new SymbolCompletionProvider(symbols), ':', ' ', '.'),
+      // HTML mail templates (docs/notifications.md "HTML mail"): the tql/email
+      // fragment palette and the payload/event model inside ${...}.
+      vscode.languages.registerCompletionItemProvider('html',
+          new EmailFragmentCompletionProvider(), ':', ' ', '{', '.'),
       vscode.commands.registerCommand('tesseraql.lint', () =>
           withHome(homes, (home) => void lint.lintNow(home))),
       vscode.commands.registerCommand('tesseraql.refreshExplorer', () => explorer.refresh()),

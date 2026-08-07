@@ -156,6 +156,14 @@ the passthrough attributes — [declarative views](declarative-views.md)), and
 `tql-export-step` pairs the export step with the follow-up `notify:` that carries
 its published `step.<id>.transferId` ([jobs](jobs.md)).
 
+HTML mail templates ([notifications](notifications.md#html-mail)) get their own
+html-language surface: `tql-mail` scaffolds the single-file wrapper + content
+fragment, `tql-mail-block`/`-button`/`-kvtable`/`-alert` insert fragment blocks, and
+completion offers the `tql/email` fragment palette after
+`~{tql/email/hc-email :: ` (signatures as placeholders) plus the mail model —
+`payload`/`event` roots and the `event.` members — inside `${...}` expressions.
+Lines without the mail markers complete nothing, so page templates are untouched.
+
 Schema-driven completion stays with `redhat.vscode-yaml`: the extension declares it
 as a recommendation and leaves the scaffolded schema wiring alone — it complements
 the JSON Schema, it does not replace it.
