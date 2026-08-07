@@ -22,4 +22,5 @@ create table tql_job_skips (
   created_at datetime2 not null
 );
 
+if col_length('tql_step_execution', 'skipped_rows') is null
 alter table tql_step_execution add skipped_rows int;

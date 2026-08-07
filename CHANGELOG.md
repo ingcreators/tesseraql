@@ -63,6 +63,13 @@ pre-1.0 rendering-contract change** — see Changed.
   explanation.
 - **The Batch Jobs auto-refresh no longer discards Run-form input** (see Changed for
   the shape).
+- **SQL Server runtime bootstrap no longer fails on re-run**: the batch schema's
+  column-add migrations (business date, chunk skip counts, execution params, cancel
+  flag) were missing the `if col_length(...) is null` guard the SQL Server dialect
+  scripts use for idempotency, so the second `ensureSchema` pass in one runtime start
+  aborted with a duplicate-column error (SQL Server's 2705 is not in the tolerated
+  already-exists set the other dialects rely on). Found by the gated
+  `SqlServerPortabilityIntegrationTest` during release verification.
 - **Every database-touching CLI command finds the running `serve --embedded-db`**
   (docs/getting-started.md): `scaffold crud`, `migrate`, `test`, `job`, `schema`, and
   `coverage` now share `identity-schema`'s datasource resolution — an explicit
