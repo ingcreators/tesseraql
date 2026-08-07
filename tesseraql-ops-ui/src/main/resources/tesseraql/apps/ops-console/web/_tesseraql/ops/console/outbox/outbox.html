@@ -27,7 +27,7 @@
           <th class="hc-datagrid__headcell">Source</th>
           <th class="hc-datagrid__headcell">App</th>
           <th class="hc-datagrid__headcell">Status</th>
-          <th class="hc-datagrid__headcell">Attempts</th>
+          <th class="hc-datagrid__headcell" data-numeric>Attempts</th>
           <th class="hc-datagrid__headcell">Last error</th>
           <th class="hc-datagrid__headcell">Created</th>
           <th class="hc-datagrid__headcell">Sent</th>
@@ -40,7 +40,7 @@
             <td class="hc-datagrid__cell" th:text="${e.source}"></td>
             <td class="hc-datagrid__cell" th:text="${e.app}"></td>
             <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
-            <td class="hc-datagrid__cell" th:text="${e.attempts}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${e.attempts}"></td>
             <td class="hc-datagrid__cell" th:text="${e.lastError}"></td>
             <td class="hc-datagrid__cell" th:text="${e.createdAt}"></td>
             <td class="hc-datagrid__cell" th:text="${e.sentAt}"></td>

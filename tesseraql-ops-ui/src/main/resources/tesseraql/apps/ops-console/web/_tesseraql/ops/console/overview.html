@@ -62,7 +62,7 @@
           <th class="hc-datagrid__headcell">Status</th>
           <th class="hc-datagrid__headcell">Trigger</th>
           <th class="hc-datagrid__headcell">Started</th>
-          <th class="hc-datagrid__headcell">Duration (ms)</th>
+          <th class="hc-datagrid__headcell" data-numeric>Duration (ms)</th>
         </tr></thead>
         <tbody class="hc-datagrid__body">
           <tr class="hc-datagrid__row" th:each="e : ${ops.recent}">
@@ -72,7 +72,7 @@
             <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
             <td class="hc-datagrid__cell" th:text="${e.trigger}"></td>
             <td class="hc-datagrid__cell" th:text="${e.startTime}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.durationMs}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${e.durationMs}"></td>
           </tr>
         </tbody>
       </table>
@@ -88,20 +88,20 @@
         <thead class="hc-datagrid__head"><tr>
           <th class="hc-datagrid__headcell">Lane</th>
           <th class="hc-datagrid__headcell">Type</th>
-          <th class="hc-datagrid__headcell">In use</th>
-          <th class="hc-datagrid__headcell">Max</th>
-          <th class="hc-datagrid__headcell">Admitted</th>
-          <th class="hc-datagrid__headcell">Rejected</th>
+          <th class="hc-datagrid__headcell" data-numeric>In use</th>
+          <th class="hc-datagrid__headcell" data-numeric>Max</th>
+          <th class="hc-datagrid__headcell" data-numeric>Admitted</th>
+          <th class="hc-datagrid__headcell" data-numeric>Rejected</th>
           <th class="hc-datagrid__headcell">Status</th>
         </tr></thead>
         <tbody class="hc-datagrid__body">
           <tr class="hc-datagrid__row" th:each="l : ${ops.lanes}">
             <td class="hc-datagrid__cell" th:text="${l.name}"></td>
             <td class="hc-datagrid__cell" th:text="${l.type}"></td>
-            <td class="hc-datagrid__cell" th:text="${l.inUse}"></td>
-            <td class="hc-datagrid__cell" th:text="${l.max}"></td>
-            <td class="hc-datagrid__cell" th:text="${l.admitted}"></td>
-            <td class="hc-datagrid__cell" th:text="${l.rejected}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${l.inUse}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${l.max}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${l.admitted}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${l.rejected}"></td>
             <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${l.warn ? 'error' : 'success'}" th:text="${l.warn ? 'warn' : 'ok'}"></span></td>
           </tr>
         </tbody>
@@ -128,15 +128,15 @@
         <thead class="hc-datagrid__head"><tr>
           <th class="hc-datagrid__headcell">SQL id</th>
           <th class="hc-datagrid__headcell">Mode</th>
-          <th class="hc-datagrid__headcell">Duration (ms)</th>
-          <th class="hc-datagrid__headcell">Rows</th>
+          <th class="hc-datagrid__headcell" data-numeric>Duration (ms)</th>
+          <th class="hc-datagrid__headcell" data-numeric>Rows</th>
         </tr></thead>
         <tbody class="hc-datagrid__body">
           <tr class="hc-datagrid__row" th:each="q : ${ops.slowSql}">
             <td class="hc-datagrid__cell" th:text="${q.sqlId}"></td>
             <td class="hc-datagrid__cell" th:text="${q.mode}"></td>
-            <td class="hc-datagrid__cell" th:text="${q.durationMs}"></td>
-            <td class="hc-datagrid__cell" th:text="${q.rowCount}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${q.durationMs}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${q.rowCount}"></td>
           </tr>
         </tbody>
       </table>

@@ -17,8 +17,8 @@
         <thead class="hc-datagrid__head"><tr>
           <th class="hc-datagrid__headcell">Span</th>
           <th class="hc-datagrid__headcell">App</th>
-          <th class="hc-datagrid__headcell">Total (ms)</th>
-          <th class="hc-datagrid__headcell">Self (ms)</th>
+          <th class="hc-datagrid__headcell" data-numeric>Total (ms)</th>
+          <th class="hc-datagrid__headcell" data-numeric>Self (ms)</th>
           <th class="hc-datagrid__headcell"></th>
         </tr></thead>
         <tbody class="hc-datagrid__body">
@@ -26,8 +26,8 @@
             <td class="hc-datagrid__cell" th:style="'padding-left:' + ${s.indentPx} + 'px'"><strong th:classappend="${s.slow} ? 'hc-status'"
                 th:attr="data-variant=${s.slow ? 'error' : null}" th:text="${s.name}"></strong></td>
             <td class="hc-datagrid__cell" th:text="${s.app}"></td>
-            <td class="hc-datagrid__cell" th:text="${s.totalMs}"></td>
-            <td class="hc-datagrid__cell" th:text="${s.selfMs}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${s.totalMs}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${s.selfMs}"></td>
             <td class="hc-datagrid__cell"><span class="hc-badge" data-variant="error" th:if="${s.error}">error</span></td>
           </tr>
         </tbody>

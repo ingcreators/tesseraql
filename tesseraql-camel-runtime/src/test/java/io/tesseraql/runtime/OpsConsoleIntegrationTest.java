@@ -317,6 +317,20 @@ class OpsConsoleIntegrationTest {
                 .containsPattern("^[^>]*type=\"number\"");
     }
 
+    /**
+     * The 15s auto-refresh swaps only the status card: the Run forms live outside it, so a
+     * refresh can never discard a parameter the operator is typing
+     * (docs/console-ux-refresh.md slice 3).
+     */
+    @Test
+    void jobsAutoRefreshRegionContainsNoForms() throws Exception {
+        String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
+        assertThat(body).contains("hx-select=\"#jobs-status\"");
+        String refreshed = body.substring(body.indexOf("id=\"jobs-status\""),
+                body.indexOf("Run a job"));
+        assertThat(refreshed).doesNotContain("<form");
+    }
+
     @Test
     void runBindsDeclaredParamsAndRefusesAMissingRequiredOne() throws Exception {
         // The posted param.* fields reach the runner coerced and validated by

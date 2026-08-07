@@ -7,9 +7,12 @@
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
   </div>
 </th:block>
-<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/jobs" hx-trigger="every 15s"
-     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
-<section class="hc-card">
+<div id="page-content" class="hc-stack">
+<!-- Only the status table auto-refreshes (docs/console-ux-refresh.md slice 3): the Run
+     forms live in their own card below, outside the swapped region, so a 15s refresh can
+     never discard a parameter the operator is typing. -->
+<section class="hc-card" id="jobs-status" hx-get="/_tesseraql/ops/console/jobs"
+         hx-trigger="every 15s" hx-select="#jobs-status" hx-target="this" hx-swap="outerHTML">
   <h2>Batch jobs</h2>
   <div class="hc-empty" th:unless="${jobs.hasRows}"><p class="hc-empty__title">No jobs declared.</p></div>
   <div class="hc-datagrid" th:if="${jobs.hasRows}">
@@ -24,7 +27,6 @@
           <th class="hc-datagrid__headcell">Source</th>
           <th class="hc-datagrid__headcell">Last run</th>
           <th class="hc-datagrid__headcell">Started</th>
-          <th class="hc-datagrid__headcell"></th>
         </tr></thead>
         <tbody class="hc-datagrid__body">
           <tr class="hc-datagrid__row" th:each="j : ${jobs.rows}">
@@ -55,29 +57,37 @@
               <span th:unless="${j.hasRun}" th:text="${j.lastStatus}"></span>
             </td>
             <td class="hc-datagrid__cell" th:text="${j.lastStart}"></td>
-            <td class="hc-datagrid__cell">
-              <form method="post" action="/_tesseraql/ops/console/jobs/run" class="hc-stack" data-gap="xs">
-                <input type="hidden" name="_csrf" th:value="${_csrf}">
-                <input type="hidden" name="id" th:value="${j.id}">
-                <!-- Declared job parameters (docs/ops-console-coverage.md): required and
-                     numeric hints catch the common misses in the browser; the binding
-                     inside the runner is what validates. -->
-                <label class="hc-field" th:each="p : ${j.params}">
-                  <span class="hc-field__label" th:text="${p.name}"></span>
-                  <input class="hc-input" data-size="sm"
-                         th:attr="name=|param.${p.name}|,type=${p.numeric} ? 'number' : 'text',required=${p.required} ? 'required' : null,step=${p.numeric} ? 'any' : null">
-                </label>
-                <button class="hc-button" data-size="sm" type="submit">Run</button>
-              </form>
-            </td>
           </tr>
         </tbody>
       </table>
     </div>
   </div>
+</section>
+<section class="hc-card" th:if="${jobs.hasRows}">
+  <h2>Run a job</h2>
   <p class="hc-field__message">Run starts the job now and records you as the trigger; declared
     parameters are validated before the job starts, and the execution page opens when it has
     been accepted.</p>
+  <details class="hc-collapsible" th:each="j : ${jobs.rows}">
+    <summary class="hc-collapsible__trigger">
+      <span th:text="${j.id}">job</span>
+      <span class="hc-field__message" th:text="${j.trigger}">trigger</span> <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span>
+    </summary>
+    <form method="post" action="/_tesseraql/ops/console/jobs/run"
+          class="hc-cluster hc-collapsible__content">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="id" th:value="${j.id}">
+      <!-- Declared job parameters (docs/ops-console-coverage.md): required and
+           numeric hints catch the common misses in the browser; the binding
+           inside the runner is what validates. -->
+      <label class="hc-field" th:each="p : ${j.params}">
+        <span class="hc-field__label" th:text="${p.name}"></span>
+        <input class="hc-input" data-size="sm"
+               th:attr="name=|param.${p.name}|,type=${p.numeric} ? 'number' : 'text',required=${p.required} ? 'required' : null,step=${p.numeric} ? 'any' : null">
+      </label>
+      <button class="hc-button" data-variant="primary" data-size="sm" type="submit">Run</button>
+    </form>
+  </details>
 </section>
 </div>
 </html>

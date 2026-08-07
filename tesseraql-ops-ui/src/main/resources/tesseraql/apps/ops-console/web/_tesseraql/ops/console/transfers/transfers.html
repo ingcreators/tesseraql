@@ -22,7 +22,7 @@
           <th class="hc-datagrid__headcell">Direction</th>
           <th class="hc-datagrid__headcell">Format</th>
           <th class="hc-datagrid__headcell">Status</th>
-          <th class="hc-datagrid__headcell">Rows</th>
+          <th class="hc-datagrid__headcell" data-numeric>Rows</th>
           <th class="hc-datagrid__headcell">File</th>
           <th class="hc-datagrid__headcell">Downloaded</th>
           <th class="hc-datagrid__headcell">Started</th>
@@ -35,7 +35,7 @@
             <td class="hc-datagrid__cell" th:text="${t.direction}"></td>
             <td class="hc-datagrid__cell" th:text="${t.format}"></td>
             <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${t.statusVariant}" th:text="${t.status}"></span></td>
-            <td class="hc-datagrid__cell" th:text="${t.rows}"></td>
+            <td class="hc-datagrid__cell" data-numeric th:text="${t.rows}"></td>
             <td class="hc-datagrid__cell">
               <a th:if="${t.downloadHref != null}" th:href="${t.downloadHref}" download
                  th:text="${t.filename}">file</a>

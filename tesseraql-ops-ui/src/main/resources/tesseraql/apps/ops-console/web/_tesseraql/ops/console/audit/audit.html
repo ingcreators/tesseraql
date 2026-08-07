@@ -30,7 +30,7 @@
             <th class="hc-datagrid__headcell">Request</th>
             <th class="hc-datagrid__headcell">Actor</th>
             <th class="hc-datagrid__headcell">Status</th>
-            <th class="hc-datagrid__headcell">Duration (ms)</th>
+            <th class="hc-datagrid__headcell" data-numeric>Duration (ms)</th>
             <th class="hc-datagrid__headcell">Params</th>
             <th class="hc-datagrid__headcell">Trace</th>
           </tr></thead>
@@ -42,7 +42,7 @@
               <td class="hc-datagrid__cell">[[${a.method}]] <code th:text="${a.path}"></code></td>
               <td class="hc-datagrid__cell" th:text="${a.actor}"></td>
               <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${a.statusVariant}" th:text="${a.status}"></span></td>
-              <td class="hc-datagrid__cell" th:text="${a.durationMs}"></td>
+              <td class="hc-datagrid__cell" data-numeric th:text="${a.durationMs}"></td>
               <td class="hc-datagrid__cell"><code th:text="${a.params}"></code></td>
               <td class="hc-datagrid__cell" th:text="${a.traceId}"></td>
             </tr>
