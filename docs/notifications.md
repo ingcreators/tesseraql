@@ -173,6 +173,62 @@ This message was sent by [(${event.app})] (event [(${event.id})]).
 `payload` is the notification's resolved payload; `event` carries `id`, `source`
 (`<routeOrJobId>.<notifyId>`), and `app`.
 
+## HTML mail
+
+The framework bundles the [hypermedia-components email fragment
+library](https://ingcreators.com/hypermedia-components/integrations/html-email/) under the
+`tql/email/*` template namespace, so an `.html` mail template composes robust HTML email —
+table layout, `role="presentation"`, every style inline, because mail clients strip
+external CSS — without hand-writing any of it:
+
+```html
+<div th:replace="~{tql/email/hc-email-layout :: hcLayout('Ticket assigned',
+    |Ticket ${payload.ticket} was assigned to you|, ~{:: content})}">
+  <div th:fragment="content">
+    <div th:replace="~{tql/email/hc-email :: hcHeading('Ticket assigned')}"></div>
+    <div th:replace="~{tql/email/hc-email :: hcText(|Ticket "${payload.ticket}" was assigned.|)}"></div>
+    <div th:replace="~{tql/email/hc-email :: hcButton(${payload.url}, 'Open ticket')}"></div>
+    <div th:replace="~{tql/email/hc-email :: hcFooter(|Sent by ${event.app}|)}"></div>
+  </div>
+</div>
+```
+
+`hcLayout(title, preheader, content)` is the 600px centered document shell
+(`tql/email/hc-email-layout`); the wrapper hands its own `content` fragment to it, so one
+file carries the whole mail (the helpdesk example's `templates/mail/assigned.html` is the
+working reference). The fragment palette in `tql/email/hc-email`:
+
+| Fragment | Signature |
+| --- | --- |
+| Button | `hcButton(href, label)`, `hcButtonSecondary(href, label)` |
+| Heading | `hcHeading(text)`, `hcSubheading(text)` |
+| Text | `hcText(text)`, `hcTextMuted(text)` |
+| Link | `hcLink(href, label)` |
+| Separator | `hcSeparator` |
+| Badge | `hcBadge(label)`, `hcBadgeInfo/Success/Warning/Error(label)` |
+| Alert | `hcAlertInfo/Success/Warning/Error(title, text)` |
+| Panel | `hcPanel(content)` — content is a fragment expression |
+| Key-value table | `hcKvTable(rows)` — rows iterable with `key`/`value` |
+| Footer | `hcFooter(text)` |
+
+The bundled library is theme-baked at the framework defaults (default accent, `slate`
+neutral — the `tesseraql.ui.neutral` default). The one embedded `<style>` block in the
+layout is enhancement-only (mobile widths, dark scheme) and may be stripped by clients
+without breaking the mail; the load-bearing styling is inline. Known degradations are the
+upstream-documented ones: Outlook's Word engine drops border radii, Gmail may auto-invert
+colors in dark mode.
+
+**Custom theme.** Eject your own artifacts and shadow the bundled ones file-for-file —
+the same L2 move as view-pattern shadowing (docs/declarative-views.md):
+
+```bash
+npx @hypermedia-components/cli email eject --tokens my-theme.json \
+    --dir <appHome>/templates/tql   # writes templates/tql/email/*
+```
+
+The generated files carry a manifest comment (core version, axes, regen command) — edit
+the theme and regenerate rather than hand-editing.
+
 ## Webhook channels
 
 Settings: `url` (required) and `secret` (optional but recommended — without it the POST is

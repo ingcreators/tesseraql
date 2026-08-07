@@ -41,15 +41,17 @@ public final class Templates {
 
     private static TemplateEngine engineFor(Path root) {
         return ENGINES.computeIfAbsent(root, key -> {
-            // The view-pattern override chain (docs/declarative-views.md, customization ladder
-            // L2): an app shadows a framework view pattern by dropping the same-named file under
-            // its templates/ directory (templates/tql/view/form.html restyles every form). Checked
-            // ahead of the classpath resolver, falling through when the app ships no override.
+            // The framework-template override chain (docs/declarative-views.md, customization
+            // ladder L2): an app shadows a framework template by dropping the same-named file
+            // under its templates/ directory — templates/tql/view/form.html restyles every form,
+            // templates/tql/email/hc-email.html swaps in a custom-themed mail fragment library
+            // (docs/notifications.md). Checked ahead of the classpath resolver, falling through
+            // when the app ships no override.
             FileTemplateResolver viewOverrides = new FileTemplateResolver();
             viewOverrides.setPrefix(key.resolve("templates") + java.io.File.separator);
             viewOverrides.setSuffix(".html");
             viewOverrides.setTemplateMode(TemplateMode.HTML);
-            viewOverrides.setResolvablePatterns(java.util.Set.of("tql/view/*"));
+            viewOverrides.setResolvablePatterns(java.util.Set.of("tql/view/*", "tql/email/*"));
             viewOverrides.setCharacterEncoding("UTF-8");
             viewOverrides.setCacheable(true);
             viewOverrides.setCheckExistence(true);

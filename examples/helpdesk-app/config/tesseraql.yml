@@ -51,4 +51,6 @@ tesseraql:
         host: ${MAIL_HOST:localhost}
         port: ${MAIL_PORT:2525}
         from: helpdesk@example.com
-        template: templates/mail/assigned.txt
+        to: agents@example.com
+        subject: "[helpdesk] Ticket [(${payload.ticket})] needs you"
+        template: templates/mail/assigned.html

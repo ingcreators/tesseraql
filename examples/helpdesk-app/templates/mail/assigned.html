@@ -1,0 +1,12 @@
+<!-- The assignment notice as HTML mail, composed from the bundled fragment library
+     (tql/email/*, docs/notifications.md): the wrapper hands its own `content` fragment
+     to the layout, so one file carries the whole mail. -->
+<div th:replace="~{tql/email/hc-email-layout :: hcLayout('Ticket assigned',
+    |Ticket ${payload.ticket} was assigned to you|, ~{:: content})}">
+  <div th:fragment="content">
+    <div th:replace="~{tql/email/hc-email :: hcHeading('Ticket assigned')}"></div>
+    <div th:replace="~{tql/email/hc-email :: hcText(|Ticket "${payload.ticket}" was assigned to you.|)}"></div>
+    <div th:replace="~{tql/email/hc-email :: hcBadge(|Priority: ${payload.priority}|)}"></div>
+    <div th:replace="~{tql/email/hc-email :: hcFooter(|Sent by ${event.app} (event ${event.id})|)}"></div>
+  </div>
+</div>
