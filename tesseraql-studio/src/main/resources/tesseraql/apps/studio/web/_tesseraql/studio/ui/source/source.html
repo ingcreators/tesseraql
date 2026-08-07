@@ -163,6 +163,19 @@
         </form>
       </div>
     </div>
+    <!-- The eject ramp (docs/page-builder.md D2): a view: route renders its pattern once
+         into a hand-owned template and flips to template:. Plain POST + hc-confirm; the
+         hidden confirm satisfies the confirm-before-apply gate — the dialog is the
+         acknowledgment. -->
+    <form method="post" action="/_tesseraql/studio/ui/eject-view" class="hc-cluster"
+          th:if="${src.ejectableView}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <input type="hidden" name="path" th:value="${src.path}">
+      <input type="hidden" name="confirm" value="true">
+      <button type="submit" class="hc-button" data-variant="ghost"
+              data-hc-confirm="Render this route's view into a hand-owned template and flip the route to template:? The view document stops driving rendering."
+              data-hc-confirm-title="Eject view" data-hc-confirm-label="Eject">Eject view to template&hellip;</button>
+    </form>
     <p class="hc-alert" data-variant="warning" role="alert" th:if="${src.conflict}">The saved source changed since this draft was started &mdash; applying overwrites those changes. Review the Compare tab above first.</p>
     <p class="hc-alert" role="note" th:if="${src.confirmApply and not src.conflict and src.hasDraft}">Confirm-before-apply is on: review the Compare tab above, then confirm.</p>
     <div id="apply-result" class="hc-stack" aria-live="polite"></div>

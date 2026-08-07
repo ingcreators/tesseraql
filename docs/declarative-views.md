@@ -283,8 +283,19 @@ as a hand-written template today.
   with the scaffold checksum so edit detection applies) and flips the route from
   `view:` to `template:`. Ejecting pins the layout — a list/detail must declare its
   `columns:`/`fields:` explicitly first — and filled slots inline as static fragment
-  inserts. The view document stays on disk for reference; a Studio surface for the same
-  action is not currently offered.
+  inserts. The view document stays on disk for reference. In Studio, the same action
+  is the "Eject view to template…" button on a `view:` route's source page (confirmed;
+  a hand-edited target blocks until explicitly overwritten), landing on the fresh
+  template.
+
+Past L3, the template stays authorable without hand-writing HTML: Studio's **visual
+builder** ("Edit visually" on eligible templates — shell-wrapped pages like ejected
+views, and bare fragment files) edits the page as a canvas with real kit styling —
+select, drag to reorder, insert components, and edit attributes (with `th:*`
+expressions verbatim) — previewing against sample data and saving through the same
+draft/apply flow as the source editor. The wrapper around the editable region is
+preserved byte-for-byte; a template outside those shapes opens read-only with the
+source editor as the escape hatch.
 
 ## Scaffolding and examples
 

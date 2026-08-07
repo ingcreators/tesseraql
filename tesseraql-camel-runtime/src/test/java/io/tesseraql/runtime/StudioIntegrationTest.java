@@ -229,6 +229,31 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiEjectViewFlipsTheRouteAndOffersTheBuilder() throws Exception {
+        // The route page offers the ramp for a view: route.
+        HttpResponse<String> source = get(
+                "/_tesseraql/studio/ui/source?path=" + enc("web/users/board/get.yml"), true);
+        assertThat(source.body()).contains("Eject view to template");
+
+        // Ejecting renders the pattern once, flips view: to template: and reloads.
+        HttpResponse<String> ejected = postForm("/_tesseraql/studio/ui/eject-view",
+                "path=" + enc("web/users/board/get.yml") + "&confirm=true");
+        assertThat(ejected.statusCode()).isEqualTo(200);
+        assertThat(ejected.body()).contains("View ejected")
+                .contains("ui/builder?path=web/users/board/board.html");
+        assertThat(Files.readString(appHome.resolve("web/users/board/get.yml")))
+                .contains("template: board.html");
+        assertThat(appHome.resolve("web/users/board/board.html")).exists();
+
+        // The fresh template opens in the builder, and the flipped route still serves.
+        HttpResponse<String> builder = get(
+                "/_tesseraql/studio/ui/builder?path=" + enc("web/users/board/board.html"),
+                true);
+        assertThat(builder.statusCode()).isEqualTo(200);
+        assertThat(builder.body()).contains("shell-wrapped page");
+    }
+
+    @Test
     void uiMailListsTheManifestMailChannels() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/studio/ui/mail", true);
 
