@@ -75,11 +75,6 @@ public final class OpsViews {
     }
 
     /**
-     * The audit page model (docs/ops-console-coverage.md): {@code enabled} reports whether
-     * the flag-gated store is on, so the empty state can name the flag instead of
-     * pretending nothing happened. Rows come pre-scoped from the store.
-     */
-    /**
      * Narrows the audit window by route id / actor (contains, case-insensitive) and status
      * (starts-with, so "4" matches every client error). The filter runs over the fetched
      * newest-200 window, not the whole store — the page says so
@@ -107,6 +102,11 @@ public final class OpsViews {
                 .contains(String.valueOf(needle).trim().toLowerCase());
     }
 
+    /**
+     * The audit page model (docs/ops-console-coverage.md): {@code enabled} reports whether
+     * the flag-gated store is on, so the empty state can name the flag instead of
+     * pretending nothing happened. Rows come pre-scoped from the store.
+     */
     public static Map<String, Object> audit(List<Map<String, Object>> rows, boolean enabled) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (rows != null) {
