@@ -1664,6 +1664,11 @@ class StudioIntegrationTest {
         // sidebar destinations server-rendered and the route/job groups loading lazily on
         // first open (intersect once — nothing fetched until the palette is visible).
         String page = get("/_tesseraql/studio/ui/health", true).body();
+        // The UI defaults (docs/hypermedia-ui.md): consoles render the slate ramp (attribute +
+        // token sheet) and stay pinned to compact density regardless of tesseraql.ui.density.
+        assertThat(page).contains("data-neutral=\"slate\"")
+                .contains("hc.tokens.neutral-slate.css")
+                .contains("data-density=\"compact\"");
         assertThat(page)
                 .contains("class=\"hc-command-dialog\" id=\"studio-command\" data-hotkey=\"k\"")
                 .contains("class=\"hc-command__input\"").contains("role=\"combobox\"")

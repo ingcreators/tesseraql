@@ -309,6 +309,28 @@ public final class HtmlResponseRenderer implements Processor {
         if (theme != null) {
             model.put("_theme", theme);
         }
+        // The app's UI defaults (docs/hypermedia-ui.md "UI defaults"): the neutral color ramp
+        // and control density every shell renders, operator-overridable via tesseraql.ui.* and
+        // defaulting to the framework's slate + compact — TesseraQL apps are data-dense work
+        // surfaces, and slate is the brand's neutral. Values are an enum lookup (the runtime
+        // binds only validated overrides); the kit defaults ("neutral" ramp / "comfortable"
+        // density) publish nothing, so the shell emits no attribute and links no extra sheet.
+        String neutral = validNeutral(exchange.getContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.UI_NEUTRAL_BEAN, String.class));
+        if (neutral == null) {
+            neutral = "slate";
+        }
+        if (!"neutral".equals(neutral)) {
+            model.put("_neutral", neutral);
+        }
+        String density = validDensity(exchange.getContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.UI_DENSITY_BEAN, String.class));
+        if (density == null) {
+            density = "compact";
+        }
+        if (!"comfortable".equals(density)) {
+            model.put("_density", density);
+        }
         if (storedTheme != null && !storedTheme.equals(cookieTheme)) {
             exchange.getMessage().setHeader("Set-Cookie", "tesseraql_theme=" + storedTheme
                     + "; Path=/; Max-Age=31536000; SameSite=Lax");
@@ -340,6 +362,18 @@ public final class HtmlResponseRenderer implements Processor {
     /** The theme enum: anything but the known values reads as absent (cookies are hostile). */
     private static String validTheme(String value) {
         return "light".equals(value) || "dark".equals(value) ? value : null;
+    }
+
+    /** The kit's neutral ramps (hc.tokens.neutral-*.css); anything else reads as absent. */
+    private static String validNeutral(String value) {
+        return value != null && java.util.Set.of("neutral", "slate", "zinc", "stone")
+                .contains(value) ? value : null;
+    }
+
+    /** The kit's density sheets (comfortable = the base tokens); anything else is absent. */
+    private static String validDensity(String value) {
+        return value != null && java.util.Set.of("comfortable", "compact", "dense")
+                .contains(value) ? value : null;
     }
 
     /** A minimal request-cookie read (the session store's parser is package-private). */

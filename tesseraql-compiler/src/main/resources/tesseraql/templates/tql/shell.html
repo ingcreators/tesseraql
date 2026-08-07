@@ -12,13 +12,17 @@
      `.hc-shell__label` navs into the desktop collapse-to-icon-rail control. -->
 <!-- data-theme: the reserved `_theme` variable (stored preference > theme cookie > operator
      default, roadmap Phase 48) with the historical dark fallback when nothing chose. -->
-<!-- data-density: the framework consoles (Studio / Ops / IAM) opt into the kit's compact
-     density sheet — 32px controls, tighter card padding — because they are data-dense work
-     surfaces (docs/studio-ux-refresh.md slice 1). App shells (the public `shell(...)` form)
-     keep the kit default; an app opts in on its own markup if it wants to. -->
+<!-- data-density: the framework consoles (Studio / Ops / IAM) pin the kit's compact density
+     sheet — 32px controls, tighter card padding — because they are data-dense work surfaces
+     (docs/studio-ux-refresh.md slice 1). App shells (the public `shell(...)` form) follow the
+     app's UI default (`_density`, tesseraql.ui.density — compact unless overridden), so a
+     touch-first app loosens with one config line without touching markup.
+     data-neutral: the app's neutral ramp (`_neutral`, tesseraql.ui.neutral — slate unless
+     overridden; the kit default renders no attribute). The variant ramps ship as separate
+     token sheets, hence the conditional link below. -->
 <html xmlns:th="http://www.thymeleaf.org" th:fragment="shell-impl(title, nav, header, content, collapsible, density)"
       lang="en" th:lang="${#locale.toLanguageTag()}" data-theme="dark"
-      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${density}">
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${density != null ? density : _density}, data-neutral=${_neutral}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,6 +32,10 @@
 <meta name="csrf-token" th:if="${_csrf}" th:content="${_csrf}">
 <title th:text="${title}">TesseraQL</title>
 <link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<!-- The neutral variant ramp (enum-validated server-side): hc.min.css carries only the default
+     ramp, so a non-default neutral links its token sheet on top. -->
+<link rel="stylesheet" th:if="${_neutral}"
+      th:href="|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 <script src="/assets/vendor/htmx.org/dist/htmx.min.js" defer></script>
 <!-- htmx's sse extension (bundled in the htmx WebJar): the EventSource behind the live
