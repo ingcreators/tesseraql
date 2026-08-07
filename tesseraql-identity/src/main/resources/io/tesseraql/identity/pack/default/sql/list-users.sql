@@ -13,9 +13,11 @@ where
   and u.tenant_id = /* tenantId */ 'tenant-a'
 /*%end*/
 /*%if q != null */
-  and (lower(u.login_id) like '%' || lower(/* q */ 'ali') || '%'
-    or lower(coalesce(u.display_name, '')) like '%' || lower(/* q */ 'ali') || '%'
-    or lower(coalesce(u.email, '')) like '%' || lower(/* q */ 'ali') || '%')
+  -- Nested two-arg concat: the one spelling all four dialects accept (Oracle's concat
+  -- is strictly two-arg; SQL Server has no ||; MySQL's || is logical OR by default).
+  and (lower(u.login_id) like concat('%', concat(lower(/* q */ 'ali'), '%'))
+    or lower(coalesce(u.display_name, '')) like concat('%', concat(lower(/* q */ 'ali'), '%'))
+    or lower(coalesce(u.email, '')) like concat('%', concat(lower(/* q */ 'ali'), '%')))
 /*%end*/
 order by
   u.login_id

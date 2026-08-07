@@ -4,10 +4,72 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.12.0 - 2026-08-07
+
+The UI/UX release: a full-surface refresh of Studio and every other framework-provided
+screen (Operations Console, IAM Admin, the account surface, the auth pages), the
+Hypermedia Components 0.1.13 upgrade, and app-wide slate/compact defaults. **Includes a
+pre-1.0 rendering-contract change** — see Changed.
+
+### Added
+
+- **Studio UX refresh** (docs/hypermedia-ui.md): a command palette (`⌘K` — navigate,
+  open-in-editor, create-route-here), the explorer as a keyboard-navigable tree with
+  hover row actions, live wizard previews with a progress stepper, a two-column source
+  editor (sticky action bar, `Ctrl/Cmd+S` saves), health/security stat tiles with
+  URL-routed filters, month-grid business calendars with click-to-toggle holidays,
+  card anatomy and one semantic color vocabulary across all Studio pages, and a flash
+  confirmation after every mutation.
+- **App-wide UI defaults** `tesseraql.ui.neutral` (default `slate`) and
+  `tesseraql.ui.density` (default `compact`) (docs/hypermedia-ui.md): every generated
+  app and console renders on the slate neutral ramp at compact density out of the box;
+  both are overridable per app, and the standalone auth pages follow the same ramp so
+  the sign-in screen matches everything behind it.
+- **Console parity with Studio** (docs/console-ux-refresh.md, internal): flash
+  confirmations for every IAM Admin and account mutation (including TOTP enrollment
+  and bulk disable with a count), a server-side contains-search on the IAM users list
+  (login/display name/email), route/actor/status filters on the ops audit trail,
+  stat-tile roll-ups on the ops overview, `INVITED` badged as info (not error), and
+  Enable/Disable offered by the user's current status.
+- **Data browser numeric columns** align: column types come from the result set's JDBC
+  metadata (works across DuckDB attached catalogs), rendered with the kit's
+  `data-numeric` end-alignment — as do durations, row counts and lane counters across
+  the Operations Console.
+- **Hypermedia Components 0.1.13**: the kit now submits confirmed plain forms, guards
+  tree row actions, ships the declarative `data-hc-show-switch`/`data-hc-show-when`
+  contract, and end-aligns `data-numeric` table columns — the framework's interim
+  stand-ins for all four are retired.
+
+### Changed
+
+- **Pre-1.0 rendering-contract change**: the generated view templates
+  (`tql/view/list|form|detail|dashboard`), the `tesseraql new` starter page, and the
+  example gallery now render titles in the kit's card anatomy
+  (`hc-card__header`/`hc-card__body`), and the global bare-`h2` scale is gone from
+  `tesseraql.css` — a bare heading outside a card is a page title on the UA scale. An
+  app that shipped custom templates against the old flat-card markup re-renders with
+  UA-scale headings until it adopts the anatomy (no user apps are known to exist yet;
+  L2 template overrides are unaffected).
+- The Batch Jobs console page is now two cards: the status table auto-refreshes alone,
+  and Run forms live in a separate non-refreshing card, so the 15 s refresh can never
+  discard a parameter mid-typing. The audit page applies the same shape around its new
+  filter form.
 
 ### Fixed
 
+- **Changing your password now explains the sign-out**: the login page renders
+  `reason=password-changed` — previously the account surface sent it but the page
+  never read it, so the user was signed out on every device (by design) with no
+  explanation.
+- **The Batch Jobs auto-refresh no longer discards Run-form input** (see Changed for
+  the shape).
+- **SQL Server runtime bootstrap no longer fails on re-run**: the batch schema's
+  column-add migrations (business date, chunk skip counts, execution params, cancel
+  flag) were missing the `if col_length(...) is null` guard the SQL Server dialect
+  scripts use for idempotency, so the second `ensureSchema` pass in one runtime start
+  aborted with a duplicate-column error (SQL Server's 2705 is not in the tolerated
+  already-exists set the other dialects rely on). Found by the gated
+  `SqlServerPortabilityIntegrationTest` during release verification.
 - **Every database-touching CLI command finds the running `serve --embedded-db`**
   (docs/getting-started.md): `scaffold crud`, `migrate`, `test`, `job`, `schema`, and
   `coverage` now share `identity-schema`'s datasource resolution — an explicit
