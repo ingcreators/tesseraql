@@ -1,9 +1,10 @@
 # Pages overview + mail wiring lints
 
-> **Status: design.** Internal design document (docs-site `EXCLUDED`). Two small,
-> independent slices closing gaps the HTML email (docs/html-email.md) and page builder
-> (docs/page-builder.md) campaigns exposed: the authoring surfaces exist but have no
-> overview page, and mail template wiring is validated only at delivery time.
+> **Status: complete.** Both slices landed 2026-08-07: the Pages overview (`ui/pages` +
+> sidebar/command-palette entries) and the mail wiring lints (`TQL-BATCH-5304` at build
+> time, `TQL-TPL-2002`, `TQL-TPL-2003`; `EmailFragments` shared with the composer
+> palette). Internal design document (docs-site `EXCLUDED`); user-facing documentation
+> lives in `notifications.md`.
 
 ## Motivation
 

@@ -229,6 +229,16 @@ npx @hypermedia-components/cli email eject --tokens my-theme.json \
 The generated files carry a manifest comment (core version, axes, regen command) — edit
 the theme and regenerate rather than hand-editing.
 
+**Build-time wiring checks.** Because a mail body is otherwise only exercised at
+delivery, lint validates the wiring: a mail channel's literal `template:` must be a file
+inside the app home (`TQL-BATCH-5304` — the send-time code, surfaced at build time), an
+`.html` body may reference only fragments the `tql/email` library declares
+(`TQL-TPL-2002`, read from the app's shadow copy when present), and a `${...}` root in
+the body or `subject` that is neither `payload`/`event` nor a `th:each`/`th:with` alias
+warns (`TQL-TPL-2003`) — binds like `${ticket}` instead of `${payload.ticket}` render as
+empty at delivery and are otherwise invisible to tests. A `template:` value carrying a
+`${...}` config placeholder is environment-dependent and skipped.
+
 **Studio.** Studio's Mail page (explorer → Create with → Mail) lists the app's mail
 channels and opens an `.html` template composed from these blocks in a no-code composer:
 add/reorder/remove blocks, edit their arguments, and preview the rendered mail against
@@ -335,6 +345,11 @@ the build like any other kind.
 - a malformed `when:` guard (`TQL-SQL-2101`)
 - a channel the config does not declare (`TQL-YAML-1102`, warning — another environment's
   config may declare it)
+- a mail channel's `template:` that is not a file inside the app home
+  (`TQL-BATCH-5304`, at build time), an `.html` body referencing an unknown `tql/email`
+  fragment (`TQL-TPL-2002`), and a `${...}` root outside `payload`/`event`/template
+  aliases in the body or `subject` (`TQL-TPL-2003`, warning) — see
+  [HTML mail](#html-mail)
 
 ## Error codes
 
@@ -346,5 +361,7 @@ the build like any other kind.
 | `TQL-BATCH-5301` | delivery: the referenced channel is not configured |
 | `TQL-BATCH-5302` | delivery: the notification envelope failed to encode/decode |
 | `TQL-BATCH-5303` | delivery: the webhook receiver answered non-2xx |
-| `TQL-BATCH-5304` | delivery: mail channel misdeclared or template outside the app home |
+| `TQL-BATCH-5304` | delivery/lint: mail channel misdeclared or template missing/outside the app home |
+| `TQL-TPL-2002` | lint: mail template references an unknown `tql/email` fragment |
+| `TQL-TPL-2003` | lint: mail body/subject `${...}` root outside the mail model (warning) |
 | `TQL-OPS-9006` | alert: outbox events are dead-lettered |
