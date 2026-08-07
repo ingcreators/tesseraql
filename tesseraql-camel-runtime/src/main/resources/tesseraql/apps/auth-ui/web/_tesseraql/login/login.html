@@ -3,12 +3,17 @@
      sign-in), styled with the Hypermedia Components kit, no inline script (CSP-safe). A plain HTML
      form, so it works without JavaScript: the post lands at POST /_tesseraql/login. -->
 <html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
-      data-theme="dark" th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
+      data-theme="dark"
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${_density}, data-neutral=${_neutral}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in &middot; TesseraQL</title>
 <link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<!-- The configured neutral ramp rides on top of hc.min.css exactly as the app shell links
+     it: the sign-in screen must match everything behind it. -->
+<link rel="stylesheet" th:if="${_neutral}"
+      th:href="|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>
@@ -21,6 +26,12 @@
     </div>
     <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
       <p class="hc-alert__title">Account activated. Sign in with your new password.</p>
+    </div>
+    <!-- Changing the password signs the account out everywhere (credential-lifecycle);
+         this is the only place that fact can be explained to the user. -->
+    <div th:if="${reason == 'password-changed'}" class="hc-alert" data-variant="success" role="status">
+      <p class="hc-alert__title">Password changed. Sign in again with your new password.</p>
+      <p>For safety, changing your password signed you out on every device.</p>
     </div>
     <div th:if="${error == 'rate'}" class="hc-alert" data-variant="error" role="alert">
       <p class="hc-alert__title">Too many attempts. Wait a few minutes and try again.</p>

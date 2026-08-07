@@ -20,6 +20,9 @@ input:
   invited:
     type: string
     required: false
+  reason:
+    type: string
+    required: false
 
 security:
   auth: public
@@ -37,5 +40,6 @@ response:
       error: params.error
       reset: params.reset
       invited: params.invited
+      reason: params.reason
     headers:
       Cache-Control: "no-store"

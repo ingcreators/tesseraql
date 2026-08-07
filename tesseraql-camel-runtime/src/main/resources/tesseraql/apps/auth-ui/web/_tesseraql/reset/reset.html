@@ -2,12 +2,15 @@
 <!-- The password-reset request page (roadmap Phase 50). Standalone like the login page. The
      confirmation box renders identically whatever the login was - no enumeration oracle. -->
 <html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
-      data-theme="dark" th:attr="data-theme=${_theme != null ? _theme : 'dark'}">
+      data-theme="dark"
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${_density}, data-neutral=${_neutral}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reset password &middot; TesseraQL</title>
 <link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" th:if="${_neutral}"
+      th:href="|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|">
 <link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
 </head>
 <body>

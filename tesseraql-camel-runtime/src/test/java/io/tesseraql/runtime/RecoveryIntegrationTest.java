@@ -154,6 +154,15 @@ class RecoveryIntegrationTest {
         assertThat(get("/_tesseraql/reset/confirm?invalid=1").body())
                 .contains("no longer valid");
         assertThat(get("/_tesseraql/login").body()).contains("Forgot password?");
+        // The forced sign-out after a password change explains itself, and the standalone
+        // pages link the configured neutral ramp so the first screen matches the shell
+        // behind it (docs/console-ux-refresh.md slice 1).
+        assertThat(get("/_tesseraql/login?reason=password-changed").body())
+                .contains("signed you out on every device");
+        assertThat(get("/_tesseraql/login").body())
+                .contains("hc.tokens.neutral-slate.css");
+        assertThat(get("/_tesseraql/reset").body())
+                .contains("hc.tokens.neutral-slate.css");
     }
 
     private static long resetMailCount() {
