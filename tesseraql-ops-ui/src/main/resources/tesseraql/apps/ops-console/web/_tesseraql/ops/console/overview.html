@@ -51,11 +51,20 @@
 <section class="hc-card" id="batch">
   <div class="hc-card__header">Batch executions</div>
   <div class="hc-card__body hc-stack">
-    <p>Total scanned: <strong th:text="${ops.batchTotal}"></strong></p>
-    <ul class="hc-chips">
-      <li th:each="s : ${ops.byStatus}" class="hc-badge"
-          th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
-    </ul>
+    <!-- Roll-up as stat tiles (docs/console-ux-refresh.md slice 5): a problem status
+         (error/warning variant with a non-zero count) colors its value; neutral facts
+         stay neutral. -->
+    <div class="tql-stats">
+      <div class="tql-stat">
+        <span class="tql-stat__value" th:text="${ops.batchTotal}">0</span>
+        <span class="tql-stat__label">scanned</span>
+      </div>
+      <div class="tql-stat" th:each="s : ${ops.byStatus}"
+           th:attr="data-tone=${(s.statusVariant == 'error' or s.statusVariant == 'warning') and s.count > 0} ? ${s.statusVariant} : null">
+        <span class="tql-stat__value" th:text="${s.count}">0</span>
+        <span class="tql-stat__label" th:text="${s.status}">status</span>
+      </div>
+    </div>
     <div class="hc-empty" th:unless="${ops.hasRecent}"><p class="hc-empty__title">No batch executions recorded.</p></div>
     <div class="hc-datagrid" th:if="${ops.hasRecent}">
       <div class="hc-datagrid__scroll">
@@ -120,13 +129,28 @@
 <section class="hc-card" id="traces">
   <div class="hc-card__header">Trace metrics</div>
   <div class="hc-card__body hc-stack">
-    <ul class="hc-chips">
-      <li class="hc-chip">Spans: <strong th:text="${ops.metrics.spans}"></strong></li>
-      <li class="hc-chip">Span error rate: <strong>[[${ops.metrics.spanErrorRate}]]%</strong></li>
-      <li class="hc-chip">Slow span rate: <strong>[[${ops.metrics.slowRate}]]%</strong></li>
-      <li class="hc-chip">Traces: <strong th:text="${ops.metrics.traces}"></strong></li>
-      <li class="hc-chip">Trace error rate: <strong>[[${ops.metrics.traceErrorRate}]]%</strong></li>
-    </ul>
+    <div class="tql-stats">
+      <div class="tql-stat">
+        <span class="tql-stat__value" th:text="${ops.metrics.spans}">0</span>
+        <span class="tql-stat__label">spans</span>
+      </div>
+      <div class="tql-stat">
+        <span class="tql-stat__value">[[${ops.metrics.spanErrorRate}]]%</span>
+        <span class="tql-stat__label">span errors</span>
+      </div>
+      <div class="tql-stat">
+        <span class="tql-stat__value">[[${ops.metrics.slowRate}]]%</span>
+        <span class="tql-stat__label">slow spans</span>
+      </div>
+      <div class="tql-stat">
+        <span class="tql-stat__value" th:text="${ops.metrics.traces}">0</span>
+        <span class="tql-stat__label">traces</span>
+      </div>
+      <div class="tql-stat">
+        <span class="tql-stat__value">[[${ops.metrics.traceErrorRate}]]%</span>
+        <span class="tql-stat__label">trace errors</span>
+      </div>
+    </div>
   </div>
 </section>
 <section class="hc-card" id="slow-sql">

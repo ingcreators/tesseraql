@@ -135,6 +135,8 @@ class OpsConsoleIntegrationTest {
         assertThat(body).contains("id=\"health\"")
                 .contains("main: reachable")
                 .contains(io.tesseraql.core.TesseraqlVersion.current());
+        // The batch and trace roll-ups read as stat tiles (console-ux-refresh slice 5).
+        assertThat(body).contains("tql-stat__value").contains("tql-stat__label");
     }
 
     @Test
@@ -147,6 +149,8 @@ class OpsConsoleIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Route audit is not enabled")
                 .contains("tesseraql.audit.routes.enabled");
+        // A disabled store offers no filter either — the form belongs to the results.
+        assertThat(response.body()).doesNotContain("Route contains");
     }
 
     @Test

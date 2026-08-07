@@ -1067,11 +1067,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // (docs/ops-console-coverage.md).
                     .register("ops.audit",
                             params -> io.tesseraql.opsui.OpsViews.audit(
-                                    auditStoreRef == null
-                                            ? null
-                                            : auditStoreRef.recent(200,
-                                                    io.tesseraql.opsui.OpsScope.allowedApps(
-                                                            params.get("permissions"))),
+                                    io.tesseraql.opsui.OpsViews.filterAudit(
+                                            auditStoreRef == null
+                                                    ? null
+                                                    : auditStoreRef.recent(200,
+                                                            io.tesseraql.opsui.OpsScope
+                                                                    .allowedApps(params
+                                                                            .get("permissions"))),
+                                            params.get("route"), params.get("actor"),
+                                            params.get("status")),
                                     auditStoreRef != null))
                     .register("ops.traces",
                             params -> io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(

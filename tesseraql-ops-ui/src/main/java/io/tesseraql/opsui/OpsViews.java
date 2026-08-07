@@ -79,6 +79,34 @@ public final class OpsViews {
      * the flag-gated store is on, so the empty state can name the flag instead of
      * pretending nothing happened. Rows come pre-scoped from the store.
      */
+    /**
+     * Narrows the audit window by route id / actor (contains, case-insensitive) and status
+     * (starts-with, so "4" matches every client error). The filter runs over the fetched
+     * newest-200 window, not the whole store — the page says so
+     * (docs/console-ux-refresh.md slice 5).
+     */
+    public static List<Map<String, Object>> filterAudit(List<Map<String, Object>> rows,
+            Object route, Object actor, Object status) {
+        if (rows == null) {
+            return null;
+        }
+        return rows.stream()
+                .filter(row -> containsIgnoreCase(row.get("routeId"), route))
+                .filter(row -> containsIgnoreCase(row.get("actor"), actor))
+                .filter(row -> status == null || String.valueOf(status).isBlank()
+                        || String.valueOf(row.get("status"))
+                                .startsWith(String.valueOf(status).trim()))
+                .toList();
+    }
+
+    private static boolean containsIgnoreCase(Object value, Object needle) {
+        if (needle == null || String.valueOf(needle).isBlank()) {
+            return true;
+        }
+        return value != null && String.valueOf(value).toLowerCase()
+                .contains(String.valueOf(needle).trim().toLowerCase());
+    }
+
     public static Map<String, Object> audit(List<Map<String, Object>> rows, boolean enabled) {
         List<Map<String, Object>> out = new ArrayList<>();
         if (rows != null) {

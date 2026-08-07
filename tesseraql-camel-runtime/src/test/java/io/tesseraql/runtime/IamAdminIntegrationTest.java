@@ -92,6 +92,18 @@ class IamAdminIntegrationTest {
         assertThat(response.body()).contains("/_tesseraql/admin/users/u1");
     }
 
+    /** Slice 5: the list narrows server-side by login/display-name/email contains. */
+    @Test
+    void usersListFiltersByLoginNameOrEmail() throws Exception {
+        String byLogin = get("/_tesseraql/admin/users?q=bob", true).body();
+        assertThat(byLogin).contains(">bob<").doesNotContain(">admin<");
+        // Email matches too (only u1 carries admin@example.com).
+        String byEmail = get("/_tesseraql/admin/users?q=example.com", true).body();
+        assertThat(byEmail).contains(">admin<").doesNotContain(">bob<");
+        assertThat(get("/_tesseraql/admin/users?q=matches-nothing", true).body())
+                .contains("No users found.");
+    }
+
     @Test
     void showsUserDetailWithRolesGroupsPermissions() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/admin/users/u1", true);
