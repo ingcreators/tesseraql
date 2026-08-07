@@ -199,6 +199,19 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiPagesListsHtmlRoutesWithTheirLadderState() throws Exception {
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/pages", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The stats route is a declarative dashboard view (never ejected by other tests);
+        // the users page is a hand-owned template that opens in the builder.
+        assertThat(response.body()).contains("view · dashboard")
+                .contains("stats.view.yml")
+                .contains(">template<")
+                .contains("ui/builder?path=web/users/index.html");
+    }
+
+    @Test
     void renderPreviewRunsScriptsOnlyOnOptIn() throws Exception {
         String form = "path=" + enc("web/users/index.html");
 
