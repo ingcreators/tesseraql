@@ -151,4 +151,6 @@ export const EXCLUDED = [
   'studio-ux-refresh.md',
   // Console UX refresh (ops/IAM/account/auth review + slice plan), 2026-08-07.
   'console-ux-refresh.md',
+  // HTML email (bundled hc-email fragments + Studio mail composer), 2026-08-07.
+  'html-email.md',
 ];
