@@ -37,6 +37,7 @@ public final class ViewEjector {
             case ViewSpec.LIST -> list(appHome, routeDir, spec);
             case ViewSpec.DETAIL -> detail(appHome, routeDir, spec);
             case ViewSpec.FORM -> form(appHome, routeDir, spec, fields);
+            case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec);
             default -> throw new TqlException(ViewSpec.INVALID_VIEW,
                     "Cannot eject view kind " + spec.view());
         };
@@ -116,8 +117,8 @@ public final class ViewEjector {
             html.append("    <div class=\"hc-field\">\n"
                     + "      <span class=\"hc-field__label\">").append(escape(labelText))
                     .append("</span>\n"
-                            + "      <span th:text=\"${row == null ? '' : row['")
-                    .append(field.name()).append("']}\">").append(field.name())
+                            + "      <span th:text=\"${row == null ? '' : row")
+                    .append(key(field.name())).append("}\">").append(field.name())
                     .append("</span>\n"
                             + "    </div>\n");
         }
@@ -153,6 +154,132 @@ public final class ViewEjector {
         }
         slot(html, appHome, routeDir, spec, "footer", "  ");
         html.append("</section>\n");
+        return pageClose(html);
+    }
+
+    /**
+     * The dashboard pattern pinned to static markup (docs/pages-and-mail-lints.md
+     * follow-ups): the kit's {@code hc-grid} of panel cards. A stat reads its column off
+     * the first row, a sparkline joins its column with an OGNL projection, a chart emits
+     * the {@code data-hc-chart} figure with its source table (the data, the no-JS
+     * fallback, and the screen-reader representation in one), and a table panel reuses
+     * the list cells. A sparkline's {@code data-max} is dropped — the render-time
+     * derivation has no static equivalent; the hand-owned template can pin one.
+     */
+    private static String dashboard(Path appHome, Path routeDir, ViewSpec spec) {
+        for (ViewSpec.Panel panel : spec.panels()) {
+            switch (panel.type()) {
+                case "stat", "sparkline" -> require(panel.column() != null,
+                        "a " + panel.type() + " panel needs column: before ejecting");
+                case "chart" -> require(panel.x() != null && !panel.effectiveSeries().isEmpty(),
+                        "a chart panel needs x: and series:/y: before ejecting");
+                case "table" -> require(!panel.columns().isEmpty(),
+                        "a table panel needs explicit columns: before ejecting"
+                                + " — the template pins them");
+                default -> throw new TqlException(ViewSpec.INVALID_VIEW,
+                        "Cannot eject panel type " + panel.type());
+            }
+        }
+        StringBuilder html = pageOpen(spec);
+        titleCluster(html, appHome, routeDir, spec);
+        html.append("<div class=\"hc-grid\">\n");
+        boolean hasChart = false;
+        for (ViewSpec.Panel panel : spec.panels()) {
+            String source = panel.source() != null ? panel.source() : spec.source();
+            String title = panel.title() != null
+                    ? panel.title()
+                    : ViewFields.humanize(source);
+            html.append("  <section class=\"hc-card\">\n"
+                    + "    <div class=\"hc-card__header\"><h3>").append(escape(title))
+                    .append("</h3></div>\n"
+                            + "    <div class=\"hc-card__body hc-stack\">\n");
+            switch (panel.type()) {
+                case "stat" -> html.append("      <p><strong th:text=\"${#lists.isEmpty(")
+                        .append(source).append(".rows) ? '—' : ").append(source)
+                        .append(".rows[0]").append(key(panel.column()))
+                        .append("}\">0</strong></p>\n");
+                // The OGNL projection `rows.{col}` reads the column off each row map —
+                // `#this` is forbidden by Thymeleaf 3.1's restricted evaluation, the bare
+                // property form is not.
+                case "sparkline" -> html.append("      <span class=\"hc-sparkline\""
+                        + " data-min=\"0\" th:attr=\"data-values=${#strings.listJoin(")
+                        .append(source).append(".rows.{").append(panel.column())
+                        .append("}, ',')}\" aria-label=\"").append(escape(title))
+                        .append("\"></span>\n");
+                case "chart" -> {
+                    hasChart = true;
+                    html.append("      <figure class=\"hc-chart\" data-hc-chart=\"")
+                            .append(panel.kind() == null ? "bar" : panel.kind()).append("\"")
+                            .append(attr("data-x-type", panel.xType()))
+                            .append(attr("data-height", panel.height()))
+                            .append(attr("data-legend", panel.legend()))
+                            .append(attr("data-y-label", panel.yLabel()))
+                            .append(">\n"
+                                    + "        <table class=\"hc-table\">\n"
+                                    + "          <caption>")
+                            .append(escape(title)).append("</caption>\n"
+                                    + "          <thead><tr>\n"
+                                    + "            <th>")
+                            .append(escape(ViewFields.humanize(panel.x()))).append("</th>\n");
+                    for (ViewSpec.Series series : panel.effectiveSeries()) {
+                        String label = series.label() != null
+                                ? series.label()
+                                : ViewFields.humanize(series.column());
+                        html.append("            <th")
+                                .append(attr("data-mark", series.mark())).append(">")
+                                .append(escape(label)).append("</th>\n");
+                    }
+                    html.append("          </tr></thead>\n"
+                            + "          <tbody>\n"
+                            + "            <tr th:each=\"row : ${").append(source)
+                            .append(".rows}\">\n"
+                                    + "              <td th:text=\"${row")
+                            .append(key(panel.x())).append("}\">x</td>\n");
+                    for (ViewSpec.Series series : panel.effectiveSeries()) {
+                        html.append("              <td th:text=\"${row")
+                                .append(key(series.column())).append("}\">v</td>\n");
+                    }
+                    html.append("            </tr>\n"
+                            + "          </tbody>\n"
+                            + "        </table>\n"
+                            + "      </figure>\n");
+                }
+                case "table" -> {
+                    html.append("      <div class=\"hc-datagrid\">\n"
+                            + "        <div class=\"hc-datagrid__scroll\">\n"
+                            + "          <table class=\"hc-datagrid__table\">\n"
+                            + "            <thead class=\"hc-datagrid__head\">\n"
+                            + "              <tr>\n");
+                    for (ViewSpec.Column column : panel.columns()) {
+                        html.append("                <th class=\"hc-datagrid__headcell\">")
+                                .append(escape(label(column))).append("</th>\n");
+                    }
+                    html.append("              </tr>\n"
+                            + "            </thead>\n"
+                            + "            <tbody class=\"hc-datagrid__body\">\n"
+                            + "              <tr class=\"hc-datagrid__row\" th:each=\"row : ${")
+                            .append(source).append(".rows}\">\n");
+                    for (ViewSpec.Column column : panel.columns()) {
+                        cell(html, column, "                ");
+                    }
+                    html.append("              </tr>\n"
+                            + "            </tbody>\n"
+                            + "          </table>\n"
+                            + "        </div>\n"
+                            + "      </div>\n");
+                }
+                default -> throw new IllegalStateException(panel.type());
+            }
+            html.append("    </div>\n  </section>\n");
+        }
+        html.append("</div>\n");
+        slot(html, appHome, routeDir, spec, "footer", "");
+        if (hasChart) {
+            // installChart needs Observable Plot; both self-hosted, CSP stays 'self'.
+            html.append("<script src=\"/assets/vendor/observablehq__plot/dist/plot.umd.min.js\""
+                    + " defer></script>\n"
+                    + "<script type=\"module\" src=\"/assets/_tesseraql/charts.js\"></script>\n");
+        }
         return pageClose(html);
     }
 
@@ -303,12 +430,12 @@ public final class ViewEjector {
     private static void cell(StringBuilder html, ViewSpec.Column column, String indent) {
         if (column.link() != null) {
             html.append(indent).append("<td class=\"hc-datagrid__cell\"><a th:href=\"|")
-                    .append(linkTemplate(column.link(), "row")).append("|\" th:text=\"${row['")
-                    .append(column.name()).append("']}\">").append(column.name())
+                    .append(linkTemplate(column.link(), "row")).append("|\" th:text=\"${row")
+                    .append(key(column.name())).append("}\">").append(column.name())
                     .append("</a></td>\n");
         } else {
-            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${row['")
-                    .append(column.name()).append("']}\">").append(column.name())
+            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${row")
+                    .append(key(column.name())).append("}\">").append(column.name())
                     .append("</td>\n");
         }
     }
@@ -316,12 +443,12 @@ public final class ViewEjector {
     private static void childCell(StringBuilder html, ViewSpec.Column column, String indent) {
         if (column.link() != null) {
             html.append(indent).append("<td class=\"hc-datagrid__cell\"><a th:href=\"|")
-                    .append(linkTemplate(column.link(), "child")).append("|\" th:text=\"${child['")
-                    .append(column.name()).append("']}\">").append(column.name())
+                    .append(linkTemplate(column.link(), "child")).append("|\" th:text=\"${child")
+                    .append(key(column.name())).append("}\">").append(column.name())
                     .append("</a></td>\n");
         } else {
-            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${child['")
-                    .append(column.name()).append("']}\">").append(column.name())
+            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${child")
+                    .append(key(column.name())).append("}\">").append(column.name())
                     .append("</td>\n");
         }
     }
@@ -332,7 +459,7 @@ public final class ViewEjector {
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
             matcher.appendReplacement(out, Matcher.quoteReplacement(
-                    "${" + var + "['" + matcher.group(1) + "']}"));
+                    "${" + var + key(matcher.group(1)) + "}"));
         }
         matcher.appendTail(out);
         return out.toString();
@@ -345,7 +472,16 @@ public final class ViewEjector {
     /** The null-safe prefill expression an ejected field reads its current value from. */
     private static String prefill(ViewFields.FieldDef field) {
         String column = field.column() != null ? field.column() : ViewFields.snake(field.name());
-        return "row == null ? '' : row['" + column + "']";
+        return "row == null ? '' : row" + key(column) + "";
+    }
+
+    /**
+     * A map key inside a generated OGNL expression. A single-quoted ONE-character string
+     * is a char literal in OGNL ({@code map.get('n')} misses the String key), so 1-char
+     * column names quote with {@code &quot;} entities instead.
+     */
+    private static String key(String name) {
+        return name.length() == 1 ? "[&quot;" + name + "&quot;]" : "['" + name + "']";
     }
 
     private static String attr(String name, Object value) {

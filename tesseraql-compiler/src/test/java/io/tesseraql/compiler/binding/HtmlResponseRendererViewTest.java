@@ -333,4 +333,54 @@ class HtmlResponseRendererViewTest {
         assertThat(html).contains("href=\"/items/7\"").contains(">Bolt</a>");
         assertThat(html).contains("hc-datagrid__table");
     }
+
+    @Test
+    void anEjectedDashboardTemplateRendersStatically(@TempDir Path dir) throws Exception {
+        // The dashboard eject (docs/pages-and-mail-lints.md follow-ups): every panel kind
+        // renders without the view machinery — including the sparkline's OGNL projection.
+        Files.writeString(dir.resolve("page.view.yml"), """
+                kind: view
+                view: dashboard
+                title: Stats
+                panels:
+                  - title: Users
+                    type: stat
+                    column: user_count
+                  - title: By status
+                    type: chart
+                    kind: bar
+                    source: byStatus
+                    x: status
+                    y: n
+                  - title: Trend
+                    type: sparkline
+                    source: byStatus
+                    column: n
+                  - title: Latest
+                    type: table
+                    source: recent
+                    columns:
+                      - name: name
+                """);
+        io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec
+                .parse(dir.resolve("page.view.yml"));
+        io.tesseraql.yaml.scaffold.ScaffoldedFile ejected = io.tesseraql.yaml.view.ViewEjector
+                .eject(dir, dir, "page.view.yml", spec, List.of(), "page.html");
+        Files.writeString(dir.resolve("page.html"), ejected.content());
+
+        String html = Templates.render(dir, "page.html", Map.of(
+                "sql", Map.of("rows", List.of(Map.of("user_count", 42))),
+                "byStatus", Map.of("rows", List.of(
+                        Map.of("status", "ACTIVE", "n", 3),
+                        Map.of("status", "DISABLED", "n", 1))),
+                "recent", Map.of("rows", List.of(Map.of("name", "sato")))),
+                java.util.Locale.ENGLISH);
+
+        assertThat(html).contains(">42</strong>");
+        assertThat(html).contains("data-hc-chart=\"bar\"")
+                .contains("<td>ACTIVE</td>").contains("<td>3</td>");
+        assertThat(html).contains("data-values=\"3,1\"");
+        assertThat(html).contains(">sato</td>");
+        assertThat(html).contains("plot.umd.min.js");
+    }
 }
