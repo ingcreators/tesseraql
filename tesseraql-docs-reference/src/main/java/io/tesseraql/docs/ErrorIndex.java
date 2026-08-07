@@ -429,7 +429,7 @@ final class ErrorIndex {
             "credential-throttle.md", "framework-datasource.md", "decision-tables.md",
             "procurement-demo.md", "workflow-expressiveness.md", "transition-engine.md",
             "batch-platform.md", "analytics-experience.md", "studio-ux-refresh.md",
-            "console-ux-refresh.md", "html-email.md");
+            "console-ux-refresh.md", "html-email.md", "page-builder.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every

@@ -153,4 +153,6 @@ export const EXCLUDED = [
   'console-ux-refresh.md',
   // HTML email (bundled hc-email fragments + Studio mail composer), 2026-08-07.
   'html-email.md',
+  // Visual page builder (editor-kit canvas over ejected templates + eject ramp), 2026-08-07.
+  'page-builder.md',
 ];
