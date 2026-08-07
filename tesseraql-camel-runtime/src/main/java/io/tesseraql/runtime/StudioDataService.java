@@ -227,8 +227,10 @@ final class StudioDataService {
                     ResultSetMetaData meta = rs.getMetaData();
                     int columnCount = meta.getColumnCount();
                     List<String> columns = new ArrayList<>();
+                    List<Boolean> numeric = new ArrayList<>();
                     for (int i = 1; i <= columnCount; i++) {
                         columns.add(meta.getColumnLabel(i));
+                        numeric.add(isNumericType(meta.getColumnType(i)));
                     }
                     int skipped = 0;
                     while (skipped < offset && rs.next()) {
@@ -248,7 +250,8 @@ final class StudioDataService {
                         }
                         rows.add(row);
                     }
-                    return new DataPage(ref.display(), columns, rows, safePage, hasNext);
+                    return new DataPage(ref.display(), columns, numeric, rows, safePage,
+                            hasNext);
                 }
             }
         } catch (SQLException ex) {
@@ -602,7 +605,22 @@ final class StudioDataService {
     }
 
     /** One page of a table's rows: its columns, the rows (null-preserving), page, and hasNext. */
-    record DataPage(String table, List<String> columns, List<List<String>> rows, int page,
-            boolean hasNext) {
+    record DataPage(String table, List<String> columns, List<Boolean> numeric,
+            List<List<String>> rows, int page, boolean hasNext) {
+    }
+
+    /**
+     * Whether a JDBC type renders as a number — the data browser's {@code data-numeric} column
+     * hint (hc-briefs.md brief 7): numeric columns end-align and the kit's tabular figures do
+     * the digit alignment. From {@link ResultSetMetaData}, so it is the RESULT's truth, not a
+     * schema guess.
+     */
+    private static boolean isNumericType(int jdbcType) {
+        return switch (jdbcType) {
+            case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT, Types.FLOAT,
+                    Types.REAL, Types.DOUBLE, Types.NUMERIC, Types.DECIMAL ->
+                true;
+            default -> false;
+        };
     }
 }

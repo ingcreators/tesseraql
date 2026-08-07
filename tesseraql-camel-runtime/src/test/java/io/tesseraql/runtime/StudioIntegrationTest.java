@@ -2590,6 +2590,19 @@ class StudioIntegrationTest {
     }
 
     @Test
+    void uiDataBrowserMarksNumericColumnsFromTheResultMetadata() throws Exception {
+        // hc-briefs.md brief 7 (hc 0.1.13): numeric columns — decided from the result set's
+        // JDBC metadata — carry data-numeric, so the kit end-aligns them; text columns don't.
+        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=users", true);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // The users table's id is bigserial → its header is marked; name is text → unmarked.
+        assertThat(response.body())
+                .containsPattern("data-numeric=\"data-numeric\">\\s*<span>id</span>")
+                .containsPattern("hc-datagrid__headcell\">\\s*<span>name</span>");
+    }
+
+    @Test
     void uiDataBrowserFiltersAndSortsByColumn() throws Exception {
         // Filter tql_users to the seeded 'admin' login and sort by it — validated columns, bound value.
         HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=tql_users"
@@ -2787,9 +2800,9 @@ class StudioIntegrationTest {
         // that compiles, passes every unit test, and answers 500.
         assertThat(response.body()).contains("use a shared rule").contains("id=\"vb-rules\"");
         // UX-refresh slice 5 (one builder recipe): the operation switch hides the fields the
-        // chosen rule does not read (the data-tql-show-for bootstrap stand-in, brief 6).
-        assertThat(response.body()).contains("data-tql-switch")
-                .contains("data-tql-show-for=\"range\"");
+        // chosen rule does not read (the kit's show-when behavior, hc 0.1.13 — brief 6).
+        assertThat(response.body()).contains("data-hc-show-switch")
+                .contains("data-hc-show-when=\"range\"");
     }
 
     @Test

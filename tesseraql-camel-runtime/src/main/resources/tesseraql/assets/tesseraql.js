@@ -109,27 +109,10 @@ document.body.addEventListener("htmx:beforeSwap", (event) => {
 // (data-hc-copy) are now the kit's installNavCurrent and installCopy behaviors (hc 0.1.6, #270/#272),
 // auto-installed by the behaviors bundle imported above — the local stand-ins they replaced are gone.
 
-// Confirmed plain-form submit (docs/hypermedia-ui.md "Confirmed actions", hc-briefs.md
-// brief 4): the kit's confirm behavior only re-emits `hc:confirmed` for htmx to observe —
-// it never re-dispatches a native form submit, so a confirm on a plain `<form method=post>`
-// submit button would confirm into nothing. Until the upstream brief ships, this stand-in
-// completes the documented plain-form contract: on confirm, re-submit the form through the
-// original submitter (preserving its formaction), unless the element or its form is
-// htmx-wired (those carry hx-trigger="hc:confirmed" and htmx owns the request).
-const HTMX_VERBS = ["hx-get", "hx-post", "hx-put", "hx-patch", "hx-delete"];
-const htmxWired = (el) => el != null
-    && HTMX_VERBS.some((a) => el.hasAttribute(a) || el.hasAttribute("data-" + a));
-document.addEventListener("hc:confirmed", (event) => {
-    const source = event.target instanceof Element
-        ? event.target.closest("[data-hc-confirm]") : null;
-    if (!source || !source.form || source.type !== "submit") {
-        return;
-    }
-    if (htmxWired(source) || htmxWired(source.form)) {
-        return;
-    }
-    source.form.requestSubmit(source);
-});
+// Confirmed plain-form submit is the KIT's contract since hc 0.1.13 (hc-briefs.md brief 4,
+// shipped and adopted): installConfirm itself calls form.requestSubmit(source) for a
+// confirmed plain-form submit button, with the same htmx-verb exemption the retired local
+// stand-in carried. Do not reintroduce a listener here — it would double-submit.
 
 // Save hotkey (docs/studio-ux-refresh.md slice 5): Ctrl/Cmd+S submits the page's save form —
 // the one marked data-tql-hotkey-save (the Studio source editor) — instead of the browser's
@@ -144,28 +127,9 @@ document.addEventListener("keydown", (event) => {
     }
 });
 
-// Conditional builder fields (slice 5, hc-briefs.md brief 6): a form control marked
-// data-tql-switch drives the visibility of same-form elements marked data-tql-show-for
-// (a space-separated list of switch values). Hidden fields still submit; the services
-// ignore what the chosen operation does not read. Stand-in until the kit owns a
-// declarative show-when behavior.
-const syncShowFor = () => {
-    for (const sw of document.querySelectorAll("[data-tql-switch]")) {
-        const form = sw.closest("form");
-        if (!form) {
-            continue;
-        }
-        for (const el of form.querySelectorAll("[data-tql-show-for]")) {
-            el.hidden = !el.getAttribute("data-tql-show-for").split(/\s+/).includes(sw.value);
-        }
-    }
-};
-document.addEventListener("change", (event) => {
-    if (event.target instanceof Element && event.target.matches("[data-tql-switch]")) {
-        syncShowFor();
-    }
-});
-document.addEventListener("DOMContentLoaded", syncShowFor);
+// Conditional field visibility is the KIT's show-when behavior since hc 0.1.13
+// (data-hc-show-switch / data-hc-show-when — hc-briefs.md brief 6, shipped and adopted);
+// the local data-tql-switch/-show-for stand-in is retired.
 
 // Submit-on-change (slice 6): a control marked data-tql-submit-on-change submits its form when
 // flipped — the Studio flags page's hc-switch toggles post through their plain form this way.

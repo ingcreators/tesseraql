@@ -134,7 +134,11 @@
             <table class="hc-datagrid__table">
               <thead class="hc-datagrid__head"><tr>
                 <th class="hc-datagrid__headcell" th:if="${data.editHrefs != null}"></th>
-                <th class="hc-datagrid__headcell" th:each="c : ${data.columns}">
+                <!-- data-numeric (hc-briefs.md brief 7, hc 0.1.13): numeric columns — decided
+                     from the RESULT's JDBC metadata, not a schema guess — end-align, and the
+                     kit's tabular figures line the digits up. -->
+                <th class="hc-datagrid__headcell" th:each="c, cStat : ${data.columns}"
+                    th:attr="data-numeric=${data.numeric[cStat.index]} ? 'data-numeric' : null">
                   <span th:text="${c}">col</span>
                   <!-- The column's role in the table-backed decision reading it
                        (docs/decision-tables.md): the rows stay raw data, but the header says
@@ -151,7 +155,8 @@
                        th:if="${data.editHrefs[rowStat.index] != null}"
                        th:href="${data.editHrefs[rowStat.index]}">Edit</a>
                   </td>
-                  <td class="hc-datagrid__cell" th:each="cell : ${row.cells}">
+                  <td class="hc-datagrid__cell" th:each="cell, cellStat : ${row.cells}"
+                      th:attr="data-numeric=${data.numeric[cellStat.index]} ? 'data-numeric' : null">
                     <span class="hc-field__message" th:if="${cell.isNull}">(null)</span>
                     <span th:unless="${cell.isNull}" th:text="${cell.value}">value</span>
                   </td>

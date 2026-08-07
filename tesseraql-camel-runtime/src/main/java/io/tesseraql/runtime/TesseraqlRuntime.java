@@ -2544,6 +2544,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         combinator, filters);
                                 model.put("table", data.table());
                                 model.put("columns", data.columns());
+                                // Parallel to `columns` (hc-briefs.md brief 7): numeric columns
+                                // render data-numeric so the kit end-aligns them.
+                                model.put("numeric", data.numeric());
                                 // Decision-contract overlay (docs/decision-tables.md): when the
                                 // browsed table backs a table-backed decision, each mapped
                                 // column's role, keyed by the displayed column name — a map

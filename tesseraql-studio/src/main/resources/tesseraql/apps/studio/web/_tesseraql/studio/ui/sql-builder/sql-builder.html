@@ -20,8 +20,8 @@
     <th:block th:if="${b.hasTables}">
       <!-- The one builder recipe (docs/studio-ux-refresh.md slice 5): live regeneration on
            change (300 ms), the result on the kit's code surface with a copy affordance, and
-           the fields the chosen operation does not read hidden (data-tql-switch/-show-for,
-           the bootstrap stand-in for hc-briefs.md brief 6). -->
+           the fields the chosen operation does not read hidden (the kit's show-when behavior,
+           hc 0.1.13 — hc-briefs.md brief 6, shipped and adopted). -->
       <form class="hc-stack" hx-post="/_tesseraql/studio/ui/sql-builder/build"
             hx-target="#sql-out" hx-swap="innerHTML" hx-trigger="submit, change delay:300ms"
             hx-disabled-elt="find button">
@@ -34,7 +34,7 @@
             </select>
           </div>
           <div class="hc-field"><label class="hc-field__label">Operation</label>
-            <select class="hc-select" name="operation" data-tql-switch>
+            <select class="hc-select" name="operation" data-hc-show-switch>
               <option value="select-by-pk">select by primary key</option>
               <option value="select-by-column">select by column (=)</option>
               <option value="select-by-column-in">select by column (in list)</option>
@@ -44,7 +44,7 @@
               <option value="delete-by-pk">delete by primary key</option>
             </select>
           </div>
-          <div class="hc-field" data-tql-show-for="select-by-column select-by-column-in select-by-column-optional">
+          <div class="hc-field" data-hc-show-when="select-by-column select-by-column-in select-by-column-optional">
             <label class="hc-field__label">Filter column</label>
             <select class="hc-select" name="column" id="sql-col"></select>
           </div>
