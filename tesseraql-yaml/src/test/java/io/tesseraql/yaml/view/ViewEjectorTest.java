@@ -102,6 +102,45 @@ class ViewEjectorTest {
     }
 
     @Test
+    void ejectsADashboardWithAllPanelKinds(@TempDir Path dir) throws Exception {
+        ViewSpec spec = parse(dir, """
+                kind: view
+                view: dashboard
+                title: Stats
+                panels:
+                  - title: Users
+                    type: stat
+                    column: user_count
+                  - title: By status
+                    type: chart
+                    kind: bar
+                    source: byStatus
+                    x: status
+                    y: n
+                  - title: Trend
+                    type: sparkline
+                    source: byStatus
+                    column: n
+                  - title: Latest
+                    type: table
+                    source: recent
+                    columns:
+                      - name: name
+                """);
+
+        ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
+                "web/stats/page.html");
+
+        assertThat(file.content()).contains("hc-grid")
+                .contains("${#lists.isEmpty(sql.rows) ? '—' : sql.rows[0]['user_count']}")
+                .contains("data-hc-chart=\"bar\"")
+                .contains("th:each=\"row : ${byStatus.rows}\"")
+                .contains("#strings.listJoin(byStatus.rows.{n}, ',')")
+                .contains("th:each=\"row : ${recent.rows}\"")
+                .contains("charts.js");
+    }
+
+    @Test
     void flipRouteSwapsViewForTemplate() {
         String yaml = """
                 response:

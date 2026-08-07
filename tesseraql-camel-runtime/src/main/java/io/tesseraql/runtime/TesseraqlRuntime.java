@@ -2053,11 +2053,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     try {
                                         kind = io.tesseraql.yaml.view.ViewSpec.parse(file)
                                                 .view();
-                                        // The ejector renders list/detail/form; a dashboard
-                                        // stays declarative.
+                                        // Every view kind ejects (docs/pages-and-mail-lints.md
+                                        // follow-ups added the dashboard).
                                         ejectable = io.tesseraql.yaml.view.ViewSpec.LIST
                                                 .equals(kind)
                                                 || io.tesseraql.yaml.view.ViewSpec.DETAIL
+                                                        .equals(kind)
+                                                || io.tesseraql.yaml.view.ViewSpec.DASHBOARD
                                                         .equals(kind)
                                                 || io.tesseraql.yaml.view.ViewSpec.FORM
                                                         .equals(kind);

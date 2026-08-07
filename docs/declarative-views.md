@@ -282,8 +282,10 @@ as a hand-written template today.
   renders the view's pattern once into a real template (deterministic output, stamped
   with the scaffold checksum so edit detection applies) and flips the route from
   `view:` to `template:`. Ejecting pins the layout — a list/detail must declare its
-  `columns:`/`fields:` explicitly first — and filled slots inline as static fragment
-  inserts. The view document stays on disk for reference. In Studio, the same action
+  `columns:`/`fields:` explicitly first; a dashboard's chart panels need `x:` and
+  `series:`/`y:`, its table panels explicit `columns:`, and a sparkline's `data-max`
+  is dropped (no static equivalent — pin one in the template). Filled slots inline as
+  static fragment inserts. The view document stays on disk for reference. In Studio, the same action
   is the "Eject view to template…" button on a `view:` route's source page (confirmed;
   a hand-edited target blocks until explicitly overwritten), landing on the fresh
   template.
