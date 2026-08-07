@@ -182,6 +182,13 @@ class MountedAppIntegrationTest {
         // The shared app nav (templates/nav.html fragment) replaces the system-console nav.
         assertThat(response.body()).contains("User Management (IAM)");
         assertThat(response.body()).doesNotContain("/_tesseraql/ops/console");
+        // The app's UI defaults (docs/hypermedia-ui.md "UI defaults"): app shells render the
+        // slate neutral ramp (attribute + its token sheet — hc.min.css carries only the
+        // default ramp) and compact density, both operator-overridable via tesseraql.ui.*.
+        assertThat(response.body()).contains("data-neutral=\"slate\"")
+                .contains(
+                        "/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-slate.css")
+                .contains("data-density=\"compact\"");
     }
 
     @Test

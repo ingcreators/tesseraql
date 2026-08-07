@@ -457,6 +457,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if ("light".equals(uiTheme) || "dark".equals(uiTheme)) {
             context.getRegistry().bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
         }
+        // The app's UI defaults (docs/hypermedia-ui.md "UI defaults"): the neutral ramp and
+        // control density every shell renders. The renderer defaults to slate + compact; only
+        // a validated operator override is bound here (values outside the kit's enums are
+        // ignored, like the theme).
+        String uiNeutral = manifest.config().getString("tesseraql.ui.neutral").orElse(null);
+        if (uiNeutral != null
+                && java.util.Set.of("neutral", "slate", "zinc", "stone").contains(uiNeutral)) {
+            context.getRegistry().bind(TesseraqlProperties.UI_NEUTRAL_BEAN, uiNeutral);
+        }
+        String uiDensity = manifest.config().getString("tesseraql.ui.density").orElse(null);
+        if (uiDensity != null
+                && java.util.Set.of("comfortable", "compact", "dense").contains(uiDensity)) {
+            context.getRegistry().bind(TesseraqlProperties.UI_DENSITY_BEAN, uiDensity);
+        }
         // Whether the password form (and so self-service password change) is on: the same
         // flag the bundled login page reads (roadmap Phase 48 slice 4).
         final boolean passwordLoginEnabled = manifest.config()

@@ -101,6 +101,10 @@ public final class TesseraqlProperties {
     public static final String ACCOUNT_SURFACE_BEAN = "tesseraqlAccountSurface";
     /** Registry bean name for the operator's default page theme (roadmap Phase 48), if set. */
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
+    /** Registry bean name for the app's neutral color ramp (docs/hypermedia-ui.md), if non-default. */
+    public static final String UI_NEUTRAL_BEAN = "tesseraqlUiNeutral";
+    /** Registry bean name for the app's control density (docs/hypermedia-ui.md), if non-default. */
+    public static final String UI_DENSITY_BEAN = "tesseraqlUiDensity";
     /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
     public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
 

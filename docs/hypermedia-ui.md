@@ -274,6 +274,34 @@ and onto pre-login pages (the cookie re-sync in [account.md](account.md)). **Nev
 and the two would fight after the next sign-in. Signed-out pages have no CSRF meta tag, so
 a toggle there flips the current page only.
 
+## UI defaults: neutral ramp and density
+
+Every page rendered through the framework shell (`tql/shell`) carries two app-wide visual
+defaults, both operator-overridable in `config/tesseraql.yml`:
+
+```yaml
+tesseraql:
+  ui:
+    neutral: slate       # neutral | slate | zinc | stone   (default: slate)
+    density: compact     # comfortable | compact | dense    (default: compact)
+```
+
+- **`neutral`** picks the kit's neutral color ramp — the grays behind pages, cards, borders,
+  and muted text, in both themes. The default is **slate** (a cool, blue-leaning neutral):
+  it sits in the same hue family as the brand navy and the kit's blue action/link colors, the
+  mainstream choice for data-dense business applications. `neutral` (the kit's warm-gray
+  default) renders no attribute and links no extra stylesheet; the other ramps link their
+  token sheet (`hc.tokens.neutral-<ramp>.css`) on top of `hc.min.css`.
+- **`density`** sets the control density for **app pages** (the public `shell(...)` form).
+  The default is **compact** — TesseraQL apps are data-dense work surfaces — but a
+  touch-first app should set `comfortable`: compact controls are 32px, below the 44px
+  touch-target guideline. The framework consoles (Studio, Operations, IAM Admin) always pin
+  `compact`; they are keyboard-and-mouse work surfaces by design.
+
+Values outside the kit's enums are ignored (the theme's rule). Both apply on the next
+restart; nothing is stored per user — these are the app's defaults, and the per-user choice
+surface remains the theme toggle above.
+
 ## Charts
 
 Charts are the kit's [chart recipe](https://ingcreators.com/hypermedia-components/recipes/chart/):
