@@ -10,55 +10,57 @@
 <div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/outbox" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
-  <h2>Outbox deliveries</h2>
-  <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(redelivered)}">Requeued
-    &mdash; the dispatcher picks the event up on its next pass.</p>
-  <ul class="hc-chips">
-    <li th:each="s : ${outbox.byStatus}" class="hc-badge"
-        th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
-  </ul>
-  <div class="hc-empty" th:unless="${outbox.hasRows}"><p class="hc-empty__title">No outbox events recorded.</p></div>
-  <div class="hc-datagrid" th:if="${outbox.hasRows}">
-    <div class="hc-datagrid__scroll">
-      <table class="hc-datagrid__table">
-        <thead class="hc-datagrid__head"><tr>
-          <th class="hc-datagrid__headcell">Event</th>
-          <th class="hc-datagrid__headcell">Type</th>
-          <th class="hc-datagrid__headcell">Source</th>
-          <th class="hc-datagrid__headcell">App</th>
-          <th class="hc-datagrid__headcell">Status</th>
-          <th class="hc-datagrid__headcell" data-numeric>Attempts</th>
-          <th class="hc-datagrid__headcell">Last error</th>
-          <th class="hc-datagrid__headcell">Created</th>
-          <th class="hc-datagrid__headcell">Sent</th>
-          <th class="hc-datagrid__headcell"></th>
-        </tr></thead>
-        <tbody class="hc-datagrid__body">
-          <tr class="hc-datagrid__row" th:each="e : ${outbox.rows}">
-            <td class="hc-datagrid__cell" th:text="${e.id}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.type}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.source}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.app}"></td>
-            <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
-            <td class="hc-datagrid__cell" data-numeric th:text="${e.attempts}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.lastError}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.createdAt}"></td>
-            <td class="hc-datagrid__cell" th:text="${e.sentAt}"></td>
-            <td class="hc-datagrid__cell">
-              <!-- DEAD rows only: FAILED events are still the dispatcher's to retry. -->
-              <form th:if="${e.dead}" method="post" action="/_tesseraql/ops/console/outbox/redeliver">
-                <input type="hidden" name="_csrf" th:value="${_csrf}">
-                <input type="hidden" name="id" th:value="${e.id}">
-                <button class="hc-button" data-size="sm" type="submit">Redeliver</button>
-              </form>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+  <div class="hc-card__header">Outbox deliveries</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(redelivered)}">Requeued
+      &mdash; the dispatcher picks the event up on its next pass.</p>
+    <ul class="hc-chips">
+      <li th:each="s : ${outbox.byStatus}" class="hc-badge"
+          th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
+    </ul>
+    <div class="hc-empty" th:unless="${outbox.hasRows}"><p class="hc-empty__title">No outbox events recorded.</p></div>
+    <div class="hc-datagrid" th:if="${outbox.hasRows}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Event</th>
+            <th class="hc-datagrid__headcell">Type</th>
+            <th class="hc-datagrid__headcell">Source</th>
+            <th class="hc-datagrid__headcell">App</th>
+            <th class="hc-datagrid__headcell">Status</th>
+            <th class="hc-datagrid__headcell" data-numeric>Attempts</th>
+            <th class="hc-datagrid__headcell">Last error</th>
+            <th class="hc-datagrid__headcell">Created</th>
+            <th class="hc-datagrid__headcell">Sent</th>
+            <th class="hc-datagrid__headcell"></th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="e : ${outbox.rows}">
+              <td class="hc-datagrid__cell" th:text="${e.id}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.type}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.source}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.app}"></td>
+              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
+              <td class="hc-datagrid__cell" data-numeric th:text="${e.attempts}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.lastError}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.createdAt}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.sentAt}"></td>
+              <td class="hc-datagrid__cell">
+                <!-- DEAD rows only: FAILED events are still the dispatcher's to retry. -->
+                <form th:if="${e.dead}" method="post" action="/_tesseraql/ops/console/outbox/redeliver">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}">
+                  <input type="hidden" name="id" th:value="${e.id}">
+                  <button class="hc-button" data-size="sm" type="submit">Redeliver</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+    <p class="hc-field__message">Redeliver requeues a dead-lettered event; failed events
+      below their attempt limit retry on their own.</p>
   </div>
-  <p class="hc-field__message">Redeliver requeues a dead-lettered event; failed events
-    below their attempt limit retry on their own.</p>
 </section>
 </div>
 </html>

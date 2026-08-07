@@ -8,8 +8,9 @@
   <a class="hc-item" href="/_tesseraql/account"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title">Account</span></a>
 </th:block>
 <div id="page-content" class="hc-stack">
-  <section class="hc-card hc-stack">
-    <h1>Inbox</h1>
+  <section class="hc-card">
+    <div class="hc-card__header"><h1>Inbox</h1></div>
+    <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:unless="${inbox.enabled}">
       <p class="hc-empty__title">No inbox channels are configured.</p>
       <p class="hc-empty__description">Declare a notification channel with <code>type: inbox</code>
@@ -28,7 +29,7 @@
       <div class="hc-empty" th:if="${#lists.isEmpty(inbox.messages)}">
         <p class="hc-empty__title">Nothing here yet.</p>
       </div>
-      <ul class="hc-stack" th:unless="${#lists.isEmpty(inbox.messages)}" style="list-style:none; padding:0">
+      <ul class="hc-stack tql-plain-list" th:unless="${#lists.isEmpty(inbox.messages)}">
         <li th:each="message : ${inbox.messages}" class="hc-card">
           <div class="hc-cluster">
             <strong th:text="${message.title}">title</strong>
@@ -49,6 +50,7 @@
         </li>
       </ul>
     </th:block>
+    </div>
   </section>
 </div>
 </html>
