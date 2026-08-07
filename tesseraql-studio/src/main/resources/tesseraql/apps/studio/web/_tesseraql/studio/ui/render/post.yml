@@ -16,6 +16,9 @@ input:
   live:
     type: string
     required: false
+  scripts:
+    type: string
+    required: false
 
 sql:
   service: studio.render
@@ -31,5 +34,6 @@ response:
     template: render.html
     model:
       render: sql
+      scripts: params.scripts
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

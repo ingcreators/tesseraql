@@ -515,11 +515,18 @@ public final class StudioViews {
         return model;
     }
 
-    /** The Hypermedia Components stylesheets the shell links, reused to style the iframe preview. */
+    /**
+     * The Hypermedia Components stylesheets the shell links, reused to style the iframe preview —
+     * plus the shell's scripts, so the opt-in live preview (the {@code allow-scripts} sandbox,
+     * docs/page-builder.md follow-up) initializes hc behaviors on bare fragments too. In the
+     * default scriptless sandbox the script tags are inert, so they ride unconditionally.
+     */
     private static final String PREVIEW_HEAD = "<meta charset=\"utf-8\">"
             + "<link rel=\"stylesheet\""
             + " href=\"/assets/vendor/hypermedia-components__core/dist/hc.min.css\">"
-            + "<link rel=\"stylesheet\" href=\"/assets/_tesseraql/tesseraql.css\">";
+            + "<link rel=\"stylesheet\" href=\"/assets/_tesseraql/tesseraql.css\">"
+            + "<script src=\"/assets/vendor/htmx.org/dist/htmx.min.js\" defer></script>"
+            + "<script type=\"module\" src=\"/assets/_tesseraql/tesseraql.js\"></script>";
 
     /**
      * Wraps rendered HTML for a sandboxed iframe {@code srcdoc}: a full-page render (one that brings

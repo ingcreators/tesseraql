@@ -114,6 +114,11 @@ final class AssetsRouteBuilder extends RouteBuilder {
         exchange.getMessage().setHeader("ETag", etag);
         exchange.getMessage().setHeader("Cache-Control", "public, max-age=300");
         exchange.getMessage().setHeader("X-Content-Type-Options", "nosniff");
+        // Public static assets are CORS-readable: Studio's opt-in live preview runs in an
+        // opaque-origin sandbox (allow-scripts WITHOUT allow-same-origin), and ES module
+        // loads from there are CORS-gated. Assets carry no credentials or per-user data —
+        // this widens nothing else (API routes stay same-origin).
+        exchange.getMessage().setHeader("Access-Control-Allow-Origin", "*");
         // The app's security.responseHeaders: an asset is a response leaving the runtime like
         // any other, and it is served by a hand-written route the compiler never sees.
         securityHeaders().forEach((name, value) -> exchange.getMessage().setHeader(name, value));

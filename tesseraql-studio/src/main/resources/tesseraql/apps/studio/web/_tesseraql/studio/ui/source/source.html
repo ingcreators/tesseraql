@@ -26,10 +26,14 @@
       <summary class="hc-collapsible__trigger">Rendered preview <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
       <p class="hc-field__message hc-collapsible__content">Rendered against the colocated <code>.sample.yml</code> fixture (or an empty model).</p>
       <input type="hidden" id="src-path" name="path" th:value="${src.path}">
+      <label class="hc-field">
+        <input type="checkbox" id="render-scripts" name="scripts" value="true">
+        Run scripts &mdash; hc behaviors initialize in the preview (network calls stay blocked)
+      </label>
       <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
       <div id="render-result" class="hc-stack" aria-live="polite"
-           hx-post="/_tesseraql/studio/ui/render" hx-trigger="load"
-           hx-include="#src-path" hx-target="this" hx-swap="innerHTML"
+           hx-post="/_tesseraql/studio/ui/render" hx-trigger="load, change from:#render-scripts"
+           hx-include="#src-path, #render-scripts" hx-target="this" hx-swap="innerHTML"
            hx-indicator="previous span"></div>
     </details>
   </th:block>
@@ -76,11 +80,15 @@
           <input type="checkbox" id="render-live" name="live" value="true">
           Use live data &mdash; run the route's SQL against the dev datasource (sandboxed)
         </label>
+        <label class="hc-field">
+          <input type="checkbox" id="render-scripts" name="scripts" value="true">
+          Run scripts &mdash; hc behaviors initialize in the preview (network calls stay blocked)
+        </label>
         <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
         <div id="render-result" class="hc-stack" aria-live="polite"
              hx-post="/_tesseraql/studio/ui/render"
-             hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live"
-             hx-include="#src-path, #source-editor, #sample-editor, #render-live"
+             hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live, change from:#render-scripts"
+             hx-include="#src-path, #source-editor, #sample-editor, #render-live, #render-scripts"
              hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
       </div>
     </div>
