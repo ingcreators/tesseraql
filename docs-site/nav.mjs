@@ -149,4 +149,6 @@ export const EXCLUDED = [
   'analytics-experience.md',
   // Studio UX refresh (full-surface review + slice plan), 2026-08-06.
   'studio-ux-refresh.md',
+  // Console UX refresh (ops/IAM/account/auth review + slice plan), 2026-08-07.
+  'console-ux-refresh.md',
 ];
