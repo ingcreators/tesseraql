@@ -26,6 +26,20 @@ class OpsViewsTest {
         return new TraceMetrics(10, 1, 10.0, 2, 20.0, 4, 1, 25.0);
     }
 
+    /** Slice 5 filter: route/actor contain (case-insensitive), status starts-with. */
+    @Test
+    void auditFilterNarrowsByRouteActorAndStatusPrefix() {
+        List<Map<String, Object>> rows = List.of(
+                Map.of("routeId", "users.create", "actor", "alice", "status", 201),
+                Map.of("routeId", "orders.update", "actor", "bob", "status", 422));
+        assertThat(OpsViews.filterAudit(rows, "USERS", null, null)).hasSize(1);
+        assertThat(OpsViews.filterAudit(rows, null, "BO", null)).hasSize(1);
+        assertThat(OpsViews.filterAudit(rows, null, null, "4")).hasSize(1);
+        assertThat(OpsViews.filterAudit(rows, "", " ", null)).hasSize(2);
+        assertThat(OpsViews.filterAudit(rows, "nope", null, null)).isEmpty();
+        assertThat(OpsViews.filterAudit(null, "x", null, null)).isNull();
+    }
+
     @Test
     void auditModelReportsTheDisabledStoreHonestly() {
         Map<String, Object> disabled = OpsViews.audit(null, false);

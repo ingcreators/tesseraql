@@ -40,6 +40,17 @@
 <section class="hc-card">
   <div class="hc-card__header">Users</div>
   <div class="hc-card__body hc-stack">
+  <!-- Server-side contains-filter over login, display name and email (the sessions page's
+       filter idiom; docs/console-ux-refresh.md slice 5). -->
+  <form method="get" action="/_tesseraql/admin/users" class="hc-cluster">
+    <label class="hc-field">
+      <span class="hc-field__label">Login, name or email contains</span>
+      <input class="hc-input" data-size="sm" name="q" th:value="${q}">
+    </label>
+    <button class="hc-button" data-size="sm" type="submit">Filter</button>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${q != null}"
+       href="/_tesseraql/admin/users">Clear</a>
+  </form>
   <div class="hc-empty" th:if="${#lists.isEmpty(users)}"><p class="hc-empty__title">No users found.</p></div>
   <!-- Bulk actions (the kit's datagrid-bulk-actions recipe, docs/hypermedia-ui.md): the form
        wraps the grid, row checkboxes serialize as repeated `ids`, the header's select-all

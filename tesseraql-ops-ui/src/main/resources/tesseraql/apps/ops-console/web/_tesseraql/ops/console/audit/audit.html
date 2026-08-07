@@ -7,8 +7,7 @@
     <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
   </div>
 </th:block>
-<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/audit" hx-trigger="every 15s"
-     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<div id="page-content" class="hc-stack">
 <section class="hc-card">
   <div class="hc-card__header">Route audit trail</div>
   <div class="hc-card__body hc-stack">
@@ -20,6 +19,30 @@
         writes; the newest entries appear here.</p>
     </div>
     <th:block th:if="${audit.enabled}">
+      <!-- Server-side narrowing of the fetched window (docs/console-ux-refresh.md
+           slice 5). The form sits outside the auto-refreshing results region below, so
+           the 15s refresh can never discard what the operator is typing. -->
+      <form method="get" action="/_tesseraql/ops/console/audit" class="hc-cluster">
+        <label class="hc-field">
+          <span class="hc-field__label">Route contains</span>
+          <input class="hc-input" data-size="sm" name="route" th:value="${route}">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">Actor contains</span>
+          <input class="hc-input" data-size="sm" name="actor" th:value="${actor}">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">Status starts with</span>
+          <input class="hc-input" data-size="sm" name="status" th:value="${status}">
+        </label>
+        <button class="hc-button" data-size="sm" type="submit">Filter</button>
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:if="${route != null or actor != null or status != null}"
+           href="/_tesseraql/ops/console/audit">Clear</a>
+      </form>
+      <div id="audit-results" class="hc-stack" hx-trigger="every 15s"
+           hx-select="#audit-results" hx-target="this" hx-swap="outerHTML"
+           th:attr="hx-get=|/_tesseraql/ops/console/audit?route=${#uris.escapeQueryParam(route != null ? route : '')}&amp;actor=${#uris.escapeQueryParam(actor != null ? actor : '')}&amp;status=${#uris.escapeQueryParam(status != null ? status : '')}|">
       <div class="hc-empty" th:unless="${audit.hasRows}"><p class="hc-empty__title">No audited requests recorded yet.</p></div>
       <div class="hc-datagrid" th:if="${audit.hasRows}">
         <div class="hc-datagrid__scroll">
@@ -52,7 +75,8 @@
         </div>
       </div>
       <p class="hc-field__message">The newest 200 audited requests, narrowed to the apps
-        your <code>ops.app.*</code> grants cover.</p>
+        your <code>ops.app.*</code> grants cover; the filter narrows within that window.</p>
+      </div>
     </th:block>
   </div>
 </section>

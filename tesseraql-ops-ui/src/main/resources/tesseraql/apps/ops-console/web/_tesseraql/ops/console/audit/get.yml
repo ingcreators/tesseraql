@@ -9,11 +9,27 @@ recipe: query-html
 security:
   policy: ops.batch.view
 
+# The filter narrows the fetched newest-200 window (route/actor contains, status
+# starts-with); the page states the window.
+input:
+  route:
+    type: string
+    required: false
+  actor:
+    type: string
+    required: false
+  status:
+    type: string
+    required: false
+
 sql:
   service: ops.audit
   params:
     # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
     permissions: principal.permissions
+    route: params.route
+    actor: params.actor
+    status: params.status
 
 response:
   html:
@@ -21,3 +37,6 @@ response:
     template: audit.html
     model:
       audit: sql
+      route: params.route
+      actor: params.actor
+      status: params.status

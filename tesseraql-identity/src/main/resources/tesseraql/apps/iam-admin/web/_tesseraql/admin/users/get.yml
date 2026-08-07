@@ -13,9 +13,14 @@ input:
   bulk:
     type: string
     required: false
+  q:
+    type: string
+    required: false
 
 sql:
   contract: identity.list-users
+  params:
+    q: params.q
 
 queries:
   total:
@@ -30,3 +35,4 @@ response:
       total: total.rows
       invited: params.invited
       bulk: params.bulk
+      q: params.q

@@ -7,9 +7,15 @@ select
   u.tenant_id    as tenant_id
 from
   tql_users u
-/*%if tenantId != null */
 where
-  u.tenant_id = /* tenantId */ 'tenant-a'
+  1 = 1
+/*%if tenantId != null */
+  and u.tenant_id = /* tenantId */ 'tenant-a'
+/*%end*/
+/*%if q != null */
+  and (lower(u.login_id) like '%' || lower(/* q */ 'ali') || '%'
+    or lower(coalesce(u.display_name, '')) like '%' || lower(/* q */ 'ali') || '%'
+    or lower(coalesce(u.email, '')) like '%' || lower(/* q */ 'ali') || '%')
 /*%end*/
 order by
   u.login_id

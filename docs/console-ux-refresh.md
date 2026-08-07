@@ -1,6 +1,11 @@
 # Console UX refresh
 
-> **Status: in progress.** A template-by-template UX review of every TesseraQL-provided
+> **Status: complete.** All five slices landed 2026-08-07 (#588 auth pages, #589
+> silent-mutation flashes, #590 jobs refresh + data-numeric, #591 card anatomy +
+> identity states, #592 list search + stat tiles). The one scoped-out item: the global
+> bare-`h2` scale in `tesseraql.css` stays — the generated `tql/view/*` templates and
+> user apps still rely on it.
+> Originally: a template-by-template UX review of every TesseraQL-provided
 > surface outside Studio — the Operations Console (`tesseraql-ops-ui`, 7 templates), IAM
 > Admin (`tesseraql-identity`, 4), the account surface (`tesseraql-camel-runtime`
 > `apps/account`, 2), and the standalone auth pages (`apps/auth-ui`, 4) — against the
