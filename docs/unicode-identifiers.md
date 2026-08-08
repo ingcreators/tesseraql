@@ -89,17 +89,23 @@ machinery is added. The one exception is Postgres `NOTIFY`/`LISTEN` channel name
 whose sanitizer is *already* Unicode-permissive and feeds raw SQL — those get
 double-quoted (track 4), which is the idiomatic Postgres form for channel names.
 
-**Dialect support matrix** (unquoted Unicode identifiers): PostgreSQL, MySQL,
-SQL Server, DuckDB and H2 accept them — and because CJK has no case, the
-upper/lower-folding differences between those engines are no-ops. **Oracle does
-not**: unquoted identifiers must come from its legacy identifier charset, so
-Japanese names on Oracle would require quoted DDL and quoted references throughout.
-Decision: **Japanese identifiers are documented as unsupported on the Oracle
-dialect**, enforced softly by a new lint (TQL-SQL family, warning) when
-`dialect: oracle` meets a non-ASCII identifier. `Labels.normalize`'s Oracle
-heuristic ("all-uppercase label ⇒ driver folded it") is unchanged; its caseless
-edge (a deliberately quoted all-caps-plus-kanji alias is indistinguishable from an
-unquoted one) is accepted and documented — it predates this campaign.
+**Dialect support matrix** (unquoted Unicode identifiers): **all supported
+dialects accept them.** PostgreSQL, MySQL, SQL Server, DuckDB and H2 allow Unicode
+letters in unquoted identifiers, and Oracle's nonquoted-identifier rule admits
+"alphanumeric characters from your database character set" — on an AL32UTF8
+database (the modern default) Japanese names work unquoted, confirmed against a
+real instance. Because CJK has no case, the engines' upper/lower-folding
+differences are no-ops, and `Labels.normalize`'s Oracle heuristic
+("all-uppercase label ⇒ driver folded it") is unchanged; its caseless edge (a
+deliberately quoted all-caps-plus-kanji alias is indistinguishable from an
+unquoted one) is accepted and documented — it predates this campaign. The
+practical per-dialect constraint is the **identifier length limit, which several
+engines count in bytes**: PostgreSQL truncates at 63 bytes (~21 kanji in UTF-8 —
+the tightest), Oracle allows 128 bytes from 12.2 (30 bytes ≈ 10 kanji before),
+MySQL 64 characters, SQL Server 128 characters. The docs page records this table;
+no lint polices it — the database's own error is authoritative. The one genuine
+prerequisite — a Unicode database character set on Oracle — is a deployment
+concern, also documented rather than linted.
 
 ## The verbatim policy
 
@@ -177,8 +183,8 @@ messages + a suite) exercising scaffold → lint → route → suite end-to-end;
 the percent-encoded URL round trip (browser encodes `/受注/{受注番号}` — verify the
 route matcher decodes before binding), CSV/file export headers, `openapi.json`
 parameters, and Studio pages over the Japanese app; a docs page stating the
-identifier contract, the verbatim policy, and the dialect matrix with the Oracle
-stance; the Oracle non-ASCII lint.
+identifier contract, the verbatim policy, and the dialect matrix (byte-counted
+length limits, Oracle's Unicode-charset prerequisite).
 
 ## Open decisions
 
@@ -203,7 +209,8 @@ Per-track unit tests on `SqlIdentifiers` and each widened site; Japanese golden
 files in the scaffolder tests; the existing rejection tests re-pointed at
 still-invalid fixtures; the track-5 gallery app run under the full suite runner; the
 gated dialect suites (PostgreSQL, MySQL, SQL Server, Oracle) over a Japanese-named
-table to pin the support matrix — Oracle asserting the lint fires. NFC/NFD: a
+table to pin the support matrix — Oracle included, asserting unquoted Japanese DDL
+and queries round-trip on an AL32UTF8 instance. NFC/NFD: a
 checksum test feeding an NFD path asserts drift-free comparison.
 
 ## Sequencing
