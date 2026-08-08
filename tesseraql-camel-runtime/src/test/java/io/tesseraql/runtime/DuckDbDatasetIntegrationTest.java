@@ -103,7 +103,7 @@ class DuckDbDatasetIntegrationTest {
                         anyOf:
                           - role: READER
                     apiKeys:
-                      header: X-API-Key
+                      label: X-API-Key
                       clients:
                         userA:
                           secretHash: %s

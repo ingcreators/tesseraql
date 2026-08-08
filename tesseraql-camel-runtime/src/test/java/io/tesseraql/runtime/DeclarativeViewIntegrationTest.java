@@ -300,7 +300,7 @@ class DeclarativeViewIntegrationTest {
                   auth: public
                 sql:
                   file: users.sql
-                page:
+                pagination:
                   size: 2
                   maxSize: 10
                   count: true
@@ -330,7 +330,7 @@ class DeclarativeViewIntegrationTest {
                   file: users.sql
                   params:
                     after: params.after
-                page:
+                pagination:
                   strategy: keyset
                   by: id
                   size: 2

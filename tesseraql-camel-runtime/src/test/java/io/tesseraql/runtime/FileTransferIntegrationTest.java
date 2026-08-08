@@ -507,7 +507,7 @@ class FileTransferIntegrationTest {
                   filename: events-sync.csv
                   locale: de-DE
                   columns:
-                    - { name: name, header: Event }
+                    - { name: name, label: Event }
                     - { name: held_on, type: date, format: yyyy/MM/dd }
                     - { name: fee, type: number, format: "#,##0.00" }
                 """);

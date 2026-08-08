@@ -132,8 +132,8 @@ class PdfExportIntegrationTest {
                   filename: users.pdf
                   template: print.html
                   columns:
-                    - { name: name,   header: 氏名 }
-                    - { name: status, header: 状態 }
+                    - { name: name,   label: 氏名 }
+                    - { name: status, label: 状態 }
                 """);
         Files.writeString(printRoute.resolve("print.sql"),
                 "select name, status from users order by name\n;\n");
