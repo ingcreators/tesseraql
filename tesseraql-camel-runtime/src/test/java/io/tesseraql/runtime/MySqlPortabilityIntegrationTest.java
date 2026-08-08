@@ -85,6 +85,12 @@ class MySqlPortabilityIntegrationTest {
         DialectIdentityChecks.seedAndAuthenticate(mysqlDataSource(), "mysql");
     }
 
+    @Test
+    void japaneseIdentifiersRoundTripOnThisDialect() throws Exception {
+        DialectRuntimeChecks.japaneseIdentifiersRoundTrip(mysqlDataSource(), "mysql",
+                "varchar(%d)");
+    }
+
     private static javax.sql.DataSource mysqlDataSource() {
         com.mysql.cj.jdbc.MysqlDataSource dataSource = new com.mysql.cj.jdbc.MysqlDataSource();
         dataSource.setUrl(MYSQL.getJdbcUrl());
