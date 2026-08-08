@@ -4,6 +4,29 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- **View documents are strict** (pre-1.0 break, docs/view-composition.md wave 0): an
+  unknown key anywhere in a `kind: view` document — top level, `fields:`, `columns:`,
+  `children:`, `panels:`, `series:` entries — is now a build error
+  (`TQL-VIEW-3314`) instead of being silently dropped. Audit view documents for
+  stray keys; the common one is `label:` on a stat/sparkline panel, which was never
+  read — the panel title key is `title:`.
+- **View pattern fragment anchors moved** (pre-1.0 break to the public fragment
+  contract): `tql/view/form.html` now anchors `view(v)` on the outer card (title,
+  header slot, and not-found state included), and `tql/view/dashboard.html` carries
+  its chart `<script>` pair inside the fragment — so an embedded fragment brings its
+  chrome and its charts along. L2 overrides of these two files should re-anchor the
+  same way (`TQL-VIEW-3307` flags a missing signature).
+
+### Fixed
+
+- A detail child's or dashboard panel's `source:` may now name one of the route's
+  `http:` sources, as documented — `TQL-VIEW-3308` previously rejected everything
+  but `queries:` keys.
+
 ## 0.13.0 - 2026-08-08
 
 The contract-cleanup release: one wire vocabulary, one name per concept — the last

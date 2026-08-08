@@ -213,7 +213,7 @@ class InventoryAnalyticsIntegrationTest {
                 recipe: dashboard
                 title: Tenant analytics
                 panels:
-                  - { type: stat, source: sql, column: products, label: Products }
+                  - { type: stat, source: sql, column: products, title: Products }
                   - type: table
                     source: drop
                     title: Monthly drop

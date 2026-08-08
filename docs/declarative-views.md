@@ -62,7 +62,9 @@ columns:                      # optional — omit to render the query's own colu
 ```
 
 The `recipe:` key names one of the four kinds — `list`, `form`, `detail`, or `dashboard`;
-anything else is `TQL-VIEW-3301`. `response.html.view` and `response.html.template` are
+anything else is `TQL-VIEW-3301`. View documents are strict: an unknown key at any
+nesting level is a build error (`TQL-VIEW-3314`), never silently dropped.
+`response.html.view` and `response.html.template` are
 mutually exclusive (`TQL-VIEW-3302`). Everything else on the route — `status`,
 `headers`, `headersWhen`, `model` — behaves unchanged.
 
@@ -202,8 +204,11 @@ The chart scripts — the self-hosted Observable Plot bundle and the framework's
 `charts.js` bootstrap — load only on pages where a chart panel renders; the CSP stays
 `default-src 'self'`. Chart vocabulary violations are `TQL-VIEW-3313`. Panel sources
 validate like children: a panel's `source:` must be `sql` or one of the route's named
-queries (`TQL-VIEW-3308`). Ejection is not offered for dashboards — the panel model is
-data-dependent.
+`queries:` or [`http:` sources](connectors.md#http-sources-on-query-routes)
+(`TQL-VIEW-3308`). Dashboards eject like any other view, with the pinning
+preconditions the ladder describes (L3): chart panels need explicit `x:` and
+`series:`/`y:`, table panels explicit `columns:`, and a sparkline's `data-max` has no
+static equivalent.
 
 ### Filtered dashboards
 
@@ -251,7 +256,7 @@ the **public rendering contract**:
 | fragment | signature | renders |
 | --- | --- | --- |
 | `tql/view/list.html` | `view(v)` | an `hc-datagrid` table: columns × rows, row links |
-| `tql/view/form.html` | `view(v)` | the blessed mutating-form recipe: `hx-post` to `action`, `_csrf`, inline field-errors target, `hx-disabled-elt` + spinner, no-JS fallback post |
+| `tql/view/form.html` | `view(v)` | the card (title, header slot, not-found state) around the blessed mutating-form recipe: `hx-post` to `action`, `_csrf`, inline field-errors target, `hx-disabled-elt` + spinner, no-JS fallback post |
 | `tql/view/field.html` | `field(f)` | one labelled field; dispatches to `tql/view/field-<widget>.html` when that fragment resolves, else renders the generic input |
 
 `v` carries `{id, kind, title, action, csrf, fields[]|columns[], data, errorsTarget}`;
@@ -341,9 +346,10 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3309 | `search:` names an input the route does not declare |
 | 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
 | 3313 | chart-panel vocabulary: unknown `chart:`, `y:` and `series:` together (or neither), `mark:` outside `chart: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |
+| 3314 | unknown key anywhere in a view document — top level, `fields:`, `columns:`, `children:`, `panels:`, `series:` entries; view documents are strict, never silently dropping a key |
 
-Coverage kind **`view`**: one item per view document, exercised when a declarative
-suite invokes its route. The htmx-contract and OpenAPI generators are unaffected —
+Coverage kind **`view`**: one item per view-backed route, exercised when a declarative
+suite invokes it. The htmx-contract and OpenAPI generators are unaffected —
 views change how HTML is produced, not the HTTP contract.
 
 ## Design notes

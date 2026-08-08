@@ -80,18 +80,16 @@ public final class ViewBinding {
             fields = ViewFields.derive(viewRef, spec, action.input());
         }
         for (ViewSpec.Child child : spec.children()) {
-            if (!"sql".equals(child.source())
-                    && (route == null || !route.queries().containsKey(child.source()))) {
+            if (!declaresSource(route, child.source())) {
                 throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": children source "
-                        + child.source() + " is not a named query of the route");
+                        + child.source() + " is not a named query or http source of the route");
             }
         }
         for (ViewSpec.Panel panel : spec.panels()) {
             String panelSource = panelSource(panel);
-            if (!"sql".equals(panelSource)
-                    && (route == null || !route.queries().containsKey(panelSource))) {
+            if (!declaresSource(route, panelSource)) {
                 throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": panel source "
-                        + panelSource + " is not a named query of the route");
+                        + panelSource + " is not a named query or http source of the route");
             }
         }
         String entry = spec.template() != null
@@ -127,6 +125,16 @@ public final class ViewBinding {
             resolved.put(name, engineName + " :: " + fragment);
         });
         return Map.copyOf(resolved);
+    }
+
+    /**
+     * A child/panel {@code source:} must be {@code sql} or one of the route's {@code queries:}
+     * or {@code http:} sources (TQL-VIEW-3308) — both publish the {@code {rows}} shape the
+     * model assembly reads.
+     */
+    private static boolean declaresSource(RouteDefinition route, String source) {
+        return "sql".equals(source) || (route != null && (route.queries().containsKey(source)
+                || route.http().containsKey(source)));
     }
 
     /** The template name the renderer feeds to the engine (pattern or per-view retarget). */
