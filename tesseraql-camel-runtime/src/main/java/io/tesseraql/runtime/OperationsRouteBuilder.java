@@ -31,9 +31,18 @@ final class OperationsRouteBuilder extends RouteBuilder {
     /**
      * TQL-BATCH-4040: the requested operations resource (job, execution, trace, or event) is
      * unknown — or outside the caller's {@code ops.app.<name>} scope, which reads the same.
+     * Thrown, so the standard error path answers 404 with the framework envelope (the shape
+     * {@code ErrorResponseRenderer.httpStatus} always promised for this code).
      */
-    private static final Map<String, Object> NOT_FOUND = Map.of("error",
-            Map.of("code", "TQL-BATCH-4040", "message", "Not Found"));
+    private static final io.tesseraql.core.error.TqlErrorCode UNKNOWN = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.BATCH, 4040);
+
+    /** The 404 refusal for an unknown — or out-of-scope, which reads the same — resource. */
+    private static TqlException notFound(String what) {
+        return TqlException.builder(UNKNOWN)
+                .message(what + " is unknown or outside the caller's ops.app scope")
+                .build();
+    }
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final JobRunner runner;
@@ -272,7 +281,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 .filter(found -> scope(exchange).test(found.appName()))
                 .orElse(null);
         if (event == null) {
-            return NOT_FOUND;
+            throw notFound("Outbox event '" + id + "'");
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", id);
@@ -326,7 +335,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         String jobId = exchange.getMessage().getHeader("jobId", String.class);
         // A job outside the caller's scope is indistinguishable from an unknown one.
         if (!scope(exchange).test(jobOwners.get(jobId))) {
-            return NOT_FOUND;
+            throw notFound("Job '" + jobId + "'");
         }
         Map<String, Object> params = parseBody(exchange);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
@@ -348,7 +357,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 .filter(found -> scope(exchange).test(found.appName()))
                 .orElse(null);
         if (execution == null) {
-            return NOT_FOUND;
+            throw notFound("Execution '" + id + "'");
         }
         if (!repository.requestCancel(id)) {
             throw io.tesseraql.core.error.TqlException.builder(NOT_RUNNING)
@@ -368,7 +377,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 .filter(found -> scope(exchange).test(found.appName()))
                 .orElse(null);
         if (execution == null) {
-            return NOT_FOUND;
+            throw notFound("Execution '" + id + "'");
         }
         Map<String, Object> detail = executionMap(execution);
         List<Object> steps = new ArrayList<>();
@@ -468,22 +477,17 @@ final class OperationsRouteBuilder extends RouteBuilder {
         io.tesseraql.core.files.FileTransferService.TransferStatus status = transfers
                 .status(id).orElse(null);
         if (status == null || !scope(exchange).test(status.appName())) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 404);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
-                    "application/json; charset=utf-8");
-            exchange.getMessage().setBody(mapper.writeValueAsString(NOT_FOUND));
-            return;
+            throw notFound("Transfer '" + id + "'");
         }
         io.tesseraql.core.files.FileTransferService.Download download = transfers.download(id)
                 .orElse(null);
         if (download == null) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 409);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
-                    "application/json; charset=utf-8");
-            exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("error",
-                    Map.of("code", "TQL-LD-2823",
-                            "message", "Transfer has no downloadable file"))));
-            return;
+            // TQL-LD-2823 (409): the transfer exists but has no downloadable file yet — the
+            // same refusal a route-level download answers.
+            throw TqlException.builder(new io.tesseraql.core.error.TqlErrorCode(
+                    io.tesseraql.core.error.TqlDomain.LD, 2823))
+                    .message("Transfer '" + id + "' has no downloadable file")
+                    .build();
         }
         exchange.getMessage().removeHeaders("*");
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);

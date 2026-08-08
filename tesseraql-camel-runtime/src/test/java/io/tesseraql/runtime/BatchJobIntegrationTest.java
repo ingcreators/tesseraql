@@ -527,6 +527,7 @@ class BatchJobIntegrationTest {
         // Unknown - or out of scope - reads as Not Found, like every ops surface.
         HttpResponse<String> unknown = send("POST",
                 "/_tesseraql/ops/batch/executions/no-such/cancel", token, "{}");
+        assertThat(unknown.statusCode()).isEqualTo(404);
         assertThat(unknown.body()).contains("TQL-BATCH-4040");
     }
 
@@ -586,9 +587,11 @@ class BatchJobIntegrationTest {
                 send("GET", "/_tesseraql/ops/batch/executions", scoped, null).body())).isEmpty();
         assertThat(MAPPER.readTree(
                 send("GET", "/_tesseraql/ops/traces/tree", scoped, null).body())).isEmpty();
-        // Running a job outside the scope is indistinguishable from an unknown job.
-        JsonNode denied = MAPPER.readTree(send("POST",
-                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", scoped, "{}").body());
+        // Running a job outside the scope is indistinguishable from an unknown job: 404.
+        HttpResponse<String> deniedRun = send("POST",
+                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", scoped, "{}");
+        assertThat(deniedRun.statusCode()).isEqualTo(404);
+        JsonNode denied = MAPPER.readTree(deniedRun.body());
         assertThat(denied.path("error").path("code").asText()).isEqualTo("TQL-BATCH-4040");
 
         // The matching per-app grant restores visibility, and executions carry their app.

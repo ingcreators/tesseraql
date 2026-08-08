@@ -377,10 +377,18 @@ public final class ErrorResponseRenderer implements Processor {
     public static int httpStatus(TqlErrorCode code) {
         return switch (code.domain()) {
             case SEC -> switch (code.number()) {
-                case 4011 -> 401;
+                // 4011 unauthenticated; 4012/4013 webhook signature invalid or stale — the
+                // caller's credential material is wrong.
+                case 4011, 4012, 4013 -> 401;
                 case 4031, 4032 -> 403;
                 case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
-                default -> 401;
+                // The SEC domain is the whole security namespace, not an auth-failure one:
+                // everything else is a server-side fault — config errors (4000, 4085-4089,
+                // 4120, 4132, 4135), guard/egress refusals (4138, 4141), federation failures
+                // (4140), and crypto errors (5001, 5002). A 401 here invites clients into
+                // token-refresh retries against a genuinely broken server
+                // (docs/contract-bugfixes.md track B).
+                default -> 500;
             };
             // 4220: declarative validation rejected the input (roadmap Phase 19); other FIELD
             // failures are malformed requests.

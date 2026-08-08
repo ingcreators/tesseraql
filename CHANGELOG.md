@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking HTTP-contract change — the operations API's refusals carry their
+  status** (docs/contract-bugfixes.md track A): `/_tesseraql/ops/batch` not-found and
+  out-of-scope refusals (`TQL-BATCH-4040`) now answer **404** instead of 200 with an
+  error body, and the ops transfer download's not-ready refusal (`TQL-LD-2823`) rides
+  the standard error path (409, unchanged status). A client checking `response.ok` no
+  longer reads a missing execution as success.
+- **Pre-1.0 breaking HTTP-contract change — unenumerated `TQL-SEC-*` codes are 500,
+  not 401** (docs/contract-bugfixes.md track B): configuration errors, federation
+  failures, egress refusals, and crypto errors in the SEC domain answered 401
+  ("Unauthorized") through the domain default; they now answer 500. Genuine
+  caller-fault codes keep their statuses (4011/4012/4013 → 401, 4031/4032 → 403,
+  4014 → 409).
 - **Pre-1.0 breaking JSON-contract change — structured error details**
   (docs/transition-engine.md Track F): a `TqlException`'s structured details no longer
   merge flat into the rendered `error` object; they render as the `error.details`
