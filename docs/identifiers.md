@@ -55,7 +55,10 @@ limits to know:
 
 Length is not linted — the database's own error is authoritative. On Oracle the
 database character set must be Unicode (AL32UTF8, the modern default) for non-ASCII
-identifiers.
+identifiers. One adjacent note about *values* rather than names: on SQL Server,
+store Japanese text in `nvarchar` columns — TesseraQL always sends values as bind
+parameters (which the driver transmits as Unicode), but a hand-written plain
+`'…'` literal in your own SQL tooling would pass through the database code page.
 
 ## How Unicode names travel over HTTP
 

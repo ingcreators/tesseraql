@@ -4,7 +4,43 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.13.0 - 2026-08-08
+
+The contract-cleanup release: one wire vocabulary, one name per concept — the last
+planned wave of pre-1.0 breaking renames — plus HTML email, the visual page builder,
+and first-class Unicode identifiers end-to-end (Japanese table, column, field, and
+route names work verbatim from DDL to JSON). **Includes many pre-1.0 breaking
+changes** — read Changed before upgrading; the rename maps live in the entries
+themselves.
+
+### Added
+
+- **Unicode identifiers, end to end** (docs/identifiers.md): a table, column, alias,
+  or field name is Unicode letters/digits/underscores — `受注`, `顧客名`, `受注番号`
+  are names like any other, and the column name *is* the field name, the SQL bind,
+  the URL path parameter, the suite parameter, and the JSON key. Every validator and
+  extractor shares one contract (`SqlIdentifiers`); browsers' percent-encoded
+  requests match their routes (non-ASCII sequences decode before routing — ASCII
+  ones like `%2F` deliberately do not); path parameters the HTTP router cannot
+  represent (`{受注番号}`, `{order_id}`) travel as positional stand-ins and map back
+  before anything user-visible; Studio's docs search finds Japanese by substring
+  (`管理` finds `受注管理`). The `受注管理` gallery app
+  (`examples/juchu-kanri-app`) exercises the whole surface, and the docs page
+  records the per-dialect identifier byte-length limits.
+- **HTML email** (docs/notifications.md): mail channels render bundled
+  `tql/email/*` Hypermedia Components fragments (hc-email 0.1.14) — layout, text,
+  button, footer and friends — shadowable per app at L2; and Studio gains a mail
+  composer over the editor-kit with a strict round-trip grammar, so a composed
+  template stays hand-editable.
+- **Visual page builder** (docs/declarative-views.md): a drag-and-drop canvas over
+  *ejected* templates — the builder edits real Thymeleaf files through a byte-safe
+  section split with a manifest inspector, and the eject ramp (`studio.ejectView`,
+  shared `ViewEjects`) hands a declarative view to the builder in one step.
+- **Pages overview and mail-wiring lints**: `ui/pages` shows the app's whole page
+  ladder (declarative view → ejected template → built page) with Pages and Mail in
+  the Studio sidebar and command palette; mail channels lint at build time — a
+  missing template fails (`TQL-BATCH-5304`), unknown `tql/email` fragments and
+  unresolvable model roots warn (`TQL-TPL-2002`/`2003`, shadow-aware).
 
 ### Changed
 
@@ -118,6 +154,28 @@ All notable changes to TesseraQL are documented here. The format follows
   rows' `code`/`guard` columns, and the dispatch `attempted[]` entry shape. An htmx
   error alert now renders a guard's declared refusal message as its body, so a form
   shows *why* the transition refused.
+
+### Fixed
+
+- **Two same-database apps can no longer share one migration history**: the per-app
+  Flyway history table's sanitizer mapped every non-ASCII character to `_`, so two
+  Japanese-named apps silently wrote the same `tql_schema_history____` — Unicode
+  letters now survive, keeping the tables distinct.
+- **Non-ASCII names no longer disappear silently**: a `{受注番号}` path parameter is
+  extracted and bound (it used to resolve `null` with no diagnostic) and appears in
+  `openapi.json`; the write-scope guard (`TQL-SEC-4100`) sees a Japanese
+  scope-governed table (it used to skip it — a silent loss of a security lint); a
+  `{顧客名}` message placeholder interpolates instead of reaching the user as raw
+  braces; ejected view links render their `${row[...]}` expressions instead of
+  literal `{…}`; and a Japanese `th:each` alias no longer draws false
+  "unresolvable root" template warnings.
+- **PostgreSQL NOTIFY/LISTEN channel names are quoted**: a Unicode channel name —
+  which the sanitizer always allowed through — was a runtime syntax error on the
+  only path that already reached raw SQL.
+- **Studio accepts Japanese migration descriptions** (the slug no longer collapses
+  to empty and refuses with "needs a description"), and generated reference pages
+  keep Unicode heading anchors instead of colliding every Japanese heading onto one
+  empty fragment.
 
 ## 0.12.0 - 2026-08-07
 

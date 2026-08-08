@@ -29,6 +29,42 @@ final class DialectRuntimeChecks {
     private DialectRuntimeChecks() {
     }
 
+    /**
+     * The identifier contract on this vendor (docs/unicode-identifiers.md): unquoted
+     * Japanese table and column names create, insert, and select — and the row-map path
+     * ({@code ResultRows.label}) hands the labels back verbatim, which on Oracle also pins
+     * the caseless no-op of the all-uppercase fold heuristic.
+     */
+    static void japaneseIdentifiersRoundTrip(javax.sql.DataSource dataSource, String dialect,
+            String varcharType) throws Exception {
+        try (var connection = dataSource.getConnection();
+                var statement = connection.createStatement()) {
+            statement.execute("create table 受注 (受注番号 " + varcharType.formatted(20)
+                    + " primary key, 顧客名 " + varcharType.formatted(100) + " not null)");
+            // Values go through bind parameters, as the framework sends them — a bare
+            // Japanese literal would need N'…' on SQL Server (a value concern, not an
+            // identifier one; the driver sends parameters as Unicode).
+            try (var insert = connection.prepareStatement(
+                    "insert into 受注 (受注番号, 顧客名) values (?, ?)")) {
+                insert.setString(1, "J-1001");
+                insert.setString(2, "山田商事");
+                insert.executeUpdate();
+            }
+            try (var results = statement.executeQuery(
+                    "select 受注番号, 顧客名 from 受注 where 受注番号 = 'J-1001'")) {
+                assertThat(results.next()).isTrue();
+                var metaData = results.getMetaData();
+                java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+                for (int column = 1; column <= metaData.getColumnCount(); column++) {
+                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                            metaData.getColumnLabel(column)), results.getObject(column));
+                }
+                assertThat(row).containsEntry("受注番号", "J-1001")
+                        .containsEntry("顧客名", "山田商事");
+            }
+        }
+    }
+
     /** Command + outbox + dispatch: exercises the vendor's claim variant end to end. */
     static void outboxRoundTrip(TesseraqlRuntime runtime) throws Exception {
         HttpResponse<String> response = HTTP.send(HttpRequest.newBuilder(

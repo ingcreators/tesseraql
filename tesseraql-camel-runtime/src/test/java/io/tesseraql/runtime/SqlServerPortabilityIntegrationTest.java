@@ -94,6 +94,12 @@ class SqlServerPortabilityIntegrationTest {
         DialectRuntimeChecks.fileTransferRoundTrip(runtime, "sqlserver-demo");
     }
 
+    @Test
+    void japaneseIdentifiersRoundTripOnThisDialect() throws Exception {
+        DialectRuntimeChecks.japaneseIdentifiersRoundTrip(dataSource(), "sqlserver",
+                "nvarchar(%d)");
+    }
+
     private static javax.sql.DataSource dataSource() {
         com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource = new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
         dataSource.setURL(SQLSERVER.getJdbcUrl());
