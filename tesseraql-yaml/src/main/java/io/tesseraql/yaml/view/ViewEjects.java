@@ -98,10 +98,34 @@ public final class ViewEjects {
                 : fileName + ".html";
         String targetPath = home.relativize(viewDir.resolve(templateName).normalize())
                 .toString().replace('\\', '/');
+        // Embedded views stay declarative across the eject (docs/view-composition.md wave 2c):
+        // the host layout pins, each embed renders through the flipped route's views: binding.
+        List<String> embeddedIds = new java.util.ArrayList<>();
+        spec.children().stream().map(ViewSpec.Child::view).filter(java.util.Objects::nonNull)
+                .forEach(embeddedIds::add);
+        spec.panels().stream().map(ViewSpec.Panel::view).filter(java.util.Objects::nonNull)
+                .forEach(embeddedIds::add);
+        java.util.function.Function<String, String> embedTemplate = id -> {
+            io.tesseraql.yaml.manifest.ViewFile embedded = manifest.viewById(id);
+            if (embedded == null) {
+                throw new TqlException(ViewSpec.INVALID_VIEW,
+                        "Embedded view " + id + " does not resolve to a view document id");
+            }
+            ViewSpec embeddedSpec = embedded.spec();
+            if (embeddedSpec.template() == null) {
+                return "tql/view/" + embeddedSpec.view();
+            }
+            Path dir = embedded.source().getParent();
+            Path custom = dir.resolve(embeddedSpec.template()).normalize();
+            if (!Files.isRegularFile(custom)) {
+                custom = home.resolve("templates").resolve(embeddedSpec.template()).normalize();
+            }
+            return home.relativize(custom).toString().replace('\\', '/');
+        };
         // The header comment names the FILE the pattern was pinned from — the id lives inside
         // it, the file name is what locates it on disk.
         ScaffoldedFile ejected = ViewEjector.eject(home, viewDir, fileName, spec, fields,
-                targetPath);
+                targetPath, embedTemplate);
         ScaffoldWriter.Report report = new ScaffoldWriter().apply(home, List.of(ejected), force);
         if (report.blocked()) {
             return new Result(normalized, targetPath, true);
@@ -119,7 +143,7 @@ public final class ViewEjects {
                             : routeDir.toAbsolutePath().normalize().relativize(target)
                                     .toString().replace('\\', '/');
             String flipped = ViewEjector.flipRoute(Files.readString(routeSource), html.view(),
-                    flipRef);
+                    flipRef, embeddedIds);
             Files.writeString(routeSource, flipped);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);

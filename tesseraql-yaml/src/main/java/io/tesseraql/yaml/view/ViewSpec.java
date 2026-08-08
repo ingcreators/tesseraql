@@ -49,9 +49,9 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     public static final String DETAIL = "detail";
     public static final String DASHBOARD = "dashboard";
 
-    /** The dashboard panel types (docs/declarative-views.md, slice 4). */
+    /** The dashboard panel types (docs/declarative-views.md; {@code view} embeds a view). */
     public static final java.util.Set<String> PANEL_TYPES = java.util.Set.of("stat",
-            "sparkline", "chart", "table");
+            "sparkline", "chart", "table", "view");
 
     /**
      * The chart kinds — the Hypermedia Components {@code data-hc-chart} vocabulary the panel
@@ -82,10 +82,10 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static final java.util.Set<String> COLUMN_KEYS = java.util.Set.of("name", "label",
             "link", "sortable", "text");
     private static final java.util.Set<String> CHILD_KEYS = java.util.Set.of("source", "title",
-            "columns");
+            "columns", "view");
     private static final java.util.Set<String> PANEL_KEYS = java.util.Set.of("title", "type",
             "source", "column", "x", "y", "chart", "series", "xType", "height", "legend",
-            "yLabel", "columns");
+            "yLabel", "columns", "view");
     private static final java.util.Set<String> SERIES_KEYS = java.util.Set.of("column", "label",
             "mark");
 
@@ -122,8 +122,13 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         }
     }
 
-    /** A detail view's child list: a named query composed under the parent record. */
-    public record Child(String source, String title, List<Column> columns) {
+    /**
+     * A detail view's child: a named query rendered through the shared table pattern (the
+     * inline {@code columns:} shorthand), or — with {@code view:} — an embedded view document
+     * (docs/view-composition.md wave 2b) whose data comes from this route's context; the
+     * entry's {@code source:} overrides the embedded document's own.
+     */
+    public record Child(String source, String title, List<Column> columns, String view) {
         public Child {
             columns = columns == null ? List.of() : List.copyOf(columns);
         }
@@ -146,7 +151,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
      */
     public record Panel(String title, String type, String source, String column, String x,
             String y, String kind, List<Series> series, String xType, Integer height,
-            Boolean legend, String yLabel, List<Column> columns) {
+            Boolean legend, String yLabel, List<Column> columns, String view) {
         public Panel {
             columns = columns == null ? List.of() : List.copyOf(columns);
             series = series == null ? List.of() : List.copyOf(series);
@@ -233,6 +238,13 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                     && (column == null || column.isBlank())) {
                 throw invalid(source, "a " + type + " panel requires column:");
             }
+            String embeddedView = str(entry.get("view"));
+            if ("view".equals(type) && (embeddedView == null || embeddedView.isBlank())) {
+                throw invalid(source, "a view panel requires view: (the embedded view id)");
+            }
+            if (!"view".equals(type) && embeddedView != null) {
+                throw invalid(source, "view: is a view-panel key (type: view)");
+            }
             String kind = str(entry.get("chart"));
             List<Series> series = parseSeries(source, entry.get("series"));
             String xType = str(entry.get("xType"));
@@ -248,7 +260,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             panels.add(new Panel(str(entry.get("title")), type, str(entry.get("source")),
                     column, str(entry.get("x")), str(entry.get("y")), kind, series, xType,
                     height, legend, str(entry.get("yLabel")),
-                    parseColumns(source, entry.get("columns"))));
+                    parseColumns(source, entry.get("columns")), embeddedView));
         }
         return panels;
     }
@@ -319,11 +331,18 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         for (Map<String, Object> entry : entries(source, raw, "children")) {
             rejectUnknown(source, entry, CHILD_KEYS, "a children: entry");
             String childSource = str(entry.get("source"));
-            if (childSource == null || childSource.isBlank()) {
-                throw invalid(source, "a children: entry requires source: (a named query key)");
+            String view = str(entry.get("view"));
+            if ((childSource == null || childSource.isBlank())
+                    && (view == null || view.isBlank())) {
+                throw invalid(source, "a children: entry requires source: (a named query key)"
+                        + " or view: (an embedded view id)");
+            }
+            if (view != null && entry.get("columns") != null) {
+                throw invalid(source, "a children: entry with view: embeds that document —"
+                        + " columns: belong inside it");
             }
             children.add(new Child(childSource, str(entry.get("title")),
-                    parseColumns(source, entry.get("columns"))));
+                    parseColumns(source, entry.get("columns")), view));
         }
         return children;
     }

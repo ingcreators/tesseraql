@@ -332,6 +332,64 @@ class ViewSpecTest {
                 .isInstanceOf(TqlException.class).hasMessageContaining("requires name");
     }
 
+    // Embedding vocabulary (docs/view-composition.md wave 2b).
+
+    @Test
+    void parsesViewChildrenAndViewPanels(@TempDir Path dir) throws Exception {
+        ViewSpec detail = ViewSpec.parse(write(dir, "detail.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                children:
+                  - { view: history, source: audit }
+                """));
+        assertThat(detail.children().get(0).view()).isEqualTo("history");
+        assertThat(detail.children().get(0).source()).isEqualTo("audit");
+
+        ViewSpec dashboard = ViewSpec.parse(write(dir, "dash.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: recent }
+                """));
+        assertThat(dashboard.panels().get(0).type()).isEqualTo("view");
+        assertThat(dashboard.panels().get(0).view()).isEqualTo("recent");
+    }
+
+    @Test
+    void embeddingVocabularyValidates(@TempDir Path dir) throws Exception {
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "novi.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, source: sql }
+                """)))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("view panel requires view:");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "stray.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: stat, source: sql, column: total, view: recent }
+                """)))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("view-panel key");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "cols.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                children:
+                  - view: history
+                    columns:
+                      - name: id
+                """)))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("columns: belong inside it");
+    }
+
     // View documents are strict at every nesting level (docs/view-composition.md wave 0,
     // TQL-VIEW-3314): a silently dropped key renders a page that quietly ignores what the
     // author wrote — the shape the procurement gallery dashboard actually shipped with.

@@ -33,11 +33,27 @@ public final class ViewEjector {
      */
     public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
             ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath) {
+        return eject(appHome, routeDir, viewRef, spec, fields, targetPath, id -> {
+            throw new TqlException(ViewSpec.INVALID_VIEW,
+                    "No embedded-view resolver — cannot eject an embedding view here");
+        });
+    }
+
+    /**
+     * The composite variant (docs/view-composition.md wave 2c): {@code embedTemplate} resolves
+     * an embedded view id to its entry template's engine name — the ejected page pins the host
+     * layout while embedded views stay declarative, inserted as
+     * {@code ~{<pattern> :: view(${views['<id>']})}} against the flipped route's
+     * {@code views:} models.
+     */
+    public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
+            ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath,
+            java.util.function.Function<String, String> embedTemplate) {
         String body = switch (spec.view()) {
             case ViewSpec.LIST -> list(appHome, routeDir, spec);
-            case ViewSpec.DETAIL -> detail(appHome, routeDir, spec);
+            case ViewSpec.DETAIL -> detail(appHome, routeDir, spec, embedTemplate);
             case ViewSpec.FORM -> form(appHome, routeDir, spec, fields);
-            case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec);
+            case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec, embedTemplate);
             default -> throw new TqlException(ViewSpec.INVALID_VIEW,
                     "Cannot eject view kind " + spec.view());
         };
@@ -54,6 +70,16 @@ public final class ViewEjector {
      * {@code view:} line is not found (the route was edited underneath the eject).
      */
     public static String flipRoute(String routeYaml, String viewRef, String templateName) {
+        return flipRoute(routeYaml, viewRef, templateName, List.of());
+    }
+
+    /**
+     * The composite variant: the ejected host's embedded views stay declarative, so the flip
+     * also writes the {@code views:} binding their models render through
+     * (docs/view-composition.md wave 2c).
+     */
+    public static String flipRoute(String routeYaml, String viewRef, String templateName,
+            List<String> embeddedIds) {
         Pattern line = Pattern.compile("(?m)^(\\s*)view:\\s*" + Pattern.quote(viewRef)
                 + "\\s*$");
         Matcher matcher = line.matcher(routeYaml);
@@ -61,7 +87,12 @@ public final class ViewEjector {
             throw new TqlException(ViewSpec.INVALID_VIEW, "The route does not declare 'view: "
                     + viewRef + "' — cannot flip it to template:");
         }
-        return matcher.replaceFirst("$1template: " + Matcher.quoteReplacement(templateName));
+        String replacement = "$1template: " + Matcher.quoteReplacement(templateName);
+        if (!embeddedIds.isEmpty()) {
+            replacement += "\n$1views: [" + Matcher.quoteReplacement(
+                    String.join(", ", embeddedIds)) + "]";
+        }
+        return matcher.replaceFirst(replacement);
     }
 
     private static String list(Path appHome, Path routeDir, ViewSpec spec) {
@@ -97,12 +128,14 @@ public final class ViewEjector {
         return pageClose(html);
     }
 
-    private static String detail(Path appHome, Path routeDir, ViewSpec spec) {
+    private static String detail(Path appHome, Path routeDir, ViewSpec spec,
+            java.util.function.Function<String, String> embedTemplate) {
         require(!spec.fields().isEmpty(),
                 "a detail view needs explicit fields: before ejecting — the template pins them");
         for (ViewSpec.Child child : spec.children()) {
-            require(!child.columns().isEmpty(), "child " + child.source()
-                    + " needs explicit columns: before ejecting — the template pins them");
+            require(child.view() != null || !child.columns().isEmpty(),
+                    "child " + child.source()
+                            + " needs explicit columns: before ejecting — the template pins them");
         }
         StringBuilder html = pageOpen(spec);
         html.append("<section class=\"hc-card\" th:with=\"row=${#lists.isEmpty(")
@@ -124,6 +157,14 @@ public final class ViewEjector {
         }
         html.append("  </div>\n");
         for (ViewSpec.Child child : spec.children()) {
+            if (child.view() != null) {
+                // The embedded view stays declarative (wave 2c): the flipped route's views:
+                // binding renders its model, inserted here through its own pattern.
+                html.append("  <th:block th:insert=\"~{").append(embedTemplate.apply(
+                        child.view())).append(" :: view(${views['").append(child.view())
+                        .append("']})}\"/>\n");
+                continue;
+            }
             String childTitle = child.title() != null
                     ? child.title()
                     : ViewFields.humanize(child.source());
@@ -166,7 +207,8 @@ public final class ViewEjector {
      * the list cells. A sparkline's {@code data-max} is dropped — the render-time
      * derivation has no static equivalent; the hand-owned template can pin one.
      */
-    private static String dashboard(Path appHome, Path routeDir, ViewSpec spec) {
+    private static String dashboard(Path appHome, Path routeDir, ViewSpec spec,
+            java.util.function.Function<String, String> embedTemplate) {
         for (ViewSpec.Panel panel : spec.panels()) {
             switch (panel.type()) {
                 case "stat", "sparkline" -> require(panel.column() != null,
@@ -176,6 +218,8 @@ public final class ViewEjector {
                 case "table" -> require(!panel.columns().isEmpty(),
                         "a table panel needs explicit columns: before ejecting"
                                 + " — the template pins them");
+                case "view" -> require(panel.view() != null,
+                        "a view panel needs view: before ejecting");
                 default -> throw new TqlException(ViewSpec.INVALID_VIEW,
                         "Cannot eject panel type " + panel.type());
             }
@@ -185,6 +229,14 @@ public final class ViewEjector {
         html.append("<div class=\"hc-grid\">\n");
         boolean hasChart = false;
         for (ViewSpec.Panel panel : spec.panels()) {
+            if ("view".equals(panel.type())) {
+                // The embedded view stays declarative (wave 2c): its model rides the flipped
+                // route's views: binding, inserted through its own pattern (card included).
+                html.append("  <th:block th:insert=\"~{").append(embedTemplate.apply(
+                        panel.view())).append(" :: view(${views['").append(panel.view())
+                        .append("']})}\"/>\n");
+                continue;
+            }
             String source = panel.source() != null ? panel.source() : spec.source();
             String title = panel.title() != null
                     ? panel.title()

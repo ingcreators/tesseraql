@@ -38,20 +38,35 @@ public final class ViewBinding {
     static final TqlErrorCode UNKNOWN_SLOT = new TqlErrorCode(TqlDomain.VIEW, 3306);
     /** TQL-VIEW-3308: a children: entry names a source the route does not declare. */
     static final TqlErrorCode UNKNOWN_SOURCE = new TqlErrorCode(TqlDomain.VIEW, 3308);
+    /** TQL-VIEW-3318: an embedded view embeds further — embedding depth is 1. */
+    static final TqlErrorCode EMBED_DEPTH = new TqlErrorCode(TqlDomain.VIEW, 3318);
+
+    /**
+     * An embedded view (docs/view-composition.md wave 2b): the sub-binding plus the host
+     * entry's optional {@code source:} override, remapped onto the embedded document's own
+     * source key at model time.
+     */
+    private record Embed(ViewBinding binding, String sourceOverride) {
+    }
 
     private final ViewSpec spec;
     private final String entryTemplate;
     private final List<ViewFields.FieldDef> fields;
     private final Map<String, String> slots;
     private final Path appHome;
+    private final Map<Integer, Embed> childEmbeds;
+    private final Map<Integer, Embed> panelEmbeds;
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
-            Map<String, String> slots, Path appHome) {
+            Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
+            Map<Integer, Embed> panelEmbeds) {
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
         this.slots = slots;
         this.appHome = appHome;
+        this.childEmbeds = childEmbeds;
+        this.panelEmbeds = panelEmbeds;
     }
 
     /**
@@ -88,13 +103,31 @@ public final class ViewBinding {
             }
             fields = ViewFields.derive(viewRef, spec, action.input());
         }
-        for (ViewSpec.Child child : spec.children()) {
+        Map<Integer, Embed> childEmbeds = new LinkedHashMap<>();
+        for (int index = 0; index < spec.children().size(); index++) {
+            ViewSpec.Child child = spec.children().get(index);
+            if (child.view() != null) {
+                childEmbeds.put(index, embed(home, viewRef, child.view(), child.source(),
+                        route, postRouteByPath, viewById));
+                if (child.source() == null) {
+                    continue;
+                }
+            }
             if (!declaresSource(route, child.source())) {
                 throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": children source "
                         + child.source() + " is not a named query or http source of the route");
             }
         }
-        for (ViewSpec.Panel panel : spec.panels()) {
+        Map<Integer, Embed> panelEmbeds = new LinkedHashMap<>();
+        for (int index = 0; index < spec.panels().size(); index++) {
+            ViewSpec.Panel panel = spec.panels().get(index);
+            if (panel.view() != null) {
+                panelEmbeds.put(index, embed(home, viewRef, panel.view(), panel.source(),
+                        route, postRouteByPath, viewById));
+                if (panel.source() == null) {
+                    continue;
+                }
+            }
             String panelSource = panelSource(panel);
             if (!declaresSource(route, panelSource)) {
                 throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": panel source "
@@ -104,7 +137,33 @@ public final class ViewBinding {
         String entry = spec.template() != null
                 ? HtmlResponseRenderer.resolveTemplate(home, viewDir, spec.template())
                 : "tql/view/" + spec.view();
-        return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home);
+        return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
+                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds));
+    }
+
+    /**
+     * Resolves one embedded view (docs/view-composition.md wave 2b): the id must be in the
+     * registry, the document must not itself embed (depth is 1, TQL-VIEW-3318 — the guard that
+     * also makes self-embedding impossible), and its sources validate against the HOST route —
+     * the route stays the sole data owner.
+     */
+    private static Embed embed(Path home, String hostRef, String embeddedId,
+            String sourceOverride, RouteDefinition route,
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById) {
+        Path file = viewById.apply(embeddedId);
+        if (file == null) {
+            throw new TqlException(UNRESOLVED_VIEW, "View " + hostRef + ": embedded view "
+                    + embeddedId + " does not resolve to a view document id");
+        }
+        ViewSpec embedded = ViewSpec.parse(file);
+        boolean embedsFurther = embedded.children().stream().anyMatch(c -> c.view() != null)
+                || embedded.panels().stream().anyMatch(p -> p.view() != null);
+        if (embedsFurther) {
+            throw new TqlException(EMBED_DEPTH, "View " + hostRef + ": embedded view "
+                    + embeddedId + " embeds views itself — embedding depth is 1");
+        }
+        return new Embed(of(home, embeddedId, route, postRouteByPath, viewById),
+                sourceOverride);
     }
 
     /**
@@ -136,6 +195,19 @@ public final class ViewBinding {
             resolved.put(name, engineName + " :: " + fragment);
         });
         return Map.copyOf(resolved);
+    }
+
+    /**
+     * The host entry's {@code source:} override remapped onto the embedded document's own
+     * source key — the embedded model reads its declared source and finds the host's data.
+     */
+    private static Map<String, Object> embedContext(Map<String, Object> context, Embed embed) {
+        if (embed.sourceOverride() == null) {
+            return context;
+        }
+        Map<String, Object> remapped = new LinkedHashMap<>(context);
+        remapped.put(embed.binding().spec.source(), context.get(embed.sourceOverride()));
+        return remapped;
     }
 
     /**
@@ -244,10 +316,19 @@ public final class ViewBinding {
             v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
             v.put("fields", detailFields(catalog, locale, row));
             List<Map<String, Object>> children = new ArrayList<>();
-            for (ViewSpec.Child child : spec.children()) {
+            for (int index = 0; index < spec.children().size(); index++) {
+                ViewSpec.Child child = spec.children().get(index);
+                Map<String, Object> c = new LinkedHashMap<>();
+                Embed embedded = childEmbeds.get(index);
+                if (embedded != null) {
+                    c.put("embed", embedded.binding().model(
+                            embedContext(context, embedded), locale, pagePath));
+                    c.put("embedTemplate", embedded.binding().entryTemplate());
+                    children.add(c);
+                    continue;
+                }
                 List<Map<String, Object>> childRows = rows(sourceOf(context, child.source()));
                 List<ViewSpec.Column> columns = columnsOf(child.columns(), childRows);
-                Map<String, Object> c = new LinkedHashMap<>();
                 c.put("title", message(catalog, locale,
                         child.title() != null
                                 ? child.title()
@@ -334,6 +415,15 @@ public final class ViewBinding {
                         List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
                         m.put("columns", renderedColumns(catalog, locale, columns));
                         m.put("rows", cellMatrix(columns, rows));
+                    }
+                    case "view" -> {
+                        // An embedded view (docs/view-composition.md wave 2b): the sub-model
+                        // rides the panel; the pattern inserts the embedded document's own
+                        // entry fragment, which brings its own card.
+                        Embed embedded = panelEmbeds.get(index);
+                        m.put("embed", embedded.binding().model(
+                                embedContext(context, embedded), locale, pagePath));
+                        m.put("embedTemplate", embedded.binding().entryTemplate());
                     }
                     default -> throw new IllegalStateException(panel.type());
                 }

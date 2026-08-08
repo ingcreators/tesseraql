@@ -21,7 +21,11 @@
      the SSE event carries no data. Empty values drop the attributes (plain dashboard). -->
 <div class="hc-grid" th:id="|${v.id}-view|" th:fragment="view(v)"
      th:attr="hx-ext=${v.liveExt},sse-connect=${v.liveConnect},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
-  <section class="hc-card" th:each="p : ${v.panels}">
+  <th:block th:each="p : ${v.panels}">
+  <!-- A view panel embeds another view document's own entry fragment — it brings its own
+       card, so the panel chrome steps aside (docs/view-composition.md wave 2b). -->
+  <th:block th:if="${p.type == 'view'}" th:insert="~{__${p.embedTemplate}__ :: view(${p.embed})}"/>
+  <section class="hc-card" th:unless="${p.type == 'view'}">
     <div class="hc-card__header"><h3 th:text="${p.title}">Panel</h3></div>
     <div class="hc-card__body hc-stack">
     <th:block th:switch="${p.type}">
@@ -50,6 +54,7 @@
     </th:block>
     </div>
   </section>
+  </th:block>
   <!-- installChart is deliberately outside the kit's auto-init bundle (it needs Observable
        Plot), so the chart scripts load here — only where a chart panel renders, and inside
        the fragment so an embedded dashboard brings them along (docs/view-composition.md

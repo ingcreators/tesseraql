@@ -52,7 +52,7 @@ class HtmlResponseRendererViewTest {
         ViewBinding binding = ViewBinding.of(dir, "page", route,
                 path -> "/items/create".equals(path) ? actionRoute() : null,
                 id -> dir.resolve("page.view.yml"));
-        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", null,
+        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", null, null,
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
 
@@ -77,7 +77,7 @@ class HtmlResponseRendererViewTest {
                 "version: tesseraql/v1\nkind: view\nrecipe: list\ntitle: Items\n");
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
                 id -> dir.resolve("page.view.yml"));
-        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", shell,
+        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", shell, null,
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
 
@@ -125,6 +125,161 @@ class HtmlResponseRendererViewTest {
         assertThatThrownBy(() -> shellRenderer(dir, "sometimes"))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-VIEW-3317");
+    }
+
+    // Embedding (docs/view-composition.md wave 2b/2c): views embed views; the route stays
+    // the sole data owner.
+
+    private static java.util.function.Function<String, Path> registry(Path dir) {
+        return id -> {
+            Path file = dir.resolve(id + ".view.yml");
+            return Files.isRegularFile(file) ? file : null;
+        };
+    }
+
+    @Test
+    void aDashboardEmbedsAnotherViewAsAPanel(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("recent.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: Recent items
+                source: recent
+                """);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                title: Board
+                panels:
+                  - { type: stat, source: sql, column: total, title: Total }
+                  - { type: view, view: recent }
+                """);
+        RouteDefinition route = MAPPER.convertValue(Map.of(
+                "id", "board", "kind", "route", "recipe", "query-html",
+                "queries", Map.of("recent", Map.of("file", "recent.sql"))),
+                RouteDefinition.class);
+        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
+                binding);
+        String html = render(renderer, Map.of(
+                "sql", Map.of("rows", List.of(Map.of("total", 9))),
+                "recent", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt")))));
+        assertThat(html).contains(">9</strong>");
+        // The embedded list renders through its own pattern, card and datagrid included.
+        assertThat(html).contains("Recent items").contains("hc-datagrid__table")
+                .contains(">Bolt<");
+    }
+
+    @Test
+    void aDetailChildEmbedsAViewWithASourceOverride(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("history.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: History
+                """);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                title: Item
+                children:
+                  - { view: history, source: audit }
+                """);
+        RouteDefinition route = MAPPER.convertValue(Map.of(
+                "id", "item", "kind", "route", "recipe", "query-html",
+                "queries", Map.of("audit", Map.of("file", "audit.sql"))),
+                RouteDefinition.class);
+        ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
+                binding);
+        // The child's source: audit remaps onto the embedded document's own source (sql).
+        String html = render(renderer, Map.of(
+                "sql", Map.of("rows", List.of(Map.of("id", 5, "name", "Bolt"))),
+                "audit", Map.of("rows", List.of(Map.of("event", "created")))));
+        assertThat(html).contains("History").contains(">created<");
+    }
+
+    @Test
+    void embeddingDepthIsOne(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("inner.view.yml"),
+                "version: tesseraql/v1\nkind: view\nrecipe: list\n");
+        Files.writeString(dir.resolve("middle.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: inner }
+                """);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: view, view: middle }
+                """);
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null, registry(dir)))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3318");
+    }
+
+    @Test
+    void routeModelEntriesMergeAlongsideV(@TempDir Path dir) throws Exception {
+        // model: entries used to be discarded on view: routes (docs/view-composition.md 2b);
+        // a per-view template retarget proves both merge sides render.
+        Files.writeString(dir.resolve("banner.html"), "<p th:text=\"${banner}\"></p>"
+                + "<th:block th:insert=\"~{tql/view/list :: view(${v})}\"/>");
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: Items
+                template: banner.html
+                """);
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of("banner", "notice.text"), Map.of(), Map.of(), null),
+                dir, dir, "en", binding);
+        String html = render(renderer, Map.of(
+                "notice", Map.of("text", "maintenance tonight"),
+                "sql", Map.of("rows", List.of(Map.of("id", 1)))));
+        assertThat(html).contains("maintenance tonight").contains("hc-datagrid__table");
+    }
+
+    @Test
+    void modelDeclaringVIsReserved(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"),
+                "version: tesseraql/v1\nkind: view\nrecipe: list\n");
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir));
+        assertThatThrownBy(() -> new HtmlResponseRenderer(new HtmlResponse(200, null, "page",
+                null, null, Map.of("v", "sql.rows"), Map.of(), Map.of(), null), dir, dir, "en",
+                binding))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3319");
+    }
+
+    @Test
+    void aTemplateRouteBindsViewModels(@TempDir Path dir) throws Exception {
+        // Declarative parts on a hand-owned template (wave 2c): the ladder's round-trip.
+        Files.writeString(dir.resolve("overview.html"), "<h1>Overview</h1>"
+                + "<th:block th:insert=\"~{tql/view/list :: view(${views['recent']})}\"/>");
+        Files.writeString(dir.resolve("recent.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: Recent items
+                """);
+        ViewBinding bound = ViewBinding.of(dir, "recent", null, path -> null, registry(dir));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200,
+                "overview.html", null, null, List.of("recent"), Map.of(), Map.of(), Map.of(),
+                null), dir, dir, "en", null, Map.of("recent", bound));
+        String html = render(renderer, Map.of(
+                "sql", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt")))));
+        assertThat(html).contains("<h1>Overview</h1>").contains("Recent items")
+                .contains(">Bolt<");
     }
 
     @Test
@@ -232,7 +387,7 @@ class HtmlResponseRendererViewTest {
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
                 id -> dir.resolve("page.view.yml"));
         assertThatThrownBy(() -> new HtmlResponseRenderer(
-                new HtmlResponse(200, "index.html", "page.view.yml", null, Map.of(), Map.of(),
+                new HtmlResponse(200, "index.html", "page.view.yml", null, null, Map.of(), Map.of(),
                         Map.of(),
                         null),
                 dir, dir, "en", binding))

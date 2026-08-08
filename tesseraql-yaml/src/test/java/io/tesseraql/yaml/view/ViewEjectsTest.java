@@ -93,6 +93,53 @@ class ViewEjectsTest {
     }
 
     @Test
+    void aCompositeEjectKeepsEmbeddedViewsDeclarative(@TempDir Path tmp) throws IOException {
+        // docs/view-composition.md wave 2c: the host layout pins; each embedded view stays a
+        // document, rendered through the flipped route's views: binding.
+        Path app = copyHelpdesk(tmp);
+        Files.writeString(app.resolve("web/tickets/recent.view.yml"), """
+                version: tesseraql/v1
+                id: tickets.recent
+                kind: view
+                recipe: list
+                title: Recent tickets
+                """);
+        Files.createDirectories(app.resolve("web/overview"));
+        Files.writeString(app.resolve("web/overview/board.view.yml"), """
+                version: tesseraql/v1
+                id: tickets.overview
+                kind: view
+                recipe: dashboard
+                title: Overview
+                panels:
+                  - { type: view, view: tickets.recent }
+                """);
+        Files.writeString(app.resolve("web/overview/get.yml"), """
+                version: tesseraql/v1
+                id: tickets.overview.page
+                kind: route
+                recipe: query-html
+                security: { auth: browser, policy: help.agent }
+                sql:
+                  file: ../tickets/list.sql
+                response:
+                  html:
+                    view: tickets.overview
+                """);
+
+        ViewEjects.Result result = ViewEjects.eject(app, new ManifestLoader().load(app),
+                "web/overview/get.yml", false);
+
+        assertThat(result.blocked()).isFalse();
+        String template = Files.readString(app.resolve("web/overview/board.html"));
+        assertThat(template)
+                .contains("~{tql/view/list :: view(${views['tickets.recent']})}");
+        String route = Files.readString(app.resolve("web/overview/get.yml"));
+        assertThat(route).contains("template: board.html")
+                .contains("views: [tickets.recent]");
+    }
+
+    @Test
     void unknownRouteAndViewlessRouteThrow(@TempDir Path tmp) throws IOException {
         Path app = copyHelpdesk(tmp);
 

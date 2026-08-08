@@ -28,10 +28,16 @@
       <span th:text="${f.value}">value</span>
     </div>
   </div>
-  <section th:each="c,cs : ${v.children}">
+  <th:block th:each="c,cs : ${v.children}">
+  <!-- A view child embeds another view document's own entry fragment (its card included);
+       the inline columns: shorthand keeps the shared table pattern
+       (docs/view-composition.md wave 2b). -->
+  <th:block th:if="${c.embed != null}" th:insert="~{__${c.embedTemplate}__ :: view(${c.embed})}"/>
+  <section th:if="${c.embed == null}">
     <h3 th:text="${c.title}">Child</h3>
     <th:block th:insert="~{tql/view/table :: table(|${v.id}-child-${cs.index}|, ${c.columns}, ${c.rows})}"/>
   </section>
+  </th:block>
   </div>
   <th:block th:if="${v.slots['footer'] != null}">
     <th:block th:insert="~{__${v.slots['footer']}__}"/>
