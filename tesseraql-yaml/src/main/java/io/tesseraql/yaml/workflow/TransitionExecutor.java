@@ -125,7 +125,7 @@ public final class TransitionExecutor {
             }
         }
         for (String column : transition.stamp().keySet()) {
-            if (!column.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+            if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(column)) {
                 throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
                         + transition.id() + "': stamp column '" + column
                         + "' is not a plain identifier");

@@ -2091,7 +2091,8 @@ public final class AppLinter {
 
     private static final Pattern SCOPE_DIRECTIVE = Pattern
             .compile("/\\*%\\s*scope\\s+([^*]+?)\\s*\\*/");
-    private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern SQL_IDENTIFIER = Pattern
+            .compile(io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER);
 
     /**
      * Lints organizational data scoping (roadmap Phase 29): every {@code scope/} definition is
@@ -2769,7 +2770,7 @@ public final class AppLinter {
     private void lintStamp(io.tesseraql.yaml.model.TransitionSpec transition, String where,
             String source, List<LintFinding> findings) {
         transition.stamp().forEach((column, value) -> {
-            if (!column.matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+            if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(column)) {
                 findings.add(new LintFinding("TQL-WORKFLOW-3111", "error", source,
                         where + " stamp column '" + column + "' is not a plain identifier"));
             }
@@ -3412,8 +3413,9 @@ public final class AppLinter {
                         "duckdb lake catalog '" + catalog + "' must be a PostgreSQL datasource"
                                 + " holding the lake metadata"));
             }
-            if (!schema.matches("[A-Za-z_][A-Za-z0-9_]*")
-                    || !alias.matches("[A-Za-z_][A-Za-z0-9_]*") || "main".equals(alias)) {
+            if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(schema)
+                    || !io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(alias)
+                    || "main".equals(alias)) {
                 findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
                         "duckdb lake schema/as on datasource '" + name + "' must be plain"
                                 + " identifiers, and as: never 'main'"));
@@ -3539,7 +3541,7 @@ public final class AppLinter {
                         "duckdb attach target '" + target + "' is itself a duckdb datasource;"
                                 + " attach targets are server datasources"));
             }
-            if (alias == null || !alias.matches("[A-Za-z_][A-Za-z0-9_]*")
+            if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(alias)
                     || "main".equals(alias)) {
                 findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
                         "duckdb attach '" + target + "' on datasource '" + name

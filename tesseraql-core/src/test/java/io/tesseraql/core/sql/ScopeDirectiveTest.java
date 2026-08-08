@@ -75,6 +75,13 @@ class ScopeDirectiveTest {
     }
 
     @Test
+    void scopeAliasMayBeAUnicodeIdentifier() {
+        // The identifier contract (docs/unicode-identifiers.md): a Japanese table alias is
+        // a name like any other.
+        assertThat(Sql2WayParser.parse("where /*%scope org on 顧客 */ (1=1)")).isNotEmpty();
+    }
+
+    @Test
     void renderingAScopeWithoutAResolverFailsLoudly() {
         List<SqlNode> nodes = Sql2WayParser.parse("where /*%scope s */ (1=1)");
         assertThatThrownBy(() -> SqlRenderer.render(nodes, Map.of()))

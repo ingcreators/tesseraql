@@ -78,6 +78,18 @@ class DecisionScaffolderTest {
     }
 
     @Test
+    void japaneseNamesScaffoldVerbatim() {
+        // The identifier contract (docs/unicode-identifiers.md): a Japanese decision keeps
+        // its name in the file stem, the rules table, and the migration.
+        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("送料区分",
+                Map.of("地域", "eq"), List.of("送料"), false, false, 1);
+
+        assertThat(files.get(0).path()).isEqualTo("decisions/送料区分.yml");
+        assertThat(files.get(1).path()).isEqualTo("db/migration/V1__decision_送料区分.sql");
+        assertThat(files.get(1).content()).contains("create table 送料区分_rules");
+    }
+
+    @Test
     void aMalformedRequestFailsWithItsCode() {
         assertThatThrownBy(() -> new DecisionScaffolder().scaffold("Shipping Fee", inputs(),
                 List.of("fee"), false, false, 1))

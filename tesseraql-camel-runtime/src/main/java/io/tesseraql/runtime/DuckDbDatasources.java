@@ -141,7 +141,8 @@ final class DuckDbDatasources {
                 throw new IllegalStateException(prefix + "mode must be readonly or readwrite,"
                         + " not '" + mode + "'");
             }
-            if (!alias.matches("[A-Za-z_][A-Za-z0-9_]*") || "main".equals(alias)) {
+            if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(alias)
+                    || "main".equals(alias)) {
                 throw new IllegalStateException(prefix + "as must be a plain identifier other"
                         + " than 'main' (DuckDB's own default schema is named main); attaching"
                         + " the main datasource requires an explicit as:");
@@ -170,10 +171,10 @@ final class DuckDbDatasources {
             throw new IllegalStateException(prefix + "mode must be readonly or readwrite, not '"
                     + mode + "'");
         }
-        if (!schema.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(schema)) {
             throw new IllegalStateException(prefix + "schema must be a plain identifier");
         }
-        if (!alias.matches("[A-Za-z_][A-Za-z0-9_]*") || "main".equals(alias)) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(alias) || "main".equals(alias)) {
             throw new IllegalStateException(prefix + "as must be a plain identifier other than"
                     + " 'main' (DuckDB's own default schema is named main)");
         }

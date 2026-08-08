@@ -383,8 +383,7 @@ public final class DecisionSets {
      * fragment.
      */
     private static String identifier(String name, String candidate) {
-        if (candidate == null || !candidate.matches("[A-Za-z_][A-Za-z0-9_]*"
-                + "(\\.[A-Za-z_][A-Za-z0-9_]*)?")) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isDotted(candidate)) {
             throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "': '" + candidate
                     + "' is not a plain SQL identifier");
         }

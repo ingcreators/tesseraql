@@ -169,7 +169,7 @@ public final class Sql2WayParser {
         String channel = dot < 0 ? reference : reference.substring(0, dot);
         String name = dot < 0 ? "" : reference.substring(dot + 1);
         if (!("scope".equals(channel) || "dataset".equals(channel)
-                || "remote".equals(channel)) || !name.matches("[A-Za-z0-9_-]+")) {
+                || "remote".equals(channel)) || !name.matches("[\\p{L}\\p{N}_-]+")) {
             throw error("Unknown file placeholder '" + content + "': only ${scope.<name>},"
                     + " ${dataset.<param>}, and ${remote.<name>} resolve to files");
         }
@@ -179,7 +179,7 @@ public final class Sql2WayParser {
         }
         if (!"dataset".equals(channel) && !validScopeSuffix(suffix)) {
             throw error("File placeholder path '" + suffix + "' must be /-separated relative"
-                    + " segments of [A-Za-z0-9._*-] with no '..'");
+                    + " segments of letters, digits, and [._*-] with no '..'");
         }
         return new SqlNode.FilePath(channel, name, suffix, directive.sourceLine());
     }
@@ -194,7 +194,7 @@ public final class Sql2WayParser {
         }
         for (String segment : suffix.substring(1).split("/", -1)) {
             if (segment.isEmpty() || segment.equals(".") || segment.equals("..")
-                    || !segment.matches("[A-Za-z0-9._*-]+")) {
+                    || !segment.matches("[\\p{L}\\p{N}._*-]+")) {
                 return false;
             }
         }
@@ -278,7 +278,7 @@ public final class Sql2WayParser {
         if (name.isEmpty()) {
             throw error("scope directive needs a scope name");
         }
-        if (alias != null && !alias.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+        if (alias != null && !SqlIdentifiers.isIdentifier(alias)) {
             throw error("scope 'on' alias '" + alias + "' must be a SQL identifier");
         }
         // A scope directive replaces a parenthesized dummy predicate so the template stays runnable
