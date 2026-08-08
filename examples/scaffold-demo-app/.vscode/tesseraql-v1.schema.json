@@ -240,7 +240,7 @@
           "properties": {
             "status": { "type": "integer", "minimum": 100, "maximum": 599 },
             "template": { "type": "string" },
-            "view": { "type": "string", "description": "A *.view.yml document (exclusive with template:)." },
+            "view": { "type": "string", "description": "The id of a *.view.yml document (exclusive with template:)." },
             "model": { "type": "object", "additionalProperties": true },
             "headers": { "type": "object", "additionalProperties": true },
             "headersWhen": { "type": "object", "additionalProperties": { "type": "string" } },

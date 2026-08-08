@@ -246,4 +246,52 @@ class ManifestLoaderTest {
 
         assertThat(new ManifestLoader().load(dir).migrations()).isEmpty();
     }
+
+    // The view registry (docs/view-composition.md wave 1): every *.view.yml under web/ and
+    // templates/, indexed by app-wide-unique id.
+
+    @Test
+    void indexesViewDocumentsUnderWebAndTemplatesByTheirIds(
+            @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("web/items"));
+        java.nio.file.Files.writeString(dir.resolve("web/items/list.view.yml"),
+                "version: tesseraql/v1\nid: items\nkind: view\nrecipe: list\n");
+        java.nio.file.Files.createDirectories(dir.resolve("templates"));
+        java.nio.file.Files.writeString(dir.resolve("templates/shared.view.yml"),
+                "version: tesseraql/v1\nkind: view\nrecipe: list\n");
+        // An unparseable document is left out (the linter reports it per document).
+        java.nio.file.Files.writeString(dir.resolve("web/items/broken.view.yml"),
+                "version: tesseraql/v1\nkind: view\nrecipe: list\nlayout: wide\n");
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        assertThat(manifest.views()).hasSize(2);
+        assertThat(manifest.viewById("items").source())
+                .isEqualTo(dir.resolve("web/items/list.view.yml"));
+        // The id defaults from the file name when the document declares none.
+        assertThat(manifest.viewById("shared").spec().view()).isEqualTo("list");
+        assertThat(manifest.viewById("broken")).isNull();
+    }
+
+    @Test
+    void aDuplicateViewIdFailsTheLoad(@org.junit.jupiter.api.io.TempDir Path dir)
+            throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("web/a"));
+        java.nio.file.Files.createDirectories(dir.resolve("web/b"));
+        java.nio.file.Files.writeString(dir.resolve("web/a/list.view.yml"),
+                "version: tesseraql/v1\nid: items\nkind: view\nrecipe: list\n");
+        java.nio.file.Files.writeString(dir.resolve("web/b/other.view.yml"),
+                "version: tesseraql/v1\nid: items\nkind: view\nrecipe: list\n");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new ManifestLoader().load(dir))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3315")
+                .hasMessageContaining("declared twice");
+    }
 }

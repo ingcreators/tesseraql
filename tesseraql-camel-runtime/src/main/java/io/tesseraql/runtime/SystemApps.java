@@ -58,7 +58,8 @@ final class SystemApps {
             apps.add(new MountedApp(source.name(), new AppManifest(loaded.appHome(), mounted,
                     loaded.routes(), loaded.jobs(), loaded.tools(), loaded.resources(),
                     loaded.uiResources(), loaded.consumers(), loaded.scopes(), loaded.workflows(),
-                    loaded.attachments(), loaded.migrations(), loaded.prompts(), loaded.index())));
+                    loaded.attachments(), loaded.migrations(), loaded.prompts(), loaded.views(),
+                    loaded.index())));
             LOG.info("Mounted app '{}' from {} ({} routes, {} jobs)",
                     source.name(), root, loaded.routes().size(), loaded.jobs().size());
         }

@@ -13,4 +13,4 @@ sql:
 response:
   html:
     status: 200
-    view: new.view.yml
+    view: requests.new.form

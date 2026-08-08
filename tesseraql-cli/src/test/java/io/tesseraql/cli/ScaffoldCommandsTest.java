@@ -81,7 +81,7 @@ class ScaffoldCommandsTest {
                   file: board.sql
                 response:
                   html:
-                    view: board.view.yml
+                    view: board
                 """);
         Files.writeString(board.resolve("board.sql"), "select name from items\n");
         Files.writeString(board.resolve("board.view.yml"), """
@@ -100,7 +100,7 @@ class ScaffoldCommandsTest {
         assertThat(Files.readString(template)).contains("tesseraql-scaffold-checksum")
                 .contains("th:each=\"row : ${sql.rows}\"");
         assertThat(Files.readString(board.resolve("get.yml")))
-                .contains("template: board.html").doesNotContain("view: board.view.yml");
+                .contains("template: board.html").doesNotContain("view: board");
 
         // Ejected means ejected: a rerun finds no view: left to eject.
         assertThat(execute("scaffold", "eject-view", "--app", app.toString(),

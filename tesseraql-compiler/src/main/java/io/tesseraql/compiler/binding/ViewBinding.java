@@ -9,7 +9,6 @@ import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.view.ViewFields;
 import io.tesseraql.yaml.view.ViewSpec;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -56,15 +55,25 @@ public final class ViewBinding {
     }
 
     /**
-     * Resolves and validates a route's view reference at build time. {@code route} is the
-     * declaring route (its {@code queries:} keys anchor a detail view's {@code children:});
+     * Resolves and validates a route's view reference at build time. {@code viewRef} is the
+     * view document's app-wide {@code id} (docs/view-composition.md wave 1), resolved through
+     * {@code viewById} — the manifest's view registry. {@code route} is the declaring route
+     * (its {@code queries:} keys anchor a detail view's {@code children:});
      * {@code postRouteByPath} looks up the POST route serving a path (the form's
-     * {@code action:}).
+     * {@code action:}). Slot and {@code template:} references inside the document resolve
+     * against the view file's own directory, then {@code templates/} — a shared document
+     * resolves the same fragments for every referencing route.
      */
-    public static ViewBinding of(Path appHome, Path routeDir, String viewRef,
-            RouteDefinition route, Function<String, RouteDefinition> postRouteByPath) {
+    public static ViewBinding of(Path appHome, String viewRef, RouteDefinition route,
+            Function<String, RouteDefinition> postRouteByPath, Function<String, Path> viewById) {
         Path home = appHome.toAbsolutePath().normalize();
-        Path file = resolve(home, routeDir, viewRef);
+        Path file = viewById.apply(viewRef);
+        if (file == null) {
+            throw new TqlException(UNRESOLVED_VIEW, "view: " + viewRef + " does not resolve to"
+                    + " a view document id (ids come from *.view.yml under web/ or templates/;"
+                    + " an unparseable document is not indexed — run lint)");
+        }
+        Path viewDir = file.getParent();
         ViewSpec spec = ViewSpec.parse(file);
         List<ViewFields.FieldDef> fields = List.of();
         if (ViewSpec.FORM.equals(spec.view())) {
@@ -93,17 +102,19 @@ public final class ViewBinding {
             }
         }
         String entry = spec.template() != null
-                ? HtmlResponseRenderer.resolveTemplate(home, routeDir, spec.template())
+                ? HtmlResponseRenderer.resolveTemplate(home, viewDir, spec.template())
                 : "tql/view/" + spec.view();
-        return new ViewBinding(spec, entry, fields, resolveSlots(home, routeDir, spec), home);
+        return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home);
     }
 
     /**
      * Validates slot names against the view kind's offering (L1) and resolves each fragment
-     * reference ({@code <template> :: <fragment>}, the template resolved colocated-first like
-     * any other) into the engine-relative form the pattern inserts via preprocessing.
+     * reference ({@code <template> :: <fragment>}) into the engine-relative form the pattern
+     * inserts via preprocessing. The template resolves against the view document's own
+     * directory first, then {@code templates/} — never the referencing route's directory, so
+     * a shared view resolves identically everywhere (docs/view-composition.md wave 1).
      */
-    private static Map<String, String> resolveSlots(Path appHome, Path routeDir, ViewSpec spec) {
+    private static Map<String, String> resolveSlots(Path appHome, Path viewDir, ViewSpec spec) {
         if (spec.slots().isEmpty()) {
             return Map.of();
         }
@@ -121,7 +132,7 @@ public final class ViewBinding {
             }
             String template = ref.substring(0, separator).trim();
             String fragment = ref.substring(separator + 2).trim();
-            String engineName = HtmlResponseRenderer.resolveTemplate(appHome, routeDir, template);
+            String engineName = HtmlResponseRenderer.resolveTemplate(appHome, viewDir, template);
             resolved.put(name, engineName + " :: " + fragment);
         });
         return Map.copyOf(resolved);
@@ -144,21 +155,6 @@ public final class ViewBinding {
 
     public ViewSpec spec() {
         return spec;
-    }
-
-    /** Resolves the view file like a template: colocated, then templates/, app-home-confined. */
-    private static Path resolve(Path appHome, Path routeDir, String viewRef) {
-        Path colocated = routeDir.toAbsolutePath().normalize().resolve(viewRef).normalize();
-        Path file = Files.isRegularFile(colocated)
-                ? colocated
-                : appHome.resolve("templates").resolve(viewRef).normalize();
-        if (!file.startsWith(appHome)) {
-            throw new TqlException(UNRESOLVED_VIEW, "View escapes app home: " + viewRef);
-        }
-        if (!Files.isRegularFile(file)) {
-            throw new TqlException(UNRESOLVED_VIEW, "View not found: " + viewRef);
-        }
-        return file;
     }
 
     /**

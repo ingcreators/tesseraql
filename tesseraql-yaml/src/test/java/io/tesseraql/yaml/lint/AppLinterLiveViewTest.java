@@ -55,7 +55,7 @@ class AppLinterLiveViewTest {
                   file: orders.sql
                 response:
                   html:
-                    view: orders.view.yml
+                    view: orders
                 """);
     }
 

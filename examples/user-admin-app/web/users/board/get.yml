@@ -11,4 +11,4 @@ sql:
 
 response:
   html:
-    view: board.view.yml
+    view: users.board

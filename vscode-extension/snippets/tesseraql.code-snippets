@@ -60,7 +60,7 @@
       "",
       "response:",
       "  html:",
-      "    view: ${5:list}.view.yml"
+      "    view: ${5:items}"
     ]
   },
   "TesseraQL command-json route": {

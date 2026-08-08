@@ -27,4 +27,4 @@ sql:
 response:
   html:
     status: 200
-    view: list.view.yml
+    view: requisitions

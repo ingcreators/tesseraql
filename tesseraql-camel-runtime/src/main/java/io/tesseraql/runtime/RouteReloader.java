@@ -268,6 +268,32 @@ final class RouteReloader {
         for (String shared : List.of("decisions", "rules", "scope", "domains")) {
             joined.append('|').append(digestTree(appHome.resolve(shared)));
         }
+        joined.append('|').append(digestViewDocuments(appHome));
+        return joined.toString();
+    }
+
+    /**
+     * View documents bake into the routes that reference them, and since references are by id
+     * (docs/view-composition.md wave 1) a shared document may sit outside the referencing
+     * route's own directory — so every {@code *.view.yml} under {@code web/} and
+     * {@code templates/} joins the app fingerprint, cheap-and-correct like the shared
+     * definitions above.
+     */
+    private static String digestViewDocuments(Path appHome) {
+        StringBuilder joined = new StringBuilder();
+        for (String root : List.of("web", "templates")) {
+            Path tree = appHome.resolve(root);
+            if (!java.nio.file.Files.isDirectory(tree)) {
+                joined.append("|absent");
+                continue;
+            }
+            try (java.util.stream.Stream<Path> files = java.nio.file.Files.walk(tree)) {
+                joined.append('|').append(digest(files.filter(
+                        file -> file.getFileName().toString().endsWith(".view.yml"))));
+            } catch (java.io.IOException ex) {
+                joined.append("|unreadable:").append(ex.getMessage());
+            }
+        }
         return joined.toString();
     }
 

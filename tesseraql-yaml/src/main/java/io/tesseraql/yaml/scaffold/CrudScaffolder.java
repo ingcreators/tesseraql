@@ -270,13 +270,14 @@ public final class CrudScaffolder {
 
                 response:
                   html:
-                    view: list.view.yml
+                    view: %s
                 %s""".formatted(names.table(), names.table(), names.entity(),
                 names.searchColumn().isPresent()
                         ? "  q:\n    type: string\n    required: false\n    maxLength: 200\n"
                         : "",
                 sortEnum(table, names), names.pkColumn(),
-                names.searchColumn().isPresent() ? "    q: query.q\n" : "", cspHeaders()));
+                names.searchColumn().isPresent() ? "    q: query.q\n" : "", names.entity(),
+                cspHeaders()));
         return yml.toString();
     }
 
@@ -401,8 +402,8 @@ public final class CrudScaffolder {
 
                 response:
                   html:
-                    view: new.view.yml
-                %s""".formatted(names.table(), names.entity(), cspHeaders());
+                    view: %s.new
+                %s""".formatted(names.table(), names.entity(), names.entity(), cspHeaders());
     }
 
     /** The create form view: every field derives from the create route's input: block. */
@@ -536,10 +537,10 @@ public final class CrudScaffolder {
 
                 response:
                   html:
-                    view: edit.view.yml
+                    view: %s.edit
                 %s""".formatted(names.table(), names.entity(),
                 inputBlock(names, List.of(names.pk())) + "\n", names.pkField(), names.pkField(),
-                cspHeaders());
+                names.entity(), cspHeaders());
     }
 
     private static String selectSql(TableSchema table, Names names) {

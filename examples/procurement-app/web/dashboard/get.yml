@@ -19,4 +19,4 @@ queries:
 response:
   html:
     status: 200
-    view: dashboard.view.yml
+    view: procurement.dashboard.view

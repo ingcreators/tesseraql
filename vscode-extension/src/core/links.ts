@@ -14,7 +14,9 @@ export interface ReferenceLink {
   target: string;
 }
 
-const REFERENCE = /^(\s*(?:-\s+)?(?:file|view|template):\s*)(["']?)([^\s#"']+)\2/;
+// view: is an id reference into the app's view registry since docs/view-composition.md
+// wave 1 — not a path, so it no longer document-links here.
+const REFERENCE = /^(\s*(?:-\s+)?(?:file|template):\s*)(["']?)([^\s#"']+)\2/;
 const TARGET = /\.(sql|yml|html)$/;
 
 export function referenceLinks(text: string): ReferenceLink[] {

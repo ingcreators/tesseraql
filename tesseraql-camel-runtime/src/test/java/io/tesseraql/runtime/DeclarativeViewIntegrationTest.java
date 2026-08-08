@@ -226,7 +226,7 @@ class DeclarativeViewIntegrationTest {
                   file: board.sql
                 response:
                   html:
-                    view: board.view.yml
+                    view: board
                 """);
         Files.writeString(board.resolve("board.sql"),
                 "select u.name, u.status from users u order by u.id\n");
@@ -262,7 +262,7 @@ class DeclarativeViewIntegrationTest {
                     file: groups.sql
                 response:
                   html:
-                    view: detail.view.yml
+                    view: detail
                 """);
         Files.writeString(boardDetail.resolve("detail.sql"),
                 "select u.name, u.status from users u where u.name = /* name */ 'sato'\n");
@@ -404,7 +404,7 @@ class DeclarativeViewIntegrationTest {
                     file: group-names.sql
                 response:
                   html:
-                    view: stats.view.yml
+                    view: stats
                 """);
         Files.writeString(boardStats.resolve("totals.sql"),
                 "select count(*) as user_count from users\n");
@@ -445,7 +445,7 @@ class DeclarativeViewIntegrationTest {
                   auth: public
                 response:
                   html:
-                    view: new.view.yml
+                    view: new
                 """);
         Files.writeString(boardNew.resolve("new.view.yml"), """
                 version: tesseraql/v1

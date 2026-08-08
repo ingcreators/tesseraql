@@ -151,7 +151,7 @@ class CrudScaffolderTest {
         // the SQL, and the tql/view/list pattern renders (docs/declarative-views.md).
         assertThat(content(files, "web/items/get.yml"))
                 .contains("recipe: query-html")
-                .contains("view: list.view.yml")
+                .contains("view: items")
                 // Declarative pagination (Phase 41): the framework appends the clause.
                 .contains("pagination:")
                 .contains("maxSize: 200")

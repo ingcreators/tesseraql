@@ -25,6 +25,14 @@ public final class ViewEjects {
     public record Result(String routePath, String templatePath, boolean blocked) {
     }
 
+    /**
+     * TQL-VIEW-3316: ejecting a view referenced by more than one route is refused — the flip
+     * would fork rendering for the other routes silently. Forking a shared view is an explicit
+     * copy-then-eject (docs/view-composition.md wave 1).
+     */
+    public static final io.tesseraql.core.error.TqlErrorCode SHARED_VIEW = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.VIEW, 3316);
+
     private ViewEjects() {
     }
 
@@ -50,12 +58,27 @@ public final class ViewEjects {
             throw new TqlException(ViewSpec.INVALID_VIEW,
                     "Route " + normalized + " declares no response.html.view — nothing to eject");
         }
-        Path routeDir = routeFile.source().getParent();
-        Path viewFile = routeDir.resolve(html.view()).normalize();
-        if (!Files.isRegularFile(viewFile)) {
-            viewFile = home.resolve("templates").resolve(html.view()).normalize();
+        io.tesseraql.yaml.manifest.ViewFile registered = manifest.viewById(html.view());
+        if (registered == null) {
+            throw new TqlException(ViewSpec.INVALID_VIEW,
+                    "view: " + html.view() + " does not resolve to a view document id");
         }
-        ViewSpec spec = ViewSpec.parse(viewFile);
+        List<String> referencing = manifest.routes().stream()
+                .filter(candidate -> candidate.definition().response() != null
+                        && candidate.definition().response().html() != null
+                        && html.view().equals(candidate.definition().response().html().view()))
+                .map(candidate -> home.relativize(candidate.source()).toString()
+                        .replace('\\', '/'))
+                .toList();
+        if (referencing.size() > 1) {
+            throw new TqlException(SHARED_VIEW, "View " + html.view() + " is shared by "
+                    + referencing.size() + " routes (" + String.join(", ", referencing)
+                    + ") — ejecting would fork rendering for the others. Copy the document"
+                    + " under a new id and point this route at the copy first.");
+        }
+        Path viewFile = registered.source();
+        Path viewDir = viewFile.getParent();
+        ViewSpec spec = registered.spec();
         List<ViewFields.FieldDef> fields = List.of();
         if (ViewSpec.FORM.equals(spec.view())) {
             RouteFile action = manifest.routes().stream()
@@ -66,12 +89,18 @@ public final class ViewEjects {
                             "The view's action " + spec.action() + " matches no POST route"));
             fields = ViewFields.derive(html.view(), spec, action.definition().input());
         }
-        String templateName = html.view().endsWith(".view.yml")
-                ? html.view().substring(0, html.view().length() - ".view.yml".length()) + ".html"
-                : html.view() + ".html";
-        String targetPath = home.relativize(routeDir.resolve(templateName).normalize())
+        // The template is named after the view FILE and lands beside it (colocated views eject
+        // next to their route exactly as before; a templates/ view ejects into templates/, where
+        // the flipped template: reference still resolves).
+        String fileName = viewFile.getFileName().toString();
+        String templateName = fileName.endsWith(".view.yml")
+                ? fileName.substring(0, fileName.length() - ".view.yml".length()) + ".html"
+                : fileName + ".html";
+        String targetPath = home.relativize(viewDir.resolve(templateName).normalize())
                 .toString().replace('\\', '/');
-        ScaffoldedFile ejected = ViewEjector.eject(home, routeDir, html.view(), spec, fields,
+        // The header comment names the FILE the pattern was pinned from — the id lives inside
+        // it, the file name is what locates it on disk.
+        ScaffoldedFile ejected = ViewEjector.eject(home, viewDir, fileName, spec, fields,
                 targetPath);
         ScaffoldWriter.Report report = new ScaffoldWriter().apply(home, List.of(ejected), force);
         if (report.blocked()) {
@@ -79,8 +108,18 @@ public final class ViewEjects {
         }
         try {
             Path routeSource = routeFile.source();
+            // The flipped template: reference must resolve from the ROUTE's directory: the bare
+            // name for a colocated or templates/ view (both resolve), the route-relative path
+            // for the odd view sitting in some other route's directory.
+            Path routeDir = routeSource.getParent();
+            Path target = viewDir.resolve(templateName).normalize();
+            String flipRef = target.getParent().equals(routeDir.toAbsolutePath().normalize())
+                    || viewDir.startsWith(home.resolve("templates"))
+                            ? templateName
+                            : routeDir.toAbsolutePath().normalize().relativize(target)
+                                    .toString().replace('\\', '/');
             String flipped = ViewEjector.flipRoute(Files.readString(routeSource), html.view(),
-                    templateName);
+                    flipRef);
             Files.writeString(routeSource, flipped);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);

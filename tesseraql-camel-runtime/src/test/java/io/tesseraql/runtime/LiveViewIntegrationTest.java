@@ -278,7 +278,7 @@ class LiveViewIntegrationTest {
                   file: orders.sql
                 response:
                   html:
-                    view: orders.view.yml
+                    view: orders
                 """);
         Files.writeString(orders.resolve("order.sql"), """
                 select
@@ -309,7 +309,7 @@ class LiveViewIntegrationTest {
                   file: ../order.sql
                 response:
                   html:
-                    view: ../order.view.yml
+                    view: order
                 """);
         Files.writeString(orders.resolve("stats.sql"), """
                 select
@@ -341,7 +341,7 @@ class LiveViewIntegrationTest {
                   file: ../stats.sql
                 response:
                   html:
-                    view: ../stats.view.yml
+                    view: stats
                 """);
         Path approve = target.resolve("web/orders/approve");
         Files.createDirectories(approve);
