@@ -86,14 +86,27 @@ public final class ManifestCoverage {
     }
 
     /**
-     * View coverage (roadmap Phase 39): routes rendering a declarative view
-     * ({@code response.html.view}) — declared and covered like routes, so a suite must exercise
-     * every view-backed route. Gated via {@code coverage.thresholds.view}.
+     * View coverage (roadmap Phase 39, keyed per document since docs/view-composition.md
+     * wave 1): one item per view document in the manifest registry, covered when a declarative
+     * suite exercises any route referencing its id. An unreferenced view document is declared
+     * and never covered — dead weight a threshold makes visible. Gated via
+     * {@code coverage.thresholds.view}.
      */
     public static ItemCoverage view(AppManifest manifest, List<TestSuite> suites) {
-        return routeKind("view", manifest, suites, definition -> definition.response() != null
-                && definition.response().html() != null
-                && definition.response().html().view() != null);
+        ItemCoverage coverage = new ItemCoverage("view");
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
+        for (io.tesseraql.yaml.manifest.ViewFile view : manifest.views()) {
+            coverage.declare(view.spec().id());
+            for (RouteFile route : manifest.routes()) {
+                RouteDefinition definition = route.definition();
+                if (definition.response() != null && definition.response().html() != null
+                        && view.spec().id().equals(definition.response().html().view())
+                        && index.exercises(route)) {
+                    coverage.cover(view.spec().id());
+                }
+            }
+        }
+        return coverage;
     }
 
     /**

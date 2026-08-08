@@ -17,4 +17,4 @@ queries:
 
 response:
   html:
-    view: detail.view.yml
+    view: users.board.detail

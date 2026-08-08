@@ -2,18 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { referenceLinks } from '../src/core/links';
 
-test('sql file, view, and template references link with exact spans', () => {
+test('sql file and template references link with exact spans; a view id does not', () => {
+  // view: carries a registry id since docs/view-composition.md wave 1, not a path.
   const text = [
     'sql:',
     '  file: search.sql',
     'response:',
     '  html:',
-    '    view: list.view.yml',
+    '    view: items',
     '    template: index.html',
   ].join('\n');
   assert.deepEqual(referenceLinks(text), [
     { line: 1, start: 8, end: 18, target: 'search.sql' },
-    { line: 4, start: 10, end: 23, target: 'list.view.yml' },
     { line: 5, start: 14, end: 24, target: 'index.html' },
   ]);
 });

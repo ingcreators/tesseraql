@@ -24,7 +24,7 @@ class AppLinterViewTest {
                   file: list.sql
                 response:
                   html:
-                    view: items.view.yml
+                    view: items
                 """);
         Files.writeString(dir.resolve("web/items/items.view.yml"), viewYaml);
         Files.createDirectories(dir.resolve("web/items/create"));
@@ -84,7 +84,7 @@ class AppLinterViewTest {
                 response:
                   html:
                     template: index.html
-                    view: items.view.yml
+                    view: items
                 """);
         assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3302");
     }
@@ -204,7 +204,7 @@ class AppLinterViewTest {
                     url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
                 response:
                   html:
-                    view: items.view.yml
+                    view: items
                 """);
         Files.writeString(dir.resolve("web/items/items.view.yml"), """
                 version: tesseraql/v1

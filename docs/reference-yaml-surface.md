@@ -214,7 +214,7 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | --- | --- | --- |
 | `status` | integer ≥ 100 ≤ 599 |  |
 | `template` | string |  |
-| `view` | string | A *.view.yml document (exclusive with template:). |
+| `view` | string | The id of a *.view.yml document (exclusive with template:). |
 | `model` | object |  |
 | `headers` | object |  |
 | `headersWhen` | map of string |  |

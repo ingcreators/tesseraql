@@ -350,15 +350,19 @@ public final class AppLinter {
     }
 
     /**
-     * Validates declarative views (roadmap Phase 39, docs/declarative-views.md): the
-     * {@code response.html.view} reference resolves and parses ({@code TQL-VIEW-3301/3302}), is
-     * not combined with {@code template:} ({@code TQL-VIEW-3302}), a form's {@code action:} names
-     * a POST route with an {@code input:} block ({@code TQL-VIEW-3303}) whose fields the view's
-     * {@code fields:} entries actually declare ({@code TQL-VIEW-3304}) with known widgets
-     * ({@code TQL-VIEW-3305}); and an app's {@code templates/tql/view/*.html} pattern override
-     * carries the expected fragment signature ({@code TQL-VIEW-3307}, warning).
+     * Validates declarative views (roadmap Phase 39, docs/declarative-views.md).
+     * Document-shape checks run once per view document — parse errors with the exception's own
+     * code, a form's {@code action:} naming a POST route with an {@code input:} block
+     * ({@code TQL-VIEW-3303}) whose fields the {@code fields:} entries actually declare
+     * ({@code TQL-VIEW-3304}) with known widgets ({@code TQL-VIEW-3305}), slot names and
+     * references ({@code TQL-VIEW-3306}/{@code 3302}), and {@code refreshOn:} wiring. Per
+     * referencing route: the id resolves in the registry and is not combined with
+     * {@code template:} ({@code TQL-VIEW-3302}), and source/search/sort wiring
+     * ({@code TQL-VIEW-3308/3309/3310}). An app's {@code templates/tql/view/*.html} pattern
+     * override carries the expected fragment signature ({@code TQL-VIEW-3307}, warning).
      */
     private void lintViews(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        lintViewDocuments(appHome, manifest, findings);
         for (RouteFile route : manifest.routes()) {
             var response = route.definition().response();
             var html = response == null ? null : response.html();
@@ -371,49 +375,14 @@ public final class AppLinter {
                         "response.html declares both template: and view: — they are mutually"
                                 + " exclusive"));
             }
-            Path routeDir = route.source().getParent();
-            Path colocated = routeDir.resolve(html.view()).normalize();
-            Path file = java.nio.file.Files.isRegularFile(colocated)
-                    ? colocated
-                    : appHome.resolve("templates").resolve(html.view()).normalize();
-            if (!java.nio.file.Files.isRegularFile(file)) {
+            io.tesseraql.yaml.manifest.ViewFile viewFile = manifest.viewById(html.view());
+            if (viewFile == null) {
                 findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
-                        "view: " + html.view() + " does not resolve (colocated or templates/)"));
+                        "view: " + html.view() + " does not resolve to a view document id"
+                                + " (ids come from *.view.yml under web/ or templates/)"));
                 continue;
             }
-            io.tesseraql.yaml.view.ViewSpec spec;
-            try {
-                spec = io.tesseraql.yaml.view.ViewSpec.parse(file);
-            } catch (io.tesseraql.core.error.TqlException ex) {
-                findings.add(new LintFinding("TQL-VIEW-3301", "error", source, ex.getMessage()));
-                continue;
-            }
-            if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
-                lintFormView(manifest, source, spec, findings);
-            }
-            lintRefreshOn(manifest, source, spec, findings);
-            for (String slotName : spec.slots().keySet()) {
-                java.util.Set<String> allowed = io.tesseraql.yaml.view.ViewSpec
-                        .slotsFor(spec.view());
-                if (!allowed.contains(slotName)) {
-                    findings.add(new LintFinding("TQL-VIEW-3306", "error", source,
-                            "view " + spec.id() + ": unknown slot " + slotName + " (a "
-                                    + spec.view() + " view offers " + allowed + ")"));
-                    continue;
-                }
-                String ref = spec.slots().get(slotName);
-                int separator = ref.indexOf("::");
-                String template = separator < 1 ? ref : ref.substring(0, separator).trim();
-                Path slotColocated = routeDir.resolve(template).normalize();
-                Path slotFile = java.nio.file.Files.isRegularFile(slotColocated)
-                        ? slotColocated
-                        : appHome.resolve("templates").resolve(template).normalize();
-                if (separator < 1 || !java.nio.file.Files.isRegularFile(slotFile)) {
-                    findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
-                            "view " + spec.id() + ": slot " + slotName + " reference " + ref
-                                    + " does not resolve ('<template> :: <fragment>')"));
-                }
-            }
+            io.tesseraql.yaml.view.ViewSpec spec = viewFile.spec();
             for (io.tesseraql.yaml.view.ViewSpec.Child child : spec.children()) {
                 if (!declaresViewSource(route.definition(), child.source())) {
                     findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
@@ -450,6 +419,76 @@ public final class AppLinter {
             }
         }
         lintViewOverrides(appHome, findings);
+    }
+
+    /**
+     * The per-document pass (docs/view-composition.md wave 1): every {@code *.view.yml} under
+     * {@code web/} and {@code templates/} parses — reported once per document with the parse
+     * error's own code (TQL-VIEW-3301/3313/3314), not once per referencing route. Parseable
+     * documents are already in the manifest's registry; duplicate ids fail the manifest load
+     * itself (TQL-VIEW-3315, the domains posture).
+     */
+    private void lintViewDocuments(Path appHome, AppManifest manifest,
+            List<LintFinding> findings) {
+        java.util.Set<Path> indexed = new java.util.HashSet<>();
+        for (io.tesseraql.yaml.manifest.ViewFile view : manifest.views()) {
+            indexed.add(view.source());
+            String source = appHome.relativize(view.source()).toString().replace('\\', '/');
+            io.tesseraql.yaml.view.ViewSpec spec = view.spec();
+            if (io.tesseraql.yaml.view.ViewSpec.FORM.equals(spec.view())) {
+                lintFormView(manifest, source, spec, findings);
+            }
+            lintRefreshOn(manifest, source, spec, findings);
+            Path viewDir = view.source().getParent();
+            for (String slotName : spec.slots().keySet()) {
+                java.util.Set<String> allowed = io.tesseraql.yaml.view.ViewSpec
+                        .slotsFor(spec.view());
+                if (!allowed.contains(slotName)) {
+                    findings.add(new LintFinding("TQL-VIEW-3306", "error", source,
+                            "view " + spec.id() + ": unknown slot " + slotName + " (a "
+                                    + spec.view() + " view offers " + allowed + ")"));
+                    continue;
+                }
+                // Slot templates resolve against the view document's own directory, then
+                // templates/ — never a referencing route's (docs/view-composition.md wave 1).
+                String ref = spec.slots().get(slotName);
+                int separator = ref.indexOf("::");
+                String template = separator < 1 ? ref : ref.substring(0, separator).trim();
+                Path slotColocated = viewDir.resolve(template).normalize();
+                Path slotFile = Files.isRegularFile(slotColocated)
+                        ? slotColocated
+                        : appHome.resolve("templates").resolve(template).normalize();
+                if (separator < 1 || !Files.isRegularFile(slotFile)) {
+                    findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                            "view " + spec.id() + ": slot " + slotName + " reference " + ref
+                                    + " does not resolve ('<template> :: <fragment>')"));
+                }
+            }
+        }
+        for (String root : List.of("web", "templates")) {
+            Path tree = appHome.resolve(root);
+            if (!Files.isDirectory(tree)) {
+                continue;
+            }
+            try (var files = Files.walk(tree)) {
+                files.filter(Files::isRegularFile)
+                        .filter(p -> p.getFileName().toString().endsWith(".view.yml"))
+                        .filter(p -> !indexed.contains(p))
+                        .sorted()
+                        .forEach(file -> {
+                            String source = appHome.relativize(file).toString()
+                                    .replace('\\', '/');
+                            try {
+                                io.tesseraql.yaml.view.ViewSpec.parse(file);
+                            } catch (io.tesseraql.core.error.TqlException ex) {
+                                findings.add(new LintFinding(ex.code().toString(), "error",
+                                        source, ex.getMessage()));
+                            }
+                        });
+            } catch (java.io.IOException ex) {
+                throw new java.io.UncheckedIOException(ex);
+            }
+        }
     }
 
     /**

@@ -15,7 +15,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- The TesseraQL version you build against (matches the CLI you installed). -->
-    <tesseraql.version>0.13.0-SNAPSHOT</tesseraql.version>
+    <tesseraql.version>0.14.0-SNAPSHOT</tesseraql.version>
   </properties>
 
   <dependencyManagement>

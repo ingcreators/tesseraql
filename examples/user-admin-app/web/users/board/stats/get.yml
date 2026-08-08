@@ -17,4 +17,4 @@ queries:
 
 response:
   html:
-    view: stats.view.yml
+    view: users.board.stats

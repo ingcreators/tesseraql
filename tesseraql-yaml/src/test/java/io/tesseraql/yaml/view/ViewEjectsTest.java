@@ -34,7 +34,7 @@ class ViewEjectsTest {
         assertThat(template).contains("tql/shell :: shell").contains("id=\"page-content\"")
                 .contains("hc-datagrid").contains("Ejected from list.view.yml");
         String route = Files.readString(app.resolve("web/tickets/get.yml"));
-        assertThat(route).contains("template: list.html").doesNotContain("view: list.view.yml");
+        assertThat(route).contains("template: list.html").doesNotContain("view: tickets");
 
         // A second eject finds no view: to flip.
         assertThatThrownBy(() -> ViewEjects.eject(app, new ManifestLoader().load(app),
@@ -55,7 +55,7 @@ class ViewEjectsTest {
         assertThat(Files.readString(app.resolve("web/tickets/list.html")))
                 .isEqualTo("<p>hand-authored</p>\n");
         assertThat(Files.readString(app.resolve("web/tickets/get.yml")))
-                .contains("view: list.view.yml");
+                .contains("view: tickets");
 
         ViewEjects.Result forced = ViewEjects.eject(app, new ManifestLoader().load(app),
                 "web/tickets/get.yml", true);
@@ -65,6 +65,31 @@ class ViewEjectsTest {
                 .contains("tql/shell :: shell");
         assertThat(Files.readString(app.resolve("web/tickets/get.yml")))
                 .contains("template: list.html");
+    }
+
+    @Test
+    void refusesToEjectASharedView(@TempDir Path tmp) throws IOException {
+        // TQL-VIEW-3316 (docs/view-composition.md wave 1): flipping one route would fork
+        // rendering for the other referencing routes silently.
+        Path app = copyHelpdesk(tmp);
+        Files.createDirectories(app.resolve("web/archive"));
+        Files.writeString(app.resolve("web/archive/get.yml"), """
+                version: tesseraql/v1
+                id: tickets.archive
+                kind: route
+                recipe: page
+                security: { auth: browser, policy: help.agent }
+                response:
+                  html:
+                    view: tickets
+                """);
+
+        assertThatThrownBy(() -> ViewEjects.eject(app, new ManifestLoader().load(app),
+                "web/tickets/get.yml", false))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3316")
+                .hasMessageContaining("shared by 2 routes")
+                .hasMessageContaining("web/archive/get.yml");
     }
 
     @Test

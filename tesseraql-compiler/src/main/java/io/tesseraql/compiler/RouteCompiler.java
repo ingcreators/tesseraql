@@ -911,8 +911,9 @@ public final class RouteCompiler {
             // input: block — so a bad view fails the build, not the request.
             io.tesseraql.compiler.binding.ViewBinding viewBinding = html != null
                     && html.view() != null
-                            ? io.tesseraql.compiler.binding.ViewBinding.of(appHome, routeDir,
-                                    html.view(), routeFile.definition(), this::postRouteByPath)
+                            ? io.tesseraql.compiler.binding.ViewBinding.of(appHome,
+                                    html.view(), routeFile.definition(), this::postRouteByPath,
+                                    this::viewPathById)
                             : null;
             route.process(new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
                     routeDir, i18n.defaultTag(), viewBinding));
@@ -921,6 +922,12 @@ public final class RouteCompiler {
         // pipelineThroughSql opened the idempotency record; closing it here is what stops a
         // retry with the same key answering 409 for the whole TTL instead of serving the page.
         applyIdempotencyComplete(route, routeFile.definition());
+    }
+
+    /** The view registry lookup — the file declaring this view id (docs/view-composition.md). */
+    private Path viewPathById(String id) {
+        var view = manifest.viewById(id);
+        return view == null ? null : view.source();
     }
 
     /** The POST route serving a path — a form view's {@code action:} target. */

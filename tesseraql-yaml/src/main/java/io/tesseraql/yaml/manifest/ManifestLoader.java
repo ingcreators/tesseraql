@@ -21,6 +21,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -121,9 +122,55 @@ public final class ManifestLoader {
                 withWorkflowDecisions(decisions, workflow.source(), workflow.definition())));
         List<AttachmentFile> attachments = loadAttachments(home);
         List<MigrationFile> migrations = loadMigrations(home);
+        List<ViewFile> views = loadViews(home);
         ManifestIndex index = buildIndex(home, config);
         return new AppManifest(home, config, routes, jobs, tools, resources, uiResources, consumers,
-                scopes, workflows, attachments, migrations, prompts, index);
+                scopes, workflows, attachments, migrations, prompts, views, index);
+    }
+
+    /**
+     * The app-wide view registry (docs/view-composition.md wave 1): every {@code *.view.yml}
+     * under {@code web/} and {@code templates/}, indexed by the document's {@code id} —
+     * {@code response.html.view} references that id, so the files themselves stay colocated
+     * with their routes (or under {@code templates/} when shared). A duplicate id is a build
+     * error (TQL-VIEW-3315); an unparseable document is left out — the linter reports it per
+     * document, and a route referencing its id fails to resolve at compile.
+     */
+    static final TqlErrorCode DUPLICATE_VIEW_ID = new TqlErrorCode(TqlDomain.VIEW, 3315);
+
+    private List<ViewFile> loadViews(Path home) {
+        List<ViewFile> views = new ArrayList<>();
+        Map<String, Path> byId = new LinkedHashMap<>();
+        for (String root : List.of("web", "templates")) {
+            Path tree = home.resolve(root);
+            if (!Files.isDirectory(tree)) {
+                continue;
+            }
+            try (Stream<Path> files = Files.walk(tree)) {
+                files.filter(Files::isRegularFile)
+                        .filter(p -> p.getFileName().toString().endsWith(".view.yml"))
+                        .sorted()
+                        .forEach(file -> {
+                            requireInside(home, file);
+                            io.tesseraql.yaml.view.ViewSpec spec;
+                            try {
+                                spec = io.tesseraql.yaml.view.ViewSpec.parse(file);
+                            } catch (TqlException broken) {
+                                return;
+                            }
+                            Path first = byId.putIfAbsent(spec.id(), file);
+                            if (first != null) {
+                                throw new TqlException(DUPLICATE_VIEW_ID, "View id '" + spec.id()
+                                        + "' is declared twice: " + home.relativize(first)
+                                        + " and " + home.relativize(file));
+                            }
+                            views.add(new ViewFile(file, spec));
+                        });
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
+        }
+        return views;
     }
 
     /**

@@ -16,10 +16,18 @@ with list views ([pagination](pagination.md)).
 
 ## The view document
 
-A view is a colocated YAML document referenced by its route. It resolves exactly like a
-template — first next to the route, then under the shared `templates/` root, confined
-to the app home — and is not itself a route (only HTTP-method-named `*.yml` files under
+A view is a YAML document referenced by its **id**: every `*.view.yml` under `web/` and
+`templates/` joins an app-wide registry at load time, and `response.html.view` names the
+document's `id` (explicit, or defaulted from the file name — `new.view.yml` → `new`). A
+duplicate id is a build error (`TQL-VIEW-3315`); an unresolved id is `TQL-VIEW-3302`.
+The files themselves stay colocated with their routes (or under `templates/` when
+shared), and a view is not itself a route (only HTTP-method-named `*.yml` files under
 `web/` are routes; the `*.view.yml` suffix is the convention).
+
+Because the reference is a name, one document may serve **several routes**. Every
+referencing route must declare the sources, search, and sort inputs the document uses
+(the per-route lints below), and the document's `v.id`-derived DOM ids and message-key
+namespace are shared across those pages.
 
 ```yaml
 # web/items/new/get.yml
@@ -30,7 +38,7 @@ recipe: page
 security: { auth: browser, policy: app.read }
 response:
   html:
-    view: new.view.yml        # instead of template:
+    view: items.new.form      # the view document's id — instead of template:
 ```
 
 ```yaml
@@ -92,7 +100,7 @@ sql:
   params: { q: query.q }
 response:
   html:
-    view: items.view.yml
+    view: items.list
 ```
 
 With no `columns:`, a list renders the result set's own columns in authored SQL order —
@@ -275,7 +283,9 @@ as a hand-written template today.
   the parameterized `tql/shell :: shell(...)` pattern applied to views. A list or
   detail offers `header`/`footer`; a form adds `actions` beside its submit button. A
   slot value is `template::fragment` (compact, so the plain YAML scalar stays legal),
-  the template resolving colocated-first then under `templates/`. An unknown slot name
+  the template resolving against the view document's own directory first, then under
+  `templates/` — never a referencing route's directory, so a shared view resolves the
+  same fragments everywhere. An unknown slot name
   is `TQL-VIEW-3306`; an unresolved reference is `TQL-VIEW-3302`.
 - **L2 — pattern overrides**: the template resolver chain resolves an app override —
   scoped to `tql/view/*`, rooted at the app's `templates/` directory — ahead of the
@@ -290,7 +300,10 @@ as a hand-written template today.
   `columns:`/`fields:` explicitly first; a dashboard's chart panels need `x:` and
   `series:`/`y:`, its table panels explicit `columns:`, and a sparkline's `data-max`
   is dropped (no static equivalent — pin one in the template). Filled slots inline as
-  static fragment inserts. The view document stays on disk for reference. In Studio, the same action
+  static fragment inserts. The view document stays on disk for reference. A view
+  referenced by more than one route refuses to eject (`TQL-VIEW-3316`) — flipping one
+  route would silently fork rendering for the others; copy the document under a new id
+  and point the route at the copy first. In Studio, the same action
   is the "Eject view to template…" button on a `view:` route's source page (confirmed;
   a hand-edited target blocks until explicitly overwritten), landing on the fresh
   template.
@@ -336,7 +349,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | code | check |
 | --- | --- |
 | 3301 | unknown `recipe:` kind (not `list`/`form`/`detail`/`dashboard`) |
-| 3302 | `view:` and `template:` both set, the view file does not resolve, or a slot's `template::fragment` reference does not resolve |
+| 3302 | `view:` and `template:` both set, the view id does not resolve in the registry, or a slot's `template::fragment` reference does not resolve |
 | 3303 | a form's `action:` names no route, or the named route declares no `input:` |
 | 3304 | a `fields:` entry names an input the action route does not declare |
 | 3305 | unknown widget name |
@@ -347,9 +360,12 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
 | 3313 | chart-panel vocabulary: unknown `chart:`, `y:` and `series:` together (or neither), `mark:` outside `chart: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |
 | 3314 | unknown key anywhere in a view document — top level, `fields:`, `columns:`, `children:`, `panels:`, `series:` entries; view documents are strict, never silently dropping a key |
+| 3315 | duplicate view id — two `*.view.yml` documents declare (or default to) the same `id` |
+| 3316 | ejecting a shared view — the view is referenced by more than one route; copy it under a new id and point the route at the copy first |
 
-Coverage kind **`view`**: one item per view-backed route, exercised when a declarative
-suite invokes it. The htmx-contract and OpenAPI generators are unaffected —
+Coverage kind **`view`**: one item per view document, exercised when a declarative
+suite invokes any route referencing its id — an unreferenced document is declared and
+never covered, which is what makes dead view files visible. The htmx-contract and OpenAPI generators are unaffected —
 views change how HTML is produced, not the HTTP contract.
 
 ## Design notes
@@ -379,8 +395,5 @@ Not currently supported:
 
 - **Fragment-mode views** — a bare view for an htmx target region, rendered without
   the shell — are planned.
-- **Shared views** (one view document used by several routes) stay colocated-only until
-  a concrete need appears; the `templates/` root fallback already covers the common
-  case.
 - **Write-side field masking** (per-role field visibility on forms) is planned to
   compose with the existing `FieldPolicy` machinery.

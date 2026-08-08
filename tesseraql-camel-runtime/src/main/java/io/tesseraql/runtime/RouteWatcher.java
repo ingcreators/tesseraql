@@ -73,11 +73,13 @@ public final class RouteWatcher implements AutoCloseable {
         }
         // The reload's full scope (RouteReloader): the web/ routes plus everything that
         // bakes into them — shared definitions rebuild every route, a workflow change
-        // rebuilds its synthesized transition routes. Only trees that exist at start are
-        // watched; a surface added later still needs a restart.
+        // rebuilds its synthesized transition routes, and templates/ joins for the view
+        // documents that may live there (docs/view-composition.md wave 1; plain templates
+        // resolve live at render time and their events are filtered out below). Only trees
+        // that exist at start are watched; a surface added later still needs a restart.
         List<Path> roots = new ArrayList<>();
         for (String surface : List.of("web", "workflow", "decisions", "rules", "scope",
-                "domains")) {
+                "domains", "templates")) {
             Path root = appHome.resolve(surface);
             if (Files.isDirectory(root)) {
                 roots.add(root);
@@ -165,6 +167,12 @@ public final class RouteWatcher implements AutoCloseable {
         }
         Path child = dir.resolve((Path) event.context());
         if (isNoise(child.getFileName().toString())) {
+            return;
+        }
+        // Under templates/ only view documents bake into routes; every other template
+        // resolves live at render time, so its events would just be wasted reloads.
+        if (child.startsWith(appHome.resolve("templates")) && !Files.isDirectory(child)
+                && !child.getFileName().toString().endsWith(".view.yml")) {
             return;
         }
         if (Files.isDirectory(child)) {

@@ -2043,11 +2043,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 String ref = isView ? html.view() : html.template();
                                 row.put("mode", isView ? "view" : "template");
                                 row.put("ref", ref);
-                                java.nio.file.Path file = routeDir.resolve(ref).normalize();
-                                if (!java.nio.file.Files.isRegularFile(file)) {
-                                    file = home.resolve("templates").resolve(ref).normalize();
+                                // A view ref is the document's id in the manifest registry
+                                // (docs/view-composition.md wave 1); a template ref stays a
+                                // path resolved colocated-first.
+                                java.nio.file.Path file;
+                                if (isView) {
+                                    var registered = fresh.viewById(ref);
+                                    file = registered == null ? null : registered.source();
+                                } else {
+                                    file = routeDir.resolve(ref).normalize();
+                                    if (!java.nio.file.Files.isRegularFile(file)) {
+                                        file = home.resolve("templates").resolve(ref)
+                                                .normalize();
+                                    }
                                 }
-                                String refPath = java.nio.file.Files.isRegularFile(file)
+                                String refPath = file != null
+                                        && java.nio.file.Files.isRegularFile(file)
                                         && file.startsWith(home)
                                                 ? home.relativize(file).toString()
                                                         .replace('\\', '/')
@@ -2057,22 +2068,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 boolean ejectable = false;
                                 boolean builderEligible = false;
                                 if (isView && refPath != null) {
-                                    try {
-                                        kind = io.tesseraql.yaml.view.ViewSpec.parse(file)
-                                                .view();
-                                        // Every view kind ejects (docs/pages-and-mail-lints.md
-                                        // follow-ups added the dashboard).
-                                        ejectable = io.tesseraql.yaml.view.ViewSpec.LIST
-                                                .equals(kind)
-                                                || io.tesseraql.yaml.view.ViewSpec.DETAIL
-                                                        .equals(kind)
-                                                || io.tesseraql.yaml.view.ViewSpec.DASHBOARD
-                                                        .equals(kind)
-                                                || io.tesseraql.yaml.view.ViewSpec.FORM
-                                                        .equals(kind);
-                                    } catch (RuntimeException ex) {
-                                        // Unparseable view document: listed without a kind.
-                                    }
+                                    kind = fresh.viewById(ref).spec().view();
+                                    // Every view kind ejects (docs/pages-and-mail-lints.md
+                                    // follow-ups added the dashboard).
+                                    ejectable = io.tesseraql.yaml.view.ViewSpec.LIST.equals(kind)
+                                            || io.tesseraql.yaml.view.ViewSpec.DETAIL
+                                                    .equals(kind)
+                                            || io.tesseraql.yaml.view.ViewSpec.DASHBOARD
+                                                    .equals(kind)
+                                            || io.tesseraql.yaml.view.ViewSpec.FORM.equals(kind);
                                 } else if (!isView && refPath != null
                                         && refPath.endsWith(".html")) {
                                     String text = studio.sourceIfExists(refPath);

@@ -140,8 +140,9 @@ class ScaffoldDogfoodIntegrationTest {
                 .contains("items.search", "items.page", "items.detail");
         assertThat(result.kind("security").covered())
                 .contains("items.search", "items.page", "items.detail");
+        // View coverage keys by view DOCUMENT id since docs/view-composition.md wave 1.
         assertThat(result.kind("view").declared())
-                .contains("items.page", "items.detail", "items.new");
+                .contains("items", "items.edit", "items.new");
     }
 
     /** Rewrites the gallery from the current generators (then commit the diff). */

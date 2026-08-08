@@ -196,7 +196,7 @@ class InventoryAnalyticsIntegrationTest {
                 response:
                   html:
                     status: 200
-                    view: tenantboard.view.yml
+                    view: tenantboard.page
                 """);
         Files.writeString(board.resolve("totals.sql"),
                 "select count(*) as products from products\n");

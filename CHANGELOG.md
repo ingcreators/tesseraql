@@ -6,7 +6,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Shared views** (docs/declarative-views.md): one view document may now serve several
+  routes — the app-wide view registry makes the reference a name, slot fragments
+  resolve against the view document's own directory, and ejecting a shared view is
+  refused (`TQL-VIEW-3316`) until the route points at its own copy. View coverage now
+  keys by view document (one item per document, covered when any referencing route is
+  exercised), so unreferenced view files become visible.
+
 ### Changed
+
+- **`response.html.view` references a view id, not a file path** (pre-1.0 break,
+  docs/view-composition.md wave 1): every `*.view.yml` under `web/` and `templates/`
+  joins a load-time registry keyed by the document's `id` (explicit, or defaulted from
+  the file name), unique app-wide (`TQL-VIEW-3315`). Replace `view: list.view.yml`
+  with the document's id (`view: items`); `scaffold crud` emits id references. Slot
+  and per-view `template:` references now resolve against the view document's
+  directory (then `templates/`), never the referencing route's.
 
 - **View documents are strict** (pre-1.0 break, docs/view-composition.md wave 0): an
   unknown key anywhere in a `kind: view` document — top level, `fields:`, `columns:`,

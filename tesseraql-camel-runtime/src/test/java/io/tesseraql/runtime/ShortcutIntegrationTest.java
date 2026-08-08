@@ -255,7 +255,7 @@ class ShortcutIntegrationTest {
                 response:
                   html:
                     status: 200
-                    view: thing.view.yml
+                    view: things.detail.view
                 """);
         Files.writeString(thing.resolve("thing.sql"),
                 "select /* id */'T-1' as id, 'Thing ' || /* id */'T-1' as name\n");

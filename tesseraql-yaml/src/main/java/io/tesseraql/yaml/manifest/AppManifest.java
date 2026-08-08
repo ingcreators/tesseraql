@@ -21,13 +21,17 @@ import java.util.List;
  * @param attachments attachment definitions discovered under {@code attachments/} (Phase 30)
  * @param migrations  Flyway migration files listed (not parsed) under {@code db/} (spec layer)
  * @param prompts     application-declared MCP prompt files discovered under {@code mcp/}
+ * @param views       the app-wide view registry: every parseable {@code *.view.yml} under
+ *                    {@code web/} and {@code templates/}, id-unique
+ *                    (docs/view-composition.md wave 1)
  * @param index       checksum index of the manifest source files
  */
 public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes,
         List<JobFile> jobs, List<ToolFile> tools, List<ResourceFile> resources,
         List<UiResourceFile> uiResources, List<RouteFile> consumers, List<ScopeFile> scopes,
         List<WorkflowFile> workflows, List<AttachmentFile> attachments,
-        List<MigrationFile> migrations, List<PromptFile> prompts, ManifestIndex index) {
+        List<MigrationFile> migrations, List<PromptFile> prompts, List<ViewFile> views,
+        ManifestIndex index) {
 
     public AppManifest {
         routes = List.copyOf(routes);
@@ -41,5 +45,16 @@ public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes
         workflows = List.copyOf(workflows);
         attachments = List.copyOf(attachments);
         migrations = List.copyOf(migrations);
+        views = List.copyOf(views);
+    }
+
+    /** The registry lookup: the view document declaring {@code id}, or {@code null}. */
+    public ViewFile viewById(String id) {
+        for (ViewFile view : views) {
+            if (view.spec().id().equals(id)) {
+                return view;
+            }
+        }
+        return null;
     }
 }

@@ -52,7 +52,7 @@ class OpenApiGeneratorTest {
                 java.util.List.of(route), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(),
-                java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
                 io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
 
         String json = new OpenApiGenerator().toJson(manifest);
@@ -139,7 +139,7 @@ class OpenApiGeneratorTest {
                 java.util.List.of(importRoute, exportRoute, commandRoute), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(),
                 java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(),
-                java.util.List.of(),
+                java.util.List.of(), java.util.List.of(),
                 io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
 
         java.util.Map<String, Object> doc = new OpenApiGenerator().generate(manifest);

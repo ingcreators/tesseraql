@@ -49,9 +49,10 @@ class HtmlResponseRendererViewTest {
     private static HtmlResponseRenderer renderer(Path dir, String viewYaml,
             RouteDefinition route) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), viewYaml);
-        ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", route,
-                path -> "/items/create".equals(path) ? actionRoute() : null);
-        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page.view.yml",
+        ViewBinding binding = ViewBinding.of(dir, "page", route,
+                path -> "/items/create".equals(path) ? actionRoute() : null,
+                id -> dir.resolve("page.view.yml"));
+        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page",
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
 
@@ -165,7 +166,8 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("page.view.yml"),
                 "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.writeString(dir.resolve("index.html"), "<p>x</p>");
-        ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", null, path -> null);
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml"));
         assertThatThrownBy(() -> new HtmlResponseRenderer(
                 new HtmlResponse(200, "index.html", "page.view.yml", Map.of(), Map.of(), Map.of(),
                         null),
@@ -177,7 +179,8 @@ class HtmlResponseRendererViewTest {
     void aFormActionMatchingNoPostRouteFailsTheBuild(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"),
                 "version: tesseraql/v1\nkind: view\nrecipe: form\naction: /nowhere\n");
-        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml")))
                 .isInstanceOf(TqlException.class).hasMessageContaining("matches no POST route");
     }
 
@@ -222,7 +225,8 @@ class HtmlResponseRendererViewTest {
                 children:
                   - source: ghost
                 """);
-        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml")))
                 .isInstanceOf(TqlException.class).hasMessageContaining("ghost");
     }
 
@@ -252,7 +256,8 @@ class HtmlResponseRendererViewTest {
                 slots:
                   sidebar: frags.html::x
                 """);
-        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml")))
                 .isInstanceOf(TqlException.class).hasMessageContaining("unknown slot");
     }
 
@@ -320,7 +325,8 @@ class HtmlResponseRendererViewTest {
                     source: ghost
                     column: c
                 """);
-        assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml")))
                 .isInstanceOf(TqlException.class).hasMessageContaining("panel source ghost");
     }
 

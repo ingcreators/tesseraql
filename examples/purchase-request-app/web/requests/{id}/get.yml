@@ -21,4 +21,4 @@ queries:
 response:
   html:
     status: 200
-    view: detail.view.yml
+    view: requests.detail.view
