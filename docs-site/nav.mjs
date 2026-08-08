@@ -159,4 +159,6 @@ export const EXCLUDED = [
   'pages-and-mail-lints.md',
   // Pre-1.0 contract bug fixes (wave A of the contract-consistency sweep), 2026-08-08.
   'contract-bugfixes.md',
+  // Vocabulary cleanup (wave C: YAML/HTTP renames before the v1 freeze), 2026-08-08.
+  'vocabulary-cleanup.md',
 ];
