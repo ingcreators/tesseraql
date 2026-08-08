@@ -1,6 +1,9 @@
 # View composition and field presentation
 
-> **Status: design.** Direction approved 2026-08-08; no slice has landed. This is an
+> **Status: complete.** All waves landed 2026-08-08/09 — wave 0 (#635), wave 1 (#636),
+> wave 2a (#637), waves 2b/2c, 3a, 3b, 4, and the finishing slice (extension intel,
+> docs) in the follow-on PRs. The user-facing documentation lives in
+> declarative-views.md; only historical rationale remains here. This is an
 > internal design document (docs-site `EXCLUDED`); the user-facing documentation stays in
 > [declarative-views.md](declarative-views.md) and
 > [declarative-validation.md](declarative-validation.md) and is rewritten as the waves
