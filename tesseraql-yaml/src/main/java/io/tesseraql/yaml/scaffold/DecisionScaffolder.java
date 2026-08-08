@@ -32,9 +32,9 @@ public final class DecisionScaffolder {
      */
     public List<ScaffoldedFile> scaffold(String name, Map<String, String> inputs,
             List<String> outputs, boolean unique, boolean effective, int migrationVersion) {
-        if (!name.matches("[a-z][A-Za-z0-9]*")) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(name)) {
             throw new TqlException(BAD_REQUEST, "Decision name '" + name
-                    + "' must be a lowerCamel identifier");
+                    + "' must be a plain identifier");
         }
         if (inputs.isEmpty() || outputs.isEmpty()) {
             throw new TqlException(BAD_REQUEST,
@@ -56,9 +56,9 @@ public final class DecisionScaffolder {
     }
 
     private static void requireName(String what, String field) {
-        if (!field.matches("[a-z][a-zA-Z0-9]*")) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(field)) {
             throw new TqlException(BAD_REQUEST, "Decision " + what + " '" + field
-                    + "' must be a lowerCamel identifier");
+                    + "' must be a plain identifier");
         }
     }
 

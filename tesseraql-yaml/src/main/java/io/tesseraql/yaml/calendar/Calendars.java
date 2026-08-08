@@ -51,9 +51,6 @@ public final class Calendars {
 
     private static final Set<DayOfWeek> DEFAULT_WEEKEND = Set.of(DayOfWeek.SATURDAY,
             DayOfWeek.SUNDAY);
-    /** Table and column names reach SQL text verbatim, so they stay plain identifiers. */
-    private static final java.util.regex.Pattern IDENTIFIER = java.util.regex.Pattern
-            .compile("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?");
 
     private final Map<String, CalendarsDocument.Calendar> calendars;
     private final Map<String, String> sources;
@@ -128,8 +125,9 @@ public final class Calendars {
         }
     }
 
+    /** Table and column names reach SQL text verbatim, so they stay plain identifiers. */
     private static void requireIdentifier(String name, String key, String value) {
-        if (value == null || !IDENTIFIER.matcher(value).matches()) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isDotted(value)) {
             throw new TqlException(INVALID, "Calendar '" + name + "' " + key + " must be a"
                     + " plain identifier (was '" + value + "') — it becomes SQL text");
         }

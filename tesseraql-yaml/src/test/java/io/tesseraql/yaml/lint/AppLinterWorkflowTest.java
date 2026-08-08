@@ -116,6 +116,12 @@ class AppLinterWorkflowTest {
                 "command: submit.sql, stamp: { lane: body.route } }"));
         assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code()
                 .equals("TQL-WORKFLOW-3111") && !f.isError());
+
+        // The identifier contract (docs/unicode-identifiers.md): a Japanese stamp column is
+        // a plain identifier.
+        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
+                "command: submit.sql, stamp: { 承認区分: approved } }"));
+        assertThat(codes(new AppLinter().lint(dir))).doesNotContain("TQL-WORKFLOW-3111");
     }
 
     @Test

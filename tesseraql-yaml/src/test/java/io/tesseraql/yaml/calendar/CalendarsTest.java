@@ -29,6 +29,21 @@ class CalendarsTest {
     }
 
     @Test
+    void japaneseSourceIdentifiersLoad(@TempDir Path dir) throws Exception {
+        // The identifier contract (docs/unicode-identifiers.md): Japanese source table and
+        // column names are names, not fragments.
+        Calendars calendars = load(dir, """
+                version: tesseraql/v1
+                calendars:
+                  jp:
+                    holidays:
+                      source: { table: 祝日, date: 祝日日付 }
+                """);
+
+        assertThat(calendars.calendars()).containsKey("jp");
+    }
+
+    @Test
     void loadsCalendarsAndDefaultsTheWeekend(@TempDir Path dir) throws Exception {
         Calendars calendars = load(dir, """
                 version: tesseraql/v1

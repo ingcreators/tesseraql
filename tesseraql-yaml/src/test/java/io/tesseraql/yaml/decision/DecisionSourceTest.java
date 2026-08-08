@@ -98,6 +98,32 @@ class DecisionSourceTest {
     }
 
     @Test
+    void japaneseIdentifiersCompileVerbatim() {
+        // The identifier contract (docs/unicode-identifiers.md): Japanese table and column
+        // names land in the generated select exactly as written.
+        Map<String, DecisionsDocument.Input> inputs = new LinkedHashMap<>();
+        inputs.put("地域", new DecisionsDocument.Input("string", null, null));
+        Map<String, DecisionsDocument.Output> outputs = new LinkedHashMap<>();
+        outputs.put("送料", new DecisionsDocument.Output("number", null, null));
+        Map<String, DecisionsDocument.ColumnMatch> match = new LinkedHashMap<>();
+        match.put("地域", new DecisionsDocument.ColumnMatch("地域", null, null));
+        Map<String, String> outputColumns = new LinkedHashMap<>();
+        outputColumns.put("送料", "送料");
+        DecisionsDocument.Source source = new DecisionsDocument.Source("送料ルール", null,
+                match, Map.of(), "優先度", List.of(), outputColumns);
+        DecisionsDocument.Decision decision = new DecisionsDocument.Decision(inputs, outputs,
+                "first", null, null, source, null);
+
+        DecisionTables.TableSource compiled = DecisionSets.compileSource("送料判定", decision,
+                "postgres");
+
+        assertThat(compiled.sql())
+                .contains("from 送料ルール r")
+                .contains("(r.地域 is null or r.地域 = ?)")
+                .contains("order by r.優先度");
+    }
+
+    @Test
     void anIdentifierThatIsNotAPlainSqlNameFails() {
         DecisionsDocument.Decision decision = shippingFee("first", "priority; drop table x");
 
