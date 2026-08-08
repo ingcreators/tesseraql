@@ -132,12 +132,15 @@ model below has to answer them, not because they are established.
   completed and the file moved to `.done` before a single row of SQL ran, and `.error` could only
   ever collect the three synchronous failures. Confirmed by removing the fix: a file whose rows
   cannot bind lands in `.done` like any success.
-- **A remote `path:` documented as absolute is home-relative.** `PollingRouteBuilder:128` strips a
-  leading `/` that Camel's `GenericFileConfiguration.configure` already strips, so
-  `path: /outbound/orders` — the form the docs show — resolves against the login home. Verified;
-  the claim that absolute paths are *unexpressible* was refuted (`path: //outbound/orders` works,
-  undocumented). The SFTP IT's `VirtualFileSystemFactory` roots the test user at `/`, which is why
-  the difference is invisible in CI.
+- ~~**A remote `path:` documented as absolute is home-relative.**~~ **FIXED** (2026-08-08,
+  contract-bugfixes track C, as a one-shot pre-1.0 break): the leading-slash strip in
+  `RemoteFileUris.remoteUri` is deleted, so `path: /outbound/orders` is absolute and
+  `path: outbound/orders` login-home-relative, for poll sources and push targets alike; extra
+  leading slashes collapse to one, so the historical `//` escape keeps its absolute meaning.
+  Originally: the strip removed a `/` that Camel's `GenericFileConfiguration.configure` already
+  strips, so the documented absolute form resolved against the login home; the SFTP IT's
+  `VirtualFileSystemFactory` roots the test user at `/`, which is why the difference was
+  invisible in CI.
 - **A remote source with no `credential:` connects anonymously**, unflagged by lint and by the
   runtime; `credential: ""` behaves differently again (lint silent, runtime `TQL-BATCH-5310`, job
   silently skipped at wiring).
@@ -194,10 +197,10 @@ block's values are validated at lint: port range, parseable delay, non-blank pat
 `local` — a path anchored under a declared root, the `FileScopes` rule the poll path never
 adopted. Wrong-kind keys (`host` on a local source) become lint errors rather than silent noise.
 
-The `//` escape hatch for absolute remote paths gets documented, or better: the leading-slash strip
-at `:128` is deleted so the documented `path: /outbound/orders` means what it says and Camel's own
-single strip does the rest. That is a behavior change for existing apps whose paths were silently
-home-relative — the CHANGELOG entry names it, per rule 10.
+~~The `//` escape hatch for absolute remote paths gets documented, or better: the leading-slash
+strip is deleted so the documented `path: /outbound/orders` means what it says.~~ **Shipped**
+(2026-08-08, contract-bugfixes track C): the strip is gone, the schema description states the
+absolute-vs-home-relative rule, and the CHANGELOG names the behavior change per rule 10.
 
 ## Slices
 
@@ -299,10 +302,9 @@ home-relative — the CHANGELOG entry names it, per rule 10.
    difference is exactly the class of divergence this document exists to remove. Preferred: the
    transfer service moves the file when the import resolves, for all three sources, which finally
    makes `.done`/`.error` mean what the docs say.
-2. Does deleting the leading-slash strip need a migration nudge, given apps may have been written
-   against the home-relative behavior? Leaning: a lint warning for one release naming both readings,
-   since the failure is silent in both directions (an app polling an empty directory forever looks
-   healthy).
+2. ~~Does deleting the leading-slash strip need a migration nudge?~~ **Closed: no** (2026-08-08).
+   Pre-1.0, the clean contract wins over a one-release lint naming both readings; the break is
+   recorded in the CHANGELOG (contract-bugfixes track C).
 3. Should `local` sources require a declared root, or default to the app work dir? Leaning require —
    defaulting quietly re-creates the "the user believes they configured a boundary" failure this
    sweep is about.

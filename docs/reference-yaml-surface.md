@@ -287,7 +287,7 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | `source` | enum: `local` \| `sftp` \| `ftps` | local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts. |
 | `host` | string |  |
 | `port` | integer |  |
-| `path` | string | The polled directory. A local path must sit under a declared allowedPaths root. |
+| `path` | string | The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home. |
 | `credential` | string | A named credential under tesseraql.connectors.poll.credentials (required for remote sources). |
 | `include` | string | An ant-style filename filter, e.g. *.csv. |
 | `delay` | string | Poll interval (duration string). |
