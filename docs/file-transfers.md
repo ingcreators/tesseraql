@@ -66,7 +66,7 @@ export:
   timezone: Asia/Tokyo
   columns:
     - name                    # simple form: column name is also the header
-    - { name: held_on, header: Held on, type: date, format: yyyy/MM/dd }
+    - { name: held_on, label: Held on, type: date, format: yyyy/MM/dd }
     - { name: fee, type: number, format: "#,##0.00" }
   template: orders.xlsx       # workbook/print template colocated with the route
   sheet: Orders               # workbook formats: the sheet to write
@@ -80,7 +80,7 @@ export:
 ```
 
 - `columns:` selects and orders the exported columns; omit it to export every query column with
-  its name as the header. `header:` sets the label in the file (it may be localized text).
+  its name as the header. `label:` sets the label in the file (it may be localized text).
 - `type:` (`date` / `datetime` / `number`) with `format:` renders values through a date or
   decimal pattern — and, for workbooks, a matching cell format — instead of raw text.
 - `locale:` and `timezone:` drive those patterns. Each accepts a literal value or a request
@@ -158,7 +158,7 @@ the `onError:` choice:
 Import-side `import:` keys beyond `format`, `columns`, `onError`, and `sql`:
 
 - `headerRow:` (default `true`) — whether the table starts with a header row. With a header,
-  simple-form columns match by header label; `header:` matches a localized label to a SQL
+  simple-form columns match by header label; `label:` matches a localized label to a SQL
   parameter name; omitting `columns:` entirely uses the header labels as parameter names.
 - `startRow:` — the 1-based row the table starts at, for files with title rows above the data.
 - `sheet:` — workbook formats: the sheet to read (default: the first).

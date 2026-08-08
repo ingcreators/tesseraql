@@ -99,7 +99,7 @@ public final class AppDocGenerator {
                     suffix(owner, target.id()));
         }
         if (test.httpCall() != null) {
-            return new DocModel.TestCaseDoc(test.name(), "http-call",
+            return new DocModel.TestCaseDoc(test.name(), "httpCall",
                     suffix(test.httpCall().job(), test.httpCall().id()));
         }
         if (test.messages() != null) {

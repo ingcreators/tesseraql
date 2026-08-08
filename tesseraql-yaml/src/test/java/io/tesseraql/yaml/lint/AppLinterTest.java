@@ -602,24 +602,24 @@ class AppLinterTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: allowed
-                    http-call:
+                    httpCall:
                       url: https://api.partner.example/v1/orders
                       credential: partner
                   - id: subdomain
-                    http-call:
+                    httpCall:
                       url: https://eu.internal.example/v1/rates
                   - id: denied
-                    http-call:
+                    httpCall:
                       url: https://evil.example/v1/exfil
                   - id: relative
-                    http-call:
+                    httpCall:
                       method: GET
                   - id: badcred
-                    http-call:
+                    httpCall:
                       url: https://api.partner.example/v1/y
                       credential: ghost
                   - id: ambiguous
-                    http-call:
+                    httpCall:
                       url: https://api.partner.example/v1/z
                     notify:
                       channel: member-mail
@@ -779,7 +779,7 @@ class AppLinterTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: local
+                    transport: local
                     %s
                 import:
                   format: csv
@@ -815,7 +815,7 @@ class AppLinterTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: local
+                    transport: local
                     path: /data/inbound
                 import:
                   format: csv
@@ -832,7 +832,7 @@ class AppLinterTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: sftp
+                    transport: sftp
                     host: sftp.partner.example
                     path: /outbound
                     credential: partner-sftp
@@ -850,7 +850,7 @@ class AppLinterTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: sftp
+                    transport: sftp
                     host: evil.example
                     path: /x
                     credential: ghost
@@ -899,7 +899,7 @@ class AppLinterTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: sftp
+                    transport: sftp
                     host: sftp.partner.example
                     path: /outbound
                     credential: partner-sftp

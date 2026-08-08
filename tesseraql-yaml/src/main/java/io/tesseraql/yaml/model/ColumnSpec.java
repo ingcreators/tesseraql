@@ -21,13 +21,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * parse/render pattern (DateTimeFormatter or DecimalFormat, and the Excel cell format).
  *
  * @param name   the SQL parameter / query column name
- * @param header the header label in the file; defaults to {@code name}
+ * @param label  the human heading in the file — the same word a view column uses; defaults to
+ *               {@code name}
  * @param column explicit position as a column letter ({@code D}) or 1-based number
  * @param type   {@code date} / {@code datetime} / {@code number}, or null for plain text
  * @param format the parse/render pattern, e.g. {@code yyyy/MM/dd} or {@code #,##0.00}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ColumnSpec(String name, String header, String column, String type, String format) {
+public record ColumnSpec(String name, String label, String column, String type, String format) {
 
     /** The simple string form: {@code columns: [orderNo, qty]}. */
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
@@ -37,14 +38,14 @@ public record ColumnSpec(String name, String header, String column, String type,
 
     @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     public static ColumnSpec of(@JsonProperty("name") String name,
-            @JsonProperty("header") String header, @JsonProperty("column") String column,
+            @JsonProperty("label") String label, @JsonProperty("column") String column,
             @JsonProperty("type") String type, @JsonProperty("format") String format) {
-        return new ColumnSpec(name, header, column, type, format);
+        return new ColumnSpec(name, label, column, type, format);
     }
 
     /** The core mapping, with the column reference resolved to a 0-based index. */
     public io.tesseraql.core.files.ColumnMapping toMapping() {
-        return new io.tesseraql.core.files.ColumnMapping(name, header,
+        return new io.tesseraql.core.files.ColumnMapping(name, label,
                 column == null || column.isBlank()
                         ? null
                         : io.tesseraql.core.files.ColumnMapping.parseColumn(column),

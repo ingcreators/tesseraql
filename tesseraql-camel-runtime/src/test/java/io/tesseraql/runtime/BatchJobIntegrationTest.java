@@ -738,8 +738,8 @@ class BatchJobIntegrationTest {
                       filename: users-{batch.businessDate}.csv
                       sql: { file: report.sql, mode: query }
                       columns:
-                        - { name: name, header: Name }
-                        - { name: status, header: Status }
+                        - { name: name, label: Name }
+                        - { name: status, label: Status }
                   - id: stamp
                     sql:
                       file: stamp-transfer.sql
@@ -767,7 +767,7 @@ class BatchJobIntegrationTest {
                       sql: { file: report.sql, mode: query }
                   - id: drop
                     push:
-                      target: local
+                      transport: local
                       path: outbox/partner
                       file: step.extract.transferId
                       as: users-{batch.businessDate}.csv
@@ -826,7 +826,8 @@ class BatchJobIntegrationTest {
                       writer: { file: writer-a.sql }
                       key: item_key
                       commitEvery: 5
-                      onError: { skipLimit: 2 }
+                      onError: skip
+                      skipLimit: 2
                 """);
         Files.writeString(target.resolve("batch/chunk/restart.yml"), """
                 version: tesseraql/v1

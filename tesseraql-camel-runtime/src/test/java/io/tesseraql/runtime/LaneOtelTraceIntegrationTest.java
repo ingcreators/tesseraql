@@ -134,7 +134,7 @@ class LaneOtelTraceIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                policy:
+                admission:
                   lane: io
                 sql:
                   file: ping.sql

@@ -67,7 +67,7 @@ Semantics (full user-facing description in
 - `*` matches within a segment, `**` across segments, a trailing `/**` also matches the bare
   prefix.
 - Merge is per key; **route-local keys always win**. A rule can default `auth`, `csrf`
-  (`auto`/`true`/`false`), and `policy`.
+  (`auto`/`required`/`off`), and `policy`.
 - A route whose effective auth is `public` never inherits a policy; the combination of an
   explicit `public` under a policy-carrying rule is linted (`TQL-SEC-4131`, warning).
 - `csrf: auto` resolves to required exactly when effective auth is `browser` and the method is
@@ -131,7 +131,7 @@ an explicit effective auth mode, so a defaults change can never silently open a 
 
 ## Out of scope
 
-- Defaults for non-security blocks (`page:`, `inputPolicy:`, `cache:`). The model defaults
+- Defaults for non-security blocks (`pagination:`, `inputPolicy:`, `cache:`). The model defaults
   already cover them (`PageSpec.effectiveSize()`, `InputPolicy.defaults()`), and current usage
   shows no duplication worth new surface.
 - Per-environment default sets. Environment overlays are [deployment](deployment.md) territory;

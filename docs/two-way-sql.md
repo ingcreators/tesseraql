@@ -234,8 +234,8 @@ statically:
 | Code | Meaning |
 | --- | --- |
 | `TQL-SQL-2103` | a route, step, or validation rule references a missing SQL file |
-| `TQL-SQL-2104` | an UPDATE declares `expect.rows` but has no version-column predicate (optimistic locking half-wired) |
-| `TQL-SQL-2105` | an UPDATE has a version predicate but no `expect.rows` (a stale edit would silently affect zero rows) |
+| `TQL-SQL-2104` | an UPDATE declares `expect.rowCount` but has no version-column predicate (optimistic locking half-wired) |
+| `TQL-SQL-2105` | an UPDATE has a version predicate but no `expect.rowCount` (a stale edit would silently affect zero rows) |
 | `TQL-SQL-2109` | an embedded variable interpolates request input that is not `enum`-constrained |
 | `TQL-YAML-1018` | a paginated route's SQL carries its own `LIMIT`/`FETCH` |
 | `TQL-SCOPE-3011` / `3013` | a scope directive names an undeclared scope / an invalid `on` alias ([data-scoping.md](data-scoping.md)) |

@@ -132,7 +132,7 @@ class ConcurrencyLimitIntegrationTest {
                         # require a session here.
                         security:
                           auth: public
-                        policy:
+                        admission:
                           concurrency:
                             maxInFlight: 1
                         sql:
@@ -159,7 +159,7 @@ class ConcurrencyLimitIntegrationTest {
                 # require a session here.
                 security:
                   auth: public
-                policy:
+                admission:
                   rateLimit:
                     requestsPerSecond: 1
                     burst: 1

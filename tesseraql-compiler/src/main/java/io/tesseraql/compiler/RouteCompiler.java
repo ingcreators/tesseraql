@@ -18,8 +18,8 @@ import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.UiResourceFile;
+import io.tesseraql.yaml.model.AdmissionSpec;
 import io.tesseraql.yaml.model.IdempotencySpec;
-import io.tesseraql.yaml.model.PolicySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
 import io.tesseraql.yaml.model.SqlBinding;
@@ -857,7 +857,7 @@ public final class RouteCompiler {
                     .to(fileDirect);
         }
         ProcessorDefinition<?> fileRoute = builder.from(fileDirect).routeId(routeId + ".file");
-        applySecurity(fileRoute, definition.security());
+        applySecurity(fileRoute, definition.security(), "GET");
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
     }
 
@@ -875,7 +875,7 @@ public final class RouteCompiler {
             restEndpoint(builder, "GET", routeFile.urlPath() + "/{transferId}").to(direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId + ".status");
-        applySecurity(route, routeFile.definition().security());
+        applySecurity(route, routeFile.definition().security(), "GET");
         route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(
                 routeFile.urlPath()));
     }
@@ -952,8 +952,9 @@ public final class RouteCompiler {
                         compiledAppHome));
         // Declarative pagination (roadmap Phase 41): compute the page window before the main
         // query executes; the producer appends the dialect clause and publishes `page`.
-        if (definition.page() != null) {
-            step = step.process(new io.tesseraql.compiler.binding.PageBinder(definition.page()));
+        if (definition.pagination() != null) {
+            step = step
+                    .process(new io.tesseraql.compiler.binding.PageBinder(definition.pagination()));
         }
         // A route may have no data binding at all (the page recipe: forms, static pages).
         if (definition.sql() != null) {
@@ -971,7 +972,7 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
                     entry.getKey(), entry.getValue()));
         }
-        if (definition.page() != null) {
+        if (definition.pagination() != null) {
             step = step.process(new io.tesseraql.compiler.binding.PageHeaders());
         }
         return step;
@@ -1049,7 +1050,7 @@ public final class RouteCompiler {
                 definition.id(), "MCP-RESOURCE", "/" + definition.id(), appName));
         applyConcurrency(route, definition);
         applyLane(route, definition);
-        applySecurity(route, definition.security());
+        applySecurity(route, definition.security(), "GET");
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
@@ -1088,7 +1089,7 @@ public final class RouteCompiler {
                 definition.id(), "MCP-UI", "/" + definition.id(), appName));
         applyConcurrency(route, definition);
         applyLane(route, definition);
-        applySecurity(route, definition.security());
+        applySecurity(route, definition.security(), "GET");
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
@@ -1257,7 +1258,7 @@ public final class RouteCompiler {
         applyAudit(route, id, method, path, definition);
         applyConcurrency(route, definition);
         applyLane(route, definition);
-        applySecurity(route, definition.security());
+        applySecurity(route, definition.security(), method);
         applyTenancy(route);
         applyI18n(route);
     }
@@ -1272,7 +1273,7 @@ public final class RouteCompiler {
     private void applyAttachmentGovernance(ProcessorDefinition<?> route, String id, String method,
             String path, SecuritySpec security) {
         applyTelemetry(route, id, method, path);
-        applySecurity(route, security);
+        applySecurity(route, security, method);
         applyTenancy(route);
         applyI18n(route);
     }
@@ -1336,10 +1337,10 @@ public final class RouteCompiler {
      * a virtual (or platform) thread.
      */
     private void applyLane(ProcessorDefinition<?> route, RouteDefinition definition) {
-        if (definition.policy() == null || definition.policy().lane() == null) {
+        if (definition.admission() == null || definition.admission().lane() == null) {
             return;
         }
-        String lane = definition.policy().lane();
+        String lane = definition.admission().lane();
         route.process(new io.tesseraql.compiler.binding.LaneGate(lane));
         route.threads().executorService(TesseraqlProperties.laneExecutorRef(lane))
                 .callerRunsWhenRejected(false);
@@ -1359,10 +1360,10 @@ public final class RouteCompiler {
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */
     private void applyConcurrency(ProcessorDefinition<?> route, RouteDefinition definition) {
-        if (definition.policy() == null) {
+        if (definition.admission() == null) {
             return;
         }
-        PolicySpec.RateLimit rateLimit = definition.policy().rateLimit();
+        AdmissionSpec.RateLimit rateLimit = definition.admission().rateLimit();
         if (rateLimit != null && rateLimit.requestsPerSecond() != null) {
             int rps = rateLimit.requestsPerSecond();
             int burst = rateLimit.burst() != null ? rateLimit.burst() : rps;
@@ -1375,7 +1376,7 @@ public final class RouteCompiler {
                 route.process(new RateLimiter(rps, burst).acquire());
             }
         }
-        PolicySpec.Concurrency concurrency = definition.policy().concurrency();
+        AdmissionSpec.Concurrency concurrency = definition.admission().concurrency();
         if (concurrency != null && concurrency.maxInFlight() != null) {
             route.process(new ConcurrencyLimiter(concurrency.maxInFlight()).acquire());
         }
@@ -1459,14 +1460,15 @@ public final class RouteCompiler {
     }
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */
-    private void applySecurity(ProcessorDefinition<?> route, SecuritySpec security) {
+    private void applySecurity(ProcessorDefinition<?> route, SecuritySpec security,
+            String httpMethod) {
         if (security == null) {
             return;
         }
         if (security.auth() != null && !"public".equals(security.auth())) {
             route.to("tesseraql-auth:authenticate?auth=" + security.auth());
         }
-        if (Boolean.TRUE.equals(security.csrf())) {
+        if (security.csrfEnforced(httpMethod)) {
             route.to("tesseraql-auth:csrf");
         }
         if (security.policy() != null && !security.policy().isBlank()) {

@@ -98,7 +98,7 @@ public final class HtmxContractGenerator {
             if (definition.security().policy() != null) {
                 security.put("policy", definition.security().policy());
             }
-            if (Boolean.TRUE.equals(definition.security().csrf())) {
+            if (definition.security().csrfEnforced(route.httpMethod())) {
                 security.put("csrf", true);
             }
             entry.put("security", security);

@@ -268,7 +268,7 @@ A transition route compiles to a recipe that, in one transaction:
 3. runs the transition's **command** — a transactional step list
    ([transactional writes](transactional-writes.md)), its `UPDATE` carrying the `/*%scope … */`
    write authority and `/* audit.user */` / `/* audit.now */` binds, with
-   `expect: { rows: 1, onMismatch: conflict }` turning a concurrent transition into a `409`;
+   `expect: { rowCount: 1, onMismatch: conflict }` turning a concurrent transition into a `409`;
 4. advances the state column (app mode) or the `tql_workflow_instance` row (managed mode);
 5. resolves **assignees** and writes the resulting task(s), completing the prior state's open tasks
    in the same transaction;
@@ -467,7 +467,7 @@ nodes:
 deadlines:
   - state: submitted
     within: 48h
-    onBreach: { reassign: dept_head.sql }   # reassign an overdue task to this resolver…
+    onBreach: { reassign: { file: dept_head.sql } }   # reassign an overdue task to this resolver…
   - state: review
     within: 72h
     onBreach: { escalate: auto_approve }    # …or auto-fire this transition as the system
@@ -481,7 +481,7 @@ rule that redirects new tasks for a whole absence window — extends exactly thi
 [workflow delegation and absence](delegation.md).
 
 **Reminder notifications** ride the [notification channels](notifications.md): a workflow declares a
-`notify:` block whose `assigned` reminder fires when a transition opens a task and whose `escalated`
+`reminders:` block whose `assigned` reminder fires when a transition opens a task and whose `escalated`
 reminder fires when the sweeper reassigns one. Each is a `NotifySpec` (channel, optional `when`
 guard, `payload`) enqueued as a `NOTIFICATION` outbox event **in the same transaction** as the task
 change — so a rolled-back transition never notifies and a committed one notifies at-least-once, with
@@ -489,7 +489,7 @@ the same retries and dead-letters as a route's `notify:`. The resolved `assignee
 scope:
 
 ```yaml
-notify:
+reminders:
   assigned:  { channel: task-mail, payload: { to: assignee, doc: document.id } }
   escalated: { channel: task-mail, payload: { to: assignee, doc: docId } }
 ```

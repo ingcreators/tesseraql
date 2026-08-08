@@ -253,7 +253,7 @@ public final class OpsViews {
             // The declared-params form (docs/ops-console-coverage.md): name, required,
             // and a numeric input for number params; bindJobParams stays the validator.
             List<Map<String, Object>> params = new ArrayList<>();
-            entry.definition().params().forEach((name, field) -> params.add(Map.of(
+            entry.definition().input().forEach((name, field) -> params.add(Map.of(
                     "name", name,
                     "required", field != null && field.required(),
                     "numeric", field != null && "number".equals(field.type()))));

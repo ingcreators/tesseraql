@@ -41,7 +41,7 @@ class AppLinterPushStepTest {
     @Test
     void aWellFormedLocalPushIsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      target: local\n      path: outbox\n"
+                "      transport: local\n      path: outbox\n"
                         + "      file: step.extract.transferId"));
 
         assertThat(findings).noneMatch(finding -> "TQL-YAML-1042".equals(finding.code())
@@ -51,20 +51,20 @@ class AppLinterPushStepTest {
     @Test
     void theTransferReferenceTargetAndPathAreRequired(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      target: local\n      path: outbox"));
+                "      transport: local\n      path: outbox"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1042");
             assertThat(finding.message()).contains("file:");
         });
 
         findings = new AppLinter().lint(app(dir,
-                "      target: carrier-pigeon\n      path: outbox\n"
+                "      transport: carrier-pigeon\n      path: outbox\n"
                         + "      file: step.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> assertThat(finding.message())
                 .contains("must be local, sftp, or ftps"));
 
         findings = new AppLinter().lint(app(dir,
-                "      target: local\n      file: step.extract.transferId"));
+                "      transport: local\n      file: step.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> assertThat(finding.message())
                 .contains("needs path:"));
     }
@@ -72,7 +72,7 @@ class AppLinterPushStepTest {
     @Test
     void aRemoteTargetNeedsHostAndCredential(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      target: sftp\n      path: incoming\n"
+                "      transport: sftp\n      path: incoming\n"
                         + "      file: step.extract.transferId"));
 
         assertThat(findings)
@@ -86,7 +86,7 @@ class AppLinterPushStepTest {
     void serverIdentityNudgesMirrorThePollSide(@TempDir Path dir) throws Exception {
         // SFTP without the push block's known-hosts file: a warning, like poll's 4084.
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      target: sftp\n      host: partner.example\n      path: incoming\n"
+                "      transport: sftp\n      host: partner.example\n      path: incoming\n"
                         + "      credential: partner\n      file: step.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-SEC-4084");
@@ -96,7 +96,7 @@ class AppLinterPushStepTest {
 
         // FTPS without the push block's trust store: an error, like poll's 4085.
         findings = new AppLinter().lint(app(dir,
-                "      target: ftps\n      host: partner.example\n      path: incoming\n"
+                "      transport: ftps\n      host: partner.example\n      path: incoming\n"
                         + "      credential: partner\n      file: step.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-SEC-4085");
@@ -109,7 +109,7 @@ class AppLinterPushStepTest {
     void anUndeclaredCredentialWarnsAndTheDeliveredNameStaysBare(@TempDir Path dir)
             throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      target: sftp\n      host: partner.example\n      path: incoming\n"
+                "      transport: sftp\n      host: partner.example\n      path: incoming\n"
                         + "      credential: partner\n      file: step.extract.transferId\n"
                         + "      as: ../escape.csv"));
 

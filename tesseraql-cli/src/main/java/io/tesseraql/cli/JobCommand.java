@@ -251,9 +251,9 @@ final class JobCommand implements Callable<Integer> {
 
     private JobExecution runOne(AppManifest manifest, Wiring wiring, JobFile job,
             Map<String, Object> runParams, String triggerType, Set<String> skipSteps) {
-        Map<String, Object> bound = job.definition().params().isEmpty()
+        Map<String, Object> bound = job.definition().input().isEmpty()
                 ? runParams
-                : io.tesseraql.compiler.binding.InputBinder.bind(job.definition().params(),
+                : io.tesseraql.compiler.binding.InputBinder.bind(job.definition().input(),
                         name -> runParams.get(name) == null
                                 ? null
                                 : String.valueOf(runParams.get(name)),

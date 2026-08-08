@@ -41,7 +41,7 @@ class BundledAppSecurityPostureTest {
                     .as("%s %s %s", resourceRoot, route.httpMethod(), route.urlPath())
                     .isIn("browser", "public");
             if ("browser".equals(security.auth()) && !"GET".equals(route.httpMethod())) {
-                assertThat(security.csrf())
+                assertThat(security.csrfEnforced(route.httpMethod()))
                         .as("%s %s %s must enforce CSRF", resourceRoot, route.httpMethod(),
                                 route.urlPath())
                         .isTrue();

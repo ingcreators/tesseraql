@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * One named {@code http:} source on a query route (docs/connectors.md, "HTTP sources"): a GET
  * against an external JSON API at render time, composed with the route's SQL results in the
- * response or view. Deliberately a strict subset of a job's {@code http-call:} step — always
+ * response or view. Deliberately a strict subset of a job's {@code httpCall:} step — always
  * GET, never a body — because a query route must stay a read; it executes through the same
  * outbound gateway (deny-by-default allow-list, named credentials, timeouts, circuit breaker).
  *
@@ -45,7 +45,7 @@ public record HttpSourceSpec(
         return "empty".equals(onError);
     }
 
-    /** The equivalent {@code http-call} step the outbound gateway executes: a body-less GET. */
+    /** The equivalent {@code httpCall} step the outbound gateway executes: a body-less GET. */
     public HttpCallSpec toCall() {
         return new HttpCallSpec("GET", url, headers, query, credential, null, expectStatus,
                 connectTimeout, requestTimeout);

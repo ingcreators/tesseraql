@@ -14,7 +14,7 @@ input:
 security:
   policy: req.read
 
-page:
+pagination:
   size: 20
   count: true
 

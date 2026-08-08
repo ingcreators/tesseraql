@@ -876,7 +876,7 @@ public final class DocViews {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("auth", security.auth());
         model.put("policy", security.policy());
-        model.put("csrf", security.csrf());
+        model.put("csrf", security.csrf()); // the declared enum value (auto/required/off)
         return model;
     }
 

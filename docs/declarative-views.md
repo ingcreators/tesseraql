@@ -69,7 +69,7 @@ mutually exclusive (`TQL-VIEW-3302`). Everything else on the route — `status`,
 ## List views
 
 The route behind a list is a plain query route with an HTML response. A paginated list
-declares `recipe: query-html` — only the query recipes accept a `page:` block
+declares `recipe: query-html` — only the query recipes accept a `pagination:` block
 ([pagination](pagination.md)):
 
 ```yaml
@@ -83,7 +83,7 @@ input:
   q: { type: string, required: false, maxLength: 100 }
   sort: { type: string, required: false }
   dir: { type: string, required: false, enum: [asc, desc] }
-page: { size: 20, count: true }
+pagination: { size: 20, count: true }
 sql:
   file: items.sql
   mode: query

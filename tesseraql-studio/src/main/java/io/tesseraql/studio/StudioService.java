@@ -740,7 +740,7 @@ public final class StudioService {
      * (the form then points at the text editor instead of rendering fields).
      */
     public record RouteForm(String path, String id, String recipe, String auth, String policy,
-            boolean csrf, List<FormInput> inputs, boolean fromDraft, String error) {
+            String csrf, List<FormInput> inputs, boolean fromDraft, String error) {
     }
 
     /**
@@ -1597,9 +1597,9 @@ public final class StudioService {
             });
             return new RouteForm(relativePath, scalar(tree.get("id")), scalar(tree.get("recipe")),
                     scalar(security.get("auth")), scalar(security.get("policy")),
-                    Boolean.TRUE.equals(security.get("csrf")), inputs, draft != null, null);
+                    scalar(security.get("csrf")), inputs, draft != null, null);
         } catch (RuntimeException ex) {
-            return new RouteForm(relativePath, null, null, null, null, false, List.of(),
+            return new RouteForm(relativePath, null, null, null, null, null, List.of(),
                     draft != null, rootMessage(ex));
         }
     }
@@ -1612,7 +1612,7 @@ public final class StudioService {
      * The mutated document must still parse as a route, or the save is rejected.
      */
     public Path routeFormSave(String relativePath, String recipe, String auth, String policy,
-            boolean csrf, List<FormInput> inputs) {
+            String csrf, List<FormInput> inputs) {
         if (readOnly) {
             throw new TqlException(READ_ONLY, "Studio is read-only; editing routes is disabled");
         }
@@ -1632,11 +1632,8 @@ public final class StudioService {
         Map<String, Object> security = childMap(tree, "security");
         putOrRemove(security, "auth", trimToNull(auth));
         putOrRemove(security, "policy", trimToNull(policy));
-        if (csrf) {
-            security.put("csrf", true);
-        } else {
-            security.remove("csrf");
-        }
+        // The csrf enum (auto|required|off); blank clears the key so defaults rules apply.
+        putOrRemove(security, "csrf", trimToNull(csrf));
         if (security.isEmpty()) {
             tree.remove("security");
         }
@@ -3222,7 +3219,7 @@ public final class StudioService {
             boolean stateChanging = !"GET".equalsIgnoreCase(route.httpMethod())
                     && !"HEAD".equalsIgnoreCase(route.httpMethod())
                     && !"OPTIONS".equalsIgnoreCase(route.httpMethod());
-            boolean csrfOn = security != null && Boolean.TRUE.equals(security.csrf());
+            boolean csrfOn = security != null && security.csrfEnforced(route.httpMethod());
             row.put("csrfGap", "browser".equals(auth) && stateChanging && !csrfOn);
             out.add(row);
         }

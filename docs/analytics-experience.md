@@ -127,8 +127,8 @@ pipeline:
       filename: price-summary-{batch.businessDate}.xlsx
       sql: { file: report.sql, mode: query }
       columns:
-        - { name: category, header: Category }
-        - { name: total, header: Total, type: number, format: "#,##0" }
+        - { name: category, label: Category }
+        - { name: total, label: Total, type: number, format: "#,##0" }
   - id: announce
     notify:
       channel: reports
@@ -157,7 +157,7 @@ pipeline:
   first fetch, unchanged, since the transfer machinery is shared.
 - **The step publishes what later steps need.** `step.<id>.transferId`, `.rows`, and
   `.filename` land in the step context, so a follow-up `notify:` carries the pointer
-  (an inbox or mail message linking the console) and a follow-up `http-call:` can
+  (an inbox or mail message linking the console) and a follow-up `httpCall:` can
   tell a partner system the drop is ready.
 - **Retrieval is the ops console.** The transfers page already lists every
   `tql_file_transfer` row under `ops.batch.view`; it gains a download action through
@@ -209,7 +209,7 @@ an earlier one.
   panel's source cannot supply being structurally absent (columns are checked at
   render time like every panel column today).
 - `TQL-FIELD-2004` — extended message: exactly one of `sql:`, `notify:`,
-  `http-call:`, `chunk:`, or `export:`.
+  `httpCall:`, `chunk:`, or `export:`.
 - Export-step reuse: the pdf template lints (`TQL-YAML-1005/1006`) apply to step
   exports as to route exports; `export.sql.datasource` on a step is refused under the
   `TQL-YAML-1037` rationale; runtime codec/transfer errors keep their `TQL-LD-28xx`

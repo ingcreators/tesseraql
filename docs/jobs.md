@@ -171,7 +171,7 @@ deny-by-default host allow-list. Polling is part of the managed-connector surfac
 **Manual runs** go through the operations API: `POST /_tesseraql/ops/batch/jobs/{jobId}/run`
 (gated by the `ops.batch.run` policy) runs the job immediately and answers with the
 execution id and final status. The JSON request body becomes the job's parameters. Declared
-`params:` on the job document the expected names and types; each value is available to steps
+`input:` on the job document the expected names and types; each value is available to steps
 as `job.<name>`. Scheduled firings run with no parameters, so a scheduled job's SQL must
 work when its `job.*` binds are null.
 
@@ -210,7 +210,7 @@ Each pipeline step has an `id` and declares **exactly one** of:
 
 - `sql:` — render and execute a 2-way SQL file
 - `notify:` — enqueue a notification on the transactional outbox
-- `http-call:` — issue one synchronous outbound REST request
+- `httpCall:` — issue one synchronous outbound REST request
 - `chunk:` — restartable per-row processing, committed in slices
   ([below](#the-chunk-step))
 - `export:` — write a formatted file from an extraction query
@@ -225,7 +225,7 @@ steps bind from:
 | -------------------------- | ------------------------------------------------------------------ |
 | `job.<name>`               | a job parameter                                                    |
 | `step.<id>.affectedRows`   | rows affected (update) or returned (query) by an earlier step      |
-| `step.<id>.status` / `step.<id>.body` / `step.<id>.headers` | an earlier `http-call` step's response |
+| `step.<id>.status` / `step.<id>.body` / `step.<id>.headers` | an earlier `httpCall` step's response |
 | `step.<id>.eventId`        | the outbox event id an earlier `notify:` step enqueued             |
 | `step.<id>.transferId` / `step.<id>.filename` / `step.<id>.rows` | an earlier `export:` step's produced transfer |
 | `step.<id>.target` / `step.<id>.filename` | an earlier `push:` step's delivery |
@@ -254,7 +254,7 @@ pipeline:
 
 The `notify:` step is the job-side twin of a command's `notify:` block — same channels, same
 outbox delivery, same per-user opt-out and declarative test cases; see
-[notifications](notifications.md). The `http-call:` step interleaves an allow-listed
+[notifications](notifications.md). The `httpCall:` step interleaves an allow-listed
 outbound REST call with SQL steps; see [managed connectors](connectors.md).
 
 ## The chunk step
@@ -272,7 +272,8 @@ pipeline:
       writer: { file: revalue-order.sql }        # runs once per row
       key: id                                    # the reader column checkpoints track
       commitEvery: 1000                          # default 500
-      onError: { skipLimit: 100 }                # default 0 - fail-fast
+      onError: skip                              # default: fail
+      skipLimit: 100                             # default 100 when skipping
 ```
 
 **Two connections.** The reader streams its SELECT on one connection (a fetch-sized
@@ -295,10 +296,11 @@ where  id > cast(/* chunk.after */ '0' as bigint)
 order by id
 ```
 
-**The skip policy.** A writer failure on one row rolls back to a per-row savepoint (the
-failed statement cannot poison the chunk's transaction), is recorded in the managed
-`tql_job_skips` table with the row key and message, and processing continues — until
-`skipLimit` is exceeded, which discards the uncommitted chunk and fails the step. Skipped
+**The skip policy.** With `onError: skip`, a writer failure on one row rolls back to a
+per-row savepoint (the failed statement cannot poison the chunk's transaction), is recorded
+in the managed `tql_job_skips` table with the row key and message, and processing continues
+— until `skipLimit` (default 100) is exceeded, which discards the uncommitted chunk and
+fails the step. `onError: fail` (the default) fails the step on the first writer error. Skipped
 rows advance the checkpoint like processed ones: they were handled and recorded, not lost.
 Processed and skipped counts land on the step execution (`affectedRows` / `skippedRows`),
 the operations API (`skips` on the execution detail), and the console's steps table.
@@ -327,8 +329,8 @@ pipeline:
       filename: price-summary-{batch.businessDate}.xlsx
       sql: { file: report.sql, mode: query }
       columns:
-        - { name: category, header: Category }
-        - { name: total, header: Total, type: number, format: "#,##0" }
+        - { name: category, label: Category }
+        - { name: total, label: Total, type: number, format: "#,##0" }
   - id: announce
     notify:
       channel: reports
@@ -358,7 +360,7 @@ pipeline:
   step publishes `transferId`, `rows`, and `filename` into the step context, so a
   follow-up `notify:` carries the pointer — or, on a mail channel, the file itself:
   `attach: step.report.transferId` sends the produced file as a mail attachment
-  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `http-call:`
+  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `httpCall:`
   can tell a partner system the drop is ready.
 
 ## The push step
@@ -376,7 +378,7 @@ pipeline:
       sql: { file: report.sql, mode: query }
   - id: deliver
     push:
-      target: sftp                     # local | sftp | ftps
+      transport: sftp                  # local | sftp | ftps
       host: partner.example.com
       path: /drop/incoming
       credential: partner-sftp         # tesseraql.connectors.push.credentials
@@ -542,14 +544,14 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-5315` | a `push:` delivery failed — connect, authenticate, write, or rename |
 | `TQL-SEC-4141` | a `push:` target host outside `tesseraql.connectors.push.allowedHosts` (deny by default) |
 
-The `notify:` and `http-call:` step families report their own codes in the same domain
+The `notify:` and `httpCall:` step families report their own codes in the same domain
 (channels `TQL-BATCH-5301`…, outbound HTTP `TQL-BATCH-5305`…); see
 [notifications](notifications.md), [managed connectors](connectors.md), and the
 [error-code reference](reference-error-codes.md).
 
 Lint checks jobs statically: a step not declaring exactly one of `sql:`/`notify:`/
-`http-call:`/`chunk:`/`export:`/`push:` (`TQL-FIELD-2004`), a malformed `push:` step —
-no transfer reference, an unknown target, a remote target without host/credential, or
+`httpCall:`/`chunk:`/`export:`/`push:` (`TQL-FIELD-2004`), a malformed `push:` step —
+no transfer reference, an unknown transport, a remote target without host/credential, or
 a non-bare delivered name (`TQL-YAML-1042`), a malformed `export:` step — no
 extraction query, no format, or a `download`-timed follow-up (`TQL-YAML-1041`, with the
 pdf template checks and the datasource refusal shared with routes), a job with both a
@@ -562,7 +564,7 @@ a malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` bloc
 
 ## Related pages
 
-- [Managed connectors](connectors.md) — `http-call` steps, the `poll:` trigger, egress policy
+- [Managed connectors](connectors.md) — `httpCall` steps, the `poll:` trigger, egress policy
 - [Notifications](notifications.md) — the `notify:` step, channels, alerts, notify test cases
 - [Transactional writes](transactional-writes.md) — the command-side transaction model jobs deliberately differ from
 - [Deployment](deployment.md) — multi-node semantics and operations permissions

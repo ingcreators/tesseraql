@@ -24,7 +24,7 @@ class AppLinterRateLimitTest {
                 id: limited.get
                 kind: route
                 recipe: query-json
-                policy:
+                admission:
                   rateLimit:
                     requestsPerSecond: 5
                     scope: %s

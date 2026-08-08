@@ -169,7 +169,7 @@ public final class AppLinter {
         if (route.definition().input() == null) {
             return;
         }
-        io.tesseraql.yaml.model.PageSpec page = route.definition().page();
+        io.tesseraql.yaml.model.PageSpec page = route.definition().pagination();
         if (page != null) {
             String recipe = route.definition().recipe();
             if (!"query-json".equals(recipe) && !"query-html".equals(recipe)) {
@@ -2747,10 +2747,11 @@ public final class AppLinter {
                                         + "', not the deadline's state"));
                     }
                 }
-                if (onBreach.reassign() != null
-                        && !Files.isRegularFile(dir.resolve(onBreach.reassign()))) {
+                if (onBreach.reassign() != null && onBreach.reassign().file() != null
+                        && !Files.isRegularFile(dir.resolve(onBreach.reassign().file()))) {
                     findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source, where
-                            + " references missing reassign file '" + onBreach.reassign() + "'"));
+                            + " references missing reassign file '"
+                            + onBreach.reassign().file() + "'"));
                 }
             }
         }
@@ -3747,8 +3748,8 @@ public final class AppLinter {
 
     /**
      * Statically checks a batch job's pipeline steps (roadmap Phase 20, 26): a step declares
-     * exactly one of {@code sql:}, {@code notify:}, or {@code http-call:}; notify steps lint like a
-     * route's, and http-call steps lint their egress against the allow-list (deny by default).
+     * exactly one of {@code sql:}, {@code notify:}, or {@code httpCall:}; notify steps lint like a
+     * route's, and httpCall steps lint their egress against the allow-list (deny by default).
      */
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.calendar.Calendars calendars, List<LintFinding> findings) {
@@ -3783,7 +3784,7 @@ public final class AppLinter {
             }
             if (declared != 1) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
-                        + step.id() + "' must declare exactly one of sql:, notify:, http-call:,"
+                        + step.id() + "' must declare exactly one of sql:, notify:, httpCall:,"
                         + " chunk:, export:, or push:"));
                 continue;
             }
@@ -3817,10 +3818,10 @@ public final class AppLinter {
                     + "': push needs file: (a context path resolving to a transfer id, e.g."
                     + " step.report.transferId)"));
         }
-        String target = push.effectiveTarget();
-        if (!"local".equals(target) && !"sftp".equals(target) && !"ftps".equals(target)) {
+        String transport = push.effectiveTransport();
+        if (!"local".equals(transport) && !"sftp".equals(transport) && !"ftps".equals(transport)) {
             findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
-                    + "': push target: must be local, sftp, or ftps"));
+                    + "': push transport: must be local, sftp, or ftps"));
             return;
         }
         if (push.path() == null || push.path().isBlank()) {
@@ -3853,14 +3854,14 @@ public final class AppLinter {
         // The poll side's server-identity nudges, mirrored (docs/connectors.md): an SFTP
         // target without host-key pinning is a warning, an FTPS target without a trust
         // store is an error — the runtime refuses it anyway, so the build says it first.
-        if ("sftp".equals(target)
+        if ("sftp".equals(transport)
                 && config.getString("tesseraql.connectors.push.knownHostsFile")
                         .filter(value -> !value.isBlank()).isEmpty()) {
             findings.add(new LintFinding("TQL-SEC-4084", "warning", source, "Step '" + step.id()
                     + "': sftp push without tesseraql.connectors.push.knownHostsFile — the"
                     + " server's host key is not verified"));
         }
-        if ("ftps".equals(target)
+        if ("ftps".equals(transport)
                 && config.navigate("tesseraql.connectors.push.trustStore") == null) {
             findings.add(new LintFinding("TQL-SEC-4085", "error", source, "Step '" + step.id()
                     + "': ftps push needs tesseraql.connectors.push.trustStore — without it"
@@ -3948,11 +3949,14 @@ public final class AppLinter {
                     + "': chunk commitEvery must be at least 1 (was " + chunk.commitEvery()
                     + ")"));
         }
-        if (chunk.onError() != null && chunk.onError().skipLimit() != null
-                && chunk.onError().skipLimit() < 0) {
+        if (chunk.onError() != null && !List.of("fail", "skip").contains(chunk.onError())) {
             findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk skipLimit must not be negative (was "
-                    + chunk.onError().skipLimit() + ")"));
+                    + "': chunk onError must be fail or skip (was '" + chunk.onError() + "')"));
+        }
+        if (chunk.skipLimit() != null && chunk.skipLimit() < 0) {
+            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                    + "': chunk skipLimit must not be negative (was " + chunk.skipLimit()
+                    + ")"));
         }
         Path readerPath = job.source().getParent().resolve(chunk.reader().file()).normalize();
         if (!java.nio.file.Files.isRegularFile(readerPath)) {
@@ -4183,11 +4187,11 @@ public final class AppLinter {
                     "Job '" + job.definition().id()
                             + "' declares both a schedule and a poll trigger; declare one"));
         }
-        String kind = poll.effectiveSource();
+        String kind = poll.effectiveTransport();
         if (!List.of("local", "sftp", "ftps").contains(kind)) {
             findings.add(new LintFinding("TQL-YAML-1005", "error", source,
-                    "Poll trigger source must be local, sftp, or ftps (was '" + poll.source()
-                            + "')"));
+                    "Poll trigger transport must be local, sftp, or ftps (was '"
+                            + poll.transport() + "')"));
         }
         if (poll.path() == null || poll.path().isBlank()) {
             findings.add(new LintFinding("TQL-YAML-1005", "error", source,
@@ -4328,11 +4332,11 @@ public final class AppLinter {
     /** rateLimit.scope is {@code node} or {@code cluster} (docs/deployment.md) — TQL-YAML-1023. */
     private void lintRateLimitScope(RouteDefinition definition, String source,
             List<LintFinding> findings) {
-        var policy = definition.policy();
-        if (policy == null || policy.rateLimit() == null) {
+        var admission = definition.admission();
+        if (admission == null || admission.rateLimit() == null) {
             return;
         }
-        String scope = policy.rateLimit().scope();
+        String scope = admission.rateLimit().scope();
         if (scope != null && !"node".equals(scope) && !"cluster".equals(scope)) {
             findings.add(new LintFinding("TQL-YAML-1023", "error", source,
                     "rateLimit.scope must be 'node' or 'cluster', got '" + scope + "'"));
@@ -4344,7 +4348,7 @@ public final class AppLinter {
      * recipes only — a command must stay a pure transactional write (TQL-YAML-1022); a
      * source name must not shadow the {@code sql} result or a named query (the response
      * composes them side by side); and each source clears the same egress checks as a job's
-     * http-call step (TQL-SEC-4070/4071/4072 via {@link #lintHttpCall}).
+     * httpCall step (TQL-SEC-4070/4071/4072 via {@link #lintHttpCall}).
      */
     private void lintHttpSources(AppConfig config, RouteDefinition definition, String source,
             List<LintFinding> findings) {
@@ -4368,7 +4372,7 @@ public final class AppLinter {
     }
 
     /**
-     * Statically checks an {@code http-call} step's egress (roadmap Phase 26): the target host
+     * Statically checks an {@code httpCall} step's egress (roadmap Phase 26): the target host
      * must resolve to an allow-listed host ({@code TQL-SEC-4070}, deny by default), the url must be
      * an absolute http/https URL ({@code TQL-SEC-4071}), and a referenced credential should be
      * configured ({@code TQL-SEC-4072}, a warning since another environment may declare it). A url
@@ -4403,7 +4407,7 @@ public final class AppLinter {
             // (an unresolved ${...} secret in the host is checked by the runtime instead).
             if (resolved == null || !resolved.contains("${")) {
                 findings.add(new LintFinding("TQL-SEC-4071", "error", source,
-                        "http-call step '" + id + "' needs an absolute http or https url:"));
+                        "httpCall step '" + id + "' needs an absolute http or https url:"));
             }
             lintHttpCredential(config, id, spec, source, findings);
             return;
@@ -4413,7 +4417,7 @@ public final class AppLinter {
             declared.forEach(value -> allowedHosts.add(String.valueOf(value)));
         }
         if (!io.tesseraql.yaml.http.HttpOutbound.hostAllowed(allowedHosts, host)) {
-            findings.add(new LintFinding("TQL-SEC-4070", "error", source, "http-call step '" + id
+            findings.add(new LintFinding("TQL-SEC-4070", "error", source, "httpCall step '" + id
                     + "' targets host '" + host + "' which is not in"
                     + " tesseraql.http.outbound.allowedHosts (deny by default)"));
         }
@@ -4427,7 +4431,7 @@ public final class AppLinter {
             return;
         }
         if (config.navigate("tesseraql.http.outbound.credentials." + credential) == null) {
-            findings.add(new LintFinding("TQL-SEC-4072", "warning", source, "http-call step '" + id
+            findings.add(new LintFinding("TQL-SEC-4072", "warning", source, "httpCall step '" + id
                     + "' references undeclared credential '" + credential + "'"));
         }
     }

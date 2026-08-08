@@ -414,7 +414,7 @@ class TransactionalCommandIntegrationTest {
                   file: update-status.sql
                   mode: update
                   expect:
-                    rows: 1
+                    rowCount: 1
                     onMismatch: conflict
                   params:
                     id: body.id

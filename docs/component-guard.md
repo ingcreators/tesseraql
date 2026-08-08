@@ -6,7 +6,7 @@
 > framework floor is the `FRAMEWORK_FLOOR` set plus the `tesseraql-*` namespace, drift-checked
 > by the runtime integration suites (the guard immediately caught the floor missing
 > `tesseraql-iam` during implementation). The `bean` open question resolved empirically: the
-> full IT suite passes with it baseline-denied. A poll-triggered job's declared `source:` (sftp/ftp/…) is the app's
+> full IT suite passes with it baseline-denied. A poll-triggered job's declared `transport:` (sftp/ftp/…) is the app's
 > structured component intent, so a narrowing `allowed:` list never restates it — the deny
 > sets still win, so a job cannot resurrect a baseline-denied component (the sftp poll suite
 > caught this interplay during implementation). The scaffold now emits guidance instead of the

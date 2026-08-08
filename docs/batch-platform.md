@@ -115,7 +115,8 @@ pipeline:
       writer: { file: revalue-order.sql }        # runs once per row
       key: id                                    # the reader column checkpoints track
       commitEvery: 1000
-      onError: { skipLimit: 100 }
+      onError: skip                              # default: fail
+      skipLimit: 100                             # default 100 when skipping
 ```
 
 - **Two connections**: the reader streams its SELECT (fetch-sized cursor, its own
@@ -128,10 +129,10 @@ pipeline:
   **`chunk.after`** bind — the reader's contract is
   `where <key> > /* chunk.after */ … order by <key>` (fresh runs bind null). A step
   that completes clears its checkpoint.
-- **Skip policy**: a writer failure on one row is recorded in the managed
-  `tql_job_skips` table (execution, step, row key, message) and processing continues
-  — until `skipLimit` is exceeded, which fails the step. `skipLimit: 0` (default)
-  keeps today's fail-fast. Processed/skipped counts land on the step execution and
+- **Skip policy**: with `onError: skip`, a writer failure on one row is recorded in
+  the managed `tql_job_skips` table (execution, step, row key, message) and
+  processing continues — until `skipLimit` (default 100) is exceeded, which fails
+  the step. `onError: fail` (the default) keeps fail-fast. Processed/skipped counts land on the step execution and
   the ops console.
 - **Lints**: a chunk reader without `order by` is an error (no deterministic
   restart); a reader that never binds `chunk.after` is a warning (it will reprocess

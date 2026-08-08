@@ -39,7 +39,7 @@ observability hole.
 
 - Cross-node aggregation (a cluster view needs a store; the per-node registry is the
   building block).
-- Egress-denial counters for `http-call` steps (same idea, different subsystem).
+- Egress-denial counters for `httpCall` steps (same idea, different subsystem).
 - Prometheus exposition of the registry (rides the existing meter once the registry
   exists).
 

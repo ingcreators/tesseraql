@@ -52,7 +52,7 @@ import javax.sql.DataSource;
  * write. Every declarative case kind runs: {@code sql} reads and writes (an {@code INSERT …
  * RETURNING} executes and its rows are checked, then rolled back), {@code validate} rules (their
  * SQL runs against the sandbox), {@code contract} cases (run through a sandboxed identity service
- * over the same datasources), and the pure (no DB) {@code notify} and {@code http-call} evaluations
+ * over the same datasources), and the pure (no DB) {@code notify} and {@code httpCall} evaluations
  * (the latter plans a job's outbound step without a network call).
  */
 final class StudioTestService {
@@ -130,7 +130,7 @@ final class StudioTestService {
     }
 
     /**
-     * The test cases covering a job: {@code notify}/{@code http-call} cases targeting it by id, and
+     * The test cases covering a job: {@code notify}/{@code httpCall} cases targeting it by id, and
      * {@code sql}/{@code contract} cases exercising one of its (main or step) SQL files or Identity
      * SQL Contracts. Mirrors {@link CrossReferenceIndex#casesFor} for routes, which the index does
      * not provide for jobs.
@@ -187,7 +187,7 @@ final class StudioTestService {
     /**
      * A declarative case the sandbox can run: a {@code sql} query or write (its SQL runs against the
      * sandbox — a write executes and is rolled back), a {@code validate} rule, a {@code contract}
-     * (run through the sandboxed identity service), or a {@code notify}/{@code http-call} evaluation
+     * (run through the sandboxed identity service), or a {@code notify}/{@code httpCall} evaluation
      * (the last two are pure, no DB). {@code messages} cases carry no DB/route/job binding.
      */
     private static boolean isRunnable(TestCase test) {

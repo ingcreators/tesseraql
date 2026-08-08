@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Phase 26: an http-call case plans a job's {@code http-call:} steps against the case's params —
+ * Phase 26: an http-call case plans a job's {@code httpCall:} steps against the case's params —
  * URL placeholders and query bindings resolve exactly as at runtime, and the egress allow-list is
  * applied — without issuing a network request. The planned requests are the case's rows.
  */
@@ -53,18 +53,18 @@ class HttpCallCaseTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: fetch
-                    http-call:
+                    httpCall:
                       method: GET
                       url: https://api.partner.example/v1/rates
                       query:
                         on: job.businessDate
                   - id: push
-                    http-call:
+                    httpCall:
                       method: POST
                       url: https://eu.internal.example/v1/orders
                       credential: partner
                   - id: leak
-                    http-call:
+                    httpCall:
                       url: https://evil.example/v1/exfil
                 """);
         // A query route with http: sources (docs/connectors.md) — planned by route target.
@@ -156,7 +156,7 @@ class HttpCallCaseTest {
         TestReport neither = run(new TestCase("neither", null, null, Map.of(), null,
                 null, null, null, new HttpCallTarget(null, null, null)));
         assertThat(neither.results().get(0).message())
-                .contains("exactly one of http-call.job or http-call.route");
+                .contains("exactly one of httpCall.job or httpCall.route");
     }
 
     /**

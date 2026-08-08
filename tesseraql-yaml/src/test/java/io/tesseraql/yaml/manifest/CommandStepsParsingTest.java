@@ -49,7 +49,7 @@ class CommandStepsParsingTest {
                     file: bump-version.sql
                     mode: update
                     expect:
-                      rows: 1
+                      rowCount: 1
                       onMismatch: conflict
                 errors:
                   constraints:
@@ -76,7 +76,7 @@ class CommandStepsParsingTest {
                 .containsEntry("orderNo", "steps.orderNo.value");
         assertThat(route.steps().get("lines").params())
                 .containsEntry("orderId", "steps.header.keys.id");
-        assertThat(route.steps().get("bump").expect().rows()).isEqualTo(1);
+        assertThat(route.steps().get("bump").expect().rowCount()).isEqualTo(1);
         assertThat(route.steps().get("bump").expect().effectiveOnMismatch()).isEqualTo("conflict");
 
         assertThat(route.errors().constraints())
@@ -102,7 +102,7 @@ class CommandStepsParsingTest {
                   file: update-order.sql
                   mode: update
                   expect:
-                    rows: 1
+                    rowCount: 1
                 response:
                   json:
                     status: 200
@@ -114,7 +114,7 @@ class CommandStepsParsingTest {
         RouteDefinition route = manifest.routes().get(0).definition();
 
         assertThat(route.steps()).isEmpty();
-        assertThat(route.sql().expect().rows()).isEqualTo(1);
+        assertThat(route.sql().expect().rowCount()).isEqualTo(1);
         assertThat(route.sql().expect().effectiveOnMismatch()).isEqualTo("conflict");
     }
 }

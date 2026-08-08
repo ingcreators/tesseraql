@@ -70,9 +70,9 @@ scope posture, and how the `data-scope` [coverage kind](#coverage-kinds) is earn
   that fires is one row with `notify` (its id), `channel`, `source`, and the resolved payload
   columns. Guards and payload expressions evaluate exactly as at runtime; by default no mail
   or webhook is sent — add `send: true` for [real-send mode](#real-send-cases).
-- **`http-call`** — plans a job's outbound HTTP steps or a query route's
+- **`httpCall`** — plans a job's outbound HTTP steps or a query route's
   [`http:` sources](connectors.md#http-sources-on-query-routes)
-  (`http-call: {job: ...}` or `{route: ...}`, plus an optional `id`) without a network
+  (`httpCall: {job: ...}` or `{route: ...}`, plus an optional `id`) without a network
   request. Each matching step is one row with `http` (its id), `method`, the resolved `url`
   and `host`, `allowed` (whether the host is in the egress allow-list), and `credential` —
   add `send: true` for [real-send mode](#real-send-cases).
@@ -146,7 +146,7 @@ tests:
           delivered: true      # plus `signature` (the HMAC header) and `wireBody`
 
   - name: the rates call carries its credential
-    http-call:
+    httpCall:
       route: orders.list
       id: rates
       send: true
@@ -166,7 +166,7 @@ tests:
   rfc822 truth (`to`, `from`, `subject`, `wireBody`), and the channel's real host is never
   touched. Inbox channels keep their evaluate-only rows: delivery there is a database write
   the outbox integration tests own.
-- An **`http-call` send** performs the request — declared headers, the resolved credential
+- An **`httpCall` send** performs the request — declared headers, the resolved credential
   header, the body — against the capture server, preserving the original path and query. The
   row keeps the plan columns (including the true `allowed` verdict for the *declared* host)
   and adds `sent`, `requestPath`, `authorization`, `requestBody`, and `responseStatus`.
@@ -296,7 +296,7 @@ Beyond SQL lines and branches, the run derives *item coverage* — covered-of-de
 - `route` / `security` — declared routes, and the subset declaring `security:`, whose SQL the
   suites exercise; `api-key`, `mtls`, `webhook`, `view`, `page`, and `document` narrow the
   same idea to routes of those shapes.
-- `validation` / `notification` / `http-call` — every `validate:` rule, `notify:` declaration,
+- `validation` / `notification` / `httpCall` — every `validate:` rule, `notify:` declaration,
   and outbound HTTP step, covered by the cases that evaluate it.
 - `message` — every message catalog, covered by the `messages` cases that read it.
 - `file-poll`, `queue-consume`, `data-scope`, `workflow`, `mcp`, `mcp-resource`, `mcp-ui` —

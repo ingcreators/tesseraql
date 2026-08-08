@@ -103,7 +103,7 @@ public final class ManifestCoverage {
      */
     public static ItemCoverage page(AppManifest manifest, List<TestSuite> suites) {
         return routeKind("page", manifest, suites,
-                definition -> definition.page() != null);
+                definition -> definition.pagination() != null);
     }
 
     /**
@@ -425,13 +425,13 @@ public final class ManifestCoverage {
     }
 
     /**
-     * http-call coverage (roadmap Phase 26): every job's {@code http-call:} pipeline step is
-     * declared as {@code <jobId>.<stepId>}; a suite's http-call case covers the steps it plans —
+     * httpCall coverage (roadmap Phase 26): every job's {@code httpCall:} pipeline step is
+     * declared as {@code <jobId>.<stepId>}; a suite's httpCall case covers the steps it plans —
      * the targeted one, or the job's whole set when no id is named — so a managed outbound
      * connector is exercised before it ships.
      */
     public static ItemCoverage httpCall(AppManifest manifest, List<TestSuite> suites) {
-        ItemCoverage coverage = new ItemCoverage("http-call");
+        ItemCoverage coverage = new ItemCoverage("httpCall");
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
             if (job.definition().id() == null) {
                 continue;

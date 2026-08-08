@@ -644,10 +644,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         // The outbound egress policy (roadmap Phase 26): deny-by-default allow-list, named
         // credentials, timeouts. One instance gates every framework-issued outbound call —
-        // http-call steps here and the Studio copilot endpoint below.
+        // httpCall steps here and the Studio copilot endpoint below.
         final io.tesseraql.yaml.http.HttpOutbound httpOutbound = io.tesseraql.yaml.http.HttpOutbound
                 .load(manifest.config());
-        // One outbound HTTP client gates every framework-issued call: http-call job steps
+        // One outbound HTTP client gates every framework-issued call: httpCall job steps
         // and query routes' http: sources (docs/connectors.md) share the allow-list, the
         // named credentials, the timeouts, and the per-host circuit breaker.
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
@@ -664,7 +664,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .notificationOutbox(outboxStore)
                 // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
                 .preferenceStore(preferences)
-                // Outbound REST for http-call pipeline steps (roadmap Phase 26): deny-by-default
+                // Outbound REST for httpCall pipeline steps (roadmap Phase 26): deny-by-default
                 // egress, secret-managed credentials, timeouts, and circuit breaking from config.
                 .httpCall(httpCallClient)
                 // export: pipeline steps write through the same transfer machinery HTTP
@@ -685,9 +685,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 : io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
         // Cluster-scoped rate limits (docs/deployment.md): the lease ledger exists exactly
         // when a route declares rateLimit.scope: cluster; limiters reach it via the registry.
-        if (manifest.routes().stream().anyMatch(route -> route.definition().policy() != null
-                && route.definition().policy().rateLimit() != null
-                && route.definition().policy().rateLimit().isCluster())) {
+        if (manifest.routes().stream().anyMatch(route -> route.definition().admission() != null
+                && route.definition().admission().rateLimit() != null
+                && route.definition().admission().rateLimit().isCluster())) {
             io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
                     frameworkDataSource);
             rateLeases.ensureSchema();
@@ -1648,7 +1648,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Copilot (roadmap Phase 44): entirely absent unless the operator opts in
                 // and names an endpoint + model; the api key stays a lazy config read so a
                 // ${secret.*} reference resolves at call time, never at startup. The endpoint
-                // must pass the same deny-by-default egress allow-list an http-call step
+                // must pass the same deny-by-default egress allow-list an httpCall step
                 // obeys — an off-allow-list host fails the boot (SEC 4085).
                 final io.tesseraql.studio.CopilotService copilotService = manifest.config()
                         .getString("tesseraql.copilot.enabled")
@@ -2199,7 +2199,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             }
                             studio.routeFormSave(path, str(params, "recipe"),
                                     str(params, "auth"), str(params, "policy"),
-                                    params.get("csrf") != null, inputs);
+                                    str(params, "csrf"), inputs);
                             return Map.of("saved", path);
                         })
                         .register("studio.newRoute", params -> {
@@ -3952,9 +3952,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 new WorkflowSweeper.Rule(docType, deadline.state(), null, escalate,
                                         escalateNotify));
                     }
-                } else if (onBreach.reassign() != null && !onBreach.reassign().isBlank()) {
+                } else if (onBreach.reassign() != null && onBreach.reassign().file() != null
+                        && !onBreach.reassign().file().isBlank()) {
+                    // The assign: shape (docs/vocabulary-cleanup.md slice 1); the sweeper binds
+                    // the SQL from its own sweep context, so declared params: stay unused here.
                     java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                            dir.resolve(onBreach.reassign()).normalize(), dialect);
+                            dir.resolve(onBreach.reassign().file()).normalize(), dialect);
                     try {
                         rules.add(new WorkflowSweeper.Rule(docType, deadline.state(),
                                 io.tesseraql.core.sql.Sql2WayParser
@@ -4195,7 +4198,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /**
      * The configured copilot endpoint, gated by the same deny-by-default egress allow-list an
-     * {@code http-call} step obeys (docs/copilot.md): every turn ships app source to this
+     * {@code httpCall} step obeys (docs/copilot.md): every turn ships app source to this
      * endpoint, so a host outside {@code tesseraql.http.outbound.allowedHosts} fails the boot
      * with {@code TQL-SEC-4085} — a chat must never become the one outbound call the egress
      * policy does not govern.
@@ -4473,7 +4476,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * this codebase has spent the day removing.
      */
     static Map<String, Object> bindJobParams(JobFile jobFile, Map<String, Object> params) {
-        Map<String, io.tesseraql.yaml.model.InputField> declared = jobFile.definition().params();
+        Map<String, io.tesseraql.yaml.model.InputField> declared = jobFile.definition().input();
         if (declared.isEmpty()) {
             return params;
         }

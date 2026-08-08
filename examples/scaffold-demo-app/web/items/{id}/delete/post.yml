@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:39c824b24bda7ee063ff28b9eff300aeb779dffc2b8622443ce56e787999da10
+# tesseraql-scaffold-checksum: sha256:4162b86b1a497fbe505a6e94ee1bd474a26d2237985dc3c8f84ebd2abc892c99
 # Scaffolded delete command for the items table.
 version: tesseraql/v1
 id: items.delete
@@ -23,7 +23,7 @@ sql:
   file: delete.sql
   mode: update
   expect:
-    rows: 1
+    rowCount: 1
     onMismatch: conflict
   params:
     id: params.id

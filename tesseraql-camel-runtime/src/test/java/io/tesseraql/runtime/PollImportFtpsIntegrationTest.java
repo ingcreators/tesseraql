@@ -315,7 +315,7 @@ class PollImportFtpsIntegrationTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: ftps
+                    transport: ftps
                     host: localhost
                     port: %d
                     path: /%s

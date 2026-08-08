@@ -188,7 +188,8 @@ class StudioServiceTest {
         assertThat(form.inputs().get(0).name()).isEqualTo("q");
 
         // Edit q (managed attrs change, unmanaged writable/mask survive), add a second field.
-        studio.routeFormSave("web/api/x/get.yml", "query-json", "browser", "app.read", true,
+        studio.routeFormSave("web/api/x/get.yml", "query-json", "browser", "app.read",
+                "required",
                 java.util.List.of(
                         new StudioService.FormInput("q", "string", true, null, null, "40", null,
                                 null, null, null),
@@ -197,7 +198,7 @@ class StudioServiceTest {
 
         String draft = studio.readDraft("web/api/x/get.yml");
         assertThat(draft).contains("auth: \"browser\"").doesNotContain("bearer");
-        assertThat(draft).contains("policy: \"app.read\"").contains("csrf: true");
+        assertThat(draft).contains("policy: \"app.read\"").contains("csrf: \"required\"");
         assertThat(draft).contains("maxLength: 40").contains("writable: false")
                 .contains("mask: \"last4\"");
         assertThat(draft).contains("age").contains("min: 18").contains("max: 130");
@@ -228,14 +229,14 @@ class StudioServiceTest {
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
 
         // A row whose name is cleared simply does not survive the rebuild.
-        studio.routeFormSave("web/api/x/get.yml", null, null, null, false, java.util.List.of(
+        studio.routeFormSave("web/api/x/get.yml", null, null, null, null, java.util.List.of(
                 new StudioService.FormInput("", "string", false, null, null, null, null, null,
                         null, null)));
         assertThat(studio.readDraft("web/api/x/get.yml")).doesNotContain("gone")
                 .doesNotContain("input:");
 
         assertThatThrownBy(() -> studio.routeFormSave("web/api/x/get.yml", null, null, null,
-                false, java.util.List.of(new StudioService.FormInput("n", "integer", false,
+                null, java.util.List.of(new StudioService.FormInput("n", "integer", false,
                         "not-a-number", null, null, null, null, null, null))))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                 .hasMessageContaining("must be a number");

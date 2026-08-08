@@ -42,7 +42,7 @@ class ExampleAppSecurityPostureTest {
                     .as("%s %s %s", app, route.httpMethod(), route.urlPath())
                     .isEqualTo(expected);
             if ("browser".equals(expected) && !"GET".equals(route.httpMethod())) {
-                assertThat(security.csrf())
+                assertThat(security.csrfEnforced(route.httpMethod()))
                         .as("%s %s %s must enforce CSRF", app, route.httpMethod(),
                                 route.urlPath())
                         .isTrue();

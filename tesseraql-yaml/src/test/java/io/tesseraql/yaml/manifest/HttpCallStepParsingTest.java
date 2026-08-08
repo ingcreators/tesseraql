@@ -33,7 +33,7 @@ class HttpCallStepParsingTest {
                       file: select-pending.sql
                       mode: query-spool
                   - id: push
-                    http-call:
+                    httpCall:
                       method: POST
                       url: https://api.partner.example/v1/orders
                       credential: partner
@@ -85,7 +85,7 @@ class HttpCallStepParsingTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: fetch
-                    http-call:
+                    httpCall:
                       url: https://api.partner.example/v1/rates
                 """);
 

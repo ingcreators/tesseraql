@@ -59,7 +59,7 @@ class RecipeGovernanceTest {
     void attachmentRoutesCarryWhatTheyCanAndTheSameLocale(@TempDir Path dir) throws Exception {
         Map<String, List<String>> compiled = compileAndCollect(dir);
 
-        // An attachment has no policy: or input:, so concurrency, lane and audit have nothing to
+        // An attachment has no admission: or input:, so concurrency, lane and audit have nothing to
         // read. Tenancy and locale do apply, and all three routes used to skip tenancy while
         // only upload resolved a locale.
         for (String routeId : List.of("notes.upload", "notes.list", "notes.download")) {
@@ -143,7 +143,7 @@ class RecipeGovernanceTest {
                 """);
 
         String policy = """
-                policy:
+                admission:
                   lane: reports
                   rateLimit:
                     requestsPerSecond: 10

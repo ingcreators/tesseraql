@@ -206,7 +206,7 @@ class MetricsEndpointIntegrationTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: sftp
+                    transport: sftp
                     host: files.partner.example
                     path: /inbound
                     credential: partner

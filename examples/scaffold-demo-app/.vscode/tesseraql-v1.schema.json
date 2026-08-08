@@ -28,6 +28,7 @@
     },
     "input": {
       "type": "object",
+      "description": "Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in input-binding.md and jobs.md.",
       "additionalProperties": { "$ref": "#/$defs/inputField" }
     },
     "inputPolicy": { "type": "object", "additionalProperties": true, "description": "Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract." },
@@ -40,7 +41,7 @@
           "enum": ["bearer", "browser", "apiKey", "mtls", "public"]
         },
         "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." },
-        "csrf": { "type": "boolean" }
+        "csrf": { "type": "string", "enum": ["auto", "required", "off"], "description": "CSRF posture: auto (browser state-changing routes are protected), required, or off - one enum here and in security.defaults rules alike." }
       },
       "additionalProperties": true
     },
@@ -54,7 +55,7 @@
       },
       "additionalProperties": true
     },
-    "policy": {
+    "admission": {
       "type": "object",
       "description": "Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes).",
       "properties": {
@@ -166,7 +167,7 @@
         "additionalProperties": false
       }
     },
-    "notify": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true }, "description": "Notifications enqueued with the command on the transactional outbox, keyed by channel. Documented in notifications.md." },
+    "notify": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true }, "description": "Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md." },
     "errors": { "type": "object", "additionalProperties": true, "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md." },
     "import": { "type": "object", "additionalProperties": true, "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md." },
     "export": { "type": "object", "additionalProperties": true, "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md." },
@@ -196,7 +197,7 @@
       },
       "additionalProperties": true
     },
-    "page": {
+    "pagination": {
       "description": "Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.",
       "type": "object",
       "properties": {
@@ -326,7 +327,7 @@
         "poll": {
           "type": "object",
           "properties": {
-            "source": { "type": "string", "enum": ["local", "sftp", "ftps"], "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts." },
+            "transport": { "type": "string", "enum": ["local", "sftp", "ftps"], "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts." },
             "host": { "type": "string" },
             "port": { "type": "integer" },
             "path": { "type": "string", "description": "The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home." },
@@ -353,14 +354,9 @@
       "additionalProperties": true
     },
     "perTenant": { "type": "boolean", "description": "Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md." },
-    "params": {
-      "type": "object",
-      "description": "A job's declared parameters (kind: job) - the same field contract routes declare with input:. Documented in jobs.md.",
-      "additionalProperties": { "$ref": "#/$defs/inputField" }
-    },
     "pipeline": {
       "type": "array",
-      "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, http-call, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md.",
+      "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, httpCall, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md.",
       "items": { "type": "object", "additionalProperties": true }
     }
   },
@@ -419,7 +415,7 @@
         "expect": {
           "type": "object",
           "properties": {
-            "rows": { "type": "integer" },
+            "rowCount": { "type": "integer", "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)." },
             "onMismatch": { "type": "string" }
           },
           "additionalProperties": true
