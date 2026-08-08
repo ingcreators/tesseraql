@@ -176,19 +176,40 @@ public final class HtmlResponseRenderer implements Processor {
         String pagePath = uri == null
                 ? ""
                 : uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
+        // HTML output masking (docs/view-composition.md wave 3b): the views' explicit domain:
+        // references carry classification/mask, applied to the execution context with the
+        // exact FieldPolicyApplier the JSON renderer uses — one row can never render masked
+        // in JSON and raw in HTML.
+        Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies = new LinkedHashMap<>();
+        if (viewBinding != null) {
+            readPolicies.putAll(viewBinding.readPolicies());
+        }
+        boundViews.values().forEach(binding -> readPolicies.putAll(binding.readPolicies()));
+        Map<String, Object> viewContext = context;
+        if (!readPolicies.isEmpty()) {
+            io.tesseraql.security.policy.PolicyEngine policyEngine = exchange.getContext()
+                    .getRegistry().lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
+                            io.tesseraql.security.policy.PolicyEngine.class);
+            io.tesseraql.security.Principal principal = exchange.getProperty(
+                    TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
+            viewContext = (Map<String, Object>) new FieldPolicyApplier(readPolicies,
+                    policyEngine, principal).apply(context);
+        }
         if (viewBinding != null) {
             // A declarative view (roadmap Phase 39): the reserved `v` model is the whole contract
             // between the route and the tql/view/* pattern fragments. The request path anchors
             // the list pattern's self-rendering search/sort links.
-            model.put("v", viewBinding.model(context, java.util.Locale.forLanguageTag(tag),
+            model.put("v", viewBinding.model(viewContext, java.util.Locale.forLanguageTag(tag),
                     pagePath));
         }
         if (!boundViews.isEmpty()) {
             // Declarative parts on a hand-owned template (wave 2c): each bound view renders
             // into views['<id>'], inserted by the template via its pattern fragment.
             Map<String, Object> views = new LinkedHashMap<>();
+            java.util.Locale viewLocale = java.util.Locale.forLanguageTag(tag);
+            Map<String, Object> boundContext = viewContext;
             boundViews.forEach((id, binding) -> views.put(id,
-                    binding.model(context, java.util.Locale.forLanguageTag(tag), pagePath)));
+                    binding.model(boundContext, viewLocale, pagePath)));
             model.put("views", views);
         }
 

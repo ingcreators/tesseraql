@@ -295,6 +295,39 @@ class HtmlResponseRendererViewTest {
     }
 
     @Test
+    void aColumnDomainMasksTheRenderedCellExactlyLikeJson(@TempDir Path dir) throws Exception {
+        // docs/view-composition.md wave 3b: the same FieldPolicyApplier vocabulary — one row
+        // can never render masked in JSON and raw in HTML.
+        Files.createDirectories(dir.resolve("domains"));
+        Files.writeString(dir.resolve("domains/catalog.yml"), """
+                version: tesseraql/v1
+                domains:
+                  cardNumber:
+                    type: string
+                    mask: last4
+                """);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - name: holder
+                  - { name: card, domain: cardNumber }
+                """);
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml"));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
+                binding);
+        String html = render(renderer, Map.of("sql", Map.of("rows", List.of(
+                Map.of("holder", "Sato", "card", "4111111111111111")))));
+        String masked = String.valueOf(
+                io.tesseraql.core.mask.Masking.apply("last4", "4111111111111111"));
+        assertThat(html).contains(">Sato<").contains(masked)
+                .doesNotContain("4111111111111111");
+    }
+
+    @Test
     void aColumnDomainReferenceMustResolve(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), """
                 version: tesseraql/v1

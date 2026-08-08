@@ -56,10 +56,12 @@ public final class ViewBinding {
     private final Path appHome;
     private final Map<Integer, Embed> childEmbeds;
     private final Map<Integer, Embed> panelEmbeds;
+    private final Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies;
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
             Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
-            Map<Integer, Embed> panelEmbeds) {
+            Map<Integer, Embed> panelEmbeds,
+            Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies) {
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -67,6 +69,17 @@ public final class ViewBinding {
         this.appHome = appHome;
         this.childEmbeds = childEmbeds;
         this.panelEmbeds = panelEmbeds;
+        this.readPolicies = readPolicies;
+    }
+
+    /**
+     * The output policies the view's explicit {@code domain:} references carry
+     * (docs/view-composition.md wave 3b), keyed by column/field name — embedded views'
+     * included. The HTML renderer applies them to the execution context before model
+     * assembly with the same {@code FieldPolicyApplier} the JSON renderer uses.
+     */
+    public Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies() {
+        return readPolicies;
     }
 
     /**
@@ -135,23 +148,41 @@ public final class ViewBinding {
             }
         }
         // Read-side domain references (docs/view-composition.md wave 3a): an explicit
-        // `domain:` on a column or field must name a declared domain — the link that carries
-        // the domain's presentation and classification knowledge to rendering.
-        List<String> domainRefs = new ArrayList<>();
-        spec.columns().stream().map(ViewSpec.Column::domain)
-                .filter(java.util.Objects::nonNull).forEach(domainRefs::add);
-        spec.fields().stream().map(ViewSpec.Field::domain)
-                .filter(java.util.Objects::nonNull).forEach(domainRefs::add);
-        if (!domainRefs.isEmpty()) {
+        // `domain:` on a column or field must name a declared domain, and the domain's
+        // classification/mask become the column's output policy (wave 3b) — the same
+        // vocabulary the JSON renderer applies, so one row can never render masked in JSON
+        // and raw in HTML.
+        Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies = new LinkedHashMap<>();
+        Map<String, String> domainByColumn = new LinkedHashMap<>();
+        spec.columns().stream().filter(column -> column.domain() != null)
+                .forEach(column -> domainByColumn.put(column.name(), column.domain()));
+        spec.fields().stream().filter(field -> field.domain() != null)
+                .forEach(field -> domainByColumn.put(field.name(), field.domain()));
+        if (!domainByColumn.isEmpty()) {
             io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
                     .load(home);
-            domainRefs.forEach(name -> domains.require(name, "view " + viewRef));
+            domainByColumn.forEach((column, domainName) -> {
+                io.tesseraql.yaml.model.InputField domain = domains.require(domainName,
+                        "view " + viewRef);
+                if (domain.classification() != null || domain.mask() != null) {
+                    readPolicies.put(column,
+                            new io.tesseraql.yaml.model.ResponseSpec.FieldPolicy(null, null,
+                                    domain.mask(), domain.classification(), null));
+                }
+            });
+        }
+        // Embedded views mask through the host render, so their policies join the host's.
+        for (Embed embedded : childEmbeds.values()) {
+            readPolicies.putAll(embedded.binding().readPolicies);
+        }
+        for (Embed embedded : panelEmbeds.values()) {
+            readPolicies.putAll(embedded.binding().readPolicies);
         }
         String entry = spec.template() != null
                 ? HtmlResponseRenderer.resolveTemplate(home, viewDir, spec.template())
                 : "tql/view/" + spec.view();
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
-                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds));
+                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), Map.copyOf(readPolicies));
     }
 
     /**
