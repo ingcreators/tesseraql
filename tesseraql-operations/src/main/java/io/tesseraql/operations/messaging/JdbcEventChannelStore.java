@@ -57,7 +57,11 @@ public final class JdbcEventChannelStore implements EventChannelStore {
         }
     }
 
-    /** The PostgreSQL LISTEN/NOTIFY channel name a publisher signals and a consumer listens on. */
+    /**
+     * The PostgreSQL LISTEN/NOTIFY channel name a publisher signals and a consumer listens on.
+     * The sanitizer keeps Unicode letters (docs/unicode-identifiers.md), so the NOTIFY/LISTEN
+     * statements double-quote it — quotes themselves can never appear here.
+     */
     public static String notifyChannel(String channel) {
         StringBuilder safe = new StringBuilder("tql_evt_");
         for (char c : channel.toLowerCase(Locale.ROOT).toCharArray()) {
@@ -101,7 +105,7 @@ public final class JdbcEventChannelStore implements EventChannelStore {
                 // transport (every other dialect, and PostgreSQL behind a pooler) just polls.
                 if ("postgresql".equals(vendor())) {
                     try (Statement notify = connection.createStatement()) {
-                        notify.execute("NOTIFY " + notifyChannel(channel));
+                        notify.execute("NOTIFY \"" + notifyChannel(channel) + "\"");
                     }
                 }
                 connection.commit();

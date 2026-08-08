@@ -89,7 +89,8 @@ final class PgNotifyListener extends ServiceSupport {
             conn.setAutoCommit(true);
             try (Statement statement = conn.createStatement()) {
                 for (String channel : channels) {
-                    statement.execute("LISTEN " + JdbcEventChannelStore.notifyChannel(channel));
+                    statement.execute(
+                            "LISTEN \"" + JdbcEventChannelStore.notifyChannel(channel) + "\"");
                 }
             }
             // Catch up on anything published while we were not listening (startup or a reconnect).

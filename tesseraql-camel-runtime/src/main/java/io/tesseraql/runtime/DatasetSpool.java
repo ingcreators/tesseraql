@@ -42,7 +42,7 @@ final class DatasetSpool {
         String key = attachment.checksum() == null || attachment.checksum().isBlank()
                 ? attachment.id()
                 : attachment.checksum();
-        Path target = directory.resolve(key.replaceAll("[^A-Za-z0-9._-]", "_") + extensionOf(
+        Path target = directory.resolve(key.replaceAll("[^\\p{L}\\p{N}._-]", "_") + extensionOf(
                 attachment.filename()));
         try {
             if (Files.isRegularFile(target)) {
@@ -90,6 +90,6 @@ final class DatasetSpool {
             return "";
         }
         int dot = filename.lastIndexOf('.');
-        return dot < 0 ? "" : filename.substring(dot).replaceAll("[^A-Za-z0-9.]", "");
+        return dot < 0 ? "" : filename.substring(dot).replaceAll("[^\\p{L}\\p{N}.]", "");
     }
 }
