@@ -66,6 +66,24 @@ class DeclarativeViewIntegrationTest {
         // The seeded user renders, its column linked per row from the view's link template.
         assertThat(response.body()).contains("href=\"/users?sel=sato\"").contains(">sato</a>");
         assertThat(response.body()).contains(">Status</span>");
+        // Shell negotiation (docs/view-composition.md wave 2a): the same URL varies by
+        // HX-Request — direct navigation is the shell-wrapped page.
+        assertThat(response.body()).contains("<html");
+        assertThat(response.headers().firstValue("Vary").orElse("")).contains("HX-Request");
+    }
+
+    @Test
+    void anHxRequestGetsTheBareRegionFromTheSameUrl() throws Exception {
+        HttpResponse<String> response = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + runtime.port() + "/board"))
+                        .header("HX-Request", "true")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("hc-datagrid__table").doesNotContain("<html");
+        assertThat(response.body()).startsWith("<div id=\"page-content\"");
+        assertThat(response.headers().firstValue("Vary").orElse("")).contains("HX-Request");
     }
 
     @Test

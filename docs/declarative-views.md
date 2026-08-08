@@ -251,6 +251,25 @@ slots:
   header: filters.html::filters
 ```
 
+## One URL, both shapes: shell negotiation
+
+Every HTML response negotiates its shell (`response.html.shell`, default `auto`): an
+htmx partial request — `HX-Request: true`, minus boosted navigation (`HX-Boosted`) and
+history restore, which both expect a full document — receives the bare `#page-content`
+region, while direct navigation receives the shell-wrapped page. One URL is therefore
+both deep-linkable and an htmx target; the standing workaround — a hand-written
+fragment template whose only purpose was "this URL must not return a full page" — is
+gone. Negotiated responses carry `Vary: HX-Request`.
+
+- `shell: auto` — the default above.
+- `shell: always` — unconditional shell wrapping (the pre-negotiation behavior).
+- `shell: never` — always the bare region: an htmx-only endpoint.
+
+Anything else is `TQL-VIEW-3317`. The mechanism is a Thymeleaf markup selector over the
+same template, so it applies to view-backed routes and shell-wrapped `template:` pages
+(ejected views included) alike; a hand-written bare fragment has no `#page-content`
+region and renders whole either way.
+
 ## Rendering pipeline and the fragment contract
 
 When `view:` is set, the HTML renderer parses the document at build time (cached,
@@ -362,6 +381,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3314 | unknown key anywhere in a view document — top level, `fields:`, `columns:`, `children:`, `panels:`, `series:` entries; view documents are strict, never silently dropping a key |
 | 3315 | duplicate view id — two `*.view.yml` documents declare (or default to) the same `id` |
 | 3316 | ejecting a shared view — the view is referenced by more than one route; copy it under a new id and point the route at the copy first |
+| 3317 | `response.html.shell` is not `auto`, `always`, or `never` |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and
@@ -393,7 +413,5 @@ demand.
 
 Not currently supported:
 
-- **Fragment-mode views** — a bare view for an htmx target region, rendered without
-  the shell — are planned.
 - **Write-side field masking** (per-role field visibility on forms) is planned to
   compose with the existing `FieldPolicy` machinery.

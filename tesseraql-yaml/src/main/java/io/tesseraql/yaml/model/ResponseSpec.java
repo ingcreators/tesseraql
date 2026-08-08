@@ -171,6 +171,11 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *
      * @param status   HTTP status code, defaulting to 200
      * @param template template path relative to the template root
+     * @param shell    shell negotiation (docs/view-composition.md wave 2a): {@code auto} (the
+     *                 default) serves the bare {@code #page-content} region to htmx requests and
+     *                 the shell-wrapped page to direct navigation, with {@code Vary: HX-Request};
+     *                 {@code always} always wraps; {@code never} always serves the region — an
+     *                 htmx-only endpoint
      * @param model    template model: each value is a source expression (e.g. {@code sql.rows})
      * @param headers  response headers; nested map values (e.g. {@code HX-Trigger}) are serialized
      *                 to JSON, and {@code {expression}} placeholders in values are resolved against
@@ -182,7 +187,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *                 response
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record HtmlResponse(Integer status, String template, String view,
+    public record HtmlResponse(Integer status, String template, String view, String shell,
             java.util.Map<String, Object> model, java.util.Map<String, Object> headers,
             java.util.Map<String, String> headersWhen,
             java.util.List<StatusWhen> statusWhen) {
@@ -202,6 +207,11 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             return status == null ? 200 : status;
         }
 
+        /** The shell negotiation mode, defaulting to {@code auto}. */
+        public String effectiveShell() {
+            return shell == null ? "auto" : shell;
+        }
+
         /**
          * A copy carrying the effective header map — how the compiler merges the app-wide
          * default response headers (docs/route-defaults.md) under the route's own entries.
@@ -210,8 +220,8 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             if (effective.equals(headers)) {
                 return this;
             }
-            return new HtmlResponse(status, template, view, model, effective, headersWhen,
-                    statusWhen);
+            return new HtmlResponse(status, template, view, shell, model, effective,
+                    headersWhen, statusWhen);
         }
     }
 }

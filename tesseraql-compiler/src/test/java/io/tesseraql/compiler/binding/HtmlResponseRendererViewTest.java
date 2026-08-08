@@ -52,16 +52,79 @@ class HtmlResponseRendererViewTest {
         ViewBinding binding = ViewBinding.of(dir, "page", route,
                 path -> "/items/create".equals(path) ? actionRoute() : null,
                 id -> dir.resolve("page.view.yml"));
-        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page",
+        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", null,
                 Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
     }
 
     private static String render(HtmlResponseRenderer renderer, Map<String, Object> context)
             throws Exception {
+        return exchangeFor(renderer, context, Map.of()).getMessage().getBody(String.class);
+    }
+
+    private static Exchange exchangeFor(HtmlResponseRenderer renderer,
+            Map<String, Object> context, Map<String, String> requestHeaders) throws Exception {
         Exchange exchange = new DefaultExchange(new DefaultCamelContext());
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
+        requestHeaders.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
         renderer.process(exchange);
-        return exchange.getMessage().getBody(String.class);
+        return exchange;
+    }
+
+    // Shell negotiation (docs/view-composition.md wave 2a): one URL, both shapes.
+
+    private static HtmlResponseRenderer shellRenderer(Path dir, String shell) throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"),
+                "version: tesseraql/v1\nkind: view\nrecipe: list\ntitle: Items\n");
+        ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml"));
+        return new HtmlResponseRenderer(new HtmlResponse(200, null, "page", shell,
+                Map.of(), Map.of(), Map.of(), null), dir, dir, "en", binding);
+    }
+
+    @Test
+    void anHxRequestGetsTheBareRegionWithVaryOnBoth(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = shellRenderer(dir, null);
+        Exchange partial = exchangeFor(renderer, Map.of(), Map.of("HX-Request", "true"));
+        String region = partial.getMessage().getBody(String.class);
+        assertThat(region).doesNotContain("<html").contains("hc-datagrid")
+                .startsWith("<div id=\"page-content\"");
+        assertThat(partial.getMessage().getHeader("Vary", String.class))
+                .contains("HX-Request");
+
+        Exchange direct = exchangeFor(renderer, Map.of(), Map.of());
+        assertThat(direct.getMessage().getBody(String.class)).contains("<html");
+        assertThat(direct.getMessage().getHeader("Vary", String.class))
+                .contains("HX-Request");
+    }
+
+    @Test
+    void boostedAndHistoryRestoreRequestsGetTheFullPage(@TempDir Path dir) throws Exception {
+        HtmlResponseRenderer renderer = shellRenderer(dir, null);
+        assertThat(exchangeFor(renderer, Map.of(),
+                Map.of("HX-Request", "true", "HX-Boosted", "true"))
+                .getMessage().getBody(String.class)).contains("<html");
+        assertThat(exchangeFor(renderer, Map.of(),
+                Map.of("HX-Request", "true", "HX-History-Restore-Request", "true"))
+                .getMessage().getBody(String.class)).contains("<html");
+    }
+
+    @Test
+    void shellAlwaysAndNeverOverrideTheNegotiation(@TempDir Path dir) throws Exception {
+        Exchange always = exchangeFor(shellRenderer(dir, "always"), Map.of(),
+                Map.of("HX-Request", "true"));
+        assertThat(always.getMessage().getBody(String.class)).contains("<html");
+        assertThat(always.getMessage().getHeader("Vary", String.class)).isNull();
+
+        Exchange never = exchangeFor(shellRenderer(dir, "never"), Map.of(), Map.of());
+        assertThat(never.getMessage().getBody(String.class))
+                .doesNotContain("<html").startsWith("<div id=\"page-content\"");
+    }
+
+    @Test
+    void anInvalidShellValueFailsTheBuild(@TempDir Path dir) throws Exception {
+        assertThatThrownBy(() -> shellRenderer(dir, "sometimes"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-VIEW-3317");
     }
 
     @Test
@@ -169,7 +232,8 @@ class HtmlResponseRendererViewTest {
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null,
                 id -> dir.resolve("page.view.yml"));
         assertThatThrownBy(() -> new HtmlResponseRenderer(
-                new HtmlResponse(200, "index.html", "page.view.yml", Map.of(), Map.of(), Map.of(),
+                new HtmlResponse(200, "index.html", "page.view.yml", null, Map.of(), Map.of(),
+                        Map.of(),
                         null),
                 dir, dir, "en", binding))
                 .isInstanceOf(TqlException.class).hasMessageContaining("mutually exclusive");
