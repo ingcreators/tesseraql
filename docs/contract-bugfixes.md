@@ -1,6 +1,10 @@
 # Pre-1.0 contract bug fixes
 
-> **Status: design accepted; slices 1–3 pending.** The contract-consistency sweep
+> **Status: complete.** Design #613; slice 1 #614 (ops API throws + SEC default 500),
+> slice 2 #617 (remote path resolution; #615 was its base-branch-closed predecessor),
+> slice 3 #616 (transfer `rowCount`, decisions `oneOf`, full `kind` enum + calendars
+> schema) — all merged 2026-08-08. Track C shipped with a three-form unit contract
+> test (`x`/`/x`/`//x`); the rooted-vs-non-rooted VFS IT stays future hardening. The contract-consistency sweep
 > (2026-08-08, the same pass that shipped transition-engine track F) surveyed every
 > recorded deferral, the YAML surface, and the HTTP/JSON surfaces for places where a
 > defect is about to be frozen into the 1.0 compatibility contract (roadmap Phase 34).
