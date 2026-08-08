@@ -164,4 +164,6 @@ export const EXCLUDED = [
   'vocabulary-cleanup.md',
   // Unicode identifiers (verbatim table/column names end-to-end), 2026-08-08.
   'unicode-identifiers.md',
+  // View composition (registry, fragment negotiation, embedding, field presentation/masking), 2026-08-08.
+  'view-composition.md',
 ];
