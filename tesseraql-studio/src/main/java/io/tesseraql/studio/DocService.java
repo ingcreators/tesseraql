@@ -465,7 +465,9 @@ public final class DocService {
         String prefix = tableName.toLowerCase(Locale.ROOT) + ".";
         for (String name : declared) {
             if (name.startsWith(prefix)) {
-                byColumn.put(snake(name.substring(prefix.length())), name);
+                // The domain key's field part is the column name verbatim
+                // (docs/unicode-identifiers.md) — no reverse camel-to-snake guessing.
+                byColumn.put(name.substring(prefix.length()), name);
             }
         }
         return byColumn;
@@ -559,19 +561,6 @@ public final class DocService {
         });
         names.sort(null);
         return names;
-    }
-
-    /** camelCase field name back to its snake_case column (the scaffolder's forward mapping). */
-    private static String snake(String camel) {
-        StringBuilder out = new StringBuilder();
-        for (char c : camel.toCharArray()) {
-            if (Character.isUpperCase(c)) {
-                out.append('_').append(Character.toLowerCase(c));
-            } else {
-                out.append(c);
-            }
-        }
-        return out.toString();
     }
 
     /**

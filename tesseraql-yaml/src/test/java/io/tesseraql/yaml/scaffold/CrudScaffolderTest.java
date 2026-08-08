@@ -106,18 +106,18 @@ class CrudScaffolderTest {
         assertThat(create.errors()).isNull();
         assertThat(create.response().redirect().location())
                 .isEqualTo("/items/{steps.record.keys.id}");
-        assertThat(create.input()).containsKeys("name", "quantity", "unitPrice", "dueDate",
+        assertThat(create.input()).containsKeys("name", "quantity", "unit_price", "due_date",
                 "active", "note");
         // The field itself lives in the domain; the route states only its operational choice.
-        assertThat(create.input().get("dueDate").domain()).isEqualTo("items.dueDate");
-        assertThat(create.input().get("dueDate").format()).isNull();
+        assertThat(create.input().get("due_date").domain()).isEqualTo("items.due_date");
+        assertThat(create.input().get("due_date").format()).isNull();
         assertThat(create.input().get("name").required()).isTrue();
 
         String insert = content(files, "web/items/create/insert.sql");
         assertThat(insert).doesNotContain("  id,");
         assertThat(insert).contains("/* audit.user */ 'someone'")
                 .contains("/* audit.now */ '2026-01-01 00:00:00'")
-                .contains("/* unitPrice */ 1");
+                .contains("/* unit_price */ 1");
     }
 
     @Test
@@ -284,7 +284,7 @@ class CrudScaffolderTest {
         List<ScaffoldedFile> files = scaffolder.scaffold(items());
 
         assertThat(content(files, "rules/items.yml"))
-                .contains("itemsNameIsFree:")
+                .contains("items_name_is_free:")
                 .contains("binds: { name: string, excludeId: integer }")
                 .contains("code: duplicate");
         assertThat(content(files, "rules/items-name-free.sql"))
@@ -293,13 +293,13 @@ class CrudScaffolderTest {
 
         RouteDefinition create = parser.parseRoute(content(files, "web/items/create/post.yml"),
                 "post.yml");
-        assertThat(create.validate().get("nameIsFree").use()).isEqualTo("itemsNameIsFree");
-        assertThat(create.validate().get("nameIsFree").params())
+        assertThat(create.validate().get("name_is_free").use()).isEqualTo("items_name_is_free");
+        assertThat(create.validate().get("name_is_free").params())
                 .containsEntry("name", "params.name")
                 .containsEntry("excludeId", "params.id");
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/items/{id}/update/post.yml"), "post.yml");
-        assertThat(update.validate().get("nameIsFree").params())
+        assertThat(update.validate().get("name_is_free").params())
                 .containsEntry("excludeId", "params.id");
     }
 
@@ -316,26 +316,26 @@ class CrudScaffolderTest {
         List<ScaffoldedFile> files = scaffolder.scaffold(table);
 
         assertThat(content(files, "rules/order_lines.yml"))
-                .contains("orderLinesProductIdExists:")
-                .contains("binds: { productId: integer }")
-                .contains("orderLinesWarehouseIdExists:")
+                .contains("order_lines_product_id_exists:")
+                .contains("binds: { product_id: integer }")
+                .contains("order_lines_warehouse_id_exists:")
                 .contains("code: unknown");
         assertThat(content(files, "rules/order_lines-product-id-exists.sql"))
-                .contains("not exists (select 1 from products where id = /* productId */0)");
+                .contains("not exists (select 1 from products where id = /* product_id */0)");
 
         RouteDefinition create = parser.parseRoute(
                 content(files, "web/order_lines/create/post.yml"), "post.yml");
         // Both write routes share the rule; the nullable FK is guarded so an absent optional
         // value never reaches the query.
-        assertThat(create.validate().get("productIdExists").use())
-                .isEqualTo("orderLinesProductIdExists");
-        assertThat(create.validate().get("productIdExists").when()).isNull();
-        assertThat(create.validate().get("warehouseIdExists").when())
-                .isEqualTo("params.warehouseId != null");
+        assertThat(create.validate().get("product_id_exists").use())
+                .isEqualTo("order_lines_product_id_exists");
+        assertThat(create.validate().get("product_id_exists").when()).isNull();
+        assertThat(create.validate().get("warehouse_id_exists").when())
+                .isEqualTo("params.warehouse_id != null");
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/order_lines/{id}/update/post.yml"), "post.yml");
-        assertThat(update.validate().get("productIdExists").use())
-                .isEqualTo("orderLinesProductIdExists");
+        assertThat(update.validate().get("product_id_exists").use())
+                .isEqualTo("order_lines_product_id_exists");
     }
 
     @Test
@@ -346,7 +346,7 @@ class CrudScaffolderTest {
         assertThat(domains)
                 .contains("items.name:")
                 .contains("maxLength: 200")
-                .contains("items.dueDate:")
+                .contains("items.due_date:")
                 .contains("format: yyyy-MM-dd")
                 .contains("items.version:")
                 // The constraint catalog moved here from the per-route errors blocks.

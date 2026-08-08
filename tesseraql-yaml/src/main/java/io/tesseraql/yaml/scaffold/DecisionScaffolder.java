@@ -4,7 +4,6 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -22,7 +21,8 @@ public final class DecisionScaffolder {
     /**
      * Generates the declaration and migration for one decision.
      *
-     * @param name    the decision name (lowerCamel), e.g. {@code shippingFee}
+     * @param name    the decision name — used verbatim as the file stem and the
+     *                {@code <name>_rules} table prefix (docs/unicode-identifiers.md)
      * @param inputs  input name to match kind ({@code eq}, {@code between}, {@code in},
      *                {@code bool}, {@code subtree}), in declaration order
      * @param outputs output names, in declaration order
@@ -46,12 +46,12 @@ public final class DecisionScaffolder {
         for (String field : outputs) {
             requireName("output", field);
         }
-        String table = snake(name) + "_rules";
+        String table = name + "_rules";
         return List.of(
-                new ScaffoldedFile("decisions/" + snake(name).replace('_', '-') + ".yml",
+                new ScaffoldedFile("decisions/" + name + ".yml",
                         declaration(name, table, inputs, outputs, unique, effective)),
                 new ScaffoldedFile("db/migration/V" + migrationVersion + "__decision_"
-                        + snake(name) + ".sql",
+                        + name + ".sql",
                         migration(name, table, inputs, outputs, unique, effective)));
     }
 
@@ -86,15 +86,15 @@ public final class DecisionScaffolder {
         inputs.forEach((input, kind) -> {
             switch (kind) {
                 case "between" -> yml.append("        ").append(input).append(": { between: [")
-                        .append(snake(input)).append("_min, ").append(snake(input))
+                        .append(input).append("_min, ").append(input)
                         .append("_max] }\n");
                 case "subtree" -> yml.append("        ").append(input)
-                        .append(": { subtree: ").append(snake(input)).append("_unit }\n");
+                        .append(": { subtree: ").append(input).append("_unit }\n");
                 case "in" -> {
                     // in inputs map under set:, appended below.
                 }
                 default -> yml.append("        ").append(input).append(": { eq: ")
-                        .append(snake(input)).append(" }\n");
+                        .append(input).append(" }\n");
             }
         });
         if (inputs.containsValue("in")) {
@@ -102,8 +102,8 @@ public final class DecisionScaffolder {
             inputs.forEach((input, kind) -> {
                 if ("in".equals(kind)) {
                     yml.append("        ").append(input).append(": { table: ").append(table)
-                            .append('_').append(snake(input)).append(", key: rule_id, value: ")
-                            .append(snake(input)).append(" }\n");
+                            .append('_').append(input).append(", key: rule_id, value: ")
+                            .append(input).append(" }\n");
                 }
             });
         }
@@ -115,7 +115,7 @@ public final class DecisionScaffolder {
         }
         yml.append("      outputs:\n");
         outputs.forEach(output -> yml.append("        ").append(output).append(": ")
-                .append(snake(output)).append('\n'));
+                .append(output).append('\n'));
         return yml.toString();
     }
 
@@ -129,16 +129,16 @@ public final class DecisionScaffolder {
         sql.append("  id bigint primary key,\n");
         inputs.forEach((input, kind) -> {
             switch (kind) {
-                case "between" -> sql.append("  ").append(snake(input))
-                        .append("_min numeric,\n  ").append(snake(input))
+                case "between" -> sql.append("  ").append(input)
+                        .append("_min numeric,\n  ").append(input)
                         .append("_max numeric,\n");
-                case "bool" -> sql.append("  ").append(snake(input)).append(" boolean,\n");
-                case "subtree" -> sql.append("  ").append(snake(input))
+                case "bool" -> sql.append("  ").append(input).append(" boolean,\n");
+                case "subtree" -> sql.append("  ").append(input)
                         .append("_unit varchar(40),\n");
                 case "in" -> {
                     // in inputs live in the child table below.
                 }
-                default -> sql.append("  ").append(snake(input)).append(" varchar(100),\n");
+                default -> sql.append("  ").append(input).append(" varchar(100),\n");
             }
         });
         if (effective) {
@@ -148,7 +148,7 @@ public final class DecisionScaffolder {
             sql.append("  priority int not null,\n");
         }
         for (int i = 0; i < outputs.size(); i++) {
-            sql.append("  ").append(snake(outputs.get(i))).append(" varchar(100) not null")
+            sql.append("  ").append(outputs.get(i)).append(" varchar(100) not null")
                     .append(i < outputs.size() - 1 ? ",\n" : "\n");
         }
         sql.append(");\n");
@@ -156,9 +156,9 @@ public final class DecisionScaffolder {
             if ("in".equals(kind)) {
                 sql.append("\n-- Membership rows of the ").append(input)
                         .append(" cell: no rows = wildcard.\ncreate table ").append(table)
-                        .append('_').append(snake(input)).append(" (\n  rule_id bigint not null")
+                        .append('_').append(input).append(" (\n  rule_id bigint not null")
                         .append(" references ").append(table).append("(id),\n  ")
-                        .append(snake(input)).append(" varchar(100) not null\n);\n");
+                        .append(input).append(" varchar(100) not null\n);\n");
             }
         });
         return sql.toString();
@@ -174,7 +174,4 @@ public final class DecisionScaffolder {
         };
     }
 
-    private static String snake(String lowerCamel) {
-        return lowerCamel.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
-    }
 }

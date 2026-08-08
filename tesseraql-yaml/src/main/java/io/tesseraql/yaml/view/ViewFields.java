@@ -32,20 +32,14 @@ public final class ViewFields {
             java.math.BigDecimal max, List<String> options,
             String column, String step) {
 
-        /** The result-set column the prefill reads: explicit, else the input name, else its
-         * snake_case form ({@code unitPrice} → {@code unit_price}). */
+        /**
+         * The result-set column the prefill reads: explicit, else the input name — which under
+         * the verbatim policy (docs/unicode-identifiers.md) <em>is</em> the column name; the
+         * camel-to-snake guessing bridge is gone.
+         */
         public Object valueFrom(Map<String, Object> row) {
-            if (column != null) {
-                return row.get(column);
-            }
-            Object direct = row.get(name);
-            return direct != null ? direct : row.get(snake(name));
+            return row.get(column != null ? column : name);
         }
-    }
-
-    /** {@code unitPrice} → {@code unit_price}. */
-    public static String snake(String name) {
-        return name.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase(Locale.ROOT);
     }
 
     /** Derives the field definitions for a form view (see class doc). */

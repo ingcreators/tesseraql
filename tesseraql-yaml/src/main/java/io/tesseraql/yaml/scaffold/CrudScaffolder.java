@@ -164,9 +164,12 @@ public final class CrudScaffolder {
             return schema.name().toLowerCase(Locale.ROOT);
         }
 
-        /** The camelCase route-id prefix, e.g. {@code order_lines} to {@code orderLines}. */
+        /**
+         * The route-id prefix — the table name verbatim (docs/unicode-identifiers.md): one
+         * name from DDL to route id, no case conversion.
+         */
         String entity() {
-            return camel(table());
+            return table();
         }
 
         /** The page title, e.g. {@code order_lines} to {@code Order lines}. */
@@ -191,7 +194,7 @@ public final class CrudScaffolder {
         }
 
         String pkField() {
-            return camel(pkColumn());
+            return pkColumn();
         }
 
         /** The first character-type data column, driving the list page's live search. */
@@ -201,19 +204,6 @@ public final class CrudScaffolder {
                     .findFirst();
         }
 
-        static String camel(String snake) {
-            StringBuilder out = new StringBuilder();
-            for (String word : snake.toLowerCase(Locale.ROOT).split("_")) {
-                if (word.isEmpty()) {
-                    continue;
-                }
-                out.append(out.isEmpty()
-                        ? word
-                        : Character.toUpperCase(word.charAt(0)) + word.substring(1));
-            }
-            return out.toString();
-        }
-
         static String label(String snake) {
             String words = snake.toLowerCase(Locale.ROOT).replace('_', ' ').trim();
             return words.isEmpty()
@@ -221,8 +211,12 @@ public final class CrudScaffolder {
                     : Character.toUpperCase(words.charAt(0)) + words.substring(1);
         }
 
+        /**
+         * The YAML field name — the column name verbatim (docs/unicode-identifiers.md): the
+         * field <em>is</em> the column, so binds, model keys, and JSON keys all carry it.
+         */
         static String field(TableSchema.Column column) {
-            return camel(column.name().toLowerCase(Locale.ROOT));
+            return columnName(column);
         }
 
         static String columnName(TableSchema.Column column) {
@@ -230,7 +224,7 @@ public final class CrudScaffolder {
         }
 
         static String htmlId(TableSchema.Column column) {
-            return "field-" + columnName(column).replace('_', '-');
+            return "field-" + columnName(column);
         }
     }
 
@@ -838,11 +832,11 @@ public final class CrudScaffolder {
                         """
                         .formatted(names.table(), names.table()));
         table.uniqueIndexes().forEach((index, column) -> {
-            String field = Names.camel(column.toLowerCase(Locale.ROOT));
+            String field = column.toLowerCase(Locale.ROOT);
             String sql = names.table() + "-" + column.toLowerCase(Locale.ROOT).replace('_', '-')
                     + "-free.sql";
-            yml.append("  ").append(names.entity()).append(capitalize(field))
-                    .append("IsFree:\n");
+            yml.append("  ").append(names.table()).append('_').append(field)
+                    .append("_is_free:\n");
             yml.append("    file: ").append(sql).append('\n');
             String fieldType = table.column(column)
                     .map(TableSchema.Column::inputType).orElse("string");
@@ -853,11 +847,11 @@ public final class CrudScaffolder {
             yml.append("    code: duplicate\n");
         });
         table.foreignKeys().forEach(fk -> {
-            String field = Names.camel(fk.column().toLowerCase(Locale.ROOT));
+            String field = fk.column().toLowerCase(Locale.ROOT);
             String sql = names.table() + "-" + fk.column().toLowerCase(Locale.ROOT)
                     .replace('_', '-') + "-exists.sql";
-            yml.append("  ").append(names.entity()).append(capitalize(field))
-                    .append("Exists:\n");
+            yml.append("  ").append(names.table()).append('_').append(field)
+                    .append("_exists:\n");
             yml.append("    file: ").append(sql).append('\n');
             yml.append("    binds: { ").append(field).append(": ")
                     .append(table.column(fk.column())
@@ -875,7 +869,7 @@ public final class CrudScaffolder {
      * "exists and is active": one edit here instead of one per route.
      */
     private static String fkRuleSql(Names names, TableSchema.ForeignKey fk) {
-        String field = Names.camel(fk.column().toLowerCase(Locale.ROOT));
+        String field = fk.column().toLowerCase(Locale.ROOT);
         return """
                 -- A returned row is a violation (docs/validation-rule-sets.md): the referenced
                 -- %s row does not exist.
@@ -902,8 +896,8 @@ public final class CrudScaffolder {
                 /*%%if excludeId != null */
                   and %s <> /* excludeId */0
                 /*%%end*/
-                """.formatted(Names.camel(column.toLowerCase(Locale.ROOT)), names.table(),
-                column.toLowerCase(Locale.ROOT), Names.camel(column.toLowerCase(Locale.ROOT)),
+                """.formatted(column.toLowerCase(Locale.ROOT), names.table(),
+                column.toLowerCase(Locale.ROOT), column.toLowerCase(Locale.ROOT),
                 names.pkColumn());
     }
 
@@ -914,13 +908,13 @@ public final class CrudScaffolder {
         }
         StringBuilder yml = new StringBuilder("\nvalidate:\n");
         table.foreignKeys().forEach(fk -> {
-            String field = Names.camel(fk.column().toLowerCase(Locale.ROOT));
+            String field = fk.column().toLowerCase(Locale.ROOT);
             boolean nullable = table.columns().stream()
                     .filter(column -> column.name().equalsIgnoreCase(fk.column()))
                     .anyMatch(TableSchema.Column::nullable);
-            yml.append("  ").append(field).append("Exists:\n");
-            yml.append("    use: ").append(names.entity()).append(capitalize(field))
-                    .append("Exists\n");
+            yml.append("  ").append(field).append("_exists:\n");
+            yml.append("    use: ").append(names.table()).append('_').append(field)
+                    .append("_exists\n");
             if (nullable) {
                 yml.append("    when: params.").append(field).append(" != null\n");
             }
@@ -929,10 +923,10 @@ public final class CrudScaffolder {
             yml.append("    field: ").append(field).append('\n');
         });
         table.uniqueIndexes().forEach((index, column) -> {
-            String field = Names.camel(column.toLowerCase(Locale.ROOT));
-            yml.append("  ").append(field).append("IsFree:\n");
-            yml.append("    use: ").append(names.entity()).append(capitalize(field))
-                    .append("IsFree\n");
+            String field = column.toLowerCase(Locale.ROOT);
+            yml.append("  ").append(field).append("_is_free:\n");
+            yml.append("    use: ").append(names.table()).append('_').append(field)
+                    .append("_is_free\n");
             yml.append("    params:\n");
             yml.append("      ").append(field).append(": params.").append(field).append('\n');
             yml.append("      excludeId: ").append(forUpdate
@@ -941,10 +935,6 @@ public final class CrudScaffolder {
             yml.append("    field: ").append(field).append('\n');
         });
         return yml.toString();
-    }
-
-    private static String capitalize(String value) {
-        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     /**
@@ -1004,7 +994,7 @@ public final class CrudScaffolder {
             table.uniqueIndexes().forEach((index, column) -> {
                 yml.append("  ").append(index.toLowerCase(Locale.ROOT)).append(":\n");
                 yml.append("    field: ")
-                        .append(Names.camel(column.toLowerCase(Locale.ROOT))).append('\n');
+                        .append(column.toLowerCase(Locale.ROOT)).append('\n');
             });
         }
         return yml.toString();

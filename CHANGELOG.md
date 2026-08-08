@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking scaffolder-output change — one verbatim name from DDL to
+  template** (docs/unicode-identifiers.md): a scaffolded field name *is* its column
+  name (`dueDate` → `due_date`), route-id prefixes are the table name verbatim,
+  shared rule names are `<table>_<column>_is_free`/`_exists` with matching
+  `validate:` keys, HTML ids keep underscores (`field-unit_price`), and a decision
+  scaffold keeps the decision name verbatim in its file stem and `<name>_rules`
+  table. The camel↔snake bridges (`Names.camel`, `ViewFields.snake`, Studio's
+  reverse mapping) are deleted — a form prefill reads exactly the field name.
+  Unicode (e.g. Japanese) table and column names flow verbatim end-to-end, and
+  scaffolded paths are NFC-normalized so macOS and Linux name the same files.
+  Hand-authored apps keep whatever field names they declare.
 - **Pre-1.0 breaking load-time change — an unresolved `domain:` or `use:` reference
   always fails the load** (the contract sweep's decision-closure wave): an app with
   no `domains/` or `rules/` tree at all used to silently drop every reference —
