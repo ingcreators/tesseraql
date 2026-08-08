@@ -159,7 +159,16 @@
             "ttl": { "type": "string", "description": "Browser-session lifetime (duration string, default 12h)." },
             "idleTimeout": { "type": "string", "description": "Invalidate a session unseen for this long (duration string) - sliding, inside the absolute ttl. Unset disables it (docs/session-visibility.md)." },
             "maxPerSubject": { "type": "integer", "minimum": 1, "description": "Cap live sessions per account: a login beyond it evicts the subject's oldest session (newest login wins). 1 = single-session policy. Unset = unlimited." },
-            "store": { "type": "string", "enum": ["memory", "jdbc"], "description": "memory (default, per-node) or jdbc (shared, survives restarts)." }
+            "store": { "type": "string", "enum": ["jdbc", "memory"], "description": "jdbc (default): tql_session shared across nodes, survives restarts. memory: per-node, gone on restart - the explicit opt-in for embedders and tests." }
+          },
+          "additionalProperties": true
+        },
+        "live": {
+          "type": "object",
+          "description": "Bounds on the live-event stream registry behind GET /_tesseraql/events (docs/realtime.md).",
+          "properties": {
+            "maxPerSubject": { "type": "integer", "minimum": 1, "description": "Streams one subject may hold at once (default 4); one more evicts that subject's oldest stream." },
+            "maxTotal": { "type": "integer", "minimum": 1, "description": "Streams the whole registry may hold (default 256); at the cap a new subscription is refused with TQL-RATE-5030 (503), never by ending someone else's stream." }
           },
           "additionalProperties": true
         },

@@ -1,10 +1,11 @@
 # Pre-1.0 contract bug fixes
 
-> **Status: complete.** Design #613; slice 1 #614 (ops API throws + SEC default 500),
-> slice 2 #617 (remote path resolution; #615 was its base-branch-closed predecessor),
-> slice 3 #616 (transfer `rowCount`, decisions `oneOf`, full `kind` enum + calendars
-> schema) — all merged 2026-08-08. Track C shipped with a three-form unit contract
-> test (`x`/`/x`/`//x`); the rooted-vs-non-rooted VFS IT stays future hardening. The contract-consistency sweep
+> **Status: waves A and B complete.** Wave A: design #613, slices #614 (tracks A+B),
+> #617 (track C; #615 was its base-branch-closed predecessor), #616 (tracks D+E+F) —
+> all merged 2026-08-08; track C shipped with a three-form unit contract test
+> (`x`/`/x`/`//x`), the rooted-vs-non-rooted VFS IT stays future hardening. Wave B
+> (tracks G/H/I — the safe-default flips) shipped 2026-08-08 in one slice.
+> The contract-consistency sweep
 > (2026-08-08, the same pass that shipped transition-engine track F) surveyed every
 > recorded deferral, the YAML surface, and the HTTP/JSON surfaces for places where a
 > defect is about to be frozen into the 1.0 compatibility contract (roadmap Phase 34).
@@ -159,12 +160,45 @@ and rules) and associate `calendars/**`. Scaffold-demo regenerates via
    component fix, decisions schema `oneOf`, `kind` enum + calendars schema +
    scaffolded associations, scaffold-demo regen.
 
+## Wave B — defaults (tracks G/H/I, shipped 2026-08-08)
+
+The three places where the unsafe behavior was the default. Each is a one-shot
+pre-1.0 break the compatibility contract would otherwise freeze; all three flip to
+the safe default with the old behavior as the explicit opt-in.
+
+### Track G — sessions default to the store that survives
+
+`tesseraql.sessions.store` defaulted to `memory`: sessions gone on every restart,
+multi-node fundamentally broken (a login on one node unknown to the next), and
+historically the only store that ignored its own TTL key. Now **`jdbc` is the
+default** — one `tql_session` table on the framework datasource, shared across
+nodes, prunes on create — and `memory` is the explicit per-node opt-in for
+embedders and tests. (The parity sweep's open question 1, closed yes.)
+
+### Track H — a job firing that finds the previous run still running skips
+
+`overlap:` defaulted to `concurrent`: a scheduled job whose previous execution had
+not finished — nearly always a symptom — got a second run stacked on top, the
+fault-amplifying answer that only shows under load. Now **`skip` is the default**:
+the firing is recorded as a `SKIPPED` execution naming the running one (auditable,
+non-destructive), and a job that is genuinely safe to overlap declares
+`overlap: concurrent`. Deny-by-default, applied to time.
+
+### Track I — the live-stream global cap refuses instead of evicting
+
+At the global cap (256 streams) a new `/_tesseraql/events` subscription evicted the
+oldest stream **of any user** — silently ending someone else's live view to serve
+the newcomer. Now the global cap **refuses** the new subscription with
+`TQL-RATE-5030` (503 + `Retry-After`, rendered before the stream opens — the
+subscribe moved from the producer into the SSE `begin`, which also closes the
+connect-to-subscribe signal gap by construction). The per-subject cap (4) keeps
+evicting the subject's own oldest stream — there the victim is the same user
+opening one tab too many. Both caps became configurable:
+`tesseraql.live.maxPerSubject` / `tesseraql.live.maxTotal`.
+
 ## Out of scope (the remaining waves)
 
 Recorded by the same sweep, each a candidate for its own design:
-
-- **Defaults wave**: session store `memory` → `jdbc`; job `overlap: concurrent` →
-  `skip`; LiveStreams global-cap eviction → refuse-with-error.
 - **Vocabulary wave** (the YAML v1 rename batch + HTTP unification): job
   `params:` → `input:`, `csrf:` enum everywhere, `http-call:` → `httpCall:`,
   `header:`/`label:`, poll `source:`/push `target:` → `transport:`,

@@ -46,12 +46,15 @@ final class LiveEvents {
             for (String topic : requestedTopics(query.apply("topics"), declaredTopics)) {
                 events.put(LiveStreams.topicKey(tenant, topic), topic);
             }
+            // Subscribe in begin(), before the stream opens: a full registry refuses with
+            // TQL-RATE-5030 as a clean 503 envelope (the 200 + SSE headers are not out yet),
+            // and once the client sees the stream open, a delivery or an emit can no longer
+            // slip between connect and subscribe.
+            LiveStreams.Subscription signals = streams.subscribe(subject,
+                    new ArrayList<>(events.keySet()));
             return writer -> {
                 long deadline = System.currentTimeMillis() + LIFETIME.toMillis();
-                // Subscribe before the first frame: once the client sees the stream open, a
-                // delivery or an emit can no longer slip between connect and subscribe.
-                try (LiveStreams.Subscription signals = streams.subscribe(subject,
-                        new ArrayList<>(events.keySet()))) {
+                try (signals) {
                     writer.retry(RETRY_MILLIS);
                     while (System.currentTimeMillis() < deadline) {
                         String fired = signals.await(HEARTBEAT);

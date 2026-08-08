@@ -71,9 +71,14 @@ public record JobDefinition(
                 null, null);
     }
 
-    /** Whether a firing skips while the previous execution still runs (track E). */
+    /**
+     * Whether a firing skips while the previous execution still runs (track E). Skip is the
+     * default (docs/contract-bugfixes.md track H): stacking a second run on a late one is
+     * nearly always a fault amplifier, and a {@code SKIPPED} execution row stays auditable —
+     * a job that is safe to overlap declares {@code overlap: concurrent}.
+     */
     public boolean skipsOverlap() {
-        return "skip".equals(overlap);
+        return !"concurrent".equals(overlap);
     }
 
     /** Returns the steps to run: the explicit pipeline, or a single synthetic step for a tasklet. */

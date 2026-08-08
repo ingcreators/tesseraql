@@ -445,12 +445,13 @@ With `tesseraql.notifications.alerts.channel` configured, every failed execution
 
 ## Overlap, and the SLA that pages someone
 
-By default a firing runs even while the previous execution is still `RUNNING`
-(`overlap: concurrent`). A job whose runs must not stack declares the alternative:
+By default a firing that finds the previous execution still `RUNNING` is recorded
+`SKIPPED`, naming the running execution — auditable, not a run (`overlap: skip`).
+A job whose runs are safe to stack — an idempotent poll, say — declares the
+alternative explicitly:
 
 ```yaml
-overlap: skip          # a firing that finds the previous run RUNNING is recorded
-                       # SKIPPED, naming the running execution - auditable, not a run
+overlap: concurrent    # run anyway, even while the previous execution is RUNNING
 sla:
   completeBy: "06:00"          # a day's run must have COMPLETED by this wall-clock time
   runningLongerThan: 2h        # a running execution beyond this raises the alert

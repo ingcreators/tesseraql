@@ -1,5 +1,8 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.events.TopicBus;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,9 +16,12 @@ import java.util.Map;
  * docs/realtime.md): every open stream holds one subscription over the signal keys its page
  * cares about — the subject's inbox key for the bell, plus a topic key per {@code refreshOn:}
  * topic — and mutations signal those keys. Signals coalesce per key per subscription (a
- * pending set, not a queue), and the registry is bounded per subject and globally: a new
- * subscription evicts the oldest over either cap, which ends that stream (the browser's
- * EventSource reconnects).
+ * pending set, not a queue), and the registry is bounded two ways
+ * (docs/contract-bugfixes.md track I): the per-subject cap evicts the subject's own oldest
+ * stream (the victim is the same user opening one tab too many), while the global cap
+ * <em>refuses</em> the new subscription with {@code TQL-RATE-5030} — a full registry must
+ * not silently end someone else's live view. Both caps are configurable
+ * ({@code tesseraql.live.maxPerSubject} / {@code maxTotal}).
  */
 final class LiveStreams implements TopicBus {
 
@@ -23,8 +29,27 @@ final class LiveStreams implements TopicBus {
     static final String IDLE = " idle";
     static final String CLOSED = " closed";
 
-    private static final int MAX_PER_SUBJECT = 4;
-    private static final int MAX_TOTAL = 256;
+    /**
+     * TQL-RATE-5030: the live-event registry is at its global capacity — the new stream is
+     * refused (HTTP 503; the page still works, it just does not live-refresh until a reload
+     * finds a free slot or the operator raises {@code tesseraql.live.maxTotal}).
+     */
+    private static final TqlErrorCode AT_CAPACITY = new TqlErrorCode(TqlDomain.RATE, 5030);
+
+    static final int DEFAULT_MAX_PER_SUBJECT = 4;
+    static final int DEFAULT_MAX_TOTAL = 256;
+
+    private final int maxPerSubject;
+    private final int maxTotal;
+
+    LiveStreams() {
+        this(DEFAULT_MAX_PER_SUBJECT, DEFAULT_MAX_TOTAL);
+    }
+
+    LiveStreams(int maxPerSubject, int maxTotal) {
+        this.maxPerSubject = maxPerSubject;
+        this.maxTotal = maxTotal;
+    }
 
     /** The signal key of a tenant's live-view topic (docs/realtime.md). */
     static String topicKey(String tenantId, String topic) {
@@ -99,13 +124,17 @@ final class LiveStreams implements TopicBus {
         // added to it would be invisible to unregister() forever: byKey would keep signalling a
         // closed stream and `total` would never come back down.
         List<Subscription> existing = bySubject.get(subject);
-        while (existing != null && existing.size() >= MAX_PER_SUBJECT) {
+        while (existing != null && existing.size() >= maxPerSubject) {
             evict(existing.get(0));
             existing = bySubject.get(subject);
         }
-        while (total >= MAX_TOTAL && evictOldest()) {
-            // Each pass frees one slot; evictOldest() reporting false means there is nothing
-            // left to evict, and continuing would spin forever holding this monitor.
+        // Checked after the per-subject eviction (which may just have freed a slot): a full
+        // registry refuses the newcomer instead of ending another user's stream.
+        if (total >= maxTotal) {
+            throw TqlException.builder(AT_CAPACITY)
+                    .message("Live-event registry is at its global capacity of " + maxTotal
+                            + " streams (tesseraql.live.maxTotal)")
+                    .build();
         }
         List<Subscription> subjectSubs = bySubject.computeIfAbsent(subject,
                 s -> new ArrayList<>());
@@ -154,18 +183,5 @@ final class LiveStreams implements TopicBus {
     private void evict(Subscription subscription) {
         unregister(subscription);
         subscription.end();
-    }
-
-    /** Evicts the oldest live subscription; false when there was none left to evict. */
-    private boolean evictOldest() {
-        for (List<Subscription> subs : bySubject.values()) {
-            if (!subs.isEmpty()) {
-                // evict() can remove this entry from the map, so return without touching the
-                // iterator again.
-                evict(subs.get(0));
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -121,7 +121,13 @@ final class SseRoutes {
                 // begin() refused before the stream opened: the framework's error envelope.
                 connection.runOnContext(refuse -> {
                     if (!gone.get() && !response.ended()) {
-                        response.setStatusCode(ErrorResponseRenderer.httpStatus(refusal.code()));
+                        int status = ErrorResponseRenderer.httpStatus(refusal.code());
+                        response.setStatusCode(status);
+                        if (status == 429 || status == 503) {
+                            // A capacity refusal is retryable; EventSource clients reconnect on
+                            // their own schedule, API clients get the standard hint.
+                            response.putHeader("Retry-After", "5");
+                        }
                         response.putHeader("Content-Type", "application/json; charset=utf-8");
                         // The code, not the exception text. Every other endpoint answers with a
                         // generic phrase; this one concatenated the internal message into JSON —

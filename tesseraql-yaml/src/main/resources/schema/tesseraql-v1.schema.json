@@ -342,7 +342,7 @@
       },
       "additionalProperties": true
     },
-    "overlap": { "type": "string", "enum": ["concurrent", "skip"], "description": "What a firing does while the previous execution still runs (kind: job): concurrent (default) runs anyway, skip records a SKIPPED execution naming the running one. Documented in jobs.md." },
+    "overlap": { "type": "string", "enum": ["skip", "concurrent"], "description": "What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md." },
     "sla": {
       "type": "object",
       "description": "Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md.",

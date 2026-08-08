@@ -8,6 +8,21 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking default change — sessions are `jdbc` by default**
+  (docs/contract-bugfixes.md track G): `tesseraql.sessions.store` now defaults to
+  `jdbc` (shared `tql_session`, survives restarts, multi-node correct);
+  `memory` is the explicit per-node opt-in for embedders and tests.
+- **Pre-1.0 breaking default change — `overlap: skip` is the job default**
+  (docs/contract-bugfixes.md track H): a firing that finds the previous execution
+  still `RUNNING` records a `SKIPPED` execution instead of stacking a concurrent
+  run; a job that is safe to overlap declares `overlap: concurrent`.
+- **Pre-1.0 breaking behavior change — the live-stream global cap refuses**
+  (docs/contract-bugfixes.md track I): at `tesseraql.live.maxTotal` (default 256) a
+  new `/_tesseraql/events` subscription answers `TQL-RATE-5030` (503 +
+  `Retry-After`) instead of silently ending another user's oldest stream; the
+  per-subject cap (default 4, `tesseraql.live.maxPerSubject`) keeps evicting the
+  subject's own oldest stream. Both caps are now configurable.
+
 - **Pre-1.0 breaking HTTP-contract change — the operations API's refusals carry their
   status** (docs/contract-bugfixes.md track A): `/_tesseraql/ops/batch` not-found and
   out-of-scope refusals (`TQL-BATCH-4040`) now answer **404** instead of 200 with an
