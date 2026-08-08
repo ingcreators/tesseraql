@@ -65,8 +65,19 @@ matching every other domain in the switch (LANE, IDEM, DECISION all default 5xxx
 - **500: everything else** — including 4140, whose failure is the federation
   boundary's, not the caller's.
 
-The implementation slice greps every `TqlDomain.SEC` code and records the full
-classification table here.
+The full classification, from a sweep of every `TqlDomain.SEC` code minted in main
+code (slice 1):
+
+| Status | Codes | Why |
+|---|---|---|
+| 401 | 4011 (unauthenticated), 4012 (webhook signature), 4013 (webhook timestamp stale) | the caller's credential material is wrong or stale |
+| 403 | 4031 (forbidden), 4032 (CSRF) | unchanged |
+| 409 | 4014 (webhook replay) | unchanged |
+| 500 | 4000 (unsupported `auth=` mode), 4085 (copilot endpoint/egress config), 4086/4087 (SAML metadata host/URL), 4088/4089 (remote credential missing/method), 4120 (invite surface unconfigured), 4132/4135 (invalid defaults documents), 4138 (component-guard refusal), 4140 (federation failure), 4141 (push egress host), 5001/5002 (password crypto) | configuration and server faults — none are the caller's |
+
+No test asserted 401 for any code in the 500 row (most surface at boot or lint
+time); the OIDC/SAML integration tests' 401 assertions are all on the 4011 path
+and hold.
 
 ## Track C — a remote poll/push `path:` means what it says
 

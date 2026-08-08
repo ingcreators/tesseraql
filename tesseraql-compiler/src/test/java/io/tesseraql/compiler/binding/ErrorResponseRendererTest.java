@@ -68,6 +68,30 @@ class ErrorResponseRendererTest {
     }
 
     @Test
+    void unenumeratedSecCodesAreServerFaultsNotUnauthorized() throws Exception {
+        // The SEC domain default inverted to 500 (docs/contract-bugfixes.md track B): a
+        // federation failure (4140) or crypto error (5001) is the server's fault; 401
+        // would invite clients into token-refresh retries against a broken server.
+        Exchange federation = exchangeWith(new TqlException(
+                new TqlErrorCode(TqlDomain.SEC, 4140), "idp unreachable"));
+        new ErrorResponseRenderer().process(federation);
+        assertThat(federation.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE))
+                .isEqualTo(500);
+
+        // The genuine credential failures keep their statuses.
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SEC, 4011)))
+                .isEqualTo(401);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SEC, 4012)))
+                .isEqualTo(401);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SEC, 4031)))
+                .isEqualTo(403);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SEC, 4014)))
+                .isEqualTo(409);
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.SEC, 5001)))
+                .isEqualTo(500);
+    }
+
+    @Test
     void htmxFragmentRendersTheGuardRefusalMessageAsTheAlertBody() throws Exception {
         Exchange exchange = exchangeWith(TqlException
                 .builder(new TqlErrorCode(TqlDomain.WORKFLOW, 3202))
