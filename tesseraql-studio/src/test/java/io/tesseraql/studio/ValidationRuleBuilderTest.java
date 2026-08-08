@@ -10,7 +10,7 @@ class ValidationRuleBuilderTest {
     private static String generate(String operation, String source, String field, String value,
             String value2, String id, String code, String message, String when) {
         return ValidationRuleBuilder.generate(operation, source, field, value, value2, id, code,
-                message, when, java.util.List.of());
+                message, when, java.util.Map.of());
     }
 
     /**
@@ -24,7 +24,7 @@ class ValidationRuleBuilderTest {
     void aSharedRuleReferenceWiresTheWholeContract() {
         String yaml = ValidationRuleBuilder.generate("use", "body", "name", "itemsNameIsFree",
                 null, "nameFree", null, null, null,
-                java.util.List.of("name", "excludeId"));
+                java.util.Map.of("name", "string", "excludeId", "integer"));
 
         assertThat(yaml).contains("use: itemsNameIsFree");
         // Every bind laid out, because a reference must wire the contract exactly: an omission
@@ -39,7 +39,7 @@ class ValidationRuleBuilderTest {
     @Test
     void aReferenceWithoutARuleNameAsksForOne() {
         assertThat(ValidationRuleBuilder.generate("use", "body", "name", null, null, "r", null,
-                null, null, java.util.List.of()))
+                null, null, java.util.Map.of()))
                 .contains("Choose the shared rule");
     }
 
