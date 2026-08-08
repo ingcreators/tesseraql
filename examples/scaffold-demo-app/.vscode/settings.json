@@ -4,7 +4,10 @@
       "web/**/*.yml",
       "consume/**/*.yml",
       "batch/**/*.yml",
-      "mcp/**/*.yml"
+      "mcp/**/*.yml",
+      "workflow/**/*.yml",
+      "scope/**/*.yml",
+      "attachments/**/*.yml"
     ],
     ".vscode/tesseraql-domains-v1.schema.json": [
       "domains/**/*.yml"
@@ -14,6 +17,9 @@
     ],
     ".vscode/tesseraql-decisions-v1.schema.json": [
       "decisions/**/*.yml"
+    ],
+    ".vscode/tesseraql-calendars-v1.schema.json": [
+      "calendars/**/*.yml"
     ],
     ".vscode/tesseraql-config-v1.schema.json": [
       "config/tesseraql.yml"

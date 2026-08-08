@@ -9,7 +9,7 @@
   "properties": {
     "version": { "const": "tesseraql/v1" },
     "id": { "type": "string", "minLength": 1, "description": "Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs." },
-    "kind": { "enum": ["route", "job", "view"] },
+    "kind": { "enum": ["route", "job", "view", "workflow", "scope", "attachment", "tool", "resource", "ui", "prompt"], "description": "route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model." },
     "recipe": {
       "description": "What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline.",
       "enum": [

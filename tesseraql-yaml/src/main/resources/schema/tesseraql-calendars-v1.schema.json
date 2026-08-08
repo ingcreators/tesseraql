@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-calendars-v1.schema.json",
+  "title": "TesseraQL business-day calendars v1",
+  "description": "Schema for TesseraQL calendar documents (calendars/*.yml): named business-day calendars referenced from a job schedule's 'calendar:'. Documented in jobs.md (Business-day calendars).",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "tesseraql/v1",
+      "description": "The DSL version. Always tesseraql/v1."
+    },
+    "calendars": {
+      "type": "object",
+      "description": "Named calendars: a weekend definition plus holidays.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "weekend": {
+            "type": "array",
+            "description": "Weekly non-business days as lowercase day names; omitted means saturday/sunday.",
+            "items": {
+              "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+            }
+          },
+          "holidays": {
+            "type": "object",
+            "description": "The calendar's holidays: exactly one home for the rows — a fixed dates: list for small closed sets, or a table-backed source: operations maintains as rows, read on the job's datasource at fire time.",
+            "properties": {
+              "dates": {
+                "type": "array",
+                "items": { "type": "string", "format": "date" }
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "table": { "type": "string", "description": "The holiday table." },
+                  "date": { "type": "string", "description": "The date column." },
+                  "calendar": { "type": "string", "description": "The calendar-name column, for a shared table carrying several calendars." }
+                },
+                "required": ["table", "date"],
+                "additionalProperties": false
+              }
+            },
+            "oneOf": [
+              { "required": ["dates"], "not": { "required": ["source"] } },
+              { "required": ["source"], "not": { "required": ["dates"] } }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

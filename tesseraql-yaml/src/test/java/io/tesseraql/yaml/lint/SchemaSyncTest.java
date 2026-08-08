@@ -223,11 +223,15 @@ class SchemaSyncTest {
         assertThat(schemaRecipes).containsAll(AppLinter.knownRouteRecipes());
         // The non-route document recipes ride the same schema (consume/** and batch jobs).
         assertThat(schemaRecipes).contains("queue-consume", "batch-tasklet", "batch-pipeline");
-        // kind covers every document family the schema claims to describe.
+        // kind covers every document family the framework parses (contract-bugfixes track F):
+        // route/job/view take this schema's shapes, workflow/scope/attachment ride it for
+        // version/id/kind (additionalProperties stays true), and the mcp/ kinds reuse the
+        // route model outright.
         List<String> kinds = new ArrayList<>();
         schema.path("properties").path("kind").path("enum")
                 .forEach(node -> kinds.add(node.asText()));
-        assertThat(kinds).containsExactlyInAnyOrder("route", "job", "view");
+        assertThat(kinds).containsExactlyInAnyOrder("route", "job", "view", "workflow",
+                "scope", "attachment", "tool", "resource", "ui", "prompt");
     }
 
     @Test
