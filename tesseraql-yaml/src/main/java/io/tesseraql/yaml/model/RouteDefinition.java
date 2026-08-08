@@ -52,7 +52,7 @@ public record RouteDefinition(
         InputPolicy inputPolicy,
         SecuritySpec security,
         IdempotencySpec idempotency,
-        PolicySpec policy,
+        AdmissionSpec admission,
         OutboxSpec outbox,
         SqlBinding sql,
         Map<String, SqlBinding> steps,
@@ -70,7 +70,7 @@ public record RouteDefinition(
         PublishSpec publish,
         ConsumeSpec consume,
         ResponseSpec response,
-        PageSpec page,
+        PageSpec pagination,
         String datasource,
         // Named http: sources composed with SQL results on query routes (docs/connectors.md).
         Map<String, HttpSourceSpec> http,
@@ -115,8 +115,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, effective,
-                idempotency, policy, outbox, sql, steps, queries, validate, decide, notifications,
-                errors, fileImport, fileExport, webhook, publish, consume, response, page,
+                idempotency, admission, outbox, sql, steps, queries, validate, decide,
+                notifications,
+                errors, fileImport, fileExport, webhook, publish, consume, response, pagination,
                 datasource, http, cache, emit);
     }
 
@@ -131,9 +132,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
-                security, idempotency, policy, outbox, sql, steps, queries, validate, decide,
+                security, idempotency, admission, outbox, sql, steps, queries, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
-                response, page, datasource, http, cache, emit);
+                response, pagination, datasource, http, cache, emit);
     }
 
     /**
@@ -145,9 +146,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
-                idempotency, policy, outbox, sql, steps, queries, effective, decide,
+                idempotency, admission, outbox, sql, steps, queries, effective, decide,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, page, datasource, http, cache, emit);
+                response, pagination, datasource, http, cache, emit);
     }
 
     /**
@@ -160,9 +161,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
-                idempotency, policy, outbox, sql, steps, queries, validate, effective,
+                idempotency, admission, outbox, sql, steps, queries, validate, effective,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, page, datasource, http, cache, emit);
+                response, pagination, datasource, http, cache, emit);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

@@ -126,7 +126,7 @@ class CrudScaffolderTest {
 
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/items/{id}/update/post.yml"), "post.yml");
-        assertThat(update.sql().expect().rows()).isEqualTo(1);
+        assertThat(update.sql().expect().rowCount()).isEqualTo(1);
         assertThat(update.sql().expect().effectiveOnMismatch()).isEqualTo("conflict");
         // Binds read the coerced params.* view: raw body/path values are strings (Phase 22).
         assertThat(update.sql().params()).containsEntry("version", "params.version")
@@ -153,7 +153,7 @@ class CrudScaffolderTest {
                 .contains("recipe: query-html")
                 .contains("view: list.view.yml")
                 // Declarative pagination (Phase 41): the framework appends the clause.
-                .contains("page:")
+                .contains("pagination:")
                 .contains("maxSize: 200")
                 .contains("sort: query.sort")
                 .contains("enum: [id, name, quantity, unit_price, due_date, active, note]")
@@ -217,8 +217,8 @@ class CrudScaffolderTest {
         // Every mutation enforces CSRF.
         for (String route : List.of("web/items/create/post.yml", "web/items/{id}/update/post.yml",
                 "web/items/{id}/delete/post.yml")) {
-            assertThat(parser.parseRoute(content(files, route), route).security().csrf())
-                    .as(route).isTrue();
+            assertThat(parser.parseRoute(content(files, route), route).security()
+                    .csrfEnforced("POST")).as(route).isTrue();
         }
     }
 
@@ -258,7 +258,7 @@ class CrudScaffolderTest {
         assertThat(parser.parseRoute(content(files, "web/items/get.yml"), "get.yml")
                 .security().auth()).isEqualTo("browser");
         assertThat(parser.parseRoute(content(files, "web/items/create/post.yml"), "post.yml")
-                .security().csrf()).isTrue();
+                .security().csrfEnforced("POST")).isTrue();
     }
 
     @Test

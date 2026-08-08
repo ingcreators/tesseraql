@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * A single step in a batch pipeline (design ch. 6.5).
  *
  * <p>A step declares exactly one of {@code sql:} (a SQL execution binding), {@code notify:} (a
- * notification enqueued on the transactional outbox, roadmap Phase 20), {@code http-call:} (a
+ * notification enqueued on the transactional outbox, roadmap Phase 20), {@code httpCall:} (a
  * synchronous outbound REST call, roadmap Phase 26), {@code chunk:} (restartable chunked
  * processing, docs/batch-platform.md track C), {@code export:} (a formatted file written
  * through the transfer machinery, docs/analytics-experience.md track 3), or {@code push:}
@@ -17,7 +17,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param sql          the SQL execution binding for this step
  * @param notification the {@code notify:} declaration of a notification step ("notify" itself
  *                     is not a legal record component: it would hide {@code Object.notify()})
- * @param httpCall     the {@code http-call:} declaration of an outbound REST step (roadmap
+ * @param httpCall     the {@code httpCall:} declaration of an outbound REST step (roadmap
  *                     Phase 26)
  * @param chunk        the {@code chunk:} declaration of a reader/writer chunk step
  * @param export       the {@code export:} declaration of a file-producing step — the route
@@ -28,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineStep(String id, SqlBinding sql,
         @JsonProperty("notify") NotifySpec notification,
-        @JsonProperty("http-call") HttpCallSpec httpCall,
+        HttpCallSpec httpCall,
         ChunkSpec chunk,
         ExportSpec export,
         PushSpec push) {

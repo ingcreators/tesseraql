@@ -335,7 +335,7 @@ public final class TransactionalCommandProcessor implements Processor {
         if (binding.isSequence() && (!binding.keys().isEmpty() || binding.expect() != null)) {
             throw invalid("step '" + name + "': keys/expect do not apply to a sequence step");
         }
-        if (binding.expect() != null && binding.expect().rows() == null) {
+        if (binding.expect() != null && binding.expect().rowCount() == null) {
             throw invalid("step '" + name + "': expect.rows is required");
         }
         if (binding.expect() != null
@@ -847,17 +847,17 @@ public final class TransactionalCommandProcessor implements Processor {
     /** Turns a row-count mismatch into a conflict (or error) instead of a silent lost update. */
     private void checkExpectation(Step step, Integer affected) {
         int actual = affected == null ? 0 : affected;
-        if (actual == step.expect().rows()) {
+        if (actual == step.expect().rowCount()) {
             return;
         }
         boolean conflict = "conflict".equals(step.expect().effectiveOnMismatch());
         throw TqlException.builder(conflict ? EXPECT_CONFLICT : EXPECT_FAILED)
                 .message("Step '" + step.name() + "' affected " + actual + " row(s), expected "
-                        + step.expect().rows())
+                        + step.expect().rowCount())
                 .source(step.sourcePath())
                 .details(Map.of("conflict", Map.of(
                         "step", step.name(),
-                        "expectedRows", step.expect().rows(),
+                        "expectedRows", step.expect().rowCount(),
                         "actualRows", actual,
                         // A message key: the error renderer localizes it per request locale.
                         "hint", "tql.conflict.stale")))

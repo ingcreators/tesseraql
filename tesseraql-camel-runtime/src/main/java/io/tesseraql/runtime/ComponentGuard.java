@@ -67,7 +67,7 @@ final class ComponentGuard {
         for (JobFile job : manifest.jobs()) {
             for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
                 if (step.push() != null && step.push().isRemote()) {
-                    targets.add(step.push().effectiveTarget());
+                    targets.add(step.push().effectiveTransport());
                 }
             }
         }
@@ -79,8 +79,8 @@ final class ComponentGuard {
         Set<String> sources = new LinkedHashSet<>();
         for (JobFile job : manifest.jobs()) {
             if (job.definition().trigger() != null && job.definition().trigger().poll() != null
-                    && job.definition().trigger().poll().source() != null) {
-                sources.add(job.definition().trigger().poll().source().trim()
+                    && job.definition().trigger().poll().transport() != null) {
+                sources.add(job.definition().trigger().poll().transport().trim()
                         .toLowerCase(Locale.ROOT));
             }
         }

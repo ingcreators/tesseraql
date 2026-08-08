@@ -96,8 +96,8 @@ public final class OpenApiGenerator {
         }
         // Declarative pagination (roadmap Phase 41): the framework-owned paging parameters
         // and the automatic response headers ride into the contract.
-        if (definition.page() != null) {
-            io.tesseraql.yaml.model.PageSpec page = definition.page();
+        if (definition.pagination() != null) {
+            io.tesseraql.yaml.model.PageSpec page = definition.pagination();
             if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {
                 parameters.add(parameter("after", "query", false, Map.of("type", "string")));
             } else {

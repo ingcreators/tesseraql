@@ -23,7 +23,7 @@ import java.util.Optional;
  * <li>an auto-generated single primary key is captured via {@code keys:} and drives the
  * post/redirect/get flow; a non-generated key becomes a required form field,</li>
  * <li>a numeric {@code version} column pairs an optimistic-locking predicate with
- * {@code expect: rows: 1} so a stale edit answers {@code 409 Conflict},</li>
+ * {@code expect: rowCount: 1} so a stale edit answers {@code 409 Conflict},</li>
  * <li>{@code created_by/created_at/updated_by/updated_at} columns are stamped from the canonical
  * {@code audit.*} binds,</li>
  * <li>single-column unique indexes map to field-level constraint errors.</li>
@@ -140,12 +140,12 @@ public final class CrudScaffolder {
         SecuritySpec write = securityDefaults.resolve("POST", base + "/create", null);
         return read != null && "browser".equals(read.auth())
                 && write != null && "browser".equals(write.auth())
-                && Boolean.TRUE.equals(write.csrf());
+                && write.csrfEnforced("POST");
     }
 
     /**
      * Drops the security keys the app defaults reproduce — exactly {@code auth: browser} and
-     * {@code csrf: true} — from a generated route document; {@code policy:} stays route-local.
+     * {@code csrf: required} — from a generated route document; {@code policy:} stays route-local.
      */
     private static ScaffoldedFile slimSecurity(ScaffoldedFile file) {
         if (!file.path().endsWith(".yml")) {
@@ -153,7 +153,7 @@ public final class CrudScaffolder {
         }
         return new ScaffoldedFile(file.path(), file.content()
                 .replace("security:\n  auth: browser\n", "security:\n")
-                .replace("  csrf: true\n", ""));
+                .replace("  csrf: required\n", ""));
     }
 
     /** Derived, deterministic naming for one table. */
@@ -269,7 +269,7 @@ public final class CrudScaffolder {
                 %s    sort: query.sort
                     dir: query.dir
 
-                page:
+                pagination:
                   size: 50
                   maxSize: 200
                   count: true
@@ -448,7 +448,7 @@ public final class CrudScaffolder {
                 security:
                   auth: browser
                   policy: app.write
-                  csrf: true
+                  csrf: required
                 """);
         route.append(validateBlock(table, names, false));
         if (generatedKey) {
@@ -623,7 +623,7 @@ public final class CrudScaffolder {
                 security:
                   auth: browser
                   policy: app.write
-                  csrf: true
+                  csrf: required
                 """);
         route.append(validateBlock(table, names, true));
         route.append("""
@@ -633,7 +633,7 @@ public final class CrudScaffolder {
                   mode: update
                 """);
         if (locked) {
-            route.append("  expect:\n    rows: 1\n    onMismatch: conflict\n");
+            route.append("  expect:\n    rowCount: 1\n    onMismatch: conflict\n");
         }
         route.append("  params:\n    ").append(names.pkField()).append(": params.")
                 .append(names.pkField()).append('\n');
@@ -711,14 +711,14 @@ public final class CrudScaffolder {
                 security:
                   auth: browser
                   policy: app.write
-                  csrf: true
+                  csrf: required
 
                 sql:
                   file: delete.sql
                   mode: update
                 """);
         if (locked) {
-            route.append("  expect:\n    rows: 1\n    onMismatch: conflict\n");
+            route.append("  expect:\n    rowCount: 1\n    onMismatch: conflict\n");
         }
         route.append("  params:\n    ").append(names.pkField()).append(": params.")
                 .append(names.pkField()).append('\n');

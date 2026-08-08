@@ -11,7 +11,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param lane        the execution lane to dispatch this route onto (design ch. 24), or null
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record PolicySpec(Concurrency concurrency, RateLimit rateLimit, String lane) {
+public record AdmissionSpec(Concurrency concurrency, RateLimit rateLimit, String lane) {
 
     /**
      * In-flight concurrency limit (design ch. 36.1).

@@ -17,11 +17,13 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param key     the reader column checkpoints track (default {@code id}); its values must be
  *                unique and ascending under the reader's {@code order by}
  * @param commitEvery rows per writer transaction (default 500)
- * @param onError the skip policy; absent means fail-fast ({@code skipLimit: 0})
+ * @param onError {@code fail} (default) or {@code skip} (docs/vocabulary-cleanup.md slice 1)
+ * @param skipLimit tolerated writer failures when {@code onError: skip}; absent means unlimited
+ *                  within the run
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ChunkSpec(SqlBinding reader, SqlBinding writer, String key, Integer commitEvery,
-        OnError onError) {
+        String onError, Integer skipLimit) {
 
     /** The reader column checkpoints track. */
     public String effectiveKey() {
@@ -33,18 +35,16 @@ public record ChunkSpec(SqlBinding reader, SqlBinding writer, String key, Intege
         return commitEvery == null ? 500 : commitEvery;
     }
 
-    /** Writer failures tolerated before the step fails; 0 keeps fail-fast. */
-    public int effectiveSkipLimit() {
-        return onError == null || onError.skipLimit() == null ? 0 : onError.skipLimit();
-    }
-
     /**
-     * The skip policy: a writer failure on one row is recorded in {@code tql_job_skips} and
-     * processing continues — until the limit is exceeded, which fails the step.
-     *
-     * @param skipLimit tolerated writer failures (default 0)
+     * Writer failures tolerated before the step fails; 0 keeps fail-fast. A skipped row is
+     * recorded in {@code tql_job_skips} and processing continues — until the limit is
+     * exceeded, which fails the step. {@code onError: skip} without a declared
+     * {@code skipLimit:} defaults to 100 (a bound, so a wholly broken feed still fails).
      */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record OnError(Integer skipLimit) {
+    public int effectiveSkipLimit() {
+        if (!"skip".equals(onError)) {
+            return 0;
+        }
+        return skipLimit == null ? 100 : skipLimit;
     }
 }

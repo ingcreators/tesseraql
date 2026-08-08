@@ -824,7 +824,7 @@ public final class TestRunner {
     }
 
     /**
-     * Plans a job's {@code http-call:} steps against the case's params (roadmap Phase 26), without
+     * Plans a job's {@code httpCall:} steps against the case's params (roadmap Phase 26), without
      * issuing a network request: each matching step is one row carrying its id, method, the resolved
      * url and host, whether the host is allow-listed, and the credential name. URL placeholders and
      * query bindings resolve exactly as they would at runtime, so a case exercises the binding and
@@ -836,7 +836,7 @@ public final class TestRunner {
         boolean hasRoute = target.route() != null && !target.route().isBlank();
         if (hasJob == hasRoute) {
             throw new IllegalArgumentException(
-                    "An http-call case needs exactly one of http-call.job or http-call.route");
+                    "An httpCall case needs exactly one of httpCall.job or httpCall.route");
         }
         if (manifest == null) {
             manifest = new ManifestLoader().load(appHome);
@@ -881,7 +881,7 @@ public final class TestRunner {
         }
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("'" + (hasJob ? target.job() : target.route())
-                    + "' declares no matching http-call"
+                    + "' declares no matching httpCall"
                     + (target.id() == null ? "" : " '" + target.id() + "'"));
         }
         return rows;

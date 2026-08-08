@@ -141,7 +141,7 @@ pipeline:
       sql: { file: price-report.sql, mode: query }
   - id: deliver
     push:
-      target: local                                # or sftp / ftps, allow-listed
+      transport: local                             # or sftp / ftps, allow-listed
       path: outbox/reports
       file: step.report.transferId
   - id: announce

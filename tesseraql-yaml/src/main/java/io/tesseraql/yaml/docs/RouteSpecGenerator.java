@@ -58,7 +58,8 @@ public final class RouteSpecGenerator {
     private RouteSpec routeSpec(RouteFile route) {
         RouteDefinition definition = route.definition();
         return new RouteSpec(definition.id(), route.httpMethod(), route.urlPath(),
-                definition.recipe(), definition.kind(), inputs(definition), security(definition),
+                definition.recipe(), definition.kind(), inputs(definition),
+                security(definition, route.httpMethod()),
                 validations(definition), notifications(definition), response(definition),
                 sqlStatements(route));
     }
@@ -78,13 +79,13 @@ public final class RouteSpecGenerator {
                 field.domain(), field.pattern(), field.minLength(), field.requiredWhen());
     }
 
-    private RouteSpec.Security security(RouteDefinition definition) {
+    private RouteSpec.Security security(RouteDefinition definition, String httpMethod) {
         SecuritySpec security = definition.security();
         if (security == null) {
             return null;
         }
         return new RouteSpec.Security(security.auth(), security.policy(),
-                Boolean.TRUE.equals(security.csrf()));
+                security.csrfEnforced(httpMethod));
     }
 
     private List<RouteSpec.Validation> validations(RouteDefinition definition) {

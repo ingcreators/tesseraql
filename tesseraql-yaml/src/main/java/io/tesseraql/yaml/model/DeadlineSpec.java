@@ -18,6 +18,6 @@ public record DeadlineSpec(String state, String within, OnBreachSpec onBreach) {
 
     /** What the sweeper does when a deadline is breached (roadmap Phase 28, consumed in slice 3). */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record OnBreachSpec(String escalate, String reassign) {
+    public record OnBreachSpec(String escalate, AssignSpec reassign) {
     }
 }

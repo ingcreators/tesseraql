@@ -63,7 +63,7 @@ final class PollingRouteBuilder extends RouteBuilder {
                         job.definition().id(), ex.getMessage());
                 // The registry is what makes the skip visible beyond this log line
                 // (docs/poll-source-status.md).
-                status.skipped(job.definition().id(), trigger.poll().effectiveSource(),
+                status.skipped(job.definition().id(), trigger.poll().effectiveTransport(),
                         ex.getMessage());
             }
         }
@@ -75,7 +75,7 @@ final class PollingRouteBuilder extends RouteBuilder {
         if (importSpec == null || importSpec.sql() == null || importSpec.sql().file() == null) {
             LOG.log(System.Logger.Level.ERROR,
                     "Poll job {0} has no import: block with a per-row sql; skipping", jobId);
-            status.skipped(jobId, poll.effectiveSource(),
+            status.skipped(jobId, poll.effectiveTransport(),
                     "no import: block with a per-row sql");
             return;
         }
@@ -83,7 +83,7 @@ final class PollingRouteBuilder extends RouteBuilder {
             LOG.log(System.Logger.Level.ERROR, "Poll job {0} targets host {1} which is not in"
                     + " tesseraql.connectors.poll.allowedHosts (deny by default); skipping",
                     jobId, poll.host());
-            status.skipped(jobId, poll.effectiveSource(), "host '" + poll.host()
+            status.skipped(jobId, poll.effectiveTransport(), "host '" + poll.host()
                     + "' is not in tesseraql.connectors.poll.allowedHosts (deny by default)");
             return;
         }
@@ -96,9 +96,9 @@ final class PollingRouteBuilder extends RouteBuilder {
         from(uri).routeId("poll." + jobId).process(new PollImportProcessor(
                 jobId, owner, importSpec.format(), readSpec, rowSqlFile,
                 importSpec.effectiveOnError(), status));
-        status.polling(jobId, poll.effectiveSource());
+        status.polling(jobId, poll.effectiveTransport());
         LOG.log(System.Logger.Level.INFO, "Polling {0} source for job {1}",
-                poll.effectiveSource(), jobId);
+                poll.effectiveTransport(), jobId);
     }
 
     /** Builds the Camel consumer URI for the source, keeping the component name out of the YAML. */
@@ -112,7 +112,7 @@ final class PollingRouteBuilder extends RouteBuilder {
                         // RAW keeps an '&' in a glob from splitting the query and binding
                         // whatever follows as extra consumer options.
                         : "&antInclude=RAW(" + poll.include() + ")");
-        return switch (poll.effectiveSource()) {
+        return switch (poll.effectiveTransport()) {
             case "local" -> "file://"
                     + connectors.requireAllowedPath(appHome, poll.path()) + "?" + options;
             case "sftp" -> RemoteFileUris.remoteUri("sftp", connectors, poll.host(),
@@ -125,7 +125,7 @@ final class PollingRouteBuilder extends RouteBuilder {
                             + RemoteFileUris.ftpsTransportOptions(connectors, appHome,
                                     poll.host()));
             default -> throw new IllegalArgumentException(
-                    "Unsupported poll source '" + poll.source() + "'");
+                    "Unsupported poll transport '" + poll.transport() + "'");
         };
     }
 

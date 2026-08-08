@@ -348,7 +348,7 @@ beyond the cap evicts the subject's oldest session — the newest login wins —
 address the edge presented at login; the account page lists your own sessions per device with a
 per-row sign-out, and IAM Admin holds the administrative views.
 
-State-changing console actions are CSRF-protected (`csrf: true`): the page publishes the session's
+State-changing console actions are CSRF-protected (`csrf: required`): the page publishes the session's
 token as `<meta name="csrf-token">`, the Hypermedia Components kit replays it as the `X-CSRF-Token`
 header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
 

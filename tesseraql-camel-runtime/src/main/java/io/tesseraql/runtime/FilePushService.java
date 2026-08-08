@@ -71,14 +71,14 @@ public final class FilePushService implements AutoCloseable {
             throw new TqlException(PUSH_FAILED, "Push filename '" + filename
                     + "' must be a plain file name");
         }
-        switch (spec.effectiveTarget()) {
+        switch (spec.effectiveTransport()) {
             case "local" -> pushLocal(spec, filename, content);
             case "sftp" -> pushRemote("sftp", spec, 22, filename, content,
                     RemoteFileUris.sftpHostKeyOptions(connectors, appHome));
             case "ftps" -> pushRemote("ftps", spec, 21, filename, content,
                     RemoteFileUris.ftpsTransportOptions(connectors, appHome, spec.host()));
             default -> throw new TqlException(PUSH_FAILED,
-                    "Unsupported push target '" + spec.target() + "'");
+                    "Unsupported push transport '" + spec.transport() + "'");
         }
     }
 

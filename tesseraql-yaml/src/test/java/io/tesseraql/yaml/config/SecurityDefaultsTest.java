@@ -34,10 +34,14 @@ class SecurityDefaultsTest {
     void csrfAutoRequiresCsrfExactlyOnBrowserWrites() {
         SecurityDefaults defaults = SecurityDefaults.from(SCAFFOLD_SHAPE);
 
-        assertThat(defaults.resolve("POST", "/items/create", null).csrf()).isTrue();
-        assertThat(defaults.resolve("GET", "/items", null).csrf()).isNull();
+        // The rule's `auto` merges verbatim; enforcement resolves per method at wiring
+        // (SecuritySpec.csrfEnforced, the one resolution point).
+        assertThat(defaults.resolve("POST", "/items/create", null).csrfEnforced("POST"))
+                .isTrue();
+        assertThat(defaults.resolve("GET", "/items", null).csrfEnforced("GET")).isFalse();
         // Bearer routes never inherit CSRF from auto, whatever the method.
-        assertThat(defaults.resolve("POST", "/api/items", null).csrf()).isNull();
+        assertThat(defaults.resolve("POST", "/api/items", null).csrfEnforced("POST"))
+                .isFalse();
     }
 
     @Test
@@ -45,12 +49,13 @@ class SecurityDefaultsTest {
         SecurityDefaults defaults = SecurityDefaults.from(config(List.of(
                 Map.of("match", "/**", "auth", "browser", "csrf", "auto", "policy", "app.read"))));
 
-        SecuritySpec declared = new SecuritySpec("bearer", "items.write", Boolean.FALSE);
+        SecuritySpec declared = new SecuritySpec("bearer", "items.write", "off");
         SecuritySpec effective = defaults.resolve("POST", "/items", declared);
 
         assertThat(effective.auth()).isEqualTo("bearer");
         assertThat(effective.policy()).isEqualTo("items.write");
-        assertThat(effective.csrf()).isFalse();
+        assertThat(effective.csrf()).isEqualTo("off");
+        assertThat(effective.csrfEnforced("POST")).isFalse();
     }
 
     @Test
@@ -76,8 +81,10 @@ class SecurityDefaultsTest {
 
         assertThat(effective.auth()).isEqualTo("public");
         assertThat(effective.policy()).isNull();
-        // csrf: auto guards browser sessions; a public route has none.
-        assertThat(effective.csrf()).isNull();
+        // csrf: auto merges verbatim but guards browser sessions only; a public route
+        // has none, so nothing is enforced.
+        assertThat(effective.csrf()).isEqualTo("auto");
+        assertThat(effective.csrfEnforced("POST")).isFalse();
     }
 
     @Test

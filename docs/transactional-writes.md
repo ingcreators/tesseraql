@@ -133,7 +133,7 @@ sql:
   file: update-status.sql
   mode: update
   expect:
-    rows: 1
+    rowCount: 1
     onMismatch: conflict   # the default; `error` yields a 500 instead
   params:
     id: body.id
@@ -164,8 +164,8 @@ route answers `409 Conflict` (`TQL-SQL-4092`) with a usable hint:
 The hint resolves through the message catalog with the request locale
 ([internationalization.md](internationalization.md)); `hintKey` keeps the stable key.
 
-Lint keeps the two halves paired: an UPDATE with `expect.rows` but no version-column
-predicate warns `TQL-SQL-2104`; a version predicate without `expect.rows` warns
+Lint keeps the two halves paired: an UPDATE with `expect.rowCount` but no version-column
+predicate warns `TQL-SQL-2104`; a version predicate without `expect.rowCount` warns
 `TQL-SQL-2105`.
 
 ## Constraint-violation mapping

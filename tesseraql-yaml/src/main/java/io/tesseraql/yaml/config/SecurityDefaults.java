@@ -42,7 +42,7 @@ public final class SecurityDefaults {
 
     private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.SEC, 4132);
 
-    /** One declaration-ordered default rule; {@code csrf} is {@code auto}, {@code true} or
+    /** One declaration-ordered default rule; {@code csrf} is {@code auto}, {@code required} or
      * {@code false}. */
     public record Rule(String match, String auth, String csrf, String policy, Pattern pattern) {
     }
@@ -77,10 +77,10 @@ public final class SecurityDefaults {
             String auth = resolved(config, map.get("auth"));
             String csrf = resolved(config, map.get("csrf"));
             String policy = resolved(config, map.get("policy"));
-            if (csrf != null && !csrf.equals("auto") && !csrf.equals("true")
-                    && !csrf.equals("false")) {
+            if (csrf != null && !csrf.equals("auto") && !csrf.equals("required")
+                    && !csrf.equals("off")) {
                 throw new TqlException(INVALID, "Security default rule '" + match
-                        + "': csrf must be auto, true or false, not '" + csrf + "'");
+                        + "': csrf must be auto, required or off, not '" + csrf + "'");
             }
             if (auth == null && csrf == null && policy == null) {
                 throw new TqlException(INVALID, "Security default rule '" + match
@@ -118,26 +118,15 @@ public final class SecurityDefaults {
         String policy = declared != null && declared.policy() != null
                 ? declared.policy()
                 : "public".equals(auth) ? null : rule.policy();
-        Boolean csrf = declared != null && declared.csrf() != null
+        // The csrf enum (auto|required|off) merges verbatim; `auto` resolves at wiring
+        // time through SecuritySpec.csrfEnforced, the one resolution point.
+        String csrf = declared != null && declared.csrf() != null
                 ? declared.csrf()
-                : defaultCsrf(rule.csrf(), auth, httpMethod);
+                : rule.csrf();
         if (auth == null && policy == null && csrf == null) {
             return declared;
         }
         return new SecuritySpec(auth, policy, csrf);
-    }
-
-    private static Boolean defaultCsrf(String csrf, String effectiveAuth, String httpMethod) {
-        if (csrf == null) {
-            return null;
-        }
-        return switch (csrf) {
-            case "true" -> Boolean.TRUE;
-            case "false" -> Boolean.FALSE;
-            default -> "browser".equals(effectiveAuth) && !"GET".equals(httpMethod)
-                    ? Boolean.TRUE
-                    : null;
-        };
     }
 
     private static String resolved(AppConfig config, Object value) {

@@ -5,14 +5,14 @@ recipes for files and HTTP. Camel's component catalog stays an
 implementation detail — an app never writes a raw endpoint URI; it declares a connector that
 runs under the framework's allow-lists, secrets, lint, and coverage.
 
-This page covers the outbound `http-call` pipeline step, the inbound directory-polling trigger
+This page covers the outbound `httpCall` pipeline step, the inbound directory-polling trigger
 for `file-import`, and the inbound `webhook` recipe. For publish/subscribe between commands and
 other systems — domain events on a broker-free database channel — see
 [messaging and events](messaging.md).
 
-## The `http-call` pipeline step
+## The `httpCall` pipeline step
 
-An `http-call` step is a batch-pipeline step that issues one synchronous outbound REST request
+An `httpCall` step is a batch-pipeline step that issues one synchronous outbound REST request
 and publishes the response to later steps. It interleaves with SQL steps, so a job can fetch
 from an API and persist the result, or read from the database and push it to a partner system.
 
@@ -22,14 +22,14 @@ id: rates.refresh
 kind: job
 recipe: batch-pipeline
 
-params:
+input:
   base:
     type: string
     required: false
 
 pipeline:
   - id: fetch
-    http-call:
+    httpCall:
       method: GET                                   # defaults to GET
       url: https://api.partner.example/v1/rates     # host must be allow-listed
       query:
@@ -56,7 +56,7 @@ The response is published as:
 | `step.<id>.body`         | the parsed JSON (a map/list) when the response is JSON, else the raw text |
 | `step.<id>.headers`      | the response headers (first value per name)                   |
 
-A step declares exactly one of `sql:`, `notify:`, or `http-call:`. The `query:` values and
+A step declares exactly one of `sql:`, `notify:`, or `httpCall:`. The `query:` values and
 `body:` are source expressions bound from the step context exactly like a SQL step's params;
 static `headers:` values may carry `${...}` config or secret placeholders, resolved at call
 time. `body:` resolves a single context expression and is sent as JSON. `expectStatus:` pins
@@ -65,17 +65,17 @@ success to one exact status — without it any `2xx` succeeds — and `connectTi
 
 ### Why a job step, not a command step
 
-`http-call` is a job-pipeline step, never a transactional `command-json` step. A command runs
+`httpCall` is a job-pipeline step, never a transactional `command-json` step. A command runs
 every step in one database transaction, and a synchronous outbound call cannot be rolled back —
 so putting it inside a command would break the all-or-nothing guarantee. A command's outbound
 integration instead rides the transactional outbox as an HMAC-signed webhook (see
 [notifications](notifications.md)): the event is written in the transaction and delivered
-at-least-once afterwards. Use `http-call` when a pipeline needs the **response** to drive
+at-least-once afterwards. Use `httpCall` when a pipeline needs the **response** to drive
 subsequent steps; use a webhook notification for fire-and-forget delivery.
 
 ## HTTP sources on query routes
 
-The read-side counterpart of `http-call`: a query route can compose an external JSON API with
+The read-side counterpart of `httpCall`: a query route can compose an external JSON API with
 its SQL result **in one screen or one JSON response**, declaratively. Each named `http:`
 source is a body-less GET executed after the route's SQL, landing in the execution context
 exactly like a named query:
@@ -111,7 +111,7 @@ response:
   `<name>.status` carries the upstream status.
 - **`onError: empty`** (default `fail`) keeps a widget-shaped source from taking the page
   down: the source yields zero rows plus `<name>.error`, and everything else renders.
-- **The same discipline as `http-call`**: sources execute through the one outbound gateway —
+- **The same discipline as `httpCall`**: sources execute through the one outbound gateway —
   the deny-by-default `allowedHosts` list, named secret-managed credentials, connect/request
   timeouts, and the per-host circuit breaker. Lint enforces the surface: query recipes only
   and no shadowing of SQL result keys (`TQL-YAML-1022`), plus the same host/url/credential
@@ -119,8 +119,8 @@ response:
 - **Reads stay reads**: `http:` is not available on command routes — a transactional write
   never blocks on a third party (the outbox is the write-side integration, above). Always
   GET, never a body.
-- An `http-call` **test case** plans a route's sources like a job's steps, without a network
-  request: `http-call: {route: orders.list}` rows carry the resolved url, host, allow-list
+- An `httpCall` **test case** plans a route's sources like a job's steps, without a network
+  request: `httpCall: {route: orders.list}` rows carry the resolved url, host, allow-list
   verdict, and credential — and `send: true` performs the call for real against the runner's
   capture server ([testing](testing.md#real-send-cases)).
 
@@ -175,7 +175,7 @@ any other outcome fails the step (and so the job). The call is recorded as a
 
 ## Governance
 
-`http-call` surfaces under the existing governance model — the host allow-list is the egress
+`httpCall` surfaces under the existing governance model — the host allow-list is the egress
 control, enforced both statically (lint) and at runtime (deny by default). Lint of a job's
 pipeline catches misconfigured egress before it ships:
 
@@ -191,18 +191,18 @@ the runtime's identical deny-by-default guard. At runtime an off-allow-list host
 
 ## Testing
 
-An `http-call` declarative test ([testing](testing.md)) **plans** a job's steps against the
+An `httpCall` declarative test ([testing](testing.md)) **plans** a job's steps against the
 case's params — resolving the url, binding query params, and applying the allow-list — without
 issuing a network request.
 Each planned request is a row, so a suite asserts the recipe is wired correctly and the
-`http-call` coverage kind tracks it.
+`httpCall` coverage kind tracks it.
 
 ```yaml
 tests:
   - name: the refresh job calls the allow-listed partner API
-    http-call:
+    httpCall:
       job: rates.refresh
-      id: fetch                       # optional; omit to plan every http-call step of the job
+      id: fetch                       # optional; omit to plan every httpCall step of the job
     params:
       job: { base: "USD" }
     expect:
@@ -214,7 +214,7 @@ tests:
           url: https://api.partner.example/v1/rates?base=USD
 ```
 
-Gate coverage with `coverage.thresholds.http-call` like any other kind.
+Gate coverage with `coverage.thresholds.httpCall` like any other kind.
 
 ## The `poll:` trigger for `file-import`
 
@@ -231,7 +231,7 @@ recipe: file-import
 
 trigger:
   poll:
-    source: sftp                 # local | sftp | ftps
+    transport: sftp              # local | sftp | ftps
     host: sftp.partner.example   # remote sources only; must be allow-listed
     port: 22                     # defaults to 22 (sftp) / 21 (ftps)
     path: /outbound/orders       # directory to poll; a leading slash is absolute on the
@@ -249,7 +249,7 @@ A **local** source needs a declared root, the same deny-by-default rule remote s
 tesseraql:
   connectors:
     poll:
-      allowedPaths:               # deny-by-default roots for source: local
+      allowedPaths:               # deny-by-default roots for transport: local
         - inbound
         - /srv/partner-drop
 ```
@@ -313,7 +313,7 @@ tesseraql:
 Without it, host keys are not checked and lint nudges with `TQL-SEC-4084` (a warning, so
 existing apps keep working).
 
-FTPS rides the same recipe and runtime path with `source: ftps`. The endpoint negotiates
+FTPS rides the same recipe and runtime path with `transport: ftps`. The endpoint negotiates
 `PBSZ 0`/`PROT P`, so the file's bytes are encrypted and not only the login, and it transfers in
 binary and connects in passive mode. Its server identity is pinned by a trust store — the FTPS
 counterpart of `knownHostsFile`:
@@ -345,7 +345,7 @@ app down:
 | `TQL-SEC-4080` | error    | a remote source's host is not in `tesseraql.connectors.poll.allowedHosts` |
 | `TQL-SEC-4081` | warning  | the trigger references a credential not declared under `credentials`  |
 | `TQL-SEC-4084` | warning  | an SFTP source polls without `tesseraql.connectors.poll.knownHostsFile` (host key unchecked) |
-| `TQL-YAML-1005`| error    | the source is not local/sftp/ftps, has no path, or a remote source has no host |
+| `TQL-YAML-1005`| error    | the transport is not local/sftp/ftps, has no path, or a remote source has no host |
 | `TQL-YAML-1006`| error    | a poll-triggered job has no `import:` block with a per-row SQL         |
 
 A poll job is covered by the `file-poll` coverage kind when a declarative suite exercises its

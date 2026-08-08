@@ -45,7 +45,7 @@
                     "properties": {
                       "match": { "type": "string", "description": "The URL path pattern this rule covers." },
                       "auth": { "type": "string", "enum": ["bearer", "browser", "apiKey", "mtls", "public"] },
-                      "csrf": { "type": "string", "enum": ["auto", "true", "false"], "description": "auto requires CSRF exactly when auth is browser and the method is not GET." },
+                      "csrf": { "type": "string", "enum": ["auto", "required", "off"], "description": "auto requires CSRF exactly when the effective auth is browser and the method is not GET; required always; off never." },
                       "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." }
                     },
                     "additionalProperties": true

@@ -289,7 +289,7 @@ because they are established.
   federation boundary, whose fault it is happens to be the most useful thing the answer carries,
   and 400-for-everything asserted it was always the caller's.
 - `POST /_tesseraql/login` and `POST /_tesseraql/reset` have no rate limit, attempt counter, or
-  lockout — the compiled-route `policy.rateLimit` feature these Java routes do not use. Reset also
+  lockout — the compiled-route `admission.rateLimit` feature these Java routes do not use. Reset also
   queues an outbox mail per call.
   **The obvious fix is a wrong one, so it is written down here before someone ships it.** Both
   shipped limiters — `RateLimiter` and `ClusterRateLimiter` — hold a *single* bucket per route;

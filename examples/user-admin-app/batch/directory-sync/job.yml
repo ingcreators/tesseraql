@@ -7,14 +7,14 @@ recipe: batch-pipeline
 # is the same. Phase 26 managed connector: an http-call step fetches from an allow-listed
 # partner directory, and the next SQL step records the reported headcount.
 
-params:
+input:
   unit:
     type: string
     required: false
 
 pipeline:
   - id: headcount
-    http-call:
+    httpCall:
       method: GET
       url: https://api.directory.example/v1/headcount
       query:

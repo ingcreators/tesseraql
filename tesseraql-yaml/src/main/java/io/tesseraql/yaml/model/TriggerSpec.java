@@ -39,7 +39,7 @@ public record TriggerSpec(Schedule schedule, PollSpec poll, String after) {
             return "after " + trigger.after();
         }
         if (trigger.poll() != null) {
-            return "poll " + trigger.poll().effectiveSource();
+            return "poll " + trigger.poll().effectiveTransport();
         }
         Schedule schedule = trigger.schedule();
         if (schedule == null) {

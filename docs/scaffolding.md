@@ -86,7 +86,7 @@ Conventions are applied when the table opts in:
   becomes a required form field instead. Composite keys fail fast (`TQL-APP-5203`).
 - **Optimistic locking** — a numeric `version` column emits the
   [transactional-writes.md](transactional-writes.md) pairing: a version predicate in the
-  UPDATE/DELETE plus `expect: { rows: 1, onMismatch: conflict }`, so a stale edit answers
+  UPDATE/DELETE plus `expect: { rowCount: 1, onMismatch: conflict }`, so a stale edit answers
   `409 Conflict`. Without the column, neither half is emitted.
 - **Audit columns** — `created_by` / `created_at` / `updated_by` / `updated_at` are stamped
   from the canonical `audit.user` / `audit.now` binds, explicit in the SQL.
@@ -129,7 +129,7 @@ The pages compose the framework `tql/shell` layout; navigation comes from the sk
 
 ### CSRF, on by default
 
-The mutation routes declare `csrf: true`, and the form-bearing pages (list, create, edit)
+The mutation routes declare `csrf: required`, and the form-bearing pages (list, create, edit)
 authenticate as `browser`/`app.read` so the shell renders `<meta name="csrf-token">` with the
 session token. On the htmx path the kit's `installCsrfHeader` behavior reads that tag and
 attaches the `X-CSRF-Token` header to every request; on the no-JS path the hidden `_csrf` form

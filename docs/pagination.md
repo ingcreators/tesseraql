@@ -1,6 +1,6 @@
 # Pagination
 
-A `page:` block on a `query-json`/`query-html` route paginates the main query — the
+A `pagination:` block on a `query-json`/`query-html` route paginates the main query — the
 framework appends the dialect's pagination clause at execution time, so the authored
 2-way SQL stays plain-tool runnable and carries no `LIMIT` of its own (`TQL-YAML-1018`
 warns when it does).
@@ -10,7 +10,7 @@ warns when it does).
 ```yaml
 sql:
   file: search.sql        # ends in ORDER BY <cols>, <pk> — a stable order, no LIMIT
-page:
+pagination:
   size: 50                # rows per page
   maxSize: 200            # opt-in: the caller may pass ?size= up to this cap
   count: true             # opt-in: run a select count(*) wrapper for totals
@@ -51,7 +51,7 @@ sql:
   file: users.sql
   params:
     after: params.after
-page:
+pagination:
   strategy: keyset
   by: id                  # the cursor column; TQL-YAML-1016 when missing
   size: 20
@@ -76,7 +76,7 @@ total is worth its cost.
 
 ## Machine-checkable
 
-`TQL-YAML-1015` (page on a non-query recipe), `1016` (keyset without `by:`/unknown
+`TQL-YAML-1015` (pagination on a non-query recipe), `1016` (keyset without `by:`/unknown
 strategy), `1017` (size bounds), `1018` (authored LIMIT/FETCH warning); a `page` coverage
 kind (`coverage.thresholds.page`) counts every paginated route a suite exercises; the
 OpenAPI contract gains the `page`/`size`/`after` parameters. `tesseraql scaffold crud`

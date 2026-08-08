@@ -42,9 +42,9 @@ transitions:
 # The quote window's reminder: an issued RFQ left unattended for a week lands on the
 # procurement head's desk, with the escalated notification riding the outbox.
 deadlines:
-  - { state: issued, within: 168h, onBreach: { reassign: head.sql } }
+  - { state: issued, within: 168h, onBreach: { reassign: { file: head.sql } } }
 
-notify:
+reminders:
   assigned:
     channel: procurement-mail
     payload:

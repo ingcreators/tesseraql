@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:dd6f451ef3a147b6b3eb4ab760a998a81ff971d9906d7e5950990773424149db
+# tesseraql-scaffold-checksum: sha256:752c477c5b2815298fc926179b5d614bb8469f7b530f1599b5b6ef68ecbca958
 # Scaffolded list page for the items table (tesseraql scaffold crud --table items):
 # renders through the tql/view/list pattern (docs/declarative-views.md).
 version: tesseraql/v1
@@ -31,7 +31,7 @@ sql:
     sort: query.sort
     dir: query.dir
 
-page:
+pagination:
   size: 50
   maxSize: 200
   count: true

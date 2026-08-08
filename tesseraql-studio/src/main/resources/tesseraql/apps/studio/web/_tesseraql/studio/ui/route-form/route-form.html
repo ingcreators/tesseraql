@@ -62,7 +62,12 @@
           </label>
           <label class="hc-field">
             <span class="hc-field__label">CSRF</span>
-            <input type="checkbox" name="csrf" value="true" th:checked="${rf.form.csrf}">
+            <select class="hc-select" name="csrf">
+              <option value="" th:selected="${rf.form.csrf == null}">(inherit)</option>
+              <option value="auto" th:selected="${rf.form.csrf == 'auto'}">auto</option>
+              <option value="required" th:selected="${rf.form.csrf == 'required'}">required</option>
+              <option value="off" th:selected="${rf.form.csrf == 'off'}">off</option>
+            </select>
           </label>
         </div>
         <h3>Inputs</h3>

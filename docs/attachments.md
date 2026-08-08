@@ -71,7 +71,7 @@ A successful upload answers `201` with the stored metadata:
  "byteSize": 182044, "checksum": "…"}
 ```
 
-The blob write is **not** transactional — like the `http-call` step
+The blob write is **not** transactional — like the `httpCall` step
 ([managed connectors](connectors.md)) and the transactional outbox ([messaging](messaging.md)),
 an external side effect cannot be rolled back. If the metadata insert fails or the request
 aborts after the blob is written, a best-effort delete covers the common case and retention

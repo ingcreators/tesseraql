@@ -117,7 +117,7 @@ class LaneBackpressureIntegrationTest {
                 security:
                   auth: public
 
-                policy:
+                admission:
                   lane: io
 
                 sql:

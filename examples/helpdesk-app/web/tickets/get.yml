@@ -11,7 +11,7 @@ input:
 security:
   policy: help.read
 
-page:
+pagination:
   size: 20
   count: true
 

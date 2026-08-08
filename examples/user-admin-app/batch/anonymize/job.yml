@@ -13,4 +13,5 @@ pipeline:
       writer: { file: anonymize-user.sql }
       key: id
       commitEvery: 200
-      onError: { skipLimit: 10 }
+      onError: skip
+      skipLimit: 10

@@ -427,7 +427,7 @@ class WorkflowTransitionIntegrationTest {
                     assign: { file: approver.sql }
                   - { id: approve, from: submitted, to: approved, command: approve.sql }
                   - { id: reject, from: submitted, to: rejected, command: reject.sql }
-                notify:
+                reminders:
                   assigned:
                     channel: task-reminders
                     payload:
@@ -564,8 +564,8 @@ class WorkflowTransitionIntegrationTest {
                 deadlines:
                   - state: submitted
                     within: 0s
-                    onBreach: { reassign: dept_head.sql }
-                notify:
+                    onBreach: { reassign: { file: dept_head.sql } }
+                reminders:
                   escalated:
                     channel: task-reminders
                     payload:

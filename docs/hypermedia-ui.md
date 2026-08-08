@@ -169,7 +169,7 @@ response:
 
 ## CSRF tokens
 
-State-changing browser routes declare `csrf: true`. The framework shell publishes the session
+State-changing browser routes declare `csrf: required`. The framework shell publishes the session
 token as `<meta name="csrf-token" content="…">` whenever an authenticated session resolved it,
 and the kit's auto-installed `installCsrfHeader` behavior reads that tag at request time and
 attaches the `X-CSRF-Token` header to every htmx request — so an htmx form needs no per-request

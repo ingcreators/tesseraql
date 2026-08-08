@@ -41,7 +41,7 @@ Studio editor + docs work (2026-06):
   gains a **Run tests** action that runs the declarative test cases covering it against the dev
   datasource with inline pass/fail: `sql` queries **and writes** (an `INSERT … RETURNING` runs and
   is rolled back) and `validate` rules (their SQL runs against the sandbox) plus the pure (no DB)
-  `notify` and `http-call` evaluations (the latter plans a job's outbound step without a network
+  `notify` and `httpCall` evaluations (the latter plans a job's outbound step without a network
   call). Gated and sandboxed: enabled only when Studio is writable and
   `tesseraql.studio.testRunner.enabled` is set; each case runs through a `SandboxDataSource` — an
   auto-rollback transaction (commits suppressed, rolled back on close) with a statement timeout and a
@@ -136,7 +136,7 @@ and is being adopted (see E below).
    already preview via the template-file path: supply `payload`/`event` as the sample.)
 2. **Run a route's or job's declarative suite from Studio** — *done* (see Shipped): a **Run tests**
    action runs every declarative case kind covering a route or job — `sql` (read **and write**),
-   `validate`, `contract` (through a sandboxed identity service), `notify`, and `http-call` — against
+   `validate`, `contract` (through a sandboxed identity service), `notify`, and `httpCall` — against
    the dev datasource, sandboxed (auto-rollback) and opt-in.
    - **Live rows into the rendered preview** — *done* (see Shipped): the route render panel's **Use
      live data** toggle runs the route's main `sql` through the sandbox for real rows.
@@ -595,7 +595,7 @@ ships as its own slice once the phase opens:
   (`schema/tesseraql-v1.schema.json`) now covers the full document surface — the linter-synced
   recipe enum (drift-tested by `SchemaSyncTest`, machine-checkable), `kind: route|job|view`,
   typed `input:` fields (pattern/minLength/format/requiredWhen/…), `security`, `sql`/`steps`/
-  `queries` bindings, `page:`, the response family incl. `statusWhen`/`nest`/`view:`, and
+  `queries` bindings, `pagination:`, the response family incl. `statusWhen`/`nest`/`view:`, and
   publish/consume/webhook — `additionalProperties` stays true so newer keys never break older
   editors. `tesseraql new` scaffolds the schema into `.vscode/tesseraql-v1.schema.json` with a
   `yaml.schemas` association (`.vscode/settings.json`) and a `redhat.vscode-yaml`

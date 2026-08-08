@@ -6,7 +6,7 @@ recipe: query-html
 security:
   policy: rfq.read
 
-page:
+pagination:
   size: 20
   count: true
 

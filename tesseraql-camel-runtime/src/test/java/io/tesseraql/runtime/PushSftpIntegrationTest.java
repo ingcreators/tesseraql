@@ -163,7 +163,7 @@ class PushSftpIntegrationTest {
                       sql: { file: report.sql, mode: query }
                   - id: deliver
                     push:
-                      target: sftp
+                      transport: sftp
                       host: localhost
                       port: %d
                       path: /incoming
@@ -183,7 +183,7 @@ class PushSftpIntegrationTest {
                       sql: { file: report.sql, mode: query }
                   - id: deliver
                     push:
-                      target: sftp
+                      transport: sftp
                       host: attacker.example
                       path: /incoming
                       credential: partner-sftp

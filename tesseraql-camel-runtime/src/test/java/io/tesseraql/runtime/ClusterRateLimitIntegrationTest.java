@@ -139,7 +139,7 @@ class ClusterRateLimitIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                policy:
+                admission:
                   rateLimit:
                     requestsPerSecond: 5
                     scope: cluster

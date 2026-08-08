@@ -188,7 +188,7 @@ class PollImportLocalIntegrationTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: local
+                    transport: local
                     path: %s
                     include: "*.csv"
                     delay: 500ms

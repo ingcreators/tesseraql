@@ -8,6 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking YAML renames — one word per concept**
+  (docs/vocabulary-cleanup.md slice 1): a job's declared parameters are `input:`
+  (the same contract routes declare; `params:` keeps its bind-wiring meanings);
+  the route admission block is `admission:` (was root `policy:`, which collided
+  with `security.policy`); the pagination block is `pagination:` (was `page:`);
+  `csrf:` is one `auto | required | off` enum on routes and defaults rules alike
+  (was a route boolean and a defaults `auto|"true"|"false"` string);
+  `http-call:` → `httpCall:` (steps and test cases); a binding's
+  `expect.rows` → `expect.rowCount`; a chunk step's `onError:` is `fail | skip`
+  with a sibling `skipLimit:` (was an object; skip without a limit defaults to
+  100); poll `source:` and push `target:` are both `transport:`; an
+  export/import column heading is `label:` (was `header:`, the view column's
+  word); a workflow's reminder block is `reminders:` (was `notify:`, colliding
+  with the route notification map); `onBreach.reassign:` takes the `assign:`
+  shape (`{file, params}`).
+
 - **Pre-1.0 breaking default change — sessions are `jdbc` by default**
   (docs/contract-bugfixes.md track G): `tesseraql.sessions.store` now defaults to
   `jdbc` (shared `tql_session`, survives restarts, multi-node correct);

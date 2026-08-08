@@ -32,8 +32,8 @@ export:
   filename: users.pdf
   template: print.html        # colocated with the route; omit for the built-in grid
   columns:
-    - { name: name,   header: Name }
-    - { name: status, header: Status }
+    - { name: name,   label: Name }
+    - { name: status, label: Status }
 ```
 
 Without a `template:` the built-in grid lays the rows out as a plain A4 table with repeating

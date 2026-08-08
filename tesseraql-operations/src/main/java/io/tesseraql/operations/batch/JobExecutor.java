@@ -126,7 +126,7 @@ public final class JobExecutor {
         return this;
     }
 
-    /** Wires the outbound HTTP client {@code http-call:} steps issue through (roadmap Phase 26). */
+    /** Wires the outbound HTTP client {@code httpCall:} steps issue through (roadmap Phase 26). */
     public JobExecutor httpCall(io.tesseraql.operations.http.HttpCallClient client) {
         this.httpCallClient = client;
         return this;
@@ -466,12 +466,12 @@ public final class JobExecutor {
         if (step.sql() != null || step.notification() != null) {
             throw TqlException.builder(STEP_ERROR)
                     .message("Step '" + step.id() + "' must declare exactly one of sql:, notify:,"
-                            + " or http-call:")
+                            + " or httpCall:")
                     .build();
         }
         if (httpCallClient == null) {
             throw TqlException.builder(STEP_ERROR)
-                    .message("Step '" + step.id() + "': http-call steps need the runtime's"
+                    .message("Step '" + step.id() + "': httpCall steps need the runtime's"
                             + " outbound HTTP client")
                     .build();
         }
@@ -640,7 +640,7 @@ public final class JobExecutor {
         result.put("affectedRows", 1);
         result.put("transferId", transferId);
         result.put("filename", filename);
-        result.put("target", push.effectiveTarget());
+        result.put("target", push.effectiveTransport());
         return result;
     }
 

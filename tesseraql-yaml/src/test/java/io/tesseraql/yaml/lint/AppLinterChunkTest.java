@@ -70,7 +70,7 @@ class AppLinterChunkTest {
 
         findings = new AppLinter().lint(app(dir,
                 "      reader: { file: reader.sql }\n      writer: { file: writer.sql }\n"
-                        + "      commitEvery: 0\n      onError: { skipLimit: -1 }",
+                        + "      commitEvery: 0\n      onError: skip\n      skipLimit: -1",
                 "select id from orders where id > /* chunk.after */ 0 order by id\n"));
         assertThat(findings.stream().filter(f -> "TQL-BATCH-4206".equals(f.code()))).hasSize(2);
     }
@@ -80,7 +80,7 @@ class AppLinterChunkTest {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      reader: { file: reader.sql }\n      writer: { file: writer.sql }\n"
                         + "      key: id\n      commitEvery: 500\n"
-                        + "      onError: { skipLimit: 10 }",
+                        + "      onError: skip\n      skipLimit: 10",
                 "select id from orders\n/*%if chunk.after != null */\n"
                         + "where id > /* chunk.after */ 0\n/*%end*/\norder by id\n"));
 

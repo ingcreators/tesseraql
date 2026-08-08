@@ -169,7 +169,7 @@ class PollImportSftpIntegrationTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: sftp
+                    transport: sftp
                     host: localhost
                     port: %d
                     path: /inbound

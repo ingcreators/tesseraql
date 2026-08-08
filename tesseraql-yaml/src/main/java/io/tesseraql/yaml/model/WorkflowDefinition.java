@@ -25,8 +25,10 @@ import java.util.List;
  * @param states      the declared states
  * @param transitions the declared transitions
  * @param deadlines   per-state deadlines (parsed and linted here; consumed in slice 3)
- * @param reminders   reminder notifications fired on task assignment / escalation (the YAML key is
- *                    {@code notify}, Phase 20 channels), or {@code null}
+ * @param reminders   reminder notifications fired on task assignment / escalation
+ *                    (Phase 20 channels; docs/vocabulary-cleanup.md slice 1 — the key was
+ *                    {@code notify:}, colliding with the route map of the same name), or
+ *                    {@code null}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record WorkflowDefinition(String version, String id, String kind, String mode,
@@ -34,8 +36,7 @@ public record WorkflowDefinition(String version, String id, String kind, String 
         List<StateSpec> states, List<TransitionSpec> transitions, List<DeadlineSpec> deadlines,
         // One-action dispatches (docs/workflow-expressiveness.md slice 3).
         List<DispatchSpec> dispatch,
-        // "notify" itself is not a legal record component (it would hide Object.notify()).
-        @com.fasterxml.jackson.annotation.JsonProperty("notify") WorkflowNotify reminders) {
+        WorkflowNotify reminders) {
 
     public WorkflowDefinition {
         states = states == null ? List.of() : List.copyOf(states);

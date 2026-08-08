@@ -10,7 +10,7 @@ remaining candidates are one coherent wave over the machinery that now exists:
 2. **health detail and a version panel** — `OpsDashboard.health()` already computes
    DOWN/WARN/UP with per-datasource probe results and nothing renders it;
 3. **run-with-params** — deferred because "it wants input metadata per job, which is its
-   own design". That design has since shipped: declared `jobs: params:` bind and validate
+   own design". That design has since shipped: declared `jobs: input:` bind and validate
    through `bindJobParams` at every entry point
    ([yaml-surface-consumers.md](yaml-surface-consumers.md)). The prerequisite is met; the
    form is what is missing.
@@ -37,9 +37,9 @@ the single source the CLI already reports. No new route: "is the platform health
 what is deployed here" belongs on the operator's first screen, and the existing 15s
 poller keeps it live.
 
-### 3. Manual runs gain a declared-params form; the binding stays where it is
+### 3. Manual runs gain a declared-input form; the binding stays where it is
 
-The jobs page renders, for each job with declared `params:`, input fields from the
+The jobs page renders, for each job with declared `input:`, input fields from the
 declaration — a required marker from `required: true`, a numeric input for
 `type: number`. Fields post as `param.<name>` beside `id`; the run route sets
 `inputPolicy.unknownFields: ignore` (dynamic names cannot be statically declared) and
@@ -67,7 +67,7 @@ UX conversation for all console writes at once, not a reason to validate twice.
    nav entry, `.app-index` additions.
 2. **Health + version on the overview**: `ops.overview` model gains `health` (status,
    datasources) and `version`; overview template renders the panel.
-3. **Params form on the jobs page**: declared params in the `ops.jobs` row model, the
+3. **Input form on the jobs page**: declared inputs in the `ops.jobs` row model, the
    form, `unknownFields: ignore` + whole-body pass-through on the run route, prefix
    stripping in `ops.jobRun`.
 
@@ -86,9 +86,9 @@ Each slice ships independently; the first two are read-only.
 
 - `OpsConsoleIntegrationTest`: the audit page renders scoped rows when the store is
   enabled and names the flag when disabled; the overview shows the health badge, the
-  per-datasource states, and the version; a run POST with declared params reaches the
+  per-datasource states, and the version; a run POST with declared inputs reaches the
   execution with coerced values, a missing required parameter is refused with the
-  field-error envelope before the job starts, and the params form appears only on jobs
+  field-error envelope before the job starts, and the input form appears only on jobs
   that declare parameters.
 - `BundledAppSecurityPostureTest` picks the audit route up automatically; the write path
   keeps its existing policy/CSRF tests.

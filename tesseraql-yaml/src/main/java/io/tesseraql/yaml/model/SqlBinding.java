@@ -90,12 +90,12 @@ public record SqlBinding(String file, String contract, String mode, Map<String, 
      * Declared row-count expectation for a command statement (roadmap Phase 18). A mismatch turns
      * a silent lost update into an explicit error instead of reporting success.
      *
-     * @param rows       the exact number of rows the statement must affect
+     * @param rowCount   the exact number of rows the statement must affect
      * @param onMismatch {@code conflict} (default, HTTP 409 with a conflict hint) or
      *                   {@code error} (HTTP 500)
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Expect(Integer rows, String onMismatch) {
+    public record Expect(Integer rowCount, String onMismatch) {
 
         /** Returns the effective mismatch behavior, defaulting to {@code conflict}. */
         public String effectiveOnMismatch() {

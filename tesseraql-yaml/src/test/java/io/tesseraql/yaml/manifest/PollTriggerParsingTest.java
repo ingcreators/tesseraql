@@ -28,7 +28,7 @@ class PollTriggerParsingTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: local
+                    transport: local
                     path: /data/inbound/orders
                     include: "*.csv"
                     delay: 30s
@@ -46,7 +46,7 @@ class PollTriggerParsingTest {
         assertThat(job.recipe()).isEqualTo("file-import");
         PollSpec poll = job.trigger().poll();
         assertThat(poll).isNotNull();
-        assertThat(poll.effectiveSource()).isEqualTo("local");
+        assertThat(poll.effectiveTransport()).isEqualTo("local");
         assertThat(poll.isRemote()).isFalse();
         assertThat(poll.path()).isEqualTo("/data/inbound/orders");
         assertThat(poll.include()).isEqualTo("*.csv");
@@ -72,7 +72,7 @@ class PollTriggerParsingTest {
                 recipe: file-import
                 trigger:
                   poll:
-                    source: sftp
+                    transport: sftp
                     host: sftp.partner.example
                     port: 2222
                     path: /outbound/orders
@@ -88,7 +88,7 @@ class PollTriggerParsingTest {
         AppManifest manifest = new ManifestLoader().load(dir);
         PollSpec poll = manifest.jobs().get(0).definition().trigger().poll();
 
-        assertThat(poll.effectiveSource()).isEqualTo("sftp");
+        assertThat(poll.effectiveTransport()).isEqualTo("sftp");
         assertThat(poll.isRemote()).isTrue();
         assertThat(poll.host()).isEqualTo("sftp.partner.example");
         assertThat(poll.port()).isEqualTo(2222);

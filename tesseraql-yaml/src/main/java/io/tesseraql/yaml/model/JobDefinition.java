@@ -15,15 +15,16 @@ import java.util.Map;
  * @param kind     always {@code job}
  * @param recipe   {@code batch-tasklet} or {@code batch-pipeline}
  * @param trigger  schedule trigger, when present
- * @param params   declared job parameters
+ * @param input    declared job parameters — the same field contract routes declare
+ *                 with {@code input:} (docs/vocabulary-cleanup.md slice 1)
  * @param sql      the single statement for a tasklet job
  * @param pipeline  the steps for a pipeline job
  * @param perTenant when true, the job runs once per configured tenant (design ch. 30.3)
  * @param fileImport the {@code import:} block of a poll-triggered {@code file-import} job
  *                 (roadmap Phase 26): the runtime feeds every polled file through it
  * @param overlap  what a firing does while the previous execution is still running
- *                 (docs/batch-platform.md track E): {@code concurrent} (the default) runs
- *                 anyway, {@code skip} records a SKIPPED execution naming the running one
+ *                 (docs/batch-platform.md track E): {@code skip} (the default) records a
+ *                 SKIPPED execution naming the running one, {@code concurrent} runs anyway
  * @param sla      the deadline expectations a periodic check alerts on (alert-only)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -34,7 +35,7 @@ public record JobDefinition(
         String recipe,
         String datasource,
         TriggerSpec trigger,
-        Map<String, InputField> params,
+        Map<String, InputField> input,
         SqlBinding sql,
         List<PipelineStep> pipeline,
         boolean perTenant,
@@ -43,31 +44,31 @@ public record JobDefinition(
         SlaSpec sla) {
 
     public JobDefinition {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        input = input == null ? Map.of() : Map.copyOf(input);
         pipeline = pipeline == null ? List.of() : List.copyOf(pipeline);
     }
 
     /** Convenience constructor without overlap/SLA declarations (the pre-track-E shape). */
     public JobDefinition(String version, String id, String kind, String recipe, String datasource,
-            TriggerSpec trigger, Map<String, InputField> params, SqlBinding sql,
+            TriggerSpec trigger, Map<String, InputField> input, SqlBinding sql,
             List<PipelineStep> pipeline, boolean perTenant, ImportSpec fileImport) {
-        this(version, id, kind, recipe, datasource, trigger, params, sql, pipeline, perTenant,
+        this(version, id, kind, recipe, datasource, trigger, input, sql, pipeline, perTenant,
                 fileImport, null, null);
     }
 
     /** Convenience constructor for a job on the main datasource (the pre-duckdb shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
-            Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
+            Map<String, InputField> input, SqlBinding sql, List<PipelineStep> pipeline,
             boolean perTenant, ImportSpec fileImport) {
-        this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant,
+        this(version, id, kind, recipe, null, trigger, input, sql, pipeline, perTenant,
                 fileImport, null, null);
     }
 
     /** Convenience constructor for a job without an {@code import:} block (the pre-Phase-26 shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
-            Map<String, InputField> params, SqlBinding sql, List<PipelineStep> pipeline,
+            Map<String, InputField> input, SqlBinding sql, List<PipelineStep> pipeline,
             boolean perTenant) {
-        this(version, id, kind, recipe, null, trigger, params, sql, pipeline, perTenant, null,
+        this(version, id, kind, recipe, null, trigger, input, sql, pipeline, perTenant, null,
                 null, null);
     }
 

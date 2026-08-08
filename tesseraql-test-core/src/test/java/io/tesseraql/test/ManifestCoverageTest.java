@@ -441,7 +441,7 @@ class ManifestCoverageTest {
                 List.of(httpCallSuite("orders.sync", null)));
         ItemCoverage none = ManifestCoverage.httpCall(manifest, List.of());
 
-        assertThat(all.kind()).isEqualTo("http-call");
+        assertThat(all.kind()).isEqualTo("httpCall");
         // The surrounding SQL step is not an http-call and is not declared.
         assertThat(all.declared()).containsExactly("orders.sync.push");
         assertThat(all.covered()).containsExactly("orders.sync.push");

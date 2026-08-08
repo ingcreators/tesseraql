@@ -81,7 +81,7 @@ class SecurityDefaultsResolutionTest {
         SecuritySpec create = route(manifest, "items.create");
         assertThat(create.auth()).isEqualTo("browser");
         assertThat(create.policy()).isEqualTo("items.write");
-        assertThat(create.csrf()).isTrue();
+        assertThat(create.csrfEnforced("POST")).isTrue();
     }
 
     @Test

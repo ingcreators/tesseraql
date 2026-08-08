@@ -7,7 +7,7 @@ trigger:
   schedule:
     cron: "0 0 2 * * ?"
 
-params:
+input:
   businessDate:
     type: string
     required: false

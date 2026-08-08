@@ -27,7 +27,7 @@
 The failure class is the one [config-consumers.md](config-consumers.md) closed for scaffolded
 configuration, moved one layer in: there, a key was emitted and never read; here, a governance
 step is *documented as universal* and applied to some recipes only. The user declares
-`policy.rateLimit`, `tenancy.mode: database-per-tenant`, or `/*%scope … */` and the runtime
+`admission.rateLimit`, `tenancy.mode: database-per-tenant`, or `/*%scope … */` and the runtime
 silently holds a different posture — on one recipe but not its sibling, with no lint, no error,
 and in one case a lint rule actively steering the author into the broken path.
 
@@ -158,7 +158,7 @@ check that would otherwise reject it).
 
 `buildFileImport` and `buildFileExport` apply telemetry, audit, security, and i18n; their
 `buildQueryExport` sibling additionally applies concurrency, lane, and tenancy. Nothing in
-`JdbcFileTransferService` enforces them instead, and no lint restricts `policy:`/`lane:` by
+`JdbcFileTransferService` enforces them instead, and no lint restricts `admission:`/`lane:` by
 recipe.
 
 Tenancy is the material half: `TenantResolution` sets the property `RequestBinder` reads into the
@@ -248,7 +248,7 @@ Ordered so that each lands independently and the guard arrives before the long t
    One production change the guard required: the admission guards and the idempotency pair
    returned **lambdas**, which have no readable name, so they are named classes now. An
    unnameable step is a step a matrix cannot assert — worth knowing before writing the next one.
-   Attachments get their own narrower applier: with no `policy:` or `input:` of their own,
+   Attachments get their own narrower applier: with no `admission:` or `input:` of their own,
    concurrency, lane and audit have nothing to read, and saying so at the call site is the
    "declare the skip where a reviewer sees it" rule this design asked for.
 4. ~~**Scope directives on the write path.**~~ **Shipped for the request path.** The resolver is

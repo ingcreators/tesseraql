@@ -60,7 +60,7 @@ publish:
 ```
 
 `publish:` rides a transactional command (`command-json`, `webhook`, or `queue-consume`), never a
-read route — a synchronous outbound call would belong in an [`http-call`](connectors.md) step
+read route — a synchronous outbound call would belong in an [`httpCall`](connectors.md) step
 instead. The published event id is available to later context as `publish.eventId`.
 
 ## Consuming events

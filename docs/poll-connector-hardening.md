@@ -81,7 +81,7 @@ calls `setFileType(ASCII_FILE_TYPE)` and skips `enterLocalPassiveMode()`. ASCII 
 line-ending-translates binary payloads in transit, so a `format: excel` import — a documented
 import format — arrives corrupt. Active mode requires the server to open a connection back to the
 runtime, which fails for any containerized or NAT'd deployment, i.e. effectively always in this
-project's target shapes. The identical job on `source: sftp` works.
+project's target shapes. The identical job on `transport: sftp` works.
 
 ### SFTP host-key checking is off by default
 
@@ -99,7 +99,7 @@ default. The risk is real; the framing "TesseraQL asserts an unsafe posture" is 
 The sweep raised these; no adversarial verifier examined them. They are listed here because the
 model below has to answer them, not because they are established.
 
-- **`source: local` has no path governance** — VERIFIED in full. The allow-list gate sits behind
+- **`transport: local` has no path governance** — VERIFIED in full. The allow-list gate sits behind
   `poll.isRemote()`, so `local` never reaches one, and the local arm concatenates `path:`
   verbatim with no anchoring and no `normalize()`. A probe with `path: <tmp>/app/data/../../secret`
   polled a file out of the sibling directory *and moved it* into `<tmp>/secret/.done/` — read and
@@ -149,7 +149,7 @@ model below has to answer them, not because they are established.
 - ~~**Remote polls load whole files into heap.**~~ **CONFIRMED and FIXED** (slice 7). Both remote
   components default to loading the whole file before the route sees it, so the processor's "a
   large file never materializes in memory" held for `local` only.
-- **`ComponentGuard` auto-allows the raw, unvalidated source string.** `source: ftp` — a plausible
+- **`ComponentGuard` auto-allows the raw, unvalidated source string.** `transport: ftp` — a plausible
   typo for `ftps`, and the cleartext sibling — exempts the `ftp` component from an `allowed:`
   narrowing even though the job itself is dead. `denied:` and the baseline still win, so this
   widens only the narrowing.

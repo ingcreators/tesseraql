@@ -459,7 +459,7 @@ class OpsConsoleIntegrationTest {
                 kind: job
                 recipe: batch-pipeline
 
-                params:
+                input:
                   businessDate:
                     type: string
                     required: true
