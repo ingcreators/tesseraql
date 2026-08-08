@@ -46,7 +46,7 @@ public final class HtmlResponseRenderer implements Processor {
     private static final String PAGE_CONTENT_SELECTOR = "#page-content";
 
     /** A {@code {expression}} placeholder in a header value, resolved like the redirect location. */
-    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
+    private static final Pattern HEADER_PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
     private final HtmlResponse response;
     private final Path appHome;
@@ -186,21 +186,25 @@ public final class HtmlResponseRenderer implements Processor {
         }
         boundViews.values().forEach(binding -> readPolicies.putAll(binding.readPolicies()));
         Map<String, Object> viewContext = context;
+        io.tesseraql.security.policy.PolicyEngine policyEngine = exchange.getContext()
+                .getRegistry().lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
+                        io.tesseraql.security.policy.PolicyEngine.class);
+        io.tesseraql.security.Principal requestPrincipal = exchange.getProperty(
+                TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
         if (!readPolicies.isEmpty()) {
-            io.tesseraql.security.policy.PolicyEngine policyEngine = exchange.getContext()
-                    .getRegistry().lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
-                            io.tesseraql.security.policy.PolicyEngine.class);
-            io.tesseraql.security.Principal principal = exchange.getProperty(
-                    TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
             viewContext = (Map<String, Object>) new FieldPolicyApplier(readPolicies,
-                    policyEngine, principal).apply(context);
+                    policyEngine, requestPrincipal).apply(context);
         }
+        // A form field's write policy: evaluates per principal (wave 4) — the same check the
+        // request binder enforces; without an engine, policy-gated fields fail safe (hidden).
+        java.util.function.Predicate<String> permits = policyId -> policyEngine != null
+                && policyEngine.permits(policyId, requestPrincipal);
         if (viewBinding != null) {
             // A declarative view (roadmap Phase 39): the reserved `v` model is the whole contract
             // between the route and the tql/view/* pattern fragments. The request path anchors
             // the list pattern's self-rendering search/sort links.
             model.put("v", viewBinding.model(viewContext, java.util.Locale.forLanguageTag(tag),
-                    pagePath));
+                    pagePath, permits));
         }
         if (!boundViews.isEmpty()) {
             // Declarative parts on a hand-owned template (wave 2c): each bound view renders
@@ -209,7 +213,7 @@ public final class HtmlResponseRenderer implements Processor {
             java.util.Locale viewLocale = java.util.Locale.forLanguageTag(tag);
             Map<String, Object> boundContext = viewContext;
             boundViews.forEach((id, binding) -> views.put(id,
-                    binding.model(boundContext, viewLocale, pagePath)));
+                    binding.model(boundContext, viewLocale, pagePath, permits)));
             model.put("views", views);
         }
 
@@ -538,7 +542,7 @@ public final class HtmlResponseRenderer implements Processor {
     }
 
     static String interpolateString(String template, EvaluationContext evaluation) {
-        Matcher matcher = PLACEHOLDER.matcher(template);
+        Matcher matcher = HEADER_PLACEHOLDER.matcher(template);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
             Object resolved = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));

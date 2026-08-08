@@ -320,6 +320,17 @@ public final class ViewBinding {
     /** {@code pagePath} is the request path sort/search links resolve against. */
     public Map<String, Object> model(Map<String, Object> context, Locale locale,
             String pagePath) {
+        return model(context, locale, pagePath, policyId -> true);
+    }
+
+    /**
+     * The per-principal variant (docs/view-composition.md wave 4): {@code permits} evaluates a
+     * field's write {@code policy:} for the current principal — a failing field is omitted
+     * from the rendered form, the same declaration the request binder enforces. The
+     * permissive default keeps build-time render paths (ejection previews, tests) whole.
+     */
+    public Map<String, Object> model(Map<String, Object> context, Locale locale,
+            String pagePath, java.util.function.Predicate<String> permits) {
         MessageCatalog catalog = MessageCatalog.live(appHome.resolve("messages"))
                 .withFallback(I18nSettings.builtinCatalog());
         Map<String, Object> v = new LinkedHashMap<>();
@@ -339,6 +350,11 @@ public final class ViewBinding {
             v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
             List<Map<String, Object>> rendered = new ArrayList<>();
             for (ViewFields.FieldDef field : fields) {
+                // A field whose write policy: the principal fails never renders (wave 4) —
+                // hiding it is derived from the same declaration the binder enforces.
+                if (field.policy() != null && !permits.test(field.policy())) {
+                    continue;
+                }
                 Map<String, Object> f = new LinkedHashMap<>();
                 f.put("name", field.name());
                 f.put("label", message(catalog, locale, field.labelKey(), field.labelFallback()));
@@ -366,7 +382,7 @@ public final class ViewBinding {
                 Embed embedded = childEmbeds.get(index);
                 if (embedded != null) {
                     c.put("embed", embedded.binding().model(
-                            embedContext(context, embedded), locale, pagePath));
+                            embedContext(context, embedded), locale, pagePath, permits));
                     c.put("embedTemplate", embedded.binding().entryTemplate());
                     children.add(c);
                     continue;
@@ -466,7 +482,7 @@ public final class ViewBinding {
                         // entry fragment, which brings its own card.
                         Embed embedded = panelEmbeds.get(index);
                         m.put("embed", embedded.binding().model(
-                                embedContext(context, embedded), locale, pagePath));
+                                embedContext(context, embedded), locale, pagePath, permits));
                         m.put("embedTemplate", embedded.binding().entryTemplate());
                     }
                     default -> throw new IllegalStateException(panel.type());

@@ -28,6 +28,13 @@ All notable changes to TesseraQL are documented here. The format follows
   entries now render alongside `v` on view-backed routes (`v`/`views` are reserved,
   `TQL-VIEW-3319`).
 
+- **Write-side field policy** (docs/view-composition.md wave 4): an `input:` field
+  takes `policy:` — a security policy the principal must satisfy to supply it —
+  enforced at the request binder (a failing principal's value follows the route's
+  readOnly behavior; an ignored value is treated as not supplied and never binds) and
+  mirrored by the derived form, which omits the field for that principal. Per-role
+  forms stop requiring N command routes. Operational like `required`/`writable`:
+  never accepted inside a domain; OpenAPI unchanged.
 - **HTML output masking** (docs/view-composition.md wave 3b): a view column's or
   detail field's explicit `domain:` reference now applies the domain's
   `classification`/`mask` to the rendered HTML through the same `FieldPolicyApplier`

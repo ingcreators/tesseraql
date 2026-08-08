@@ -30,7 +30,7 @@ public final class ViewFields {
     public record FieldDef(String name, String labelKey, String labelFallback, String widget,
             boolean required, Integer maxLength, java.math.BigDecimal min,
             java.math.BigDecimal max, List<String> options,
-            String column, String step) {
+            String column, String step, String policy) {
 
         /**
          * The result-set column the prefill reads: explicit, else the input name — which under
@@ -89,7 +89,7 @@ public final class ViewFields {
         return new FieldDef(name, labelKey, fallback, widget, input.required(),
                 input.maxLength(), input.min(), input.max(), options,
                 override == null ? null : override.column(),
-                "number".equals(input.type()) ? "any" : null);
+                "number".equals(input.type()) ? "any" : null, input.policy());
     }
 
     /** The widget an input renders as when the view does not say otherwise. */

@@ -383,6 +383,7 @@
         "classification": { "type": "string" },
         "mask": { "type": "string" },
         "widget": { "type": "string", "enum": ["text", "textarea", "number", "date", "datetime-local", "checkbox", "select", "hidden"], "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract." },
+        "policy": { "type": "string", "description": "Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain." },
         "items": {
           "type": "object",
           "properties": {

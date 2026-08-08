@@ -111,9 +111,9 @@ class ViewEjectorTest {
                 """);
         List<ViewFields.FieldDef> fields = List.of(
                 new ViewFields.FieldDef("name", "k", "Name", "text", true, 200, null, null,
-                        List.of(), null, null),
+                        List.of(), null, null, null),
                 new ViewFields.FieldDef("status", "k", "Status", "select", false, null, null,
-                        null, List.of("OPEN", "CLOSED"), null, null));
+                        null, List.of("OPEN", "CLOSED"), null, null, null));
         ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, fields,
                 "web/items/new/page.html");
         assertThat(file.content()).contains("hx-post=\"/items/create\"");
