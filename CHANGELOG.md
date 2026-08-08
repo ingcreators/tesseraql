@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking HTTP-wire changes** (docs/vocabulary-cleanup.md slice 3):
+  every framework JSON timestamp is an ISO-8601 UTC string — `/ops/slow-sql`,
+  `/ops/pinning`, and `/ops/traces*` drop their raw `…EpochMs` longs
+  (`startedAt`/`at`), and `/ops/audit`'s `occurredAt` stops being
+  `Timestamp.toString()`; every JSON writer sends
+  `application/json; charset=utf-8`; the attachment-upload and SCIM 201s carry
+  `Location` (RFC 7644 §3.3), the file-transfer 202 points `Location` at the
+  status resource (body keeps `statusUrl`), and
+  `POST /_tesseraql/ops/batch/jobs/{id}/run` answers **202 + Location**
+  instead of a bare 200; every rendered 429/503 carries `Retry-After`; the
+  htmx redirect negotiation is one shared helper (login/IamAdmin redirects now
+  answer htmx with `204 + HX-Redirect`); and `GET /_tesseraql/logout` is
+  removed — sign-out is a CSRF-carrying `POST /_tesseraql/logout`, and the
+  shell's sign-out menu item is a form.
 - **Pre-1.0 breaking value-vocabulary changes** (docs/vocabulary-cleanup.md
   slice 2): multi-word enum values go kebab-case (`auth: api-key`,
   `runOn: business-day | first-business-day-of-month |

@@ -62,6 +62,7 @@ The HTML renderer publishes a third reserved model variable beside `_csrf` and
 
 ```
 _account = { name, initials, accountHref: /_tesseraql/account, logoutHref: /_tesseraql/logout }
+# logoutHref is the action of the shell's sign-out POST form (a state change, never a GET link)
 ```
 
 and the shared shell renders an `hc-avatar` button with an `hc-popover` menu (account

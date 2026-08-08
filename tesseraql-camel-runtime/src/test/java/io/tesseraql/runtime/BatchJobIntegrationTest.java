@@ -126,7 +126,9 @@ class BatchJobIntegrationTest {
 
         HttpResponse<String> run = send("POST",
                 "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
-        assertThat(run.statusCode()).isEqualTo(200);
+        assertThat(run.statusCode()).isEqualTo(202);
+        assertThat(run.headers().firstValue("Location").orElse(""))
+                .startsWith("/_tesseraql/ops/batch/executions/");
         JsonNode runBody = MAPPER.readTree(run.body());
         assertThat(runBody.path("status").asText()).isEqualTo("COMPLETED");
         assertThat(runBody.path("executionId").asText()).isNotBlank();
@@ -366,7 +368,9 @@ class BatchJobIntegrationTest {
         HttpResponse<String> run = send("POST",
                 "/_tesseraql/ops/batch/jobs/user.chainExtract/run", token,
                 "{\"businessDate\": \"2026-08-03\"}");
-        assertThat(run.statusCode()).isEqualTo(200);
+        assertThat(run.statusCode()).isEqualTo(202);
+        assertThat(run.headers().firstValue("Location").orElse(""))
+                .startsWith("/_tesseraql/ops/batch/executions/");
         assertThat(run.body()).contains("COMPLETED");
 
         JobExecution chained = runtime.jobRepository().listExecutions(500).stream()

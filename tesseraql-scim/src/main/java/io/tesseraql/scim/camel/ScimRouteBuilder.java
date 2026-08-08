@@ -90,7 +90,12 @@ public final class ScimRouteBuilder extends RouteBuilder {
     private void createUser(Exchange exchange) throws Exception {
         ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class),
                 ScimUser.class);
-        respond(exchange, 201, users.create(request));
+        ScimUser created = users.create(request);
+        // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location.
+        exchange.getMessage().setHeader("Location",
+                exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class)
+                        + "/" + created.id());
+        respond(exchange, 201, created);
     }
 
     private void getUser(Exchange exchange) throws Exception {
@@ -131,7 +136,11 @@ public final class ScimRouteBuilder extends RouteBuilder {
     private void createGroup(Exchange exchange) throws Exception {
         ScimGroup request = mapper.readValue(exchange.getMessage().getBody(String.class),
                 ScimGroup.class);
-        respond(exchange, 201, groups.create(request));
+        ScimGroup created = groups.create(request);
+        exchange.getMessage().setHeader("Location",
+                exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class)
+                        + "/" + created.id());
+        respond(exchange, 201, created);
     }
 
     private void getGroup(Exchange exchange) throws Exception {

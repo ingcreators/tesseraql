@@ -66,4 +66,21 @@ public final class RedirectRenderer implements Processor {
     private static boolean isHtmxRequest(Exchange exchange) {
         return "true".equalsIgnoreCase(exchange.getMessage().getHeader("HX-Request", String.class));
     }
+
+    /**
+     * The one htmx-aware redirect (docs/vocabulary-cleanup.md slice 3): an htmx caller gets
+     * {@code 204 + HX-Redirect} (a swap would inline the target page), everyone else the given
+     * 3xx + {@code Location}. Framework route builders use this instead of hand-rolling the
+     * negotiation.
+     */
+    public static void negotiate(Exchange exchange, int status, String location) {
+        if (isHtmxRequest(exchange)) {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+            exchange.getMessage().setHeader("HX-Redirect", location);
+        } else {
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+            exchange.getMessage().setHeader("Location", location);
+        }
+        exchange.getMessage().setBody("");
+    }
 }

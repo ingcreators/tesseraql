@@ -76,9 +76,8 @@ final class IamAdminRouteBuilder extends RouteBuilder {
                                 Map.of("userId", id));
                         sessions.invalidateOthersFor(id, "");
                     }
-                    exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 303);
-                    exchange.getMessage().setHeader("Location", USERS + "?bulk=" + ids.size());
-                    exchange.getMessage().setBody("");
+                    io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, 303,
+                            USERS + "?bulk=" + ids.size());
                 });
     }
 

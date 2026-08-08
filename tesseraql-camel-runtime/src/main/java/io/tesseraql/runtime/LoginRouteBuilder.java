@@ -95,7 +95,10 @@ final class LoginRouteBuilder extends RouteBuilder {
         rest().post(LOGIN_PATH).to("direct:tql.login");
         from("direct:tql.login").routeId("system.login").process(this::login);
 
-        rest().get("/_tesseraql/logout").to("direct:tql.logout");
+        // Sign-out is a state change: a POST with the CSRF token, like its logout-device
+        // and logout-others siblings — the CSRF-exempt GET is gone
+        // (docs/vocabulary-cleanup.md slice 3).
+        rest().post("/_tesseraql/logout").to("direct:tql.logout");
         from("direct:tql.logout").routeId("system.logout").process(this::logout);
 
         // Sign out every session but this one (roadmap Phase 48, the account surface). A
@@ -189,8 +192,15 @@ final class LoginRouteBuilder extends RouteBuilder {
                 Map.of("ok", true, "loginId", principal.get().loginId())));
     }
 
-    private void logout(Exchange exchange) {
-        sessions.invalidateFromCookie(exchange.getMessage().getHeader("Cookie", String.class));
+    private void logout(Exchange exchange) throws Exception {
+        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        if (token == null) {
+            Object field = parseBody(exchange).get("_csrf");
+            token = field == null ? null : String.valueOf(field);
+        }
+        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
+        sessions.invalidateFromCookie(cookie);
         // Expire the cookie client-side too (Max-Age=0), then land on the login page.
         setSessionCookie(exchange, sessions.cookieName()
                 + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
@@ -251,9 +261,7 @@ final class LoginRouteBuilder extends RouteBuilder {
 
     /** Shared with the recovery endpoints (roadmap Phase 50), same package. */
     static void redirect(Exchange exchange, int status, String location) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader("Location", location);
-        exchange.getMessage().setBody("");
+        io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, status, location);
     }
 
     private static void setSessionCookie(Exchange exchange, String cookie) {

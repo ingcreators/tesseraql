@@ -53,7 +53,7 @@ public final class AttachmentListProcessor implements Processor {
         }
         exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(items));
     }
 }

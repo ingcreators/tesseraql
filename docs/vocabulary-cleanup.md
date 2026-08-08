@@ -1,6 +1,8 @@
 # Vocabulary cleanup — one word per concept before the v1 freeze
 
-> **Status: design accepted; slices 1–4 pending.** Wave C of the pre-1.0
+> **Status: complete.** Slice 1 #621 (key renames), slice 2 #622 (value vocabulary),
+> slices 3+4 in one PR (HTTP wire + editor catch-up; ext 0.3.9 in-tree, tag rides the
+> next release the user names) — all merged 2026-08-08. Wave C of the pre-1.0
 > contract-consistency sweep (after [contract-bugfixes.md](contract-bugfixes.md)
 > waves A and B): the YAML-surface and HTTP-wire renames that make one concept one
 > word everywhere. Every item is a one-shot pre-1.0 break under the

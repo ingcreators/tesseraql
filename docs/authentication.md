@@ -331,7 +331,9 @@ in. The login method is therefore a **config switch**, with no per-route changes
 
 To run **SSO-only**, hide the password form with `tesseraql.console.login.password.enabled: false`;
 turn the login page off entirely with `tesseraql.console.login.enabled: false`. Logging out is
-`GET /_tesseraql/logout` (invalidates the session, clears the cookie).
+`POST /_tesseraql/logout` (a CSRF-carrying state change like its logout-device/others
+siblings; invalidates the session, clears the cookie — the CSRF-exempt GET is gone,
+vocabulary-cleanup slice 3).
 
 Credential guessing has a budget (docs/credential-throttle.md): failed sign-ins throttle
 per submitted login id (10/15m) and per presented address (100/15m), on by default and

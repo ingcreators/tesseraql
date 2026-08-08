@@ -113,7 +113,11 @@
           <span class="hc-menu__label" th:text="${_account.name}">User</span>
           <a class="hc-menu__item" th:if="${_account.accountHref != null}"
              th:href="${_account.accountHref}">Account settings</a>
-          <a class="hc-menu__item" th:href="${_account.logoutHref}">Sign out</a>
+          <!-- Sign-out is a state change: a CSRF-carrying POST, never a GET link. -->
+          <form method="post" th:action="${_account.logoutHref}">
+            <input type="hidden" name="_csrf" th:value="${_csrf}">
+            <button class="hc-menu__item" type="submit">Sign out</button>
+          </form>
         </nav>
       </div>
     </th:block>
