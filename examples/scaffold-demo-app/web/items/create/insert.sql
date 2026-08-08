@@ -1,4 +1,4 @@
--- tesseraql-scaffold-checksum: sha256:aad24efe116bf3bb339d7bb5337145f97b1ae96f1db80511a754473f3bdb8910
+-- tesseraql-scaffold-checksum: sha256:fae351b5e93507322bd5bea797ce46290bbcf5d073156a3d030ef3faa275abd5
 -- Scaffolded insert for the items table: audit columns stay explicit in the SQL (Phase 18).
 insert into items (
   name,
@@ -15,8 +15,8 @@ insert into items (
 ) values (
   /* name */ 'sample',
   /* quantity */ 1,
-  /* unitPrice */ 1,
-  /* dueDate */ '2026-01-01',
+  /* unit_price */ 1,
+  /* due_date */ '2026-01-01',
   /* active */ true,
   /* note */ 'sample',
   1,

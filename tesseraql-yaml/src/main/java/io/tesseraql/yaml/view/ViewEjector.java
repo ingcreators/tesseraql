@@ -471,7 +471,7 @@ public final class ViewEjector {
 
     /** The null-safe prefill expression an ejected field reads its current value from. */
     private static String prefill(ViewFields.FieldDef field) {
-        String column = field.column() != null ? field.column() : ViewFields.snake(field.name());
+        String column = field.column() != null ? field.column() : field.name();
         return "row == null ? '' : row" + key(column) + "";
     }
 

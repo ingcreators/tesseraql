@@ -33,11 +33,11 @@ class DecisionScaffolderTest {
     @Test
     void theGeneratedDeclarationCompilesThroughTheManifestPass(@TempDir Path dir)
             throws Exception {
-        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("shippingFee", inputs(),
+        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("shipping_fee", inputs(),
                 List.of("fee", "carrier"), false, true, 3);
 
         assertThat(files).extracting(ScaffoldedFile::path).containsExactly(
-                "decisions/shipping-fee.yml", "db/migration/V3__decision_shipping_fee.sql");
+                "decisions/shipping_fee.yml", "db/migration/V3__decision_shipping_fee.sql");
         for (ScaffoldedFile file : files) {
             Path target = dir.resolve(file.path());
             Files.createDirectories(target.getParent());
@@ -46,12 +46,12 @@ class DecisionScaffolderTest {
         // The load compiles the source mapping (DecisionSets.compileSource), so a generated
         // declaration that did not match its own migration's columns would fail right here.
         DecisionSets sets = DecisionSets.load(dir, new SimpleYamlParser());
-        assertThat(sets.decisions()).containsKey("shippingFee");
+        assertThat(sets.decisions()).containsKey("shipping_fee");
     }
 
     @Test
     void theMigrationCarriesOneColumnPerCellAndTheChildTable(@TempDir Path dir) {
-        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("shippingFee", inputs(),
+        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("shipping_fee", inputs(),
                 List.of("fee"), false, true, 1);
         String migration = files.get(1).content();
 
@@ -68,7 +68,7 @@ class DecisionScaffolderTest {
 
     @Test
     void uniqueSkipsThePriorityColumnAndDeclaration() {
-        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("bonusTier",
+        List<ScaffoldedFile> files = new DecisionScaffolder().scaffold("bonus_tier",
                 Map.of("amount", "between"), List.of("rate"), true, false, 1);
 
         assertThat(files.get(0).content())
