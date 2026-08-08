@@ -1,6 +1,19 @@
 # Unicode identifiers — one verbatim name from DDL to template
 
-> **Status: design.** Table and column names written in any script — Japanese is the
+> **Status: complete.** Design #625; slices #626 (contract + hard rejectors), #627
+> (silent-skip extractors), #628 (the verbatim break + scaffold-demo regen), #629
+> (sanitizers + CJK Studio search), #630 (WireNames/UnicodePaths HTTP layer, the
+> 受注管理 gallery app, docs/identifiers.md) — all merged 2026-08-08. Track 5's IT
+> settled open decision 1 the hard way: the router matches request paths as sent
+> (encoded) against decoded templates, and its parameter names are Java regex group
+> names (`[A-Za-z][A-Za-z0-9]*` — even `order_id` was unrepresentable),
+> so the runtime now decodes non-ASCII triplets pre-match and carries positional
+> stand-ins on the wire. Deviation from the letter of track 3: DocService's
+> route↔table graph keys keep their lowercase fold — unquoted ASCII SQL is
+> case-insensitive and the fold is a no-op for CJK; only the camel↔snake guessing
+> died. Original design below.
+
+Table and column names written in any script — Japanese is the
 > driving case — become first-class identifiers, and the framework stops converting
 > names between layers: the DDL column name **is** the YAML field name **is** the SQL
 > bind name **is** the template model key **is** the JSON key. This is a one-shot
