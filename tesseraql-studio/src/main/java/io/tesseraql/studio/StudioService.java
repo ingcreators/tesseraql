@@ -2278,7 +2278,8 @@ public final class StudioService {
     private static String slug(String description) {
         String slug = description == null
                 ? ""
-                : description.strip().replaceAll("[^A-Za-z0-9]+", "_").replaceAll("^_+|_+$", "");
+                : description.strip().replaceAll("[^\\p{L}\\p{N}]+", "_")
+                        .replaceAll("^_+|_+$", "");
         if (slug.isEmpty()) {
             throw new TqlException(NEW_ROUTE, "A migration needs a description");
         }

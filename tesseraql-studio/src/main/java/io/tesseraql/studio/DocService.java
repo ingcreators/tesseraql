@@ -71,7 +71,7 @@ public final class DocService {
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4042);
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
+    private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     /** Overlay-aware search filters: {@code key:value} tokens that narrow by the run report. */
@@ -802,8 +802,17 @@ public final class DocService {
         }
         List<String> tokens = new ArrayList<>();
         for (String token : NON_WORD.split(text.toLowerCase(Locale.ROOT))) {
-            if (!token.isBlank()) {
-                tokens.add(token);
+            if (token.isBlank()) {
+                continue;
+            }
+            tokens.add(token);
+            // A CJK run carries no word boundaries to split on, so every suffix is indexed
+            // too — the index's prefix matching over suffixes is substring matching, which
+            // is how 管理 finds 受注管理 (docs/unicode-identifiers.md).
+            if (!token.chars().allMatch(c -> c < 128)) {
+                for (int i = 1; i < token.length(); i++) {
+                    tokens.add(token.substring(i));
+                }
             }
         }
         return tokens;

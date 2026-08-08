@@ -340,6 +340,32 @@ class DocServiceTest {
     }
 
     @Test
+    void searchFindsJapaneseRoutesBySubstring(@TempDir Path dir) throws Exception {
+        // The ASCII tokenizer split on every Japanese character, indexing zero tokens —
+        // Japanese apps were unsearchable. A CJK run is indexed with its suffixes, so the
+        // prefix matcher finds mid-string runs like 管理 (docs/unicode-identifiers.md).
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        Files.createDirectories(dir.resolve("web/受注"));
+        Files.writeString(dir.resolve("web/受注/list.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/受注/get.yml"), """
+                version: tesseraql/v1
+                id: 受注管理.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: list.sql
+                """);
+        DocService service = new DocService(new ManifestLoader().load(dir));
+
+        assertThat(service.search("受注")).anySatisfy(
+                hit -> assertThat(hit.id()).isEqualTo("受注管理.list"));
+        assertThat(service.search("管理")).anySatisfy(
+                hit -> assertThat(hit.id()).isEqualTo("受注管理.list"));
+    }
+
+    @Test
     void readsTheRunHistoryAndDegradesWhenAbsent(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"),

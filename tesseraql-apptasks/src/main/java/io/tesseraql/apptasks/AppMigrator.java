@@ -146,6 +146,8 @@ public final class AppMigrator {
     }
 
     private static String sanitize(String name) {
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
+        // Unicode letters survive (docs/unicode-identifiers.md) — an ASCII-only class mapped
+        // every Japanese app name to underscores, so two apps shared one history table.
+        return name.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}_]", "_");
     }
 }

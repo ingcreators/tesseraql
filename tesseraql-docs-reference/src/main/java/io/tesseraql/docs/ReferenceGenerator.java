@@ -55,7 +55,11 @@ public final class ReferenceGenerator {
 
     /** GitHub-slugger-compatible heading anchors, shared by both pages. */
     static String slug(String heading) {
-        return heading.toLowerCase().replaceAll("[^a-z0-9 _-]", "").trim().replace(' ', '-');
+        // Unicode letters survive, as github-slugger keeps them — an ASCII-only class
+        // slugged every Japanese heading to "", colliding all anchors
+        // (docs/unicode-identifiers.md).
+        return heading.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}\\p{N} _-]", "")
+                .trim().replace(' ', '-');
     }
 
     /** Markdown table cells: pipes escaped, line breaks flattened. */
