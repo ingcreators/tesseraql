@@ -124,6 +124,12 @@ public final class ErrorResponseRenderer implements Processor {
                         && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+        // Capacity refusals are retryable; every 429/503 the envelope renders says so
+        // (docs/vocabulary-cleanup.md slice 3) — the login throttle was the only surface
+        // that did.
+        if (status == 429 || status == 503) {
+            exchange.getMessage().setHeader("Retry-After", "5");
+        }
         // A browser opening an auth: browser admin page with no session gets bounced to the login
         // page (post/redirect/get) instead of a raw JSON 401 — only for a top-level HTML GET, never
         // an htmx swap, a JSON/API client, or a 403 (authenticated-but-unauthorized never loops).

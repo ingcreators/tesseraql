@@ -111,7 +111,10 @@ public final class FileImportProcessor implements Processor {
         }
         exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        // 202 points at the status resource (docs/vocabulary-cleanup.md slice 3); the body
+        // keeps statusUrl/fileUrl for existing consumers.
+        exchange.getMessage().setHeader("Location", urlPath + "/" + transferId);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
             exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {

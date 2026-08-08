@@ -231,15 +231,18 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
         from("direct:ops.slowSql").routeId("ops.slowSql")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> dashboard.slowSql()));
+                .process(jsonProcessor(exchange -> mapList(dashboard.slowSql(),
+                        OperationsRouteBuilder::sqlExecutionWire)));
 
         from("direct:ops.traces").routeId("ops.traces")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> dashboard.traces(scope(exchange))));
+                .process(jsonProcessor(exchange -> mapList(dashboard.traces(scope(exchange)),
+                        OperationsRouteBuilder::spanWire)));
 
         from("direct:ops.traceTree").routeId("ops.traceTree")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> dashboard.traceTree(scope(exchange))));
+                .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(scope(exchange)),
+                        OperationsRouteBuilder::traceNodeWire)));
 
         from("direct:ops.traceSummary").routeId("ops.traceSummary")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -257,7 +260,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
         from("direct:ops.pinning").routeId("ops.pinning")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> dashboard.pinning()));
+                .process(jsonProcessor(exchange -> pinningWire(dashboard.pinning())));
 
         from("direct:ops.outbox").routeId("ops.outbox")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
@@ -341,6 +344,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         JobExecution execution = runner.run(jobId, params, "manual",
                 principal == null ? null : principal.loginId());
+        // Work accepted, poll the execution: the same 202 + Location contract the
+        // file-transfer start answers (docs/vocabulary-cleanup.md slice 3).
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
+        exchange.getMessage().setHeader("Location",
+                "/_tesseraql/ops/batch/executions/" + execution.id());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("executionId", execution.id());
         result.put("status", execution.status().name());
@@ -459,7 +467,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private Processor jsonProcessor(java.util.function.Function<Exchange, Object> handler) {
         return exchange -> {
             Object body = handler.apply(exchange);
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+            // A handler that set its own status (the 202 accepted-run) keeps it.
+            if (exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE) == null) {
+                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+            }
             exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
                     "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(body));
@@ -495,5 +506,70 @@ final class OperationsRouteBuilder extends RouteBuilder {
         exchange.getMessage().setHeader("Content-Disposition", "attachment; filename=\""
                 + download.filename().replaceAll("[\\r\\n\"]", "_") + "\"");
         exchange.getMessage().setBody(download.content());
+    }
+
+    // ---- wire shapes: ISO-8601 timestamps only (docs/vocabulary-cleanup.md slice 3) ----
+
+    private static <T> List<Map<String, Object>> mapList(List<T> items,
+            java.util.function.Function<T, Map<String, Object>> mapper) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (T item : items) {
+            out.add(mapper.apply(item));
+        }
+        return out;
+    }
+
+    private static String iso(long epochMs) {
+        return java.time.Instant.ofEpochMilli(epochMs).toString();
+    }
+
+    private static Map<String, Object> sqlExecutionWire(io.tesseraql.core.diag.SqlExecution e) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("sqlId", e.sqlId());
+        map.put("mode", e.mode());
+        map.put("durationMs", e.durationMs());
+        map.put("rowCount", e.rowCount());
+        map.put("startedAt", iso(e.startedAtEpochMs()));
+        return map;
+    }
+
+    private static Map<String, Object> spanWire(io.tesseraql.core.telemetry.SpanSample span) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("name", span.name());
+        map.put("traceId", span.traceId());
+        map.put("spanId", span.spanId());
+        map.put("parentSpanId", span.parentSpanId());
+        map.put("attributes", span.attributes());
+        map.put("durationMs", span.durationMs());
+        map.put("error", span.error());
+        map.put("startedAt", iso(span.startedAtEpochMs()));
+        return map;
+    }
+
+    private static Map<String, Object> traceNodeWire(
+            io.tesseraql.opsui.OpsDashboard.TraceNode node) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("span", spanWire(node.span()));
+        map.put("durationMs", node.durationMs());
+        map.put("selfMs", node.selfMs());
+        map.put("startedAt", node.startedAt());
+        map.put("slow", node.slow());
+        map.put("children", mapList(node.children(), OperationsRouteBuilder::traceNodeWire));
+        return map;
+    }
+
+    private static Map<String, Object> pinningWire(
+            io.tesseraql.opsui.OpsDashboard.PinningSummary summary) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("count", summary.count());
+        map.put("recent", mapList(summary.recent(), event -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("carrierThread", event.carrierThread());
+            row.put("durationMs", event.durationMs());
+            row.put("topFrame", event.topFrame());
+            row.put("at", iso(event.atEpochMs()));
+            return row;
+        }));
+        return map;
     }
 }

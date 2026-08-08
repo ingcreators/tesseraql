@@ -169,6 +169,7 @@ deny-by-default host allow-list. Polling is part of the managed-connector surfac
 [managed connectors](connectors.md) for the full `poll:` reference.
 
 **Manual runs** go through the operations API: `POST /_tesseraql/ops/batch/jobs/{jobId}/run`
+(a **202** whose `Location` points at the execution detail — accepted, poll there)
 (gated by the `ops.batch.run` policy) runs the job immediately and answers with the
 execution id and final status. The JSON request body becomes the job's parameters. Declared
 `input:` on the job document the expected names and types; each value is available to steps

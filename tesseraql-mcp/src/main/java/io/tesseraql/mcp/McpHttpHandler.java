@@ -26,7 +26,7 @@ public final class McpHttpHandler {
 
     /** The header naming the MCP session, issued at initialize and echoed on later requests. */
     public static final String SESSION_HEADER = "Mcp-Session-Id";
-    private static final String JSON = "application/json";
+    private static final String JSON = "application/json; charset=utf-8";
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final McpServer server;

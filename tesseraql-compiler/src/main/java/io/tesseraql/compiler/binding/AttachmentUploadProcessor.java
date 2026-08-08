@@ -100,7 +100,13 @@ public final class AttachmentUploadProcessor implements Processor {
         body.put("checksum", a.checksum());
         exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 201);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        // 201 identifies what it created (docs/vocabulary-cleanup.md slice 3): the
+        // attachment's own subtree URL under the upload path.
+        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        if (uri != null && !uri.isBlank()) {
+            exchange.getMessage().setHeader("Location", uri + "/" + a.id());
+        }
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(body));
     }
 

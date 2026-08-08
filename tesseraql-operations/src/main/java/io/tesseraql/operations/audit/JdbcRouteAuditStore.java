@@ -104,7 +104,10 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
                     row.put("durationMs", rs.getLong("duration_ms"));
                     row.put("params", rs.getString("params_json"));
                     row.put("traceId", rs.getString("trace_id"));
-                    row.put("occurredAt", String.valueOf(rs.getTimestamp("occurred_at")));
+                    java.sql.Timestamp occurred = rs.getTimestamp("occurred_at");
+                    // ISO-8601 on the wire, not Timestamp.toString (vocabulary-cleanup slice 3).
+                    row.put("occurredAt",
+                            occurred == null ? null : occurred.toInstant().toString());
                     out.add(row);
                 }
             }
