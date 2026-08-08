@@ -24,8 +24,9 @@
 > submitted requisition with an actor handoff. Slice 4: lint `TQL-WORKFLOW-3115` —
 > `current_state` literals against declared states, narrowed to one workflow's states
 > when the file pins exactly one declared `doc_type`. **All four slices are
-> implemented**; track F (structured error details) remains gated on the Phase 34
-> compatibility contract, carrying this document's target shape.
+> implemented**, and **track F (structured error details) shipped 2026-08-08 as a
+> one-shot pre-1.0 break** — details render as the `error.details` namespace and the
+> guard refusal keys took the natural names `details.code`/`details.message`.
 > The follow-up campaign from
 > [workflow expressiveness](workflow-expressiveness.md) (all four slices shipped,
 > #534–#537) and the [procurement demo](procurement-demo.md). Grounded in what the
@@ -72,7 +73,8 @@ Three smaller frictions surfaced on the same path:
   the same typo class, far more frequent in gallery SQL — are not.
 - The error payload's flat `putIfAbsent` details merge forced the guard refusal keys
   to be named `guard`/`guardMessage` because `code`/`message` would be shadowed by
-  the renderer's own top-level keys.
+  the renderer's own top-level keys. (Resolved by track F below: details are now the
+  `error.details` namespace and the refusal keys are `details.code`/`details.message`.)
 
 This design turns each of those from a workaround into a specification.
 
@@ -93,7 +95,7 @@ with the step order the docs already promise ([approval workflow](approval-workf
 2. `decide:` evaluation — after document binds, before the guard;
 3. state legality — mismatch throws `TQL-WORKFLOW-3201`;
 4. guard, both forms — expression or SQL guard file; refusal throws
-   `TQL-WORKFLOW-3202` carrying `guard`/`guardMessage`;
+   `TQL-WORKFLOW-3202` carrying the declared refusal as `details.code`/`details.message`;
 5. task authority — an open task the caller does not hold throws `TQL-WORKFLOW-3203`;
 6. conditional state advance (managed store or app `stateColumn`) — a raced
    concurrent transition surfaces as `409`;
@@ -253,26 +255,29 @@ comment: a future Camel upgrade that flips the default must not silently double 
 route count and resurrect direct consumers nobody sends to (or the reverse). One
 line, twice; also an input to the Camel 4.21 adoption review.
 
-## Track F — structured error details (target shape; gated on the compat contract)
+## Track F — structured error details (shipped 2026-08-08 as a one-shot pre-1.0 break)
 
-Today `TqlException.details()` merges **flat** into the rendered error object with
-`putIfAbsent`, so the renderer's own top-level `code`/`message` shadow any
-same-named detail key — which is why the guard refusal keys are spelled
+Before this track, `TqlException.details()` merged **flat** into the rendered error
+object with `putIfAbsent`, so the renderer's own top-level `code`/`message` shadowed
+any same-named detail key — which is why the guard refusal keys were spelled
 `guard`/`guardMessage` instead of the natural `code`/`message`. Every future
-feature detail dodges the same landmine.
+feature detail dodged the same landmine.
 
-Target shape — details become a namespace:
+The shipped shape — details are a namespace:
 
 ```json
 { "error": { "code": "TQL-WORKFLOW-3202", "message": "…", "details": { "code": "not-funded", "message": "…", "attempted": [] } } }
 ```
 
-This is a **breaking payload change** for every consumer (Studio, portal try-it,
-hypermedia-components field-errors, gallery clients, the suites' code-row idiom), so
-it belongs to the roadmap Phase 34 compatibility-contract work and must land before
-1.0 — this document fixes the target shape so Phase 34 inherits a decision, not a
-debate. Out of scope here: the migration mechanics (dual-emit window vs. one-shot
-pre-1.0 break).
+This was a **breaking payload change** for JSON consumers of the envelope, delivered
+as a **one-shot pre-1.0 break** (no dual-emit window) under the pre-1.0
+latest-release-only support posture. The browser surfaces were unaffected: they all
+consume the htmx field-errors HTML fragment, whose attribute contract is independent
+of the JSON nesting. The guard refusal keys took the natural names
+`details.code`/`details.message`; the suite outcome rows keep their `code`/`guard`
+columns, and the dispatch `attempted[]` entries keep `code` (registry) alongside
+`guard` (the declared refusal code). Phase 34 now freezes the corrected shape
+instead of shipping a break at contract time.
 
 ## Slices
 
@@ -290,7 +295,8 @@ pre-1.0 break).
 4. **Lint `TQL-WORKFLOW-3115`** — `current_state` literals, with single-doc_type
    narrowing; gallery proves zero false positives.
 
-Track F ships with Phase 34, carrying this document's target shape.
+Track F shipped ahead of Phase 34 (2026-08-08), carrying this document's target
+shape; the compatibility contract inherits it as the frozen v1 envelope.
 
 ## Open questions
 

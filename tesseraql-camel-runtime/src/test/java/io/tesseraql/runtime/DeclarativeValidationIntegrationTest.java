@@ -101,7 +101,7 @@ class DeclarativeValidationIntegrationTest {
         JsonNode error = MAPPER.readTree(response.body()).path("error");
         assertThat(error.path("code").asText()).isEqualTo("TQL-FIELD-4220");
         assertThat(error.path("message").asText()).isEqualTo("Unprocessable Entity");
-        JsonNode field = error.path("fields").get(0);
+        JsonNode field = error.path("details").path("fields").get(0);
         assertThat(field.path("rule").asText()).isEqualTo("uniqueEmail");
         assertThat(field.path("field").asText()).isEqualTo("email");
         assertThat(field.path("code").asText()).isEqualTo("duplicate");
@@ -121,7 +121,8 @@ class DeclarativeValidationIntegrationTest {
                  "startDate": "2026-12-31", "endDate": "2026-01-01"}""", Map.of());
 
         assertThat(response.statusCode()).isEqualTo(422);
-        JsonNode fields = MAPPER.readTree(response.body()).path("error").path("fields");
+        JsonNode fields = MAPPER.readTree(response.body())
+                .path("error").path("details").path("fields");
         assertThat(fields).hasSize(2);
         assertThat(List.of(fields.get(0).path("rule").asText(),
                 fields.get(1).path("rule").asText()))

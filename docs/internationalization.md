@@ -79,10 +79,10 @@ key keeps riding as `messageKey` while `message` carries the resolved text; the 
 
 ```json
 {"error": {"code": "TQL-FIELD-4220", "message": "入力内容を確認してください",
-  "fields": [
+  "details": {"fields": [
     {"rule": "userExists", "field": "userName", "code": "unknown-user",
      "messageKey": "users.provision.unknown-user",
-     "message": "指定されたユーザーは存在しません。"}]}}
+     "message": "指定されたユーザーは存在しません。"}]}}}
 ```
 
 - Validation rules declare keys as before (`message: users.provision.unknown-user`).

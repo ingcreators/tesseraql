@@ -103,7 +103,7 @@ Two orthogonal checks gate every transition, and they answer different questions
   - the **SQL guard file** (`guard: {file: …, code: …, message: …}`): a 2-way **query**
     evaluated on the transition's connection, after `decide:` resolution — rows pass, no
     rows fails `422` carrying the declared `code` (and optional `messages/` key) in the
-    payload as `guard`/`guardMessage`, so the caller learns *why*. The right tool for set
+    payload as `error.details.code`/`error.details.message`, so the caller learns *why*. The right tool for set
     conditions ("every line is priced", "a shipment is registered") that would otherwise
     force denormalized counters or zero-row commands failing as a generic conflict.
     `document.*`, `decision.*`, `principal.*`, `key`, and ambient binds are in scope
@@ -174,11 +174,12 @@ and no member holding answers `422` with each attempt's refusal — the code, an
 SQL guard files the declared refusal code:
 
 ```json
-{ "error": { "code": "TQL-WORKFLOW-3202", "dispatch": "submit_decision",
-             "attempted": [ { "transition": "approve", "status": 422,
-                              "code": "TQL-WORKFLOW-3202", "guard": "not-funded" },
-                            { "transition": "advance", "status": 409,
-                              "code": "TQL-WORKFLOW-3201" } ] } }
+{ "error": { "code": "TQL-WORKFLOW-3202",
+             "details": { "dispatch": "submit_decision",
+               "attempted": [ { "transition": "approve", "status": 422,
+                                "code": "TQL-WORKFLOW-3202", "guard": "not-funded" },
+                              { "transition": "advance", "status": 409,
+                                "code": "TQL-WORKFLOW-3201" } ] } } }
 ```
 
 A dispatch may declare its own `decide:`, evaluated **once**, before the member loop,

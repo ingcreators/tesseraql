@@ -4,6 +4,23 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- **Pre-1.0 breaking JSON-contract change — structured error details**
+  (docs/transition-engine.md Track F): a `TqlException`'s structured details no longer
+  merge flat into the rendered `error` object; they render as the `error.details`
+  namespace (`{"error": {"code", "message", "details": {...}}}`), so a detail may use
+  any key — `code` and `message` included — without colliding with the envelope's own.
+  Accordingly the SQL guard refusal keys renamed from `guard`/`guardMessage` to the
+  natural `details.code`/`details.message`, and `fields`, `conflict`, `dispatch`,
+  `attempted`, and `maxBytes` moved under `details`. Unchanged: `error.code`/
+  `error.message`, the htmx field-errors HTML fragment contract, the suite outcome
+  rows' `code`/`guard` columns, and the dispatch `attempted[]` entry shape. An htmx
+  error alert now renders a guard's declared refusal message as its body, so a form
+  shows *why* the transition refused.
+
 ## 0.12.0 - 2026-08-07
 
 The UI/UX release: a full-surface refresh of Studio and every other framework-provided

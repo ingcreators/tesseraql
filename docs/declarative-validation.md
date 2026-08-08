@@ -377,10 +377,10 @@ A violating request answers `422` with `TQL-FIELD-4220`:
 
 ```json
 {"error": {"code": "TQL-FIELD-4220", "message": "Unprocessable Entity",
-  "fields": [
+  "details": {"fields": [
     {"rule": "uniqueEmail", "field": "email", "code": "duplicate",
      "messageKey": "members.email.duplicate", "message": "Already exists."},
-    {"rule": "dateOrder", "field": "endDate", "code": "end-before-start"}]}}
+    {"rule": "dateOrder", "field": "endDate", "code": "end-before-start"}]}}}
 ```
 
 `code` defaults to the rule id. The declared message key rides as `messageKey`, and
