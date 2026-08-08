@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.TesseraqlProperties;
 import java.io.IOException;
@@ -126,7 +127,8 @@ class WorkflowTransitionIntegrationTest {
         // (docs/workflow-expressiveness.md).
         HttpResponse<String> refused = post("/funded-requests/PR-2/clear", "requester-1");
         assertThat(refused.statusCode()).isEqualTo(422);
-        assertThat(refused.body()).contains("not-funded");
+        JsonNode details = MAPPER.readTree(refused.body()).path("error").path("details");
+        assertThat(details.path("code").asText()).isEqualTo("not-funded");
         assertThat(instanceState("funded_request", "PR-2")).isNull();
     }
 
@@ -143,7 +145,10 @@ class WorkflowTransitionIntegrationTest {
         // names every attempted transition with its typed refusal code.
         HttpResponse<String> none = post("/funded-requests/PR-3/settle", "requester-1");
         assertThat(none.statusCode()).isEqualTo(422);
-        assertThat(none.body()).contains("attempted").contains("clear").contains("writeoff")
+        JsonNode noneDetails = MAPPER.readTree(none.body()).path("error").path("details");
+        assertThat(noneDetails.path("dispatch").asText()).isEqualTo("settle");
+        assertThat(noneDetails.path("attempted")).hasSize(2);
+        assertThat(none.body()).contains("clear").contains("writeoff")
                 .contains("TQL-WORKFLOW-3201");
     }
 

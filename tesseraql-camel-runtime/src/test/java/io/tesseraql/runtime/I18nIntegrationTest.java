@@ -129,7 +129,7 @@ class I18nIntegrationTest {
         JsonNode error = MAPPER.readTree(response.body()).path("error");
         assertThat(error.path("code").asText()).isEqualTo("TQL-FIELD-4220");
         assertThat(error.path("message").asText()).isEqualTo("入力内容を確認してください");
-        JsonNode field = error.path("fields").get(0);
+        JsonNode field = error.path("details").path("fields").get(0);
         assertThat(field.path("messageKey").asText())
                 .isEqualTo("users.provision.unknown-user");
         assertThat(field.path("message").asText()).isEqualTo("指定されたユーザーは存在しません。");

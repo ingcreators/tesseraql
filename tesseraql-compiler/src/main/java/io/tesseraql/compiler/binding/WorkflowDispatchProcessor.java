@@ -123,8 +123,10 @@ public final class WorkflowDispatchProcessor implements Processor {
                 refusal.put("transition", member.id());
                 refusal.put("status", code.endsWith("3201") ? 409 : 422);
                 refusal.put("code", code);
-                if (refused.details() != null && refused.details().get("guard") != null) {
-                    refusal.put("guard", refused.details().get("guard"));
+                if (refused.details() != null && refused.details().get("code") != null) {
+                    // A SQL guard's declared refusal code (`details.code`) keeps the
+                    // `guard` name here: the entry's `code` is the registry code.
+                    refusal.put("guard", refused.details().get("code"));
                 }
                 attempted.add(refusal);
                 context.clear();

@@ -489,8 +489,8 @@ public final class TestRunner {
             // Every pipeline refusal is typed: the documented code becomes the row, and a
             // SQL guard file's declared refusal code rides the `guard` column.
             outcome.put("code", refusal.code().toString());
-            if (refusal.details() != null && refusal.details().get("guard") != null) {
-                outcome.put("guard", refusal.details().get("guard"));
+            if (refusal.details() != null && refusal.details().get("code") != null) {
+                outcome.put("guard", refusal.details().get("code"));
             }
             return outcome;
         }

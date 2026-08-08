@@ -134,7 +134,7 @@ class TransactionalCommandIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(409);
         JsonNode error = MAPPER.readTree(response.body()).path("error");
         assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4091");
-        JsonNode field = error.path("fields").get(0);
+        JsonNode field = error.path("details").path("fields").get(0);
         assertThat(field.path("field").asText()).isEqualTo("lines");
         assertThat(field.path("code").asText()).isEqualTo("unknown-product");
         assertThat(field.path("constraint").asText()).isEqualTo("order_lines_product_fk");
@@ -176,9 +176,10 @@ class TransactionalCommandIntegrationTest {
         assertThat(stale.statusCode()).isEqualTo(409);
         JsonNode error = MAPPER.readTree(stale.body()).path("error");
         assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4092");
-        assertThat(error.path("conflict").path("expectedRows").asInt()).isEqualTo(1);
-        assertThat(error.path("conflict").path("actualRows").asInt()).isEqualTo(0);
-        assertThat(error.path("conflict").path("hint").asText()).contains("another user");
+        JsonNode conflict = error.path("details").path("conflict");
+        assertThat(conflict.path("expectedRows").asInt()).isEqualTo(1);
+        assertThat(conflict.path("actualRows").asInt()).isEqualTo(0);
+        assertThat(conflict.path("hint").asText()).contains("another user");
         assertThat(queryOne("select status from orders where id = " + orderId).get("status"))
                 .isEqualTo("APPROVED"); // the stale write did not stick
     }

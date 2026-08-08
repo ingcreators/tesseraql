@@ -323,7 +323,7 @@ JavaScript (or without Plot) the table simply stays visible.
 ## Custom error pages
 
 Drop `templates/errors/<status>.html` (or the catch-all `templates/errors/error.html`) into
-the app and a top-level browser GET that fails renders it, with `status`, `error.code`, and
-`error.message` in the model. htmx swaps keep the inline error fragment and API clients keep
+the app and a top-level browser GET that fails renders it, with `status`, `error.code`,
+`error.message`, and any structured `error.details` in the model. htmx swaps keep the inline error fragment and API clients keep
 the JSON envelope; with no template, every caller gets the JSON envelope. A broken error
 template never masks the original failure — the response falls back to JSON.

@@ -22,9 +22,11 @@ import org.apache.camel.Processor;
  * <p>External responses expose only {@code code}, a generic {@code message}, and a trace id;
  * internal diagnostics (source, line) are not leaked (design ch. 37.3). The one addition is
  * {@link TqlException#details()}: structured payload the thrower explicitly declared safe —
- * field-level constraint errors and optimistic-locking conflict hints (roadmap Phase 18).
- * htmx requests ({@code HX-Request} header) receive those details as an inline HTML fragment
- * instead of JSON, so a form can surface them next to its fields.
+ * field-level constraint errors and optimistic-locking conflict hints (roadmap Phase 18) —
+ * rendered as the {@code error.details} namespace (transition-engine Track F), so a detail
+ * may use any key, {@code code} and {@code message} included, without colliding with the
+ * envelope's own. htmx requests ({@code HX-Request} header) receive those details as an
+ * inline HTML fragment instead of JSON, so a form can surface them next to its fields.
  *
  * <p>Messages localize through the app's message catalog with the negotiated request locale
  * (roadmap Phase 22): a field error's declared key keeps riding as {@code messageKey} (and
@@ -107,11 +109,12 @@ public final class ErrorResponseRenderer implements Processor {
         Map<String, Object> error = new LinkedHashMap<>();
         error.put("code", code.toString());
         error.put("message", statusMessage(tag, status));
-        if (cause instanceof TqlException tql) {
-            tql.details().forEach((key, value) -> error.putIfAbsent(key, value));
+        if (cause instanceof TqlException tql && !tql.details().isEmpty()) {
+            Map<String, Object> details = new LinkedHashMap<>(tql.details());
+            localizeFields(details, tag);
+            localizeConflict(details, tag);
+            error.put("details", details);
         }
-        localizeFields(error, tag);
-        localizeConflict(error, tag);
         Map<String, Object> body = Map.of("error", error);
 
         // Inbound form fields can surface as multi-line message headers (platform-http); drop them
@@ -207,8 +210,8 @@ public final class ErrorResponseRenderer implements Processor {
     }
 
     /** Localizes the field-error entries in place: {@code messageKey} + resolved {@code message}. */
-    private void localizeFields(Map<String, Object> error, String tag) {
-        if (!(error.get("fields") instanceof List<?> fields)) {
+    private void localizeFields(Map<String, Object> details, String tag) {
+        if (!(details.get("fields") instanceof List<?> fields)) {
             return;
         }
         List<Map<String, Object>> localized = new ArrayList<>();
@@ -240,12 +243,12 @@ public final class ErrorResponseRenderer implements Processor {
             }
             localized.add(field);
         }
-        error.put("fields", localized);
+        details.put("fields", localized);
     }
 
     /** Resolves a conflict hint declared as a message key; literal hints pass through. */
-    private void localizeConflict(Map<String, Object> error, String tag) {
-        if (!(error.get("conflict") instanceof Map<?, ?> raw) || raw.get("hint") == null) {
+    private void localizeConflict(Map<String, Object> details, String tag) {
+        if (!(details.get("conflict") instanceof Map<?, ?> raw) || raw.get("hint") == null) {
             return;
         }
         Map<String, Object> conflict = new LinkedHashMap<>();
@@ -256,7 +259,7 @@ public final class ErrorResponseRenderer implements Processor {
             conflict.put("hintKey", hint);
             conflict.put("hint", MessageCatalog.interpolate(resolved, conflict));
         }
-        error.put("conflict", conflict);
+        details.put("conflict", conflict);
     }
 
     /**
@@ -314,13 +317,16 @@ public final class ErrorResponseRenderer implements Processor {
      */
     @SuppressWarnings("unchecked")
     private String htmxFragment(Map<String, Object> error) {
+        Map<String, Object> details = error.get("details") instanceof Map<?, ?> raw
+                ? (Map<String, Object>) raw
+                : Map.of();
         StringBuilder html = new StringBuilder();
         html.append("<div class=\"hc-alert\" data-variant=\"error\" role=\"alert\""
                 + " data-hc-field-errors data-error-code=\"")
                 .append(escape(String.valueOf(error.get("code")))).append("\">");
         html.append("<p class=\"hc-alert__title\">")
                 .append(escape(String.valueOf(error.get("message")))).append("</p>");
-        if (error.get("fields") instanceof java.util.List<?> fields && !fields.isEmpty()) {
+        if (details.get("fields") instanceof java.util.List<?> fields && !fields.isEmpty()) {
             html.append("<ul class=\"hc-alert__errors\">");
             for (Object entry : fields) {
                 Map<String, Object> field = (Map<String, Object>) entry;
@@ -349,10 +355,15 @@ public final class ErrorResponseRenderer implements Processor {
             }
             html.append("</ul>");
         }
-        if (error.get("conflict") instanceof Map<?, ?> conflict
+        if (details.get("conflict") instanceof Map<?, ?> conflict
                 && conflict.get("hint") != null) {
             html.append("<p class=\"hc-alert__body\">")
                     .append(escape(String.valueOf(conflict.get("hint")))).append("</p>");
+        } else if (details.get("message") != null) {
+            // A workflow guard's declared refusal message (details.code/details.message):
+            // surface the WHY in the alert body, not just the status phrase.
+            html.append("<p class=\"hc-alert__body\">")
+                    .append(escape(String.valueOf(details.get("message")))).append("</p>");
         }
         return html.append("</div>").toString();
     }

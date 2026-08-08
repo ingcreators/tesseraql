@@ -200,14 +200,14 @@ public final class TransitionExecutor {
                 }
             }
             if (!holds) {
-                // `guard`/`guardMessage`, not `code`/`message`: the renderer's top-level
-                // keys would shadow them (details merge is putIfAbsent).
+                // The renderer nests details under `error.details`, so the declared refusal
+                // rides the natural names: `code` is the app's refusal code, `message` its text.
                 Map<String, Object> details = new LinkedHashMap<>();
-                details.put("guard", transition.guardCode() == null
+                details.put("code", transition.guardCode() == null
                         ? "guard-failed"
                         : transition.guardCode());
                 if (transition.guardMessage() != null) {
-                    details.put("guardMessage", transition.guardMessage());
+                    details.put("message", transition.guardMessage());
                 }
                 throw TqlException.builder(GUARD_FAILED)
                         .message("Workflow '" + transition.workflowId() + "': transition '"

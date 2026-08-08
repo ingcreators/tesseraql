@@ -156,9 +156,9 @@ route answers `409 Conflict` (`TQL-SQL-4092`) with a usable hint:
 
 ```json
 {"error": {"code": "TQL-SQL-4092", "message": "Conflict",
-  "conflict": {"step": "sql", "expectedRows": 1, "actualRows": 0,
+  "details": {"conflict": {"step": "sql", "expectedRows": 1, "actualRows": 0,
     "hintKey": "tql.conflict.stale",
-    "hint": "The record may have been changed or deleted by another user; reload it and retry the operation"}}}
+    "hint": "The record may have been changed or deleted by another user; reload it and retry the operation"}}}}
 ```
 
 The hint resolves through the message catalog with the request locale
@@ -185,8 +185,8 @@ errors:
 
 ```json
 {"error": {"code": "TQL-SQL-4091", "message": "Conflict",
-  "fields": [{"field": "customerId", "code": "unknown-customer",
-              "constraint": "orders_customer_fk"}]}}
+  "details": {"fields": [{"field": "customerId", "code": "unknown-customer",
+              "constraint": "orders_customer_fk"}]}}}
 ```
 
 A mapping may declare its own `message:` key; without one, the built-in

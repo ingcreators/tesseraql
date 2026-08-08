@@ -38,10 +38,48 @@ class ErrorResponseRendererTest {
         assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(409);
         assertThat(body).contains("\"code\":\"TQL-SQL-4090\"")
                 .contains("\"message\":\"Conflict\"")
+                // Details render as the error.details namespace (transition-engine track F).
+                .contains("\"details\":{\"fields\":[")
                 .contains("\"field\":\"email\"")
                 .contains("\"code\":\"duplicate\"")
                 // The internal exception message is not leaked (design ch. 37.3).
                 .doesNotContain("internal detail");
+    }
+
+    @Test
+    void detailKeysNamedCodeAndMessageDoNotCollideWithTheEnvelope() throws Exception {
+        // A workflow SQL guard's declared refusal (transition-engine track F): the natural
+        // names live under details, beside the envelope's own registry code and phrase.
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.WORKFLOW, 3202))
+                .message("internal detail that must not leak")
+                .details(Map.of("code", "not-funded", "message", "The request is not funded."))
+                .build());
+
+        new ErrorResponseRenderer().process(exchange);
+
+        String body = exchange.getMessage().getBody(String.class);
+        assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
+        assertThat(body).contains("\"code\":\"TQL-WORKFLOW-3202\"")
+                .contains("\"message\":\"Unprocessable Entity\"")
+                .contains("\"code\":\"not-funded\"")
+                .contains("\"message\":\"The request is not funded.\"")
+                .doesNotContain("internal detail");
+    }
+
+    @Test
+    void htmxFragmentRendersTheGuardRefusalMessageAsTheAlertBody() throws Exception {
+        Exchange exchange = exchangeWith(TqlException
+                .builder(new TqlErrorCode(TqlDomain.WORKFLOW, 3202))
+                .details(Map.of("code", "not-funded", "message", "The request is not funded."))
+                .build());
+        exchange.getMessage().setHeader("HX-Request", "true");
+
+        new ErrorResponseRenderer().process(exchange);
+
+        assertThat(exchange.getMessage().getBody(String.class))
+                .contains("hc-alert__body")
+                .contains("The request is not funded.");
     }
 
     @Test
@@ -115,6 +153,7 @@ class ErrorResponseRendererTest {
         assertThat(exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(422);
         assertThat(body).contains("\"code\":\"TQL-FIELD-4220\"")
                 .contains("\"message\":\"Unprocessable Entity\"")
+                .contains("\"details\":{\"fields\":[")
                 .contains("\"rule\":\"uniqueEmail\"")
                 .contains("\"field\":\"email\"")
                 // The declared key rides as messageKey (roadmap Phase 22); the human text under
@@ -201,7 +240,8 @@ class ErrorResponseRendererTest {
         new ErrorResponseRenderer().process(exchange);
 
         String body = exchange.getMessage().getBody(String.class);
-        assertThat(body).contains("\"hintKey\":\"tql.conflict.stale\"")
+        assertThat(body).contains("\"details\":{\"conflict\":{")
+                .contains("\"hintKey\":\"tql.conflict.stale\"")
                 .contains("他のユーザーによってレコードが変更または削除された可能性があります");
     }
 
