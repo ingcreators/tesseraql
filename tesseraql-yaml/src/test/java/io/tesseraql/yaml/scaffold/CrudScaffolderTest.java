@@ -153,7 +153,7 @@ class CrudScaffolderTest {
                 .contains("recipe: query-html")
                 .contains("view: list.view.yml")
                 // Declarative pagination (Phase 41): the framework appends the clause.
-                .contains("page:")
+                .contains("pagination:")
                 .contains("maxSize: 200")
                 .contains("sort: query.sort")
                 .contains("enum: [id, name, quantity, unit_price, due_date, active, note]")
