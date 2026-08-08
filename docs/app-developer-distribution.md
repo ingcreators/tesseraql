@@ -290,7 +290,12 @@ today.
   coexist** — jpackage app images and the fat-jar dist ship on every release, the demo container
   image covers Docker-centric hosts, and the Homebrew tap / Scoop bucket sit on top as the
   polished installers.
-- `tesseraql.modules` key name and `modules.lock` format.
+- ~~`tesseraql.modules` key name and `modules.lock` format.~~ **Closed: as shipped**
+  (2026-08-08, decision-closure wave): the `tesseraql.modules` config key, the `--modules`
+  CLI flag, and the committed `modules.lock` (coordinates + checksums) are the contract —
+  they are in users' repos, CI caches, and mirrors, and no alternative shape was ever
+  recorded; revisiting the format now would be the breaking change the freeze exists to
+  prevent.
 - ~~Whether `identity-schema` folds into `migrate` or stays a separate command.~~ **Resolved:
   stays a separate command** (`tesseraql identity-schema`) — admin seeding and the file/env-only
   password handling are distinct concerns from schema migration, and it maps 1:1 to the mojo.

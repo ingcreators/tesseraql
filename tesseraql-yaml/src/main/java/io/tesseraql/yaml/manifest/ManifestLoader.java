@@ -385,9 +385,10 @@ public final class ManifestLoader {
             io.tesseraql.yaml.domain.FieldDomains domains,
             io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
             io.tesseraql.yaml.decision.DecisionSets decisions, List<RouteFile> files) {
-        if (domains.isEmpty() && ruleSets.isEmpty() && decisions.isEmpty()) {
-            return files;
-        }
+        // No wholesale skip when the shared-definition trees are empty: a `domain:` or
+        // `use:` reference in an app that declares none must fail the load, not silently
+        // drop the constraints it names (docs/vocabulary-cleanup.md wave D closure of
+        // shared-definitions-reach open question 1).
         List<RouteFile> resolved = new ArrayList<>(files.size());
         for (RouteFile file : files) {
             resolved.add(new RouteFile(file.httpMethod(), file.urlPath(), file.source(),
@@ -465,9 +466,6 @@ public final class ManifestLoader {
 
     private static RouteDefinition withFieldDomains(io.tesseraql.yaml.domain.FieldDomains domains,
             Path source, RouteDefinition def) {
-        if (domains.isEmpty()) {
-            return def;
-        }
         Map<String, io.tesseraql.yaml.model.InputField> input = def.input();
         if (input.values().stream().anyMatch(field -> field.domain() != null)) {
             Map<String, io.tesseraql.yaml.model.InputField> merged = new java.util.LinkedHashMap<>();
@@ -490,8 +488,7 @@ public final class ManifestLoader {
 
     private static RouteDefinition withRuleSets(
             io.tesseraql.yaml.rules.ValidationRuleSets sets, Path source, RouteDefinition def) {
-        if (sets.isEmpty()
-                || def.validate().values().stream().noneMatch(rule -> rule.use() != null)) {
+        if (def.validate().values().stream().noneMatch(rule -> rule.use() != null)) {
             return def;
         }
         Map<String, io.tesseraql.yaml.model.ValidationRule> merged = new java.util.LinkedHashMap<>();

@@ -8,6 +8,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking load-time change — an unresolved `domain:` or `use:` reference
+  always fails the load** (the contract sweep's decision-closure wave): an app with
+  no `domains/` or `rules/` tree at all used to silently drop every reference —
+  the constraints a typo names simply never applied. The empty-tree skip is gone;
+  the same unknown-reference error now fires whether or not the tree exists.
 - **Pre-1.0 breaking HTTP-wire changes** (docs/vocabulary-cleanup.md slice 3):
   every framework JSON timestamp is an ISO-8601 UTC string — `/ops/slow-sql`,
   `/ops/pinning`, and `/ops/traces*` drop their raw `…EpochMs` longs
