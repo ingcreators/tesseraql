@@ -186,9 +186,13 @@ enables — the demo is the fixture the design is measured against.
 
 - Should a guard file's `message:` key double as the `dispatch:` none-held explanation
   (concatenated per member), or does dispatch need its own message?
-- `stamp:` writes bypass the command's `/*%scope */` — the engine stamps by key after the
-  state advance already established row legality. Is that authority story crisp enough,
-  or should stamps render through the same scope directive machinery? (Leaning: the
-  advance's optimistic `WHERE current_state = from` plus the transition's security is the
-  authority; a scope on a by-key UPDATE the engine issues adds noise, not safety. To be
-  revisited against the threat model before slice 2.)
+- ~~`stamp:` writes bypass the command's `/*%scope */` — is that authority story crisp
+  enough?~~ **Closed: yes, the revisit is recorded** (2026-08-08, decision-closure wave —
+  the "before slice 2" gate had passed without a written verdict): a stamp is a by-key
+  UPDATE the engine itself issues, only after (1) the transition's route security admitted
+  the caller, (2) task authority held, and (3) the optimistic
+  `WHERE current_state = from` advance established that this exact row is mid-transition.
+  A `/*%scope */` on that statement could only re-check what step 1 already decided with
+  the same principal, and a scope mismatch there would strand a document half-transitioned
+  (state advanced, stamp skipped). The command SQL — the part that touches arbitrary
+  rows — keeps its scope directive.

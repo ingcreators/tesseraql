@@ -112,4 +112,57 @@ class FieldDomainResolutionTest {
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("unknown domain 'sku'");
     }
+
+    @Test
+    void aDomainReferenceWithoutAnyDomainsTreeStillFailsTheLoad(@TempDir Path dir)
+            throws Exception {
+        // The empty-tree skip used to swallow this (vocabulary-cleanup wave D): an app with
+        // no domains/ at all silently dropped the constraints a `domain:` reference names.
+        Path home = app(dir);
+        deleteRecursively(home.resolve("domains"));
+
+        assertThatThrownBy(() -> new ManifestLoader().load(home))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("unknown domain 'sku'");
+    }
+
+    @Test
+    void aUseReferenceWithoutAnyRulesTreeStillFailsTheLoad(@TempDir Path dir) throws Exception {
+        Path home = app(dir);
+        Files.writeString(home.resolve("web/products/get.yml"), """
+                version: tesseraql/v1
+                id: products.search
+                kind: route
+                recipe: query-json
+                input:
+                  q: { type: string }
+                validate:
+                  qKnown:
+                    use: neverDeclared
+                    params: { q: params.q }
+                    field: q
+                sql:
+                  file: search.sql
+                  mode: query
+                """);
+
+        assertThatThrownBy(() -> new ManifestLoader().load(home))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("unknown rule 'neverDeclared'");
+    }
+
+    private static void deleteRecursively(Path root) throws Exception {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (var walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.delete(path);
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+        }
+    }
 }

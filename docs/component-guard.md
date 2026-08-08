@@ -87,6 +87,7 @@ framework-required component (warning, floor applies).
 
 1. Should the boot failure list the resolving call site (route id / plugin name) when known?
    Leaning yes — a denied resolution with no provenance is hard to act on.
-2. Is `bean` too disruptive for the baseline (framework internals may resolve it)? To verify at
-   implementation; if the framework needs it, it moves to the implicit floor and stays out of
-   the baseline-denied set.
+2. ~~Is `bean` too disruptive for the baseline (framework internals may resolve it)?~~
+   **Closed: no** (2026-08-08, the contract-sweep decision-closure wave): a repo sweep found no
+   framework-internal `bean:` endpoint resolution (registry binds do not pass the guard), so
+   `bean` stays in the baseline-denied set as shipped.

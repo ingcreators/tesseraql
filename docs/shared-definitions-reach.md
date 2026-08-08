@@ -218,10 +218,12 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
 
 ## Open questions
 
-1. Should an unknown `domain:` be a load error everywhere, matching `use:`? It is today, for
-   routes — `FieldDomains.require` throws. Once resolution reaches tools and consumers it becomes
-   one automatically, which is right but is a new failure mode for manifests that "worked".
-   Leaning: yes, and name it in the CHANGELOG — a silently unenforced constraint is the bug.
+1. ~~Should an unknown `domain:` be a load error everywhere, matching `use:`?~~ **Closed:
+   yes — shipped** (2026-08-08, decision-closure wave): resolution already reached tools and
+   consumers; the remaining gap was the empty-tree skip, under which an app with no
+   `domains/` (or `rules/`) at all silently dropped every `domain:`/`use:` reference. The
+   skip is gone: an unresolved reference fails the load whether or not the tree exists,
+   named in the CHANGELOG.
 2. Does the MCP input schema advertise domain-derived constraints to the model once domains
    resolve? `McpSchema`'s javadoc frames type-and-required as deliberate scope. Leaning yes for
    enum/pattern/length: a model that sees the constraint produces a valid call, and the alternative

@@ -300,9 +300,10 @@ shape; the compatibility contract inherits it as the frozen v1 envelope.
 
 ## Open questions
 
-- Should the dispatch success payload's `transition` field be opt-out (a client that
-  must not learn the lane)? Default-on seems right — the audit trail names the fired
-  transition anyway.
+- ~~Should the dispatch success payload's `transition` field be opt-out?~~ **Closed:
+  default-on, no opt-out** (2026-08-08, decision-closure wave): the audit trail names the
+  fired transition regardless, so hiding it from the payload buys no confidentiality —
+  and an unconditional field is a simpler frozen contract than a conditional one.
 - A member's own `decide:` re-using the dispatch-level table with different params:
   legal (different alias) or suspicious enough to warn?
 - When the executor exists, should the deadline sweeper's escalation path also run

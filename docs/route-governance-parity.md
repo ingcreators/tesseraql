@@ -325,10 +325,11 @@ Ordered so that each lands independently and the guard arrives before the long t
 
 ## Open questions
 
-1. Should the scope resolver reach `JobExecutor` at all? A batch job has no principal, so
-   `/*%scope … */` there can only mean a job-parameter-driven scope. Leaning: make it a lint error
-   in batch SQL rather than wiring a resolver with nothing to resolve — which is the fail-fast half
-   of slice 4 doing the work.
+1. ~~Should the scope resolver reach `JobExecutor` at all?~~ **Closed: no — the lint error
+   shipped** (`TQL-SCOPE-3014`, an error): a `/*%scope … */` directive in batch-job SQL (or
+   any SQL no scope resolver reaches) fails the build instead of the 3am job run; a batch
+   scope is a job-parameter-driven filter. Confirmed as shipped in the 2026-08-08
+   decision-closure wave.
 2. Does the per-tenant fix belong in the processor or one layer down, in a routing `DataSource`
    bound under the connector name? The wrapper would fix every current and future executor at once
    and make Matrix 2's tenant column unconditional. Leaning wrapper, if the pool-per-tenant

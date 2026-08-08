@@ -101,9 +101,12 @@ tenant lint (`TQL-TENANT-3001` neighborhood) that catches a missing tenant bind 
 1. Should list binds (`principal.roles`) be permitted in `IN (...)` positions only, mirroring
    how existing list params are constrained, or anywhere an array type is legal on the target
    database? Leaning: exactly the existing list-param rule, no special case.
-2. Is `principal.` the right prefix, or should the namespace unify with the existing families as
-   `ctx.principal.*` / `ctx.audit.*`? Leaning: keep `principal.` — `audit.*` and `tenant.id`
-   are established, and a rename buys uniformity at the cost of touching every example.
+2. ~~Is `principal.` the right prefix, or should the namespace unify under `ctx.*`?~~
+   **Closed: the three namespaces are the contract** (2026-08-08, decision-closure wave):
+   `principal.*`, `audit.*`, and `tenant.id` are the ambient families, frozen as-is — the
+   corpus is large (every gallery app), the prefixes are short and self-describing, and a
+   `ctx.*` unification would rewrite every `.sql` file for uniformity alone. A future
+   ambient family declares its own top-level prefix.
 
 ## Related designs
 
