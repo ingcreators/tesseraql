@@ -188,10 +188,13 @@ public final class MailComposer {
     private static Block block(String invocation) {
         int paren = invocation.indexOf('(');
         if (paren < 0) {
-            return invocation.matches("\\w+") ? new Block(invocation, List.of()) : null;
+            return io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(invocation)
+                    ? new Block(invocation, List.of())
+                    : null;
         }
         String name = invocation.substring(0, paren);
-        if (!name.matches("\\w+") || !invocation.endsWith(")")) {
+        if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(name)
+                || !invocation.endsWith(")")) {
             return null;
         }
         return new Block(name,

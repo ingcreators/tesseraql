@@ -109,6 +109,20 @@ class AppLinterScopeTest {
     }
 
     @Test
+    void aJapaneseScopeGovernedTableIsSeen(@TempDir Path dir) throws Exception {
+        writeScope(dir);
+        // An ASCII-only extractor silently dropped 顧客 from the governed set, so the
+        // unscoped write below drew no warning (docs/unicode-identifiers.md).
+        writeRoute(dir, "select * from 顧客 得 where /*%scope orders_scope on 得 */ (1=1)\n");
+        writeCommandRoute(dir,
+                "update 顧客 set 状態 = /* status */ 'x' where id = /* id */ 1\n");
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        assertThat(writeScopeCodes(findings)).containsExactly("TQL-SEC-4100");
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4100")
+                && f.message().contains("顧客"));
+    }
+
+    @Test
     void scopedWriteOnAScopeGovernedTableIsClean(@TempDir Path dir) throws Exception {
         writeScope(dir);
         writeRoute(dir, "select * from orders o where /*%scope orders_scope on o */ (1=1)\n");

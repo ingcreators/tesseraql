@@ -2176,10 +2176,13 @@ public final class AppLinter {
         return files;
     }
 
+    // The trailing alias guard is a lookahead, not \b: \b only bounds ASCII word characters,
+    // so a Japanese alias would never "end" and the table would silently escape the scope set.
     private static final Pattern SCOPED_TABLE_ALIASED = Pattern.compile(
-            "(?is)\\b(?:from|join|into|update)\\s+([A-Za-z_][\\w.]*)\\s+(?:as\\s+)?ALIAS\\b");
+            "(?is)\\b(?:from|join|into|update)\\s+([\\p{L}_][\\p{L}\\p{N}_.]*)"
+                    + "\\s+(?:as\\s+)?ALIAS(?![\\p{L}\\p{N}_])");
     private static final Pattern WRITE_TARGET = Pattern.compile(
-            "(?is)^\\s*(?:update|delete\\s+from)\\s+([A-Za-z_][\\w.]*)");
+            "(?is)^\\s*(?:update|delete\\s+from)\\s+([\\p{L}_][\\p{L}\\p{N}_.]*)");
 
     /**
      * A defense-in-depth guard (docs/data-scoping.md, docs/security-hardening.md): if the app scopes
@@ -2256,7 +2259,7 @@ public final class AppLinter {
                 if (write.find()) {
                     out.add(lastSegment(write.group(1)));
                 } else {
-                    Matcher from = Pattern.compile("(?is)\\bfrom\\s+([A-Za-z_][\\w.]*)")
+                    Matcher from = Pattern.compile("(?is)\\bfrom\\s+([\\p{L}_][\\p{L}\\p{N}_.]*)")
                             .matcher(sql);
                     if (from.find()) {
                         out.add(lastSegment(from.group(1)));
@@ -4440,13 +4443,16 @@ public final class AppLinter {
 
     /** {@code ~{tql/email/<library> :: <fragment>} references in a mail body. */
     private static final Pattern EMAIL_FRAGMENT_REF = Pattern
-            .compile("~\\{tql/email/(hc-email(?:-layout)?)\\s*::\\s*(\\w+)");
+            .compile("~\\{tql/email/(hc-email(?:-layout)?)\\s*::\\s*("
+                    + io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER + ")");
     /** The root identifier of a {@code ${...}} expression. */
     private static final Pattern EXPR_ROOT = Pattern
-            .compile("\\$\\{\\s*([A-Za-z_][A-Za-z0-9_]*)");
+            .compile("\\$\\{\\s*(" + io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER + ")");
     /** {@code th:each="alias[, iterStat] : ..."} alias declarations. */
     private static final Pattern EACH_ALIAS = Pattern.compile(
-            "th:each=\"\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?:,\\s*([A-Za-z_][A-Za-z0-9_]*))?\\s*:");
+            "th:each=\"\\s*(" + io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER
+                    + ")\\s*(?:,\\s*(" + io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER
+                    + "))?\\s*:");
     /** {@code th:with="a=..., b=..."} alias declarations. */
     private static final Pattern WITH_ALIAS = Pattern.compile("th:with=\"([^\"]*)\"");
     /** Expression roots that are always fine: the mail model plus literal keywords. */

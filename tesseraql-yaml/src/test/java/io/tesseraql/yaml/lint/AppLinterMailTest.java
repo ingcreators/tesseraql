@@ -59,6 +59,18 @@ class AppLinterMailTest {
     }
 
     @Test
+    void aJapaneseEachAliasIsDeclared(@TempDir Path dir) throws Exception {
+        writeApp(dir, "templates/mail/notice.txt");
+        Files.createDirectories(dir.resolve("templates/mail"));
+        // An ASCII-only alias pattern never collected 行, so every ${行.*} root was a
+        // false "unresolvable" warning (docs/unicode-identifiers.md).
+        Files.writeString(dir.resolve("templates/mail/notice.txt"),
+                "<tr th:each=\"行 : ${payload.items}\"><td th:text=\"${行.名前}\"></td></tr>\n");
+
+        assertThat(mailFindings(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
     void aMissingTemplateFileFailsTheBuild(@TempDir Path dir) throws Exception {
         writeApp(dir, "templates/mail/nope.html");
 

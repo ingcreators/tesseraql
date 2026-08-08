@@ -26,7 +26,8 @@ public final class EmailFragments {
     public static final String LAYOUT = "hc-email-layout";
 
     private static final Pattern SIGNATURE = Pattern
-            .compile("th:fragment=\"(\\w+)(?:\\(([^)]*)\\))?\"");
+            .compile("th:fragment=\"(" + io.tesseraql.core.sql.SqlIdentifiers.IDENTIFIER
+                    + ")(?:\\(([^)]*)\\))?\"");
     private static final String CLASSPATH_PREFIX = "tesseraql/templates/tql/email/";
 
     private EmailFragments() {

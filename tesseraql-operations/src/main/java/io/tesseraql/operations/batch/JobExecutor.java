@@ -667,7 +667,7 @@ public final class JobExecutor {
         }
         EvaluationContext evaluation = new EvaluationContext(context);
         java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("\\{([A-Za-z0-9_.]+)}").matcher(template);
+                .compile("\\{([\\p{L}\\p{N}_.]+)}").matcher(template);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
             Object value = evaluation.resolve(Arrays.asList(matcher.group(1).split("\\.")));

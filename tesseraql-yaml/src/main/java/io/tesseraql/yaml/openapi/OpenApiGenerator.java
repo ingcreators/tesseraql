@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 public final class OpenApiGenerator {
 
     private static final TqlErrorCode GEN_ERROR = new TqlErrorCode(TqlDomain.REPORT, 2001);
-    private static final Pattern PATH_PARAM = Pattern.compile("\\{(\\w+)\\}");
+    private static final Pattern PATH_PARAM = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER;
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Map<String, String> EXPORT_CONTENT_TYPES = Map.of(
             "csv", "text/csv; charset=utf-8",

@@ -214,7 +214,7 @@ public final class MessageCatalog {
             return template;
         }
         StringBuilder out = new StringBuilder(template.length());
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{(\\w+)}")
+        java.util.regex.Matcher matcher = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER
                 .matcher(template);
         while (matcher.find()) {
             Object value = params.get(matcher.group(1));
