@@ -393,7 +393,9 @@ public final class ErrorResponseRenderer implements Processor {
             // 4220: declarative validation rejected the input (roadmap Phase 19); other FIELD
             // failures are malformed requests.
             case FIELD -> code.number() == 4220 ? 422 : 400;
-            case RATE -> 429;
+            // 5030: the live-event registry is at capacity — server saturation, not caller
+            // misbehavior (docs/contract-bugfixes.md track I).
+            case RATE -> code.number() == 5030 ? 503 : 429;
             case LANE -> code.number() == 5031 ? 503 : 500;
             case STUDIO -> switch (code.number()) {
                 // 4230/4231/4233/4234: route-form / connector / recorder / row-edit input

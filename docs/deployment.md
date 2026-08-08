@@ -27,7 +27,8 @@ otherwise (status word only). Point container health checks at
   detailed health/metrics stay behind the authorized ops API.
 - Put a Cloudflare Access policy on `/_tesseraql/*` so the system consoles sit behind both the
   Cloudflare login and the app's own authentication.
-- `tesseraql.sessions.store: jdbc` keeps logins across container replacement.
+- Sessions are `jdbc` by default (shared `tql_session`, logins survive container
+  replacement); `tesseraql.sessions.store: memory` is the per-node opt-out.
 - `/assets/**` is CDN-cacheable (ETag/Cache-Control are set); vendor assets use version-less
   URLs, so purge the Cloudflare cache when upgrading browser libraries.
 

@@ -349,8 +349,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // history per component, Flyway's lock serializing concurrent node startups); the
         // stores' direct bootstrap below stays as the idempotent fallback for embedders.
         FrameworkMigrations.migrate(dataSource, frameworkDataSource);
-        // Browser sessions: in-memory per node by default; "jdbc" shares tql_session across all
-        // runtime nodes so a login made on one node resolves on every other (design ch. 11.2).
+        // Browser sessions: "jdbc" by default (docs/contract-bugfixes.md track G) — tql_session
+        // shared across all runtime nodes, so a login made on one node resolves on every other
+        // (design ch. 11.2) and survives a restart. "memory" is the explicit per-node opt-in
+        // for embedders and tests.
         // Constructed after Flyway on purpose: the versioned history owns evolutions like the
         // V2 subject column, and the store's direct ensureSchema stays the tolerated,
         // idempotent fallback for embedders without it.
@@ -373,7 +375,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         Integer sessionCap = manifest.config().getString("tesseraql.sessions.maxPerSubject")
                 .map(Integer::parseInt).orElse(null);
         if ("jdbc".equalsIgnoreCase(
-                manifest.config().getString("tesseraql.sessions.store").orElse("memory"))) {
+                manifest.config().getString("tesseraql.sessions.store").orElse("jdbc"))) {
             io.tesseraql.security.session.JdbcSessionStore jdbcSessions = new io.tesseraql.security.session.JdbcSessionStore(
                     frameworkDataSource, sessionTtl, sessionIdle, sessionCap,
                     io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME);
@@ -716,7 +718,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .anyMatch(name -> io.tesseraql.yaml.notify.NotificationChannels.INBOX
                         .equals(notificationChannels.require(name).type()));
         final LiveStreams liveStreams = inboxConfigured || !declaredTopics.isEmpty()
-                ? new LiveStreams()
+                ? new LiveStreams(
+                        manifest.config().getString("tesseraql.live.maxPerSubject")
+                                .map(Integer::parseInt)
+                                .orElse(LiveStreams.DEFAULT_MAX_PER_SUBJECT),
+                        manifest.config().getString("tesseraql.live.maxTotal")
+                                .map(Integer::parseInt).orElse(LiveStreams.DEFAULT_MAX_TOTAL))
                 : null;
         final io.tesseraql.core.inbox.InboxStore inboxStore;
         if (inboxConfigured) {

@@ -49,7 +49,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `children` | object |  |
 | `slots` | map of string |  |
 | `trigger` | [object](#trigger) | How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md. |
-| `overlap` | enum: `concurrent` \| `skip` | What a firing does while the previous execution still runs (kind: job): concurrent (default) runs anyway, skip records a SKIPPED execution naming the running one. Documented in jobs.md. |
+| `overlap` | enum: `skip` \| `concurrent` | What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md. |
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
 | `params` | map of [inputField](#inputfield) | A job's declared parameters (kind: job) - the same field contract routes declare with input:. Documented in jobs.md. |

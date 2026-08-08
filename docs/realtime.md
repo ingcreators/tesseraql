@@ -44,9 +44,13 @@ re-fetch their own view of the data.
   streams.
 - **The stream is session-authenticated** (like `auth: browser` routes) and only serves
   topics some route actually declares; unknown requested topics simply never fire.
-- **Bounded by construction**: subscriptions are capped per subject and globally (a new
-  stream evicts the oldest, and the browser's EventSource reconnects), signals coalesce
-  per topic, and idle `ping` frames keep intermediaries from severing quiet streams.
+- **Bounded by construction**: subscriptions are capped per subject (default 4,
+  `tesseraql.live.maxPerSubject`; one more evicts that subject's own oldest stream and the
+  browser's EventSource reconnects) and globally (default 256, `tesseraql.live.maxTotal`;
+  at the cap a new subscription is **refused** with `TQL-RATE-5030` as a 503 before the
+  stream opens — a full registry never ends someone else's live view; the page still works
+  without live refresh until a reload finds a free slot). Signals coalesce per topic, and
+  idle `ping` frames keep intermediaries from severing quiet streams.
 - **The refetch carries the live client state**: the typed search term and the current
   sort ride along, read from the DOM (the search box swaps the region without navigating,
   so the render-time URL can be stale) — and because the search box sits outside the

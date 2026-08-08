@@ -448,12 +448,14 @@ else re-derives.
 
 ## Open questions
 
-1. Should `jdbc` become the default session store? It fixes TTL, cap, and multi-node correctness in
-   one line and costs a table on first boot for the single-node case the memory store serves.
-   Leaning yes — the current default is the only one that silently ignores its own TTL key.
+1. ~~Should `jdbc` become the default session store?~~ **Closed: yes** (2026-08-08,
+   contract-bugfixes track G, pre-1.0 break): `tesseraql.sessions.store` defaults to `jdbc`;
+   `memory` is the explicit per-node opt-in for embedders and tests.
 2. Does the security-header step belong in the platform-http layer (covering every response
    including 404s from unmounted paths) or in a framework route base (covering only what the runtime
    mounts)? Leaning platform-http: the 404 branch is exactly the one an attacker reaches.
-3. Should `LiveStreams`' global cap evict at all, or refuse the new subscription with a clear error?
-   Eviction silently kills someone else's live view to serve this one. Leaning refuse-with-error at
-   the global cap and keep eviction only for the per-subject cap, where the victim is the same user.
+3. ~~Should `LiveStreams`' global cap evict at all, or refuse the new subscription?~~ **Closed:
+   refuse** (2026-08-08, contract-bugfixes track I, pre-1.0 break): the global cap answers
+   `TQL-RATE-5030` (503 + `Retry-After`) before the stream opens; the per-subject cap keeps
+   evicting the subject's own oldest stream. Both caps became configurable
+   (`tesseraql.live.maxPerSubject`/`maxTotal`).
