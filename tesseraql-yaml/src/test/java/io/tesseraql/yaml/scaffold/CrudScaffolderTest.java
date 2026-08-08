@@ -159,7 +159,7 @@ class CrudScaffolderTest {
                 .contains("enum: [id, name, quantity, unit_price, due_date, active, note]")
                 .contains("enum: [asc, desc]");
         assertThat(content(files, "web/items/list.view.yml"))
-                .contains("view: list")
+                .contains("recipe: list")
                 .contains("search: q")
                 .contains("sortable: true")
                 .contains("text: Open")
@@ -174,7 +174,7 @@ class CrudScaffolderTest {
         // The edit view derives its fields from the update route; version rides hidden and the
         // confirmed delete mounts in the footer slot.
         assertThat(content(files, "web/items/{id}/edit.view.yml"))
-                .contains("view: form")
+                .contains("recipe: form")
                 .contains("action: /items/{id}/update")
                 .contains("- name: version\n    widget: hidden")
                 .contains("footer: ../frags.html::confirm-delete");
@@ -187,7 +187,7 @@ class CrudScaffolderTest {
         // The create view derives every field from the create route (the tql/view/form
         // pattern renders the blessed mutating-form recipe).
         assertThat(content(files, "web/items/new/new.view.yml"))
-                .contains("view: form")
+                .contains("recipe: form")
                 .contains("action: /items/create")
                 .contains("header: ../frags.html::back-link");
 
@@ -285,7 +285,7 @@ class CrudScaffolderTest {
 
         assertThat(content(files, "rules/items.yml"))
                 .contains("itemsNameIsFree:")
-                .contains("binds: [name, excludeId]")
+                .contains("binds: { name: string, excludeId: integer }")
                 .contains("code: duplicate");
         assertThat(content(files, "rules/items-name-free.sql"))
                 .contains("/*%if excludeId != null */")
@@ -317,7 +317,7 @@ class CrudScaffolderTest {
 
         assertThat(content(files, "rules/order_lines.yml"))
                 .contains("orderLinesProductIdExists:")
-                .contains("binds: [productId]")
+                .contains("binds: { productId: integer }")
                 .contains("orderLinesWarehouseIdExists:")
                 .contains("code: unknown");
         assertThat(content(files, "rules/order_lines-product-id-exists.sql"))

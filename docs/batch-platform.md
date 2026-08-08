@@ -81,7 +81,7 @@ trigger:
   schedule:
     cron: "0 0 2 * * ?"          # fires daily — the cron says when to CONSIDER
     calendar: jp-banking          # the calendar says whether it COUNTS
-    runOn: lastBusinessDayOfMonth # businessDay | firstBusinessDayOfMonth | lastBusinessDayOfMonth
+    runOn: last-business-day-of-month # business-day | first-business-day-of-month | last-business-day-of-month
 ```
 
 - **The daily-consider model**: the cron fires, the calendar filters. "Last business
@@ -91,7 +91,7 @@ trigger:
   belief that it needs missed-date memory across firings — the detailed review found it
   does not: the shifted target is a **pure function of the calendar** ("does the fire
   date equal the first business day on or after this month's 5th?"), so
-  `dayOfMonth: 5` + `shift: nextBusinessDay|previousBusinessDay` are just two more
+  `dayOfMonth: 5` + `shift: next-business-day|previous-business-day` are just two more
   schedule qualifiers under the same model. The run's business date is the **nominal**
   date — the 5th's close, executed on the 7th, records the 5th — which is exactly what
   track A's business-date machinery exists to say.

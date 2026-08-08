@@ -97,7 +97,7 @@ class AppLinterCalendarsTest {
         // dayOfMonth without a calendar, out of range, combined with runOn - and runOn is
         // itself missing its calendar: four distinct declarations that cannot mean anything.
         List<LintFinding> findings = new AppLinter().lint(app(dir, null,
-                "    cron: \"0 0 8 * * ?\"\n    dayOfMonth: 45\n    runOn: businessDay"));
+                "    cron: \"0 0 8 * * ?\"\n    dayOfMonth: 45\n    runOn: business-day"));
         assertThat(findings.stream().filter(f -> "TQL-BATCH-4202".equals(f.code())))
                 .hasSize(4);
 
@@ -116,7 +116,7 @@ class AppLinterCalendarsTest {
                   jp-banking:
                     weekend: [saturday, sunday]
                 """, "    cron: \"0 0 8 * * ?\"\n    calendar: jp-banking\n"
-                + "    dayOfMonth: 5\n    shift: nextBusinessDay"));
+                + "    dayOfMonth: 5\n    shift: next-business-day"));
         assertThat(findings).noneMatch(finding -> finding.code().startsWith("TQL-BATCH-42"));
     }
 
@@ -130,7 +130,7 @@ class AppLinterCalendarsTest {
                     holidays:
                       source: { table: holidays, date: holiday_date, calendar: calendar_id }
                 """, "    cron: \"0 0 2 * * ?\"\n    calendar: jp-banking\n"
-                + "    runOn: lastBusinessDayOfMonth"));
+                + "    runOn: last-business-day-of-month"));
 
         assertThat(findings).noneMatch(finding -> finding.code().startsWith("TQL-BATCH-42"));
     }

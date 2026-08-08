@@ -42,6 +42,7 @@ class TestRunnerIntegrationTest {
     @Test
     void runsSqlAndContractCasesAndReportsFailures() {
         TestSuite suite = new TestSuiteLoader().parse("""
+                version: tesseraql/v1
                 tests:
                   - name: search finds sato
                     sql:
@@ -92,6 +93,7 @@ class TestRunnerIntegrationTest {
     @Test
     void runsWriteCasesInARolledBackTransaction() throws Exception {
         TestSuite suite = new TestSuiteLoader().parse("""
+                version: tesseraql/v1
                 tests:
                   - name: deactivating sato affects one row and the read-back sees it
                     sql:
@@ -145,6 +147,7 @@ class TestRunnerIntegrationTest {
                 """);
         TestRunner writeRunner = new TestRunner(dataSource, appHome);
         TestSuite suite = new TestSuiteLoader().parse("""
+                version: tesseraql/v1
                 tests:
                   - name: the insert returns the new row
                     sql:
@@ -175,6 +178,7 @@ class TestRunnerIntegrationTest {
     @Test
     void mismatchedExpectationsFailWithGuidance() {
         TestSuite suite = new TestSuiteLoader().parse("""
+                version: tesseraql/v1
                 tests:
                   - name: rowCount asserted on a write
                     sql:
@@ -244,6 +248,7 @@ class TestRunnerIntegrationTest {
         writeValidatedApp(appHome);
         TestRunner validationRunner = new TestRunner(dataSource, appHome);
         TestSuite suite = new TestSuiteLoader().parse("""
+                version: tesseraql/v1
                 tests:
                   - name: a taken name is rejected with the declared field error
                     validate:

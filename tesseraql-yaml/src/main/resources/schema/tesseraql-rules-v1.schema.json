@@ -4,6 +4,7 @@
   "title": "TesseraQL validation rule sets v1",
   "description": "Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules a route references from its 'validate:' block with 'use:'. Documented in validation-rule-sets.md.",
   "type": "object",
+  "required": ["version"],
   "properties": {
     "version": {
       "type": "string",
@@ -25,11 +26,12 @@
             "description": "Validation SQL, resolved relative to this document. Exactly one of rule: or file:."
           },
           "binds": {
-            "type": "array",
-            "items": {
-              "type": "string"
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["string", "integer", "number", "boolean", "date"]
             },
-            "description": "The bind contract a reference's params: must satisfy exactly. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here."
+            "description": "The typed bind contract a reference's params: must satisfy exactly - bind name to declared type, checked against the referencing route's input types at load. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here."
           },
           "code": {
             "type": "string",

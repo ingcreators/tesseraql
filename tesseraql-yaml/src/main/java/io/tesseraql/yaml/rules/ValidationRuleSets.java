@@ -68,8 +68,25 @@ public final class ValidationRuleSets {
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
-        rules.forEach((name, rule) -> checkDeclaredContract(dir, name, rule));
+        rules.forEach((name, rule) -> {
+            checkDeclaredTypes(name, rule);
+            checkDeclaredContract(dir, name, rule);
+        });
         return new ValidationRuleSets(dir, rules);
+    }
+
+    /** The scalar types a bind may declare — the input-field vocabulary, arrays excluded. */
+    private static final Set<String> BIND_TYPES = Set.of("string", "integer", "number",
+            "boolean", "date");
+
+    /** A typed contract must use the input-field type vocabulary. */
+    private static void checkDeclaredTypes(String name, RuleSetsDocument.RuleSet rule) {
+        rule.binds().forEach((bind, type) -> {
+            if (type == null || !BIND_TYPES.contains(type)) {
+                throw new TqlException(DECLARED_CONTRACT, "Rule '" + name + "' bind '" + bind
+                        + "' declares type '" + type + "' — one of " + BIND_TYPES);
+            }
+        });
     }
 
     /**
@@ -108,7 +125,7 @@ public final class ValidationRuleSets {
             return;
         }
         actual.removeIf(AmbientBinds::isAmbient);
-        Set<String> declared = new LinkedHashSet<>(rule.binds());
+        Set<String> declared = new LinkedHashSet<>(rule.binds().keySet());
         if (!declared.equals(actual)) {
             throw new TqlException(DECLARED_CONTRACT, "Rule '" + name + "' declares binds "
                     + declared + " but " + rule.file() + " binds " + actual
@@ -148,6 +165,16 @@ public final class ValidationRuleSets {
      */
     public ValidationRule resolve(String id, ValidationRule declared, Path routeDir,
             String source) {
+        return resolve(id, declared, routeDir, source, Map.of());
+    }
+
+    /**
+     * As {@link #resolve(String, ValidationRule, Path, String)}, additionally checking each
+     * wired {@code params.<field>} expression against the contract's declared bind type when
+     * the referencing route declares that input's type (docs/vocabulary-cleanup.md slice 2).
+     */
+    public ValidationRule resolve(String id, ValidationRule declared, Path routeDir,
+            String source, Map<String, io.tesseraql.yaml.model.InputField> routeInput) {
         if (declared.use() == null || declared.use().isBlank()) {
             return declared;
         }
@@ -162,12 +189,26 @@ public final class ValidationRuleSets {
                     + "' references unknown rule '" + declared.use()
                     + "' — declare it under rules/ or fix the reference");
         }
-        Set<String> contract = new LinkedHashSet<>(shared.binds());
+        Set<String> contract = new LinkedHashSet<>(shared.binds().keySet());
         if (!declared.params().keySet().equals(contract)) {
             throw new TqlException(CONTRACT, source + ": validation rule '" + id
                     + "' must wire exactly the binds " + contract + " of rule '"
                     + declared.use() + "', not " + declared.params().keySet());
         }
+        shared.binds().forEach((bind, type) -> {
+            String expr = declared.params().get(bind);
+            if (expr == null || !expr.startsWith("params.")) {
+                return;
+            }
+            io.tesseraql.yaml.model.InputField field = routeInput
+                    .get(expr.substring("params.".length()));
+            if (field != null && field.type() != null && !type.equals(field.type())) {
+                throw new TqlException(CONTRACT, source + ": validation rule '" + id
+                        + "' wires '" + bind + ": " + expr + "' (" + field.type()
+                        + ") against rule '" + declared.use() + "' which declares '" + bind
+                        + ": " + type + "' — the typed contract must match the input");
+            }
+        });
         String routeRelativeFile = shared.file() == null
                 ? null
                 : routeDir.relativize(rulesDir.resolve(shared.file()).normalize())

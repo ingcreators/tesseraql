@@ -3,7 +3,7 @@
 version: tesseraql/v1
 id: users.board.detail
 kind: view
-view: detail
+recipe: detail
 title: User
 fields:
   - name: name

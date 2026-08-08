@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 /**
  * The generated lookup of a table-backed decision (docs/decision-tables.md "Evaluation"):
  * ordinary SQL — one {@code (col IS NULL OR col ⟨op⟩ ?)} arm per mapped column, an EXISTS per
- * {@code in} child table and per {@code orgSubtree} closure test, the effective window, and a
+ * {@code in} child table and per {@code subtree} closure test, the effective window, and a
  * portable single-row fetch for {@code hitPolicy: first}.
  */
 class DecisionSourceTest {
@@ -25,7 +25,7 @@ class DecisionSourceTest {
         inputs.put("weight", new DecisionsDocument.Input("number", null, "between"));
         inputs.put("region", new DecisionsDocument.Input("string", null, null));
         inputs.put("category", new DecisionsDocument.Input("string", null, "in"));
-        inputs.put("dept", new DecisionsDocument.Input("string", null, "orgSubtree"));
+        inputs.put("dept", new DecisionsDocument.Input("string", null, "subtree"));
         Map<String, DecisionsDocument.Output> outputs = new LinkedHashMap<>();
         outputs.put("fee", new DecisionsDocument.Output("number", null, null));
         outputs.put("carrier", new DecisionsDocument.Output("string", null, null));

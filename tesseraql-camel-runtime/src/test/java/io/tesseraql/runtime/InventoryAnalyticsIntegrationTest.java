@@ -208,8 +208,9 @@ class InventoryAnalyticsIntegrationTest {
         Files.writeString(board.resolve("tenantboard.view.yml"), """
                 version: tesseraql/v1
                 id: tenantboard.page
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Tenant analytics
                 panels:
                   - { type: stat, source: sql, column: products, label: Products }

@@ -97,8 +97,8 @@
         <div class="hc-field">
           <label class="hc-field__label" for="cal-shift">Shift</label>
           <select class="hc-select" id="cal-shift" name="shift">
-            <option value="nextBusinessDay" th:selected="${cal.grid.shift != 'previousBusinessDay'}">nextBusinessDay</option>
-            <option value="previousBusinessDay" th:selected="${cal.grid.shift == 'previousBusinessDay'}">previousBusinessDay</option>
+            <option value="next-business-day" th:selected="${cal.grid.shift != 'previous-business-day'}">next-business-day</option>
+            <option value="previous-business-day" th:selected="${cal.grid.shift == 'previous-business-day'}">previous-business-day</option>
           </select>
         </div>
         <button class="hc-button" data-size="sm" type="submit">Preview</button>

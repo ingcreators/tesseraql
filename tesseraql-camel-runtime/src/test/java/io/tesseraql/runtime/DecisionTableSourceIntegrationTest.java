@@ -24,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 /**
  * The generated lookup of a table-backed decision against a real database
  * (docs/decision-tables.md "Evaluation"): NULL cells are wildcards, {@code in} membership
- * rides the child table, {@code orgSubtree} the org closure, dated rows the effective window;
+ * rides the child table, {@code subtree} the org closure, dated rows the effective window;
  * {@code first} resolves by priority, a miss without a default raises, and {@code unique}
  * ambiguity raises.
  */
@@ -80,7 +80,7 @@ class DecisionTableSourceIntegrationTest {
         inputs.put("category", new DecisionsDocument.Input("string", null, "in"));
         inputs.put("weight", new DecisionsDocument.Input("number", null, "between"));
         inputs.put("region", new DecisionsDocument.Input("string", null, null));
-        inputs.put("dept", new DecisionsDocument.Input("string", null, "orgSubtree"));
+        inputs.put("dept", new DecisionsDocument.Input("string", null, "subtree"));
         Map<String, DecisionsDocument.Output> outputs = new LinkedHashMap<>();
         outputs.put("fee", new DecisionsDocument.Output("number", null, null));
         outputs.put("carrier", new DecisionsDocument.Output("string", null, null));

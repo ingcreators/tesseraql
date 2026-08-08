@@ -1,3 +1,4 @@
+version: tesseraql/v1
 tests:
   - name: the request list finds seeded rows and the search narrows
     sql:

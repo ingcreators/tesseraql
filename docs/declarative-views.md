@@ -38,7 +38,7 @@ response:
 version: tesseraql/v1
 id: items.new.form
 kind: view
-view: form                    # list | form | detail | dashboard
+recipe: form                  # list | form | detail | dashboard
 title: view.items.new.title   # message key; literal fallback
 action: /items/create         # the command route this form posts to
 fields:                       # optional — override only what differs
@@ -51,7 +51,7 @@ fields:                       # optional — override only what differs
 version: tesseraql/v1
 id: items.list
 kind: view
-view: list
+recipe: list
 title: view.items.title
 source: sql                   # model key carrying rows (default: sql)
 columns:                      # optional — omit to render the query's own columns
@@ -61,7 +61,7 @@ columns:                      # optional — omit to render the query's own colu
     label: view.items.due
 ```
 
-The `view:` key names one of the four kinds — `list`, `form`, `detail`, or `dashboard`;
+The `recipe:` key names one of the four kinds — `list`, `form`, `detail`, or `dashboard`;
 anything else is `TQL-VIEW-3301`. `response.html.view` and `response.html.template` are
 mutually exclusive (`TQL-VIEW-3302`). Everything else on the route — `status`,
 `headers`, `headersWhen`, `model` — behaves unchanged.
@@ -147,14 +147,14 @@ camelCase input names to snake_case columns.
 
 ## Detail views
 
-`view: detail` renders a labelled value list over one row, and composes its route's
+`recipe: detail` renders a labelled value list over one row, and composes its route's
 named queries as child lists: a `children:` entry names a source that must be one of
 the route's `queries:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
 slots as a list.
 
 ## Dashboard views
 
-`view: dashboard` renders query-backed `panels:` over the route's results, laid out on
+`recipe: dashboard` renders query-backed `panels:` over the route's results, laid out on
 the kit's `hc-grid`:
 
 - `stat` — one value.
@@ -171,12 +171,12 @@ the kit's `hc-grid`:
 version: tesseraql/v1
 id: products.dashboard.view
 kind: view
-view: dashboard
+recipe: dashboard
 title: Inventory dashboard
 panels:
   - { type: stat, source: sql, column: products, label: Products }
   - type: chart
-    kind: bar-grouped
+    chart: bar-grouped
     source: byCategory          # one of the route's named queries
     title: Stock by category
     x: label                    # the column supplying each mark's label
@@ -190,10 +190,10 @@ A `stat` shows the named `column:` of its source's first row. A `chart` plots th
 `x:` column against its `series:` — or against the single `y:` column, the one-series
 shorthand — across the source's rows:
 
-- `kind:` is the kit vocabulary: `bar`, `line`, `area`, `combo`, `bar-stacked`,
+- `chart:` is the kit vocabulary: `bar`, `line`, `area`, `combo`, `bar-stacked`,
   `bar-grouped`, `scatter` (default `bar`).
 - `series:` entries carry `column`, an optional `label` (message-key-first, like every
-  label), and — under `kind: combo` only — the `mark` that series draws with
+  label), and — under `chart: combo` only — the `mark` that series draws with
   (`bar`/`line`/`area`).
 - `xType:` (`category`/`number`/`date`), `height:`, `legend:`, and `yLabel:` pass
   through as the kit's `data-*` attributes.
@@ -330,7 +330,7 @@ Lint family **`TQL-VIEW-33xx`**:
 
 | code | check |
 | --- | --- |
-| 3301 | unknown `view:` kind (not `list`/`form`/`detail`/`dashboard`) |
+| 3301 | unknown `recipe:` kind (not `list`/`form`/`detail`/`dashboard`) |
 | 3302 | `view:` and `template:` both set, the view file does not resolve, or a slot's `template::fragment` reference does not resolve |
 | 3303 | a form's `action:` names no route, or the named route declares no `input:` |
 | 3304 | a `fields:` entry names an input the action route does not declare |
@@ -340,7 +340,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3308 | a `children:` or `panels:` entry names a source the route's `queries:` do not declare |
 | 3309 | `search:` names an input the route does not declare |
 | 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
-| 3313 | chart-panel vocabulary: unknown `kind:`, `y:` and `series:` together (or neither), `mark:` outside `kind: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |
+| 3313 | chart-panel vocabulary: unknown `chart:`, `y:` and `series:` together (or neither), `mark:` outside `chart: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes its route. The htmx-contract and OpenAPI generators are unaffected —

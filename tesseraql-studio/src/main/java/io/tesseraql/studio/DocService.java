@@ -493,7 +493,7 @@ public final class DocService {
                 return; // YAML-backed rows have no table to annotate.
             }
             if (tableName.equalsIgnoreCase(source.table())) {
-                contracts.put(source.effectiveId(), name + ": rule key");
+                contracts.put(source.effectiveKeyColumn(), name + ": rule key");
                 source.match().forEach((input, match) -> {
                     if (match.eq() != null) {
                         contracts.put(match.eq(), name + ": " + input + " match");

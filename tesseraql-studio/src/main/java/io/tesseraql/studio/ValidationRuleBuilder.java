@@ -31,7 +31,7 @@ public final class ValidationRuleBuilder {
      */
     public static String generate(String operation, String source, String field, String value,
             String value2, String id, String code, String message, String when,
-            List<String> binds) {
+            java.util.Map<String, String> binds) {
         String ruleId = trim(id);
         String fieldName = trim(field);
         String op = operation == null ? "" : operation;
@@ -99,15 +99,15 @@ public final class ValidationRuleBuilder {
      * ({@code TQL-FIELD-4607}), and a snippet that fails the load is worse than no snippet.
      */
     private static String useSnippet(String ruleId, String shared, String fieldName, String code,
-            String message, String when, List<String> binds) {
+            String message, String when, java.util.Map<String, String> binds) {
         StringBuilder yaml = new StringBuilder("validate:\n  ").append(ruleId).append(":\n");
         yaml.append("    use: ").append(shared).append('\n');
         if (binds != null && !binds.isEmpty()) {
             yaml.append("    params:\n");
-            for (String bind : binds) {
-                // The source is the author's to choose; the name is not.
-                yaml.append("      ").append(bind).append(": body.").append(bind).append('\n');
-            }
+            // The source is the author's to choose; the name (and its declared type,
+            // checked at load) is not.
+            binds.forEach((bind, type) -> yaml.append("      ").append(bind)
+                    .append(": body.").append(bind).append('\n'));
         }
         yaml.append("    field: ").append(fieldName).append('\n');
         if (!blank(when)) {

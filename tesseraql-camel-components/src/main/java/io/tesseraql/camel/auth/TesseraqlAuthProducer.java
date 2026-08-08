@@ -89,7 +89,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                 bean(JwtAuthenticator.class, TesseraqlProperties.JWT_AUTHENTICATOR_BEAN)
                         .authenticate(
                                 exchange.getMessage().getHeader("Authorization", String.class));
-            case "apiKey" -> apiKeyAuthenticate(exchange);
+            case "api-key" -> apiKeyAuthenticate(exchange);
             case "mtls" -> mtlsAuthenticate(exchange);
             case "browser" -> browserAuthenticate(exchange);
             default ->

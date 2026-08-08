@@ -35,6 +35,7 @@ class RouteTestRunnerTest {
     @Test
     void runsRouteCasesAndReportsResults() {
         RouteSuite suite = RouteTestRunner.parse("""
+                version: tesseraql/v1
                 tests:
                   - name: ping ok
                     method: GET

@@ -9,7 +9,7 @@ user, and a pin can never point off-site.
 - **Pins** — user-curated, labelled, capped (20). Rendered as a **Pinned** group at the
   top of the sidebar on every shell page, and managed (relabel by re-pinning, remove) on
   the account page ([account surface](account.md)).
-- **Recents** — an automatic, bounded ring (20) of **detail views** (`view: detail`
+- **Recents** — an automatic, bounded ring (20) of **detail views** (`recipe: detail`
   renders — see [declarative views](declarative-views.md) — are the framework's honest
   definition of "a record"), deduped by URL and bumped on revisit. Listed on the account
   page; never in the sidebar (chrome stays calm).
@@ -64,7 +64,7 @@ user's shortcuts.
 
 ## Recents
 
-The renderer records a recent when a route renders a **`view: detail`** page (the
+The renderer records a recent when a route renders a **`recipe: detail`** page (the
 bounded, deduped ring above). The label is the view's title line — the document key the
 detail pattern already renders. Rapid reloads of the same record dedupe inside the cache
 TTL instead of writing a row per render.

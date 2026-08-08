@@ -66,12 +66,13 @@ class DocViewsTest {
     @Test
     void theRulesPageShowsContractsAndReferences() {
         var rule = new io.tesseraql.yaml.model.RuleSetsDocument.RuleSet(null,
-                "items-name-free.sql", java.util.List.of("name", "excludeId"), "duplicate", null);
+                "items-name-free.sql", java.util.Map.of("name", "string", "excludeId", "integer"),
+                "duplicate", null);
         var used = new DocService.RuleEntry("itemsNameIsFree", rule,
                 java.util.List.of(new DocService.RouteRef("items.create", "POST", "/api/items")));
         var orphan = new DocService.RuleEntry("neverUsed",
                 new io.tesseraql.yaml.model.RuleSetsDocument.RuleSet("params.x > 0", null,
-                        java.util.List.of(), null, null),
+                        java.util.Map.of(), null, null),
                 java.util.List.of());
 
         Map<String, Object> model = DocViews.rules("demo", java.util.List.of(used, orphan));

@@ -202,7 +202,7 @@ class ManifestCoverageTest {
             kind: route
             recipe: command-json
             security:
-              auth: apiKey
+              auth: api-key
               policy: invoices.write
             sql:
               file: post.sql

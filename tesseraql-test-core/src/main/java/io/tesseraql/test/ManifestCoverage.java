@@ -56,13 +56,13 @@ public final class ManifestCoverage {
     }
 
     /**
-     * API-key coverage (roadmap Phase 25): routes authenticated by {@code auth: apiKey} — the
+     * API-key coverage (roadmap Phase 25): routes authenticated by {@code auth: api-key} — the
      * service-caller surface — declared and covered like routes, so a suite must exercise every
      * API-key-protected route.
      */
     public static ItemCoverage apiKey(AppManifest manifest, List<TestSuite> suites) {
         return routeKind("api-key", manifest, suites, definition -> definition.security() != null
-                && "apiKey".equals(definition.security().auth()));
+                && "api-key".equals(definition.security().auth()));
     }
 
     /**

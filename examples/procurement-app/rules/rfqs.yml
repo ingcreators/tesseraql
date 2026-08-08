@@ -7,6 +7,6 @@ version: tesseraql/v1
 rules:
   requisitionApproved:
     file: requisition-approved.sql
-    binds: [requisitionId]
+    binds: { requisitionId: string }
     code: not-approved
     message: procurement.rules.notApproved

@@ -34,7 +34,7 @@ version: tesseraql/v1
 rules:
   stockStaysNonNegative:
     file: validate-stock.sql        # relative to this rules document
-    binds: [sku, delta]             # the bind contract a reference must satisfy
+    binds: { sku: string, delta: integer }  # the typed bind contract a reference must satisfy
     code: insufficient-stock
     message: inventory.adjust.insufficient
   editableStatus:
@@ -59,8 +59,12 @@ Resolution happens at manifest load (the domains precedent): the resolved route 
 testing consume what they consume today, unchanged.
 
 - **Shared keys** (the rule itself): `rule:`/`file:`, `binds:`, `code`, `message` defaults.
+  The `binds:` contract is **typed** — each bind declares its type (`string`/`integer`/
+  `number`/`boolean`/`date`), checked against the referencing route's (domain-resolved)
+  input types at load.
 - **Local keys** (this operation's use): `params:` (checked against `binds:` — a missing or
-  extra bind fails the load), `field:`, `when:`, and `code`/`message` overrides.
+  extra bind, or a wiring whose input type disagrees with the declared bind type, fails the
+  load), `field:`, `when:`, and `code`/`message` overrides.
 - Ambient [`principal.*` binds](ambient-params.md) seed shared-rule SQL exactly as they seed
   route SQL — a tenant-scoped uniqueness rule writes `/* principal.tenantId */` and drops
   `tenantId` from its bind contract entirely.
@@ -75,7 +79,7 @@ create and update. Two generated slices give the mechanism its first real consum
 1. **Scoped uniqueness per unique index** — today the scaffolder maps unique indexes to
    constraint-catalog entries (violation → field error after the write). A generated rule set
    adds the *pre-write* check both routes share, with self-exclusion on update:
-   `uniqueName(binds: [name, excludeId])` — create wires `excludeId` to nothing (the rule's
+   `uniqueName(binds: {name: string, excludeId: integer})` — create wires `excludeId` to nothing (the rule's
    SQL treats null as "exclude nobody"), update wires `params.id`. One rule, two consumers,
    from day one of a scaffold.
 2. **FK existence with business filtering** — for each foreign key, a generated
@@ -129,10 +133,12 @@ purchase-request), so the docs page has a hand-authored reference next to the ge
 
 ## Open questions
 
-1. Should `binds:` carry types (`binds: {sku: string, excludeId: integer}`) so the load can
+1. ~~Should `binds:` carry types (`binds: {sku: string, excludeId: integer}`) so the load can
    type-check the wiring against the referencing route's (domain-resolved) inputs? Leaning
    yes-but-later: names-only ships first, the type layer rides once domains give inputs stable
-   types.
+   types.~~ **Closed: yes — shipped** (2026-08-08, vocabulary-cleanup slice 2): `binds:` is a
+   typed mapping, checked against the referencing route's input types at load; the names-only
+   list form is dropped.
 2. Does the generated uniqueness rule replace the constraint-catalog entry or complement it?
    Leaning complement: the pre-write rule gives the friendly 422, the catalog keeps the
    post-write race honest (the constraint still fires under concurrency).

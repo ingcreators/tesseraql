@@ -77,12 +77,12 @@ public record TriggerSpec(Schedule schedule, PollSpec poll, String after) {
      * @param cron       a cron expression, e.g. {@code "0 0 2 * * ?"}
      * @param fixedDelay a fixed delay between runs, e.g. {@code "5s"}
      * @param calendar   a business-day calendar declared under {@code calendars/}
-     * @param runOn      {@code businessDay} (the default), {@code firstBusinessDayOfMonth}, or
-     *                   {@code lastBusinessDayOfMonth}
+     * @param runOn      {@code business-day} (the default), {@code first-business-day-of-month}, or
+     *                   {@code last-business-day-of-month}
      * @param dayOfMonth the nominal day (1–31, rounded down to the month's last day) the
      *                   firing is <em>for</em>; mutually exclusive with {@code runOn}
-     * @param shift      where a non-business nominal day moves: {@code nextBusinessDay} (the
-     *                   default) or {@code previousBusinessDay}
+     * @param shift      where a non-business nominal day moves: {@code next-business-day} (the
+     *                   default) or {@code previous-business-day}
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Schedule(String cron, String fixedDelay, String calendar, String runOn,

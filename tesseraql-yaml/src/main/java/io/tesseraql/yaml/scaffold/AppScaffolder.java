@@ -462,6 +462,7 @@ public final class AppScaffolder {
     private static final String SMOKE_TEST_YML = """
             # Starter smoke suite (tesseraql new): proves the migration, the seeded row, and both
             # branches of the search SQL (design ch. 13).
+            version: tesseraql/v1
             tests:
               - name: the items search returns the seeded row
                 sql:

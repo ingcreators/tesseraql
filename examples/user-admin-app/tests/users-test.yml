@@ -1,3 +1,4 @@
+version: tesseraql/v1
 tests:
   - name: the board view lists every user
     sql:

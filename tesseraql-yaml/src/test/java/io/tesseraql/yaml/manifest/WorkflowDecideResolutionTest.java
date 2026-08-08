@@ -32,8 +32,8 @@ class WorkflowDecideResolutionTest {
                       route: { type: string, enum: [manager, director] }
                     rows:
                       - when: { amount: "> 100000" }
-                        out: { route: director }
-                      - out: { route: manager }
+                        outputs: { route: director }
+                      - outputs: { route: manager }
                 """);
         Files.createDirectories(dir.resolve("workflow"));
         Files.writeString(dir.resolve("workflow/purchase.yml"), """

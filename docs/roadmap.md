@@ -203,7 +203,7 @@ existing authentication step and principal model, with IAM admin wizards like SA
 JWTs verify with `SHA256withRSA` against a static `publicKey` or a `jwksUri` (JDK-only, no JOSE
 dependency); the JWKS key set caches and rotates by `kid` with an unknown-`kid` refetch floor so it
 cannot be flooded, and the expected algorithm is bound from config so `alg: none` and RS256/HS256
-confusion are rejected. Service callers authenticate with `auth: apiKey` against config-declared
+confusion are rejected. Service callers authenticate with `auth: api-key` against config-declared
 clients holding only a key hash, mapped to an explicit principal so existing policies apply. Lint
 (`TQL-SEC-4040..4046`) and an `api-key` coverage kind keep both machine-checkable.
 
@@ -613,7 +613,7 @@ template today.
   slots (L1).
 - Slice 3: `scaffold crud` emits view documents instead of raw templates; the example
   gallery regenerates on views (dogfooded in CI).
-- Slice 4: dashboards — `view: dashboard` panels (`stat`/`sparkline`/`chart`/`table`) on
+- Slice 4: dashboards — `recipe: dashboard` panels (`stat`/`sparkline`/`chart`/`table`) on
   the kit's `hc-grid`; charts are deterministic server-rendered SVG wearing the kit's
   CSS-only `hc-chart` skin (no upstream brief was needed — the component already ships;
   the earlier "only `hc-sparkline`" note repeated the Track-I mistake of grepping only
@@ -926,7 +926,7 @@ query string rides along** — one control on every shell page (list views, the 
 data browser, dashboards) instead of per-surface machinery. Ships as: **pins** (capped,
 labelled, a Pinned sidebar group on every shell page + account-page management, with
 relative-path-only hrefs so a pin can never point off-site) and **recents** (an
-automatic bounded ring of `view: detail` renders, deduped and bumped, listed on the
+automatic bounded ring of `recipe: detail` renders, deduped and bumped, listed on the
 account page only). One managed `tql_user_shortcut` table behind one SPI; the
 account-surface construction invariant throughout. Two slices: pins, then recents + the
 list pattern's *Pin this view*.
@@ -938,7 +938,7 @@ in a bounded recent list on the account page; removing and re-labelling work fro
 
 Delivered 2026-07-04 in the two designed slices: pins (the header toggle on every shell
 page, the Pinned sidebar group, the account card, relative-path-only hrefs down to the
-backslash form) and recents (the automatic deduped ring of `view: detail` renders,
+backslash form) and recents (the automatic deduped ring of `recipe: detail` renders,
 labelled by the view's own title). Held green by `ShortcutIntegrationTest` on real
 PostgreSQL. **Phase 51 is complete and milestone M17 is met — with it, every phase
 named into Horizon 9 (48–52) is complete.**

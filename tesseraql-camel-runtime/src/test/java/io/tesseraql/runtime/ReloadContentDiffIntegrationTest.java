@@ -210,8 +210,8 @@ class ReloadContentDiffIntegrationTest {
                       tier: { type: string }
                     rows:
                       - when: { amount: ">= 100" }
-                        out: { tier: high }
-                      - out: { tier: low }
+                        outputs: { tier: high }
+                      - outputs: { tier: low }
                 """);
         Files.createDirectories(target.resolve("workflow"));
         Files.writeString(target.resolve("workflow/submit.sql"),

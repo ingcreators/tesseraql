@@ -111,7 +111,7 @@ class AppLifecycleCommandsTest {
                     outputs:
                       assignee: { type: string }
                     rows:
-                      - out: { assignee: approver-1 }
+                      - outputs: { assignee: approver-1 }
                 """);
         Files.createDirectories(app.resolve("workflow"));
         Files.writeString(app.resolve("workflow/tick.sql"),

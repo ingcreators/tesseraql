@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Pre-1.0 breaking value-vocabulary changes** (docs/vocabulary-cleanup.md
+  slice 2): multi-word enum values go kebab-case (`auth: api-key`,
+  `runOn: business-day | first-business-day-of-month |
+  last-business-day-of-month`, `shift: next-business-day |
+  previous-business-day`); a decision row's `out:` → `outputs:`, the subtree
+  match kind unifies on `subtree` (was `orgSubtree` at declaration), and a
+  table source's key column is `keyColumn:` (was `id:`); a shared rule's
+  `binds:` is a typed map (`binds: {sku: string}`) checked against the
+  referencing route's input types at load; `version: tesseraql/v1` is required
+  by every document family — views start validating it and `tests/*.yml` gains
+  it; a view's discriminator is `recipe: list | form | detail | dashboard`
+  (was `view:`), and a dashboard panel's chart shape is `chart:` (was `kind:`,
+  colliding with the panel-role vocabulary).
 - **Pre-1.0 breaking YAML renames — one word per concept**
   (docs/vocabulary-cleanup.md slice 1): a job's declared parameters are `input:`
   (the same contract routes declare; `params:` keeps its bind-wiring meanings);

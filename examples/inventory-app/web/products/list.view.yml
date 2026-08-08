@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: products
 kind: view
-view: list
+recipe: list
 title: Products
 search: q
 columns:

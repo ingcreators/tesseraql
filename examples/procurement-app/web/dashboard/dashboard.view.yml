@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: procurement.dashboard.view
 kind: view
-view: dashboard
+recipe: dashboard
 title: Procurement dashboard
 panels:
   - { type: stat, source: sql, column: requisitions, label: Requisitions }
@@ -9,7 +9,7 @@ panels:
   - { type: stat, source: sql, column: submitted_quotes, label: Submitted quotes }
   - { type: stat, source: sql, column: in_transit, label: In transit }
   - type: chart
-    kind: bar
+    chart: bar
     source: ordersByState
     title: Orders by state
     x: label

@@ -6,6 +6,6 @@ version: tesseraql/v1
 rules:
   selectionReason:
     file: selection-reason.sql
-    binds: [quoteId, reason]
+    binds: { quoteId: string, reason: string }
     code: reason-required
     message: procurement.rules.reasonRequired

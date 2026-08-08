@@ -4,8 +4,9 @@
   "title": "TesseraQL test suite (tests/*.yml)",
   "$comment": "Deliberately open (additionalProperties: true): newer keys never break older editors. Each case sets exactly one target - sql, contract, validate, notify, messages, httpCall, or decide - stated as prose rather than a oneOf so editors report missing keys, not opaque union failures.",
   "type": "object",
-  "required": ["tests"],
+  "required": ["version", "tests"],
   "properties": {
+    "version": { "type": "string", "const": "tesseraql/v1", "description": "The DSL version. Always tesseraql/v1." },
     "tests": {
       "type": "array",
       "items": {

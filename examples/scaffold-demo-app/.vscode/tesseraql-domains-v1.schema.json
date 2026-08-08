@@ -5,6 +5,7 @@
   "description": "Schema for TesseraQL field domain documents (domains/*.yml): named field knowledge referenced from input fields with 'domain:', plus the app-level constraint catalog. Documented in field-domains.md.",
   "$comment": "The domains map's value type is an input field, so $defs/inputField below is copied verbatim from tesseraql-v1.schema.json rather than restated by hand, and SchemaSyncTest fails if the two ever differ. A cross-file $ref would avoid the copy but would depend on how each editor's language server resolves a relative reference offline; a guarded copy depends on nothing.",
   "type": "object",
+  "required": ["version"],
   "properties": {
     "version": {
       "type": "string",

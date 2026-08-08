@@ -65,7 +65,7 @@ public final class AppLinter {
     private static final List<String> VALIDATING_RECIPES = List.of("command-json", "query-json",
             "webhook");
 
-    private static final Set<String> KNOWN_AUTH_MODES = Set.of("bearer", "browser", "apiKey",
+    private static final Set<String> KNOWN_AUTH_MODES = Set.of("bearer", "browser", "api-key",
             "mtls", "public");
 
     /**
@@ -561,7 +561,7 @@ public final class AppLinter {
     /**
      * Lints authentication configuration (roadmap Phase 25): a bearer JWT picks a supported
      * algorithm and a single matching key source (no algorithm confusion), and an
-     * {@code auth: apiKey} route requires API-key config whose clients each store a key hash. Reads
+     * {@code auth: api-key} route requires API-key config whose clients each store a key hash. Reads
      * raw config nodes — never resolving secret placeholders — so the lint runs without a live
      * secret store.
      */
@@ -879,7 +879,7 @@ public final class AppLinter {
 
     /**
      * Table-backed decision sources (docs/decision-tables.md "Integrity when the rows are
-     * data"): an {@code orgSubtree} input matches through the managed org closure, so it needs
+     * data"): an {@code subtree} input matches through the managed org closure, so it needs
      * {@code tesseraql.orgunit.mode: managed} (TQL-DECISION-4717); and when the schema
      * introspection sidecar is present, every mapped table and column is checked against the
      * real DDL (TQL-DECISION-4710) — the rows are runtime data, but the shape of their table
@@ -895,10 +895,10 @@ public final class AppLinter {
                 return;
             }
             boolean subtree = decision.inputs().values().stream()
-                    .anyMatch(input -> "orgSubtree".equals(input.match()));
+                    .anyMatch(input -> "subtree".equals(input.match()));
             if (subtree && !managedOrgUnits) {
                 findings.add(new LintFinding("TQL-DECISION-4717", "error", "decisions",
-                        "Decision '" + name + "' matches orgSubtree, which resolves through"
+                        "Decision '" + name + "' matches subtree, which resolves through"
                                 + " the managed org closure — set tesseraql.orgunit.mode:"
                                 + " managed or drop the subtree input"));
             }
@@ -929,7 +929,7 @@ public final class AppLinter {
                                     + " does not know")));
         };
         List<String> columns = new ArrayList<>();
-        columns.add(source.effectiveId());
+        columns.add(source.effectiveKeyColumn());
         columns.add(source.priority());
         columns.addAll(source.effective());
         source.match().values().forEach(match -> {
@@ -1513,11 +1513,11 @@ public final class AppLinter {
         if (!apiKeysConfigured) {
             for (RouteFile route : manifest.routes()) {
                 io.tesseraql.yaml.model.SecuritySpec security = route.definition().security();
-                if (security != null && "apiKey".equals(security.auth())) {
+                if (security != null && "api-key".equals(security.auth())) {
                     String source = appHome.relativize(route.source()).toString().replace('\\',
                             '/');
                     findings.add(new LintFinding("TQL-SEC-4044", "error", source,
-                            "Route '" + route.definition().id() + "' declares auth: apiKey but no"
+                            "Route '" + route.definition().id() + "' declares auth: api-key but no"
                                     + " tesseraql.security.apiKeys is configured (deny by default)"));
                 }
             }

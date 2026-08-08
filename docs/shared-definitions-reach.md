@@ -212,8 +212,9 @@ catch up. `domains/` and `rules/` get their own small schemas and their own file
   their own design.
 - **Cross-app shared definitions.** Bundled and mounted apps keep their own namespaces, as
   [validation-rule-sets.md](validation-rule-sets.md) already decided.
-- **Typed `binds:`.** Still the open question that document parked; the bind-name contract check in
-  slice 4 does not presuppose it.
+- **Typed `binds:`.** The open question that document parked — since closed and shipped
+  (vocabulary-cleanup slice 2: `binds:` is a typed mapping checked against the referencing
+  route's input types at load); the bind-name contract check in slice 4 did not presuppose it.
 
 ## Open questions
 

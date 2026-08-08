@@ -3178,7 +3178,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                 .filter(r -> r.name().equals(str(params, "value")))
                                                 .findFirst()
                                                 .map(io.tesseraql.studio.StudioService.SharedRule::binds)
-                                                .orElse(java.util.List.of()))))
+                                                .orElse(java.util.Map.of()))))
                         // Decide-snippet builder (docs/decision-tables.md): generate a route's
                         // decide: block for one declared decision — the validation builder's
                         // shape applied to the other shared definition. Pure text generation to

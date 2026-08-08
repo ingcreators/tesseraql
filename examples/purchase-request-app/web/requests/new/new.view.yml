@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: requests.new.form
 kind: view
-view: form
+recipe: form
 title: New purchase request
 action: /requests/new
 fields:

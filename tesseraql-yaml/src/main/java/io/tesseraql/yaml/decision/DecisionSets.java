@@ -201,9 +201,9 @@ public final class DecisionSets {
                     + " but is YAML-backed — its default is a trailing row without when:");
         }
         decision.inputs().forEach((input, spec) -> {
-            if ("orgSubtree".equals(spec.match())) {
+            if ("subtree".equals(spec.match())) {
                 throw new TqlException(CONTRACT_SHAPE, "Decision '" + name + "' input '"
-                        + input + "' matches orgSubtree but the decision is YAML-backed —"
+                        + input + "' matches subtree but the decision is YAML-backed —"
                         + " subtree membership lives in the org closure, so the kind needs a"
                         + " table source");
             }
@@ -214,7 +214,7 @@ public final class DecisionSets {
                 java.util.List.copyOf(decision.outputs().keySet()), decision.hitPolicy(),
                 decision.onMiss(),
                 decision.rows().stream()
-                        .map(row -> new DecisionTables.RowSpec(row.when(), row.out()))
+                        .map(row -> new DecisionTables.RowSpec(row.when(), row.outputs()))
                         .toList());
         decision.rows().forEach(row -> checkRowValues(name, decision, row));
         return table;
@@ -224,7 +224,7 @@ public final class DecisionSets {
      * Compiles one table-backed decision into its generated lookup
      * (docs/decision-tables.md "Evaluation"): each mapped column contributes a
      * {@code (col IS NULL OR col ⟨op⟩ ?)} arm — NULL cell = wildcard, the YAML semantics in
-     * SQL — an {@code in} input an EXISTS against its child table, an {@code orgSubtree}
+     * SQL — an {@code in} input an EXISTS against its child table, an {@code subtree}
      * input an EXISTS through the managed org closure, dated rows an effective-window test,
      * {@code ORDER BY} the priority column with a portable single-row fetch for
      * {@code hitPolicy: first}. The result is ordinary SQL, loggable and runnable in a SQL
@@ -294,7 +294,7 @@ public final class DecisionSets {
         });
         sql.append(" from ").append(identifier(name, source.table())).append(" r where 1 = 1");
         List<String> binds = new java.util.ArrayList<>();
-        String id = identifier(name, source.effectiveId());
+        String id = identifier(name, source.effectiveKeyColumn());
         decision.inputs().forEach((input, spec) -> {
             DecisionTables.MatchKind kind = DecisionTables.MatchKind.parse(spec.match(), name,
                     input);
@@ -408,7 +408,7 @@ public final class DecisionSets {
                         List.of(), value));
             }
         });
-        row.out().forEach((output, value) -> {
+        row.outputs().forEach((output, value) -> {
             DecisionsDocument.Output spec = decision.outputs().get(output);
             if (spec == null) {
                 return;

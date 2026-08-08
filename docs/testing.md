@@ -9,10 +9,12 @@ routes, rules, and notifications the suites exercised at all.
 
 ## Writing a suite
 
-Every `tests/**/*.yml` file with a `tests:` block is a suite. A case has a `name`, exactly one
-target, optional `params`, and an optional `expect`:
+Every `tests/**/*.yml` file with a `tests:` block is a suite, and every suite declares
+`version: tesseraql/v1` as its first line (required — an unversioned suite fails the load). A
+case has a `name`, exactly one target, optional `params`, and an optional `expect`:
 
 ```yaml
+version: tesseraql/v1
 tests:
   - name: the search narrows by title
     sql:
@@ -132,6 +134,7 @@ the case's rows carry what actually arrived — no external mock server to insta
 listening after the case ends:
 
 ```yaml
+version: tesseraql/v1
 tests:
   - name: the audit webhook is signed on the wire
     notify:
@@ -196,6 +199,7 @@ manual-commit transaction it always rolls back — pass or fail — so nothing a
 persists, suites stay order-independent, and repeated runs are idempotent:
 
 ```yaml
+version: tesseraql/v1
 tests:
   - name: deactivating sato affects one row and the search sees the new status
     sql:

@@ -26,7 +26,7 @@ class RuleSetResolutionTest {
                 rules:
                   skuIsFree:
                     file: sku-free.sql
-                    binds: [sku]
+                    binds: { sku: string }
                     code: duplicate
                     message: catalog.sku.duplicate
                   quantityStaysSane:
@@ -98,7 +98,7 @@ class RuleSetResolutionTest {
                 rules:
                   skuIsFree:
                     file: sku-free.sql
-                    binds: [sku, orgId]
+                    binds: { sku: string, orgId: string }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))
@@ -131,7 +131,7 @@ class RuleSetResolutionTest {
                 rules:
                   quantityStaysSane:
                     rule: "params.delta >= -10000"
-                    binds: [delta]
+                    binds: { delta: integer }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))

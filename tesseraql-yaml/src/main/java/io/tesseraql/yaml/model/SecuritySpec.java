@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * Route security declaration (design ch. 6.3, 11). Routes are deny-by-default; a route is only
  * public when explicitly declared so (design ch. 20.14).
  *
- * @param auth     authentication type: {@code bearer}, {@code browser}, {@code apiKey}, etc.
+ * @param auth     authentication type: {@code bearer}, {@code browser}, {@code api-key}, etc.
  * @param policy   authorization policy id evaluated against the principal
  * @param csrf     CSRF posture: {@code auto} (default; browser state-changing routes are
  *                 protected), {@code required}, or {@code off} (docs/vocabulary-cleanup.md

@@ -52,15 +52,16 @@ class AppLinterViewTest {
 
     @Test
     void aWellFormedListViewProducesNoFindings(@TempDir Path dir) throws Exception {
-        writeApp(dir, "kind: view\nview: list\n");
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
     }
 
     @Test
     void aWellFormedFormViewProducesNoFindings(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 action: /items/create
                 fields:
                   - name: name
@@ -71,7 +72,7 @@ class AppLinterViewTest {
 
     @Test
     void viewAndTemplateTogetherAreAnError(@TempDir Path dir) throws Exception {
-        writeApp(dir, "kind: view\nview: list\n");
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.writeString(dir.resolve("web/items/index.html"), "<p>x</p>");
         Files.writeString(dir.resolve("web/items/get.yml"), """
                 version: tesseraql/v1
@@ -90,7 +91,7 @@ class AppLinterViewTest {
 
     @Test
     void anUnresolvedViewFileIsAnError(@TempDir Path dir) throws Exception {
-        writeApp(dir, "kind: view\nview: list\n");
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.delete(dir.resolve("web/items/items.view.yml"));
         assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3302");
     }
@@ -103,15 +104,16 @@ class AppLinterViewTest {
 
     @Test
     void aFormActionMatchingNoPostRouteIsAnError(@TempDir Path dir) throws Exception {
-        writeApp(dir, "kind: view\nview: form\naction: /nowhere\n");
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: form\naction: /nowhere\n");
         assertThat(viewCodes(new AppLinter().lint(dir))).contains("TQL-VIEW-3303");
     }
 
     @Test
     void aFieldTheActionDoesNotDeclareIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 action: /items/create
                 fields:
                   - name: ghost
@@ -122,8 +124,9 @@ class AppLinterViewTest {
     @Test
     void anUnknownWidgetIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 action: /items/create
                 fields:
                   - name: name
@@ -135,8 +138,9 @@ class AppLinterViewTest {
     @Test
     void anUnknownSlotNameIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 slots:
                   sidebar: frags.html::x
                 """);
@@ -146,8 +150,9 @@ class AppLinterViewTest {
     @Test
     void anUnresolvedSlotReferenceIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 slots:
                   header: missing.html::x
                 """);
@@ -157,8 +162,9 @@ class AppLinterViewTest {
     @Test
     void aResolvedSlotIsClean(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 slots:
                   header: frags.html::newLink
                 """);
@@ -171,8 +177,9 @@ class AppLinterViewTest {
     @Test
     void aChildSourceTheRouteDoesNotDeclareIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 children:
                   - source: ghost
                 """);
@@ -181,7 +188,7 @@ class AppLinterViewTest {
 
     @Test
     void anOverrideWithoutTheFragmentSignatureIsAWarning(@TempDir Path dir) throws Exception {
-        writeApp(dir, "kind: view\nview: list\n");
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.createDirectories(dir.resolve("templates/tql/view"));
         Files.writeString(dir.resolve("templates/tql/view/form.html"), "<form></form>");
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -192,7 +199,7 @@ class AppLinterViewTest {
 
     @Test
     void anOverrideWithTheFragmentSignatureIsClean(@TempDir Path dir) throws Exception {
-        writeApp(dir, "kind: view\nview: list\n");
+        writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.createDirectories(dir.resolve("templates/tql/view"));
         Files.writeString(dir.resolve("templates/tql/view/form.html"),
                 "<form th:fragment=\"view(v)\"></form>");

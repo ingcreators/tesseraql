@@ -496,7 +496,7 @@ public final class ManifestLoader {
         }
         Map<String, io.tesseraql.yaml.model.ValidationRule> merged = new java.util.LinkedHashMap<>();
         def.validate().forEach((id, rule) -> merged.put(id,
-                sets.resolve(id, rule, source.getParent(), source.toString())));
+                sets.resolve(id, rule, source.getParent(), source.toString(), def.input())));
         return def.withValidate(merged);
     }
 

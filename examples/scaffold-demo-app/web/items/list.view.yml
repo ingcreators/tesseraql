@@ -1,11 +1,11 @@
-# tesseraql-scaffold-checksum: sha256:bc17a4ea0748718560163c346372a8e64b6abb22cfce982267603a93ab792d98
+# tesseraql-scaffold-checksum: sha256:8d8029722174b0f5e1ca1859de639d9c5ce973bc2497958cdd8f10ff9a26cd45
 # Scaffolded list view for the items table: renders through the tql/view/list
 # pattern (docs/declarative-views.md) — sortable headers, a live search box,
 # and the header slot's New button.
 version: tesseraql/v1
 id: items
 kind: view
-view: list
+recipe: list
 title: Items
 search: q
 columns:

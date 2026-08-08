@@ -87,7 +87,7 @@ class ScaffoldCommandsTest {
         Files.writeString(board.resolve("board.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Board
                 columns:
                   - name: name

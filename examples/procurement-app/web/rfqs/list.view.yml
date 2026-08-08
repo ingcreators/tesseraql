@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: rfqs
 kind: view
-view: list
+recipe: list
 title: Requests for quotation
 columns:
   - { name: id, label: "#" }

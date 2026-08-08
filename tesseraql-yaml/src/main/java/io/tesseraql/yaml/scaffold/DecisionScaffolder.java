@@ -24,7 +24,7 @@ public final class DecisionScaffolder {
      *
      * @param name    the decision name (lowerCamel), e.g. {@code shippingFee}
      * @param inputs  input name to match kind ({@code eq}, {@code between}, {@code in},
-     *                {@code bool}, {@code orgSubtree}), in declaration order
+     *                {@code bool}, {@code subtree}), in declaration order
      * @param outputs output names, in declaration order
      * @param unique  {@code hitPolicy: unique} (no priority column) instead of {@code first}
      * @param effective whether the rows are dated ({@code valid_from}/{@code valid_to})
@@ -88,7 +88,7 @@ public final class DecisionScaffolder {
                 case "between" -> yml.append("        ").append(input).append(": { between: [")
                         .append(snake(input)).append("_min, ").append(snake(input))
                         .append("_max] }\n");
-                case "orgSubtree" -> yml.append("        ").append(input)
+                case "subtree" -> yml.append("        ").append(input)
                         .append(": { subtree: ").append(snake(input)).append("_unit }\n");
                 case "in" -> {
                     // in inputs map under set:, appended below.
@@ -133,7 +133,7 @@ public final class DecisionScaffolder {
                         .append("_min numeric,\n  ").append(snake(input))
                         .append("_max numeric,\n");
                 case "bool" -> sql.append("  ").append(snake(input)).append(" boolean,\n");
-                case "orgSubtree" -> sql.append("  ").append(snake(input))
+                case "subtree" -> sql.append("  ").append(snake(input))
                         .append("_unit varchar(40),\n");
                 case "in" -> {
                     // in inputs live in the child table below.
@@ -168,9 +168,9 @@ public final class DecisionScaffolder {
         return switch (kind) {
             case "between" -> "number";
             case "bool" -> "boolean";
-            case "eq", "in", "orgSubtree" -> "string";
+            case "eq", "in", "subtree" -> "string";
             default -> throw new TqlException(BAD_REQUEST, "Unknown match kind '" + kind
-                    + "' — one of eq, between, in, bool, orgSubtree");
+                    + "' — one of eq, between, in, bool, subtree");
         };
     }
 

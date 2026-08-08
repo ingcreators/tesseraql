@@ -36,9 +36,9 @@
       "type": "object",
       "properties": {
         "auth": {
-          "description": "bearer | browser | apiKey | mtls | public (deny-by-default: no auth means no access to protected data).",
+          "description": "bearer | browser | api-key | mtls | public (deny-by-default: no auth means no access to protected data).",
           "type": "string",
-          "enum": ["bearer", "browser", "apiKey", "mtls", "public"]
+          "enum": ["bearer", "browser", "api-key", "mtls", "public"]
         },
         "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." },
         "csrf": { "type": "string", "enum": ["auto", "required", "off"], "description": "CSRF posture: auto (browser state-changing routes are protected), required, or off - one enum here and in security.defaults rules alike." }
@@ -318,9 +318,9 @@
             "cron": { "type": "string", "description": "A Quartz cron expression; firings are claimed cluster-wide so one node runs each." },
             "fixedDelay": { "type": "string", "description": "A period (duration string, e.g. 5m); mutually exclusive with cron." },
             "calendar": { "type": "string", "description": "A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md." },
-            "runOn": { "type": "string", "enum": ["businessDay", "firstBusinessDayOfMonth", "lastBusinessDayOfMonth"], "description": "Which considered firings count under the calendar (default businessDay); mutually exclusive with dayOfMonth." },
+            "runOn": { "type": "string", "enum": ["business-day", "first-business-day-of-month", "last-business-day-of-month"], "description": "Which considered firings count under the calendar (default business-day); mutually exclusive with dayOfMonth." },
             "dayOfMonth": { "type": "integer", "minimum": 1, "maximum": 31, "description": "The shifted nominal-day rule: fire on this day of month, or its shifted business day when it is not one - and the run's business date is the nominal date. Rounds down to the month's last day. Documented in jobs.md." },
-            "shift": { "type": "string", "enum": ["nextBusinessDay", "previousBusinessDay"], "description": "Where a non-business nominal day moves (default nextBusinessDay); requires dayOfMonth." }
+            "shift": { "type": "string", "enum": ["next-business-day", "previous-business-day"], "description": "Where a non-business nominal day moves (default next-business-day); requires dayOfMonth." }
           },
           "additionalProperties": true
         },

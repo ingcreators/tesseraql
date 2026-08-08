@@ -72,8 +72,8 @@ class TransitionCaseTest {
                     hitPolicy: first
                     rows:
                       - when: { amount: "> 100" }
-                        out: { lane: slow }
-                      - out: { lane: fast }
+                        outputs: { lane: slow }
+                      - outputs: { lane: fast }
                 """);
         Files.createDirectories(appHome.resolve("scope"));
         Files.writeString(appHome.resolve("scope/docs_scope.yml"), """

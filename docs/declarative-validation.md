@@ -175,7 +175,7 @@ version: tesseraql/v1
 rules:
   skuIsFree:
     file: sku-free.sql          # relative to this document; rows are violations
-    binds: [sku, excludeId]     # the bind contract every reference must wire exactly
+    binds: { sku: string, excludeId: integer }  # the typed bind contract every reference must wire exactly
     code: duplicate
 ```
 
@@ -190,7 +190,9 @@ validate:
 
 The set carries what the rule *is* (the expression or SQL, the contract, default
 `code`/`message`); every reference carries its own wiring — `params:` (checked against
-`binds:` exactly), `field:`, `when:`, and `code`/`message` overrides. Ambient
+`binds:` exactly, and the contract is typed: each bind's declared type is checked against
+the referencing route's input types at load), `field:`, `when:`, and `code`/`message`
+overrides. Ambient
 [`principal.*` binds](two-way-sql.md#ambient-binds) seed shared SQL exactly as route SQL, so
 they never appear in a contract. Resolution happens at manifest load; execution, this page's
 error model, and coverage consume plain rules unchanged. Unknown references, contract
@@ -228,8 +230,8 @@ decisions:
     hitPolicy: first          # first | unique
     rows:
       - when: { amount: "> 100000" }
-        out: { assignee: cfo-1 }
-      - out: { assignee: approver-1 }    # the trailing row without when: is the default
+        outputs: { assignee: cfo-1 }
+      - outputs: { assignee: approver-1 }  # the trailing row without when: is the default
 ```
 
 ```yaml
@@ -241,7 +243,7 @@ decide:
 ```
 
 A row is the conjunction of its cells — equality, an inclusive range (`between`),
-membership in a small set (`in`), a boolean, or an org-subtree test (`orgSubtree`, table
+membership in a small set (`in`), a boolean, or an org-subtree test (`subtree`, table
 sources) — and an absent cell is a wildcard. Alternatives are separate rows; derivations
 ("the caller holds the officer role") belong in the `decide:` wiring, which is an
 expression over the request context. Outputs publish as `decision.<alias>.<output>` for

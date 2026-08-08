@@ -101,17 +101,20 @@ and analytics queries in one page — each panel's query picks its datasource:
 
 ```yaml
 # web/products/dashboard/dashboard.view.yml
+version: tesseraql/v1
+kind: view
+recipe: dashboard
 panels:
   - { type: stat, source: sql, column: products, label: Products }
   - type: chart
-    kind: bar-grouped
+    chart: bar-grouped
     source: byCategory           # main: live stock vs reorder floor
     x: label
     series:
       - { column: stock, label: In stock }
       - { column: reorder, label: Reorder floor }
   - type: chart
-    kind: line
+    chart: line
     source: priceTrend           # analytics: the lake's history
     x: label
     y: avg_price

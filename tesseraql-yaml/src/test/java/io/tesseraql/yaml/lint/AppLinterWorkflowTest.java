@@ -175,8 +175,8 @@ class AppLinterWorkflowTest {
                       lane: { type: string, enum: [fast, slow] }
                     rows:
                       - when: { amount: ">= 1000" }
-                        out: { lane: slow }
-                      - out: { lane: fast }
+                        outputs: { lane: slow }
+                      - outputs: { lane: fast }
                 """);
     }
 

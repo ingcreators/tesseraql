@@ -18,7 +18,7 @@ emit: orders.changed
 # web/orders/orders.view.yml — the screen
 version: tesseraql/v1
 kind: view
-view: list
+recipe: list
 title: Orders
 refreshOn: orders.changed
 ```

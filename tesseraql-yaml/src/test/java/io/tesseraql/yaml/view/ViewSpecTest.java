@@ -23,7 +23,7 @@ class ViewSpecTest {
         ViewSpec spec = ViewSpec.parse(write(dir, "items.view.yml", """
                 version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: view.items.title
                 columns:
                   - name: name
@@ -44,8 +44,9 @@ class ViewSpecTest {
         ViewSpec spec = ViewSpec.parse(write(dir, "new.view.yml", """
                 version: tesseraql/v1
                 id: items.new
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 action: /items/create
                 fields:
                   - name: note
@@ -62,7 +63,7 @@ class ViewSpecTest {
         ViewSpec spec = ViewSpec.parse(write(dir, "item.view.yml", """
                 version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 fields:
                   - name: name
                 children:
@@ -83,8 +84,9 @@ class ViewSpecTest {
     @Test
     void rejectsChildrenOnANonDetailView(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 children:
                   - source: orders
                 """);
@@ -95,8 +97,9 @@ class ViewSpecTest {
     @Test
     void rejectsAChildWithoutSource(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 children:
                   - title: Orders
                 """);
@@ -109,7 +112,7 @@ class ViewSpecTest {
         ViewSpec spec = ViewSpec.parse(write(dir, "stats.view.yml", """
                 version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Stats
                 panels:
                   - title: Users
@@ -118,7 +121,7 @@ class ViewSpecTest {
                     column: user_count
                   - title: Signups
                     type: chart
-                    kind: bar
+                    chart: bar
                     source: signups
                     x: day
                     y: n
@@ -137,8 +140,9 @@ class ViewSpecTest {
     @Test
     void rejectsAPanelWithoutAKnownType(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - title: Broken
                 """);
@@ -149,8 +153,9 @@ class ViewSpecTest {
     @Test
     void rejectsAStatPanelWithoutAColumn(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: stat
                 """);
@@ -161,8 +166,9 @@ class ViewSpecTest {
     @Test
     void rejectsAChartPanelWithoutItsAxes(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: chart
                     y: n
@@ -171,8 +177,9 @@ class ViewSpecTest {
                 .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3313")
                 .hasMessageContaining("requires x:");
         Path noSeries = write(dir, "y.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: chart
                     x: day
@@ -185,11 +192,12 @@ class ViewSpecTest {
     void parsesAMultiSeriesChartWithThePassthroughAttributes(@TempDir Path dir)
             throws Exception {
         ViewSpec spec = ViewSpec.parse(write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: chart
-                    kind: bar-grouped
+                    chart: bar-grouped
                     x: month
                     xType: date
                     height: 240
@@ -213,8 +221,9 @@ class ViewSpecTest {
     @Test
     void theYShorthandIsASingleSeries(@TempDir Path dir) throws Exception {
         ViewSpec spec = ViewSpec.parse(write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - { type: chart, x: day, y: n }
                 """));
@@ -225,15 +234,17 @@ class ViewSpecTest {
     @Test
     void rejectsChartVocabularyViolations(@TempDir Path dir) throws Exception {
         assertThatThrownBy(() -> ViewSpec.parse(write(dir, "kind.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
-                  - { type: chart, kind: donut, x: day, y: n }
+                  - { type: chart, chart: donut, x: day, y: n }
                 """)))
                 .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3313");
         assertThatThrownBy(() -> ViewSpec.parse(write(dir, "both.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: chart
                     x: day
@@ -243,26 +254,29 @@ class ViewSpecTest {
                 """)))
                 .isInstanceOf(TqlException.class).hasMessageContaining("not both");
         assertThatThrownBy(() -> ViewSpec.parse(write(dir, "mark.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: chart
-                    kind: bar
+                    chart: bar
                     x: day
                     series:
                       - { column: n, mark: line }
                 """)))
-                .isInstanceOf(TqlException.class).hasMessageContaining("kind: combo");
+                .isInstanceOf(TqlException.class).hasMessageContaining("chart: combo");
         assertThatThrownBy(() -> ViewSpec.parse(write(dir, "stat.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - { type: stat, column: n, height: 100 }
                 """)))
                 .isInstanceOf(TqlException.class).hasMessageContaining("chart-panel keys");
         assertThatThrownBy(() -> ViewSpec.parse(write(dir, "height.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - { type: chart, x: day, y: n, height: tall }
                 """)))
@@ -272,8 +286,9 @@ class ViewSpecTest {
     @Test
     void rejectsPanelsOnANonDashboardView(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 panels:
                   - type: stat
                     column: c
@@ -291,14 +306,14 @@ class ViewSpecTest {
 
     @Test
     void rejectsAnUnknownViewKind(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", "kind: view\nview: wizard\n");
+        Path file = write(dir, "x.view.yml", "version: tesseraql/v1\nkind: view\nrecipe: wizard\n");
         assertThatThrownBy(() -> ViewSpec.parse(file))
-                .isInstanceOf(TqlException.class).hasMessageContaining("view must be");
+                .isInstanceOf(TqlException.class).hasMessageContaining("recipe must be");
     }
 
     @Test
     void rejectsAFormWithoutAction(@TempDir Path dir) throws Exception {
-        Path file = write(dir, "x.view.yml", "kind: view\nview: form\n");
+        Path file = write(dir, "x.view.yml", "version: tesseraql/v1\nkind: view\nrecipe: form\n");
         assertThatThrownBy(() -> ViewSpec.parse(file))
                 .isInstanceOf(TqlException.class).hasMessageContaining("action");
     }
@@ -306,8 +321,9 @@ class ViewSpecTest {
     @Test
     void rejectsAFieldWithoutName(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 action: /x
                 fields:
                   - widget: textarea

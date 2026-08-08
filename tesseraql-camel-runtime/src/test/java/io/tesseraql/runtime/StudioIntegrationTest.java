@@ -3728,6 +3728,7 @@ class StudioIntegrationTest {
                 "update users set status = 'PROBED' where name = /* name */ 'sato'\n"
                         + "returning id, name, status;\n");
         Files.writeString(target.resolve("tests/studio-write-test.yml"), """
+                version: tesseraql/v1
                 tests:
                   - name: the probe update returns the affected row
                     sql:
@@ -3743,6 +3744,7 @@ class StudioIntegrationTest {
         // A contract test case targeting an identity contract the admin route binds, to exercise
         // contract cases through the sandboxed identity service (no expect: it passes if it runs).
         Files.writeString(target.resolve("tests/studio-contract-test.yml"), """
+                version: tesseraql/v1
                 tests:
                   - name: the list-users contract runs under the sandbox
                     contract: identity.list-users
@@ -3843,10 +3845,10 @@ class StudioIntegrationTest {
                     onMiss: default
                     rows:
                       - when: { amount: ">= 100000" }
-                        out: { tier: cfo }
+                        outputs: { tier: cfo }
                       - when: { amount: ">= 10000", dept: sales }
-                        out: { tier: director }
-                      - out: { tier: manager }
+                        outputs: { tier: director }
+                      - outputs: { tier: manager }
                 """);
         // A field domain for the route-form editor test: saving `domain: formed.q` through the
         // form must survive the draft AND resolve when the applied route recompiles.

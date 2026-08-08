@@ -4,6 +4,7 @@
   "title": "TesseraQL decision tables v1",
   "description": "Schema for TesseraQL shared decision documents (decisions/*.yml): named decision tables a route references from its 'decide:' block with 'use:'. Documented in decision-tables.md.",
   "type": "object",
+  "required": ["version"],
   "properties": {
     "version": {
       "type": "string",
@@ -26,8 +27,8 @@
                 "domain": { "type": "string", "description": "Field domain reference declaring the input's type." },
                 "match": {
                   "type": "string",
-                  "enum": ["eq", "between", "in", "bool", "orgSubtree"],
-                  "description": "How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, orgSubtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure)."
+                  "enum": ["eq", "between", "in", "bool", "subtree"],
+                  "description": "How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, subtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure)."
                 }
               },
               "additionalProperties": false
@@ -64,7 +65,7 @@
             "description": "The app-owned table carrying the rows (exactly one of rows:/source:): business users maintain them at runtime, and the decision evaluates as one generated SELECT in the operation's transaction. A NULL cell in any mapped column is the wildcard.",
             "properties": {
               "table": { "type": "string", "description": "The rule table." },
-              "id": { "type": "string", "description": "The rule table's key column joining set: child tables. Default id." },
+              "keyColumn": { "type": "string", "description": "The rule table's key column joining set: child tables. Default id." },
               "match": {
                 "type": "object",
                 "description": "Column realization per input (all but in): exactly one shape per entry.",
@@ -73,7 +74,7 @@
                   "properties": {
                     "eq": { "type": "string", "description": "One nullable column for an eq/bool input." },
                     "between": { "type": "array", "items": { "type": "string" }, "description": "The nullable [min, max] column pair of a between input." },
-                    "subtree": { "type": "string", "description": "The nullable unit-id column of an orgSubtree input, matched through the managed org closure." }
+                    "subtree": { "type": "string", "description": "The nullable unit-id column of an subtree input, matched through the managed org closure." }
                   },
                   "additionalProperties": false
                 }
@@ -113,12 +114,12 @@
                   "type": "object",
                   "description": "Cells by input name: a scalar (eq/bool), a range ('>= 10000', '5..10', a number), or a list (in)."
                 },
-                "out": {
+                "outputs": {
                   "type": "object",
                   "description": "The outputs this row sets — exactly the declared outputs."
                 }
               },
-              "required": ["out"],
+              "required": ["outputs"],
               "additionalProperties": false
             }
           }

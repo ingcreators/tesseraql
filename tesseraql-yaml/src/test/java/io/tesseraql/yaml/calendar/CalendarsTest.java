@@ -62,19 +62,19 @@ class CalendarsTest {
         Set<LocalDate> holidays = Calendars.staticHolidays(calendar);
 
         // June 2026: the 1st (Monday) is a holiday, so the first business day is Tuesday the 2nd.
-        assertThat(Calendars.counts(calendar, "firstBusinessDayOfMonth",
+        assertThat(Calendars.counts(calendar, "first-business-day-of-month",
                 LocalDate.parse("2026-06-02"), holidays)).isTrue();
-        assertThat(Calendars.counts(calendar, "firstBusinessDayOfMonth",
+        assertThat(Calendars.counts(calendar, "first-business-day-of-month",
                 LocalDate.parse("2026-06-01"), holidays)).isFalse(); // holiday itself
-        assertThat(Calendars.counts(calendar, "firstBusinessDayOfMonth",
+        assertThat(Calendars.counts(calendar, "first-business-day-of-month",
                 LocalDate.parse("2026-06-03"), holidays)).isFalse(); // the 2nd already counted
 
         // The 30th (Tuesday) is a holiday, so the last business day is Monday the 29th.
-        assertThat(Calendars.counts(calendar, "lastBusinessDayOfMonth",
+        assertThat(Calendars.counts(calendar, "last-business-day-of-month",
                 LocalDate.parse("2026-06-29"), holidays)).isTrue();
-        assertThat(Calendars.counts(calendar, "lastBusinessDayOfMonth",
+        assertThat(Calendars.counts(calendar, "last-business-day-of-month",
                 LocalDate.parse("2026-06-30"), holidays)).isFalse();
-        assertThat(Calendars.counts(calendar, "lastBusinessDayOfMonth",
+        assertThat(Calendars.counts(calendar, "last-business-day-of-month",
                 LocalDate.parse("2026-06-26"), holidays)).isFalse(); // the 29th still to come
     }
 
@@ -174,7 +174,7 @@ class CalendarsTest {
 
         // Backward shift across the month boundary: September 1 (Tuesday holiday) shifts back
         // to Monday August 31 - the next month's nominal reaches this month.
-        assertThat(Calendars.shiftedNominal(calendar, 1, "previousBusinessDay",
+        assertThat(Calendars.shiftedNominal(calendar, 1, "previous-business-day",
                 LocalDate.parse("2026-08-31"), holidays))
                 .isEqualTo(LocalDate.parse("2026-09-01"));
 

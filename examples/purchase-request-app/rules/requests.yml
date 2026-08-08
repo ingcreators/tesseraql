@@ -7,5 +7,5 @@ version: tesseraql/v1
 rules:
   duplicateRequest:
     file: duplicate-request.sql
-    binds: [title]
+    binds: { title: string }
     code: duplicate
