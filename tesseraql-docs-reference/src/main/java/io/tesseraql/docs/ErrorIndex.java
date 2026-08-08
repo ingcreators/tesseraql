@@ -430,7 +430,8 @@ final class ErrorIndex {
             "procurement-demo.md", "workflow-expressiveness.md", "transition-engine.md",
             "batch-platform.md", "analytics-experience.md", "studio-ux-refresh.md",
             "console-ux-refresh.md", "html-email.md", "page-builder.md",
-            "pages-and-mail-lints.md", "contract-bugfixes.md", "vocabulary-cleanup.md");
+            "pages-and-mail-lints.md", "contract-bugfixes.md", "vocabulary-cleanup.md",
+            "unicode-identifiers.md");
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every
