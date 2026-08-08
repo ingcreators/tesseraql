@@ -102,7 +102,7 @@ request answers `202` with the transfer URLs, and the route owns its subtree:
 
 - `POST {path}` → `{ "transferId": ..., "statusUrl": "{path}/{transferId}", "fileUrl": "{path}/{transferId}/file" }`
 - `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED` or
-  `FAILED`), `rows`, `filename`, `downloaded`, and `fileUrl` once completed
+  `FAILED`), `rowCount`, `filename`, `downloaded`, and `fileUrl` once completed
 - `GET {path}/{transferId}/file` — streams the finished file; an unknown transfer is 404, a
   transfer that is still running (or failed, or is an import) is 409
 
@@ -152,8 +152,8 @@ the `onError:` choice:
 - `rollback` (default) — all or nothing. Any failing row rolls the whole import back; the
   transfer ends `FAILED` and the status response lists every rejected row with its row number
   and message (up to a reporting cap).
-- `skip` — clean rows commit. The transfer ends `COMPLETED`, `rows` counts the applied rows,
-  and the rejected rows are listed the same way.
+- `skip` — clean rows commit. The transfer ends `COMPLETED`, `rowCount` counts the applied
+  rows, and the rejected rows are listed the same way.
 
 Import-side `import:` keys beyond `format`, `columns`, `onError`, and `sql`:
 

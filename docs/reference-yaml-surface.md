@@ -11,7 +11,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | --- | --- | --- |
 | `version` \* | const `tesseraql/v1` |  |
 | `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
-| `kind` \* | enum: `route` \| `job` \| `view` |  |
+| `kind` \* | enum: `route` \| `job` \| `view` \| `workflow` \| `scope` \| `attachment` \| `tool` \| `resource` \| `ui` \| `prompt` | route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model. |
 | `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline. |
 | `input` | map of [inputField](#inputfield) |  |
 | `inputPolicy` | object | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
@@ -363,7 +363,7 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 | `onMiss` | enum: `error` \| `default` | error (default): a lookup no row matches raises TQL-DECISION-4721. default: the trailing row without when: answers. |
 | `source` | [object](#decisionsdecisionssource) | The app-owned table carrying the rows (exactly one of rows:/source:): business users maintain them at runtime, and the decision evaluates as one generated SELECT in the operation's transaction. A NULL cell in any mapped column is the wildcard. |
 | `default` | object | The outputs answering a miss of a table-backed decision. A YAML-backed decision declares its default as a trailing row without when: instead. |
-| `rows` \* | array of [object](#decisionsdecisionsrows) | The authored rows, resolved in order. A row is the conjunction of its when: cells (absent cell = wildcard); a trailing row without when: is the default. |
+| `rows` | array of [object](#decisionsdecisionsrows) | The authored rows, resolved in order. A row is the conjunction of its when: cells (absent cell = wildcard); a trailing row without when: is the default. |
 
 ##### decisions.decisions.inputs
 

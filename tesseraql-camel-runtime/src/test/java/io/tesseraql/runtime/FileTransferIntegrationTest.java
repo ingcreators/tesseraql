@@ -69,7 +69,7 @@ class FileTransferIntegrationTest {
         JsonNode status = awaitTerminal("/api/items/import/" + transferId);
 
         assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(status.get("rows").asLong()).isEqualTo(2);
+        assertThat(status.get("rowCount").asLong()).isEqualTo(2);
         assertThat(itemCount("alpha")).isEqualTo(1);
         assertThat(itemCount("beta")).isEqualTo(1);
     }
@@ -94,7 +94,7 @@ class FileTransferIntegrationTest {
         JsonNode status = awaitTerminal("/api/items/import-lenient/" + transferId);
 
         assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(status.get("rows").asLong()).isEqualTo(1);
+        assertThat(status.get("rowCount").asLong()).isEqualTo(1);
         assertThat(status.get("errors").get(0).get("row").asLong()).isEqualTo(2);
         assertThat(itemCount("delta")).isEqualTo(1);
     }
@@ -165,7 +165,7 @@ class FileTransferIntegrationTest {
 
         JsonNode status = awaitTerminal("/api/items/import/" + transferId);
         assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(status.get("rows").asLong()).isEqualTo(1);
+        assertThat(status.get("rowCount").asLong()).isEqualTo(1);
         assertThat(itemCount("multi")).isEqualTo(1);
     }
 

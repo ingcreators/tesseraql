@@ -123,7 +123,11 @@
             }
           }
         },
-        "required": ["inputs", "outputs", "rows"],
+        "required": ["inputs", "outputs"],
+        "oneOf": [
+          { "required": ["rows"], "not": { "required": ["source"] } },
+          { "required": ["source"], "not": { "required": ["rows"] } }
+        ],
         "additionalProperties": false
       }
     }

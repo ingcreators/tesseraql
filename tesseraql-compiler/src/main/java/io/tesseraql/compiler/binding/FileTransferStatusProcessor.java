@@ -39,7 +39,9 @@ public final class FileTransferStatusProcessor implements Processor {
         body.put("route", status.routeId());
         body.put("direction", status.direction());
         body.put("status", status.status());
-        body.put("rows", status.rows());
+        // rowCount, not rows: `rows` is a list of records everywhere else on the wire
+        // (docs/contract-bugfixes.md track D).
+        body.put("rowCount", status.rows());
         if (!status.errors().isEmpty()) {
             body.put("errors", errorRows(status.errors()));
         }

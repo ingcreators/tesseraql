@@ -79,6 +79,8 @@ public final class AppScaffolder {
                         absoluteResource("/schema/tesseraql-rules-v1.schema.json")),
                 new ScaffoldedFile(".vscode/tesseraql-decisions-v1.schema.json",
                         absoluteResource("/schema/tesseraql-decisions-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-calendars-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-calendars-v1.schema.json")),
                 // The remaining authored surfaces (docs/vscode-extension.md "schema
                 // completion"): the app config, test suites, and message catalogs each get
                 // their own schema, so no authored YAML is editor-blind.
@@ -99,7 +101,10 @@ public final class AppScaffolder {
                   "web/**/*.yml",
                   "consume/**/*.yml",
                   "batch/**/*.yml",
-                  "mcp/**/*.yml"
+                  "mcp/**/*.yml",
+                  "workflow/**/*.yml",
+                  "scope/**/*.yml",
+                  "attachments/**/*.yml"
                 ],
                 ".vscode/tesseraql-domains-v1.schema.json": [
                   "domains/**/*.yml"
@@ -109,6 +114,9 @@ public final class AppScaffolder {
                 ],
                 ".vscode/tesseraql-decisions-v1.schema.json": [
                   "decisions/**/*.yml"
+                ],
+                ".vscode/tesseraql-calendars-v1.schema.json": [
+                  "calendars/**/*.yml"
                 ],
                 ".vscode/tesseraql-config-v1.schema.json": [
                   "config/tesseraql.yml"

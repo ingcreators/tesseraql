@@ -444,7 +444,7 @@ public final class OpenApiGenerator {
         statusProperties.put("route", Map.of("type", "string"));
         statusProperties.put("direction", Map.of("type", "string"));
         statusProperties.put("status", Map.of("type", "string"));
-        statusProperties.put("rows", Map.of("type", "integer"));
+        statusProperties.put("rowCount", Map.of("type", "integer"));
         statusProperties.put("errors", ordered("type", "array", "items", Map.of("type", "object")));
         statusProperties.put("filename", Map.of("type", "string"));
         statusProperties.put("downloaded", Map.of("type", "boolean"));

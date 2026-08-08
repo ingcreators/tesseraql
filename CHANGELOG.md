@@ -27,6 +27,11 @@ All notable changes to TesseraQL are documented here. The format follows
   login-home-relative and absolute paths needed an undocumented `//` escape (which
   keeps its absolute meaning). A deployment that relied on the home-relative reading
   of a leading-slash path must drop the slash.
+- **Pre-1.0 breaking JSON-contract change — the transfer status counts rows as
+  `rowCount`** (docs/contract-bugfixes.md track D): the file-transfer status
+  endpoint's `rows` key — the one payload where `rows` was an integer instead of a
+  list of records — renamed to `rowCount`, matching the query metadata vocabulary;
+  the OpenAPI `TransferStatus` component follows.
 - **Pre-1.0 breaking JSON-contract change — structured error details**
   (docs/transition-engine.md Track F): a `TqlException`'s structured details no longer
   merge flat into the rendered `error` object; they render as the `error.details`

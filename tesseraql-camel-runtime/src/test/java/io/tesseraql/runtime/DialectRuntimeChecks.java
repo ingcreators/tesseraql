@@ -75,7 +75,7 @@ final class DialectRuntimeChecks {
                 "name,qty\nalpha,1\nbeta,2\n");
         JsonNode imported = awaitTerminal(runtime, "/api/items/import/" + importId);
         assertThat(imported.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(imported.get("rows").asLong()).isEqualTo(2);
+        assertThat(imported.get("rowCount").asLong()).isEqualTo(2);
 
         String exportId = startTransfer(runtime, "/api/items/export", "");
         assertThat(awaitTerminal(runtime, "/api/items/export/" + exportId)
