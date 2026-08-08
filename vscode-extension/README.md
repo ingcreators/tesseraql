@@ -25,12 +25,19 @@ never disagree with the build.
 - **Declared-symbol intelligence.** Completion and go-to-definition for `policy:`,
   `message:`, `domain:`, `use:`, `decision:`, and `workflow:` values over the
   `tesseraql symbols` contract — the editor offers exactly what the framework
-  declares, nothing more.
+  declares, nothing more. Flow-map fields
+  (`salary: { domain: salary, policy: hr.write }`) complete too.
+- **View-composition intelligence.** View ids complete at every reference position —
+  `response.html.view:`, `views: [..]` on template routes, and `view:` on dashboard
+  panels and detail children — from the app's `*.view.yml` registry (`web/` +
+  `templates/`); `shell:` offers the negotiation vocabulary (`auto`/`always`/`never`)
+  and `widget:` the field-widget enum.
 - **Test Explorer with SQL coverage.** App test suites run in the native Test
   Explorer (`tesseraql test --format json`), single cases included; a coverage run
   paints per-file SQL line coverage in the editor.
-- **Reference navigation.** `file:`, `view:`, and `template:` values in app YAML are
-  clickable links when the target exists.
+- **Reference navigation.** `file:` and `template:` values in app YAML are
+  clickable links when the target exists (`view:` is an id into the view registry,
+  not a path, and completes instead).
 - **Serve status.** A status-bar item polls the dev server's readiness endpoint;
   *TesseraQL: Open Server* jumps to it.
 - **Open in Studio.** Any app file opens at its source view in the running Studio.
@@ -39,9 +46,10 @@ never disagree with the build.
 - **Error-code hovers.** Hover any `TQL-<DOMAIN>-<n>` literal for a link into the
   error-code reference.
 - **Snippets** for the blessed shapes (`tql-query-json`, `tql-query-html`,
-  `tql-command`, `tql-view-list`, `tql-view-dashboard`, `tql-chart-panel`,
-  `tql-workflow`, `tql-test`, `tql-test-transition`, `tql-test-dispatch`,
-  `tql-calendar`, `tql-job-schedule`, `tql-chunk-step`, `tql-export-step`).
+  `tql-command`, `tql-view-list`, `tql-view-dashboard`, `tql-view-embed`,
+  `tql-views`, `tql-chart-panel`, `tql-workflow`, `tql-test`,
+  `tql-test-transition`, `tql-test-dispatch`, `tql-calendar`, `tql-job-schedule`,
+  `tql-chunk-step`, `tql-export-step`).
 
 Schema-driven completion stays with the scaffolded wiring: `tesseraql new` associates
 the committed JSON Schema through the recommended

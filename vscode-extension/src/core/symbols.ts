@@ -230,13 +230,15 @@ export function symbolReferenceAt(lineText: string, character: number): SymbolRe
 
 /**
  * The completion context of a cursor sitting after `policy:`, `message:`, `domain:`,
- * `use:`, or `decision:`.
+ * `use:`, or `decision:` — in block form or inside a flow map, so the wave-4 input
+ * shape `salary: { domain: salary, policy: hr.write }` (docs/view-composition.md)
+ * completes both references.
  */
 export function completionKindAt(lineText: string, character: number):
     'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow' | 'calendar'
     | 'job' | undefined {
   const head = lineText.slice(0, character);
-  const match = /^\s*(?:-\s+)?(policy|message|domain|use|decision|workflow|calendar|after):\s*(["']?)[^\s#"']*$/.exec(head);
+  const match = /(?:^\s*(?:-\s+)?|[{,]\s*)(policy|message|domain|use|decision|workflow|calendar|after):\s*(["']?)[^\s#"',}]*$/.exec(head);
   return match === null
       ? undefined
       : KIND_BY_KEY[match[1]] as
