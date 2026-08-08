@@ -161,4 +161,6 @@ export const EXCLUDED = [
   'contract-bugfixes.md',
   // Vocabulary cleanup (wave C: YAML/HTTP renames before the v1 freeze), 2026-08-08.
   'vocabulary-cleanup.md',
+  // Unicode identifiers (verbatim table/column names end-to-end), 2026-08-08.
+  'unicode-identifiers.md',
 ];
