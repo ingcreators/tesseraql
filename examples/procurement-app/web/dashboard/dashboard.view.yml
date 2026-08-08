@@ -4,10 +4,10 @@ kind: view
 recipe: dashboard
 title: Procurement dashboard
 panels:
-  - { type: stat, source: sql, column: requisitions, label: Requisitions }
-  - { type: stat, source: sql, column: open_rfqs, label: Open RFQs }
-  - { type: stat, source: sql, column: submitted_quotes, label: Submitted quotes }
-  - { type: stat, source: sql, column: in_transit, label: In transit }
+  - { type: stat, source: sql, column: requisitions, title: Requisitions }
+  - { type: stat, source: sql, column: open_rfqs, title: Open RFQs }
+  - { type: stat, source: sql, column: submitted_quotes, title: Submitted quotes }
+  - { type: stat, source: sql, column: in_transit, title: In transit }
   - type: chart
     chart: bar
     source: ordersByState

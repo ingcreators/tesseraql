@@ -187,6 +187,36 @@ class AppLinterViewTest {
     }
 
     @Test
+    void aChildSourceNamingAnHttpSourceIsClean(@TempDir Path dir) throws Exception {
+        // docs/connectors.md http sources publish the same {rows} shape as a named query,
+        // so a child/panel source: may name one (docs/view-composition.md wave 0).
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/list.sql"), "select id, name from items\n");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.page
+                kind: route
+                recipe: query-html
+                sql:
+                  file: list.sql
+                http:
+                  rates:
+                    url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
+                response:
+                  html:
+                    view: items.view.yml
+                """);
+        Files.writeString(dir.resolve("web/items/items.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                children:
+                  - source: rates
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
     void anOverrideWithoutTheFragmentSignatureIsAWarning(@TempDir Path dir) throws Exception {
         writeApp(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.createDirectories(dir.resolve("templates/tql/view"));

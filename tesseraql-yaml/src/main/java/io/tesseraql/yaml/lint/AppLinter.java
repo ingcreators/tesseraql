@@ -415,24 +415,20 @@ public final class AppLinter {
                 }
             }
             for (io.tesseraql.yaml.view.ViewSpec.Child child : spec.children()) {
-                var queries = route.definition().queries();
-                if (!"sql".equals(child.source())
-                        && (queries == null || !queries.containsKey(child.source()))) {
+                if (!declaresViewSource(route.definition(), child.source())) {
                     findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
                             "view " + spec.id() + ": children source " + child.source()
-                                    + " is not a named query of the route"));
+                                    + " is not a named query or http source of the route"));
                 }
             }
             for (io.tesseraql.yaml.view.ViewSpec.Panel panel : spec.panels()) {
                 String panelSource = panel.source() == null || panel.source().isBlank()
                         ? "sql"
                         : panel.source();
-                var queries = route.definition().queries();
-                if (!"sql".equals(panelSource)
-                        && (queries == null || !queries.containsKey(panelSource))) {
+                if (!declaresViewSource(route.definition(), panelSource)) {
                     findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
                             "view " + spec.id() + ": panel source " + panelSource
-                                    + " is not a named query of the route"));
+                                    + " is not a named query or http source of the route"));
                 }
             }
             if (io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
@@ -454,6 +450,21 @@ public final class AppLinter {
             }
         }
         lintViewOverrides(appHome, findings);
+    }
+
+    /**
+     * A child/panel {@code source:} must be {@code sql} or one of the route's {@code queries:}
+     * or {@code http:} sources (TQL-VIEW-3308) — both publish the {@code {rows}} shape the
+     * view model reads.
+     */
+    private static boolean declaresViewSource(RouteDefinition definition, String source) {
+        if ("sql".equals(source)) {
+            return true;
+        }
+        var queries = definition.queries();
+        var http = definition.http();
+        return (queries != null && queries.containsKey(source))
+                || (http != null && http.containsKey(source));
     }
 
     /** A form view's action route exists, declares inputs, and covers every fields: entry. */

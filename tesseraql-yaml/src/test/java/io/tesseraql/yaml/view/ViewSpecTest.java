@@ -331,4 +331,79 @@ class ViewSpecTest {
         assertThatThrownBy(() -> ViewSpec.parse(file))
                 .isInstanceOf(TqlException.class).hasMessageContaining("requires name");
     }
+
+    // View documents are strict at every nesting level (docs/view-composition.md wave 0,
+    // TQL-VIEW-3314): a silently dropped key renders a page that quietly ignores what the
+    // author wrote — the shape the procurement gallery dashboard actually shipped with.
+
+    @Test
+    void rejectsAnUnknownTopLevelKey(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                layout: wide
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("layout");
+    }
+
+    @Test
+    void rejectsAnUnknownPanelKey(@TempDir Path dir) throws Exception {
+        Path file = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - { type: stat, source: sql, column: total, label: Total }
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(file))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("label");
+    }
+
+    @Test
+    void rejectsUnknownEntryKeysAtEveryLevel(@TempDir Path dir) throws Exception {
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "col.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - { name: sku, width: 12 }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("width");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "field.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                action: /x
+                fields:
+                  - { name: note, placeholder: hint }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("placeholder");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "child.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                children:
+                  - { source: orders, label: Orders }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("label");
+        assertThatThrownBy(() -> ViewSpec.parse(write(dir, "series.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - type: chart
+                    x: label
+                    series:
+                      - { column: stock, color: red }
+                """)))
+                .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")
+                .hasMessageContaining("color");
+    }
 }

@@ -36,6 +36,14 @@ public record ViewSpec(String id, String view, String title, String action, Stri
      */
     public static final TqlErrorCode INVALID_CHART = new TqlErrorCode(TqlDomain.VIEW, 3313);
 
+    /**
+     * Unknown key in a view document (docs/view-composition.md wave 0, TQL-VIEW-3314). View
+     * documents are strict at every nesting level — the same posture the {@code domains/}
+     * documents take — because a silently dropped key renders a page that quietly ignores
+     * what the author wrote.
+     */
+    public static final TqlErrorCode UNKNOWN_KEY = new TqlErrorCode(TqlDomain.VIEW, 3314);
+
     public static final String LIST = "list";
     public static final String FORM = "form";
     public static final String DETAIL = "detail";
@@ -64,6 +72,22 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     /** The slice-1 widget vocabulary (docs/declarative-views.md, TQL-VIEW-3305). */
     public static final java.util.Set<String> WIDGETS = java.util.Set.of("text", "textarea",
             "number", "date", "datetime-local", "checkbox", "select", "hidden");
+
+    /** The strict key vocabulary per nesting level (TQL-VIEW-3314). */
+    private static final java.util.Set<String> DOCUMENT_KEYS = java.util.Set.of("version",
+            "kind", "id", "recipe", "title", "action", "source", "search", "fields", "columns",
+            "children", "panels", "slots", "template", "refreshOn");
+    private static final java.util.Set<String> FIELD_KEYS = java.util.Set.of("name", "label",
+            "widget", "column");
+    private static final java.util.Set<String> COLUMN_KEYS = java.util.Set.of("name", "label",
+            "link", "sortable", "text");
+    private static final java.util.Set<String> CHILD_KEYS = java.util.Set.of("source", "title",
+            "columns");
+    private static final java.util.Set<String> PANEL_KEYS = java.util.Set.of("title", "type",
+            "source", "column", "x", "y", "chart", "series", "xType", "height", "legend",
+            "yLabel", "columns");
+    private static final java.util.Set<String> SERIES_KEYS = java.util.Set.of("column", "label",
+            "mark");
 
     /**
      * The slot names each view kind offers (customization ladder L1, TQL-VIEW-3306): list and
@@ -162,6 +186,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         if (!"tesseraql/v1".equals(tree.get("version"))) {
             throw invalid(name, "version must be 'tesseraql/v1'");
         }
+        rejectUnknown(name, tree, DOCUMENT_KEYS, "a view document");
         String view = str(tree.get("recipe"));
         if (!LIST.equals(view) && !FORM.equals(view) && !DETAIL.equals(view)
                 && !DASHBOARD.equals(view)) {
@@ -198,6 +223,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static List<Panel> parsePanels(String source, Object raw) {
         List<Panel> panels = new ArrayList<>();
         for (Map<String, Object> entry : entries(source, raw, "panels")) {
+            rejectUnknown(source, entry, PANEL_KEYS, "a panels: entry");
             String type = str(entry.get("type"));
             if (type == null || !PANEL_TYPES.contains(type)) {
                 throw invalid(source, "a panels: entry requires type: one of " + PANEL_TYPES);
@@ -268,6 +294,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static List<Series> parseSeries(String source, Object raw) {
         List<Series> series = new ArrayList<>();
         for (Map<String, Object> entry : entries(source, raw, "series")) {
+            rejectUnknown(source, entry, SERIES_KEYS, "a series: entry");
             String column = str(entry.get("column"));
             if (column == null || column.isBlank()) {
                 throw invalidChart(source, "a series: entry requires column:");
@@ -290,6 +317,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static List<Child> parseChildren(String source, Object raw) {
         List<Child> children = new ArrayList<>();
         for (Map<String, Object> entry : entries(source, raw, "children")) {
+            rejectUnknown(source, entry, CHILD_KEYS, "a children: entry");
             String childSource = str(entry.get("source"));
             if (childSource == null || childSource.isBlank()) {
                 throw invalid(source, "a children: entry requires source: (a named query key)");
@@ -321,6 +349,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static List<Field> parseFields(String source, Object raw) {
         List<Field> fields = new ArrayList<>();
         for (Map<String, Object> entry : entries(source, raw, "fields")) {
+            rejectUnknown(source, entry, FIELD_KEYS, "a fields: entry");
             String name = str(entry.get("name"));
             if (name == null || name.isBlank()) {
                 throw invalid(source, "a fields: entry requires name:");
@@ -334,6 +363,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static List<Column> parseColumns(String source, Object raw) {
         List<Column> columns = new ArrayList<>();
         for (Map<String, Object> entry : entries(source, raw, "columns")) {
+            rejectUnknown(source, entry, COLUMN_KEYS, "a columns: entry");
             String name = str(entry.get("name"));
             if (name == null || name.isBlank()) {
                 throw invalid(source, "a columns: entry requires name:");
@@ -365,6 +395,21 @@ public record ViewSpec(String id, String view, String title, String action, Stri
 
     private static String str(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * View documents are strict at every nesting level (TQL-VIEW-3314): an unknown key is a
+     * build error, never silently dropped.
+     */
+    private static void rejectUnknown(String source, Map<String, Object> map,
+            java.util.Set<String> allowed, String where) {
+        for (String key : map.keySet()) {
+            if (!allowed.contains(key)) {
+                throw new TqlException(UNKNOWN_KEY, "Invalid view document " + source + ": "
+                        + where + " does not accept " + key + ": (accepted: "
+                        + new java.util.TreeSet<>(allowed) + ")");
+            }
+        }
     }
 
     private static TqlException invalid(String source, String message) {

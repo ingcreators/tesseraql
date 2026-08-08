@@ -50,16 +50,17 @@
     </th:block>
     </div>
   </section>
+  <!-- installChart is deliberately outside the kit's auto-init bundle (it needs Observable
+       Plot), so the chart scripts load here — only where a chart panel renders, and inside
+       the fragment so an embedded dashboard brings them along (docs/view-composition.md
+       wave 0). Both are self-hosted; the CSP stays default-src 'self'. -->
+  <th:block th:if="${v.hasChart}">
+    <script src="/assets/vendor/observablehq__plot/dist/plot.umd.min.js" defer></script>
+    <script type="module" src="/assets/_tesseraql/charts.js"></script>
+  </th:block>
 </div>
 <th:block th:if="${v.slots['footer'] != null}">
   <th:block th:insert="~{__${v.slots['footer']}__}"/>
-</th:block>
-<!-- installChart is deliberately outside the kit's auto-init bundle (it needs Observable
-     Plot), so the chart scripts load here — only where a chart panel renders. Both are
-     self-hosted; the CSP stays default-src 'self'. -->
-<th:block th:if="${v.hasChart}">
-  <script src="/assets/vendor/observablehq__plot/dist/plot.umd.min.js" defer></script>
-  <script type="module" src="/assets/_tesseraql/charts.js"></script>
 </th:block>
 </div>
 </html>
