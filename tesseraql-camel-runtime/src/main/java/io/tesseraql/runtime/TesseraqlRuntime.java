@@ -3855,6 +3855,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         alertChannel, alertPeriod, appName));
             }
             context.start();
+            // Unicode route paths match their percent-encoded requests (UnicodePaths).
+            UnicodePaths.install(context, port);
             sseEndpoints.forEach(Runnable::run);
         } catch (Exception ex) {
             tenantDataSources.close();

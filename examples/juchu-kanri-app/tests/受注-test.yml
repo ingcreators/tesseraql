@@ -1,0 +1,47 @@
+version: tesseraql/v1
+tests:
+  - name: the list finds both seeded orders
+    sql:
+      file: web/受注/受注一覧.sql
+    expect:
+      rowCount: 2
+
+  - name: the 顧客名 search branch narrows to one
+    sql:
+      file: web/受注/受注一覧.sql
+    params:
+      顧客名: 山田
+    expect:
+      rowCount: 1
+      rows:
+        - 受注番号: J-1001
+
+  - name: the detail select loads one order by 受注番号
+    sql:
+      file: web/受注/{受注番号}/明細.sql
+    params:
+      受注番号: J-1002
+    expect:
+      rowCount: 1
+      rows:
+        - 顧客名: 佐藤物産
+
+  - name: Hokkaido routes to the 1200 shipping class
+    decide:
+      decision: 送料区分
+    params:
+      地域: 北海道
+    expect:
+      rowCount: 1
+      rows:
+        - 送料: "1200"
+
+  - name: anywhere else falls through to the wildcard class
+    decide:
+      decision: 送料区分
+    params:
+      地域: 関東
+    expect:
+      rowCount: 1
+      rows:
+        - 送料: "800"

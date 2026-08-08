@@ -1,0 +1,27 @@
+version: tesseraql/v1
+id: 受注.list
+kind: route
+recipe: query-json
+
+input:
+  顧客名:
+    type: string
+    required: false
+    maxLength: 100
+
+security:
+  policy: juchu.read
+
+sql:
+  file: 受注一覧.sql
+  mode: query
+  params:
+    顧客名: query.顧客名
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows
+      meta:
+        count: sql.rowCount

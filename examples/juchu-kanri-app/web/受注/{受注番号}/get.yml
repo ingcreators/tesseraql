@@ -1,0 +1,19 @@
+version: tesseraql/v1
+id: 受注.detail
+kind: route
+recipe: query-json
+
+security:
+  policy: juchu.read
+
+sql:
+  file: 明細.sql
+  mode: query
+  params:
+    受注番号: path.受注番号
+
+response:
+  json:
+    status: 200
+    body:
+      data: sql.rows

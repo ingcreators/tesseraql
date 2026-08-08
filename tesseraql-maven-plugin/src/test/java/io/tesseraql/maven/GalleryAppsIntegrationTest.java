@@ -36,7 +36,7 @@ class GalleryAppsIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"purchase-request-app", "inventory-app", "helpdesk-app",
-            "procurement-app"})
+            "procurement-app", "juchu-kanri-app"})
     void galleryAppLintsCleanPassesItsSuitesAndClearsAdmission(String appName)
             throws Exception {
         Path example = Paths.get("..", "examples", appName).toAbsolutePath().normalize();

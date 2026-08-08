@@ -39,6 +39,8 @@ public final class RequestBinder implements Processor {
 
     private final RouteDefinition route;
     private final java.util.List<String> pathParams;
+    /** Declared path-parameter name → the router's wire name (WireNames). */
+    private final Map<String, String> wireNames;
     private final java.nio.file.Path appHome;
     private final ObjectMapper mapper = new ObjectMapper();
     /** Pre-compiled {@code requiredWhen} conditions (roadmap Phase 40) — bad syntax fails the build. */
@@ -56,6 +58,7 @@ public final class RequestBinder implements Processor {
             java.nio.file.Path appHome) {
         this.route = route;
         this.pathParams = java.util.List.copyOf(pathParams);
+        this.wireNames = WireNames.of(this.pathParams);
         this.appHome = appHome;
         route.input().forEach((name, field) -> {
             if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
@@ -98,7 +101,7 @@ public final class RequestBinder implements Processor {
         for (String name : pathParams) {
             path.put(name, effective.containsKey(name)
                     ? effective.get(name)
-                    : exchange.getMessage().getHeader(name, String.class));
+                    : exchange.getMessage().getHeader(wireNames.get(name), String.class));
         }
 
         Map<String, Object> context = new HashMap<>();
@@ -247,7 +250,12 @@ public final class RequestBinder implements Processor {
         if (body.containsKey(name) && body.get(name) != null) {
             return String.valueOf(body.get(name));
         }
-        return exchange.getMessage().getHeader(name, String.class);
+        String header = exchange.getMessage().getHeader(name, String.class);
+        if (header == null && wireNames.containsKey(name)) {
+            // A declared input that is also a path parameter arrives under its wire name.
+            header = exchange.getMessage().getHeader(wireNames.get(name), String.class);
+        }
+        return header;
     }
 
     /** Every binding whose {@code params:} this route's SQL execution can read, in precedence
