@@ -29,6 +29,14 @@ public final class SqlIdentifiers {
     /** Regex source for an optionally schema-qualified identifier ({@code name} or {@code schema.name}). */
     public static final String DOTTED = IDENTIFIER + "(?:\\." + IDENTIFIER + ")?";
 
+    /**
+     * A {@code {name}} placeholder whose name is one identifier: URL path parameters,
+     * message placeholders, and view link templates all extract through this — an
+     * unmatched placeholder passes through silently on those paths, so the extractor
+     * accepting exactly what the validators accept is the whole point.
+     */
+    public static final Pattern PLACEHOLDER = Pattern.compile("\\{(" + IDENTIFIER + ")}");
+
     private static final Pattern IDENTIFIER_PATTERN = Pattern.compile(IDENTIFIER);
     private static final Pattern DOTTED_PATTERN = Pattern.compile(DOTTED);
 

@@ -49,6 +49,26 @@ class ViewEjectorTest {
     }
 
     @Test
+    void ejectsJapaneseColumnsAndLinkPlaceholders(@TempDir Path dir) throws Exception {
+        // An ASCII-only placeholder pattern left {受注番号} as literal braces in the
+        // ejected href (docs/unicode-identifiers.md).
+        ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                title: 受注一覧
+                columns:
+                  - name: 受注番号
+                    link: /受注/{受注番号}
+                  - name: 状態
+                """);
+        ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
+                "web/受注/page.html");
+        assertThat(file.content()).contains("th:href=\"|/受注/${row['受注番号']}|\"");
+        assertThat(file.content()).contains("th:text=\"${row['状態']}\"");
+    }
+
+    @Test
     void aListWithoutExplicitColumnsRefusesToEject(@TempDir Path dir) throws Exception {
         ViewSpec spec = parse(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         assertThatThrownBy(() -> ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),

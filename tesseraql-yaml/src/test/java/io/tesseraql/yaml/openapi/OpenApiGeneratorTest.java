@@ -33,6 +33,34 @@ class OpenApiGeneratorTest {
     }
 
     @Test
+    void japanesePathParametersAreIncluded() {
+        // An ASCII-only extractor dropped {受注番号} from the document entirely
+        // (docs/unicode-identifiers.md).
+        io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
+        Path home = Path.of("/app").toAbsolutePath().normalize();
+        var route = new io.tesseraql.yaml.manifest.RouteFile("get", "/受注/{受注番号}",
+                home.resolve("web/受注/get.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: orders.detail
+                        kind: route
+                        recipe: query-json
+                        sql:
+                          file: detail.sql
+                        """, "detail"));
+        AppManifest manifest = new AppManifest(home,
+                new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
+                java.util.List.of(route), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(),
+                io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
+
+        String json = new OpenApiGenerator().toJson(manifest);
+
+        assertThat(json).contains("\"name\" : \"受注番号\"").contains("\"in\" : \"path\"");
+    }
+
+    @Test
     void recipesShapeResponses() {
         String json = new OpenApiGenerator().toJson(exampleApp());
         // HTML pages respond text/html; query-export streams the export format.

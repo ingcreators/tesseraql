@@ -30,7 +30,7 @@ registerCodeLanguage("tql-sql", (text) => {
             tokens.push({ text: text.slice(plainStart, end) });
         }
     };
-    const isWord = (ch) => /[A-Za-z0-9_]/.test(ch);
+    const isWord = (ch) => /[\p{L}\p{N}_]/u.test(ch);
     while (i < n) {
         const c = text[i];
         const next = i + 1 < n ? text[i + 1] : "";
@@ -73,7 +73,7 @@ registerCodeLanguage("tql-sql", (text) => {
             tokens.push({ tok: "number", text: text.slice(i, end) });
             i = end;
             plainStart = i;
-        } else if (/[A-Za-z_]/.test(c)) {
+        } else if (/[\p{L}_]/u.test(c)) {
             let end = i;
             while (end < n && isWord(text[end])) {
                 end++;

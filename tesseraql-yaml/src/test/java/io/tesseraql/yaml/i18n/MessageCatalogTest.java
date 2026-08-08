@@ -109,6 +109,10 @@ class MessageCatalogTest {
                 .isEqualTo("x and {missing}");
         assertThat(MessageCatalog.interpolate("no placeholders", Map.of("a", "x")))
                 .isEqualTo("no placeholders");
+        // The identifier contract (docs/unicode-identifiers.md): a Japanese placeholder
+        // interpolates instead of reaching the user as raw braces.
+        assertThat(MessageCatalog.interpolate("{顧客名} は必須です。", Map.of("顧客名", "山田")))
+                .isEqualTo("山田 は必須です。");
     }
 
     @Test

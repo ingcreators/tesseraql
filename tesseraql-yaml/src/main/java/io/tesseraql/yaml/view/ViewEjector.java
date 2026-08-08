@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  */
 public final class ViewEjector {
 
-    private static final Pattern LINK_PLACEHOLDER = Pattern.compile("\\{(\\w+)}");
+    private static final Pattern LINK_PLACEHOLDER = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER;
 
     private ViewEjector() {
     }

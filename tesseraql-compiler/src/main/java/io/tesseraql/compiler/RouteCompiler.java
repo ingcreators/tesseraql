@@ -1119,7 +1119,7 @@ public final class RouteCompiler {
     /** Extracts {@code {name}} path-parameter names from a URL template. */
     private static java.util.List<String> pathParams(String urlPath) {
         java.util.List<String> names = new java.util.ArrayList<>();
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{(\\w+)\\}")
+        java.util.regex.Matcher matcher = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER
                 .matcher(urlPath);
         while (matcher.find()) {
             names.add(matcher.group(1));
