@@ -34,6 +34,14 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
+    <!-- The baked hc email artifacts (docs/notifications.md "HTML mail", upstream brief 9):
+         the build unpacks dist/email/default-slate/thymeleaf + contract.json out of the
+         WebJar into tesseraql/templates/tql/email/ — nothing generated is checked in, and
+         a version bump IS the regen. -->
+    <dependency>
+      <groupId>org.webjars.npm</groupId>
+      <artifactId>hypermedia-components__core</artifactId>
+    </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
       <artifactId>jackson-dataformat-yaml</artifactId>
@@ -55,5 +63,67 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <!-- tql/email/* resolves from the classpath exactly as before; the bytes now come
+           baked from the core package (dist/email, upstream brief 9) instead of a
+           checked-in CLI eject — unpack the WebJar, then copy the default-slate
+           thymeleaf flavor and the machine-readable contract into the classpath spot. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>unpack-hc-email</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>unpack</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>org.webjars.npm</groupId>
+                  <artifactId>hypermedia-components__core</artifactId>
+                  <outputDirectory>${project.build.directory}/hc-core-webjar</outputDirectory>
+                  <includes>**/dist/email/default-slate/thymeleaf/*.html,**/dist/email/contract.json</includes>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-hc-email</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}/tesseraql/templates/tql/email</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.build.directory}/hc-core-webjar/META-INF/resources/webjars/hypermedia-components__core/${hypermedia-components.version}/dist/email/default-slate/thymeleaf</directory>
+                  <includes>
+                    <include>*.html</include>
+                  </includes>
+                </resource>
+                <resource>
+                  <directory>${project.build.directory}/hc-core-webjar/META-INF/resources/webjars/hypermedia-components__core/${hypermedia-components.version}/dist/email</directory>
+                  <includes>
+                    <include>contract.json</include>
+                  </includes>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>

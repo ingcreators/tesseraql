@@ -11,6 +11,7 @@ import {
   createDragController,
   insertNode,
   moveNode,
+  pickBlock,
   removeNode,
   setAttribute,
   setText,
@@ -46,7 +47,9 @@ async function init() {
     .join('');
   const theme = document.documentElement.getAttribute('data-theme') ?? 'light';
   const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
-  frame.srcdoc = `<!doctype html><html data-theme="${theme}"><head>${links}`
+  // data-hc-static (upstream brief 11): behavior components render their CSS-only
+  // resting state, so the scriptless canvas previews tabs/collapsibles faithfully.
+  frame.srcdoc = `<!doctype html><html data-theme="${theme}" data-hc-static><head>${links}`
     + '<style>body{margin:0;padding:1rem;min-height:100%}</style></head><body></body></html>';
   await loaded;
 
@@ -64,11 +67,22 @@ async function init() {
   doc.body.appendChild(mount);
 
   // Structural containers accept drops and inserts; the mark is editor scaffolding the
-  // serializers strip. Datagrid internals stay off-limits (table-aware moves deferred).
-  const CONTAINERS = ['hc-stack', 'hc-cluster', 'hc-card__body', 'hc-card__footer'];
+  // serializers strip. Since upstream brief 8 the set derives from the manifest's
+  // per-component `containers` metadata ("" = the block root, else parts) — new kit
+  // components with content areas become editable with no change here. The layout
+  // utilities are CSS primitives outside the component manifest, so they stay a local
+  // list. Datagrid internals remain off-limits (table-aware moves deferred).
+  const LAYOUT_CONTAINERS = ['hc-stack', 'hc-cluster', 'hc-grid'];
+  const containerSelectors = LAYOUT_CONTAINERS.map((c) => '.' + c);
+  for (const component of manifest?.components ?? []) {
+    for (const part of component.containers ?? []) {
+      containerSelectors.push(
+        part === '' ? `.${component.block}` : `.${component.block}__${part}`);
+    }
+  }
   const markContainers = () => {
     mount.setAttribute('data-hc-editor-container', '');
-    for (const el of mount.querySelectorAll(CONTAINERS.map((c) => '.' + c).join(','))) {
+    for (const el of mount.querySelectorAll(containerSelectors.join(','))) {
       if (!el.closest('table')) el.setAttribute('data-hc-editor-container', '');
     }
   };
@@ -91,17 +105,10 @@ async function init() {
 
   const blockOf = (el) => [...el.classList].map((c) => blocks.get(c)).find(Boolean) ?? null;
 
-  // Selection: the nearest manifest block above the click, else the clicked element
-  // itself — never the mount. Links and buttons in the canvas must not navigate.
-  const pick = (target) => {
-    let el = target instanceof Element ? target : null;
-    while (el && el !== mount) {
-      if (blockOf(el)) return el;
-      el = el.parentElement;
-    }
-    el = target instanceof Element ? target : null;
-    return el && el !== mount && mount.contains(el) ? el : null;
-  };
+  // Selection: the kit's pickBlock (upstream brief 10) — the nearest manifest block
+  // above the click, else the clicked element itself, never the mount. Links and
+  // buttons in the canvas must not navigate.
+  const pick = (target) => pickBlock(target, { root: mount, manifest });
   doc.addEventListener('click', (event) => {
     event.preventDefault();
     const el = pick(event.target);
@@ -154,6 +161,15 @@ async function init() {
     if (!el) return;
     const block = blockOf(el);
     inspectorTitle.textContent = block ? block.block : `<${el.tagName.toLowerCase()}>`;
+
+    // staticSafe (upstream brief 11): the canvas is scriptless, so a behavior-driven
+    // component whose resting state needs JS previews approximately — say so.
+    if (block && block.staticSafe === false) {
+      const note = document.createElement('p');
+      note.className = 'hc-field__message';
+      note.textContent = `${block.block} previews approximately — its rendering is behavior-driven (check the live preview).`;
+      inspectorFields.appendChild(note);
+    }
 
     // Manifest-known data attributes as enums (empty = unset).
     for (const name of block?.dataAttributes ?? []) {
@@ -270,19 +286,32 @@ async function init() {
     button.addEventListener('click', () => {
       const el = instantiate(html);
       const container = insertTarget();
-      editor.stack.apply(insertNode(container, el, container.childNodes.length));
+      // {before: null} appends (upstream brief 10's element-based insertion points).
+      editor.stack.apply(insertNode(container, el, { before: null }));
       editor.selection.select(el);
     });
+    // Dragging the same button inserts at the pointer (a plain click cancels the drag
+    // over the palette and falls through to the click handler above).
+    button.addEventListener('pointerdown', (event) => dnd.startInsert(html, event));
     palette.appendChild(button);
   }
 
-  // Drag to reorder inside the canvas (palette drags cannot cross the iframe boundary —
-  // clicks insert instead). Every drop goes through the stack, so it is undoable.
+  // Drag to reorder AND palette drag-insert: since upstream brief 10 the controller
+  // takes the frame and translates host-document coordinates through it, so a palette
+  // drag from the parent page drops into the iframe canvas. Every drop goes through
+  // the stack, so it is undoable.
   const dnd = createDragController({
     root: mount,
+    frame,
     onPreview: (target) => overlay.showDropIndicator(target),
     onDrop: ({ container, index, payload }) => {
-      editor.stack.apply(moveNode(payload.node, container, index));
+      if (payload.type === 'move') {
+        editor.stack.apply(moveNode(payload.node, container, index));
+      } else {
+        const el = instantiate(payload.data);
+        editor.stack.apply(insertNode(container, el, index));
+        editor.selection.select(el);
+      }
     },
     onCancel: () => overlay.showDropIndicator(null),
   });
@@ -298,29 +327,20 @@ async function init() {
   document.getElementById('builder-undo').addEventListener('click', () => editor.stack.undo());
   document.getElementById('builder-redo').addEventListener('click', () => editor.stack.redo());
 
-  // Alt+Arrow moves the selected element among its element siblings — the keyboard path
-  // to what the drag does. Indices are childNodes positions measured with the node
-  // absent, exactly what moveNode consumes.
-  const childNodesIndexBefore = (parent, ref, exclude) => {
-    let index = 0;
-    for (const node of parent.childNodes) {
-      if (node === ref) break;
-      if (node !== exclude) index++;
-    }
-    return index;
-  };
+  // Alt+Arrow moves the selected element among its element siblings — the keyboard
+  // path to what the drag does, via the kit's element-based insertion points
+  // (upstream brief 10).
   document.addEventListener('keydown', (event) => {
     const el = editor.selection.primary;
     if (!el || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
     const parent = el.parentNode;
     const siblings = [...parent.children];
     const i = siblings.indexOf(el);
-    let ref = null;
-    if (event.key === 'ArrowUp' && i > 0) ref = siblings[i - 1];
-    else if (event.key === 'ArrowDown' && i < siblings.length - 1) ref = siblings[i + 1].nextElementSibling;
-    else if (event.key === 'ArrowDown') return;
+    let before;
+    if (event.key === 'ArrowUp' && i > 0) before = siblings[i - 1];
+    else if (event.key === 'ArrowDown' && i < siblings.length - 1) before = siblings[i + 1].nextElementSibling;
     else return;
-    editor.stack.apply(moveNode(el, parent, childNodesIndexBefore(parent, ref, el)));
+    editor.stack.apply(moveNode(el, parent, { before }));
     event.preventDefault();
   });
 }

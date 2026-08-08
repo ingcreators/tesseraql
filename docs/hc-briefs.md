@@ -411,6 +411,12 @@ misaligned digits are a polish gap, not a defect. The stat tiles' `tabular-nums`
 
 *Filed: [ingcreators/hypermedia-components#447](https://github.com/ingcreators/hypermedia-components/issues/447) (found 2026-08-07, page builder — docs/page-builder.md).*
 
+> **Status: shipped and adopted.** Landed in **hc 0.1.15** — per-component `containers`
+> metadata (`""` = the block root, else parts; e.g. `hc-card: [body, footer]`). The
+> builder derives its droppable marking from the manifest; only the three CSS layout
+> utilities (`hc-stack`/`hc-cluster`/`hc-grid`, not manifest components) remain a local
+> list.
+
 ### Problem
 
 The page builder derives its palette and inspector from `dist/manifest.json`, but **which
@@ -431,6 +437,13 @@ droppable marking and `canAccept` from the injected manifest; the hardcoded list
 ## Brief 9 — baked default-theme email artifacts in core + machine-readable fragment contract
 
 *Filed: [ingcreators/hypermedia-components#448](https://github.com/ingcreators/hypermedia-components/issues/448) (found 2026-08-07, HTML email — docs/html-email.md).*
+
+> **Status: shipped and adopted.** Landed in **hc 0.1.15** — `dist/email/<theme>/<flavor>/`
+> baked artifacts (five neutrals × thymeleaf/plain) plus `dist/email/contract.json`.
+> TesseraQL DELETED its checked-in `tql/email/*` copies: the build unpacks the WebJar's
+> default-slate/thymeleaf artifacts (a version bump IS the regen), and the drift guard
+> validates the parsed signatures against the published contract instead of a hardcoded
+> set. The CLI eject remains the custom-theme path.
 
 ### Problem
 
@@ -453,6 +466,13 @@ and the served core. The core package already ships the token-referencing source
 ## Brief 10 — editor-kit canvas ergonomics (element-index moves, block picker, cross-document palette drag, format-stable serialize)
 
 *Filed: [ingcreators/hypermedia-components#449](https://github.com/ingcreators/hypermedia-components/issues/449) (found 2026-08-07, mail composer + page builder).*
+
+> **Status: shipped (items 1–3) and adopted.** Landed in **editor-kit 0.1.0** —
+> `{before: Element|null}` insertion points + exported `indexBefore`, `pickBlock`, and a
+> `frame` option on the drag controller (host-document listeners + coordinate
+> translation). Both canvases adopted: the whitespace normalization and the hand-rolled
+> index/pick helpers are deleted, and palette drags now drop into the iframe canvas.
+> Item 4 (dirty-region serialize) stays on the upstream roadmap.
 
 ### Problem / Proposed
 
@@ -478,6 +498,11 @@ order:
 ## Brief 11 — scriptless static rendering for behavior components
 
 *Filed: [ingcreators/hypermedia-components#450](https://github.com/ingcreators/hypermedia-components/issues/450) (found 2026-08-07, page builder canvas).*
+
+> **Status: shipped and adopted.** Landed in **hc 0.1.15** — `data-hc-static` CSS
+> resting states (tabs panels, empty-shell frames, …) and a per-component `staticSafe`
+> manifest flag. The builder canvas sets `data-hc-static` on its srcdoc document, and
+> the inspector notes "previews approximately" on `staticSafe: false` components.
 
 ### Problem
 
