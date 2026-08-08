@@ -132,7 +132,7 @@ class DuckDbDatasetIntegrationTest {
                 basePath: /records/{recordId}/files
                 record: { entity: record, key: recordId }
                 security:
-                  auth: apiKey
+                  auth: api-key
                   policy: data.read
                 """);
 
@@ -173,7 +173,7 @@ class DuckDbDatasetIntegrationTest {
                 recipe: query-json
                 datasource: analytics
                 security:
-                  auth: apiKey
+                  auth: api-key
                   policy: data.read
                 input:
                   id: { type: string, required: true }

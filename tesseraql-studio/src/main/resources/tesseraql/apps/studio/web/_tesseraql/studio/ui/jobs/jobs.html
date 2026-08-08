@@ -102,9 +102,9 @@
         <div class="hc-field">
           <label class="hc-field__label" for="jp-runon">runOn</label>
           <select class="hc-select" id="jp-runon" name="runOn">
-            <option value="">(businessDay)</option>
-            <option value="firstBusinessDayOfMonth" th:selected="${jp.form.runOn == 'firstBusinessDayOfMonth'}">firstBusinessDayOfMonth</option>
-            <option value="lastBusinessDayOfMonth" th:selected="${jp.form.runOn == 'lastBusinessDayOfMonth'}">lastBusinessDayOfMonth</option>
+            <option value="">(business-day)</option>
+            <option value="first-business-day-of-month" th:selected="${jp.form.runOn == 'first-business-day-of-month'}">first-business-day-of-month</option>
+            <option value="last-business-day-of-month" th:selected="${jp.form.runOn == 'last-business-day-of-month'}">last-business-day-of-month</option>
           </select>
         </div>
         <label class="hc-field">
@@ -115,8 +115,8 @@
         <div class="hc-field">
           <label class="hc-field__label" for="jp-shift">shift</label>
           <select class="hc-select" id="jp-shift" name="shift">
-            <option value="">(nextBusinessDay)</option>
-            <option value="previousBusinessDay" th:selected="${jp.form.shift == 'previousBusinessDay'}">previousBusinessDay</option>
+            <option value="">(next-business-day)</option>
+            <option value="previous-business-day" th:selected="${jp.form.shift == 'previous-business-day'}">previous-business-day</option>
           </select>
         </div>
         </div>

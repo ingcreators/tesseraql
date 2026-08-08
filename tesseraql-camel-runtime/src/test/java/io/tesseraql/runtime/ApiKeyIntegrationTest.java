@@ -28,7 +28,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for API-key authentication of service callers (roadmap Phase 25): a route
- * declaring {@code auth: apiKey} accepts a valid key (in the configured header or as
+ * declaring {@code auth: api-key} accepts a valid key (in the configured header or as
  * {@code Authorization: ApiKey}), denies an invalid or missing key (401), and applies the same
  * authorization policy so an under-privileged key is forbidden (403).
  */
@@ -155,7 +155,7 @@ class ApiKeyIntegrationTest {
                 kind: route
                 recipe: query-json
                 security:
-                  auth: apiKey
+                  auth: api-key
                   policy: users.read
                 sql:
                   file: list.sql

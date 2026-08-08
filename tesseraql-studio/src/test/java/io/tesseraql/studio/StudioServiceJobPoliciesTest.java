@@ -108,7 +108,7 @@ class StudioServiceJobPoliciesTest {
                         "nightly.close", null, null, "jp-banking", null, null, null, null,
                         null, null, null, "op")),
                 new Case("runOn and dayOfMonth", () -> studio.saveJobPolicies("nightly.close",
-                        "0 0 8 * * ?", null, "jp-banking", "businessDay", "5", null, null,
+                        "0 0 8 * * ?", null, "jp-banking", "business-day", "5", null, null,
                         null, null, null, "op")),
                 new Case("unknown calendar", () -> studio.saveJobPolicies("nightly.close",
                         "0 0 8 * * ?", null, "no-such", null, null, null, null, null, null,
@@ -118,7 +118,7 @@ class StudioServiceJobPoliciesTest {
                         null, null, null, "op")),
                 new Case("shift without dayOfMonth", () -> studio.saveJobPolicies(
                         "nightly.close", "0 0 8 * * ?", null, "jp-banking", null, null,
-                        "previousBusinessDay", null, null, null, null, "op")),
+                        "previous-business-day", null, null, null, null, "op")),
                 new Case("self chain", () -> studio.saveJobPolicies("nightly.close", null,
                         null, null, null, null, null, "nightly.close", null, null, null,
                         "op")),

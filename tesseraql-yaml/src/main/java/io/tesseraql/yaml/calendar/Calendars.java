@@ -42,12 +42,12 @@ public final class Calendars {
     /** TQL-BATCH-4205: a calendar declaration that cannot mean anything at fire time. */
     private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.BATCH, 4205);
 
-    /** The {@code runOn:} qualifiers a schedule may declare (default: {@code businessDay}). */
-    public static final Set<String> RUN_ON = Set.of("businessDay", "firstBusinessDayOfMonth",
-            "lastBusinessDayOfMonth");
+    /** The {@code runOn:} qualifiers a schedule may declare (default: {@code business-day}). */
+    public static final Set<String> RUN_ON = Set.of("business-day", "first-business-day-of-month",
+            "last-business-day-of-month");
 
     /** The {@code shift:} directions a nominal day may declare (default: next). */
-    public static final Set<String> SHIFTS = Set.of("nextBusinessDay", "previousBusinessDay");
+    public static final Set<String> SHIFTS = Set.of("next-business-day", "previous-business-day");
 
     private static final Set<DayOfWeek> DEFAULT_WEEKEND = Set.of(DayOfWeek.SATURDAY,
             DayOfWeek.SUNDAY);
@@ -152,7 +152,7 @@ public final class Calendars {
     /**
      * Whether a considered firing counts: the date is a business day under the calendar, and
      * — for the month-boundary qualifiers — no earlier/later business day exists in its month.
-     * {@code runOn} null means {@code businessDay}.
+     * {@code runOn} null means {@code business-day}.
      */
     public static boolean counts(CalendarsDocument.Calendar calendar, String runOn,
             LocalDate date, Set<LocalDate> holidays) {
@@ -160,10 +160,10 @@ public final class Calendars {
         if (!isBusinessDay(date, weekend, holidays)) {
             return false;
         }
-        return switch (runOn == null ? "businessDay" : runOn) {
-            case "firstBusinessDayOfMonth" -> date.withDayOfMonth(1).datesUntil(date)
+        return switch (runOn == null ? "business-day" : runOn) {
+            case "first-business-day-of-month" -> date.withDayOfMonth(1).datesUntil(date)
                     .noneMatch(earlier -> isBusinessDay(earlier, weekend, holidays));
-            case "lastBusinessDayOfMonth" -> date.plusDays(1)
+            case "last-business-day-of-month" -> date.plusDays(1)
                     .datesUntil(date.withDayOfMonth(date.lengthOfMonth()).plusDays(1))
                     .noneMatch(later -> isBusinessDay(later, weekend, holidays));
             default -> true;
@@ -192,7 +192,7 @@ public final class Calendars {
     public static LocalDate shiftedNominal(CalendarsDocument.Calendar calendar, int dayOfMonth,
             String shift, LocalDate fireDate, Set<LocalDate> holidays) {
         Set<DayOfWeek> weekend = weekend(calendar);
-        boolean previous = "previousBusinessDay".equals(shift);
+        boolean previous = "previous-business-day".equals(shift);
         // Forward shifts can land in the month after their nominal day; backward shifts in the
         // month before. Check the fire month and the one neighbour that can reach it.
         LocalDate[] months = {fireDate.withDayOfMonth(1),

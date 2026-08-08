@@ -26,12 +26,12 @@ class TriggerSpecTest {
     @Test
     void calendarQualifiersJoinTheStory() {
         assertThat(TriggerSpec.describe(new TriggerSpec(new TriggerSpec.Schedule(
-                "0 0 2 * * ?", null, "jp-banking", "lastBusinessDayOfMonth", null, null))))
+                "0 0 2 * * ?", null, "jp-banking", "last-business-day-of-month", null, null))))
                 .isEqualTo("cron 0 0 2 * * ?, calendar jp-banking"
                         + " (lastBusinessDayOfMonth)");
         // A nominal-day rule wins the parenthesis: it is the more specific qualifier.
         assertThat(TriggerSpec.describe(new TriggerSpec(new TriggerSpec.Schedule(
-                "0 0 8 * * ?", null, "jp-banking", null, 5, "nextBusinessDay"))))
+                "0 0 8 * * ?", null, "jp-banking", null, 5, "next-business-day"))))
                 .isEqualTo("cron 0 0 8 * * ?, calendar jp-banking (day 5)");
     }
 }

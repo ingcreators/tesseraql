@@ -1443,7 +1443,7 @@ class AppLinterTest {
                 kind: route
                 recipe: query-json
                 security:
-                  auth: apiKey
+                  auth: api-key
                 sql:
                   file: search.sql
                   mode: query
