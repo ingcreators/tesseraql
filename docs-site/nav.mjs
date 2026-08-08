@@ -157,4 +157,6 @@ export const EXCLUDED = [
   'page-builder.md',
   // Pages overview + mail wiring lints (post-campaign gap closing), 2026-08-07.
   'pages-and-mail-lints.md',
+  // Pre-1.0 contract bug fixes (wave A of the contract-consistency sweep), 2026-08-08.
+  'contract-bugfixes.md',
 ];
