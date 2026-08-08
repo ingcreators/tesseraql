@@ -241,6 +241,7 @@
             "status": { "type": "integer", "minimum": 100, "maximum": 599 },
             "template": { "type": "string" },
             "view": { "type": "string", "description": "The id of a *.view.yml document (exclusive with template:)." },
+            "shell": { "type": "string", "enum": ["auto", "always", "never"], "description": "Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint." },
             "model": { "type": "object", "additionalProperties": true },
             "headers": { "type": "object", "additionalProperties": true },
             "headersWhen": { "type": "object", "additionalProperties": { "type": "string" } },

@@ -36,6 +36,12 @@ public final class HtmlResponseRenderer implements Processor {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.TPL, 2001);
 
+    /** TQL-VIEW-3317: response.html.shell must be auto, always, or never. */
+    static final TqlErrorCode INVALID_SHELL = new TqlErrorCode(TqlDomain.VIEW, 3317);
+
+    /** The region shell negotiation serves to htmx requests (docs/view-composition.md 2a). */
+    private static final String PAGE_CONTENT_SELECTOR = "#page-content";
+
     /** A {@code {expression}} placeholder in a header value, resolved like the redirect location. */
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
@@ -74,6 +80,10 @@ public final class HtmlResponseRenderer implements Processor {
         this.templateName = viewBinding != null
                 ? viewBinding.entryTemplate()
                 : resolveTemplate(this.appHome, routeDir, response.template());
+        if (!java.util.Set.of("auto", "always", "never").contains(response.effectiveShell())) {
+            throw new TqlException(INVALID_SHELL, "response.html.shell must be 'auto',"
+                    + " 'always' or 'never', got: " + response.shell());
+        }
         this.defaultLocaleTag = defaultLocaleTag;
         // Model values compile in the core expression language (roadmap Phase 41) — a plain
         // dotted path is unchanged, a computed leaf comes for free, and an unparsable legacy
@@ -336,8 +346,27 @@ public final class HtmlResponseRenderer implements Processor {
                     + "; Path=/; Max-Age=31536000; SameSite=Lax");
         }
 
-        String html = Templates.render(appHome, templateName, model,
-                java.util.Locale.forLanguageTag(tag));
+        // Shell negotiation (docs/view-composition.md wave 2a): one URL serves both shapes.
+        // An htmx partial request (HX-Request, minus boosted navigation and history restore,
+        // which both expect a full document) gets the bare #page-content region; direct
+        // navigation gets the shell-wrapped page. `shell: never` declares an htmx-only region
+        // endpoint; `always` restores unconditional wrapping. A template without a
+        // #page-content region (a hand-written bare fragment) renders whole either way.
+        String shellMode = response.effectiveShell();
+        boolean partialRequest = "true".equals(
+                exchange.getMessage().getHeader("HX-Request", String.class))
+                && !"true".equals(exchange.getMessage().getHeader("HX-Boosted", String.class))
+                && !"true".equals(exchange.getMessage()
+                        .getHeader("HX-History-Restore-Request", String.class));
+        boolean region = "never".equals(shellMode)
+                || ("auto".equals(shellMode) && partialRequest);
+        java.util.Locale locale = java.util.Locale.forLanguageTag(tag);
+        String html = region
+                ? Templates.render(appHome, templateName, model, locale, PAGE_CONTENT_SELECTOR)
+                : Templates.render(appHome, templateName, model, locale);
+        if (region && html.isBlank()) {
+            html = Templates.render(appHome, templateName, model, locale);
+        }
 
         int status = response.effectiveStatus();
         for (JsonResponseRenderer.CompiledStatus arm : statusWhen) {
@@ -349,6 +378,13 @@ public final class HtmlResponseRenderer implements Processor {
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
         applyHeaders(exchange, evaluation);
+        if ("auto".equals(shellMode)) {
+            // The negotiated response differs by HX-Request, so caches must key on it.
+            String vary = exchange.getMessage().getHeader("Vary", String.class);
+            exchange.getMessage().setHeader("Vary", vary == null || vary.isBlank()
+                    ? "HX-Request"
+                    : vary.contains("HX-Request") ? vary : vary + ", HX-Request");
+        }
         exchange.getMessage().setBody(html);
     }
 

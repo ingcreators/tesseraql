@@ -215,6 +215,7 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | `status` | integer ≥ 100 ≤ 599 |  |
 | `template` | string |  |
 | `view` | string | The id of a *.view.yml document (exclusive with template:). |
+| `shell` | enum: `auto` \| `always` \| `never` | Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint. |
 | `model` | object |  |
 | `headers` | object |  |
 | `headersWhen` | map of string |  |

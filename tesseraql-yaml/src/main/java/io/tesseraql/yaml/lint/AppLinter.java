@@ -366,10 +366,21 @@ public final class AppLinter {
         for (RouteFile route : manifest.routes()) {
             var response = route.definition().response();
             var html = response == null ? null : response.html();
-            if (html == null || html.view() == null) {
+            if (html == null) {
                 continue;
             }
-            String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+            String routeSource = appHome.relativize(route.source()).toString()
+                    .replace('\\', '/');
+            if (!java.util.Set.of("auto", "always", "never")
+                    .contains(html.effectiveShell())) {
+                findings.add(new LintFinding("TQL-VIEW-3317", "error", routeSource,
+                        "response.html.shell must be 'auto', 'always' or 'never', got: "
+                                + html.shell()));
+            }
+            if (html.view() == null) {
+                continue;
+            }
+            String source = routeSource;
             if (html.template() != null) {
                 findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
                         "response.html declares both template: and view: — they are mutually"

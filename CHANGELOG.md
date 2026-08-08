@@ -17,6 +17,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **HTML responses negotiate their shell** (pre-1.0 behavior change,
+  docs/view-composition.md wave 2a): with the new `response.html.shell: auto` default,
+  an htmx partial request (`HX-Request`, minus boosted navigation and history restore)
+  receives the bare `#page-content` region and direct navigation the shell-wrapped
+  page, from one URL, with `Vary: HX-Request`. `shell: always` restores unconditional
+  wrapping; `shell: never` declares an htmx-only region endpoint (`TQL-VIEW-3317` for
+  anything else). Hand-written fragment templates that existed only to avoid returning
+  a full page to htmx can now be deleted.
 - **`response.html.view` references a view id, not a file path** (pre-1.0 break,
   docs/view-composition.md wave 1): every `*.view.yml` under `web/` and `templates/`
   joins a load-time registry keyed by the document's `id` (explicit, or defaulted from

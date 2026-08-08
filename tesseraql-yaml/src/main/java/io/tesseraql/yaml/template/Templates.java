@@ -39,6 +39,22 @@ public final class Templates {
         return engineFor(templateRoot.toAbsolutePath().normalize()).process(templateName, context);
     }
 
+    /**
+     * Renders only the subtree a Thymeleaf markup selector picks (e.g. {@code #page-content})
+     * — the shell-negotiation path (docs/view-composition.md wave 2a): the selected region
+     * processes normally, while markup outside it (the page root's {@code th:replace} into the
+     * shell included) never executes. A selector matching nothing renders the empty string —
+     * callers fall back to the full render.
+     */
+    public static String render(Path templateRoot, String templateName, Map<String, Object> model,
+            java.util.Locale locale, String selector) {
+        Context context = new Context(locale, model);
+        return engineFor(templateRoot.toAbsolutePath().normalize()).process(
+                new org.thymeleaf.TemplateSpec(templateName, java.util.Set.of(selector),
+                        (TemplateMode) null, null),
+                context);
+    }
+
     private static TemplateEngine engineFor(Path root) {
         return ENGINES.computeIfAbsent(root, key -> {
             // The framework-template override chain (docs/declarative-views.md, customization
