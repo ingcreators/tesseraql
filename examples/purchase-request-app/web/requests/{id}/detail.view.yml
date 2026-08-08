@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: requests.detail.view
 kind: view
-view: detail
+recipe: detail
 title: Purchase request
 fields:
   - { name: id, label: "#" }

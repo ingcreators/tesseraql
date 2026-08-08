@@ -38,8 +38,8 @@ class DecideCaseTest {
                       assignee: { type: string, enum: [approver-1, cfo-1] }
                     rows:
                       - when: { amount: "> 100000" }
-                        out: { assignee: cfo-1 }
-                      - out: { assignee: approver-1 }
+                        outputs: { assignee: cfo-1 }
+                      - outputs: { assignee: approver-1 }
                   strictTier:
                     inputs:
                       amount: { type: number, match: between }
@@ -48,7 +48,7 @@ class DecideCaseTest {
                     hitPolicy: unique
                     rows:
                       - when: { amount: ">= 100" }
-                        out: { tier: high }
+                        outputs: { tier: high }
                 """);
     }
 

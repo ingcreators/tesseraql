@@ -130,7 +130,7 @@ detail is filled in the [assessment](#asvs-assessment) below.
 | ASVS chapter | TesseraQL surface | Where |
 | --- | --- | --- |
 | V1 Architecture | module boundaries, SPI seams, deny-by-default posture | this page |
-| V2 Authentication | bearer/apiKey/mTLS/browser + SAML/OIDC; PBKDF2; TOTP | [authentication](authentication.md), [credential-lifecycle](credential-lifecycle.md), [saml](saml.md) |
+| V2 Authentication | bearer/api-key/mTLS/browser + SAML/OIDC; PBKDF2; TOTP | [authentication](authentication.md), [credential-lifecycle](credential-lifecycle.md), [saml](saml.md) |
 | V3 Session management | server session store, per-session CSRF, fixation/rotation | [account](account.md) |
 | V4 Access control | deny-by-default `PolicyEngine`, field/row scoping, tenancy | [data-scoping](data-scoping.md), [multi-tenancy](multi-tenancy.md) |
 | V5 Validation / encoding / injection | 2-way SQL bind discipline, embedded-var enum gate, Thymeleaf escaping, CSP, **parser robustness** | [two-way-sql](two-way-sql.md), [declarative-validation](declarative-validation.md), this page |

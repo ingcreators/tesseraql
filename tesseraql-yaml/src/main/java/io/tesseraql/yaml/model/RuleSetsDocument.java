@@ -1,6 +1,5 @@
 package io.tesseraql.yaml.model;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,17 +27,23 @@ public record RuleSetsDocument(String version, Map<String, RuleSet> rules) {
      *
      * @param rule    cross-field expression (exactly one of rule/file)
      * @param file    validation SQL, relative to the rules document
-     * @param binds   the bind contract a reference's {@code params:} must satisfy exactly;
-     *                ambient binds ({@code principal.*}, {@code audit.*}) never appear here
+     * @param binds   the typed bind contract a reference's {@code params:} must satisfy
+     *                exactly — bind name to declared type ({@code string}, {@code integer},
+     *                {@code number}, {@code boolean}, {@code date}), checked against the
+     *                referencing route's input types at load
+     *                (docs/vocabulary-cleanup.md slice 2); ambient binds
+     *                ({@code principal.*}, {@code audit.*}) never appear here
      * @param code    default stable rule code
      * @param message default message key
      */
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    public record RuleSet(String rule, String file, List<String> binds, String code,
+    public record RuleSet(String rule, String file, Map<String, String> binds, String code,
             String message) {
 
         public RuleSet {
-            binds = binds == null ? List.of() : List.copyOf(binds);
+            binds = binds == null
+                    ? Map.of()
+                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(binds));
         }
     }
 }

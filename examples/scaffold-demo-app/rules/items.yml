@@ -1,4 +1,4 @@
-# tesseraql-scaffold-checksum: sha256:2cd90fb0f50dd2e13a0bbe8359d54c16e61f23e87b972ade2856ad3de8614f37
+# tesseraql-scaffold-checksum: sha256:4efba155555ad1534994bae06dded1671627ce2f2a31dff4c92827cead8ba73f
 # Scaffolded validation rules for the items table (tesseraql scaffold crud --table items):
 # declared once, referenced from validate: blocks with use: (docs/validation-rule-sets.md).
 version: tesseraql/v1
@@ -6,5 +6,5 @@ version: tesseraql/v1
 rules:
   itemsNameIsFree:
     file: items-name-free.sql
-    binds: [name, excludeId]
+    binds: { name: string, excludeId: integer }
     code: duplicate

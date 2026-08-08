@@ -26,8 +26,9 @@ class ViewEjectorTest {
         Files.writeString(dir.resolve("templates/frags.html"),
                 "<a th:fragment=\"newLink\" href=\"/new\">New</a>");
         ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Items
                 columns:
                   - name: name
@@ -49,7 +50,7 @@ class ViewEjectorTest {
 
     @Test
     void aListWithoutExplicitColumnsRefusesToEject(@TempDir Path dir) throws Exception {
-        ViewSpec spec = parse(dir, "kind: view\nview: list\n");
+        ViewSpec spec = parse(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         assertThatThrownBy(() -> ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
                 "web/items/page.html"))
                 .isInstanceOf(TqlException.class).hasMessageContaining("explicit columns");
@@ -58,8 +59,9 @@ class ViewEjectorTest {
     @Test
     void ejectsADetailWithChildren(@TempDir Path dir) throws Exception {
         ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 fields:
                   - name: name
                     label: Name
@@ -81,8 +83,9 @@ class ViewEjectorTest {
     @Test
     void ejectsAFormFromItsDerivedFields(@TempDir Path dir) throws Exception {
         ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 id: items.new
                 action: /items/create
                 """);
@@ -104,8 +107,9 @@ class ViewEjectorTest {
     @Test
     void ejectsADashboardWithAllPanelKinds(@TempDir Path dir) throws Exception {
         ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Stats
                 panels:
                   - title: Users
@@ -113,7 +117,7 @@ class ViewEjectorTest {
                     column: user_count
                   - title: By status
                     type: chart
-                    kind: bar
+                    chart: bar
                     source: byStatus
                     x: status
                     y: n

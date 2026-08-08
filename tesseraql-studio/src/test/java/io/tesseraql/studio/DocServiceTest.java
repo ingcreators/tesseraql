@@ -69,7 +69,7 @@ class DocServiceTest {
                     inputs:
                       weight: { type: number, match: between }
                       region: { type: string }
-                      unit: { type: string, match: orgSubtree }
+                      unit: { type: string, match: subtree }
                       category: { type: string, match: in }
                     outputs:
                       fee: { type: number }
@@ -96,8 +96,8 @@ class DocServiceTest {
                     hitPolicy: first
                     rows:
                       - when: { amount: "> 100000" }
-                        out: { assignee: cfo }
-                      - out: { assignee: approver }
+                        outputs: { assignee: cfo }
+                      - outputs: { assignee: approver }
                 """);
         DocService service = new DocService(new ManifestLoader().load(dir));
 

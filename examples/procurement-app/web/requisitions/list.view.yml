@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: requisitions
 kind: view
-view: list
+recipe: list
 title: Purchase requisitions
 search: q
 columns:

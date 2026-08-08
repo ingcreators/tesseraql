@@ -30,8 +30,8 @@ public record ViewSpec(String id, String view, String title, String action, Stri
 
     /**
      * Chart-panel vocabulary violation (docs/analytics-experience.md track 2,
-     * TQL-VIEW-3313): an unknown {@code kind:}, {@code y:} and {@code series:} together (or
-     * neither), a {@code mark:} outside {@code kind: combo}, or a malformed passthrough
+     * TQL-VIEW-3313): an unknown {@code chart:}, {@code y:} and {@code series:} together (or
+     * neither), a {@code mark:} outside {@code chart: combo}, or a malformed passthrough
      * attribute ({@code xType:}, {@code height:}).
      */
     public static final TqlErrorCode INVALID_CHART = new TqlErrorCode(TqlDomain.VIEW, 3313);
@@ -53,7 +53,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     public static final java.util.Set<String> CHART_KINDS = java.util.Set.of("bar", "line",
             "area", "combo", "bar-stacked", "bar-grouped", "scatter");
 
-    /** Per-series marks, legal only under {@code kind: combo} (the kit's {@code data-mark}). */
+    /** Per-series marks, legal only under {@code chart: combo} (the kit's {@code data-mark}). */
     private static final java.util.Set<String> SERIES_MARKS = java.util.Set.of("bar", "line",
             "area");
 
@@ -107,7 +107,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
 
     /**
      * One charted series: the numeric {@code column} plotted per row, an optional display
-     * {@code label} (message-key-first like every label), and — under {@code kind: combo}
+     * {@code label} (message-key-first like every label), and — under {@code chart: combo}
      * only — the {@code mark} the kit draws it with ({@code bar}/{@code line}/{@code area}).
      */
     public record Series(String column, String label, String mark) {
@@ -157,10 +157,15 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         if (!"view".equals(tree.get("kind"))) {
             throw invalid(name, "kind must be 'view'");
         }
-        String view = str(tree.get("view"));
+        // The version discriminator is required on every document family
+        // (docs/vocabulary-cleanup.md slice 2); views used to skip the check.
+        if (!"tesseraql/v1".equals(tree.get("version"))) {
+            throw invalid(name, "version must be 'tesseraql/v1'");
+        }
+        String view = str(tree.get("recipe"));
         if (!LIST.equals(view) && !FORM.equals(view) && !DETAIL.equals(view)
                 && !DASHBOARD.equals(view)) {
-            throw invalid(name, "view must be '" + LIST + "', '" + FORM + "', '" + DETAIL
+            throw invalid(name, "recipe must be '" + LIST + "', '" + FORM + "', '" + DETAIL
                     + "' or '" + DASHBOARD + "', got: " + view);
         }
         if (!DETAIL.equals(view) && tree.get("children") != null) {
@@ -202,7 +207,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                     && (column == null || column.isBlank())) {
                 throw invalid(source, "a " + type + " panel requires column:");
             }
-            String kind = str(entry.get("kind"));
+            String kind = str(entry.get("chart"));
             List<Series> series = parseSeries(source, entry.get("series"));
             String xType = str(entry.get("xType"));
             Integer height = parseHeight(source, entry.get("height"));
@@ -226,7 +231,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     private static void validateChart(String source, Map<String, Object> entry, String kind,
             List<Series> series, String xType) {
         if (kind != null && !CHART_KINDS.contains(kind)) {
-            throw invalidChart(source, "chart kind: must be one of " + CHART_KINDS + ", got: "
+            throw invalidChart(source, "chart: must be one of " + CHART_KINDS + ", got: "
                     + kind);
         }
         if (str(entry.get("x")) == null) {
@@ -244,7 +249,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
         boolean combo = "combo".equals(kind);
         for (Series charted : series) {
             if (charted.mark() != null && !combo) {
-                throw invalidChart(source, "series mark: is legal only under kind: combo");
+                throw invalidChart(source, "series mark: is legal only under chart: combo");
             }
             if (charted.mark() != null && !SERIES_MARKS.contains(charted.mark())) {
                 throw invalidChart(source, "series mark: must be one of " + SERIES_MARKS
@@ -252,7 +257,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             }
         }
         if (combo && series.isEmpty()) {
-            throw invalidChart(source, "kind: combo requires series: (each with its mark:)");
+            throw invalidChart(source, "chart: combo requires series: (each with its mark:)");
         }
         if (xType != null && !X_TYPES.contains(xType)) {
             throw invalidChart(source, "chart xType: must be one of " + X_TYPES + ", got: "

@@ -4,7 +4,7 @@
 version: tesseraql/v1
 id: users.board.stats
 kind: view
-view: dashboard
+recipe: dashboard
 title: User stats
 panels:
   - title: Users
@@ -12,7 +12,7 @@ panels:
     column: user_count
   - title: By status
     type: chart
-    kind: bar
+    chart: bar
     source: byStatus
     x: status
     y: n

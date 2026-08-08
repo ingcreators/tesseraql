@@ -42,7 +42,7 @@ class AppLinterLiveViewTest {
         Files.writeString(dir.resolve("web/orders/orders.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: %s
+                recipe: %s
                 title: Orders
                 %s
                 """.formatted(viewKind, refreshOn));
@@ -89,7 +89,7 @@ class AppLinterLiveViewTest {
         Files.writeString(dir.resolve("web/orders/orders.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 title: Orders
                 action: orders.approve
                 refreshOn: orders.changed

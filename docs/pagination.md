@@ -39,7 +39,7 @@ response:
 
 The response automatically carries
 `X-Total-Count` (when counting) and RFC 8288 `Link` `rel="next"`/`rel="prev"` headers. A
-`view: list` on a paginated route renders the kit's `hc-pagination` nav, links preserving
+`recipe: list` view on a paginated route renders the kit's `hc-pagination` nav, links preserving
 the search and sort state ([declarative views](declarative-views.md)).
 
 ## Keyset strategy

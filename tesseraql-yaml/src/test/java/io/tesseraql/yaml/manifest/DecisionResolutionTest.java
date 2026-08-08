@@ -35,10 +35,10 @@ class DecisionResolutionTest {
                     hitPolicy: first
                     rows:
                       - when: { category: [office-supplies, books], amount: ">= 10000" }
-                        out: { route: manager }
+                        outputs: { route: manager }
                       - when: { amount: "> 100000" }
-                        out: { route: director }
-                      - out: { route: auto }
+                        outputs: { route: director }
+                      - outputs: { route: auto }
                 """);
         Files.createDirectories(dir.resolve("web/requests/new"));
         Files.writeString(dir.resolve("web/requests/new/post.yml"), """
@@ -143,9 +143,9 @@ class DecisionResolutionTest {
                     hitPolicy: unique
                     rows:
                       - when: { weight: "5..15" }
-                        out: { fee: 1 }
+                        outputs: { fee: 1 }
                       - when: { weight: ">= 10" }
-                        out: { fee: 2 }
+                        outputs: { fee: 2 }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))
@@ -171,8 +171,8 @@ class DecisionResolutionTest {
                       route: { type: string, enum: [manager, director, auto] }
                     rows:
                       - when: { amount: "> 100000" }
-                        out: { route: directer }
-                      - out: { route: auto }
+                        outputs: { route: directer }
+                      - outputs: { route: auto }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))
@@ -208,8 +208,8 @@ class DecisionResolutionTest {
                       route: { domain: approvalLane }
                     rows:
                       - when: { amount: "> 100000" }
-                        out: { route: cfo }
-                      - out: { route: auto }
+                        outputs: { route: cfo }
+                      - outputs: { route: auto }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))
@@ -235,8 +235,8 @@ class DecisionResolutionTest {
                       route: { type: string }
                     rows:
                       - when: { category: [office-supplies], amount: "> 100000" }
-                        out: { route: director }
-                      - out: { route: auto }
+                        outputs: { route: director }
+                      - outputs: { route: auto }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))
@@ -260,7 +260,7 @@ class DecisionResolutionTest {
                     outputs:
                       route: { type: string }
                     rows:
-                      - out: { route: auto }
+                      - outputs: { route: auto }
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(app))

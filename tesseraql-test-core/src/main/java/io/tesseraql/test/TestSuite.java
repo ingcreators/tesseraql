@@ -13,10 +13,15 @@ import java.util.Map;
  * @param tests the test cases
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TestSuite(List<TestCase> tests) {
+public record TestSuite(String version, List<TestCase> tests) {
 
     public TestSuite {
         tests = tests == null ? List.of() : List.copyOf(tests);
+    }
+
+    /** Programmatic suites carry the current version implicitly. */
+    public TestSuite(List<TestCase> tests) {
+        this("tesseraql/v1", tests);
     }
 
     /**

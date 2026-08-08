@@ -767,7 +767,7 @@ public final class StudioService {
     }
 
     /** One shared rule offered by the validation builder: its name and its bind contract. */
-    public record SharedRule(String name, List<String> binds) {
+    public record SharedRule(String name, java.util.Map<String, String> binds) {
     }
 
     /** The decision-rows grid's fixed slot count: rows {@code r0..r19}. */
@@ -834,7 +834,7 @@ public final class StudioService {
         for (Object entry : anyList(decision.get("rows"))) {
             Map<String, Object> row = anyMap(entry);
             Map<String, Object> when = anyMap(row.get("when"));
-            Map<String, Object> out = anyMap(row.get("out"));
+            Map<String, Object> out = anyMap(row.get("outputs"));
             List<String> cells = new ArrayList<>();
             for (GridColumn column : columns) {
                 Object value = "in".equals(column.kind())
@@ -929,7 +929,7 @@ public final class StudioService {
             if (!when.isEmpty()) {
                 row.put("when", when);
             }
-            row.put("out", out);
+            row.put("outputs", out);
             rows.add(row);
         }
         decision.put("rows", rows);
@@ -1854,6 +1854,9 @@ public final class StudioService {
         } else {
             tree = new LinkedHashMap<>();
         }
+        // Every document family carries the version discriminator (vocabulary-cleanup
+        // slice 2); the recorder writes it like any hand-authored suite.
+        tree.putIfAbsent("version", "tesseraql/v1");
         Object existing = tree.get("tests");
         List<Object> tests = existing instanceof List<?> list
                 ? new ArrayList<>(list)

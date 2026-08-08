@@ -77,7 +77,7 @@ public record DecisionsDocument(String version, Map<String, Decision> decisions)
      * @param id        the rule table's key column joining the {@code set:} child tables,
      *                  defaulting to {@code id}
      * @param match     column realization per input: {@code eq}/{@code bool} → one nullable
-     *                  column, {@code between} → a nullable min/max pair, {@code orgSubtree} →
+     *                  column, {@code between} → a nullable min/max pair, {@code subtree} →
      *                  a nullable unit-id column matched through the managed org closure
      * @param set       child-table realization of each {@code in} input: no child rows =
      *                  wildcard, membership otherwise
@@ -87,7 +87,7 @@ public record DecisionsDocument(String version, Map<String, Decision> decisions)
      * @param outputs   output name → column
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Source(String table, String id, Map<String, ColumnMatch> match,
+    public record Source(String table, String keyColumn, Map<String, ColumnMatch> match,
             Map<String, SetMatch> set, String priority, List<String> effective,
             Map<String, String> outputs) {
 
@@ -106,8 +106,8 @@ public record DecisionsDocument(String version, Map<String, Decision> decisions)
         }
 
         /** The rule table's key column, defaulting to {@code id}. */
-        public String effectiveId() {
-            return id == null || id.isBlank() ? "id" : id;
+        public String effectiveKeyColumn() {
+            return keyColumn == null || keyColumn.isBlank() ? "id" : keyColumn;
         }
     }
 
@@ -122,7 +122,7 @@ public record DecisionsDocument(String version, Map<String, Decision> decisions)
 
     /**
      * One {@code in} input's normalized child table: {@code key} references the rule row's
-     * {@link Source#effectiveId() id}, {@code value} carries one member per child row.
+     * {@link Source#effectiveKeyColumn() id}, {@code value} carries one member per child row.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SetMatch(String table, String key, String value) {
@@ -155,15 +155,15 @@ public record DecisionsDocument(String version, Map<String, Decision> decisions)
      * last.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Row(Map<String, Object> when, Map<String, Object> out) {
+    public record Row(Map<String, Object> when, Map<String, Object> outputs) {
 
         public Row {
             when = when == null
                     ? Map.of()
                     : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(when));
-            out = out == null
+            outputs = outputs == null
                     ? Map.of()
-                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(out));
+                    : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(outputs));
         }
     }
 }

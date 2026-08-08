@@ -8,7 +8,7 @@ regardless of how the caller proved its identity.
 
 ```yaml
 security:
-  auth: bearer        # bearer | apiKey | browser | mtls | public
+  auth: bearer        # bearer | api-key | browser | mtls | public
   policy: users.read  # authorization policy evaluated against the principal
 ```
 
@@ -157,11 +157,11 @@ secret" attack), is rejected. The lint enforces the same statically (see below).
 ## API keys
 
 API keys authenticate **service callers** — machine clients with a small, mostly-static set of
-keys. A route opts in with `auth: apiKey`:
+keys. A route opts in with `auth: api-key`:
 
 ```yaml
 security:
-  auth: apiKey
+  auth: api-key
   policy: invoices.write
 ```
 
@@ -378,7 +378,7 @@ Returned at request time (distinct from the lint codes below, which are static c
 | `TQL-SEC-4041` | error | RS256 JWT config declares both key sources; set exactly one. |
 | `TQL-SEC-4042` | error | Algorithm and key material disagree (HS256 `secret` with RS256 key material, or vice versa) — an algorithm-confusion risk. |
 | `TQL-SEC-4043` | error | Unsupported JWT algorithm (use `HS256` or `RS256`; `none` is rejected). |
-| `TQL-SEC-4044` | error | A route declares `auth: apiKey` but no `tesseraql.security.apiKeys` is configured. |
+| `TQL-SEC-4044` | error | A route declares `auth: api-key` but no `tesseraql.security.apiKeys` is configured. |
 | `TQL-SEC-4045` | error | An API-key client declares no `secretHash`. |
 | `TQL-SEC-4046` | warning | An API-key client grants no roles or permissions (least-privilege hint). |
 | `TQL-SEC-4050` | error | OIDC is enabled but no `discoveryUri` is configured. |
@@ -403,7 +403,7 @@ secret store.
 Three coverage kinds make authentication test gaps visible (see
 [testing.md](testing.md#coverage-kinds) for how kinds and threshold gating work):
 
-- `api-key` — every route authenticated by `auth: apiKey`, covered when a declarative suite
+- `api-key` — every route authenticated by `auth: api-key`, covered when a declarative suite
   exercises it; gate with `coverage.thresholds.api-key`.
 - `mtls` — the same for routes authenticated by `auth: mtls`; gate with
   `coverage.thresholds.mtls`.

@@ -58,7 +58,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `auth` | enum: `bearer` \| `browser` \| `apiKey` \| `mtls` \| `public` | bearer \| browser \| apiKey \| mtls \| public (deny-by-default: no auth means no access to protected data). |
+| `auth` | enum: `bearer` \| `browser` \| `api-key` \| `mtls` \| `public` | bearer \| browser \| api-key \| mtls \| public (deny-by-default: no auth means no access to protected data). |
 | `policy` | string | A policy id under tesseraql.security.policies. |
 | `csrf` | enum: `auto` \| `required` \| `off` | CSRF posture: auto (browser state-changing routes are protected), required, or off - one enum here and in security.defaults rules alike. |
 
@@ -275,9 +275,9 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | `cron` | string | A Quartz cron expression; firings are claimed cluster-wide so one node runs each. |
 | `fixedDelay` | string | A period (duration string, e.g. 5m); mutually exclusive with cron. |
 | `calendar` | string | A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md. |
-| `runOn` | enum: `businessDay` \| `firstBusinessDayOfMonth` \| `lastBusinessDayOfMonth` | Which considered firings count under the calendar (default businessDay); mutually exclusive with dayOfMonth. |
+| `runOn` | enum: `business-day` \| `first-business-day-of-month` \| `last-business-day-of-month` | Which considered firings count under the calendar (default business-day); mutually exclusive with dayOfMonth. |
 | `dayOfMonth` | integer ≥ 1 ≤ 31 | The shifted nominal-day rule: fire on this day of month, or its shifted business day when it is not one - and the run's business date is the nominal date. Rounds down to the month's last day. Documented in jobs.md. |
-| `shift` | enum: `nextBusinessDay` \| `previousBusinessDay` | Where a non-business nominal day moves (default nextBusinessDay); requires dayOfMonth. |
+| `shift` | enum: `next-business-day` \| `previous-business-day` | Where a non-business nominal day moves (default next-business-day); requires dayOfMonth. |
 
 #### trigger.poll
 
@@ -312,7 +312,7 @@ Schema for TesseraQL field domain documents (domains/*.yml): named field knowled
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `version` | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
+| `version` \* | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
 | `domains` | map of [inputField](#inputfield) | Named field domains. A route's input field references one with 'domain: <name>' and may override any individual key locally. |
 | `constraints` | map of [object](#domainsconstraints) | Database constraint names mapped once for the whole app, so a violation of a shared unique index reports the same field, code and message on every route that can raise it. |
 
@@ -330,7 +330,7 @@ Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `version` | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
+| `version` \* | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
 | `rules` | map of [object](#rulesrules) | Named validation rules. Each declares what the rule is; how a route uses it (params:, field:, when:) stays at the reference. |
 
 #### rules.rules
@@ -339,7 +339,7 @@ Schema for TesseraQL shared validation rule documents (rules/*.yml): named rules
 | --- | --- | --- |
 | `rule` | string | Cross-field expression. Exactly one of rule: or file:. |
 | `file` | string | Validation SQL, resolved relative to this document. Exactly one of rule: or file:. |
-| `binds` | array of string | The bind contract a reference's params: must satisfy exactly. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here. |
+| `binds` | map of string | The typed bind contract a reference's params: must satisfy exactly - bind name to declared type, checked against the referencing route's input types at load. Ambient binds (principal.*, audit.*) are supplied by the framework and never listed here. |
 | `code` | string | Default stable rule code, overridable at the reference. |
 | `message` | string | Default message key, overridable at the reference. |
 
@@ -349,7 +349,7 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `version` | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
+| `version` \* | const `tesseraql/v1` | The DSL version. Always tesseraql/v1. |
 | `decisions` | map of [object](#decisionsdecisions) | Named decision tables. Each declares its contract (typed inputs and outputs, hit and miss policies) and rows; how a route wires the inputs (params:) stays at the reference. |
 
 #### decisions.decisions
@@ -370,7 +370,7 @@ Schema for TesseraQL shared decision documents (decisions/*.yml): named decision
 | --- | --- | --- |
 | `type` | string | Inline type of the input. |
 | `domain` | string | Field domain reference declaring the input's type. |
-| `match` | enum: `eq` \| `between` \| `in` \| `bool` \| `orgSubtree` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, orgSubtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure). |
+| `match` | enum: `eq` \| `between` \| `in` \| `bool` \| `subtree` | How row cells compare against this input: eq (default, equality; empty cell = wildcard), between (inclusive range), in (membership in a small fixed set), bool, subtree (the bound org unit is in the cell's subtree; table sources only, resolved through the managed org closure). |
 
 ##### decisions.decisions.outputs
 
@@ -387,7 +387,7 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | Property | Type | Description |
 | --- | --- | --- |
 | `table` \* | string | The rule table. |
-| `id` | string | The rule table's key column joining set: child tables. Default id. |
+| `keyColumn` | string | The rule table's key column joining set: child tables. Default id. |
 | `match` \* | map of [object](#decisionsdecisionssourcematch) | Column realization per input (all but in): exactly one shape per entry. |
 | `set` | map of [object](#decisionsdecisionssourceset) | Child-table realization of each in input: no child rows = wildcard, membership otherwise. |
 | `priority` | string | The resolution-order column; required for hitPolicy: first. |
@@ -400,7 +400,7 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | --- | --- | --- |
 | `eq` | string | One nullable column for an eq/bool input. |
 | `between` | array of string | The nullable [min, max] column pair of a between input. |
-| `subtree` | string | The nullable unit-id column of an orgSubtree input, matched through the managed org closure. |
+| `subtree` | string | The nullable unit-id column of an subtree input, matched through the managed org closure. |
 
 ###### decisions.decisions.source.set
 
@@ -415,7 +415,7 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | Property | Type | Description |
 | --- | --- | --- |
 | `when` | object | Cells by input name: a scalar (eq/bool), a range ('>= 10000', '5..10', a number), or a list (in). |
-| `out` \* | object | The outputs this row sets — exactly the declared outputs. |
+| `outputs` \* | object | The outputs this row sets — exactly the declared outputs. |
 
 ## Shared definitions
 

@@ -233,7 +233,7 @@ class DeclarativeViewIntegrationTest {
         Files.writeString(board.resolve("board.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Board
                 columns:
                   - name: name
@@ -271,7 +271,7 @@ class DeclarativeViewIntegrationTest {
         Files.writeString(boardDetail.resolve("detail.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 title: User
                 fields:
                   - name: name
@@ -413,7 +413,7 @@ class DeclarativeViewIntegrationTest {
         Files.writeString(boardStats.resolve("stats.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Stats
                 panels:
                   - title: Users
@@ -450,7 +450,7 @@ class DeclarativeViewIntegrationTest {
         Files.writeString(boardNew.resolve("new.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 title: New entry
                 action: /board/create
                 """);

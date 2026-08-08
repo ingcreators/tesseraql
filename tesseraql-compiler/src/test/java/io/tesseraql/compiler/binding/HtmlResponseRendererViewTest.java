@@ -66,8 +66,9 @@ class HtmlResponseRendererViewTest {
     @Test
     void aListViewRendersTheQuerysOwnColumnsAsADatagrid(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Items
                 """);
         String html = render(renderer, Map.of("sql", Map.of("rows", List.of(
@@ -82,8 +83,9 @@ class HtmlResponseRendererViewTest {
     @Test
     void aListColumnLinkResolvesPerRow(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 columns:
                   - name: name
                     link: /items/{id}
@@ -95,7 +97,8 @@ class HtmlResponseRendererViewTest {
 
     @Test
     void anEmptyListRendersTheEmptyMessage(@TempDir Path dir) throws Exception {
-        HtmlResponseRenderer renderer = renderer(dir, "kind: view\nview: list\n");
+        HtmlResponseRenderer renderer = renderer(dir,
+                "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         String html = render(renderer, Map.of());
         assertThat(html).contains("No rows");
     }
@@ -104,8 +107,9 @@ class HtmlResponseRendererViewTest {
     void aFormViewDerivesItsFieldsFromTheActionRoutesInputBlock(@TempDir Path dir)
             throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 title: New item
                 action: /items/create
                 """);
@@ -124,8 +128,9 @@ class HtmlResponseRendererViewTest {
     @Test
     void fieldsEntriesSelectOrderAndOverride(@TempDir Path dir) throws Exception {
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: form
+                recipe: form
                 action: /items/create
                 fields:
                   - name: name
@@ -145,8 +150,9 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("templates/tql/view/list.html"),
                 "<p th:fragment=\"view(v)\" th:text=\"'custom:' + ${v.title}\"></p>");
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Items
                 """);
         String html = render(renderer, Map.of());
@@ -156,7 +162,8 @@ class HtmlResponseRendererViewTest {
 
     @Test
     void viewAndTemplateTogetherFailTheBuild(@TempDir Path dir) throws Exception {
-        Files.writeString(dir.resolve("page.view.yml"), "kind: view\nview: list\n");
+        Files.writeString(dir.resolve("page.view.yml"),
+                "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         Files.writeString(dir.resolve("index.html"), "<p>x</p>");
         ViewBinding binding = ViewBinding.of(dir, dir, "page.view.yml", null, path -> null);
         assertThatThrownBy(() -> new HtmlResponseRenderer(
@@ -169,7 +176,7 @@ class HtmlResponseRendererViewTest {
     @Test
     void aFormActionMatchingNoPostRouteFailsTheBuild(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"),
-                "kind: view\nview: form\naction: /nowhere\n");
+                "version: tesseraql/v1\nkind: view\nrecipe: form\naction: /nowhere\n");
         assertThatThrownBy(() -> ViewBinding.of(dir, dir, "page.view.yml", null, path -> null))
                 .isInstanceOf(TqlException.class).hasMessageContaining("matches no POST route");
     }
@@ -184,8 +191,9 @@ class HtmlResponseRendererViewTest {
                 "queries", Map.of("orders", Map.of("file", "orders.sql"))),
                 RouteDefinition.class);
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 title: Item
                 fields:
                   - name: name
@@ -208,8 +216,9 @@ class HtmlResponseRendererViewTest {
     @Test
     void aChildSourceTheRouteDoesNotDeclareFailsTheBuild(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 children:
                   - source: ghost
                 """);
@@ -223,8 +232,9 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("templates/frags.html"),
                 "<a th:fragment=\"newLink\" href=\"/items/new\">New item</a>");
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Items
                 slots:
                   header: frags.html::newLink
@@ -236,8 +246,9 @@ class HtmlResponseRendererViewTest {
     @Test
     void anUnknownSlotNameFailsTheBuild(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 slots:
                   sidebar: frags.html::x
                 """);
@@ -256,8 +267,9 @@ class HtmlResponseRendererViewTest {
                         "signups", Map.of("file", "signups.sql"))),
                 RouteDefinition.class);
         HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Stats
                 panels:
                   - title: Users
@@ -300,8 +312,9 @@ class HtmlResponseRendererViewTest {
     void aDashboardPanelSourceTheRouteDoesNotDeclareFailsTheBuild(@TempDir Path dir)
             throws Exception {
         Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 panels:
                   - type: stat
                     source: ghost
@@ -315,8 +328,9 @@ class HtmlResponseRendererViewTest {
     void anEjectedListTemplateRendersTheSameRows(@TempDir Path dir) throws Exception {
         // L3: the generated template is real Thymeleaf that renders without the view machinery.
         Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Items
                 columns:
                   - name: name
@@ -339,8 +353,9 @@ class HtmlResponseRendererViewTest {
         // The dashboard eject (docs/pages-and-mail-lints.md follow-ups): every panel kind
         // renders without the view machinery — including the sparkline's OGNL projection.
         Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Stats
                 panels:
                   - title: Users
@@ -348,7 +363,7 @@ class HtmlResponseRendererViewTest {
                     column: user_count
                   - title: By status
                     type: chart
-                    kind: bar
+                    chart: bar
                     source: byStatus
                     x: status
                     y: n

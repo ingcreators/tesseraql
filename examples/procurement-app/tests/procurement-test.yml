@@ -1,3 +1,4 @@
+version: tesseraql/v1
 tests:
   # The scope's three postures over the seeded rows (scope/requisitions_scope.yml):
   # procurement sees both departments, a requester sees their own, no matching arm

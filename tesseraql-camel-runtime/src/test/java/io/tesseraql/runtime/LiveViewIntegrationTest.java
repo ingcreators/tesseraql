@@ -262,7 +262,7 @@ class LiveViewIntegrationTest {
         Files.writeString(orders.resolve("orders.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: list
+                recipe: list
                 title: Orders
                 search: q
                 refreshOn: orders.changed
@@ -292,7 +292,7 @@ class LiveViewIntegrationTest {
         Files.writeString(orders.resolve("order.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 title: Order
                 refreshOn: orders.changed
                 """);
@@ -320,7 +320,7 @@ class LiveViewIntegrationTest {
         Files.writeString(orders.resolve("stats.view.yml"), """
                 version: tesseraql/v1
                 kind: view
-                view: dashboard
+                recipe: dashboard
                 title: Order stats
                 refreshOn: orders.changed
                 panels:

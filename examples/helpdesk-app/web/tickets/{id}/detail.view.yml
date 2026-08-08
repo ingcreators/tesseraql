@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: tickets.detail.view
 kind: view
-view: detail
+recipe: detail
 title: Ticket
 fields:
   - { name: id, label: "#" }

@@ -71,7 +71,7 @@ around — every stop is live against the seeded data:
    diff. `tesseraql admission --app examples/inventory-app` is the bar a shared app must
    clear ([marketplace admission](admission.md)).
 6. **Dashboards** — open `http://localhost:8080/products/dashboard` in the browser: stats,
-   charts and a low-stock table from a handful of SQL files and one `view: dashboard`
+   charts and a low-stock table from a handful of SQL files and one `recipe: dashboard`
    document, no HTML anywhere in the app — including a supplier-price table read straight
    off CSV files and a price trend from the lake's snapshots, live database and analytics
    engine composing in one page. The product pages share your browser login (the demo

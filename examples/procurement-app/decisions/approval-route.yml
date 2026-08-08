@@ -16,8 +16,8 @@ decisions:
     rows:
       # Capital categories are two-stage no matter how small the amount.
       - when: { category: [it-equipment, capex] }
-        out: { route: two_stage }
+        outputs: { route: two_stage }
       # Everything else escalates on amount alone.
       - when: { amount: "> 300000" }
-        out: { route: two_stage }
-      - out: { route: manager }
+        outputs: { route: two_stage }
+      - outputs: { route: manager }

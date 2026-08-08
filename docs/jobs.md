@@ -107,8 +107,8 @@ trigger:
   schedule:
     cron: "0 0 2 * * ?"           # the cron says when to CONSIDER a firing
     calendar: jp-banking          # the calendar says whether it COUNTS
-    runOn: lastBusinessDayOfMonth # businessDay (default) | firstBusinessDayOfMonth
-                                  # | lastBusinessDayOfMonth
+    runOn: last-business-day-of-month # business-day (default) | first-business-day-of-month
+                                      # | last-business-day-of-month
 ```
 
 This is the **daily-consider model**: "last business day of the month" is a daily cron
@@ -129,7 +129,7 @@ trigger:
     cron: "0 0 8 * * ?"
     calendar: jp-banking
     dayOfMonth: 5                 # the nominal day the run is FOR
-    shift: nextBusinessDay        # default; previousBusinessDay for pay-date-style rules
+    shift: next-business-day      # default; previous-business-day for pay-date-style rules
 ```
 
 The firing counts only on the shifted target — and the run's **business date is the

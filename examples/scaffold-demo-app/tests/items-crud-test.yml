@@ -1,6 +1,7 @@
-# tesseraql-scaffold-checksum: sha256:993e902bd4000b4b8c1594df957b0e6596f43e010cd67f32dfd48586a77c15c1
+# tesseraql-scaffold-checksum: sha256:4101cfb24eb0ed86f9e87bb2f3dc948a7d3e955cb3e4f14513ba70c737aa6529
 # Scaffolded suite for the items table (design ch. 13): exercises the generated
 # queries with data-independent expectations, so it passes against any contents.
+version: tesseraql/v1
 tests:
   - name: the items search runs without a filter
     sql:

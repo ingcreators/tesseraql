@@ -305,7 +305,7 @@ public final class CrudScaffolder {
                 version: tesseraql/v1
                 id: %s
                 kind: view
-                view: list
+                recipe: list
                 title: %s
                 %scolumns:
                   - name: %s
@@ -419,7 +419,7 @@ public final class CrudScaffolder {
                 version: tesseraql/v1
                 id: %s.new
                 kind: view
-                view: form
+                recipe: form
                 title: New
                 action: %s/create
                 slots:
@@ -574,7 +574,7 @@ public final class CrudScaffolder {
                 version: tesseraql/v1
                 id: %s.edit
                 kind: view
-                view: form
+                recipe: form
                 title: Edit
                 action: %s/{%s}/update
                 fields:
@@ -753,6 +753,7 @@ public final class CrudScaffolder {
         suite.append("""
                 # Scaffolded suite for the %s table (design ch. 13): exercises the generated
                 # queries with data-independent expectations, so it passes against any contents.
+                version: tesseraql/v1
                 tests:
                 """.formatted(names.table()));
         // Every search.sql case sets sort/dir: the ORDER BY is an embedded variable, so it needs
@@ -843,7 +844,12 @@ public final class CrudScaffolder {
             yml.append("  ").append(names.entity()).append(capitalize(field))
                     .append("IsFree:\n");
             yml.append("    file: ").append(sql).append('\n');
-            yml.append("    binds: [").append(field).append(", excludeId]\n");
+            String fieldType = table.column(column)
+                    .map(TableSchema.Column::inputType).orElse("string");
+            String keyType = table.column(table.primaryKey().get(0))
+                    .map(TableSchema.Column::inputType).orElse("string");
+            yml.append("    binds: { ").append(field).append(": ").append(fieldType)
+                    .append(", excludeId: ").append(keyType).append(" }\n");
             yml.append("    code: duplicate\n");
         });
         table.foreignKeys().forEach(fk -> {
@@ -853,7 +859,10 @@ public final class CrudScaffolder {
             yml.append("  ").append(names.entity()).append(capitalize(field))
                     .append("Exists:\n");
             yml.append("    file: ").append(sql).append('\n');
-            yml.append("    binds: [").append(field).append("]\n");
+            yml.append("    binds: { ").append(field).append(": ")
+                    .append(table.column(fk.column())
+                            .map(TableSchema.Column::inputType).orElse("string"))
+                    .append(" }\n");
             yml.append("    code: unknown\n");
         });
         return yml.toString();

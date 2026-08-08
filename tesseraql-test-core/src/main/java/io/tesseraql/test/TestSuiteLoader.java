@@ -20,7 +20,8 @@ public final class TestSuiteLoader {
 
     public TestSuite load(Path file) {
         try {
-            return mapper.readValue(Files.readString(file), TestSuite.class);
+            return requireVersion(mapper.readValue(Files.readString(file), TestSuite.class),
+                    file.toString());
         } catch (IOException ex) {
             throw TqlException.builder(PARSE_ERROR)
                     .message("Failed to load test suite: " + ex.getMessage())
@@ -32,9 +33,22 @@ public final class TestSuiteLoader {
 
     public TestSuite parse(String yaml) {
         try {
-            return mapper.readValue(yaml, TestSuite.class);
+            return requireVersion(mapper.readValue(yaml, TestSuite.class), "test suite");
         } catch (IOException ex) {
             throw new TqlException(PARSE_ERROR, "Failed to parse test suite: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Every document family carries the version discriminator (docs/vocabulary-cleanup.md
+     * slice 2); test suites were the one family without it.
+     */
+    private static TestSuite requireVersion(TestSuite suite, String source) {
+        if (!"tesseraql/v1".equals(suite.version())) {
+            throw new TqlException(PARSE_ERROR, source
+                    + ": version must be 'tesseraql/v1' (the tests document is versioned like"
+                    + " every other TesseraQL document)");
+        }
+        return suite;
     }
 }

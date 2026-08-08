@@ -4,6 +4,7 @@
   "title": "TesseraQL business-day calendars v1",
   "description": "Schema for TesseraQL calendar documents (calendars/*.yml): named business-day calendars referenced from a job schedule's 'calendar:'. Documented in jobs.md (Business-day calendars).",
   "type": "object",
+  "required": ["version"],
   "properties": {
     "version": {
       "type": "string",

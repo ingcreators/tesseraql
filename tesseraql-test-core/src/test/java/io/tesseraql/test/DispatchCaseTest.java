@@ -70,8 +70,8 @@ class DispatchCaseTest {
                     hitPolicy: first
                     rows:
                       - when: { amount: "> 100" }
-                        out: { lane: slow }
-                      - out: { lane: fast }
+                        outputs: { lane: slow }
+                      - outputs: { lane: fast }
                 """);
         Files.createDirectories(appHome.resolve("workflow"));
         Files.writeString(appHome.resolve("workflow/tick.sql"),

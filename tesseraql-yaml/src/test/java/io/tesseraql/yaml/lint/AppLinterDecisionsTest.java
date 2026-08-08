@@ -30,8 +30,8 @@ class AppLinterDecisionsTest {
                       route: { type: string }
                     rows:
                       - when: { amount: ">= 10000" }
-                        out: { route: manager }
-                      - out: { route: auto }
+                        outputs: { route: manager }
+                      - outputs: { route: auto }
                 """);
         Files.createDirectories(dir.resolve("web/requests/new"));
         Files.writeString(dir.resolve("web/requests/new/post.yml"), """
@@ -131,7 +131,7 @@ class AppLinterDecisionsTest {
             decisions:
               approvalRoute:
                 inputs:
-                  dept: { type: string, match: orgSubtree }
+                  dept: { type: string, match: subtree }
                   amount: { type: integer, match: between }
                 outputs:
                   route: { type: string }
@@ -152,7 +152,7 @@ class AppLinterDecisionsTest {
             """;
 
     @Test
-    void orgSubtreeWithoutManagedOrgUnitsIsAnError(@TempDir Path dir) throws Exception {
+    void subtreeWithoutManagedOrgUnitsIsAnError(@TempDir Path dir) throws Exception {
         Path app = app(dir, DECIDE_TABLE_BACKED,
                 "insert into requests (route) values (/* decision.approvalRoute.route */'x')\n");
         Files.writeString(app.resolve("decisions/approval.yml"), TABLE_BACKED);
@@ -248,8 +248,8 @@ class AppLinterDecisionsTest {
                       route: { type: string, enum: [%s] }
                     rows:
                       - when: { amount: "> 100000" }
-                        out: { route: director }
-                      - out: { route: manager }
+                        outputs: { route: director }
+                      - outputs: { route: manager }
                 """.formatted(enumValues));
         Files.createDirectories(app.resolve("workflow"));
         Files.writeString(app.resolve("workflow/purchase.yml"), """
@@ -350,10 +350,10 @@ class AppLinterDecisionsTest {
                       route: { type: string }
                     rows:
                       - when: { amount: ">= 100" }
-                        out: { route: manager }
+                        outputs: { route: manager }
                       - when: { amount: "500..900" }
-                        out: { route: director }
-                      - out: { route: auto }
+                        outputs: { route: director }
+                      - outputs: { route: auto }
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(app);

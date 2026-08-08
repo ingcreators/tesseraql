@@ -95,11 +95,11 @@ What the framework does with it:
   and installs it with `window.Plot`. Pages without chart panels ship not a byte of
   charting. `installChart` listens for `htmx:load`, so `refreshOn:` live dashboards
   re-render their charts with no extra wiring.
-- **The panel vocabulary grows to the kit's.** `kind:` accepts the kit set — `bar`,
+- **The panel vocabulary grows to the kit's.** `chart:` accepts the kit set — `bar`,
   `line`, `area`, `combo`, `bar-stacked`, `bar-grouped`, `scatter` (`histogram` and
   `heatmap` stay out until a gallery app needs them). Multi-series arrives as
   `series:` — a list of `{column, label?, mark?}` — with the existing single-column
-  `y:` kept as its shorthand; `mark:` is legal only under `kind: combo`. New optional
+  `y:` kept as its shorthand; `mark:` is legal only under `chart: combo`. New optional
   panel keys pass through as the kit's data attributes: `xType:`
   (`category|number|date` → `data-x-type`), `height:` (→ `data-height`), `legend:`
   (→ `data-legend`), `yLabel:` (→ `data-y-label`).
@@ -204,8 +204,8 @@ an earlier one.
 
 ## Machine-checkable surface
 
-- `TQL-VIEW-3313` — chart panel vocabulary violations: unknown `kind:`, `series:`
-  and `y:` both present, `mark:` outside `kind: combo`, or a series column the
+- `TQL-VIEW-3313` — chart panel vocabulary violations: unknown `chart:`, `series:`
+  and `y:` both present, `mark:` outside `chart: combo`, or a series column the
   panel's source cannot supply being structurally absent (columns are checked at
   render time like every panel column today).
 - `TQL-FIELD-2004` — extended message: exactly one of `sql:`, `notify:`,

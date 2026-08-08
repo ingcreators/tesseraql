@@ -15,6 +15,6 @@ decisions:
     rows:
       # High-value requests go straight to finance.
       - when: { amount: "> 100000" }
-        out: { assignee: cfo-1 }
+        outputs: { assignee: cfo-1 }
       # Everything else lands with the standing approver.
-      - out: { assignee: approver-1 }
+      - outputs: { assignee: approver-1 }

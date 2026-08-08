@@ -12,7 +12,7 @@
 > decisions JSON Schema with scaffolded `.vscode` association, and the YAML-surface/error
 > reference pages. Slice 2 is implemented: the table-backed `source:` — one generated SELECT
 > with a `(col IS NULL OR col ⟨op⟩ ?)` arm per mapped column, `in` via a normalized child
-> table, `orgSubtree` via the managed org closure (with the `tesseraql.orgunit.mode: managed`
+> table, `subtree` via the managed org closure (with the `tesseraql.orgunit.mode: managed`
 > lint `4717`), dated rows via `effective:` + `effectiveAt:` defaulting to `audit.now`,
 > `ORDER BY priority` with a portable single-row fetch — plus `default:` outputs for table
 > misses, the plain-identifier guard, runtime lookup failures `4723`, and the sidecar DDL
@@ -72,7 +72,7 @@ It builds on subsystems already in the framework:
 - **[Ambient parameters](ambient-params.md)** — `principal.*` binds seed decision inputs
   ("the caller's org unit") exactly as they seed route SQL.
 - **[Organizational data scoping](data-scoping.md)** — the `OrgUnitStore` substrate
-  resolves the `orgSubtree` match kind, so "the sales department" means the same subtree
+  resolves the `subtree` match kind, so "the sales department" means the same subtree
   in a decision row as it does in a scope directive.
 - **[Transactional writes](transactional-writes.md)** — a table-backed decision evaluates
   as one generated `SELECT` inside the operation's transaction, on the operation's
@@ -100,7 +100,7 @@ decisions:
     inputs:
       amount:   { domain: money }
       category: { type: string, match: in }
-      dept:     { type: string, match: orgSubtree }
+      dept:     { type: string, match: subtree }
     outputs:
       route:    { type: string, enum: [manager, director, cfo] }
       requiredLevel: { type: integer }
@@ -108,10 +108,10 @@ decisions:
     onMiss: error               # error | default
     rows:
       - when: { category: [office-supplies, books], amount: ">= 10000" }
-        out:  { route: manager, requiredLevel: 1 }
+        outputs: { route: manager, requiredLevel: 1 }
       - when: { dept: sales, amount: "> 100000" }
-        out:  { route: director, requiredLevel: 2 }
-      - out:  { route: cfo, requiredLevel: 3 }    # no when: — the default row
+        outputs: { route: director, requiredLevel: 2 }
+      - outputs: { route: cfo, requiredLevel: 3 }  # no when: — the default row
 ```
 
 A route evaluates a decision with a `decide:` block — the `validate:` reference form,
@@ -197,7 +197,7 @@ priority. Five match kinds cover the LOB patterns:
 | `eq` (default) | equals; empty cell = wildcard | scalar or absent | one nullable column |
 | `between` | inclusive range; open ends | `">= 10000"`, `"5..10"` | `min`/`max` nullable pair |
 | `in` | membership in a small fixed set | list | normalized child table |
-| `orgSubtree` | bound org unit is in the cell's subtree | unit id | unit-id column, resolved via `OrgUnitStore` |
+| `subtree` | bound org unit is in the cell's subtree | unit id | unit-id column, resolved via `OrgUnitStore` |
 | `bool` | true/false; empty = wildcard | boolean | nullable boolean |
 
 Arbitrary expressions in cells are **rejected by design**, for two load-bearing reasons:
@@ -214,7 +214,7 @@ Both sources implement identical semantics:
   in the request.
 - **Table rows** evaluate as one generated `SELECT` — each cell contributes
   `(col IS NULL OR col ⟨op⟩ ?)`, `in` cells an `EXISTS` against the child table,
-  `orgSubtree` a join through the org-unit closure, dated rows an `effective` window
+  `subtree` a join through the org-unit closure, dated rows an `effective` window
   test — `ORDER BY priority`, in the operation's transaction, on the operation's
   datasource. The generated SQL is ordinary 2-way SQL, loggable and runnable in a SQL
   tool.

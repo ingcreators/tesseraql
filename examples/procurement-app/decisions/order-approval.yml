@@ -15,7 +15,7 @@ decisions:
     hitPolicy: first
     rows:
       - when: { isLowest: true }
-        out: { lane: auto }
+        outputs: { lane: auto }
       - when: { deltaPct: "<= 3" }
-        out: { lane: auto }
-      - out: { lane: head_review }
+        outputs: { lane: auto }
+      - outputs: { lane: head_review }

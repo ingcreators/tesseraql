@@ -262,8 +262,9 @@ class ShortcutIntegrationTest {
         Files.writeString(thing.resolve("thing.view.yml"), """
                 version: tesseraql/v1
                 id: things.detail.view
+                version: tesseraql/v1
                 kind: view
-                view: detail
+                recipe: detail
                 title: Thing
                 """);
         Files.writeString(home.resolve("home.html"), """

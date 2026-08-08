@@ -61,10 +61,10 @@ public final class DecisionTables {
                 case "between" -> BETWEEN;
                 case "in" -> IN;
                 case "bool" -> BOOL;
-                case "orgSubtree" -> ORG_SUBTREE;
+                case "subtree" -> ORG_SUBTREE;
                 default -> throw new TqlException(CONTRACT, "Decision '" + decision
                         + "' input '" + input + "': unknown match kind '" + declared
-                        + "' — one of eq, between, in, bool, orgSubtree");
+                        + "' — one of eq, between, in, bool, subtree");
             };
         }
     }
@@ -343,7 +343,7 @@ public final class DecisionTables {
             // YAML-backed decision cannot answer it in memory, so the loader restricts the
             // kind to table sources and this arm is unreachable from a valid declaration.
             case ORG_SUBTREE -> throw new TqlException(ROW, "Decision '" + decision + "' cell '"
-                    + input + "': an orgSubtree input needs a table source"
+                    + input + "': a subtree input needs a table source"
                     + " (docs/decision-tables.md)");
         };
     }

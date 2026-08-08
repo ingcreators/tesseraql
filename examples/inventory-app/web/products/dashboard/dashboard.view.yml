@@ -1,7 +1,7 @@
 version: tesseraql/v1
 id: products.dashboard.view
 kind: view
-view: dashboard
+recipe: dashboard
 title: Inventory dashboard
 panels:
   - { type: stat, source: sql, column: products, label: Products }
@@ -9,7 +9,7 @@ panels:
   # The kit chart recipe (docs/analytics-experience.md track 2): two series grouped
   # side-by-side, the reorder floor beside the live stock, per category.
   - type: chart
-    kind: bar-grouped
+    chart: bar-grouped
     source: byCategory
     title: Stock by category
     x: label
@@ -36,7 +36,7 @@ panels:
   # the trend line reads them, and the snapshot list is the time-travel index
   # (query any of them with AT (VERSION => n)).
   - type: chart
-    kind: line
+    chart: line
     source: priceTrend
     title: Best-price trend (lake)
     x: label
