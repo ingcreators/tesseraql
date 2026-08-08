@@ -33,7 +33,9 @@ class PollingRouteBuilderTest {
                 "knownHostsFile", "security/known_hosts")).endpointUri(sftp());
 
         assertThat(uri)
-                .startsWith("sftp://sftp.partner.example:22/outbound?")
+                // The declared `/outbound` is absolute (contract-bugfixes track C): Camel's
+                // grammar needs the doubled slash after the authority to mean that.
+                .startsWith("sftp://sftp.partner.example:22//outbound?")
                 // The path resolves against the app home, like other configured file paths.
                 .contains("knownHostsFile="
                         + home.resolve("security/known_hosts").toAbsolutePath())
@@ -67,7 +69,7 @@ class PollingRouteBuilderTest {
                 .endpointUri(ftps());
 
         assertThat(uri)
-                .startsWith("ftps://ftps.partner.example:21/outbound?")
+                .startsWith("ftps://ftps.partner.example:21//outbound?")
                 // PBSZ/PROT protect the data connection. Without them TLS covers the control
                 // channel only and every polled file crosses the network in cleartext.
                 .contains("execPbsz=0")
@@ -278,6 +280,26 @@ class PollingRouteBuilderTest {
     private static PollSpec sftp() {
         return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", "partner", null,
                 null, null, null);
+    }
+
+    private static PollSpec sftp(String path) {
+        return new PollSpec("sftp", "sftp.partner.example", null, path, "partner", null,
+                null, null, null);
+    }
+
+    @Test
+    void aRemotePathMeansWhatItSays() {
+        // The declared path passes through (contract-bugfixes track C): no slash is
+        // login-home-relative, a leading slash is absolute, and the historical `//`
+        // escape collapses to the same absolute meaning instead of breaking.
+        PollingRouteBuilder builder = builder(
+                Map.of("allowedHosts", List.of("sftp.partner.example")));
+        assertThat(builder.endpointUri(sftp("outbound/orders")))
+                .startsWith("sftp://sftp.partner.example:22/outbound/orders?");
+        assertThat(builder.endpointUri(sftp("/outbound/orders")))
+                .startsWith("sftp://sftp.partner.example:22//outbound/orders?");
+        assertThat(builder.endpointUri(sftp("//outbound/orders")))
+                .startsWith("sftp://sftp.partner.example:22//outbound/orders?");
     }
 
     @Test

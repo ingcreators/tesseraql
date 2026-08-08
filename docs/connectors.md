@@ -234,7 +234,8 @@ trigger:
     source: sftp                 # local | sftp | ftps
     host: sftp.partner.example   # remote sources only; must be allow-listed
     port: 22                     # defaults to 22 (sftp) / 21 (ftps)
-    path: /outbound/orders       # directory to poll (a local path, or the remote directory)
+    path: /outbound/orders       # directory to poll; a leading slash is absolute on the
+                                 # server, without one it resolves against the login home
     credential: partner-sftp     # a configured credential, never inline (remote sources)
     include: "*.csv"             # filename glob (default: every file)
     delay: 60s                   # poll interval (default 60s)

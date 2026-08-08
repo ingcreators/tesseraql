@@ -52,7 +52,13 @@ final class RemoteFileUris {
         }
         FileConnectors.Credential credential = connectors.requireCredential(credentialName);
         int effectivePort = port == null ? defaultPort : port;
-        String directory = path.startsWith("/") ? path.substring(1) : path;
+        // Camel's FTP/SFTP grammar: the first slash after the authority is a separator, a
+        // second one makes the directory absolute. So the declared path passes through —
+        // `outbound/orders` is login-home-relative, `/outbound/orders` absolute — instead of
+        // the old double strip that silently made every path home-relative
+        // (docs/contract-bugfixes.md track C). Extra leading slashes collapse to one, so the
+        // historical `//` absolute-path escape keeps its meaning.
+        String directory = path.replaceFirst("^/+", "/");
         StringBuilder uri = new StringBuilder(scheme).append("://")
                 .append(host).append(':').append(effectivePort).append('/').append(directory)
                 .append('?').append(options);

@@ -329,7 +329,7 @@
             "source": { "type": "string", "enum": ["local", "sftp", "ftps"], "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts." },
             "host": { "type": "string" },
             "port": { "type": "integer" },
-            "path": { "type": "string", "description": "The polled directory. A local path must sit under a declared allowedPaths root." },
+            "path": { "type": "string", "description": "The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home." },
             "credential": { "type": "string", "description": "A named credential under tesseraql.connectors.poll.credentials (required for remote sources)." },
             "include": { "type": "string", "description": "An ant-style filename filter, e.g. *.csv." },
             "delay": { "type": "string", "description": "Poll interval (duration string)." },

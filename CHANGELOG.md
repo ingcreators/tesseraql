@@ -20,6 +20,13 @@ All notable changes to TesseraQL are documented here. The format follows
   ("Unauthorized") through the domain default; they now answer 500. Genuine
   caller-fault codes keep their statuses (4011/4012/4013 → 401, 4031/4032 → 403,
   4014 → 409).
+- **Pre-1.0 breaking behavior change — a remote poll/push `path:` means what it says**
+  (docs/contract-bugfixes.md track C): a leading slash on an SFTP/FTPS `path:` is now
+  absolute on the server, as the reference always documented; without one the path
+  resolves against the credential's login home. Previously every path was silently
+  login-home-relative and absolute paths needed an undocumented `//` escape (which
+  keeps its absolute meaning). A deployment that relied on the home-relative reading
+  of a leading-slash path must drop the slash.
 - **Pre-1.0 breaking JSON-contract change — structured error details**
   (docs/transition-engine.md Track F): a `TqlException`'s structured details no longer
   merge flat into the rendered `error` object; they render as the `error.details`
