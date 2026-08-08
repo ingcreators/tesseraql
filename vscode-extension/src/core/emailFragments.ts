@@ -49,14 +49,18 @@ export type EmailCompletionContext =
 export function emailCompletionAt(lineText: string, character: number):
     EmailCompletionContext | undefined {
   const before = lineText.slice(0, character);
-  const fragment = /~\{tql\/email\/(hc-email(?:-layout)?)\s*::\s*(\w*)$/.exec(before);
+  // Identifier runs are Unicode (docs/unicode-identifiers.md): a half-typed Japanese
+  // fragment name or model root keeps its completion context — \w would drop it at
+  // the first non-ASCII character.
+  const fragment =
+      /~\{tql\/email\/(hc-email(?:-layout)?)\s*::\s*[\p{L}\p{N}_]*$/u.exec(before);
   if (fragment !== null) {
     return { kind: 'fragment', library: fragment[1] as 'hc-email' | 'hc-email-layout' };
   }
-  if (/\$\{\s*event\.\w*$/.test(before)) {
+  if (/\$\{\s*event\.[\p{L}\p{N}_]*$/u.test(before)) {
     return { kind: 'event-member' };
   }
-  if (/\$\{\s*\w*$/.test(before)) {
+  if (/\$\{\s*[\p{L}\p{N}_]*$/u.test(before)) {
     return { kind: 'root' };
   }
   return undefined;

@@ -129,7 +129,7 @@
       "  - { type: stat, source: sql, column: ${3:total}, title: ${4:Total} }",
       "  - type: chart",
       "    chart: ${5|bar,line,area,combo,bar-stacked,bar-grouped,scatter|}",
-      "    source: ${6:byCategory}",
+      "    source: ${6:by_category}",
       "    title: ${7:By category}",
       "    x: ${8:label}",
       "    yLabel: ${9:units}",
@@ -146,7 +146,7 @@
     "body": [
       "- type: chart",
       "  chart: ${1|bar,line,area,combo,bar-stacked,bar-grouped,scatter|}",
-      "  source: ${2:byCategory}",
+      "  source: ${2:by_category}",
       "  title: ${3:By category}",
       "  x: ${4:label}",
       "  xType: ${5|category,number,date|}",

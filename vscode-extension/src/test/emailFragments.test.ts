@@ -29,6 +29,17 @@ test('model roots complete inside ${}', () => {
   assert.deepEqual(emailCompletionAt(line, line.length), { kind: 'root' });
 });
 
+test('a half-typed Japanese identifier keeps its completion context', () => {
+  // The identifier contract (docs/unicode-identifiers.md): Unicode names are names.
+  const fragment = '<div th:replace="~{tql/email/hc-email :: 明細';
+  assert.deepEqual(emailCompletionAt(fragment, fragment.length),
+      { kind: 'fragment', library: 'hc-email' });
+  const root = '<p th:text="${受注';
+  assert.deepEqual(emailCompletionAt(root, root.length), { kind: 'root' });
+  const member = '<p th:text="${event.受';
+  assert.deepEqual(emailCompletionAt(member, member.length), { kind: 'event-member' });
+});
+
 test('ordinary markup completes nothing', () => {
   for (const line of ['<div class="hc-card">', 'plain text', '<p th:text="${payload.name}">done</p>']) {
     assert.equal(emailCompletionAt(line, line.length), undefined);
