@@ -109,9 +109,9 @@ class AppTestRunnerIntegrationTest {
         assertThat(result.kind("notification").ratio()).isEqualTo(1.0);
         // Phase 26: the directory sync job's http-call step is declared, and the suite's
         // http-call case plans it (resolving url, query, and the allow-list, no network call).
-        assertThat(result.kind("http-call").declared()).containsExactly("directory.sync.headcount");
-        assertThat(result.kind("http-call").covered()).containsExactly("directory.sync.headcount");
-        assertThat(result.kind("http-call").ratio()).isEqualTo(1.0);
+        assertThat(result.kind("httpCall").declared()).containsExactly("directory.sync.headcount");
+        assertThat(result.kind("httpCall").covered()).containsExactly("directory.sync.headcount");
+        assertThat(result.kind("httpCall").ratio()).isEqualTo(1.0);
         // Phase 21: the print route exports a pdf document; its extraction SQL is exercised.
         assertThat(result.kind("document").declared()).containsExactly("users.print");
         assertThat(result.kind("document").covered()).containsExactly("users.print");
