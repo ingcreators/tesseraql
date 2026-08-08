@@ -1477,12 +1477,15 @@ public final class RouteCompiler {
     }
 
     private RestDefinition restEndpoint(RouteBuilder builder, String method, String path) {
+        // The router-facing template swaps non-wire-safe parameter names for positional
+        // stand-ins; the RequestBinder maps them back to the declared names (WireNames).
+        String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         return switch (method) {
-            case "GET" -> builder.rest().get(path);
-            case "POST" -> builder.rest().post(path);
-            case "PUT" -> builder.rest().put(path);
-            case "PATCH" -> builder.rest().patch(path);
-            case "DELETE" -> builder.rest().delete(path);
+            case "GET" -> builder.rest().get(wirePath);
+            case "POST" -> builder.rest().post(wirePath);
+            case "PUT" -> builder.rest().put(wirePath);
+            case "PATCH" -> builder.rest().patch(wirePath);
+            case "DELETE" -> builder.rest().delete(wirePath);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
         };

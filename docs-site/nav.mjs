@@ -18,6 +18,7 @@ export const SECTIONS = [
     items: [
       'app-layout',
       'two-way-sql',
+      'identifiers',
       'scaffolding',
       'transactional-writes',
       'declarative-validation',

@@ -1,0 +1,18 @@
+# The 送料区分 (shipping class) decision (docs/decision-tables.md): routes and suites
+# reference it by name; business users maintain the 送料区分_rules rows at runtime.
+version: tesseraql/v1
+
+decisions:
+  送料区分:
+    inputs:
+      地域: { type: string, match: eq }
+    outputs:
+      送料: { type: string }
+    hitPolicy: first
+    source:
+      table: 送料区分_rules
+      match:
+        地域: { eq: 地域 }
+      priority: priority
+      outputs:
+        送料: 送料
