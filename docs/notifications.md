@@ -212,7 +212,9 @@ working reference). The fragment palette in `tql/email/hc-email`:
 | Footer | `hcFooter(text)` |
 
 The bundled library is theme-baked at the framework defaults (default accent, `slate`
-neutral — the `tesseraql.ui.neutral` default). The one embedded `<style>` block in the
+neutral — the `tesseraql.ui.neutral` default), and comes straight from the
+hypermedia-components package (`dist/email`, unpacked at build time with its published
+`contract.json` as the signature contract — nothing generated is checked in). The one embedded `<style>` block in the
 layout is enhancement-only (mobile widths, dark scheme) and may be stripped by clients
 without breaking the mail; the load-bearing styling is inline. Known degradations are the
 upstream-documented ones: Outlook's Word engine drops border radii, Gmail may auto-invert

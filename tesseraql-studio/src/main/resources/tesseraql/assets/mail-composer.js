@@ -29,12 +29,6 @@ if (canvas) {
     params[button.dataset.tqlFragment] = JSON.parse(button.dataset.tqlParams);
   }
 
-  // Whitespace text nodes from the server render would skew childNodes indices
-  // (insert/move positions count every child node) — normalize them away once.
-  for (const node of [...canvas.childNodes]) {
-    if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()) node.remove();
-  }
-
   const editor = createEditor({ root: canvas });
 
   const blocks = () => [...canvas.querySelectorAll('[data-tql-fragment]')];
@@ -161,7 +155,9 @@ if (canvas) {
   for (const button of document.querySelectorAll('#mail-palette [data-tql-fragment]')) {
     button.addEventListener('click', () => {
       const block = makeBlock(button.dataset.tqlFragment, JSON.parse(button.dataset.tqlArgs));
-      editor.stack.apply(insertNode(canvas, block, canvas.childNodes.length));
+      // {before: null} appends — element-based insertion points (editor-kit 0.1.0)
+      // make whitespace text nodes irrelevant to positioning.
+      editor.stack.apply(insertNode(canvas, block, { before: null }));
       editor.selection.select(block);
     });
   }
@@ -188,16 +184,17 @@ if (canvas) {
   document.getElementById('composer-undo').addEventListener('click', () => editor.stack.undo());
   document.getElementById('composer-redo').addEventListener('click', () => editor.stack.redo());
 
-  // Alt+Arrow moves the selected block — the keyboard path to what the drag does.
+  // Alt+Arrow moves the selected block — the keyboard path to what the drag does,
+  // via element-based insertion points (editor-kit 0.1.0).
   canvas.addEventListener('keydown', (event) => {
     const block = event.target.closest('[data-tql-fragment]');
     if (!block || !event.altKey) return;
     const siblings = blocks();
     const i = siblings.indexOf(block);
     if (event.key === 'ArrowUp' && i > 0) {
-      editor.stack.apply(moveNode(block, canvas, i - 1));
+      editor.stack.apply(moveNode(block, canvas, { before: siblings[i - 1] }));
     } else if (event.key === 'ArrowDown' && i < siblings.length - 1) {
-      editor.stack.apply(moveNode(block, canvas, i + 1));
+      editor.stack.apply(moveNode(block, canvas, { before: siblings[i + 1].nextElementSibling }));
     } else {
       return;
     }
