@@ -141,8 +141,8 @@ class ScaffoldedCrudIntegrationTest {
         HttpResponse<String> created = post("/items/create", cookie, null, csrf, Map.of(
                 "name", "Second item",
                 "quantity", "2",
-                "unitPrice", "1.50",
-                "dueDate", "2026-07-01",
+                "unit_price", "1.50",
+                "due_date", "2026-07-01",
                 "active", "true",
                 "note", "Created over the no-JS path"));
         assertThat(created.statusCode()).as(created::body).isEqualTo(303);
@@ -162,8 +162,8 @@ class ScaffoldedCrudIntegrationTest {
         HttpResponse<String> updated = post("/items/2/update", cookie, csrf, null, Map.of(
                 "name", "Second item (edited)",
                 "quantity", "3",
-                "unitPrice", "2.50",
-                "dueDate", "2026-07-02",
+                "unit_price", "2.50",
+                "due_date", "2026-07-02",
                 "active", "false",
                 "note", "Edited over the htmx path",
                 "version", "1"));
