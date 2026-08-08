@@ -19,7 +19,7 @@ class OpenApiArrayItemsTest {
 
     private static InputField array(InputField.InputItems items) {
         return new InputField("array", false, null, null, null, null, null, null, null, null,
-                null, items, null, null, null, null);
+                null, items, null, null, null, null, null);
     }
 
     @Test

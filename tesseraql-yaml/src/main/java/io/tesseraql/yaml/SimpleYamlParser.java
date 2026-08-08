@@ -73,7 +73,7 @@ public final class SimpleYamlParser {
      * operation's use of it. */
     private static final java.util.Set<String> DOMAIN_KEYS = java.util.Set.of("type", "min",
             "max", "minLength", "maxLength", "pattern", "format", "enum", "items",
-            "classification", "mask");
+            "classification", "mask", "widget");
 
     private static final TqlErrorCode DOMAIN_OPERATIONAL_KEY = new TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.FIELD, 4602);

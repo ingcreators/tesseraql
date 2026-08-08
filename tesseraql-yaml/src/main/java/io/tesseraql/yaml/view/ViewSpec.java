@@ -78,9 +78,9 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             "kind", "id", "recipe", "title", "action", "source", "search", "fields", "columns",
             "children", "panels", "slots", "template", "refreshOn");
     private static final java.util.Set<String> FIELD_KEYS = java.util.Set.of("name", "label",
-            "widget", "column");
+            "widget", "column", "domain");
     private static final java.util.Set<String> COLUMN_KEYS = java.util.Set.of("name", "label",
-            "link", "sortable", "text");
+            "link", "sortable", "text", "domain");
     private static final java.util.Set<String> CHILD_KEYS = java.util.Set.of("source", "title",
             "columns", "view");
     private static final java.util.Set<String> PANEL_KEYS = java.util.Set.of("title", "type",
@@ -104,9 +104,12 @@ public record ViewSpec(String id, String view, String title, String action, Stri
      * Presentation override for a form field derived from the action route's input block.
      * {@code column} names the result-set column the prefill value reads when it differs from
      * the input name (the camelCase-input over snake_case-column convention falls back
-     * automatically).
+     * automatically). {@code domain} references an app-level field domain
+     * (docs/view-composition.md wave 3a) — the explicit read-side link that brings the
+     * domain's presentation and data-classification knowledge to a rendered field.
      */
-    public record Field(String name, String label, String widget, String column) {
+    public record Field(String name, String label, String widget, String column,
+            String domain) {
     }
 
     /**
@@ -115,7 +118,8 @@ public record ViewSpec(String id, String view, String title, String action, Stri
      * {@code dir} inputs its SQL applies); {@code text} renders that literal (styled as a small
      * button when linked) instead of the row value — the per-row action column.
      */
-    public record Column(String name, String label, String link, Boolean sortable, String text) {
+    public record Column(String name, String label, String link, Boolean sortable, String text,
+            String domain) {
 
         public boolean isSortable() {
             return Boolean.TRUE.equals(sortable);
@@ -374,7 +378,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                 throw invalid(source, "a fields: entry requires name:");
             }
             fields.add(new Field(name, str(entry.get("label")), str(entry.get("widget")),
-                    str(entry.get("column"))));
+                    str(entry.get("column")), str(entry.get("domain"))));
         }
         return fields;
     }
@@ -389,7 +393,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             }
             columns.add(new Column(name, str(entry.get("label")), str(entry.get("link")),
                     entry.get("sortable") instanceof Boolean b ? b : null,
-                    str(entry.get("text"))));
+                    str(entry.get("text")), str(entry.get("domain"))));
         }
         return columns;
     }

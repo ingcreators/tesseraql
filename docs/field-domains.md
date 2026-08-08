@@ -148,9 +148,11 @@ a migration is one edit in one file.
 1. Should a bare-string shorthand (`sku: sku`) be accepted where the field name equals the domain
    name, or is the explicit `domain:` key always required? Leaning explicit-only: the shorthand
    collides with a future scalar syntax and saves little.
-2. Should `enum` domains double as the source for form `<select>` options in declarative views,
-   closing the loop with [hypermedia UI](hypermedia-ui.md)? Attractive, but deferred until a
-   concrete view needs it.
+2. ~~Should `enum` domains double as the source for form `<select>` options in declarative
+   views?~~ **Resolved — it already does, by construction**: the load-time merge populates the
+   route's `input:` with the domain's `enum`, and view form derivation renders a `select` from
+   it (documented in declarative-views.md as of docs/view-composition.md wave 3a, which also
+   added the `widget:` domain key for the general presentation-hint case).
 
 ## Related designs
 

@@ -440,6 +440,7 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | `writable` | boolean |  |
 | `classification` | string |  |
 | `mask` | string |  |
+| `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
 | `items` | [object](#inputfielditems) |  |
 
 #### inputField.items

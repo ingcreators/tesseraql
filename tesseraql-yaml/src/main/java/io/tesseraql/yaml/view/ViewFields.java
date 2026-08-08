@@ -67,9 +67,12 @@ public final class ViewFields {
 
     private static FieldDef fieldDef(ViewSpec spec, String name, InputField input,
             ViewSpec.Field override) {
-        String widget = override == null || override.widget() == null
-                ? defaultWidget(input)
-                : override.widget();
+        // Widget precedence (docs/view-composition.md wave 3a): the per-view fields: override,
+        // else the field's own declared widget (usually merged in from its domain — "an SKU is
+        // a code input", said once), else the type-derived default.
+        String widget = override != null && override.widget() != null
+                ? override.widget()
+                : input.widget() != null ? input.widget() : defaultWidget(input);
         if (!ViewSpec.WIDGETS.contains(widget)) {
             throw new TqlException(UNKNOWN_WIDGET, "View " + spec.id() + ": unknown widget "
                     + widget + " on field " + name + " (known: " + ViewSpec.WIDGETS + ")");

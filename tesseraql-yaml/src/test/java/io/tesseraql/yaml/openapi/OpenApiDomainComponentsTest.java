@@ -66,6 +66,23 @@ class OpenApiDomainComponentsTest {
                 .contains("#/components/schemas/domain.sku");
     }
 
+    @Test
+    void aDomainWidgetHintNeverReachesTheContract(@TempDir Path dir) throws Exception {
+        // docs/view-composition.md wave 3a: presentation is not contract.
+        Path home = app(dir, "    domain: sku\n    required: true");
+        Files.writeString(home.resolve("domains/catalog.yml"), """
+                version: tesseraql/v1
+                domains:
+                  sku:
+                    type: string
+                    maxLength: 40
+                    widget: text
+                """);
+
+        assertThat(new OpenApiGenerator().toJson(new ManifestLoader().load(home)))
+                .doesNotContain("widget");
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     void aTighteningOverrideStaysInlineSoTheContractShowsIt(@TempDir Path dir) throws Exception {

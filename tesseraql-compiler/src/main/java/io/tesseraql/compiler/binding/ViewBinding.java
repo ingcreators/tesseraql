@@ -134,6 +134,19 @@ public final class ViewBinding {
                         + panelSource + " is not a named query or http source of the route");
             }
         }
+        // Read-side domain references (docs/view-composition.md wave 3a): an explicit
+        // `domain:` on a column or field must name a declared domain — the link that carries
+        // the domain's presentation and classification knowledge to rendering.
+        List<String> domainRefs = new ArrayList<>();
+        spec.columns().stream().map(ViewSpec.Column::domain)
+                .filter(java.util.Objects::nonNull).forEach(domainRefs::add);
+        spec.fields().stream().map(ViewSpec.Field::domain)
+                .filter(java.util.Objects::nonNull).forEach(domainRefs::add);
+        if (!domainRefs.isEmpty()) {
+            io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
+                    .load(home);
+            domainRefs.forEach(name -> domains.require(name, "view " + viewRef));
+        }
         String entry = spec.template() != null
                 ? HtmlResponseRenderer.resolveTemplate(home, viewDir, spec.template())
                 : "tql/view/" + spec.view();
@@ -584,7 +597,7 @@ public final class ViewBinding {
         if (selection.isEmpty()) {
             selection = new ArrayList<>();
             for (String name : row.keySet()) {
-                selection.add(new ViewSpec.Field(name, null, null, null));
+                selection.add(new ViewSpec.Field(name, null, null, null, null));
             }
         }
         for (ViewSpec.Field field : selection) {
@@ -681,7 +694,7 @@ public final class ViewBinding {
         }
         List<ViewSpec.Column> derived = new ArrayList<>();
         for (String name : rows.get(0).keySet()) {
-            derived.add(new ViewSpec.Column(name, null, null, null, null));
+            derived.add(new ViewSpec.Column(name, null, null, null, null, null));
         }
         return derived;
     }

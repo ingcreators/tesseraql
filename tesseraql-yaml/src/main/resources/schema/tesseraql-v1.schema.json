@@ -382,6 +382,7 @@
         "writable": { "type": "boolean" },
         "classification": { "type": "string" },
         "mask": { "type": "string" },
+        "widget": { "type": "string", "enum": ["text", "textarea", "number", "date", "datetime-local", "checkbox", "select", "hidden"], "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract." },
         "items": {
           "type": "object",
           "properties": {

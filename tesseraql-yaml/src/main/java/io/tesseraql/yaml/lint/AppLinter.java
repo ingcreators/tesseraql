@@ -455,6 +455,8 @@ public final class AppLinter {
     private void lintViewDocuments(Path appHome, AppManifest manifest,
             List<LintFinding> findings) {
         java.util.Set<Path> indexed = new java.util.HashSet<>();
+        io.tesseraql.yaml.domain.FieldDomains appDomains = io.tesseraql.yaml.domain.FieldDomains
+                .load(appHome);
         for (io.tesseraql.yaml.manifest.ViewFile view : manifest.views()) {
             indexed.add(view.source());
             String source = appHome.relativize(view.source()).toString().replace('\\', '/');
@@ -463,6 +465,19 @@ public final class AppLinter {
                 lintFormView(manifest, source, spec, findings);
             }
             lintRefreshOn(manifest, source, spec, findings);
+            // Read-side domain references (wave 3a): a column/field domain: must be declared.
+            java.util.stream.Stream.concat(
+                    spec.columns().stream().map(io.tesseraql.yaml.view.ViewSpec.Column::domain),
+                    spec.fields().stream().map(io.tesseraql.yaml.view.ViewSpec.Field::domain))
+                    .filter(java.util.Objects::nonNull)
+                    .forEach(name -> {
+                        try {
+                            appDomains.require(name, "view " + spec.id());
+                        } catch (io.tesseraql.core.error.TqlException ex) {
+                            findings.add(new LintFinding(ex.code().toString(), "error", source,
+                                    ex.getMessage()));
+                        }
+                    });
             // Embedded views (docs/view-composition.md wave 2b): the id resolves in the
             // registry, and the embedded document does not embed further (depth is 1).
             java.util.List<String> embeds = new ArrayList<>();
