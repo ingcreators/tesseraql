@@ -211,10 +211,14 @@ class LiveViewIntegrationTest {
     void anUndeclaredTopicIsRefusedRatherThanOpeningADeadStream() throws Exception {
         HttpResponse<String> refused = get("/_tesseraql/events?topics=odrers.changed");
 
+        // The envelope carries the code only — this transport deliberately never concatenates
+        // the exception text into its JSON — so the code is what names the problem class.
         assertThat(refused.statusCode()).isEqualTo(400);
         assertThat(refused.body()).contains("TQL-VIEW-3320");
-        // The declared spelling still opens; the refusal names what the app does declare.
-        assertThat(refused.body()).contains("orders.changed");
+        assertThat(refused.headers().firstValue("Content-Type"))
+                .hasValueSatisfying(value -> assertThat(value).startsWith("application/json"));
+        // The declared spelling opens a stream instead — covered by the delivery test above,
+        // which reads it as a stream; reading a live stream as a string would never return.
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
