@@ -62,9 +62,9 @@ transactional command — and the MCP endpoint dispatches a `tools/call` to it. 
 - **The result** is the SQL/command result as JSON (`{ "rows": [...], "rowCount": n }` for a
   query), or a custom shape if the tool declares a `response: { json: ... }` block.
 - **Governance, lint, and coverage extend to tools.** A write (command) tool must declare an
-  authorization policy or lint fails (`TQL-MCP-4030`, deny-by-default — an agent must not
-  mutate data unauthorized); the governance gate scores and gates tools like routes (a
-  write tool reachable without authentication is `advanced` and needs approval); and an `mcp`
+  authorization policy or lint fails (`TQL-MCP-4030`): deny-by-default, because an agent must
+  not mutate data unauthorized. The governance gate scores and gates tools like routes, so a
+  write tool reachable without authentication is `advanced` and needs approval. An `mcp`
   coverage kind tracks which tools your declarative suites exercise.
 
 Set `tesseraql.mcp.enabled: false` to stop serving the endpoint (tools, resources, and UI
@@ -160,12 +160,15 @@ ui:
 ui: ui://orders/board
 ```
 
-On startup the compiler turns each UI resource into a read-only internal route that runs the same
-read-and-render pipeline a `query-html` route runs — telemetry, the resource's own authentication
-and authorization, tenancy and locale resolution, the 2-way SQL, then the Thymeleaf template — so
-it renders the same `hc-*` fragment a page would (UI work follows the blessed patterns in
-[docs/hypermedia-ui.md](hypermedia-ui.md); any gap belongs upstream in the kit, not in app CSS).
-The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and resources. So:
+On startup the compiler turns each UI resource into a read-only internal route running the
+same read-and-render pipeline a `query-html` route runs: telemetry, the resource's own
+authentication and authorization, tenancy and locale resolution, the 2-way SQL, then the
+Thymeleaf template. It therefore renders the same `hc-*` fragment a page would. UI work
+follows the blessed patterns in [docs/hypermedia-ui.md](hypermedia-ui.md), and any gap
+belongs upstream in the kit rather than in app CSS.
+
+The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and resources.
+So:
 
 - **The extension is negotiated.** When the app serves any UI resource, `initialize` advertises it
   under `capabilities.extensions["io.modelcontextprotocol/ui"]` with `text/html;profile=mcp-app`,
@@ -180,11 +183,12 @@ The runtime serves it over the same `/_tesseraql/mcp` endpoint as the tools and 
 - **Security is per-resource and identical to a route.** The request's `Authorization: Bearer`
   rides into the UI resource's route, where its declared `auth`/`policy` run; an unauthorized read
   comes back as a `resources/read` JSON-RPC error. Discovery is open.
-- **Read-only by construction, governed like a read.** Lint keeps a UI resource HTML-rendering and
-  uri-addressed (`TQL-MCP-1008`/`1009`/`1011`), warns on a missing description (`TQL-MCP-1010`),
-  and rejects a tool whose `ui:` link dangles (`TQL-MCP-1012`); the governance gate scores a UI
-  resource like a read route (never `advanced`, since it cannot write); and an `mcp-ui` coverage
-  kind tracks which UI resources your declarative suites exercise.
+- **Read-only by construction, governed like a read.** Lint keeps a UI resource
+  HTML-rendering and uri-addressed (`TQL-MCP-1008`/`1009`/`1011`), warns on a missing
+  description (`TQL-MCP-1010`), and rejects a tool whose `ui:` link dangles
+  (`TQL-MCP-1012`). The governance gate scores a UI resource like a read route — never
+  `advanced`, since it cannot write. An `mcp-ui` coverage kind tracks which UI resources your
+  declarative suites exercise.
 
 ## Prompts
 

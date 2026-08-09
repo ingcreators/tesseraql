@@ -218,11 +218,11 @@ redirects on success, while degrading to a plain form post with no JavaScript:
 ## Bulk actions
 
 A list that offers one action against many rows follows the kit's `datagrid-bulk-actions`
-recipe (IAM Admin's users list is the blessed example): a form wraps the `hc-datagrid` and
-the toolbar, each row carries a checkbox serialized as repeated `ids` fields, the header's
-select-all deliberately has **no `name`** so it never posts, and the auto-installed
-`installDatagridActions` behavior reveals the toolbar — with a live
-`data-hc-datagrid-count` — while anything is selected:
+recipe, and [IAM Admin](iam-admin.md)'s users list is the blessed example. A form wraps the
+`hc-datagrid` and the toolbar, and each row carries a checkbox serialized as repeated `ids`
+fields. The header's select-all deliberately has **no `name`**, so it never posts. The
+auto-installed `installDatagridActions` behavior reveals the toolbar, with a live
+`data-hc-datagrid-count`, while anything is selected:
 
 ```html
 <form method="post" action="/members/bulk">

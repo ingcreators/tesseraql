@@ -1,13 +1,15 @@
 # SAML sign-in
 
-SAML logs a browser user in through a corporate identity provider (Okta, ADFS, Entra ID,
-Keycloak, …) using the SAML 2.0 **SP-initiated web SSO** flow with the HTTP-POST binding, then
-issues a TesseraQL browser session — the same session cookie (`tesseraql_sid`) that password and
-OIDC login produce, so every `auth: browser` route is satisfied identically however the user signed
-in (see [authentication.md](authentication.md#browser-sessions-and-the-admin-console)). Once
-enabled, the login page shows **Sign in with SAML**, linking to `GET /_tesseraql/saml/login`; the
-page the user originally requested rides along as RelayState and is always sanitized to a
-same-origin path after login (no open redirect).
+SAML logs a browser user in through a corporate identity provider — Okta, ADFS, Entra ID,
+Keycloak — using the SAML 2.0 **SP-initiated web SSO** flow with the HTTP-POST binding. It then
+issues a TesseraQL browser session: the same `tesseraql_sid` cookie that password and OIDC login
+produce, so every `auth: browser` route is satisfied identically however the user signed in (see
+[authentication.md](authentication.md#browser-sessions-and-the-admin-console)).
+
+Once enabled, the login page shows **Sign in with SAML**, linking to
+`GET /_tesseraql/saml/login`. The page the user originally requested rides along as RelayState,
+and is always sanitized to a same-origin path after login, so it cannot become an open
+redirect.
 
 Like OIDC, SAML is an opt-in leaf module: add the `tesseraql-saml` jar to the runtime classpath
 (or drop a signed jar in the app's plugin directory) and set `tesseraql.saml.enabled: true` — the

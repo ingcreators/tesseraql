@@ -211,11 +211,15 @@ takes `TQL-SEC-411x` (`TQL-SEC-4100` is the write-scope guard in
 Scanning adds no lint — it is config plus a discovered scanner, with no new YAML surface — and is
 enforced at runtime instead (the codes below).
 
-The runtime fails closed, all mapped from the `TQL-LD-284x` codes the attachment routes raise: a
-`404` when an attachment is unknown or owned by a different record (never leaked across records),
-a `413` past the size limit, a `415` for a disallowed content type, a `409` for a download of an
-object that did not pass scanning, and a `503` when the scanner cannot reach a verdict
-(fail-closed).
+The runtime fails closed, mapping every case from the `TQL-LD-284x` codes the attachment
+routes raise:
+
+- `404` — the attachment is unknown, or owned by a different record. Attachments never leak
+  across records.
+- `413` — past the size limit.
+- `415` — a disallowed content type.
+- `409` — a download of an object that did not pass scanning.
+- `503` — the scanner could not reach a verdict.
 
 An **`attachment`** coverage kind (one item per `kind: attachment` document, gated with
 `coverage.thresholds.attachment`) is planned but not currently supported: it needs a declarative

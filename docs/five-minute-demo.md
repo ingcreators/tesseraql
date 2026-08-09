@@ -86,15 +86,18 @@ around — every stop is live against the seeded data:
 
 ## The low-code loop, end to end
 
-The demo walks the whole loop: a semi-technical author adds a column and its screen
-behavior entirely in Studio — **migration** (created and applied with Migrate now, via the
-hot reload), **view** (a [declarative document](declarative-views.md)), **recorded test**
-(the API console's one click, in Studio) — writing no HTML and never restarting; the change
-**promotes through a release diff** ([environment profiles and promotion](promotion.md));
-and the route's **latency shows up on a scraped dashboard**
-([observability](deployment.md), `deploy/grafana/tesseraql-dashboard.json`). Each leg is
-held green by an integration test: the zero-restart hot reload, the Studio test recorder,
-the release diff engine, and the Prometheus exposition.
+The demo walks the whole loop. A semi-technical author adds a column and its screen
+behaviour entirely in Studio, writing no HTML and never restarting: a **migration** created
+and applied with Migrate now, a **view** ([a declarative document](declarative-views.md)),
+and a **recorded test** from the API console's one click.
+
+From there the change leaves Studio. It **promotes through a release diff**
+([environment profiles and promotion](promotion.md)), and the route's **latency appears on a
+scraped dashboard** ([observability](deployment.md),
+`deploy/grafana/tesseraql-dashboard.json`).
+
+Each leg is held green by an integration test: the zero-restart hot reload, the Studio test
+recorder, the release diff engine, and the Prometheus exposition.
 
 ## Next
 

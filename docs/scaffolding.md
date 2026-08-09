@@ -71,12 +71,14 @@ tests/items-crud-test.yml        data-independent suite over the generated queri
 ```
 
 The pages are **declarative views**
-([docs/declarative-views.md](declarative-views.md)), not hand-written templates: one list
-route renders through the `tql/view/list` pattern (search box, server-driven sort, per-row
-Open action — no separate fragment route), the create/edit forms derive their fields from
-the command routes' `input:` blocks, and the shared `frags.html` carries the slot fragments
-(the list's New button, the forms' back link, and the confirmed delete the edit view mounts
-in its footer slot). Customize per the ladder: view keys (L0), the slots (L1), a pattern
+([docs/declarative-views.md](declarative-views.md)), not hand-written templates. One list
+route renders through the `tql/view/list` pattern, which brings a search box, server-driven
+sort, and a per-row Open action with no separate fragment route. The create and edit forms
+derive their fields from the command routes' `input:` blocks. The shared `frags.html`
+carries the slot fragments: the list's New button, the forms' back link, and the confirmed
+delete the edit view mounts in its footer slot.
+
+Customize per the ladder: view keys (L0), the slots (L1), a pattern
 override under `templates/tql/view/` (L2), or `tesseraql scaffold eject-view` (L3).
 
 Conventions are applied when the table opts in:

@@ -299,11 +299,13 @@ It serves three endpoints under `/_tesseraql/oidc`:
 - `GET /login` — generates an anti-CSRF `state`, an ID-token `nonce`, and a PKCE `code_verifier`,
   records them server-side (single-use, in `tql_oidc_state`), and redirects to the provider's
   authorization endpoint with the `code_challenge` (S256).
-- `GET /callback` — validates and consumes the `state` (a forged, replayed, or expired one is
-  rejected, as is an `error=` response), exchanges the code at the token endpoint
-  (`client_secret_basic` when a secret is set, else a public PKCE client), validates the ID token
-  (signature via JWKS, `iss`, `exp`/`nbf`, `aud` includes the client id, `nonce` matches), resolves
-  or provisions the principal, opens a session, and redirects to the fixed `postLoginUrl`.
+- `GET /callback` — five steps, each failing closed. It validates and consumes the `state`,
+  rejecting a forged, replayed, or expired one, and rejecting an `error=` response. It
+  exchanges the code at the token endpoint, using `client_secret_basic` when a secret is set
+  and a public PKCE client otherwise. It validates the ID token: signature via JWKS, `iss`,
+  `exp`/`nbf`, `aud` including the client id, and a matching `nonce`. It resolves or
+  provisions the principal. Finally it opens a session and redirects to the fixed
+  `postLoginUrl`.
 - `GET /logout` — clears the local session and, when the provider advertises one, redirects to its
   end-session endpoint.
 

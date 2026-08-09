@@ -29,13 +29,15 @@ rolled-back command emits nothing.
 
 ## How it works — and what never leaves the server
 
-The wire carries **topic names, never data**. A committed `emit:` pushes one named,
-empty Server-Sent Event on `GET /_tesseraql/events` — the same per-session stream that
-carries the [inbox bell](inbox.md#live-badge)'s badge, so one connection serves both; the
-browser side is the bundled htmx `sse` extension,
-which re-issues an ordinary `GET` of the page and swaps the view's refresh region in
-place (a list's table region — the same one the search box refreshes — or a detail's or
-dashboard's `#<view>-view` region). Because the refetch is a normal request, everything
+The wire carries **topic names, never data**. A committed `emit:` pushes one named, empty
+Server-Sent Event on `GET /_tesseraql/events`. That is the same per-session stream carrying
+the [inbox bell](inbox.md#live-badge)'s badge, so one connection serves both.
+
+On the browser side, the bundled htmx `sse` extension re-issues an ordinary `GET` of the
+page and swaps the view's refresh region in place: a list's table region — the same one the
+search box refreshes — or a detail's or dashboard's `#<view>-view` region.
+
+Because the refetch is a normal request, everything
 that guards the route guards the refresh: authentication, policies,
 [data scoping](data-scoping.md), tenancy. Two viewers with different row authority each
 re-fetch their own view of the data.
@@ -47,13 +49,14 @@ re-fetch their own view of the data.
   before the stream opens** (`TQL-VIEW-3320`, `400`): it used to be filtered out silently,
   which opened a healthy-looking stream — heartbeats and all — that could never fire, so a
   typo left the page waiting for a refresh signal that was never coming.
-- **Bounded by construction**: subscriptions are capped per subject (default 4,
-  `tesseraql.live.maxPerSubject`; one more evicts that subject's own oldest stream and the
-  browser's EventSource reconnects) and globally (default 256, `tesseraql.live.maxTotal`;
-  at the cap a new subscription is **refused** with `TQL-RATE-5030` as a 503 before the
-  stream opens — a full registry never ends someone else's live view; the page still works
-  without live refresh until a reload finds a free slot). Signals coalesce per topic, and
-  idle `ping` frames keep intermediaries from severing quiet streams.
+- **Bounded by construction**: subscriptions are capped per subject and globally.
+  Per subject the default is 4 (`tesseraql.live.maxPerSubject`); one more evicts that
+  subject's own oldest stream, and the browser's EventSource reconnects. Globally the
+  default is 256 (`tesseraql.live.maxTotal`); at the cap a new subscription is **refused**
+  with `TQL-RATE-5030` as a 503 before the stream opens. A full registry never ends someone
+  else's live view, and the page still works without live refresh until a reload finds a
+  free slot. Signals coalesce per topic, and idle `ping` frames keep intermediaries from
+  severing quiet streams.
 - **The refetch carries the live client state**: the typed search term and the current
   sort ride along, read from the DOM (the search box swaps the region without navigating,
   so the render-time URL can be stale) — and because the search box sits outside the

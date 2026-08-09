@@ -209,13 +209,12 @@ How the bytes reach the engine is one mechanism for every blob-store backend: th
 **dataset spool** (`work/duckdb-spool`, relocatable via
 `tesseraql.duckdb.spoolDirectory`) — the blob streams to a local content-addressed
 file once, written atomically so concurrent localizations converge, touched on
-every hit and swept least-recently-used past a cap. The spool is the one directory
-the fence admits beyond the scope roots, which is exactly why it is the only
-bridge: a filesystem blob store could serve zero-copy, and an S3 store could serve
-a presigned `httpfs` read with Parquet range pushdown, but the first would open the
-whole blob root to SQL and the second cannot coexist with
-`enable_external_access=false` — both are recorded as possible future tiers, not
-current behavior.
+every hit and swept least-recently-used past a cap. The spool is the one directory the fence admits beyond the scope roots, and that is exactly
+why it is the only bridge. Two faster paths exist on paper: a filesystem blob store could
+serve zero-copy, and an S3 store could serve a presigned `httpfs` read with Parquet range
+pushdown. The first would open the whole blob root to SQL, and the second cannot coexist
+with `enable_external_access=false`. Both are recorded as possible future tiers, not current
+behaviour.
 
 ## Lake tables: DuckLake under the fence
 

@@ -521,12 +521,17 @@ A lint family catches a malformed or unreachable state machine before it ships:
 | `TQL-WORKFLOW-3107` | error | a deadline's `escalate` names a transition that does not start from the deadline's state |
 | `TQL-WORKFLOW-3110` | error | `tesseraql.workflow.mode` is set to something other than `managed` or `app` |
 
-The runtime fails closed at execution, under its own `WORKFLOW` error domain (so its codes match the
-lint family rather than borrowing `TQL-SQL-*`): a transition not declared for the current state is
-`TQL-WORKFLOW-3201` (`409`); a transition whose guard is falsy is `TQL-WORKFLOW-3202` (`422`); a
-transition attempted by a caller who holds none of the document's open tasks is `TQL-WORKFLOW-3203`
-(`403`); a transition whose scoped write matches no authorized row is a `409`/`403`, exactly as a
-scoped write is today — a workflow can never silently no-op a transition.
+The runtime fails closed at execution, under its own `WORKFLOW` error domain, so its codes
+match the lint family rather than borrowing `TQL-SQL-*`:
+
+| Refusal | Code | Status |
+| --- | --- | --- |
+| A transition not declared for the current state | `TQL-WORKFLOW-3201` | `409` |
+| A transition whose guard is falsy | `TQL-WORKFLOW-3202` | `422` |
+| A transition attempted by a caller holding none of the document's open tasks | `TQL-WORKFLOW-3203` | `403` |
+| A transition whose scoped write matches no authorized row | as a scoped write | `409` / `403` |
+
+A workflow can never silently no-op a transition.
 
 The **`workflow`** coverage kind declares one item per **transition** across `workflow/` documents; a
 transition counts as covered when a declarative suite ([testing](testing.md)) exercises a route that
@@ -550,12 +555,13 @@ second org model:
 ## Design notes
 
 **Why a native state machine, not an embedded engine.** Embedding an external workflow engine
-(Flowable, Camunda, jBPM) was weighed and rejected. An external engine would keep process state in
-the engine's own schema, mutated by the engine's runtime rather than by plain-SQL-tool-runnable 2-way
-SQL; it is a heavy runtime dependency with its own persistence, threading, and transaction model to
-reconcile with Camel and the TesseraQL outbox; and it would duplicate machinery the framework already
-owns — a transaction-scoped write engine, row scoping, an expression language, and a cluster-safe
-scheduler. The native state machine reuses all of that and adds no runtime dependency. The seam
+(Flowable, Camunda, jBPM) was weighed and rejected. Three reasons. An external engine would keep
+process state in the engine's own schema, mutated by the engine's runtime rather than by
+plain-SQL-tool-runnable 2-way SQL. It is a heavy runtime dependency, with its own
+persistence, threading, and transaction model to reconcile with Camel and the TesseraQL
+outbox. And it would duplicate machinery the framework already owns: a transaction-scoped
+write engine, row scoping, an expression language, and a cluster-safe scheduler. The native
+state machine reuses all of that and adds no runtime dependency. The seam
 survives the decision: the `WorkflowStore` SPI and the `kind: workflow` document are where an
 external engine *could* later plug in for an application that needs BPMN, without changing the YAML
 surface — the same way the PDF codec keeps its engine SPI
