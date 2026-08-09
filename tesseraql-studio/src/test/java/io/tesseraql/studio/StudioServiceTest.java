@@ -991,6 +991,38 @@ class StudioServiceTest {
     }
 
     @Test
+    void aCorruptBaseMetaSidecarIsTreatedAsAConflict(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/x"));
+        String source = """
+                version: tesseraql/v1
+                id: x
+                kind: route
+                recipe: query-json
+                sql:
+                  file: x.sql
+                response:
+                  json:
+                    body:
+                      data: sql.rows
+                """;
+        Files.writeString(dir.resolve("web/api/x/get.yml"), source);
+        StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
+        studio.saveDraft("web/api/x/get.yml", source.replace("id: x", "id: x-edited"));
+
+        // Corrupt the recorded-base sidecar: concurrent-edit detection must fail closed rather
+        // than silently clobber another author's change (silent-tolerance T5).
+        try (var walk = Files.walk(dir)) {
+            Path meta = walk.filter(p -> p.getFileName().toString().endsWith(".meta"))
+                    .findFirst().orElseThrow();
+            Files.writeString(meta, "{ not json");
+        }
+
+        assertThat(studio.draftConflicts("web/api/x/get.yml")).isTrue();
+    }
+
+    @Test
     void applyRejectsInvalidDraftAndReadOnly(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");

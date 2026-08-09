@@ -249,7 +249,10 @@ public final class StudioService {
         }
         BaseMeta meta = readBaseMeta(relativePath);
         if (meta == null) {
-            return false;
+            // A present-but-unreadable sidecar is treated as a conflict — concurrent-edit
+            // detection must fail closed, not silently clobber another author's change; a
+            // genuinely absent sidecar is a pre-tracking draft and stays non-conflicting.
+            return Files.isRegularFile(draftMetaPath(relativePath));
         }
         return !java.util.Objects.equals(meta.base(), sourceIfExists(relativePath));
     }
