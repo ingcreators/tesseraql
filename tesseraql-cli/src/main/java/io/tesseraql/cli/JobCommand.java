@@ -333,6 +333,10 @@ final class JobCommand implements Callable<Integer> {
         Calendars calendars = Calendars.load(app, new io.tesseraql.yaml.SimpleYamlParser());
         CalendarsDocument.Calendar calendar = calendars.calendars().get(schedule.calendar());
         if (calendar == null) {
+            // Says so, like the read-failure arm below always did: running unfiltered is the
+            // fail-open stance, but the operator has to be told the gate was skipped.
+            System.err.println("Calendar '" + schedule.calendar()
+                    + "' is not declared; running unfiltered");
             return new CalendarDecision(true, null);
         }
         try {

@@ -13,7 +13,13 @@ import javax.sql.DataSource;
  * The one place a job's business-day calendar is applied to a date (docs/jobs.md): the
  * scheduling gate asks "does this firing count, and which date is it for", and the console's
  * jobs page asks "when does the next firing count" — both answers must come from the same
- * arithmetic or they will drift. Resolution failures fail open, the fire-time stance.
+ * arithmetic or they will drift.
+ *
+ * <p>Resolution failures fail open — a calendar the runtime cannot read must not strand a
+ * scheduled job — but the fail-open is <em>recorded</em>, not merely logged: a job that should
+ * have been filtered out ran on a holiday, and one WARN line was the only trace
+ * (docs/silent-tolerance.md O5). {@link io.tesseraql.opsui.CalendarStatus} carries it to the
+ * dashboard, which raises {@code TQL-OPS-9009} while any job is firing unfiltered.
  */
 final class CalendarDecisions {
 
@@ -26,12 +32,28 @@ final class CalendarDecisions {
     private final Calendars calendars;
     private final DataSource mainDataSource;
     private final Map<String, ? extends DataSource> namedDataSources;
+    private io.tesseraql.opsui.CalendarStatus status;
 
     CalendarDecisions(Calendars calendars, DataSource mainDataSource,
             Map<String, ? extends DataSource> namedDataSources) {
         this.calendars = calendars;
         this.mainDataSource = mainDataSource;
         this.namedDataSources = namedDataSources;
+    }
+
+    /** Wires the registry that carries a fail-open to the operations dashboard. */
+    CalendarDecisions status(io.tesseraql.opsui.CalendarStatus status) {
+        this.status = status;
+        return this;
+    }
+
+    /** Records a firing that ran unfiltered, so the gate's absence is observable, not implied. */
+    private void failOpen(JobFile job, String calendar, String reason) {
+        LOG.warn("Job {} calendar '{}' could not be resolved ({}); firing runs unfiltered",
+                job.definition().id(), calendar, reason);
+        if (status != null) {
+            status.failedOpen(job.definition().id(), calendar, reason);
+        }
     }
 
     /** Whether a firing on {@code fireDate} counts, and the nominal date it is for. */
@@ -98,8 +120,7 @@ final class CalendarDecisions {
         }
         CalendarsDocument.Calendar calendar = calendars.calendars().get(schedule.calendar());
         if (calendar == null) {
-            LOG.warn("Job {} names unknown calendar '{}'; firing runs unfiltered",
-                    job.definition().id(), schedule.calendar());
+            failOpen(job, schedule.calendar(), "no calendar of that name is declared");
             return null;
         }
         try {
@@ -117,10 +138,13 @@ final class CalendarDecisions {
             } else {
                 holidays = Calendars.staticHolidays(calendar);
             }
+            if (status != null) {
+                // It resolves again: a fixed config stops alerting without a restart.
+                status.resolved(job.definition().id());
+            }
             return new Resolved(schedule, calendar, holidays);
         } catch (Exception ex) {
-            LOG.warn("Job {} calendar '{}' holiday read failed; firing runs unfiltered",
-                    job.definition().id(), schedule.calendar(), ex);
+            failOpen(job, schedule.calendar(), "holiday read failed: " + ex.getMessage());
             return null;
         }
     }
