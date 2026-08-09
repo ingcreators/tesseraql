@@ -26,6 +26,8 @@ import org.apache.camel.Processor;
  */
 public final class HttpSourceProcessor implements Processor {
 
+    private static final System.Logger LOG = System.getLogger(HttpSourceProcessor.class.getName());
+
     private final String name;
     private final HttpSourceSpec spec;
 
@@ -53,6 +55,13 @@ public final class HttpSourceProcessor implements Processor {
             if (!spec.degradesToEmpty()) {
                 throw ex;
             }
+            // onError: empty used to degrade with no log and no metric — a partner API down for a
+            // week rendered silently-empty pages with a 200. Surface it so it is observable.
+            LOG.log(System.Logger.Level.WARNING,
+                    "http: source '" + name + "' failed; degrading to zero rows (onError: empty)",
+                    ex);
+            meter(exchange).counter("tesseraql.httpsource.degraded")
+                    .increment(Map.of("source", name));
             Map<String, Object> degraded = new LinkedHashMap<>();
             degraded.put("rows", List.of());
             degraded.put("body", null);
@@ -62,9 +71,23 @@ public final class HttpSourceProcessor implements Processor {
         }
     }
 
+    private static io.tesseraql.core.telemetry.Meter meter(Exchange exchange) {
+        io.tesseraql.core.telemetry.Meter meter = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.METER_BEAN,
+                        io.tesseraql.core.telemetry.Meter.class);
+        return meter != null ? meter : io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
+    }
+
     /** The context entry: the gateway's {status} plus the selected body and its row form. */
     private Map<String, Object> shape(Map<String, Object> result) {
         Object body = select(result.get("body"), spec.select());
+        if (body == null && spec.select() != null && !spec.select().isBlank()
+                && result.get("body") != null) {
+            // A select: path that misses yields zero rows indistinguishable from an empty
+            // upstream — a typo'd path stays empty forever. Trace it (DEBUG, per-request hot path).
+            LOG.log(System.Logger.Level.DEBUG, "http: source ''{0}'' select path ''{1}'' matched"
+                    + " nothing in the response body", name, spec.select());
+        }
         Map<String, Object> shaped = new LinkedHashMap<>();
         shaped.put("rows", rows(body));
         shaped.put("body", body);
