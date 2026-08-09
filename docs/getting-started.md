@@ -183,6 +183,9 @@ bake the cache into your image so production hosts need no repository access.
 
 ## Next
 
+- [your-first-app.md](your-first-app.md) — the tutorial: an empty directory to a tested
+  feature, step by step. Start here.
 - [app-layout.md](app-layout.md) — the application directory and URL mapping.
+- [studio.md](studio.md) — the browser IDE `serve` just opened.
 - [deployment.md](deployment.md) — container deployment.
 - [proxy.md](proxy.md) — corporate proxy / internal mirror / air-gapped networks.

@@ -81,3 +81,8 @@ Commit `modules.lock` and pre-seed the module cache (or use an internal mirror).
 fetch, `tesseraql modules resolve --offline` and `serve` resolve reproducibly with no outbound
 calls. Resolve modules at build/CI time and bake the cache into the image so a production `serve`
 performs no module-resolution outbound.
+
+## Next
+
+- [getting-started.md](getting-started.md) — the installation this configures.
+- [deployment.md](deployment.md) — outbound paths at runtime.

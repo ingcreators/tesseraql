@@ -565,3 +565,9 @@ surface — the same way the PDF codec keeps its engine SPI
 rather than running through a parallel one, so there is one transaction engine, the state advance and
 history write ride the command's own JDBC `Connection` (the same connection-threaded idiom the
 outbox uses), and the guard runs *inside* the transaction with no time-of-check/time-of-use gap.
+
+## Next
+
+- [delegation.md](delegation.md) — standing in for an approver who is away.
+- [notifications.md](notifications.md) — telling approvers there is something to do.
+- [declarative-validation.md](declarative-validation.md) — refusing a transition that should not happen.

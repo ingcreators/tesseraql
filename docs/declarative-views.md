@@ -490,3 +490,9 @@ constraint and the server validation are the same declaration") to authorization
 `required` and `writable`, `policy:` is operational and never accepted inside a
 domain. The per-role form stops requiring N command routes. OpenAPI is unchanged —
 policy-gated fields remain declared; the contract does not vary by role.
+
+## Next
+
+- [hypermedia-ui.md](hypermedia-ui.md) — the htmx patterns the views render into.
+- [realtime.md](realtime.md) — a view that refreshes itself when data changes.
+- [pagination.md](pagination.md) — paging a list view.

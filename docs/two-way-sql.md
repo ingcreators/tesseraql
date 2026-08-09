@@ -252,3 +252,9 @@ transaction and must not write) — see [declarative-validation.md](declarative-
 - [pagination.md](pagination.md) — offset and keyset pagination over plain-runnable queries
 - [data-scoping.md](data-scoping.md) — the `/*%scope */` directive and organizational
   row-level access
+
+## Next
+
+- [transactional-writes.md](transactional-writes.md) — running several statements as one operation.
+- [pagination.md](pagination.md) — paging a query without writing LIMIT.
+- [testing.md](testing.md) — suites and coverage over the SQL you just wrote.

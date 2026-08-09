@@ -124,3 +124,8 @@ new delivery pipeline:
 | Muting | The per-user opt-out (`userOptOut: true` shows the toggle; the enqueue check silences) |
 | Testing | The existing `notification` coverage kind and `notify:` suite targets |
 | Chrome | The reserved-variable + bundled-app pattern (`_account`, `/_tesseraql/account`) |
+
+## Next
+
+- [notifications.md](notifications.md) — how a message gets to the inbox.
+- [account.md](account.md) — where users set their notification preferences.

@@ -159,3 +159,9 @@ agent can read the error and correct course. Protocol-level mistakes (unknown me
 malformed JSON-RPC) use the standard JSON-RPC error codes. The lint codes for an
 application's own MCP documents are listed on the [application MCP
 surface](app-mcp.md) page.
+
+## Next
+
+- [app-mcp.md](app-mcp.md) — exposing your own application's tools.
+- [copilot.md](copilot.md) — the same loop inside Studio.
+- [vscode-extension.md](vscode-extension.md) — the editor side of the loop.

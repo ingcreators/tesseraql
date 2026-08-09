@@ -81,3 +81,8 @@ strategy), `1017` (size bounds), `1018` (authored LIMIT/FETCH warning); a `page`
 kind (`coverage.thresholds.page`) counts every paginated route a suite exercises; the
 OpenAPI contract gains the `page`/`size`/`after` parameters. `tesseraql scaffold crud`
 lists paginate this way out of the box (size 50, `maxSize` 200, counted).
+
+## Next
+
+- [two-way-sql.md](two-way-sql.md) — the query being paged.
+- [declarative-views.md](declarative-views.md) — the list view that renders the pages.

@@ -295,3 +295,8 @@ the substantive follow-up.
   when the dependency is worth it.
 - **A full threat-model refresh and the SECURITY.md supported-versions/LTS statement** —
   tracked as follow-up hardening work, not part of this assessment.
+
+## Next
+
+- [threat-model.md](threat-model.md) — the same surfaces from the attacker side.
+- [authentication.md](authentication.md) — the controls an application declares.

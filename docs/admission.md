@@ -34,3 +34,9 @@ The gallery starter apps under `examples/` are held to this bar in CI — the sh
 starters pass the same gate that shared apps are held to. Provenance (signing, SBOM, hash
 pinning) rides the existing `tesseraql:release-evidence` pipeline and `.tqlapp` sha256
 pinning; see [promotion](promotion.md) and [deployment](deployment.md).
+
+## Next
+
+- [promotion.md](promotion.md) — getting a passing application into production.
+- [testing.md](testing.md) — the suites the profile counts.
+- [documentation-portal.md](documentation-portal.md) — the report the profile reads.

@@ -277,3 +277,8 @@ At runtime, a tool call that fails (a bad argument, an unauthorized write) comes
 MCP tool result with `isError: true` and the message — the connection stays up so the agent
 can read the error and correct course. Protocol-level mistakes (unknown method, malformed
 JSON-RPC) use the standard JSON-RPC error codes.
+
+## Next
+
+- [ai-mcp.md](ai-mcp.md) — the framework-authoring server, rather than your app.
+- [authentication.md](authentication.md) — how an agent caller is authorized.

@@ -235,3 +235,8 @@ object-store SDK's weight never reaches an app that does not use it. Durable att
 deliberately a separate store from the ephemeral spool the file-transfer machinery uses — the
 two lifecycles never mix, and a deployment can keep spool on local disk while attachments live
 in S3, or vice versa.
+
+## Next
+
+- [file-transfers.md](file-transfers.md) — moving tabular files rather than documents.
+- [data-scoping.md](data-scoping.md) — confining who may read an attachment.

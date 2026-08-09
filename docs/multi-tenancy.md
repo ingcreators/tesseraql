@@ -182,3 +182,8 @@ tenancy:
 - [Application layout](app-layout.md) — where migrations live and how they run per tenant pool
 - [Jobs](jobs.md) — per-tenant batch fan-out
 - [Deployment](deployment.md) — pool tuning, audit trail, and operating the runtime
+
+## Next
+
+- [data-scoping.md](data-scoping.md) — row-level scoping within a tenant.
+- [deployment.md](deployment.md) — running one deployment for many tenants.

@@ -249,3 +249,9 @@ The presence of the block enables idempotency; every key is optional. Reusing a 
 | `TQL-SQL-2611` | 500 | sequence step without a configured allocator |
 | `TQL-CAMEL-3102` | — | invalid steps declaration (route build time) |
 | `TQL-SQL-2104` / `2105` | — | lint: optimistic-locking pairing nudges |
+
+## Next
+
+- [declarative-validation.md](declarative-validation.md) — refusing a bad command before it writes.
+- [notifications.md](notifications.md) — telling someone the command succeeded.
+- [response-shaping.md](response-shaping.md) — what the command answers with.

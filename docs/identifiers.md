@@ -78,3 +78,8 @@ finds them — `管理` finds `受注管理`. Message-catalog placeholders (`{�
 view link templates, and workflow stamp columns all accept the same identifier
 contract, so a Japanese app gets the same lint coverage — including the write-scope
 guard — as an ASCII one.
+
+## Next
+
+- [two-way-sql.md](two-way-sql.md) — where the names are bound.
+- [scaffolding.md](scaffolding.md) — what the generator makes of your column names.

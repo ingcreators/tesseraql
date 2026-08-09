@@ -469,3 +469,9 @@ Lint reports statically what would otherwise fail at route build time:
 | `TQL-FIELD-4220` | 422 | declarative validation rejected the input |
 | `TQL-FIELD-2003` | — | invalid validation rule declaration (build/lint time) |
 | `TQL-YAML-1003` | — | lint: `validate:` on a non-command recipe |
+
+## Next
+
+- [transactional-writes.md](transactional-writes.md) — the commands these rules guard.
+- [internationalization.md](internationalization.md) — translating the messages a rule produces.
+- [testing.md](testing.md) — exercising rules declaratively.

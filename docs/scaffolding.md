@@ -203,3 +203,9 @@ real linter's findings in the Problems panel on save, the CLI verbs as commands,
 explorer, error-code hovers, and route snippets. The schema wiring above stays the
 completion source — the extension complements it. Until the extension is published to the
 marketplace, install the CI-built `.vsix` from file.
+
+## Next
+
+- [declarative-views.md](declarative-views.md) — customizing the generated pages.
+- [declarative-validation.md](declarative-validation.md) — adding business rules to the generated command.
+- [testing.md](testing.md) — the suite the generator wrote for you.

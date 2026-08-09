@@ -430,3 +430,9 @@ Declarative suites exercise a route's SQL through the same pipeline regardless o
 method, so app test cases need no per-method setup. The authentication wiring itself — JWKS
 rotation, API-key privilege checks, mTLS trust and matching, the OIDC code + PKCE flow — is held
 by the framework's own test suite; an application does not re-test it.
+
+## Next
+
+- [saml.md](saml.md) — signing in through a corporate identity provider.
+- [data-scoping.md](data-scoping.md) — confining what an authenticated principal may read.
+- [iam-admin.md](iam-admin.md) — administering the accounts.

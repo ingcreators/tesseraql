@@ -303,3 +303,9 @@ give the scraper a token via `bearer_token_file`, or set
 guards. OTLP push (`tesseraql.otel.otlp.endpoint`) is independent and now carries the same
 histograms. A ready-made Grafana dashboard ships at
 [deploy/grafana/tesseraql-dashboard.json](../deploy/grafana/tesseraql-dashboard.json).
+
+## Next
+
+- [promotion.md](promotion.md) — moving a change between environments.
+- [upgrading.md](upgrading.md) — moving to a new framework release.
+- [ops-console.md](ops-console.md) — watching the running system.
