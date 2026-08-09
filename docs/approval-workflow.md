@@ -574,6 +574,8 @@ outbox uses), and the guard runs *inside* the transaction with no time-of-check/
 
 ## Next
 
+- [guide-approval-workflow.md](guide-approval-workflow.md) — the reading order for a whole approval application.
+
 - [delegation.md](delegation.md) — standing in for an approver who is away.
 - [notifications.md](notifications.md) — telling approvers there is something to do.
 - [declarative-validation.md](declarative-validation.md) — refusing a transition that should not happen.

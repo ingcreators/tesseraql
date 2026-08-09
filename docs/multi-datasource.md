@@ -173,6 +173,8 @@ main-anchored feature into a non-main transaction.
 
 ## Next
 
+- [guide-existing-database.md](guide-existing-database.md) — putting an API and screens over a database you did not create.
+
 - [duckdb.md](duckdb.md) — an analytical datasource over files.
 - [transactional-writes.md](transactional-writes.md) — why writes stay on one connector.
 - [deployment.md](deployment.md) — configuring the connectors per environment.

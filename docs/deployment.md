@@ -308,4 +308,5 @@ histograms. A ready-made Grafana dashboard ships at
 
 - [promotion.md](promotion.md) — moving a change between environments.
 - [upgrading.md](upgrading.md) — moving to a new framework release.
+- [reference-config.md](reference-config.md) — every configuration key, with what reads it.
 - [ops-console.md](ops-console.md) — watching the running system.
