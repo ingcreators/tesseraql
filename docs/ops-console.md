@@ -116,3 +116,4 @@ The console watches; it does not author. Three neighbouring surfaces do the rest
 - [deployment.md](deployment.md) — health endpoints, metrics, and the safety valves
   behind the overview page.
 - [studio.md](studio.md) — the authoring console.
+- [troubleshooting.md](troubleshooting.md) — what the symptoms on these pages mean.

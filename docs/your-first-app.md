@@ -213,6 +213,7 @@ Expect `... 0 error(s)` and exit code 0. Both commands are what CI runs
   [integration and batch](guide-integration.md), [reporting and analytics](guide-analytics.md), or
   [an API over an existing database](guide-existing-database.md).
 - [concepts.md](concepts.md) — the model behind what you just built.
+- [troubleshooting.md](troubleshooting.md) — when a step did not do what it said.
 
 - [two-way-sql.md](two-way-sql.md) — the SQL dialect you just edited: binds, branches,
   embedded variables.
