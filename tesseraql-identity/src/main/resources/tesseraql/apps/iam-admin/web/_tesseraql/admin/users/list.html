@@ -11,8 +11,14 @@
 <div th:if="${invited}" class="hc-alert" data-variant="success" role="status">
   <p class="hc-alert__title">Invitation sent. The account stays INVITED until it is accepted.</p>
 </div>
-<div th:if="${bulk != null}" class="hc-alert" data-variant="success" role="status">
-  <p class="hc-alert__title" th:text="|${bulk} user(s) disabled. Their active sessions have ended.|">users disabled</p>
+<!-- What actually changed, not what was selected: a stale id updates no rows, and
+     reporting the request size made a partial action read as a completed one. -->
+<div th:if="${bulk != null}" class="hc-alert"
+     th:attr="data-variant=${selected != null and selected != bulk} ? 'warning' : 'success'" role="status">
+  <p class="hc-alert__title" th:if="${selected == null or selected == bulk}"
+     th:text="|${bulk} user(s) disabled. Their active sessions have ended.|">users disabled</p>
+  <p class="hc-alert__title" th:if="${selected != null and selected != bulk}"
+     th:text="|${bulk} of ${selected} selected user(s) disabled - the rest matched no user. Active sessions have ended.|">users disabled</p>
 </div>
 <!-- Invite a user (roadmap Phase 50 slice 2): created INVITED - unable to sign in - and
      mailed a one-time accept link; the operator never knows a password. -->

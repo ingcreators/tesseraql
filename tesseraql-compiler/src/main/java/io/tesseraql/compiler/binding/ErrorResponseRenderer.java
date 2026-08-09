@@ -407,7 +407,8 @@ public final class ErrorResponseRenderer implements Processor {
                 // 4230/4231/4233/4234: route-form / connector / recorder / row-edit input
                 // rejected (Phase 43 Track J); 4237: a decision-rows grid save that cannot
                 // reach the decision compile (wrong target / malformed grid)
-                case 4002, 4224, 4230, 4231, 4233, 4234, 4237 -> 400;
+                // 4241: a menu edit naming an index the menu does not have
+                case 4002, 4224, 4230, 4231, 4233, 4234, 4237, 4241 -> 400;
                 case 4030, 4031 -> 403; // read-only / caller lacks a Studio edit role (backlog D6)
                 case 4040 -> 404;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
@@ -417,6 +418,9 @@ public final class ErrorResponseRenderer implements Processor {
                 default -> 500;
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;
+            // 3320: the live stream was asked for a topic no route declares — the caller's
+            // query, not a server fault. Build-time view codes never surface over HTTP.
+            case VIEW -> code.number() == 3320 ? 400 : 500;
             // Authoring/build-range decision codes (4700..4719) surface over HTTP only from
             // Studio's validate-before-persist (the decision-rows grid), where they reject the
             // author's cells — an unprocessable edit, not a server fault. The runtime-range

@@ -43,7 +43,10 @@ re-fetch their own view of the data.
 - **Topics are tenant-scoped**: a commit in one tenant never signals another tenant's
   streams.
 - **The stream is session-authenticated** (like `auth: browser` routes) and only serves
-  topics some route actually declares; unknown requested topics simply never fire.
+  topics some route actually declares. A `?topics=` value no route emits is **refused
+  before the stream opens** (`TQL-VIEW-3320`, `400`): it used to be filtered out silently,
+  which opened a healthy-looking stream — heartbeats and all — that could never fire, so a
+  typo left the page waiting for a refresh signal that was never coming.
 - **Bounded by construction**: subscriptions are capped per subject (default 4,
   `tesseraql.live.maxPerSubject`; one more evicts that subject's own oldest stream and the
   browser's EventSource reconnects) and globally (default 256, `tesseraql.live.maxTotal`;

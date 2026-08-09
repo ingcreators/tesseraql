@@ -538,6 +538,12 @@ Investigated by the sweep and **cleared** — documented, deliberate degradation
   default), and the address budget is documented "secondary — XFF-first, spoof-rotation
   accepted; the login key is the one that must hold". Denying on a missing header would break
   every legitimate pre-tenant request.
+- **`AssetsRouteBuilder` keying its ETag on mtime+size.** The silent-tolerance defect here — an
+  ETag cached per path forever, so an edited asset kept answering `304` — was fixed by hashing
+  the bytes actually served on each request. Re-keying on `mtime+size` would only *reduce*
+  correctness (a content hash cannot miss an edit that leaves the timestamp alone) in exchange
+  for skipping a read; that is a caching-cost decision, not a tolerated failure, so it is out of
+  this campaign's scope.
 - **mTLS PKIX skipped when `trustBundle` is unset.** Already covered by lint `TQL-SEC-4065` and
   documented as trusting the edge. (The SAN *type* confusion it aggravated — email/URI/DNS matched
   interchangeably — was **taken back in scope and fixed**: `san:` is replaced by the type-qualified

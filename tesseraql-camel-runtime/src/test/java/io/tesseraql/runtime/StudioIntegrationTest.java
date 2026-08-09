@@ -2481,6 +2481,31 @@ class StudioIntegrationTest {
         assertThat(removed).contains("First").doesNotContain("Second");
     }
 
+    /**
+     * A menu edit naming an index the menu does not have is refused. It used to answer
+     * {@code {"removed": true}} → 303 back to a page that looked fine, having written nothing
+     * and recorded no audit entry (docs/silent-tolerance.md O10).
+     */
+    @Test
+    void uiMenuEditWithABadIndexIsRefusedNotSilentlyIgnored() throws Exception {
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/menu.yml"), """
+                menu:
+                  - {label: Only, href: /only}
+                """);
+        String before = Files.readString(appHome.resolve("config/menu.yml"));
+
+        // Not a number at all, and a number past the end: both are refused.
+        assertThat(postForm("/_tesseraql/studio/ui/menu/remove", "index=abc").statusCode())
+                .isEqualTo(400);
+        assertThat(postForm("/_tesseraql/studio/ui/menu/remove", "index=7").statusCode())
+                .isEqualTo(400);
+        assertThat(postForm("/_tesseraql/studio/ui/menu/move", "index=9&dir=up").statusCode())
+                .isEqualTo(400);
+
+        assertThat(Files.readString(appHome.resolve("config/menu.yml"))).isEqualTo(before);
+    }
+
     @Test
     void uiMenuPreviewFiltersByRoleServerSide() throws Exception {
         Files.createDirectories(appHome.resolve("config"));

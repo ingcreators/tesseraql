@@ -295,14 +295,34 @@ class IamAdminIntegrationTest {
                     "action=disable&ids=u1&ids=u2");
             assertThat(bulk.statusCode()).isEqualTo(303);
             assertThat(bulk.headers().firstValue("location"))
-                    .hasValue("/_tesseraql/admin/users?bulk=2");
-            assertThat(get("/_tesseraql/admin/users?bulk=2", true).body())
+                    .hasValue("/_tesseraql/admin/users?bulk=2&selected=2");
+            assertThat(get("/_tesseraql/admin/users?bulk=2&selected=2", true).body())
                     .contains("2 user(s) disabled.");
             assertThat(get("/_tesseraql/admin/users/u1", true).body()).contains("DISABLED");
             assertThat(get("/_tesseraql/admin/users/u2", true).body()).contains("DISABLED");
         } finally {
             post("/_tesseraql/admin/users/u1/enable");
             post("/_tesseraql/admin/users/u2/enable");
+        }
+    }
+
+    /**
+     * A stale selection cannot read as a completed action: an id matching no user updates no
+     * rows, so it is not counted, and the banner says how many of the selection actually
+     * changed (docs/silent-tolerance.md O10 — the count used to be the request size).
+     */
+    @Test
+    void bulkDisableReportsWhatChangedNotWhatWasSelected() throws Exception {
+        try {
+            HttpResponse<String> bulk = postForm("/_tesseraql/admin/users/bulk",
+                    "action=disable&ids=u1&ids=no-such-user");
+            assertThat(bulk.statusCode()).isEqualTo(303);
+            assertThat(bulk.headers().firstValue("location"))
+                    .hasValue("/_tesseraql/admin/users?bulk=1&selected=2");
+            assertThat(get("/_tesseraql/admin/users?bulk=1&selected=2", true).body())
+                    .contains("1 of 2 selected user(s) disabled");
+        } finally {
+            post("/_tesseraql/admin/users/u1/enable");
         }
     }
 

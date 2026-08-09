@@ -13,6 +13,9 @@ input:
   bulk:
     type: string
     required: false
+  selected:
+    type: string
+    required: false
   q:
     type: string
     required: false
@@ -35,4 +38,5 @@ response:
       total: total.rows
       invited: params.invited
       bulk: params.bulk
+      selected: params.selected
       q: params.q

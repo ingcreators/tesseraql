@@ -2302,13 +2302,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         })
                         .register("studio.menu.remove", params -> {
                             studioAccess.requireEdit(params.get("principalRoles"));
-                            studio.removeMenuItem(parseIndex(params.get("index")), actorOf(params));
+                            studio.removeMenuItem(menuIndex(params.get("index")), actorOf(params));
                             return Map.of("removed", true);
                         })
                         .register("studio.menu.move", params -> {
                             studioAccess.requireEdit(params.get("principalRoles"));
                             int delta = "up".equals(String.valueOf(params.get("dir"))) ? -1 : 1;
-                            studio.moveMenuItem(parseIndex(params.get("index")), delta,
+                            studio.moveMenuItem(menuIndex(params.get("index")), delta,
                                     actorOf(params));
                             return Map.of("moved", true);
                         })
@@ -4386,7 +4386,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /** Parses a menu-item index parameter, yielding -1 (a no-op index) when malformed. */
+    /**
+     * A menu-item index parameter, refused when it is not a number.
+     *
+     * <p>It used to fall back to {@code -1}, which the service treated as an out-of-range no-op
+     * while the handler still answered {@code {"removed": true}} — a change reported that never
+     * happened (docs/silent-tolerance.md O10). The page-number reader below keeps its clamp:
+     * there, falling back to the first page is the documented behaviour, not a lost edit.
+     */
+    private static int menuIndex(Object value) {
+        try {
+            return Integer.parseInt(String.valueOf(value).strip());
+        } catch (NumberFormatException ex) {
+            throw new io.tesseraql.core.error.TqlException(
+                    new io.tesseraql.core.error.TqlErrorCode(
+                            io.tesseraql.core.error.TqlDomain.STUDIO, 4241),
+                    "Menu index '" + value + "' is not a number");
+        }
+    }
+
+    /** Parses a page-number parameter, yielding -1 (clamped to the first page) when malformed. */
     private static int parseIndex(Object value) {
         try {
             return Integer.parseInt(String.valueOf(value).strip());

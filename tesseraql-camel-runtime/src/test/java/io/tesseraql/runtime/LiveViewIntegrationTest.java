@@ -201,6 +201,22 @@ class LiveViewIntegrationTest {
         assertThat(refused.statusCode()).isEqualTo(401);
     }
 
+    /**
+     * A topic no route declares with {@code emit:} is refused before the stream opens. It used
+     * to be filtered out silently, so a typo opened a perfectly healthy-looking stream — 200,
+     * event-stream, heartbeats forever — that could never fire, and the page waited for a
+     * refresh signal that was not coming (docs/silent-tolerance.md O10).
+     */
+    @Test
+    void anUndeclaredTopicIsRefusedRatherThanOpeningADeadStream() throws Exception {
+        HttpResponse<String> refused = get("/_tesseraql/events?topics=odrers.changed");
+
+        assertThat(refused.statusCode()).isEqualTo(400);
+        assertThat(refused.body()).contains("TQL-VIEW-3320");
+        // The declared spelling still opens; the refusal names what the app does declare.
+        assertThat(refused.body()).contains("orders.changed");
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

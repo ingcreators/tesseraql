@@ -3557,25 +3557,45 @@ public final class StudioService {
         writeMenu(items, actor);
     }
 
-    /** Removes the menu item at {@code index} (no-op when out of range) and records the change. */
+    /**
+     * Removes the menu item at {@code index} and records the change.
+     *
+     * <p>An index outside the list is refused rather than ignored: the handler answered
+     * {@code {"removed": true}} for it, so a malformed or stale index reported a change that
+     * never happened and left no audit record to contradict it (docs/silent-tolerance.md O10).
+     */
     public void removeMenuItem(int index, String actor) {
         List<MenuItem> items = new ArrayList<>(menuItems());
-        if (index >= 0 && index < items.size()) {
-            items.remove(index);
-            writeMenu(items, actor);
-        }
+        requireIndex(index, items.size());
+        items.remove(index);
+        writeMenu(items, actor);
     }
 
     /**
      * Moves the menu item at {@code index} one slot up ({@code delta < 0}) or down
-     * ({@code delta > 0}); a move that would leave the list is a no-op.
+     * ({@code delta > 0}). Moving the first item up, or the last down, is a legitimate no-op —
+     * the item is already where it was asked to go — but an index outside the list is refused.
      */
     public void moveMenuItem(int index, int delta, String actor) {
         List<MenuItem> items = new ArrayList<>(menuItems());
+        requireIndex(index, items.size());
         int target = index + Integer.signum(delta);
-        if (index >= 0 && index < items.size() && target >= 0 && target < items.size()) {
-            items.add(target, items.remove(index));
-            writeMenu(items, actor);
+        if (target < 0 || target >= items.size()) {
+            return;
+        }
+        items.add(target, items.remove(index));
+        writeMenu(items, actor);
+    }
+
+    /** TQL-STUDIO-4241: the menu index names no item, so the edit cannot be applied. */
+    private static final TqlErrorCode UNKNOWN_MENU_INDEX = new TqlErrorCode(TqlDomain.STUDIO,
+            4241);
+
+    private static void requireIndex(int index, int size) {
+        if (index < 0 || index >= size) {
+            throw new TqlException(UNKNOWN_MENU_INDEX,
+                    "Menu index " + index + " names no item; the menu has " + size + " item"
+                            + (size == 1 ? "" : "s"));
         }
     }
 
