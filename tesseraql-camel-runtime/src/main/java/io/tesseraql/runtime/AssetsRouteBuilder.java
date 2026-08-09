@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
@@ -51,7 +50,6 @@ final class AssetsRouteBuilder extends RouteBuilder {
     private final Path mainAssets;
     private final Map<String, Path> appAssets;
     private final ClientMessages clientMessages;
-    private final Map<String, String> etags = new ConcurrentHashMap<>();
     private final org.webjars.WebJarVersionLocator webJars = new org.webjars.WebJarVersionLocator();
 
     /**
@@ -106,11 +104,11 @@ final class AssetsRouteBuilder extends RouteBuilder {
             notFound(exchange);
             return;
         }
-        // The catalog module varies per locale, so its cache entry keys on the resolved tag.
-        String etagKey = messagesModule
-                ? path + "|" + clientMessages.normalize(locale)
-                : path;
-        String etag = etags.computeIfAbsent(etagKey, key -> "\"" + sha256(bytes) + "\"");
+        // Hash the bytes actually served on this request: the previous per-path cache never
+        // invalidated, so after an asset changed on disk (Studio apply, serve --watch, redeploy
+        // into the same process) a client holding the old ETag got a 304 for stale content — the
+        // body and its validator disagreed. The bytes are already read here, so re-hashing is cheap.
+        String etag = "\"" + sha256(bytes) + "\"";
         exchange.getMessage().setHeader("ETag", etag);
         exchange.getMessage().setHeader("Cache-Control", "public, max-age=300");
         exchange.getMessage().setHeader("X-Content-Type-Options", "nosniff");
