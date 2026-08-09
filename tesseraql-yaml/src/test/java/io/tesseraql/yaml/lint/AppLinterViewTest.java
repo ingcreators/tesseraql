@@ -187,6 +187,30 @@ class AppLinterViewTest {
     }
 
     @Test
+    void aColumnDomainReferenceIsCheckedPerDocument(@TempDir Path dir) throws Exception {
+        // docs/view-composition.md wave 3a: explicit read-side domain links must resolve.
+        writeApp(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - { name: sku, domain: ghost }
+                """);
+        java.util.List<String> codes = new AppLinter().lint(dir).stream()
+                .map(LintFinding::code).toList();
+        assertThat(codes).contains("TQL-FIELD-4601");
+
+        Files.createDirectories(dir.resolve("domains"));
+        Files.writeString(dir.resolve("domains/catalog.yml"), """
+                version: tesseraql/v1
+                domains:
+                  ghost:
+                    type: string
+                """);
+        assertThat(viewCodes(new AppLinter().lint(dir))).isEmpty();
+    }
+
+    @Test
     void aChildSourceNamingAnHttpSourceIsClean(@TempDir Path dir) throws Exception {
         // docs/connectors.md http sources publish the same {rows} shape as a named query,
         // so a child/panel source: may name one (docs/view-composition.md wave 0).

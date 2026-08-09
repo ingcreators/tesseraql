@@ -28,6 +28,13 @@ All notable changes to TesseraQL are documented here. The format follows
   entries now render alongside `v` on view-backed routes (`v`/`views` are reserved,
   `TQL-VIEW-3319`).
 
+- **Domains carry presentation** (docs/view-composition.md wave 3a): a field domain
+  takes `widget:` — "an SKU is a code input", declared once — with precedence per-view
+  `fields:` override > domain widget > type-derived default; an enum domain already
+  doubles as a form's `<select>` options through the same merge. Read-side `columns:`
+  and detail `fields:` entries take an explicit `domain:` reference
+  (`TQL-FIELD-4601` when unknown). Presentation hints never reach OpenAPI.
+
 ### Changed
 
 - **HTML responses negotiate their shell** (pre-1.0 behavior change,

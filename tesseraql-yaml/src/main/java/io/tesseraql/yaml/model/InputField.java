@@ -36,7 +36,11 @@ public record InputField(
         // Reference to an app-level field domain (docs/field-domains.md); the manifest loader
         // merges the domain's keys under this field's own, so downstream consumers see the
         // fully-populated result (with this reference kept for tooling and lint).
-        String domain) {
+        String domain,
+        // Presentation hint (docs/view-composition.md wave 3a): the form widget this field
+        // renders as, declared once on its domain ("an SKU is a code input"). Never part of the
+        // HTTP contract — OpenAPI emission excludes it — and a per-view fields: override wins.
+        String widget) {
 
     /** The semantic string formats {@code format:} validates (roadmap Phase 40). */
     public static final java.util.Set<String> STRING_FORMATS = java.util.Set.of("email", "uuid",
@@ -76,7 +80,8 @@ public record InputField(
                 pattern != null ? pattern : d.pattern(),
                 minLength != null ? minLength : d.minLength(),
                 requiredWhen,
-                domain);
+                domain,
+                widget != null ? widget : d.widget());
     }
 
     /** Element type for array inputs. */

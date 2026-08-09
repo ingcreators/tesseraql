@@ -261,6 +261,54 @@ class HtmlResponseRendererViewTest {
                 .hasMessageContaining("TQL-VIEW-3319");
     }
 
+    // Domain presentation (docs/view-composition.md wave 3a).
+
+    @Test
+    void aDomainWidgetHintDrivesTheDerivedWidgetAndTheViewOverrideWins(@TempDir Path dir)
+            throws Exception {
+        // The action route's input carries widget: textarea (merged in from its domain).
+        RouteDefinition action = MAPPER.convertValue(Map.of(
+                "id", "items.create", "kind", "route", "recipe", "command-json",
+                "input", Map.of(
+                        "note", Map.of("type", "string", "widget", "textarea"),
+                        "sku", Map.of("type", "string", "widget", "textarea"))),
+                RouteDefinition.class);
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: form
+                action: /items/create
+                fields:
+                  - name: note
+                  - { name: sku, widget: text }
+                """);
+        ViewBinding binding = ViewBinding.of(dir, "page", null,
+                path -> "/items/create".equals(path) ? action : null,
+                id -> dir.resolve("page.view.yml"));
+        HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
+                "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
+                binding);
+        String html = render(renderer, Map.of());
+        // note follows the domain hint; sku's per-view override wins over it.
+        assertThat(html).contains("<textarea");
+        assertThat(html).contains("name=\"sku\"").contains("type=\"text\"");
+    }
+
+    @Test
+    void aColumnDomainReferenceMustResolve(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - { name: sku, domain: ghost }
+                """);
+        assertThatThrownBy(() -> ViewBinding.of(dir, "page", null, path -> null,
+                id -> dir.resolve("page.view.yml")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("unknown domain 'ghost'");
+    }
+
     @Test
     void aTemplateRouteBindsViewModels(@TempDir Path dir) throws Exception {
         // Declarative parts on a hand-owned template (wave 2c): the ladder's round-trip.

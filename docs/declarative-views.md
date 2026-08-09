@@ -152,6 +152,16 @@ present, selects and orders the fields and merges presentation overrides (label,
 widget, and other presentation attributes) onto the derived definitions — it cannot
 invent a field the action route does not declare (`TQL-VIEW-3304`).
 
+A [field domain](declarative-validation.md#field-domains) may carry a `widget:` hint —
+"an SKU is a code input", declared once — and the widget precedence is: the per-view
+`fields:` override, else the field's declared widget (usually the domain's), else the
+type-derived default. A domain's `enum` already flows through the same merge, so an
+enum domain doubles as the source of a form's `<select>` options with no extra key.
+Presentation hints are never part of the HTTP contract — OpenAPI emission excludes
+them. On the read side, a `columns:` or detail `fields:` entry takes an explicit
+`domain:` reference (no name-based inference, ever) — the link that brings the
+domain's presentation and data-classification knowledge to rendered output.
+
 A form's `action:` resolves `{placeholder}`s per record, and prefills fall back from
 camelCase input names to snake_case columns.
 

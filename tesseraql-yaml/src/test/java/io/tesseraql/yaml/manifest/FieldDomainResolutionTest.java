@@ -78,6 +78,24 @@ class FieldDomainResolutionTest {
     }
 
     @Test
+    void aDomainWidgetHintMergesLikeAnyFieldKey(@TempDir Path dir) throws Exception {
+        // docs/view-composition.md wave 3a: "an SKU is a code input", declared once.
+        Path home = app(dir);
+        Files.writeString(home.resolve("domains/catalog.yml"), """
+                version: tesseraql/v1
+                domains:
+                  sku:
+                    type: string
+                    maxLength: 40
+                    widget: textarea
+                """);
+
+        AppManifest manifest = new ManifestLoader().load(home);
+        InputField sku = manifest.routes().get(0).definition().input().get("sku");
+        assertThat(sku.widget()).isEqualTo("textarea");
+    }
+
+    @Test
     void theConstraintCatalogIsInheritedAndRouteEntriesWin(@TempDir Path dir) throws Exception {
         Path home = app(dir);
 
