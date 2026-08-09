@@ -209,6 +209,11 @@ Expect `... 0 error(s)` and exit code 0. Both commands are what CI runs
 
 ## Where to next
 
+- **Pick the guide for what you are building** — [an approval application](guide-approval-workflow.md),
+  [integration and batch](guide-integration.md), [reporting and analytics](guide-analytics.md), or
+  [an API over an existing database](guide-existing-database.md).
+- [concepts.md](concepts.md) — the model behind what you just built.
+
 - [two-way-sql.md](two-way-sql.md) — the SQL dialect you just edited: binds, branches,
   embedded variables.
 - [declarative-views.md](declarative-views.md) — the `list`/`form` view documents behind

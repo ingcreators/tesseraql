@@ -12,6 +12,8 @@ hero:
       variant: primary
     - text: The five-minute demo
       link: /tesseraql/five-minute-demo/
+    - text: What TesseraQL is
+      link: /tesseraql/overview/
     - text: View on GitHub
       link: https://github.com/ingcreators/tesseraql
       icon: external
@@ -41,5 +43,28 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     Health probes, Prometheus metrics, audit trails, SSO (OIDC/SAML/SCIM), workflow
     delegation, and an [admission profile](/tesseraql/admission/) that gates releases
     in CI.
+  </Card>
+</CardGrid>
+
+## Building something specific?
+
+Each guide is a reading order through the pages that matter for one shape of application.
+
+<CardGrid>
+  <Card title="An approval application" icon="approve-check">
+    Requests, reviews, and states: [the approval
+    guide](/tesseraql/guide-approval-workflow/).
+  </Card>
+  <Card title="Integration and batch" icon="random">
+    Scheduled work, file drops, and message channels: [the integration
+    guide](/tesseraql/guide-integration/).
+  </Card>
+  <Card title="Reporting and analytics" icon="bars">
+    Dashboards, exports, and files queried in place: [the analytics
+    guide](/tesseraql/guide-analytics/).
+  </Card>
+  <Card title="An existing database" icon="seti:db">
+    An API and screens over a schema you did not create: [the
+    guide](/tesseraql/guide-existing-database/).
   </Card>
 </CardGrid>

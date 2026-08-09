@@ -189,6 +189,8 @@ nothing extra to configure:
 
 ## Next
 
+- [guide-analytics.md](guide-analytics.md) — the reading order for the reporting side of an application.
+
 - [duckdb.md](duckdb.md) — the engine behind the lake tables.
 - [jobs.md](jobs.md) — scheduling the summarization.
 - [declarative-views.md](declarative-views.md) — the dashboard views that render it.

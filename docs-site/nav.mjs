@@ -10,15 +10,28 @@ export const BASE = '/tesseraql';
 /** Sidebar sections in display order; items are docs/<slug>.md file slugs. */
 export const SECTIONS = [
   {
-    label: 'Tutorial',
-    items: ['getting-started', 'five-minute-demo', 'your-first-app'],
+    label: 'Start here',
+    items: ['overview', 'five-minute-demo', 'getting-started', 'your-first-app'],
+  },
+  {
+    // One page per application shape, routing through pages that already exist rather
+    // than explaining features again: the reader who finished the tutorial had forty
+    // topic pages and no order to read them in (docs/documentation-ia.md).
+    label: 'Guides by use case',
+    items: [
+      'guide-approval-workflow',
+      'guide-integration',
+      'guide-analytics',
+      'guide-existing-database',
+    ],
+  },
+  {
+    label: 'Concepts',
+    items: ['concepts', 'app-layout', 'two-way-sql', 'identifiers', 'glossary'],
   },
   {
     label: 'Building applications',
     items: [
-      'app-layout',
-      'two-way-sql',
-      'identifiers',
       'scaffolding',
       'transactional-writes',
       'declarative-validation',
@@ -81,7 +94,7 @@ export const SECTIONS = [
     ],
   },
   {
-    label: 'Operations',
+    label: 'Running in production',
     items: [
       'deployment',
       'promotion',

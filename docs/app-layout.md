@@ -98,6 +98,7 @@ into apps.
 
 ## Next
 
+- [concepts.md](concepts.md) — what these documents are, and how a request travels through them.
 - [two-way-sql.md](two-way-sql.md) — the SQL files the layout is built around.
 - [identifiers.md](identifiers.md) — how a column name becomes an input name, a bind, and a URL parameter.
 - [scaffolding.md](scaffolding.md) — generate a working slice into this layout.

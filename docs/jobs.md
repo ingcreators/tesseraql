@@ -570,6 +570,8 @@ a malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` bloc
 
 ## Related pages
 
+- [guide-integration.md](guide-integration.md) — the reading order for an integration or batch application.
+
 - [Managed connectors](connectors.md) — `httpCall` steps, the `poll:` trigger, egress policy
 - [Notifications](notifications.md) — the `notify:` step, channels, alerts, notify test cases
 - [Transactional writes](transactional-writes.md) — the command-side transaction model jobs deliberately differ from
