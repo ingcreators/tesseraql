@@ -528,10 +528,12 @@ are independent and can interleave; within a wave, order is roughly worst-first.
 
 Investigated by the sweep and **cleared** — documented, deliberate degradation, not defects:
 
-- **SAML `sp.acsUrl` unset skips the Recipient check.** Documented at `docs/saml.md:52` as a
+- **SAML `sp.acsUrl` unset skips the Recipient check.** Documented at `docs/saml.md` as a
   recommended optional hardening control ("without it those are off"), to support
-  IdP-initiated-only deployments. The genuine gap is the absence of a boot warning/lint (cheap,
-  non-breaking) — added as a small item, not a fix. Making `acsUrl` required is rejected.
+  IdP-initiated-only deployments. Making `acsUrl` required is still rejected — but the genuine gap,
+  the absence of a warning, **was closed**: lint `TQL-SEC-4092` now says the control is off, the
+  same way `TQL-SEC-4065` does for the analogous optional mTLS `trustBundle`. That asymmetry
+  (mTLS warns, SAML silent) was the tell that this belonged in scope after all.
 - **`MultiAppGateway` entitlement skip on a missing tenant header, and XFF pass-through.**
   Both carry inline design citations: the gateway is a convenience aggregator, not a security
   boundary (per-app tenancy resolution is the authoritative check, `required: true` by

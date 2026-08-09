@@ -838,6 +838,7 @@ public final class AppLinter {
         lintApiKeyConfig(appHome, manifest, config, findings);
         lintMtlsConfig(appHome, manifest, config, findings);
         lintOidcConfig(config, findings);
+        lintSamlConfig(config, findings);
         lintSecurityDefaults(appHome, manifest, config, findings);
         lintFieldDomains(appHome, manifest, findings);
         lintResponseHeaderDefaults(appHome, manifest, config, findings);
@@ -1758,6 +1759,27 @@ public final class AppLinter {
         if (rawString(config, "tesseraql.oidc.redirectUri") == null) {
             findings.add(new LintFinding("TQL-SEC-4053", "error", "config",
                     "OIDC is enabled but tesseraql.oidc.redirectUri is not configured"));
+        }
+    }
+
+    /**
+     * Lints the SAML service-provider config (roadmap Phase 26): an enabled SP without
+     * {@code sp.acsUrl} silently turns off the SubjectConfirmation {@code Recipient} check — the
+     * assertion is then accepted no matter which service provider it was addressed to, so an
+     * assertion captured at another SP of the same IdP replays here. The URL stays optional
+     * (IdP-initiated-only deployments have no ACS to advertise), so this is a warning and not an
+     * error: exactly the {@code TQL-SEC-4065} stance for the analogous mTLS {@code trustBundle},
+     * which is the asymmetry this closes. Reads raw config nodes — never resolving secrets.
+     */
+    private void lintSamlConfig(AppConfig config, List<LintFinding> findings) {
+        if (!"true".equalsIgnoreCase(rawString(config, "tesseraql.saml.enabled"))) {
+            return;
+        }
+        if (rawString(config, "tesseraql.saml.sp.acsUrl") == null) {
+            findings.add(new LintFinding("TQL-SEC-4092", "warning", "config",
+                    "SAML is enabled but declares no tesseraql.saml.sp.acsUrl; the assertion's"
+                            + " SubjectConfirmation recipient is not checked, and neither the login"
+                            + " route nor the SP metadata endpoint is published"));
         }
     }
 

@@ -49,7 +49,7 @@ tesseraql:
 | Key | Required | Meaning |
 | --- | --- | --- |
 | `sp.audience` | yes | The SP entity id. Every assertion's audience restriction must include it. |
-| `sp.acsUrl` | recommended | The public URL of the Assertion Consumer Service (`…/_tesseraql/saml/acs`). Enables the recipient check, the **Sign in with SAML** login route, and the SP metadata endpoint; without it those are off. |
+| `sp.acsUrl` | recommended | The public URL of the Assertion Consumer Service (`…/_tesseraql/saml/acs`). Enables the recipient check, the **Sign in with SAML** login route, and the SP metadata endpoint; without it those are off — and lint says so (`TQL-SEC-4092`). |
 | `sp.nameIdFormat` | no | The NameID format advertised in SP metadata (default `unspecified`). |
 | `sp.signingKey` | no | Path to an RSA private key (PKCS#8, PEM or DER) used to sign outgoing HTTP-Redirect messages. Without it, redirects are sent unsigned. |
 | `idp.metadata` | one of these two | Path to the IdP's SAML metadata XML; the signing certificate is extracted from its `IDPSSODescriptor` (a `use="signing"` key, else one with no `use`). |
@@ -124,7 +124,11 @@ IdP.
   rejected, transforms restricted); and the consumed assertion must lie inside the signed element —
   an assertion smuggled outside the signed subtree (XML signature wrapping) is never trusted. The
   audience restriction must include `sp.audience`, and when `sp.acsUrl` is set the subject
-  confirmation's recipient must match it.
+  confirmation's recipient must match it. Leaving `sp.acsUrl` unset is supported (an
+  IdP-initiated-only deployment has no ACS URL to advertise) but turns that recipient check off:
+  the assertion is then accepted regardless of which service provider it was addressed to, so one
+  captured at another SP of the same IdP replays here. Lint raises `TQL-SEC-4092` for it — the
+  control is optional, but never silently absent.
 - **Replay protection.** A database-backed guard (tables `tql_saml_request` and
   `tql_saml_seen_assertion`, created automatically) makes each AuthnRequest id single-use: the
   response's `InResponseTo` must consume a pending request exactly once, and the RelayState
