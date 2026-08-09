@@ -12,7 +12,13 @@ an empty PostgreSQL applies the app's migrations on start, so there is no manual
 | [`purchase-request-app`](purchase-request-app) | The approval-workflow starter (template gallery, roadmap Phase 47): a `kind: workflow` document drives draft → submitted → approved/rejected in managed mode — synthesized transition endpoints, guards, task assignment, and the history shown on a declarative detail view. |
 | [`inventory-app`](inventory-app) | The inventory starter: declarative views end to end — searchable/paginated list, a dashboard (stats, bar chart, low-stock table), forms, and a stock adjustment guarded by a declarative validation rule. |
 | [`helpdesk-app`](helpdesk-app) | The helpdesk starter: an app-mode workflow over the ticket's own `status` column, plus a transactional `notify:` on ticket creation that the declarative suite asserts without SMTP. |
+| [`procurement-app`](procurement-app) | The suite-scale example: four workflows (requisition, RFQ, quote, order) over thirty routes, with shared decisions, rules, and scopes — what a real department application looks like. |
+| [`juchu-kanri-app`](juchu-kanri-app) | Japanese identifiers end to end: table and column names in Japanese, used verbatim as input names, binds, and URL parameters ([identifiers](../docs/identifiers.md)). |
 
-Both apps follow the same conventions, so what you learn from one transfers to the other. See the
-top-level [README](../README.md) for how to run `user-admin-app`, and
-[../docs/app-layout.md](../docs/app-layout.md) for the full directory contract.
+Every app follows the same conventions, so what you learn from one transfers to the others.
+See the top-level [README](../README.md) for how to run `user-admin-app`, and
+[../docs/app-layout.md](../docs/app-layout.md) for the full directory contract. Each guide by
+use case names the app that demonstrates its shape:
+[approval](../docs/guide-approval-workflow.md), [integration and
+batch](../docs/guide-integration.md), [analytics](../docs/guide-analytics.md), and [an
+existing database](../docs/guide-existing-database.md).

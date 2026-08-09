@@ -88,9 +88,6 @@ export const SECTIONS = [
       'multi-tenancy',
       'credential-lifecycle',
       'delegation',
-      'admission',
-      'security-hardening',
-      'threat-model',
     ],
   },
   {
@@ -101,6 +98,15 @@ export const SECTIONS = [
       'upgrading',
       'proxy',
     ],
+  },
+  {
+    // Written for someone deciding whether to adopt or install, not for someone
+    // building: the framework's own posture and the bar a shared app must clear.
+    // security-hardening.md opens by calling itself a maintainer document, and sat
+    // among the pages a reader browses to secure their own app
+    // (docs/documentation-ia.md).
+    label: 'Evaluating TesseraQL',
+    items: ['admission', 'security-hardening', 'threat-model'],
   },
   {
     // Generated pages, committed under docs/ by tesseraql-docs-reference and
