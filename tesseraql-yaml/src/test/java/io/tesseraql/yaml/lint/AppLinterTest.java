@@ -647,6 +647,49 @@ class AppLinterTest {
     }
 
     @Test
+    void flagsAnEmbeddedVariableInjectionOnAnMcpTool(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    policies:
+                      catalog.read:
+                        anyOf:
+                          - role: READ
+                """);
+        Files.createDirectories(dir.resolve("mcp"));
+        // A tool's SQL is driven by LLM arguments — the highest-risk injection surface, which the
+        // guard used to skip. An embedded {sort} with no enum allowlist must be flagged.
+        Files.writeString(dir.resolve("mcp/search.sql"),
+                "select 1 from items t\n/*# order by t.{sort} */\n");
+        Files.writeString(dir.resolve("mcp/search.yml"), """
+                version: tesseraql/v1
+                id: search
+                kind: tool
+                recipe: query-json
+                description: Search items.
+                input:
+                  sort:
+                    type: string
+                security:
+                  auth: bearer
+                  policy: catalog.read
+                sql:
+                  file: search.sql
+                  mode: query
+                  params:
+                    sort: query.sort
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2109") && f.isError()
+                && f.source().contains("search.yml"));
+    }
+
+    @Test
     void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
