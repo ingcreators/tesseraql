@@ -493,6 +493,62 @@ class AppLinterTest {
     }
 
     @Test
+    void flagsAnUnknownTopLevelRouteKeyAsAWarning(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        // `securty:` is a typo for security:, silently dropped so the route loses its auth block.
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.search
+                kind: route
+                recipe: query-json
+                securty:
+                  auth: bearer
+                sql:
+                  text: select 1
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1043") && !f.isError()
+                && f.message().contains("securty"));
+    }
+
+    @Test
+    void flagsARenamedTopLevelKeyWithItsReplacement(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        // `page:` was renamed to `pagination:` before v1.
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.search
+                kind: route
+                recipe: query-json
+                page:
+                  size: 20
+                sql:
+                  text: select 1
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1044") && f.isError()
+                && f.message().contains("page") && f.message().contains("pagination"));
+    }
+
+    @Test
     void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
