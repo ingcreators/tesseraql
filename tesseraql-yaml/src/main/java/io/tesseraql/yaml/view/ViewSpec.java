@@ -253,7 +253,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             List<Series> series = parseSeries(source, entry.get("series"));
             String xType = str(entry.get("xType"));
             Integer height = parseHeight(source, entry.get("height"));
-            Boolean legend = entry.get("legend") instanceof Boolean b ? b : null;
+            Boolean legend = flag(source, entry.get("legend"), "legend");
             if ("chart".equals(type)) {
                 validateChart(source, entry, kind, series, xType);
             } else if (entry.get("series") != null || xType != null || height != null
@@ -318,6 +318,24 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             series.add(new Series(column, str(entry.get("label")), str(entry.get("mark"))));
         }
         return series;
+    }
+
+    /**
+     * A boolean view key, refused when it is not one.
+     *
+     * <p>{@code sortable}/{@code legend} were read with {@code instanceof Boolean … : null}, so
+     * {@code sortable: "yes"} passed {@link #rejectUnknown} — the key is real — and then coerced
+     * to null, silently rendering the column non-sortable. A wrong-typed value is exactly what
+     * the {@code TQL-VIEW-3314} strictness promise is about; only the keys were being kept.
+     */
+    private static Boolean flag(String source, Object raw, String key) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        throw invalid(source, key + ": must be true or false, got: " + raw);
     }
 
     private static Integer parseHeight(String source, Object raw) {
@@ -392,7 +410,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
                 throw invalid(source, "a columns: entry requires name:");
             }
             columns.add(new Column(name, str(entry.get("label")), str(entry.get("link")),
-                    entry.get("sortable") instanceof Boolean b ? b : null,
+                    flag(source, entry.get("sortable"), "sortable"),
                     str(entry.get("text")), str(entry.get("domain"))));
         }
         return columns;

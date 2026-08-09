@@ -1271,6 +1271,55 @@ class AppLinterTest {
                 .noneMatch(f -> f.code().equals("TQL-SQL-2104") || f.code().equals("TQL-SQL-2105"));
     }
 
+    /**
+     * The write-safety nudge follows the write, not the mount: an MCP tool and a queue consumer
+     * update rows with the same bindings a command route does, and had the check skipped
+     * entirely (docs/silent-tolerance.md K-e).
+     */
+    @Test
+    void nudgesOptimisticLockingOnToolsAndConsumersToo(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        String update = "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n";
+
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/bump.sql"), update);
+        Files.writeString(dir.resolve("mcp/bump.yml"), """
+                version: tesseraql/v1
+                id: bump
+                kind: tool
+                recipe: command-json
+                description: Bump an order.
+                security:
+                  policy: orders.write
+                sql:
+                  file: bump.sql
+                  mode: update
+                """);
+
+        Files.createDirectories(dir.resolve("consume/orders"));
+        Files.writeString(dir.resolve("consume/orders/bump.sql"), update);
+        Files.writeString(dir.resolve("consume/orders/consume.yml"), """
+                version: tesseraql/v1
+                id: orders.consume
+                kind: route
+                recipe: queue-consume
+                consume:
+                  channel: events
+                  topic: orders.changed
+                sql:
+                  file: bump.sql
+                  mode: update
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+        // A version predicate with no expect: affects zero rows in silence — on all three now.
+        assertThat(findings).filteredOn(f -> f.code().equals("TQL-SQL-2105"))
+                .hasSizeGreaterThanOrEqualTo(2)
+                .anyMatch(f -> f.source().contains("mcp/bump.yml"))
+                .anyMatch(f -> f.source().contains("consume/orders/consume.yml"));
+    }
+
     @Test
     void reportsMissingStepSqlFile(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """

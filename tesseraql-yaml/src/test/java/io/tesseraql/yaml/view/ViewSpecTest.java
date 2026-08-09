@@ -394,6 +394,39 @@ class ViewSpecTest {
     // TQL-VIEW-3314): a silently dropped key renders a page that quietly ignores what the
     // author wrote — the shape the procurement gallery dashboard actually shipped with.
 
+    /**
+     * The strictness promise covers values, not only key names: {@code sortable: "yes"} passed
+     * {@code rejectUnknown} — the key is real — and then coerced to null, so the column rendered
+     * non-sortable with nothing said (docs/silent-tolerance.md K-e).
+     */
+    @Test
+    void rejectsAWrongTypedBooleanValue(@TempDir Path dir) throws Exception {
+        Path column = write(dir, "x.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                columns:
+                  - name: total
+                    sortable: "yes"
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(column))
+                .isInstanceOf(TqlException.class).hasMessageContaining("sortable")
+                .hasMessageContaining("true or false");
+
+        Path panel = write(dir, "y.view.yml", """
+                version: tesseraql/v1
+                kind: view
+                recipe: dashboard
+                panels:
+                  - title: Trend
+                    type: chart
+                    chart: line
+                    legend: "false"
+                """);
+        assertThatThrownBy(() -> ViewSpec.parse(panel))
+                .isInstanceOf(TqlException.class).hasMessageContaining("legend");
+    }
+
     @Test
     void rejectsAnUnknownTopLevelKey(@TempDir Path dir) throws Exception {
         Path file = write(dir, "x.view.yml", """
