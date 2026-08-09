@@ -40,7 +40,12 @@ public record InputField(
         // Presentation hint (docs/view-composition.md wave 3a): the form widget this field
         // renders as, declared once on its domain ("an SKU is a code input"). Never part of the
         // HTTP contract — OpenAPI emission excludes it — and a per-view fields: override wins.
-        String widget) {
+        String widget,
+        // Write authorization (docs/view-composition.md wave 4): a policy the principal must
+        // satisfy to supply this field. Operational like required/writable — never accepted
+        // inside a domain — enforced at the binder (a failing principal's value follows the
+        // route's readOnly behavior) and mirrored by the rendered form, which omits the field.
+        String policy) {
 
     /** The semantic string formats {@code format:} validates (roadmap Phase 40). */
     public static final java.util.Set<String> STRING_FORMATS = java.util.Set.of("email", "uuid",
@@ -81,7 +86,8 @@ public record InputField(
                 minLength != null ? minLength : d.minLength(),
                 requiredWhen,
                 domain,
-                widget != null ? widget : d.widget());
+                widget != null ? widget : d.widget(),
+                policy);
     }
 
     /** Element type for array inputs. */

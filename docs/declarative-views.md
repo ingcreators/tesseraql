@@ -470,7 +470,23 @@ The one thing compilation would have offered — a diffable HTML file — is cov
 Studio's rendered preview and by L3 ejection, which *is* deterministic generation on
 demand.
 
-Not currently supported:
+## Write-side field policy
 
-- **Write-side field masking** (per-role field visibility on forms) is planned to
-  compose with the existing `FieldPolicy` machinery.
+Hiding a field must mean the server does not accept it
+(docs/view-composition.md wave 4). An `input:` field takes `policy:` — a security
+policy the principal must satisfy to supply it:
+
+```yaml
+input:
+  note:   { type: string, maxLength: 200 }
+  salary: { type: integer, policy: hr.write }   # only principals satisfying hr.write
+```
+
+Enforcement happens **at the binder**: a failing principal's value follows the route's
+readOnly behavior (reject by default, or ignore/warn — and an ignored value is treated
+as not supplied, never bound). The derived form omits the field for that principal —
+the same declaration drives both, extending the form-derivation principle ("the HTML
+constraint and the server validation are the same declaration") to authorization. Like
+`required` and `writable`, `policy:` is operational and never accepted inside a
+domain. The per-role form stops requiring N command routes. OpenAPI is unchanged —
+policy-gated fields remain declared; the contract does not vary by role.

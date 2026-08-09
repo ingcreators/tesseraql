@@ -86,7 +86,7 @@ public final class RequestBinder implements Processor {
 
     private void bind(Exchange exchange) {
         Map<String, Object> body = parseBody(exchange);
-        guardMassAssignment(body);
+        guardMassAssignment(exchange, body);
 
         // The negotiated request locale (roadmap Phase 22) drives date/number input parsing.
         String localeTag = exchange.getProperty(TesseraqlProperties.LOCALE, "en", String.class);
@@ -217,11 +217,12 @@ public final class RequestBinder implements Processor {
         return form;
     }
 
-    private void guardMassAssignment(Map<String, Object> body) {
+    private void guardMassAssignment(Exchange exchange, Map<String, Object> body) {
         if (body.isEmpty()) {
             return;
         }
         InputPolicy policy = route.effectiveInputPolicy();
+        java.util.List<String> dropped = new java.util.ArrayList<>();
         for (String key : body.keySet()) {
             if (RESERVED_FIELDS.contains(key)) {
                 continue;
@@ -233,17 +234,38 @@ public final class RequestBinder implements Processor {
                 }
                 continue;
             }
-            if (!field.isWritable()) {
+            // A field the principal's policy does not permit is exactly a non-writable field
+            // for this request (docs/view-composition.md wave 4): server truth first — the
+            // rendered form omitting it is derived from this same declaration.
+            boolean deniedByPolicy = field.policy() != null
+                    && !permitsWrite(exchange, field.policy());
+            if (!field.isWritable() || deniedByPolicy) {
                 switch (policy.readOnlyBehaviorOrDefault()) {
-                    case "ignore" -> {
-                        /* drop silently */ }
-                    case "warn" -> LOG.log(System.Logger.Level.WARNING,
-                            "Ignoring non-writable input field ''{0}''", key);
-                    default -> throw new TqlException(FIELD_REJECTED,
-                            "Field '" + key + "' is not writable");
+                    case "ignore" -> dropped.add(key);
+                    case "warn" -> {
+                        LOG.log(System.Logger.Level.WARNING,
+                                "Ignoring non-writable input field ''{0}''", key);
+                        dropped.add(key);
+                    }
+                    default -> throw new TqlException(FIELD_REJECTED, deniedByPolicy
+                            ? "Field '" + key + "' is not writable for this principal"
+                            : "Field '" + key + "' is not writable");
                 }
             }
         }
+        // ignore/warn mean "treat as not supplied": the value must not reach the binder — a
+        // dropped-but-bound value would defeat the guard.
+        dropped.forEach(body::remove);
+    }
+
+    /** Whether the principal satisfies a field's write {@code policy:}. Fails safe. */
+    private boolean permitsWrite(Exchange exchange, String policyId) {
+        io.tesseraql.security.policy.PolicyEngine engine = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
+                        io.tesseraql.security.policy.PolicyEngine.class);
+        io.tesseraql.security.Principal principal = exchange.getProperty(
+                TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
+        return engine != null && engine.permits(policyId, principal);
     }
 
     private String rawValue(String name, Map<String, Object> body, Exchange exchange) {
