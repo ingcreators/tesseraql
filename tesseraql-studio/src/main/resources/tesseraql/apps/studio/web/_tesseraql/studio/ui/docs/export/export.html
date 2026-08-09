@@ -66,7 +66,10 @@
       </li>
     </ul>
   </th:block>
-  <p class="hc-field__label" th:unless="${docs.hasBaseline}">No baseline captured. Use
+  <p class="hc-field__label" th:if="${docs.baselineCorrupt}">The captured API baseline
+    (<code>openapi.baseline.json</code>) cannot be read as an OpenAPI document, so no changelog
+    can be computed &mdash; re-capture it.</p>
+  <p class="hc-field__label" th:if="${!docs.hasBaseline and !docs.baselineCorrupt}">No baseline captured. Use
     <em>Capture baselines now</em> on the
     <a href="/_tesseraql/studio/ui/docs/release-diff">release diff page</a> (for example at release
     time) to track what changed since then.</p>

@@ -30,7 +30,14 @@
   <section class="hc-card" th:unless="${cov.hasReport}">
     <div class="hc-card__header">Coverage</div>
     <div class="hc-card__body hc-stack">
-      <div class="hc-empty">
+      <!-- A corrupt overlay used to render exactly like an absent one, telling the operator
+           no run was recorded while the file sat there unreadable. -->
+      <div class="hc-empty" th:if="${cov.reportCorrupt}">
+        <p class="hc-empty__title">The run overlay cannot be parsed.</p>
+        <p><code>.tesseraql/docs/report.json</code> exists but is not a valid run document
+          &mdash; re-run <code>tesseraql:report</code> to regenerate it.</p>
+      </div>
+      <div class="hc-empty" th:unless="${cov.reportCorrupt}">
         <p class="hc-empty__title">No test run recorded yet.</p>
         <p>Run the <code>tesseraql:report</code> goal to populate test results and coverage.</p>
       </div>
@@ -56,6 +63,13 @@
             <li th:each="f : ${cov.gateFailures}" th:text="${f}"></li>
           </ul>
         </div>
+      </div>
+    </section>
+    <section class="hc-card" th:if="${cov.historyCorrupt}">
+      <div class="hc-card__header">Trend</div>
+      <div class="hc-card__body">
+        <p class="hc-field__message"><code>.tesseraql/docs/history.json</code> cannot be parsed,
+          so the trend is unavailable &mdash; it is not that no runs were recorded.</p>
       </div>
     </section>
     <section class="hc-card" th:if="${cov.trend}">

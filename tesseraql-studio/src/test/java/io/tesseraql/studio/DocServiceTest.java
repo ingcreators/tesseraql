@@ -342,6 +342,52 @@ class DocServiceTest {
         DocService corrupt = new DocService(new ManifestLoader().load(dir));
         assertThat(corrupt.hasReport()).isTrue();
         assertThat(corrupt.report()).isNull();
+        // ...but the two are now distinguishable, so the page can say which one it is.
+        assertThat(corrupt.reportCorrupt()).isTrue();
+        assertThat(noReport.reportCorrupt()).isFalse();
+    }
+
+    /**
+     * A corrupt history read as an empty list, which drops the whole Trend card — an absence
+     * indistinguishable from "no runs yet" (docs/silent-tolerance.md T6).
+     */
+    @Test
+    void historyCorruptDistinguishesAnUnreadableTrendFromAnAbsentOne(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        DocService absent = new DocService(new ManifestLoader().load(dir));
+        assertThat(absent.history()).isEmpty();
+        assertThat(absent.historyCorrupt()).isFalse();
+
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/history.json"), "[ not valid json");
+        DocService corrupt = new DocService(new ManifestLoader().load(dir));
+        assertThat(corrupt.history()).isEmpty();
+        assertThat(corrupt.historyCorrupt()).isTrue();
+    }
+
+    /**
+     * A corrupt OpenAPI baseline rendered as "no baseline captured", inviting the operator to
+     * capture one they already have (docs/silent-tolerance.md T6).
+     */
+    @Test
+    void apiChangelogCorruptDistinguishesAnUnreadableBaselineFromAnAbsentOne(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        DocService absent = new DocService(new ManifestLoader().load(dir));
+        assertThat(absent.hasApiBaseline()).isFalse();
+        assertThat(absent.apiChangelogCorrupt()).isFalse();
+
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/openapi.baseline.json"), "{ not json");
+        DocService corrupt = new DocService(new ManifestLoader().load(dir));
+        assertThat(corrupt.hasApiBaseline()).isTrue();
+        assertThat(corrupt.apiChangelog()).isNull();
+        assertThat(corrupt.apiChangelogCorrupt()).isTrue();
     }
 
     @Test
