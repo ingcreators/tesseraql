@@ -915,8 +915,19 @@ public final class RouteCompiler {
                                     html.view(), routeFile.definition(), this::postRouteByPath,
                                     this::viewPathById)
                             : null;
+            // Declarative parts on a hand-owned template (docs/view-composition.md wave 2c):
+            // each response.html.views id compiles like a view: reference and publishes its
+            // model as views['<id>'].
+            java.util.Map<String, io.tesseraql.compiler.binding.ViewBinding> boundViews = new java.util.LinkedHashMap<>();
+            if (html != null) {
+                for (String id : html.views()) {
+                    boundViews.put(id, io.tesseraql.compiler.binding.ViewBinding.of(appHome,
+                            id, routeFile.definition(), this::postRouteByPath,
+                            this::viewPathById));
+                }
+            }
             route.process(new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
-                    routeDir, i18n.defaultTag(), viewBinding));
+                    routeDir, i18n.defaultTag(), viewBinding, boundViews));
         }
         applyHttpCache(route, routeFile.definition());
         // pipelineThroughSql opened the idempotency record; closing it here is what stops a

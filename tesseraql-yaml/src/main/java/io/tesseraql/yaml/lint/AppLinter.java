@@ -377,6 +377,19 @@ public final class AppLinter {
                         "response.html.shell must be 'auto', 'always' or 'never', got: "
                                 + html.shell()));
             }
+            // views: binds declarative parts to a template: route (wave 2c): each id must
+            // resolve, and a view: route embeds through its own document instead.
+            if (!html.views().isEmpty() && html.view() != null) {
+                findings.add(new LintFinding("TQL-VIEW-3302", "error", routeSource,
+                        "response.html.views binds declarative parts to a template: route — a"
+                                + " view: route embeds through its own document instead"));
+            }
+            for (String bound : html.views()) {
+                if (manifest.viewById(bound) == null) {
+                    findings.add(new LintFinding("TQL-VIEW-3302", "error", routeSource,
+                            "views: " + bound + " does not resolve to a view document id"));
+                }
+            }
             if (html.view() == null) {
                 continue;
             }
@@ -450,6 +463,31 @@ public final class AppLinter {
                 lintFormView(manifest, source, spec, findings);
             }
             lintRefreshOn(manifest, source, spec, findings);
+            // Embedded views (docs/view-composition.md wave 2b): the id resolves in the
+            // registry, and the embedded document does not embed further (depth is 1).
+            java.util.List<String> embeds = new ArrayList<>();
+            spec.children().stream().map(io.tesseraql.yaml.view.ViewSpec.Child::view)
+                    .filter(java.util.Objects::nonNull).forEach(embeds::add);
+            spec.panels().stream().map(io.tesseraql.yaml.view.ViewSpec.Panel::view)
+                    .filter(java.util.Objects::nonNull).forEach(embeds::add);
+            for (String embedId : embeds) {
+                io.tesseraql.yaml.manifest.ViewFile embedded = manifest.viewById(embedId);
+                if (embedded == null) {
+                    findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                            "view " + spec.id() + ": embedded view " + embedId
+                                    + " does not resolve to a view document id"));
+                    continue;
+                }
+                boolean embedsFurther = embedded.spec().children().stream()
+                        .anyMatch(child -> child.view() != null)
+                        || embedded.spec().panels().stream()
+                                .anyMatch(panel -> panel.view() != null);
+                if (embedsFurther) {
+                    findings.add(new LintFinding("TQL-VIEW-3318", "error", source,
+                            "view " + spec.id() + ": embedded view " + embedId
+                                    + " embeds views itself — embedding depth is 1"));
+                }
+            }
             Path viewDir = view.source().getParent();
             for (String slotName : spec.slots().keySet()) {
                 java.util.Set<String> allowed = io.tesseraql.yaml.view.ViewSpec

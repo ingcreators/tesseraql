@@ -176,6 +176,11 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *                 the shell-wrapped page to direct navigation, with {@code Vary: HX-Request};
      *                 {@code always} always wraps; {@code never} always serves the region — an
      *                 htmx-only endpoint
+     * @param views    view ids whose models a {@code template:} route binds
+     *                 (docs/view-composition.md wave 2c): each renders into
+     *                 {@code views['<id>']}, so a hand-owned template inserts
+     *                 {@code ~{tql/view/list :: view(${views['items']})}} — the ladder's
+     *                 round-trip; illegal alongside {@code view:}
      * @param model    template model: each value is a source expression (e.g. {@code sql.rows})
      * @param headers  response headers; nested map values (e.g. {@code HX-Trigger}) are serialized
      *                 to JSON, and {@code {expression}} placeholders in values are resolved against
@@ -188,14 +193,15 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record HtmlResponse(Integer status, String template, String view, String shell,
-            java.util.Map<String, Object> model, java.util.Map<String, Object> headers,
-            java.util.Map<String, String> headersWhen,
+            java.util.List<String> views, java.util.Map<String, Object> model,
+            java.util.Map<String, Object> headers, java.util.Map<String, String> headersWhen,
             java.util.List<StatusWhen> statusWhen) {
 
         public HtmlResponse {
             statusWhen = statusWhen == null
                     ? java.util.List.of()
                     : java.util.List.copyOf(statusWhen);
+            views = views == null ? java.util.List.of() : java.util.List.copyOf(views);
             model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
             headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
             headersWhen = headersWhen == null
@@ -220,7 +226,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             if (effective.equals(headers)) {
                 return this;
             }
-            return new HtmlResponse(status, template, view, shell, model, effective,
+            return new HtmlResponse(status, template, view, shell, views, model, effective,
                     headersWhen, statusWhen);
         }
     }

@@ -162,6 +162,50 @@ named queries as child lists: a `children:` entry names a source that must be on
 the route's `queries:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
 slots as a list.
 
+## Views embed views
+
+`children:` and `panels:` accept view references (docs/view-composition.md wave 2b) —
+the one entry type the two composition vocabularies were missing:
+
+```yaml
+# dashboard — a panel that is a view
+panels:
+  - { type: stat, source: sql, column: total }
+  - { type: view, view: requests.recent }        # embedded list view
+
+# detail — children reference views; inline columns stay as the shorthand
+children:
+  - { view: requests.history, source: history }
+```
+
+The route remains the sole data owner: an embedded view reads the **host route's**
+context through its own `source:` (the entry's `source:` overrides it), validated like
+any other source (`TQL-VIEW-3308`). Embedding depth is 1 — an embedded view that itself
+embeds is `TQL-VIEW-3318`, which also makes self-embedding impossible. The embedded
+document renders through its own entry fragment (its card included, per-view
+`template:` retargets respected), so an L2 override of its pattern applies inside the
+host too.
+
+Route `model:` entries render alongside `v` on view-backed routes; `v` and `views` are
+reserved names (`TQL-VIEW-3319`).
+
+### Declarative parts on hand-owned templates
+
+A `template:` route binds view models without owning a view
+(docs/view-composition.md wave 2c):
+
+```yaml
+response:
+  html:
+    template: overview.html
+    views: [requests.recent]     # each renders into views['<id>']
+```
+
+The template inserts `~{tql/view/list :: view(${views['requests.recent']})}` wherever
+it likes. This is what makes L3 non-terminal: **ejecting a composite view emits exactly
+this shape** — the host layout pins into the template while embedded views stay
+declarative and keep deriving from their routes.
+
 ## Dashboard views
 
 `recipe: dashboard` renders query-backed `panels:` over the route's results, laid out on
@@ -382,6 +426,8 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3315 | duplicate view id — two `*.view.yml` documents declare (or default to) the same `id` |
 | 3316 | ejecting a shared view — the view is referenced by more than one route; copy it under a new id and point the route at the copy first |
 | 3317 | `response.html.shell` is not `auto`, `always`, or `never` |
+| 3318 | an embedded view embeds views itself — embedding depth is 1 |
+| 3319 | `response.html.model` declares a reserved view-model name (`v`, `views`) |
 
 Coverage kind **`view`**: one item per view document, exercised when a declarative
 suite invokes any route referencing its id — an unreferenced document is declared and

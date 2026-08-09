@@ -15,6 +15,19 @@ All notable changes to TesseraQL are documented here. The format follows
   keys by view document (one item per document, covered when any referencing route is
   exercised), so unreferenced view files become visible.
 
+### Added
+
+- **Views embed views** (docs/view-composition.md wave 2b/2c): a dashboard panel takes
+  `{ type: view, view: <id> }` and a detail child takes `{ view: <id> }` (the entry's
+  `source:` overriding the embedded document's own), rendering the embedded document
+  through its own pattern fragment — data still comes from the host route's declared
+  sources, and embedding depth is 1 (`TQL-VIEW-3318`). A `template:` route binds
+  declarative parts with `response.html.views: [ids]`, each rendering into
+  `views['<id>']` — and **ejecting a composite view emits exactly that shape**, so L3
+  stops being terminal: the layout pins, the parts stay declarative. Route `model:`
+  entries now render alongside `v` on view-backed routes (`v`/`views` are reserved,
+  `TQL-VIEW-3319`).
+
 ### Changed
 
 - **HTML responses negotiate their shell** (pre-1.0 behavior change,

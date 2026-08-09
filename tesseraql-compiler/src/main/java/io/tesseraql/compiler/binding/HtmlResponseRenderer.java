@@ -39,6 +39,9 @@ public final class HtmlResponseRenderer implements Processor {
     /** TQL-VIEW-3317: response.html.shell must be auto, always, or never. */
     static final TqlErrorCode INVALID_SHELL = new TqlErrorCode(TqlDomain.VIEW, 3317);
 
+    /** TQL-VIEW-3319: model: must not declare the reserved view-model names (v, views). */
+    static final TqlErrorCode RESERVED_MODEL = new TqlErrorCode(TqlDomain.VIEW, 3319);
+
     /** The region shell negotiation serves to htmx requests (docs/view-composition.md 2a). */
     private static final String PAGE_CONTENT_SELECTOR = "#page-content";
 
@@ -50,6 +53,7 @@ public final class HtmlResponseRenderer implements Processor {
     private final String templateName;
     private final String defaultLocaleTag;
     private final ViewBinding viewBinding;
+    private final Map<String, ViewBinding> boundViews;
     private final Map<String, Expr> headerGuards;
     private final Map<String, Expr> compiledModel = new LinkedHashMap<>();
     private final java.util.List<JsonResponseRenderer.CompiledStatus> statusWhen;
@@ -70,12 +74,33 @@ public final class HtmlResponseRenderer implements Processor {
      */
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
             String defaultLocaleTag, ViewBinding viewBinding) {
+        this(response, appHome, routeDir, defaultLocaleTag, viewBinding, Map.of());
+    }
+
+    /**
+     * @param boundViews the compiled {@code response.html.views} bindings by id
+     *                   (docs/view-composition.md wave 2c) — declarative parts a
+     *                   {@code template:} route publishes as {@code views['<id>']}
+     */
+    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
+            String defaultLocaleTag, ViewBinding viewBinding,
+            Map<String, ViewBinding> boundViews) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
         this.viewBinding = viewBinding;
+        this.boundViews = boundViews;
         if (viewBinding != null && response.template() != null) {
             throw new TqlException(new TqlErrorCode(TqlDomain.VIEW, 3302),
                     "response.html declares both template: and view: — they are mutually exclusive");
+        }
+        if (viewBinding != null && !boundViews.isEmpty()) {
+            throw new TqlException(new TqlErrorCode(TqlDomain.VIEW, 3302),
+                    "response.html.views binds declarative parts to a template: route — a view:"
+                            + " route embeds through its own document instead");
+        }
+        if (response.model().containsKey("v") || response.model().containsKey("views")) {
+            throw new TqlException(RESERVED_MODEL, "response.html.model must not declare 'v' or"
+                    + " 'views' — they are the reserved view-model names");
         }
         this.templateName = viewBinding != null
                 ? viewBinding.entryTemplate()
@@ -143,18 +168,28 @@ public final class HtmlResponseRenderer implements Processor {
                 String.class);
 
         Map<String, Object> model = new LinkedHashMap<>();
+        // Route model: entries always evaluate (docs/view-composition.md wave 2b — they used
+        // to be discarded on view: routes); `v` and `views` are reserved names the constructor
+        // refuses, so the view models below can never be shadowed.
+        compiledModel.forEach((key, expr) -> model.put(key, expr.eval(evaluation)));
+        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String pagePath = uri == null
+                ? ""
+                : uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
         if (viewBinding != null) {
             // A declarative view (roadmap Phase 39): the reserved `v` model is the whole contract
             // between the route and the tql/view/* pattern fragments. The request path anchors
             // the list pattern's self-rendering search/sort links.
-            String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
-            String pagePath = uri == null
-                    ? ""
-                    : uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
             model.put("v", viewBinding.model(context, java.util.Locale.forLanguageTag(tag),
                     pagePath));
-        } else {
-            compiledModel.forEach((key, expr) -> model.put(key, expr.eval(evaluation)));
+        }
+        if (!boundViews.isEmpty()) {
+            // Declarative parts on a hand-owned template (wave 2c): each bound view renders
+            // into views['<id>'], inserted by the template via its pattern fragment.
+            Map<String, Object> views = new LinkedHashMap<>();
+            boundViews.forEach((id, binding) -> views.put(id,
+                    binding.model(context, java.util.Locale.forLanguageTag(tag), pagePath)));
+            model.put("views", views);
         }
 
         // Publish the browser session's CSRF token (stashed on authentication) as the reserved
