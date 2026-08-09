@@ -28,9 +28,24 @@ export async function registerMcpServer(home: string): Promise<void> {
     return;
   }
   const written: string[] = [];
+  const skipped: string[] = [];
   for (const target of targets.filter((candidate) => picked.includes(candidate.label))) {
     const existing = fs.existsSync(target.file) ? fs.readFileSync(target.file, 'utf8') : undefined;
     const result = target.merge(existing);
+    if (result.unparseable) {
+      // Nothing was merged, so there is nothing safe to write: rewriting from an empty root would
+      // drop every other server the file declares. Hand the file to the user with the entry to add.
+      const open = await vscode.window.showWarningMessage(
+          `${path.basename(target.file)} is not valid JSON (comments and trailing commas are `
+              + `common in mcp.json), so the 'tesseraql' entry cannot be merged without losing `
+              + `the rest of the file. Add it by hand.`,
+          'Open File');
+      if (open === 'Open File') {
+        void vscode.window.showTextDocument(vscode.Uri.file(target.file));
+      }
+      skipped.push(`${target.label}: not valid JSON`);
+      continue;
+    }
     if (!result.changed) {
       written.push(`${target.label}: already registered`);
       continue;
@@ -47,7 +62,8 @@ export async function registerMcpServer(home: string): Promise<void> {
     fs.writeFileSync(target.file, result.content);
     written.push(target.label);
   }
-  if (written.length > 0) {
-    void vscode.window.showInformationMessage('TesseraQL MCP server: ' + written.join('; '));
+  if (written.length > 0 || skipped.length > 0) {
+    void vscode.window.showInformationMessage(
+        'TesseraQL MCP server: ' + written.concat(skipped).join('; '));
   }
 }
