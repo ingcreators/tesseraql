@@ -240,7 +240,7 @@ the opt-in regression gate) are identical in both formats.
 Prints what the framework declares:
 
 ```json
-{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}]}
+{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
 ```
 
 Policies come from the app config, message keys from the default-locale catalog
@@ -249,6 +249,17 @@ the shared-definition documents under `domains/`, `rules/`, and `calendars/` (ea
 name with the file declaring it), routes, workflows (each workflow with its
 transition and dispatch ids), and jobs (each with its one-line trigger story) from
 the manifest; sorted, deterministic.
+
+A document that does not parse is **skipped, not fatal**: it is listed in `broken`
+(with the parser's message) and on stderr, and everything else still prints. Editor
+intelligence exists to help while an app is mid-edit, so the one moment a document is
+broken must not be the moment every completion in the app goes quiet. A failure
+outside the route tree — a broken shared definition, job, or MCP document — still
+aborts the manifest load, and the command then degrades one step further: the
+config-derived arrays (`policies`, `messages`) and the shared-definition walks still
+answer, `routes`/`workflows`/`jobs` come back empty rather than absent, and `broken`
+carries an `(app manifest)` entry. The extension names the skipped files once per set
+rather than leaving the missing completions unexplained.
 
 ## Publishing
 

@@ -36,6 +36,12 @@ export interface JobSymbol {
   trigger: string | null;
 }
 
+/** A document the CLI could not parse, so its symbols are missing from this index. */
+export interface BrokenDocument {
+  source: string;
+  error: string;
+}
+
 export interface AppSymbols {
   policies: DeclaredSymbol[];
   messages: DeclaredSymbol[];
@@ -46,6 +52,7 @@ export interface AppSymbols {
   routes: RouteSymbol[];
   workflows: WorkflowSymbol[];
   jobs: JobSymbol[];
+  broken: BrokenDocument[];
 }
 
 export class SymbolsContractError extends Error {}
@@ -64,7 +71,7 @@ export function parseAppSymbols(stdout: string): AppSymbols {
   const document = parsed as {
     policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
     decisions?: unknown; calendars?: unknown; routes?: unknown; workflows?: unknown;
-    jobs?: unknown;
+    jobs?: unknown; broken?: unknown;
   };
   return {
     policies: document.policies.map((value) => toSymbol(value, 'name')),
@@ -81,7 +88,23 @@ export function parseAppSymbols(stdout: string): AppSymbols {
     // Absent on a pre-0.10 CLI: workflows degrade to empty, same rule.
     workflows: optionalWorkflows(document.workflows),
     jobs: optionalJobs(document.jobs),
+    // Absent on a CLI that loaded strictly (it would have failed the whole run instead of
+    // reporting skipped documents): degrades to empty, same rule.
+    broken: optionalBroken(document.broken),
   };
+}
+
+function optionalBroken(value: unknown): BrokenDocument[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+      .map((entry) => entry as Record<string, unknown>)
+      .filter((entry) => typeof entry?.source === 'string')
+      .map((entry) => ({
+        source: entry.source as string,
+        error: typeof entry.error === 'string' ? entry.error : '',
+      }));
 }
 
 function optionalJobs(value: unknown): JobSymbol[] {

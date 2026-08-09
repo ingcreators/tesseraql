@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.yaml.SimpleYamlParser;
+import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
@@ -32,6 +33,12 @@ import picocli.CommandLine.Option;
  * JSON object on stdout. The editor language layer
  * (docs/vscode-extension.md, Phase 56) consumes it for completion and go-to-definition; like
  * every editor contract, the document is sorted and deterministic.
+ *
+ * <p>A document that does not parse is <em>skipped and reported</em>, not fatal: the load is the
+ * tolerant one the hot reloader uses, and each shared-definition file is parsed inside its own
+ * try. Editor intelligence exists to help while an app is mid-edit, so the one moment a document
+ * is broken must not be the moment every completion in the app goes quiet. The skipped files are
+ * listed in {@code broken[]} (and on stderr) so the silence is explained rather than mysterious.
  */
 @Command(name = "symbols", description = "Print the app's declared symbols (policies, message keys, domains, rules, decisions, routes, workflows) as JSON.")
 final class SymbolsCommand implements Callable<Integer> {
@@ -39,33 +46,92 @@ final class SymbolsCommand implements Callable<Integer> {
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
     Path app;
 
+    /** One document that could not be parsed, so its symbols are missing from this run. */
+    private record Broken(String source, String error) {
+    }
+
     @Override
     public Integer call() throws Exception {
         Path home = app.toAbsolutePath().normalize();
-        AppManifest manifest = new ManifestLoader().load(home);
+        List<Broken> broken = new ArrayList<>();
+        // The tolerant load the hot reloader uses: an unparseable route document costs its own
+        // symbols, not the run. A failure outside the route tree (a broken shared definition,
+        // job, or MCP document) still aborts the whole load, so it degrades one step further —
+        // config alone still yields policies and message keys, and the walks below are this
+        // command's own. Editor intelligence must survive the app being mid-edit.
+        List<ManifestLoader.BrokenRoute> brokenRoutes = new ArrayList<>();
+        AppManifest manifest;
+        AppConfig config;
+        try {
+            manifest = new ManifestLoader().load(home, brokenRoutes);
+            config = manifest.config();
+        } catch (RuntimeException ex) {
+            manifest = null;
+            config = ManifestLoader.configOnly(home);
+            broken.add(new Broken("(app manifest)", rootMessage(ex)));
+        }
+        for (ManifestLoader.BrokenRoute route : brokenRoutes) {
+            broken.add(new Broken(relative(home, route.source()), route.error()));
+        }
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode document = mapper.createObjectNode();
         SimpleYamlParser parser = new SimpleYamlParser();
-        policies(document.putArray("policies"), manifest, home);
-        messages(document.putArray("messages"), manifest, home);
+        policies(document.putArray("policies"), config, home);
+        messages(document.putArray("messages"), config, home);
         sharedDefinitions(document.putArray("domains"), home, "domains",
-                file -> parser.parseDomains(file).domains().keySet());
+                file -> parser.parseDomains(file).domains().keySet(), broken);
         sharedDefinitions(document.putArray("rules"), home, "rules",
-                file -> parser.parseRuleSets(file).rules().keySet());
+                file -> parser.parseRuleSets(file).rules().keySet(), broken);
         sharedDefinitions(document.putArray("decisions"), home, "decisions",
-                file -> parser.parseDecisions(file).decisions().keySet());
+                file -> parser.parseDecisions(file).decisions().keySet(), broken);
         sharedDefinitions(document.putArray("calendars"), home, "calendars",
-                file -> parser.parseCalendars(file).calendars().keySet());
-        routes(document.putArray("routes"), manifest, home);
-        workflows(document.putArray("workflows"), manifest, home);
-        jobs(document.putArray("jobs"), manifest, home);
+                file -> parser.parseCalendars(file).calendars().keySet(), broken);
+        ArrayNode routes = document.putArray("routes");
+        ArrayNode workflows = document.putArray("workflows");
+        ArrayNode jobs = document.putArray("jobs");
+        // The manifest-derived arrays stay present but empty when the load could not complete —
+        // the contract's shape never depends on the app's health.
+        if (manifest != null) {
+            routes(routes, manifest, home);
+            workflows(workflows, manifest, home);
+            jobs(jobs, manifest, home);
+        }
+        broken(document.putArray("broken"), broken);
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(document));
         return 0;
     }
 
-    private static void policies(ArrayNode into, AppManifest manifest, Path home)
+    /**
+     * The skipped documents, sorted by source so the contract stays deterministic, and echoed to
+     * stderr — stdout carries the JSON contract alone, but a human running the command still has
+     * to be told which files were left out of it.
+     */
+    private static void broken(ArrayNode into, List<Broken> broken) {
+        broken.sort(Comparator.comparing(Broken::source));
+        for (Broken document : broken) {
+            ObjectNode entry = into.addObject();
+            entry.put("source", document.source());
+            entry.put("error", document.error());
+            System.err.println("symbols: skipped " + document.source() + ": " + document.error());
+        }
+    }
+
+    private static String relative(Path home, Path file) {
+        return home.relativize(file.toAbsolutePath().normalize()).toString().replace('\\', '/');
+    }
+
+    /** The innermost cause's message — what the parser actually objected to. */
+    private static String rootMessage(Throwable ex) {
+        Throwable root = ex;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        return root.getMessage() == null ? root.toString() : root.getMessage();
+    }
+
+    private static void policies(ArrayNode into, AppConfig config, Path home)
             throws IOException {
-        if (!(manifest.config()
+        if (!(config
                 .navigate("tesseraql.security.policies") instanceof Map<?, ?> declared)) {
             return;
         }
@@ -82,9 +148,9 @@ final class SymbolsCommand implements Callable<Integer> {
         }
     }
 
-    private static void messages(ArrayNode into, AppManifest manifest, Path home)
+    private static void messages(ArrayNode into, AppConfig config, Path home)
             throws IOException {
-        String tag = manifest.config().getString("i18n.defaultLocale").orElse("en");
+        String tag = config.getString("i18n.defaultLocale").orElse("en");
         MessageCatalog catalog = MessageCatalog.load(home.resolve("messages"));
         Map<String, String> entries = new TreeMap<>(catalog.entries(tag));
         if (entries.isEmpty()) {
@@ -108,7 +174,7 @@ final class SymbolsCommand implements Callable<Integer> {
      * that declares it and its 1-based line.
      */
     private static void sharedDefinitions(ArrayNode into, Path home, String kind,
-            Function<Path, Collection<String>> namesOf) throws IOException {
+            Function<Path, Collection<String>> namesOf, List<Broken> broken) throws IOException {
         Path dir = home.resolve(kind);
         if (!Files.isDirectory(dir)) {
             return;
@@ -125,7 +191,16 @@ final class SymbolsCommand implements Callable<Integer> {
         for (Path file : files) {
             String source = kind + "/" + file.getFileName();
             Map<String, Integer> lines = dottedKeyLines(readLines(file));
-            for (String name : namesOf.apply(file)) {
+            Collection<String> names;
+            try {
+                names = namesOf.apply(file);
+            } catch (RuntimeException ex) {
+                // One unparseable domains/rules/decisions/calendars document must cost only its
+                // own names, not every symbol in the app.
+                broken.add(new Broken(source, rootMessage(ex)));
+                continue;
+            }
+            for (String name : names) {
                 Integer line = lines.get(kind + "." + name);
                 declared.add(new Declared(name, source, line));
             }
