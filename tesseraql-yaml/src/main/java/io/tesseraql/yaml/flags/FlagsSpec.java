@@ -63,8 +63,16 @@ public final class FlagsSpec {
             return EMPTY;
         }
         Object raw = new SimpleYamlParser().parseTree(file).get("flags");
-        if (!(raw instanceof Map<?, ?> map)) {
+        if (raw == null) {
             return EMPTY;
+        }
+        if (!(raw instanceof Map<?, ?> map)) {
+            // A present-but-mis-shaped flags: (e.g. authored as a list) used to yield no flags
+            // silently, so every flags.* expression resolved null and the feature was off
+            // everywhere with no error.
+            throw new io.tesseraql.core.error.TqlException(WRITE_ERROR,
+                    "config/flags.yml: flags: must be a map of name → value, not "
+                            + raw.getClass().getSimpleName());
         }
         Map<String, Object> values = new LinkedHashMap<>();
         map.forEach((key, value) -> values.put(String.valueOf(key), value));

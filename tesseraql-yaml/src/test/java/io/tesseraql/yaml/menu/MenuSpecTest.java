@@ -70,9 +70,19 @@ class MenuSpecTest {
     }
 
     @Test
-    void aNonListMenuKeyYieldsAnEmptySpec(@TempDir Path appHome) throws Exception {
+    void aNonListMenuKeyIsAnError(@TempDir Path appHome) throws Exception {
+        // A mis-shaped menu: used to yield an empty menu silently (navigation vanished with no
+        // error); it now fails the load (silent-tolerance K4).
         writeMenu(appHome, "menu: not-a-list\n");
 
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> MenuSpec.load(appHome))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("must be a list");
+    }
+
+    @Test
+    void anAbsentMenuKeyStaysEmpty(@TempDir Path appHome) throws Exception {
+        writeMenu(appHome, "other: x\n");
         assertThat(MenuSpec.load(appHome).isEmpty()).isTrue();
     }
 

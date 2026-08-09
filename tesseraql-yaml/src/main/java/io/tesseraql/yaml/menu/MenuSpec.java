@@ -78,8 +78,15 @@ public final class MenuSpec {
             return EMPTY;
         }
         Object raw = new SimpleYamlParser().parseTree(file).get("menu");
-        if (!(raw instanceof List<?> list)) {
+        if (raw == null) {
             return EMPTY;
+        }
+        if (!(raw instanceof List<?> list)) {
+            // A present-but-mis-shaped menu: (e.g. authored as a map) used to yield an empty menu
+            // silently — the navigation vanished on every page with no error.
+            throw new io.tesseraql.core.error.TqlException(WRITE_ERROR,
+                    "config/menu.yml: menu: must be a list of items, not "
+                            + raw.getClass().getSimpleName());
         }
         List<MenuItem> items = new ArrayList<>();
         for (Object element : list) {
