@@ -55,6 +55,14 @@ class AppConfigTest {
     }
 
     @Test
+    void anUnterminatedPlaceholderThrowsRatherThanEmittingLiteralText() {
+        // `${db.main.url` (missing brace) was previously handed to the driver verbatim.
+        AppConfig config = config(Map.of("x", "${db.main.url"), Map.of());
+        assertThatThrownBy(() -> config.getString("x")).isInstanceOf(TqlException.class)
+                .hasMessageContaining("Unterminated");
+    }
+
+    @Test
     void resolvesCrossFileReference() {
         Map<String, Object> root = Map.of(
                 "db", Map.of("main", Map.of("url", "jdbc:postgresql://h/db")),

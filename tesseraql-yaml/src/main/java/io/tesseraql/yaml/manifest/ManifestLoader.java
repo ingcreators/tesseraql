@@ -38,6 +38,8 @@ public final class ManifestLoader {
 
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.YAML, 1201);
     private static final TqlErrorCode LOAD_ERROR = new TqlErrorCode(TqlDomain.YAML, 1202);
+    /** TQL-MCP-1013: an mcp/ document declared a kind: outside tool/resource/ui/prompt. */
+    private static final TqlErrorCode MCP_UNKNOWN_KIND = new TqlErrorCode(TqlDomain.MCP, 1013);
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
             "head", "options");
 
@@ -629,6 +631,14 @@ public final class ManifestLoader {
                         if ("prompt".equals(kind)) {
                             prompts.add(promptFile(file, tree, description));
                             return;
+                        }
+                        // A non-null kind outside the legal set was silently treated as a tool —
+                        // `kind: resourse` published a callable tool and dropped the resource.
+                        if (kind != null && !"tool".equals(kind) && !"resource".equals(kind)
+                                && !"ui".equals(kind)) {
+                            throw new TqlException(MCP_UNKNOWN_KIND, "mcp document " + file
+                                    + " declares kind: " + kind
+                                    + " — expected tool, resource, ui or prompt");
                         }
                         RouteDefinition definition = parser.parseRoute(file);
                         if ("resource".equals(kind)) {

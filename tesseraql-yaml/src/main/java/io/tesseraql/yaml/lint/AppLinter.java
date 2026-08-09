@@ -919,6 +919,49 @@ public final class AppLinter {
                         "decisions", "Decision '" + name + "' is declared but never referenced")));
         lintDecisionSources(appHome, manifest, sets, findings);
         lintDecisionConsumption(appHome, manifest, findings);
+        lintDecisionRemovedKeys(appHome, findings);
+    }
+
+    /**
+     * Flags a decision {@code source.id:} — renamed to {@code keyColumn:} before v1 (TQL-DECISION-
+     * 4718). This rename is more dangerous than a plain drop: {@code effectiveKeyColumn()} defaults
+     * to {@code "id"}, so the dropped key is masked and the decision silently joins its {@code set:}
+     * child tables on a column named {@code id} rather than the one the author redirected to.
+     */
+    @SuppressWarnings("unchecked")
+    private void lintDecisionRemovedKeys(Path appHome, List<LintFinding> findings) {
+        Path dir = appHome.resolve("decisions");
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+            files.filter(f -> f.getFileName().toString().endsWith(".yml")).sorted()
+                    .forEach(file -> {
+                        Map<String, Object> tree;
+                        try {
+                            tree = new io.tesseraql.yaml.SimpleYamlParser().parseTree(file);
+                        } catch (RuntimeException malformed) {
+                            return;
+                        }
+                        if (!(tree.get("decisions") instanceof Map<?, ?> decisions)) {
+                            return;
+                        }
+                        String source = relative(appHome, file);
+                        for (Map.Entry<?, ?> decision : decisions.entrySet()) {
+                            if (decision.getValue() instanceof Map<?, ?> body
+                                    && body.get("source") instanceof Map<?, ?> src
+                                    && ((Map<String, Object>) src).containsKey("id")) {
+                                findings.add(new LintFinding("TQL-DECISION-4718", "error", source,
+                                        "Decision '" + decision.getKey()
+                                                + "' source.id: was renamed to "
+                                                + "keyColumn: before v1 — the old key is dropped and the "
+                                                + "join silently falls back to a column named 'id'"));
+                            }
+                        }
+                    });
+        } catch (java.io.IOException ex) {
+            throw new java.io.UncheckedIOException(ex);
+        }
     }
 
     /**
