@@ -405,10 +405,13 @@ a view-backed board list + detail (`examples/user-admin-app/web/users/board`).
   override gets `view.<viewId>.<field>` then a humanized name (`login_id` → "Login
   id"). Locale-aware value formatting composes with [declarative
   validation](declarative-validation.md) and [pagination](pagination.md).
-- **Security**: nothing new. A view renders inside its route's existing
-  auth/policy/CSRF; the form fragment emits the `_csrf` field per the recipe; no new
-  endpoints appear. (Rendering `response.json.fields`-style output masking into list
-  columns is planned, not currently supported.)
+- **Security**: a view renders inside its route's existing auth/policy/CSRF; the form
+  fragment emits the `_csrf` field per the recipe; no new endpoints appear. **HTML
+  output masking** (docs/view-composition.md wave 3b): a column's or detail field's
+  explicit `domain:` reference carries the domain's `classification`/`mask` into
+  rendering — applied with the same `FieldPolicyApplier` (and the same resolution
+  order) the JSON renderer uses, so one row can never render masked in JSON and raw in
+  HTML. Embedded views' policies apply through the host render.
 - **Studio**: the rendered preview already renders routes through the real pipeline, so
   view-backed routes preview (and live-data preview) unchanged; `.view.yml` sources get
   the YAML editor treatment, and the Studio copilot ([copilot](copilot.md)) operates on

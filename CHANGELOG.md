@@ -28,6 +28,11 @@ All notable changes to TesseraQL are documented here. The format follows
   entries now render alongside `v` on view-backed routes (`v`/`views` are reserved,
   `TQL-VIEW-3319`).
 
+- **HTML output masking** (docs/view-composition.md wave 3b): a view column's or
+  detail field's explicit `domain:` reference now applies the domain's
+  `classification`/`mask` to the rendered HTML through the same `FieldPolicyApplier`
+  the JSON renderer uses — closing the masked-in-JSON/raw-in-HTML asymmetry. Embedded
+  views' policies apply through the host render.
 - **Domains carry presentation** (docs/view-composition.md wave 3a): a field domain
   takes `widget:` — "an SKU is a code input", declared once — with precedence per-view
   `fields:` override > domain widget > type-derived default; an enum domain already
