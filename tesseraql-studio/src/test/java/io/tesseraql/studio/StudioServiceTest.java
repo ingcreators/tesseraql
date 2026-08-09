@@ -442,6 +442,76 @@ class StudioServiceTest {
         assertThat(broken.error()).isNotBlank();
     }
 
+    /**
+     * Every declaration kind is compiled by its own parser. These all answered an unconditional
+     * "valid" before, so {@code applyDraft}'s compile-before-write gate promoted broken documents
+     * to the source of truth while the screen said they compiled.
+     */
+    @Test
+    void previewValidatesEveryDeclarationKind() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        assertThat(studio.preview("domains/catalog.yml", """
+                version: tesseraql/v1
+                domains:
+                  sku:
+                    type: string
+                """)).satisfies(p -> assertThat(p.valid()).isTrue())
+                .satisfies(p -> assertThat(p.kind()).isEqualTo("domains"))
+                .satisfies(p -> assertThat(p.result()).contains("sku"));
+
+        // A domains document with no version: is exactly what the manifest load refuses.
+        PreviewResult broken = studio.preview("domains/catalog.yml", "domains:\n  sku:\n");
+        assertThat(broken.valid()).isFalse();
+        assertThat(broken.error()).isNotBlank()
+                .as("the author's own path, not the temp file the parser was handed")
+                .doesNotContain("tql-preview-");
+
+        for (String path : new String[]{"rules/inventory.yml", "decisions/approval.yml",
+                "calendars/jp.yml", "batch/nightly/job.yml", "workflow/purchase.yml",
+                "scope/tenant.yml", "attachments/invoice.yml"}) {
+            assertThat(studio.preview(path, "this: is not a valid document\n").valid())
+                    .as("%s must be compiled, not waved through", path)
+                    .isFalse();
+        }
+
+        // Suites and config are structural only (the suite loader is not on Studio's classpath),
+        // but malformed YAML is still refused where it used to pass.
+        assertThat(studio.preview("tests/users.yml", "cases:\n  - name: x\n   bad: indent\n")
+                .valid()).isFalse();
+        assertThat(studio.preview("config/tesseraql.yml", "tesseraql:\n  app:\n   name: x\n  bad\n")
+                .valid()).isFalse();
+    }
+
+    /**
+     * A view document lives under {@code web/} and ends in {@code .yml}, so the route branch
+     * claimed it and ran the wrong parser entirely — a false green for anything a route happens
+     * to tolerate, and a route-shaped error for anything it does not.
+     */
+    @Test
+    void previewParsesAViewDocumentAsAViewNotARoute() {
+        StudioService studio = new StudioService(exampleManifest(), true);
+
+        PreviewResult view = studio.preview("web/users/users.view.yml", """
+                version: tesseraql/v1
+                id: users.list
+                kind: view
+                recipe: list
+                title: Users
+                columns:
+                  - name: name
+                """);
+        assertThat(view.valid()).isTrue();
+        assertThat(view.kind()).isEqualTo("view");
+        assertThat(view.result()).contains("users.list");
+
+        // And a broken one fails as a view, with the view parser's own complaint.
+        PreviewResult broken = studio.preview("web/users/users.view.yml",
+                "version: tesseraql/v1\nkind: view\n");
+        assertThat(broken.valid()).isFalse();
+        assertThat(broken.kind()).isEqualTo("view");
+    }
+
     @Test
     void previewValidatesTemplates() {
         StudioService studio = new StudioService(exampleManifest(), true);
