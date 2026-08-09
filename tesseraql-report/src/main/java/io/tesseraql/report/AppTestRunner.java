@@ -129,12 +129,15 @@ public final class AppTestRunner {
         return kinds;
     }
 
+    /**
+     * Loads the manifest for the manifest-based coverage kinds. A load failure is not swallowed:
+     * returning {@code null} silently dropped ~two dozen {@code ManifestCoverage} kinds from the
+     * report, so their {@code coverage.thresholds.*} gates all passed against a report that never
+     * measured them. An app whose manifest cannot load has a real error to surface, not coverage
+     * to under-report.
+     */
     private static AppManifest loadManifest(Path appHome) {
-        try {
-            return new ManifestLoader().load(appHome);
-        } catch (RuntimeException ex) {
-            return null;
-        }
+        return new ManifestLoader().load(appHome);
     }
 
     /** Writes coverage gaps as SARIF so CI code-scanning can annotate them (design ch. 15). */

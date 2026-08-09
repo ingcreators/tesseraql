@@ -108,6 +108,16 @@ public class ReportMojo extends AbstractMojo {
             Files.createDirectories(docsDir);
             Files.writeString(docsDir.resolve("report.json"), generator.toJson(report));
             Path historyFile = docsDir.resolve("history.json");
+            // A corrupt (not merely absent) history silently disabled the regression gate — the
+            // empty baseline it produces passes unconditionally, then overwrites the file.
+            if (ReportHistory.isCorrupt(historyFile)) {
+                String message = "Coverage history " + historyFile + " is unreadable; the "
+                        + "regression gate has no baseline to compare against";
+                if (failOnCoverageRegression) {
+                    throw new MojoExecutionException(message);
+                }
+                getLog().warn(message + " (starting a fresh history)");
+            }
             priorHistory = ReportHistory.read(historyFile);
             // A non-positive limit keeps the full history (longer-term trends, backlog F9).
             ReportHistory.append(historyFile, ReportHistory.Entry.from(report), historyLimit);

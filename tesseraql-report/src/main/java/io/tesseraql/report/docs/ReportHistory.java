@@ -82,6 +82,24 @@ public final class ReportHistory {
         }
     }
 
+    /**
+     * Whether a history file is present but unreadable — distinct from simply absent (a legitimate
+     * first run). {@link #read} recovers from both by starting fresh; a caller enforcing a
+     * regression gate uses this to warn or fail on corruption rather than silently treating a
+     * broken baseline as "no baseline yet".
+     */
+    public static boolean isCorrupt(Path historyFile) {
+        if (!Files.isRegularFile(historyFile)) {
+            return false;
+        }
+        try {
+            MAPPER.readValue(historyFile.toFile(), Entry[].class);
+            return false;
+        } catch (IOException ex) {
+            return true;
+        }
+    }
+
     private static void write(Path historyFile, List<Entry> entries) {
         try {
             if (historyFile.getParent() != null) {
