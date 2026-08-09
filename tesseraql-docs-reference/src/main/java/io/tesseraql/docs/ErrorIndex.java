@@ -431,7 +431,18 @@ final class ErrorIndex {
             "batch-platform.md", "analytics-experience.md", "studio-ux-refresh.md",
             "console-ux-refresh.md", "html-email.md", "page-builder.md",
             "pages-and-mail-lints.md", "contract-bugfixes.md", "vocabulary-cleanup.md",
-            "unicode-identifiers.md", "view-composition.md", "silent-tolerance.md");
+            "unicode-identifiers.md", "view-composition.md", "silent-tolerance.md",
+            "documentation-ia.md");
+
+    /** Whether {@code name} is an internal planning document; shared with the config index. */
+    static boolean isInternalDoc(String name) {
+        return INTERNAL_DOCS.contains(name);
+    }
+
+    /** The internal set, for the guard that keeps it equal to the nav manifest's exclusions. */
+    static Set<String> internalDocs() {
+        return INTERNAL_DOCS;
+    }
 
     /**
      * Marks each code with the cookbook pages whose markdown mentions it — every

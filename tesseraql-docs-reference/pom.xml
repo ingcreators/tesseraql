@@ -30,6 +30,16 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
 
+    <!-- The CLI reference is generated from the Picocli command model rather than
+         hand-listed, so it cannot drift from the binary a reader actually runs. This
+         module is build-only and never published, so the dependency costs nothing at
+         runtime; Maven orders the reactor from it. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-cli</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

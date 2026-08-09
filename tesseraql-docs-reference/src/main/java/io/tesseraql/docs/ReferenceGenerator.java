@@ -32,6 +32,8 @@ public final class ReferenceGenerator {
                 yamlSurface(repoRoot));
         Files.writeString(repoRoot.resolve("docs/reference-error-codes.md"),
                 errorCodes(repoRoot));
+        Files.writeString(repoRoot.resolve("docs/reference-cli.md"), cli());
+        Files.writeString(repoRoot.resolve("docs/reference-config.md"), config(repoRoot));
         System.out.println("reference pages regenerated under docs/");
     }
 
@@ -51,6 +53,16 @@ public final class ReferenceGenerator {
     /** The full {@code reference-error-codes.md} content. */
     public static String errorCodes(Path repoRoot) throws IOException {
         return BANNER + ErrorIndex.render(repoRoot);
+    }
+
+    /** The full {@code reference-cli.md} content, from the Picocli command model. */
+    public static String cli() {
+        return BANNER + CliReference.render();
+    }
+
+    /** The full {@code reference-config.md} content, from a source scan. */
+    public static String config(Path repoRoot) throws IOException {
+        return BANNER + ConfigReference.render(repoRoot);
     }
 
     /** GitHub-slugger-compatible heading anchors, shared by both pages. */

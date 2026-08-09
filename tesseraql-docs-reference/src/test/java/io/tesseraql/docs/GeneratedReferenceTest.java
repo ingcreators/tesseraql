@@ -34,6 +34,55 @@ class GeneratedReferenceTest {
     }
 
     @Test
+    void committedCliReferenceMatchesGenerated() throws IOException {
+        assertThat(Files.readString(REPO.resolve("docs/reference-cli.md")))
+                .as(REFRESH)
+                .isEqualTo(ReferenceGenerator.cli());
+    }
+
+    @Test
+    void committedConfigReferenceMatchesGenerated() throws IOException {
+        assertThat(Files.readString(REPO.resolve("docs/reference-config.md")))
+                .as(REFRESH)
+                .isEqualTo(ReferenceGenerator.config(REPO));
+    }
+
+    /**
+     * The CLI page is generated from the command model, so a subcommand cannot be documented
+     * without existing — nor exist without being documented, which is what actually went wrong:
+     * 27 subcommands were scattered through prose with no page listing them.
+     */
+    @Test
+    void cliReferenceCoversEverySubcommandAndItsFlags() {
+        String cli = ReferenceGenerator.cli();
+
+        for (String command : new String[]{"serve", "new", "scaffold", "lint", "test",
+                "coverage", "migrate", "package", "admission", "modules", "job", "token",
+                "identity-schema", "embedded-db", "duckdb", "mcp"}) {
+            assertThat(cli).as("subcommand " + command).contains("## `" + command + "`");
+        }
+        // Nested subcommands render under their parent, not as top-level entries.
+        assertThat(cli).contains("### `modules add`");
+        // A param label carrying a pipe must not break out of its table cell.
+        assertThat(cli).doesNotContain("<text|json>");
+    }
+
+    /**
+     * The configuration index follows the error index's stance: a key appears because the code
+     * reads it, and an undocumented key still appears rather than being quietly dropped.
+     */
+    @Test
+    void configReferenceIndexesKeysWithProvenance() throws IOException {
+        String config = ReferenceGenerator.config(REPO);
+
+        assertThat(config).contains("## tesseraql.studio");
+        assertThat(config).contains("`tesseraql.studio.readOnly`");
+        assertThat(config).contains("https://github.com/ingcreators/tesseraql/blob/main/");
+        // The generator's own example keys are not framework configuration.
+        assertThat(config).doesNotContain("`tesseraql.x.y`");
+    }
+
+    @Test
     void scanFindsBothLiteralAndConstructorShapes() throws IOException {
         Map<String, Map<Integer, ErrorIndex.Code>> scanned = ErrorIndex.scan(REPO);
 
