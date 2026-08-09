@@ -241,3 +241,9 @@ An app author *could* build a settings page by hand, but could not reach the she
 chrome, the locale-resolution chain, the notification dispatch path, or the session
 store — those integration points are framework-internal, which is why the framework
 owns this surface rather than a scaffold.
+
+## Next
+
+- [authentication.md](authentication.md) — the realms and policies behind the sign-in.
+- [iam-admin.md](iam-admin.md) — the administrative counterpart to this surface.
+- [internationalization.md](internationalization.md) — the languages users can choose from.

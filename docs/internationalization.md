@@ -153,3 +153,8 @@ Lint checks the catalogs statically when `messages/` exists:
 | `TQL-YAML-1103` | warning | a declared `tesseraql.i18n.locales` entry has no catalog |
 | `TQL-YAML-1008` | warning | a catalog misses keys present in the default locale |
 | `TQL-FIELD-2005` | warning | a declared message key has no default-locale text |
+
+## Next
+
+- [account.md](account.md) — where users pick their own language.
+- [declarative-validation.md](declarative-validation.md) — the error messages being translated.

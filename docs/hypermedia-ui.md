@@ -327,3 +327,9 @@ the app and a top-level browser GET that fails renders it, with `status`, `error
 `error.message`, and any structured `error.details` in the model. htmx swaps keep the inline error fragment and API clients keep
 the JSON envelope; with no template, every caller gets the JSON envelope. A broken error
 template never masks the original failure — the response falls back to JSON.
+
+## Next
+
+- [declarative-views.md](declarative-views.md) — declaring a page instead of writing its markup.
+- [internationalization.md](internationalization.md) — the message catalogs the templates read.
+- [studio.md](studio.md) — previewing and editing templates live.

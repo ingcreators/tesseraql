@@ -464,3 +464,9 @@ without a verifier would be unauthenticated. Lint catches this and the rest stat
 
 A webhook route is covered by the `webhook` coverage kind when a suite exercises its SQL (the same
 SQL-file basis as route coverage); gate it with `coverage.thresholds.webhook`.
+
+## Next
+
+- [file-transfers.md](file-transfers.md) — the import and export routes connectors feed.
+- [jobs.md](jobs.md) — polling a source on a schedule.
+- [ops-console.md](ops-console.md) — watching transfers and retries.

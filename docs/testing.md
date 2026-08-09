@@ -349,3 +349,9 @@ recordable.
 - [promotion.md](promotion.md) — the test and coverage evidence a release promotion carries.
 - [admission.md](admission.md) — the machine-checkable bar shared apps must clear alongside
   their tests.
+
+## Next
+
+- [admission.md](admission.md) — the bar a shared application must clear.
+- [promotion.md](promotion.md) — how a tested change reaches production.
+- [studio.md](studio.md) — running suites and recording cases in the browser.

@@ -248,3 +248,8 @@ A suite exercises scoped SQL by declaring the principal each case runs as
 ([testing](testing.md#writing-a-suite)): the runner resolves the directive through the app's
 `scope/` declarations with the production resolver, so one case per role asserts each arm's
 rows and the deny-by-default posture against a real database.
+
+## Next
+
+- [multi-tenancy.md](multi-tenancy.md) — isolating whole organizations rather than rows.
+- [authentication.md](authentication.md) — where the principal comes from.

@@ -95,3 +95,10 @@ into apps.
 - Pages are full documents composed with the `tql/shell` fragment; fragments are partial markup.
 - `@{...}` link expressions are not available (no web context); build URLs with literal
   substitution: `th:href="|/users/${u.id}|"`.
+
+## Next
+
+- [two-way-sql.md](two-way-sql.md) — the SQL files the layout is built around.
+- [identifiers.md](identifiers.md) — how a column name becomes an input name, a bind, and a URL parameter.
+- [scaffolding.md](scaffolding.md) — generate a working slice into this layout.
+- [declarative-views.md](declarative-views.md) — the view documents behind the pages.

@@ -261,3 +261,9 @@ beside the other release evidence for the CI governance gate. See
   run-dependent and non-deterministic; folding them into the archive would break artifact
   reproducibility, so they live beside (not inside) the packaged spec, in `.tesseraql/docs/`.
   All of these files are generated artifacts — never hand-edit them.
+
+## Next
+
+- [studio.md](studio.md) — where the portal is served during development.
+- [promotion.md](promotion.md) — the release diff between environments.
+- [admission.md](admission.md) — the machine-checkable bar the portal reports against.

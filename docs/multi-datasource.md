@@ -170,3 +170,9 @@ main-anchored feature into a non-main transaction.
 - **Studio's data browser and the docs portal's schema introspection** stay on
   `main` for now; extending them per-datasource is planned, not currently supported.
 - **Per-tenant named datasources** — tenancy remains a `main`-only concern.
+
+## Next
+
+- [duckdb.md](duckdb.md) — an analytical datasource over files.
+- [transactional-writes.md](transactional-writes.md) — why writes stay on one connector.
+- [deployment.md](deployment.md) — configuring the connectors per environment.

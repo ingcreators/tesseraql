@@ -87,3 +87,8 @@ TTL instead of writing a row per render.
 - The list pattern has no "Pin this view" button of its own: the header control already
   pins any page with its query, so a second button beside the search box would be
   redundant chrome — the collapse argument, applied once more.
+
+## Next
+
+- [account.md](account.md) — the rest of the per-user surface.
+- [inbox.md](inbox.md) — the other place users return to.

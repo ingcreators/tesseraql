@@ -94,3 +94,8 @@ finding, and the stream carries no logic of its own).
 - [declarative-views.md](declarative-views.md) — the list view `refreshOn:` hangs off.
 - [inbox.md](inbox.md) — the framework's own live surface on the same transport.
 - [deployment.md](deployment.md) — the per-node coordination stance this feature follows.
+
+## Next
+
+- [declarative-views.md](declarative-views.md) — the views that refresh.
+- [messaging.md](messaging.md) — events between applications, rather than screens.

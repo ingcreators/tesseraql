@@ -138,3 +138,7 @@ cache:
 - `cache:` is a **query-recipe** key (`query-json`, `query-html`, `page`): a command's
   response must never come from a cache. Streaming responses (`query-export`) are not hashed.
 
+## Next
+
+- [declarative-views.md](declarative-views.md) — shaping an HTML response instead.
+- [app-mcp.md](app-mcp.md) — the same routes as agent tools.

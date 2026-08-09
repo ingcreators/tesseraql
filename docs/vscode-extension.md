@@ -321,3 +321,8 @@ asset is the distribution channel, not the repository.
   the form is a curated subset — id, recipe, security, inputs — with the text editor
   as the escape hatch. The option *lists* are framework-derived and drift-tested
   because the choices, not the layout, are where drift lives.
+
+## Next
+
+- [studio.md](studio.md) — the browser console the extension complements.
+- [testing.md](testing.md) — the suites the extension runs.

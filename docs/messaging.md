@@ -215,3 +215,9 @@ Lint catches a misconfigured channel before it ships:
 A `queue-consume` route is covered by the `queue-consume` coverage kind when a declarative suite
 ([testing](testing.md)) exercises its SQL (the same SQL-file basis as route coverage); gate it with
 `coverage.thresholds.queue-consume`.
+
+## Next
+
+- [connectors.md](connectors.md) — reaching systems that do not speak your channel.
+- [notifications.md](notifications.md) — messages aimed at people.
+- [ops-console.md](ops-console.md) — the dead-letter surface.

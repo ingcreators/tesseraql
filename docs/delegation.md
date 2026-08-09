@@ -95,3 +95,8 @@ operator's answer to "why did this land with X?".
   operation covers it deliberately).
 - Admin-imposed delegation on behalf of another user — a possible later,
   separately-audited surface; today the rule is strictly self-service.
+
+## Next
+
+- [approval-workflow.md](approval-workflow.md) — the approvals being delegated.
+- [iam-admin.md](iam-admin.md) — seeing standing delegations.

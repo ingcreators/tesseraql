@@ -96,3 +96,8 @@ rendered identically — with no stream at all.
   capability: UUID, single-use, actor-bound, short TTL.
 - Every chunk is server-escaped before framing; the client appends, never interprets.
 - CSP unchanged: EventSource connects same-origin under `default-src 'self'`.
+
+## Next
+
+- [studio.md](studio.md) — the console the copilot drives.
+- [ai-mcp.md](ai-mcp.md) — the same tools from an external agent.

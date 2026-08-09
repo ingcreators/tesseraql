@@ -373,3 +373,9 @@ the build like any other kind.
 | `TQL-TPL-2002` | lint: mail template references an unknown `tql/email` fragment |
 | `TQL-TPL-2003` | lint: mail body/subject `${...}` root outside the mail model (warning) |
 | `TQL-OPS-9006` | alert: outbox events are dead-lettered |
+
+## Next
+
+- [inbox.md](inbox.md) — the in-product side of the same messages.
+- [messaging.md](messaging.md) — events to other systems rather than people.
+- [ops-console.md](ops-console.md) — watching delivery, and redelivering a failure.

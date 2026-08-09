@@ -95,3 +95,9 @@ and the route's **latency shows up on a scraped dashboard**
 ([observability](deployment.md), `deploy/grafana/tesseraql-dashboard.json`). Each leg is
 held green by an integration test: the zero-restart hot reload, the Studio test recorder,
 the release diff engine, and the Prometheus exposition.
+
+## Next
+
+- [your-first-app.md](your-first-app.md) — build one yourself, from an empty directory.
+- [studio.md](studio.md) — the console you just toured, in full.
+- [app-layout.md](app-layout.md) — what the files you opened are, and how URLs map to them.

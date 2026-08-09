@@ -129,3 +129,8 @@ already-usable login refuses, so an invite can never take over an account.
 - A consumed reset invalidates every session of the subject.
 - The TOTP secret is server-side data in the identity database, like the password
   hashes beside it — protect that database accordingly.
+
+## Next
+
+- [account.md](account.md) — the self-service surface these flows serve.
+- [iam-admin.md](iam-admin.md) — inviting and disabling users.

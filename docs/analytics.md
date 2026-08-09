@@ -186,3 +186,9 @@ nothing extra to configure:
 | Export, transfers, retention | [File import and export](file-transfers.md) |
 | Push targets, poll sources, egress policy | [Managed connectors](connectors.md) |
 | Mail attachments | [Notifications](notifications.md) |
+
+## Next
+
+- [duckdb.md](duckdb.md) — the engine behind the lake tables.
+- [jobs.md](jobs.md) — scheduling the summarization.
+- [declarative-views.md](declarative-views.md) — the dashboard views that render it.

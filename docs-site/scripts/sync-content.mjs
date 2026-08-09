@@ -63,6 +63,21 @@ for (const slug of SECTIONS.flatMap((section) => section.items)) {
   });
 }
 
+// Every published page ends somewhere. The sidebar was the only way on for 44 of 50
+// pages, so a reader who finished one had to guess what followed (docs/documentation-ia.md).
+// The generated reference pages are indexes, not reading; they are exempt by name.
+const ENDS_SOMEWHERE = /^## (?:Next|Where to next|Related pages|See also)\s*$/m;
+for (const slug of SECTIONS.flatMap((section) => section.items)) {
+  if (slug.startsWith('reference-')) continue;
+  const file = path.join(docsDir, `${slug}.md`);
+  if (!fs.existsSync(file)) continue; // the completeness check above reports it
+  if (!ENDS_SOMEWHERE.test(fs.readFileSync(file, 'utf8'))) {
+    problems.push(
+      `docs/${slug}.md is a dead end: add a "## Next" section naming two or three pages that follow`,
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.error('sync-content: the nav manifest and docs/ disagree:');
   for (const problem of problems) console.error(`  - ${problem}`);

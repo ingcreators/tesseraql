@@ -162,3 +162,8 @@ Carried forward, none an actively-exploitable hole in a correctly-configured dep
   packages, beyond today's hash pinning and the declarative-only admission gate.
 - **This model is living.** Each new surface — a new recipe, a new egress path, a new parser —
   extends the tables above; that upkeep is part of adding the surface, not an afterthought.
+
+## Next
+
+- [security-hardening.md](security-hardening.md) — the control map behind the mitigations.
+- [deployment.md](deployment.md) — the production settings the residual risks assume.

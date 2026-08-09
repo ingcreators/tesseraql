@@ -381,3 +381,9 @@ with its URL and endpoint.
   time. The live surface exists instead: Studio's data browser browses any declared
   datasource, and on a `duckdb` one it lists tables and views across every attached
   catalog — the lake included — as `catalog.schema.table`.
+
+## Next
+
+- [analytics.md](analytics.md) — the whole file-to-dashboard loop.
+- [jobs.md](jobs.md) — the scheduled ETL that feeds the lake.
+- [multi-datasource.md](multi-datasource.md) — how a named datasource is declared.
