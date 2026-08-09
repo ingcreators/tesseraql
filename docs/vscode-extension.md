@@ -202,6 +202,11 @@ configuration: `.vscode/mcp.json` (VS Code MCP clients) and/or the repo-root
 foreign `tesseraql` entry without confirmation. One command, and any connected agent
 sees manifest, lint, tests, and scaffolding.
 
+A file that is not valid JSON — `mcp.json` is JSONC in practice, and VS Code itself writes
+comments into it — cannot be merged, so the command **refuses to write it** and offers to open
+it for a hand edit. It never rewrites a file it could not read: the other servers declared there
+are exactly what a rewrite would destroy.
+
 ## CLI contracts
 
 The extension computes nothing the framework already knows; these CLI contracts carry
