@@ -27,6 +27,21 @@ test('parses the symbols document', () => {
       [{ id: 'app.home', source: 'web/get.yml', method: 'GET', path: '/', recipe: 'query-html' }]);
 });
 
+test('skipped documents are read from the broken array', () => {
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [],
+    messages: [],
+    broken: [{ source: 'web/users/get.yml', error: 'mapping values are not allowed here' }],
+  }));
+  assert.deepEqual(symbols.broken,
+      [{ source: 'web/users/get.yml', error: 'mapping values are not allowed here' }]);
+});
+
+test('a CLI that loaded strictly reports no broken documents', () => {
+  // It would have failed the whole run instead, so the array is simply absent.
+  assert.deepEqual(parseAppSymbols(JSON.stringify({ policies: [], messages: [] })).broken, []);
+});
+
 test('a pre-shared-definitions document degrades to empty domains, rules, and decisions', () => {
   const symbols = parseAppSymbols(JSON.stringify({ policies: [], messages: [] }));
   assert.deepEqual(symbols.domains, []);

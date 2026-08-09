@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { homeOf } from '../core/appHome';
 import {
   AppSymbols,
+  BrokenDocument,
   completionKindAt,
   parseAppSymbols,
   symbolReferenceAt,
@@ -38,6 +39,8 @@ export class SymbolIndex {
   private readonly byHome = new Map<string, AppSymbols>();
   private readonly pending = new Map<string, NodeJS.Timeout>();
   private readonly refreshed: (() => void)[] = [];
+  /** The last reported set of broken documents per home, so an unchanged set warns once. */
+  private readonly warnedBroken = new Map<string, string>();
 
   constructor(private homes: readonly string[], private readonly output: vscode.OutputChannel) {
     for (const home of homes) {
@@ -89,7 +92,9 @@ export class SymbolIndex {
       execFile(cliPath, ['symbols', '--app', home], { cwd: home, maxBuffer: 16 * 1024 * 1024 },
           (_error, stdout) => {
             try {
-              this.byHome.set(home, parseAppSymbols(stdout));
+              const symbols = parseAppSymbols(stdout);
+              this.byHome.set(home, symbols);
+              this.reportBroken(home, symbols.broken);
               for (const listener of this.refreshed) {
                 listener();
               }
@@ -101,6 +106,38 @@ export class SymbolIndex {
             resolve();
           });
     });
+  }
+
+  /**
+   * Names the documents the CLI skipped. Their symbols are simply missing, so without this the
+   * only evidence is a completion list that quietly stops offering one file's names — the kind
+   * of absence a user reads as "the extension is broken" rather than "that document is".
+   * Logged every refresh; the popup appears once per set of files, so a document that stays
+   * broken while it is being edited does not nag.
+   */
+  private reportBroken(home: string, broken: readonly BrokenDocument[]): void {
+    const signature = broken.map((document) => document.source).sort().join('\n');
+    if (signature === this.warnedBroken.get(home)) {
+      return;
+    }
+    this.warnedBroken.set(home, signature);
+    for (const document of broken) {
+      this.output.appendLine(`symbols: skipped ${document.source}: ${document.error}`);
+    }
+    if (broken.length === 0) {
+      return;
+    }
+    const files = broken.map((document) => document.source).join(', ');
+    void vscode.window
+        .showWarningMessage(
+            `TesseraQL: ${broken.length} document(s) did not parse, so their symbols are missing`
+                + ` from completion and go-to-definition: ${files}`,
+            'Show Log')
+        .then((choice) => {
+          if (choice === 'Show Log') {
+            this.output.show(true);
+          }
+        });
   }
 }
 

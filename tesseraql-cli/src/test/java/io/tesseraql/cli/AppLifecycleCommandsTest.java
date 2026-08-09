@@ -11,6 +11,8 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
@@ -238,6 +240,67 @@ class AppLifecycleCommandsTest {
         assertThat(route.get("id").asText()).isNotBlank();
         assertThat(route.get("source").asText()).endsWith(".yml");
         assertThat(route.get("recipe").asText()).isNotBlank();
+        assertThat(document.get("broken")).isEmpty();
+    }
+
+    private static List<String> brokenSources(JsonNode document) {
+        List<String> sources = new ArrayList<>();
+        document.get("broken").forEach(entry -> {
+            sources.add(entry.get("source").asText());
+            assertThat(entry.get("error").asText()).isNotBlank();
+        });
+        return sources;
+    }
+
+    /**
+     * Editor intelligence has to survive the moment it is most needed: mid-edit, with one document
+     * not yet valid. An unparseable route costs only its own symbols — every other route, policy
+     * and message key still lands — and it is named in {@code broken[]} so the gap is explained
+     * rather than mysterious.
+     */
+    @Test
+    void symbolsSkipsAnUnparseableRouteInsteadOfFailingTheRun(@TempDir Path dir) throws Exception {
+        Path app = scaffold(dir);
+        Files.createDirectories(app.resolve("web/broken"));
+        Files.writeString(app.resolve("web/broken/get.yml"), "id: broken\n  bad indentation:\n");
+
+        Captured captured = executeCapturing("symbols", "--app", app.toString());
+
+        assertThat(captured.exitCode()).isZero();
+        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        assertThat(document.get("policies").size()).isPositive();
+        assertThat(document.get("routes").size()).isPositive();
+        assertThat(brokenSources(document)).containsExactly("web/broken/get.yml");
+    }
+
+    /**
+     * A failure outside the route tree still aborts the manifest load, so the fallback degrades
+     * one step further instead of failing: config-derived symbols (policies, message keys) and
+     * the shared-definition walks still answer, the manifest-derived arrays are empty rather
+     * than absent, and both the aborted load and the offending document are reported.
+     */
+    @Test
+    void symbolsDegradesToConfigWhenASharedDefinitionIsUnparseable(@TempDir Path dir)
+            throws Exception {
+        Path app = scaffold(dir);
+        Files.createDirectories(app.resolve("domains"));
+        Files.writeString(app.resolve("domains/good.yml"), """
+                version: tesseraql/v1
+                domains:
+                  sku:
+                    type: string
+                """);
+        Files.writeString(app.resolve("domains/bad.yml"), "domains:\n  : not a name\n");
+
+        Captured captured = executeCapturing("symbols", "--app", app.toString());
+
+        assertThat(captured.exitCode()).isZero();
+        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        assertThat(document.get("policies").size()).isPositive();
+        assertThat(document.get("domains"))
+                .anyMatch(entry -> "sku".equals(entry.get("name").asText()));
+        assertThat(document.get("routes")).isEmpty();
+        assertThat(brokenSources(document)).contains("(app manifest)", "domains/bad.yml");
     }
 
     @Test
