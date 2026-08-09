@@ -151,6 +151,14 @@ public final class ScimRouteBuilder extends RouteBuilder {
     }
 
     private void listGroups(Exchange exchange) throws Exception {
+        String filter = exchange.getMessage().getHeader("filter", String.class);
+        if (filter != null && !filter.isBlank()) {
+            // The Groups endpoint has no filter support; it used to silently return the whole
+            // directory, so an IdP's pre-create `displayName eq "X"` lookup got every group and
+            // mutated the wrong one. RFC 7644: an unsupported filter is invalidFilter (400).
+            throw new io.tesseraql.scim.ScimException(400, "invalidFilter",
+                    "Filtering is not supported on the Groups endpoint");
+        }
         int startIndex = header(exchange, "startIndex", 1);
         int count = header(exchange, "count", 100);
         respond(exchange, 200, groups.list(startIndex, count));
@@ -197,8 +205,30 @@ public final class ScimRouteBuilder extends RouteBuilder {
                 cause == null ? "Internal Server Error" : "Request rejected"));
     }
 
+    /** The largest page a SCIM list returns; a client asking for more is clamped, not honored. */
+    private static final int MAX_COUNT = 200;
+
     private static int header(Exchange exchange, String name, int defaultValue) {
-        Integer value = exchange.getMessage().getHeader(name, Integer.class);
-        return value != null ? value : defaultValue;
+        String raw = exchange.getMessage().getHeader(name, String.class);
+        if (raw == null || raw.isBlank()) {
+            return defaultValue;
+        }
+        int value;
+        try {
+            // getHeader(Integer.class) returned null on a non-numeric value, so ?count=abc
+            // silently became the default and ?count=1000000 was an unbounded page; reject and
+            // clamp explicitly.
+            value = Integer.parseInt(raw.trim());
+        } catch (NumberFormatException ex) {
+            throw new io.tesseraql.scim.ScimException(400, "invalidValue",
+                    "Query parameter '" + name + "' must be an integer, not '" + raw + "'");
+        }
+        if ("startIndex".equals(name)) {
+            return Math.max(1, value);
+        }
+        if ("count".equals(name)) {
+            return Math.max(0, Math.min(value, MAX_COUNT));
+        }
+        return value;
     }
 }
