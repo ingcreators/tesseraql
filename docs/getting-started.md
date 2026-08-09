@@ -185,6 +185,7 @@ bake the cache into your image so production hosts need no repository access.
 
 - [your-first-app.md](your-first-app.md) — the tutorial: an empty directory to a tested
   feature, step by step. Start here.
+- [troubleshooting.md](troubleshooting.md) — if the first run did not go to plan.
 - [reference-cli.md](reference-cli.md) — every subcommand and flag.
 - [reference-config.md](reference-config.md) — every configuration key the framework reads.
 - [app-layout.md](app-layout.md) — the application directory and URL mapping.

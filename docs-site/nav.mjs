@@ -11,7 +11,7 @@ export const BASE = '/tesseraql';
 export const SECTIONS = [
   {
     label: 'Start here',
-    items: ['overview', 'five-minute-demo', 'getting-started', 'your-first-app'],
+    items: ['overview', 'five-minute-demo', 'getting-started', 'your-first-app', 'faq'],
   },
   {
     // One page per application shape, routing through pages that already exist rather
@@ -117,6 +117,7 @@ export const SECTIONS = [
       'reference-cli',
       'reference-config',
       'reference-error-codes',
+      'troubleshooting',
     ],
   },
 ];

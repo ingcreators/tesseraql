@@ -74,3 +74,4 @@ all.
 - [five-minute-demo.md](five-minute-demo.md) — a running application in one command.
 - [concepts.md](concepts.md) — the mental model.
 - [getting-started.md](getting-started.md) — install and scaffold.
+- [faq.md](faq.md) — the questions people ask before adopting it.
