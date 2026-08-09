@@ -25,7 +25,10 @@ import org.apache.camel.builder.RouteBuilder;
  * input surface is deliberately single-valued; multi-value form parsing is a transport
  * concern, like the copilot's content negotiation. Same gate chain the YAML per-user
  * routes compile to: browser session, CSRF, {@code iam.admin.write} — and every submitted
- * id is validated by the identity contract itself (an unknown id updates nothing).
+ * id is validated by the identity contract itself. An id that matches no user updates
+ * nothing and is <em>not</em> counted as disabled: the redirect carries what actually
+ * changed alongside what was selected, so a stale selection cannot read as a completed
+ * action (docs/silent-tolerance.md O10).
  */
 final class IamAdminRouteBuilder extends RouteBuilder {
 
@@ -67,17 +70,24 @@ final class IamAdminRouteBuilder extends RouteBuilder {
                             .getRegistry().lookupByNameAndType(
                                     TesseraqlProperties.SESSION_STORE_BEAN,
                                     io.tesseraql.security.session.SessionStore.class);
-                    // The same contract the per-user route runs, once per selected id; an
-                    // id that matches no user simply updates zero rows. Disabled means
-                    // disabled (docs/session-administration.md): every session of each
+                    // The same contract the per-user route runs, once per selected id. Disabled
+                    // means disabled (docs/session-administration.md): every session of each
                     // subject ends now, not at cookie expiry.
+                    //
+                    // The affected-row count is kept rather than discarded: an id that matches
+                    // no user updates nothing, and reporting the *requested* count made a stale
+                    // selection read as a completed action ("5 user(s) disabled" having disabled
+                    // three). The page is told both numbers and says so when they differ.
+                    int disabled = 0;
                     for (String id : ids) {
-                        identity.executeUpdate(realm, IdentityContracts.DISABLE_USER,
-                                Map.of("userId", id));
+                        if (identity.executeUpdate(realm, IdentityContracts.DISABLE_USER,
+                                Map.of("userId", id)) > 0) {
+                            disabled++;
+                        }
                         sessions.invalidateOthersFor(id, "");
                     }
                     io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, 303,
-                            USERS + "?bulk=" + ids.size());
+                            USERS + "?bulk=" + disabled + "&selected=" + ids.size());
                 });
     }
 

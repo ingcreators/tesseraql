@@ -453,6 +453,7 @@ All 446 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-STUDIO-4238` | a calendar edit that cannot mean anything (docs/jobs.md). | [jobs](jobs.md) | [StudioService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/StudioService.java) |
 | `TQL-STUDIO-4239` | a job-policy edit that cannot mean anything (docs/jobs.md). | [jobs](jobs.md) | [StudioService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/StudioService.java) |
 | `TQL-STUDIO-4240` | Unknown wizard '…' — expected one of … | — | [StudioService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/StudioService.java) |
+| `TQL-STUDIO-4241` | Menu index '…' is not a number · the menu index names no item, so the edit cannot be applied. | — | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [StudioService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-studio/src/main/java/io/tesseraql/studio/StudioService.java) |
 
 ## TENANT
 
@@ -501,6 +502,7 @@ All 446 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-VIEW-3317` | response.html.shell must be 'auto', 'always' or 'never', got: … · response.html.shell must be auto, always, or never. | [declarative-views](declarative-views.md) | [HtmlResponseRenderer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/HtmlResponseRenderer.java), [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
 | `TQL-VIEW-3318` | an embedded view embeds further — embedding depth is 1. · view …: embedded view … embeds views itself — embedding depth is 1 | [declarative-views](declarative-views.md) | [ViewBinding.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/ViewBinding.java), [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
 | `TQL-VIEW-3319` | model: must not declare the reserved view-model names (v, views). | [declarative-views](declarative-views.md) | [HtmlResponseRenderer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/HtmlResponseRenderer.java) |
+| `TQL-VIEW-3320` | the stream was asked for a topic no route declares with `emit:`. | [realtime](realtime.md) | [LiveEvents.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/LiveEvents.java) |
 
 ## WORKFLOW
 

@@ -75,15 +75,42 @@ final class LiveEvents {
         });
     }
 
-    /** The requested topics, filtered to the declared set (an unknown topic never fires). */
+    /**
+     * TQL-VIEW-3320: the stream was asked for a topic no route declares with {@code emit:}.
+     */
+    private static final io.tesseraql.core.error.TqlErrorCode UNDECLARED_TOPIC = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.VIEW, 3320);
+
+    /**
+     * The requested topics, checked against the app-declared set.
+     *
+     * <p>An undeclared topic used to be filtered out silently, so a typo (`odrers.changed`)
+     * opened a perfectly healthy-looking stream — 200, {@code text/event-stream}, heartbeats
+     * forever — that could never fire. The page waits for a refresh signal that is not coming,
+     * and nothing anywhere says why. Refusing before the stream opens is the whole point of
+     * {@code begin} (docs/realtime.md): the caller gets the framework's error envelope instead
+     * of a dead subscription.
+     */
     private static List<String> requestedTopics(String raw, Set<String> declared) {
         if (raw == null || raw.isBlank()) {
             return List.of();
         }
-        return Arrays.stream(raw.split(","))
+        List<String> topics = Arrays.stream(raw.split(","))
                 .map(String::trim)
-                .filter(declared::contains)
+                .filter(topic -> !topic.isEmpty())
                 .distinct()
                 .toList();
+        List<String> undeclared = topics.stream().filter(topic -> !declared.contains(topic))
+                .toList();
+        if (!undeclared.isEmpty()) {
+            throw io.tesseraql.core.error.TqlException.builder(UNDECLARED_TOPIC)
+                    .message("No route declares emit: " + String.join(", ", undeclared)
+                            + "; a stream for an undeclared topic can never fire"
+                            + (declared.isEmpty()
+                                    ? " (this app declares no topics)"
+                                    : " (declared: " + String.join(", ", declared) + ")"))
+                    .build();
+        }
+        return topics;
     }
 }
