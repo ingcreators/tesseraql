@@ -286,7 +286,7 @@ poll) and `DEAD` (attempts exhausted; never retried automatically) on the failur
 Dead letters raise the `TQL-OPS-9006` operational alert — which itself notifies through the
 alerts channel — and stay visible until an operator acts:
 
-- the **Outbox** screen of the operations console (`/_tesseraql/ops/console/outbox`):
+- the **Outbox** screen of the [operations console](ops-console.md) (`/_tesseraql/ops/console/outbox`):
   recent deliveries with status, attempts, and last error, scoped to the caller's
   `ops.app.<name>` grants
 - `GET /_tesseraql/ops/outbox` — the same delivery log as JSON (`ops.batch.view`)

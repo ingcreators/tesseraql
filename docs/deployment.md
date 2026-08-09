@@ -71,7 +71,7 @@ is a per-host canary.
    applies the managed IAM schema and seeds the first administrator; the
    `tesseraql:identity-schema` Maven goal is the CI alternative. There are no default
    credentials; the role names must match the app's `tesseraql.security.policies`.
-   `ops.app.<name>` permissions scope what an operator sees in the ops console and the
+   `ops.app.<name>` permissions scope what an operator sees in the [ops console](ops-console.md) and the
    `/_tesseraql/ops` API: [batch jobs](jobs.md), executions, and traces are attributed to their
    owning app
    and hidden outside the caller's grants (deny by default); `ops.app.*` grants everything.

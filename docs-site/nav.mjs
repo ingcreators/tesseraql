@@ -36,6 +36,17 @@ export const SECTIONS = [
       'analytics',
       'testing',
       'documentation-portal',
+    ],
+  },
+  {
+    // The surfaces every application ships with. They were referenced from thirty
+    // pages and documented on none; a reader who met "the ops console's jobs page"
+    // had nowhere to go (docs/documentation-ia.md).
+    label: 'Consoles and tools',
+    items: [
+      'studio',
+      'ops-console',
+      'iam-admin',
       'vscode-extension',
     ],
   },

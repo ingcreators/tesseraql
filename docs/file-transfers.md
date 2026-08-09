@@ -22,7 +22,7 @@ asynchronous extraction by changing the recipe, not the column layout.
   rejections.
 
 Every transfer is also tracked as a batch execution, so imports and exports show up app-scoped
-in the operations console. Imports can alternatively be driven by polling a local or SFTP/FTPS
+in the [operations console](ops-console.md). Imports can alternatively be driven by polling a local or SFTP/FTPS
 directory instead of an HTTP upload — see [connectors.md](connectors.md).
 
 ## Synchronous download: query-export

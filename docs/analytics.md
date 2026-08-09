@@ -74,7 +74,7 @@ group by sku
 ```
 
 Runs are recorded per step with row counts, visible in the
-[operations console](jobs.md#observing-runs); reruns are safe by construction
+[operations console](ops-console.md); reruns are safe by construction
 (replace-the-window writes), and a failed run pages through the `sla:` policy.
 
 ## 3. History as snapshots — and time travel

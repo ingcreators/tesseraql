@@ -70,7 +70,7 @@ a URL is held to the egress discipline — the host must be in
 is refused off loopback (`TQL-SEC-4087`). A successful fetch caches to
 `work/saml/idp-metadata.xml`; if the IdP's endpoint is down at a later boot, the cached copy
 serves with a warning, so an IdP outage never bricks the app. A Studio wizard (**SAML SP**,
-under the IAM admin wizards) generates this config block.
+under the [IAM Admin](iam-admin.md) wizards) generates this config block.
 
 ## Metadata exchange
 

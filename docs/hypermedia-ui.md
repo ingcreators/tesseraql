@@ -1,7 +1,7 @@
 # Hypermedia UI patterns
 
 This page records the blessed htmx patterns TesseraQL UIs are built from — the compositions
-the bundled system apps (the signed-in shell, IAM Admin, the ops console) use — so user apps
+the bundled system apps (the signed-in shell, [IAM Admin](iam-admin.md), [the ops console](ops-console.md)) use — so user apps
 can copy them instead of inventing their own. Pages are server-rendered Thymeleaf composed
 with [Hypermedia Components](https://ingcreators.com/hypermedia-components) (`hc-*` markup,
 served from the WebJar at version-less `/assets/vendor/` paths, see

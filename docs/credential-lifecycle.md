@@ -81,7 +81,7 @@ tesseraql:
 not a mail channel — fails the boot with `TQL-SEC-4120`, so a half configuration can
 never send an invite that goes nowhere.
 
-The bundled IAM admin (`/_tesseraql/admin/users`) has **Invite user**: login id,
+The bundled [IAM Admin](iam-admin.md) (`/_tesseraql/admin/users`) has **Invite user**: login id,
 display name, email, roles. The provider runs the existing `create-user` contract with
 **status `INVITED`** — no credential columns at all, and `find-credential-by-login`
 already refuses any status but ACTIVE, so an invited account **cannot sign in** until

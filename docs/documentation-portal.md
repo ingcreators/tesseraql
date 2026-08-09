@@ -1,7 +1,7 @@
 # Documentation portal
 
 The documentation portal is a single, browsable **per-application reference**, served in-product
-by Studio, that lets an operator or reviewer see, with cross-references between them:
+by [Studio](studio.md), that lets an operator or reviewer see, with cross-references between them:
 
 1. **Page / route specs** — every HTTP route and HTML page: method, path, recipe, declared
    inputs, security (auth + policy + CSRF), validation, notifications, response shape, and the
