@@ -2178,6 +2178,10 @@ public final class AppLinter {
         // An MCP tool's SQL is model-driven — its arguments come from an LLM — so it is the
         // highest-risk surface for embedded-variable injection, and it was the one not checked.
         lintEmbeddedVariables(tool.source(), definition, source, findings);
+        // A tool writes with the same bindings a command route does; the write-safety
+        // and isolation nudges apply to it identically (docs/silent-tolerance.md K-e).
+        lintOptimisticLocking(tool.source(), definition, source, findings);
+        lintTenantPredicate(config, tool.source(), definition, source, findings);
     }
 
     /**
@@ -2334,7 +2338,7 @@ public final class AppLinter {
                         "Query '" + name + "' references a missing SQL file: " + query.file()));
             }
         });
-        lintOptimisticLocking(route, definition, source, findings);
+        lintOptimisticLocking(route.source(), definition, source, findings);
         // Whether the recipe honors validate: at all is a route-level question; the rules'
         // shape is checked the same way wherever they are declared.
         if (!definition.validate().isEmpty() && definition.recipe() != null
@@ -2380,7 +2384,7 @@ public final class AppLinter {
         }
         lintInputPolicy(definition, source, findings);
         lintInputPolicy(definition, source, findings);
-        lintTenantPredicate(config, route, definition, source, findings);
+        lintTenantPredicate(config, route.source(), definition, source, findings);
     }
 
     /**
@@ -2502,10 +2506,11 @@ public final class AppLinter {
      * leaks data across tenants (design ch. 30.4). Warns when an enabled shared-schema app has a
      * SQL route that neither binds {@code tenant.*} nor mentions a tenant column.
      */
-    private void lintTenantPredicate(AppConfig config, RouteFile route, RouteDefinition definition,
-            String source, List<LintFinding> findings) {
-        boolean enabled = config.getString("tenancy.enabled").map(Boolean::parseBoolean)
-                .orElse(false);
+    private void lintTenantPredicate(AppConfig config, Path documentSource,
+            RouteDefinition definition, String source, List<LintFinding> findings) {
+        // getBoolean, not parseBoolean: `tenancy.enabled: yes` used to read as false here and
+        // silently switch the whole tenant lint off (docs/silent-tolerance.md K-e).
+        boolean enabled = config.getBoolean("tenancy.enabled", false);
         String mode = config.getString("tenancy.mode").orElse("shared-schema");
         if (!enabled || !"shared-schema".equals(mode)) {
             return;
@@ -2519,7 +2524,7 @@ public final class AppLinter {
         if (boundToTenant) {
             return;
         }
-        Path sqlFile = route.source().getParent().resolve(definition.sql().file());
+        Path sqlFile = documentSource.getParent().resolve(definition.sql().file());
         if (Files.isRegularFile(sqlFile) && readQuietly(sqlFile).toLowerCase().contains("tenant")) {
             return;
         }
@@ -3409,14 +3414,22 @@ public final class AppLinter {
                 : content;
     }
 
+    /** The write recipes an optimistic-locking nudge applies to, whatever surface mounts them. */
+    private static final java.util.Set<String> WRITE_RECIPES = java.util.Set.of("command-json",
+            "queue-consume");
+
     /**
      * Nudges version-column predicates on command UPDATEs (roadmap Phase 18): a row-count
      * expectation without a version predicate only detects "row vanished", not concurrent
      * edits; a version predicate without an expectation silently affects zero rows.
+     *
+     * <p>Takes the document's path rather than a {@link RouteFile}, so an MCP tool and a queue
+     * consumer — which write with the same bindings and had the check skipped entirely — are
+     * held to it too (docs/silent-tolerance.md K-e).
      */
-    private void lintOptimisticLocking(RouteFile route, RouteDefinition definition, String source,
-            List<LintFinding> findings) {
-        if (!"command-json".equals(definition.recipe())) {
+    private void lintOptimisticLocking(Path documentSource, RouteDefinition definition,
+            String source, List<LintFinding> findings) {
+        if (!WRITE_RECIPES.contains(definition.recipe())) {
             return;
         }
         java.util.Map<String, io.tesseraql.yaml.model.SqlBinding> bindings = new java.util.LinkedHashMap<>(
@@ -3428,7 +3441,7 @@ public final class AppLinter {
             if (binding.file() == null) {
                 return;
             }
-            Path file = route.source().getParent().resolve(binding.file());
+            Path file = documentSource.getParent().resolve(binding.file());
             if (!Files.isRegularFile(file)) {
                 return;
             }
@@ -3607,6 +3620,8 @@ public final class AppLinter {
         // A consumer's SQL is fed by an external message payload — as untrusted as an HTTP body —
         // so the embedded-variable injection guard (TQL-SQL-2109) applies here, not just on routes.
         lintEmbeddedVariables(consumer.source(), definition, source, findings);
+        lintOptimisticLocking(consumer.source(), definition, source, findings);
+        lintTenantPredicate(config, consumer.source(), definition, source, findings);
     }
 
     /**

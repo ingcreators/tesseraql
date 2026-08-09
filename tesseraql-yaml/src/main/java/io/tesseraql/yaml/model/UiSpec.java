@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.model;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import java.util.List;
 import java.util.Map;
 
@@ -37,22 +40,58 @@ public record UiSpec(Boolean prefersBorder, List<String> cspConnectDomains,
      * lists). A non-map (or null) yields {@link #EMPTY}.
      */
     public static UiSpec from(Object raw) {
-        if (!(raw instanceof Map<?, ?> map)) {
+        if (raw == null) {
             return EMPTY;
         }
-        Boolean prefersBorder = map.get("prefersBorder") instanceof Boolean flag ? flag : null;
+        if (!(raw instanceof Map<?, ?> map)) {
+            throw invalid("ui: must be a block of rendering hints, got: " + raw);
+        }
+        Boolean prefersBorder = bool(map.get("prefersBorder"), "ui.prefersBorder");
         List<String> connect = List.of();
         List<String> resource = List.of();
-        if (map.get("csp") instanceof Map<?, ?> csp) {
-            connect = stringList(csp.get("connectDomains"));
-            resource = stringList(csp.get("resourceDomains"));
+        Object csp = map.get("csp");
+        if (csp != null) {
+            if (!(csp instanceof Map<?, ?> block)) {
+                throw invalid("ui.csp: must be a block declaring connectDomains and/or"
+                        + " resourceDomains, got: " + csp);
+            }
+            connect = stringList(block.get("connectDomains"), "ui.csp.connectDomains");
+            resource = stringList(block.get("resourceDomains"), "ui.csp.resourceDomains");
         }
         return new UiSpec(prefersBorder, connect, resource);
     }
 
-    private static List<String> stringList(Object raw) {
-        if (!(raw instanceof List<?> list)) {
+    /**
+     * TQL-YAML-1026: a {@code ui:} value is not of the type the block declares.
+     *
+     * <p>Every read here used to be an {@code instanceof} that fell back to the default, so a
+     * wrong-typed value disappeared: {@code prefersBorder: "true"} (a YAML string) left the hint
+     * unset, and a {@code csp:} authored as a list — or a {@code connectDomains:} written as one
+     * scalar host — left the sandbox at its default deny with the fragment's requests failing in
+     * the host and nothing anywhere naming the config that was ignored.
+     */
+    private static final TqlErrorCode INVALID_UI = new TqlErrorCode(TqlDomain.YAML, 1026);
+
+    private static TqlException invalid(String message) {
+        return new TqlException(INVALID_UI, message);
+    }
+
+    private static Boolean bool(Object raw, String where) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Boolean flag) {
+            return flag;
+        }
+        throw invalid(where + ": must be true or false, got: " + raw);
+    }
+
+    private static List<String> stringList(Object raw, String where) {
+        if (raw == null) {
             return List.of();
+        }
+        if (!(raw instanceof List<?> list)) {
+            throw invalid(where + ": must be a list of origins, got: " + raw);
         }
         return list.stream().filter(java.util.Objects::nonNull).map(Object::toString).toList();
     }
