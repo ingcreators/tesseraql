@@ -432,6 +432,67 @@ class AppLinterTest {
     }
 
     @Test
+    void reportsAMisnamedRouteFileAndAYamlExtension(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        // A route file misnamed (route.yml, not <method>.yml) and one with a .yaml extension.
+        Files.writeString(dir.resolve("web/api/items/route.yml"), """
+                version: tesseraql/v1
+                id: items.stray
+                kind: route
+                recipe: query-json
+                """);
+        Files.writeString(dir.resolve("web/api/items/get.yaml"), """
+                version: tesseraql/v1
+                id: items.doublea
+                kind: route
+                recipe: query-json
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-APP-4205")
+                && f.message().contains("route.yml"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-APP-4205")
+                && f.message().contains("get.yaml") && f.message().contains(".yaml"));
+    }
+
+    @Test
+    void reportsANestedSharedDefinitionFileAndAcceptsRootAndViews(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        // domains/ loads non-recursively: a nested file is silently dropped.
+        Files.createDirectories(dir.resolve("domains/hr"));
+        Files.writeString(dir.resolve("domains/hr/fields.yml"), "version: tesseraql/v1\n");
+        // A well-named view and a proper HTTP-method route must NOT be flagged.
+        Files.createDirectories(dir.resolve("web/tickets"));
+        Files.writeString(dir.resolve("web/tickets/get.yml"), """
+                version: tesseraql/v1
+                id: tickets.list
+                kind: route
+                recipe: query-json
+                """);
+        Files.writeString(dir.resolve("web/tickets/list.view.yml"), """
+                version: tesseraql/v1
+                id: tickets.view
+                kind: view
+                recipe: table
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-APP-4205")
+                && f.message().contains("domains/hr/fields.yml")
+                && f.message().contains("non-recursively"));
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-APP-4205")
+                && (f.message().contains("get.yml") || f.message().contains("list.view.yml")));
+    }
+
+    @Test
     void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
