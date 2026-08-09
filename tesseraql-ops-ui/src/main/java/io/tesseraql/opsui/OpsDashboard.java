@@ -32,6 +32,7 @@ public final class OpsDashboard {
     private java.util.function.Supplier<Map<String, Integer>> eventCounts;
     private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
     private PollSourceStatus pollSources;
+    private CalendarStatus calendars;
 
     public OpsDashboard(JobRepository jobs, ExecutionLanes lanes, SqlExecutionLog slowSql,
             TraceLog traces, long slowSpanThresholdMs) {
@@ -99,6 +100,16 @@ public final class OpsDashboard {
      */
     public OpsDashboard pollSources(PollSourceStatus pollSources) {
         this.pollSources = pollSources;
+        return this;
+    }
+
+    /**
+     * Wires the business-day calendar registry (docs/jobs.md), so a job whose {@code calendar:}
+     * could not be resolved — and which therefore fired unfiltered — raises an operational alert
+     * instead of leaving one WARN line as the only trace (docs/silent-tolerance.md O5).
+     */
+    public OpsDashboard calendars(CalendarStatus calendars) {
+        this.calendars = calendars;
         return this;
     }
 
@@ -241,6 +252,14 @@ public final class OpsDashboard {
                                     + source.consecutiveFailures()
                                     + " consecutive import(s); last: " + source.lastResult()));
                 }
+            }
+        }
+        if (calendars != null) {
+            for (CalendarStatus.FailOpen failOpen : calendars.all()) {
+                alerts.add(new Alert("TQL-OPS-9009", "warning",
+                        "Job '" + failOpen.jobId() + "' fired unfiltered: its calendar '"
+                                + failOpen.calendar() + "' could not be resolved ("
+                                + failOpen.reason() + ")"));
             }
         }
         if (jobs != null) {

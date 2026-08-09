@@ -266,6 +266,7 @@ All 446 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-OPS-9006` | … outbox event(s) dead-lettered; inspect the outbox delivery… log and redeliver or discard them | [notifications](notifications.md) | [OpsDashboard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-ops-ui/src/main/java/io/tesseraql/opsui/OpsDashboard.java) |
 | `TQL-OPS-9007` | Poll source for job '…' failed … consecutive import(s); last: … · Poll source for job '…' is not polling: … | — | [OpsDashboard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-ops-ui/src/main/java/io/tesseraql/opsui/OpsDashboard.java) |
 | `TQL-OPS-9008` | … queue event(s) dead-lettered; inspect the queue events log… and redeliver or discard them | [messaging](messaging.md) | [OpsDashboard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-ops-ui/src/main/java/io/tesseraql/opsui/OpsDashboard.java) |
+| `TQL-OPS-9009` | Job '…' fired unfiltered: its calendar '…' could not be resolved (…) | [jobs](jobs.md) | [CalendarDecisions.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/CalendarDecisions.java), [CalendarStatus.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-ops-ui/src/main/java/io/tesseraql/opsui/CalendarStatus.java), [OpsDashboard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-ops-ui/src/main/java/io/tesseraql/opsui/OpsDashboard.java) |
 
 ## PLAN
 

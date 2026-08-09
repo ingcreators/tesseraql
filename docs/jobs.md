@@ -144,10 +144,15 @@ Two edges are deliberate:
 - **Manual runs bypass the calendar.** An operator forcing a run through the ops API is
   saying "run it now"; the filter governs scheduled firings (and `tesseraql job run`,
   which is the scheduler surface — see below).
-- **Resolution failures fail open.** If the holiday table cannot be read at fire time,
-  the firing runs and a warning is logged — silently skipping a close-job on a transient
-  read error would be worse, and the job's own SQL reaches the same database next. The
-  place typos get to be loud is the build: lint checks every reference
+- **Resolution failures fail open, and say so.** If the calendar is not declared, or its
+  holiday table cannot be read at fire time, the firing runs — silently skipping a
+  close-job on a transient read error would be worse, and the job's own SQL reaches the
+  same database next. But the skipped gate is recorded, not merely logged: the operations
+  dashboard raises **`TQL-OPS-9009`** naming the job, the calendar, and the reason, for as
+  long as the condition lasts (it clears itself once the calendar resolves again), and
+  `tesseraql job run` prints the same on stderr. A job that should have been filtered out
+  ran on a holiday — that is worth knowing before the business notices. The place typos
+  get to be loud is still the build: lint checks every reference
   (`TQL-BATCH-4201`–`4203` below).
 
 **Studio** has a job-policies form (`/_tesseraql/studio/ui/jobs`): a job's trigger —

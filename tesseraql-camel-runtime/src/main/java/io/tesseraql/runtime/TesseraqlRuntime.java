@@ -929,8 +929,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // gate and the console's next-counting preview, so the two can never drift.
         io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
                 .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+        // A calendar that cannot be resolved fails open at fire time, so the skip is recorded
+        // here and alerted by the dashboard (docs/silent-tolerance.md O5).
+        io.tesseraql.opsui.CalendarStatus calendarStatus = new io.tesseraql.opsui.CalendarStatus();
         CalendarDecisions calendarDecisions = new CalendarDecisions(calendars, dataSource,
-                dataSources);
+                dataSources).status(calendarStatus);
 
         io.tesseraql.core.outbox.OutboxEventSink outboxSink;
         // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
@@ -962,6 +965,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // A skipped or repeatedly failing poll source surfaces as an alert
                     // instead of only a startup log line (docs/poll-source-status.md).
                     .pollSources(pollSourceStatus)
+                    // A job firing unfiltered because its calendar would not resolve.
+                    .calendars(calendarStatus)
                     // Truthful readiness (roadmap Phase 45): every configured datasource is
                     // probed live; any failure rolls health up to DOWN so a load balancer
                     // actually sheds traffic.

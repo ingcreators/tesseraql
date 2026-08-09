@@ -272,6 +272,32 @@ class OpsDashboardTest {
         assertThat(healthy.alerts()).isEmpty();
     }
 
+    /**
+     * A calendar that would not resolve fires the job unfiltered — the deliberate fire-time
+     * stance — so the skip has to be visible somewhere other than a WARN line
+     * (docs/silent-tolerance.md O5).
+     */
+    @Test
+    void aCalendarThatFiredUnfilteredRaisesAlert() {
+        CalendarStatus calendars = new CalendarStatus();
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .calendars(calendars);
+        assertThat(dashboard.alerts()).isEmpty();
+
+        calendars.failedOpen("nightly.close", "jp-banking",
+                "no calendar of that name is declared");
+
+        assertThat(dashboard.alerts()).singleElement().satisfies(alert -> {
+            assertThat(alert.code()).isEqualTo("TQL-OPS-9009");
+            assertThat(alert.message()).contains("nightly.close").contains("jp-banking")
+                    .contains("fired unfiltered");
+        });
+
+        // A fixed config goes quiet again without a restart.
+        calendars.resolved("nightly.close");
+        assertThat(dashboard.alerts()).isEmpty();
+    }
+
     @Test
     void deadLetteredQueueEventsRaiseAlert() {
         // The messaging mirror of the outbox alert (docs/silent-tolerance.md O1): a consumer
