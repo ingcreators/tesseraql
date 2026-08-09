@@ -259,7 +259,19 @@ public final class StudioService {
 
     /**
      * Compiles a draft (or current source) without applying it, so edits can be validated before
-     * they touch the source of truth (design ch. 16.6): route YAML is parsed, SQL is rendered.
+     * they touch the source of truth (design ch. 16.6): every document kind is parsed by the same
+     * parser the manifest load uses, SQL is rendered, templates are processed.
+     *
+     * <p>This used to recognize only {@code .sql}, {@code web/**.yml}, {@code .html} and
+     * {@code .tpl}, and answer <em>valid</em> for everything else — so the compile-before-write
+     * gate in {@link #applyDraft} was a no-op for shared definitions, jobs, workflows, scopes,
+     * attachments, suites, and config, and a broken document was promoted to the source of truth
+     * with the screen saying it compiled. Worse, the route branch matched any {@code web/**.yml},
+     * so a {@code *.view.yml} was parsed as a route: the check that ran was the wrong one.
+     *
+     * <p>The parsers read files rather than text, so the document kinds land in a temp file whose
+     * name matches the real one and whose path is scrubbed from the message — the same technique
+     * {@link #validateDecisionDraft} already used, now shared.
      */
     public PreviewResult preview(String relativePath, String content) {
         String text = content != null ? content : source(relativePath);
@@ -271,7 +283,15 @@ public final class StudioService {
                 return PreviewResult.invalid("sql", ex.getMessage());
             }
         }
-        if (relativePath.startsWith("web/") && relativePath.endsWith(".yml")) {
+        // Before the route check: a view document also lives under web/ and is not a route.
+        if (relativePath.endsWith(".view.yml")) {
+            return previewDocument("view", relativePath, text, file -> {
+                io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec.parse(file);
+                return "id=" + spec.id() + ", recipe=" + spec.view();
+            });
+        }
+        // A consumer is a route document too — same parser, different mount.
+        if (isRouteYaml(relativePath) || isUnder(relativePath, "consume")) {
             try {
                 RouteDefinition definition = parser.parseRoute(text, relativePath);
                 return PreviewResult.valid("route",
@@ -283,7 +303,123 @@ public final class StudioService {
         if (relativePath.endsWith(".html") || relativePath.endsWith(".tpl")) {
             return previewTemplate(relativePath, text);
         }
-        return PreviewResult.valid("text", text);
+        PreviewResult document = previewDeclaration(relativePath, text);
+        return document != null ? document : PreviewResult.valid("text", text);
+    }
+
+    /**
+     * The declaration kinds the manifest load parses per directory (docs/app-layout.md): each is
+     * validated by its own parser, so a draft that cannot load is refused where it is written.
+     * Returns null when the path is not a declaration — the caller falls back to plain text.
+     */
+    private PreviewResult previewDeclaration(String relativePath, String text) {
+        if (!relativePath.endsWith(".yml") && !relativePath.endsWith(".yaml")) {
+            return null;
+        }
+        if (isUnder(relativePath, "domains")) {
+            return previewDocument("domains", relativePath, text, file -> named("domain",
+                    parser.parseDomains(file).domains().keySet()));
+        }
+        if (isUnder(relativePath, "rules")) {
+            return previewDocument("rules", relativePath, text, file -> named("rule set",
+                    parser.parseRuleSets(file).rules().keySet()));
+        }
+        if (isUnder(relativePath, "decisions")) {
+            return previewDocument("decisions", relativePath, text, file -> {
+                io.tesseraql.yaml.model.DecisionsDocument decisions = parser.parseDecisions(file);
+                // Parsing is not enough: a decision compiles its rows, and a bad row is exactly
+                // what the author needs told here rather than at the next app load.
+                decisions.decisions().forEach(io.tesseraql.yaml.decision.DecisionSets::compile);
+                return named("decision", decisions.decisions().keySet());
+            });
+        }
+        if (isUnder(relativePath, "calendars")) {
+            return previewDocument("calendars", relativePath, text, file -> named("calendar",
+                    parser.parseCalendars(file).calendars().keySet()));
+        }
+        if (isUnder(relativePath, "batch")) {
+            return previewDocument("job", relativePath, text,
+                    file -> "id=" + parser.parseJob(file).id());
+        }
+        if (isUnder(relativePath, "workflow")) {
+            return previewDocument("workflow", relativePath, text,
+                    file -> "id=" + parser.parseWorkflow(file).id());
+        }
+        if (isUnder(relativePath, "scope")) {
+            return previewDocument("scope", relativePath, text,
+                    file -> "id=" + parser.parseScope(file).id());
+        }
+        if (isUnder(relativePath, "attachments")) {
+            return previewDocument("attachment", relativePath, text,
+                    file -> "id=" + parser.parseAttachment(file).id());
+        }
+        // Suites and config get structural validation only: the suite loader lives in
+        // tesseraql-test-core, whose GreenMail/Testcontainers dependency tree Studio does not
+        // carry, and config is merged from several documents so a single file has no schema of
+        // its own. Well-formed YAML is still a real gate — it is what "valid" claimed before.
+        if (isUnder(relativePath, "tests") || isUnder(relativePath, "config")) {
+            String kind = isUnder(relativePath, "tests") ? "suite" : "config";
+            try {
+                parser.parseTree(text);
+                return PreviewResult.valid(kind, kind + " document is well-formed YAML");
+            } catch (RuntimeException ex) {
+                return PreviewResult.invalid(kind, rootMessage(ex));
+            }
+        }
+        return null;
+    }
+
+    /** Whether the path sits under a top-level declaration directory. */
+    private static boolean isUnder(String relativePath, String directory) {
+        return relativePath.startsWith(directory + "/");
+    }
+
+    private static String named(String noun, java.util.Collection<String> names) {
+        return names.size() + " " + noun + (names.size() == 1 ? "" : "s")
+                + (names.isEmpty() ? "" : ": " + String.join(", ", names));
+    }
+
+    /**
+     * Parses draft text with a parser that reads files. The temp file keeps the real document's
+     * name so a message that quotes it still reads right, and its directory is scrubbed out of
+     * the message so the author sees their own path, not a temp one.
+     */
+    private PreviewResult previewDocument(String kind, String relativePath, String text,
+            java.util.function.Function<Path, String> parse) {
+        Path directory = null;
+        try {
+            directory = Files.createTempDirectory("tql-preview-");
+            String name = relativePath.substring(relativePath.lastIndexOf('/') + 1);
+            Path file = directory.resolve(name);
+            Files.writeString(file, text);
+            try {
+                return PreviewResult.valid(kind, parse.apply(file));
+            } catch (RuntimeException ex) {
+                return PreviewResult.invalid(kind,
+                        rootMessage(ex).replace(file.toString(), relativePath));
+            }
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        } finally {
+            deleteTemp(directory);
+        }
+    }
+
+    private static void deleteTemp(Path directory) {
+        if (directory == null) {
+            return;
+        }
+        try (Stream<Path> entries = Files.walk(directory)) {
+            entries.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // best-effort cleanup
+                }
+            });
+        } catch (IOException ignored) {
+            // best-effort cleanup
+        }
     }
 
     /**
