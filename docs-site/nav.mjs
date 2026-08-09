@@ -166,4 +166,6 @@ export const EXCLUDED = [
   'unicode-identifiers.md',
   // View composition (registry, fragment negotiation, embedding, field presentation/masking), 2026-08-08.
   'view-composition.md',
+  // Silent tolerance sweep (fail-open/unknown-key/observability/tooling defects), 2026-08-09.
+  'silent-tolerance.md',
 ];
