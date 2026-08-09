@@ -77,12 +77,14 @@ public class CoverageMojo extends AbstractMojo {
         }
     }
 
-    /** Loads the app config for threshold overrides, or {@code null} when it cannot be read. */
+    /**
+     * Loads the app config for threshold overrides. A load failure is not swallowed: it used to
+     * return {@code null}, which silently discarded the app's stricter configured
+     * {@code coverage.thresholds.*} and passed the gate against the mojo's (zero) defaults. The
+     * test run that precedes this loads the same manifest strictly, so a failure here is genuinely
+     * exceptional and must surface.
+     */
     private static AppConfig loadConfig(Path appHome) {
-        try {
-            return new ManifestLoader().load(appHome).config();
-        } catch (RuntimeException ex) {
-            return null;
-        }
+        return new ManifestLoader().load(appHome).config();
     }
 }

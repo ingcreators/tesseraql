@@ -69,6 +69,20 @@ class ReportHistoryTest {
     }
 
     @Test
+    void isCorruptDistinguishesAnUnreadableFileFromAnAbsentOne(@TempDir Path dir) throws Exception {
+        Path missing = dir.resolve("none.json");
+        Path corrupt = dir.resolve("corrupt.json");
+        Path valid = dir.resolve("valid.json");
+        Files.writeString(corrupt, "{ not json");
+        ReportHistory.append(valid, entry("r1"), 20);
+
+        // Absent is a legitimate first run; the regression gate must fail only on corruption.
+        assertThat(ReportHistory.isCorrupt(missing)).isFalse();
+        assertThat(ReportHistory.isCorrupt(valid)).isFalse();
+        assertThat(ReportHistory.isCorrupt(corrupt)).isTrue();
+    }
+
+    @Test
     void derivesAnEntryFromAReport() {
         ReportDoc report = new ReportDoc(ReportDoc.SCHEMA_VERSION, "build-7",
                 "2026-06-15T12:00:00Z",
