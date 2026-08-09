@@ -3,6 +3,7 @@ package io.tesseraql.security.mtls;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.mtls.MtlsConfig.MtlsClient;
+import io.tesseraql.security.mtls.MtlsConfig.SanType;
 import io.tesseraql.security.policy.PolicyEngine;
 import java.io.ByteArrayInputStream;
 import java.net.URLDecoder;
@@ -189,8 +190,9 @@ public final class MtlsAuthenticator {
         if (notBlank(client.subjectDn())) {
             return new Matcher(MatchKind.SUBJECT_DN, canonicalDn(client.subjectDn().trim()));
         }
-        if (notBlank(client.san())) {
-            return new Matcher(MatchKind.SAN, client.san().trim());
+        if (client.san() != null && notBlank(client.san().value())) {
+            return new Matcher(MatchKind.SAN,
+                    qualified(client.san().type(), client.san().value().trim()));
         }
         if (notBlank(client.sha256())) {
             return new Matcher(MatchKind.SHA256, normalizeHex(client.sha256()));
@@ -205,14 +207,28 @@ public final class MtlsAuthenticator {
                 Map.of("mtls_client", id));
     }
 
+    /**
+     * The certificate's Subject Alternative Names as type-qualified comparison keys.
+     *
+     * <p>Each entry of {@code getSubjectAlternativeNames()} is {@code [tag, value]}; the tag was
+     * previously dropped, so every name — DNS, URI, email, IP — collapsed into one untyped set and
+     * a matcher for one kind was satisfied by a certificate carrying the value under another
+     * (identity confusion: an {@code email=api.internal} name answered a DNS matcher, and a rogue
+     * DNS name could defeat a SPIFFE URI pin). Keying by kind is what makes the comparison honest.
+     * A name of a kind no matcher can express (directoryName, otherName, …) is left out.
+     */
     private static Set<String> subjectAltNames(X509Certificate leaf) {
         Set<String> names = new LinkedHashSet<>();
         try {
             Collection<List<?>> sans = leaf.getSubjectAlternativeNames();
             if (sans != null) {
                 for (List<?> san : sans) {
-                    if (san.size() >= 2 && san.get(1) instanceof String value) {
-                        names.add(value);
+                    if (san.size() >= 2 && san.get(0) instanceof Integer tag
+                            && san.get(1) instanceof String value) {
+                        SanType type = SanType.ofTag(tag);
+                        if (type != null) {
+                            names.add(qualified(type, value));
+                        }
                     }
                 }
             }
@@ -220,6 +236,16 @@ public final class MtlsAuthenticator {
             // A malformed SAN extension contributes no names; identity falls back to DN/fingerprint.
         }
         return names;
+    }
+
+    /**
+     * The comparison key for one kind of name: the kind and the value, so a lookup can never cross
+     * kinds. DNS labels are case-insensitive (RFC 4343), so they fold to lower case on both sides;
+     * URI, email, and IP values compare exactly.
+     */
+    private static String qualified(SanType type, String value) {
+        String normalized = type == SanType.DNS ? value.toLowerCase(Locale.ROOT) : value;
+        return type.name() + ":" + normalized;
     }
 
     private static Set<TrustAnchor> parseTrustAnchors(String trustBundle) {

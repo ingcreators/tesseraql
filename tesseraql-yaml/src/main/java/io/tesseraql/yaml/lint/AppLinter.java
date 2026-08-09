@@ -1852,10 +1852,15 @@ public final class AppLinter {
         });
     }
 
+    /** The type-qualified Subject Alternative Name matchers an mTLS client may declare. */
+    private static final List<String> MTLS_SAN_KEYS = List.of("sanDns", "sanUri", "sanEmail",
+            "sanIp");
+
     /**
      * Lints the mutual-TLS config (roadmap Phase 25): an {@code auth: mtls} route requires mTLS
      * config; the config must name the forwarded-certificate header and each client must declare
-     * exactly one certificate matcher (subjectDn/san/sha256). A missing trustBundle is a warning —
+     * exactly one certificate matcher (subjectDn/sanDns/sanUri/sanEmail/sanIp/sha256). A missing
+     * trustBundle is a warning —
      * without it the runtime does not independently validate the chain and fully trusts the
      * TLS-terminating edge. Reads raw config nodes — never resolving secret placeholders.
      */
@@ -1893,12 +1898,24 @@ public final class AppLinter {
             java.util.Map<?, ?> client = spec instanceof java.util.Map<?, ?> map
                     ? map
                     : java.util.Map.of();
+            // The untyped san: matched a value against every kind of Subject Alternative Name at
+            // once, so a certificate carrying it as an email or URI satisfied a matcher that meant
+            // DNS. It is gone rather than deprecated: a config kept working while meaning something
+            // weaker is the failure this replaces.
+            if (client.get("san") != null) {
+                findings.add(new LintFinding("TQL-SEC-4066", "error", "config",
+                        "mTLS client '" + id + "' declares the removed untyped san:; name the kind"
+                                + " with sanDns/sanUri/sanEmail/sanIp so a certificate's name of"
+                                + " one kind cannot satisfy a matcher meaning another"));
+            }
             int matchers = 0;
             if (client.get("subjectDn") != null) {
                 matchers++;
             }
-            if (client.get("san") != null) {
-                matchers++;
+            for (String typed : MTLS_SAN_KEYS) {
+                if (client.get(typed) != null) {
+                    matchers++;
+                }
             }
             if (client.get("sha256") != null) {
                 matchers++;
@@ -1906,11 +1923,11 @@ public final class AppLinter {
             if (matchers == 0) {
                 findings.add(new LintFinding("TQL-SEC-4062", "error", "config",
                         "mTLS client '" + id + "' declares no certificate matcher; set exactly one"
-                                + " of subjectDn/san/sha256"));
+                                + " of subjectDn/sanDns/sanUri/sanEmail/sanIp/sha256"));
             } else if (matchers > 1) {
                 findings.add(new LintFinding("TQL-SEC-4063", "error", "config",
                         "mTLS client '" + id + "' declares more than one certificate matcher; set"
-                                + " exactly one of subjectDn/san/sha256"));
+                                + " exactly one of subjectDn/sanDns/sanUri/sanEmail/sanIp/sha256"));
             }
             if (client.get("roles") == null && client.get("permissions") == null) {
                 findings.add(new LintFinding("TQL-SEC-4064", "warning", "config",

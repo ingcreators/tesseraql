@@ -1842,6 +1842,55 @@ class AppLinterTest {
                 """)).noneMatch(f -> f.code().startsWith("TQL-SEC-406") && f.isError());
     }
 
+    /**
+     * The untyped {@code san:} is gone, not aliased: it matched a value against every kind of
+     * Subject Alternative Name, so a certificate carrying it as an email or URI satisfied a matcher
+     * that meant DNS. A config still using it must fail, not quietly mean something weaker.
+     */
+    @Test
+    void rejectsTheRemovedUntypedMtlsSanMatcher(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      trustBundle: ca-pem
+                      clients:
+                        billing:
+                          san: "spiffe://acme/ns/default/sa/billing"
+                          roles: [SERVICE]
+                """);
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4066") && f.isError()
+                && f.message().contains("'billing'"));
+        // It is not a matcher any more, so the client also has none at all.
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4062") && f.isError());
+    }
+
+    @Test
+    void acceptsTypedMtlsSanMatchersAndFlagsTwoOfThem(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      trustBundle: ca-pem
+                      clients:
+                        billing:
+                          sanUri: "spiffe://acme/ns/default/sa/billing"
+                          roles: [SERVICE]
+                """)).noneMatch(f -> f.code().startsWith("TQL-SEC-406") && f.isError());
+
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    mtls:
+                      forwardedHeader: ssl-client-cert
+                      trustBundle: ca-pem
+                      clients:
+                        billing:
+                          sanUri: "spiffe://acme/ns/default/sa/billing"
+                          sanDns: api.internal
+                          roles: [SERVICE]
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4063") && f.isError());
+    }
+
     @Test
     void flagsMtlsRouteWithoutMtlsConfig(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

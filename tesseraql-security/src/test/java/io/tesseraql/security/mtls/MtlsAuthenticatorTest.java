@@ -33,9 +33,13 @@ class MtlsAuthenticatorTest {
         }
     }
 
-    private static MtlsClient billing(String subjectDn, String san, String sha256) {
+    private static MtlsClient billing(String subjectDn, MtlsConfig.SanMatcher san, String sha256) {
         return new MtlsClient(subjectDn, san, sha256, "svc:billing", "tenant-a",
                 List.of("SERVICE"), List.of("invoices:write"), true);
+    }
+
+    private static MtlsConfig.SanMatcher san(MtlsConfig.SanType type, String value) {
+        return new MtlsConfig.SanMatcher(type, value);
     }
 
     private static MtlsConfig config(String trustBundle, Map<String, MtlsClient> clients) {
@@ -79,10 +83,39 @@ class MtlsAuthenticatorTest {
 
     @Test
     void matchesBySubjectAlternativeName() throws Exception {
-        MtlsAuthenticator authenticator = new MtlsAuthenticator(
-                config(null, Map.of("billing-service", billing(null, BILLING_SAN, null))));
+        MtlsAuthenticator authenticator = new MtlsAuthenticator(config(null, Map.of(
+                "billing-service",
+                billing(null, san(MtlsConfig.SanType.URI, BILLING_SAN), null))));
         assertThat(authenticator.authenticate(pem("client.pem")).subject())
                 .isEqualTo("svc:billing");
+    }
+
+    /**
+     * The type confusion this grammar exists to close: the fixture carries its identity as a URI
+     * name, and a matcher naming any other kind must not be satisfied by it. Untyped matching made
+     * these four authenticate — which is how a rogue DNS name could defeat a SPIFFE URI pin.
+     */
+    @Test
+    void aSubjectAlternativeNameOfAnotherKindDoesNotMatch() throws Exception {
+        for (MtlsConfig.SanType other : List.of(MtlsConfig.SanType.DNS, MtlsConfig.SanType.EMAIL,
+                MtlsConfig.SanType.IP)) {
+            MtlsAuthenticator authenticator = new MtlsAuthenticator(config(null,
+                    Map.of("billing-service", billing(null, san(other, BILLING_SAN), null))));
+            assertThatThrownBy(() -> authenticator.authenticate(pem("client.pem")))
+                    .as("a %s matcher must not be satisfied by a URI name", other)
+                    .isInstanceOf(TqlException.class)
+                    .hasMessageContaining("not recognized");
+        }
+    }
+
+    /** A URI name compares exactly — only DNS folds case (RFC 4343), and this fixture has no DNS. */
+    @Test
+    void uriMatchingComparesExactly() throws Exception {
+        MtlsAuthenticator uri = new MtlsAuthenticator(config(null, Map.of("billing-service",
+                billing(null, san(MtlsConfig.SanType.URI,
+                        BILLING_SAN.toUpperCase(java.util.Locale.ROOT)), null))));
+        assertThatThrownBy(() -> uri.authenticate(pem("client.pem")))
+                .isInstanceOf(TqlException.class);
     }
 
     @Test
