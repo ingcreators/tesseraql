@@ -44,6 +44,14 @@ public final class CompiledScopeResolver implements ScopeResolver {
     /** TQL-SQL-2107: a scope directive named a scope not declared under {@code scope/}. */
     private static final TqlErrorCode UNKNOWN_SCOPE = new TqlErrorCode(TqlDomain.SQL, 2107);
 
+    /**
+     * TQL-SQL-2113: a match arm's {@code when:} block was present but declared no recognized
+     * predicate (an empty block, or a typo'd key like {@code roles:}). A present-but-empty
+     * {@code when:} would otherwise compile to a null rule that matches every principal — turning a
+     * restricting arm into match-everyone — so it fails at startup rather than failing open.
+     */
+    private static final TqlErrorCode MALFORMED_WHEN = new TqlErrorCode(TqlDomain.SQL, 2113);
+
     private final Map<String, List<CompiledArm>> scopes;
 
     public CompiledScopeResolver(List<ScopeFile> scopeFiles, String dialect) {
@@ -74,7 +82,12 @@ public final class CompiledScopeResolver implements ScopeResolver {
         return new CompiledArm(rule(arm.when()), arm.isAll(), arm.isNone(), fragment, arm.params());
     }
 
-    /** Maps a {@code when:} condition to a policy rule; {@code null} means an unconditional arm. */
+    /**
+     * Maps a {@code when:} condition to a policy rule. An <em>absent</em> {@code when:}
+     * ({@code when == null}) is the legitimate unconditional arm and returns {@code null}; a
+     * <em>present</em> {@code when:} that names no recognized predicate is a malformed arm and
+     * throws {@link #MALFORMED_WHEN} rather than compiling to a match-everyone rule.
+     */
     private static Policy.Rule rule(WhenCondition when) {
         if (when == null) {
             return null;
@@ -88,7 +101,9 @@ public final class CompiledScopeResolver implements ScopeResolver {
         if (when.claim() != null) {
             return Policy.Rule.ofClaim(when.claim(), when.value());
         }
-        return null;
+        throw new TqlException(MALFORMED_WHEN, "A scope match arm's when: declares no role, "
+                + "permission, or claim (an empty block or a misspelled key would match every "
+                + "principal); remove the when: for an unconditional arm, or name a predicate");
     }
 
     @Override

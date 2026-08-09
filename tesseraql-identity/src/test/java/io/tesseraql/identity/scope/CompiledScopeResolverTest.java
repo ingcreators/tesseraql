@@ -1,7 +1,9 @@
 package io.tesseraql.identity.scope;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.ScopeResolver;
@@ -106,6 +108,29 @@ class CompiledScopeResolverTest {
     void absentPrincipalDeniesByDefault() {
         BoundSql bound = resolve("o", null);
         assertThat(bound.sql()).isEqualTo("(1=0)");
+    }
+
+    @Test
+    void presentButEmptyWhenFailsAtConstructionRatherThanMatchingEveryone() {
+        ScopeDefinition definition = new ScopeDefinition("tesseraql/v1", "leaky_scope", "scope",
+                List.of(new MatchArm(new WhenCondition(null, null, null, null), "all", null,
+                        Map.of())));
+        ScopeFile scopeFile = new ScopeFile(dir.resolve("leaky_scope.yml"), definition);
+        assertThatThrownBy(() -> new CompiledScopeResolver(List.of(scopeFile), ""))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("declares no role");
+    }
+
+    @Test
+    void omittedWhenStaysAnUnconditionalArm() {
+        ScopeDefinition definition = new ScopeDefinition("tesseraql/v1", "catch_all", "scope",
+                List.of(new MatchArm(null, "all", null, Map.of())));
+        ScopeFile scopeFile = new ScopeFile(dir.resolve("catch_all.yml"), definition);
+        CompiledScopeResolver catchAll = new CompiledScopeResolver(List.of(scopeFile), "");
+        ScopeResolver.Resolved resolved = catchAll.resolve("catch_all", "o",
+                Map.of("principal", principal(List.of(), List.of(), Map.of())));
+        assertThat(SqlRenderer.render(resolved.nodes(), resolved.bindings()).sql())
+                .isEqualTo("(1=1)");
     }
 
     @Test
