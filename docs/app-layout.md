@@ -101,5 +101,6 @@ into apps.
 - [concepts.md](concepts.md) — what these documents are, and how a request travels through them.
 - [two-way-sql.md](two-way-sql.md) — the SQL files the layout is built around.
 - [identifiers.md](identifiers.md) — how a column name becomes an input name, a bind, and a URL parameter.
+- [governance.md](governance.md) — the `governance/` ledger, and what puts a route in it.
 - [scaffolding.md](scaffolding.md) — generate a working slice into this layout.
 - [declarative-views.md](declarative-views.md) — the view documents behind the pages.

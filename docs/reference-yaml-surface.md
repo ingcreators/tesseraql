@@ -497,8 +497,8 @@ Element constraints for `type: array`.
 | Property | Type | Description |
 | --- | --- | --- |
 | `file` | string | A colocated 2-way SQL file (must exist; TQL-SQL-2103). |
-| `contract` | string | A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Documented in authentication.md. |
-| `service` | string | A named runtime service provider to call instead of running SQL. The provider is Java the framework supplies; an application declares the call, not the code. |
+| `contract` | string | A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Legal on sql: and queries:, and refused inside a command step. Documented in authentication.md. |
+| `service` | string | A named runtime service provider to call instead of running SQL (docs/extending.md). Legal on sql: and queries:, and refused inside a command step — a transactional step must be a SQL file or a sequence. |
 | `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (a streamed result). |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |

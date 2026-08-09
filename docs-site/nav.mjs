@@ -48,6 +48,8 @@ export const SECTIONS = [
       'duckdb',
       'analytics',
       'testing',
+      'governance',
+      'extending',
       'documentation-portal',
     ],
   },

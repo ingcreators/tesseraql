@@ -168,7 +168,7 @@ All 449 `TQL-*` codes, scanned from the framework sources on every refresh and g
 
 | Code | Meaning | Documented in | Raised in |
 | --- | --- | --- | --- |
-| `TQL-GOV-3001` | a route that needs review has no valid approval pinning its current source hash in `governance/approvals.yml`. | — | [GovernanceCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/GovernanceCommand.java), [GovernanceMojo.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-maven-plugin/src/main/java/io/tesseraql/maven/GovernanceMojo.java) |
+| `TQL-GOV-3001` | a route that needs review has no valid approval pinning its current source hash in `governance/approvals.yml`. | [governance](governance.md) | [GovernanceCommand.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/GovernanceCommand.java), [GovernanceMojo.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-maven-plugin/src/main/java/io/tesseraql/maven/GovernanceMojo.java) |
 
 ## IAM
 
@@ -284,9 +284,9 @@ All 449 `TQL-*` codes, scanned from the framework sources on every refresh and g
 
 | Code | Meaning | Documented in | Raised in |
 | --- | --- | --- | --- |
-| `TQL-PLUGIN-1301` | Plugin jar … found but no tesseraql.plugins.trustedKeys are configured… (set tesseraql.plugins.requireSignature: false to allow unsigned… plugins in development) | — | [Plugins.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/plugins/Plugins.java) |
-| `TQL-PLUGIN-1302` | Plugin jar … has no detached signature … | — | [Plugins.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/plugins/Plugins.java) |
-| `TQL-PLUGIN-1303` | Plugin jar … signature does not verify against any trusted key | — | [Plugins.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/plugins/Plugins.java) |
+| `TQL-PLUGIN-1301` | Plugin jar … found but no tesseraql.plugins.trustedKeys are configured… (set tesseraql.plugins.requireSignature: false to allow unsigned… plugins in development) | [extending](extending.md) | [Plugins.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/plugins/Plugins.java) |
+| `TQL-PLUGIN-1302` | Plugin jar … has no detached signature … | [extending](extending.md) | [Plugins.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/plugins/Plugins.java) |
+| `TQL-PLUGIN-1303` | Plugin jar … signature does not verify against any trusted key | [extending](extending.md) | [Plugins.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/plugins/Plugins.java) |
 
 ## RATE
 

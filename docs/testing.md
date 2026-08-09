@@ -354,6 +354,7 @@ Anything else states why it is not recordable.
 
 ## Next
 
+- [governance.md](governance.md) — the review gate that runs beside the suites.
 - [admission.md](admission.md) — the bar a shared application must clear.
 - [promotion.md](promotion.md) — how a tested change reaches production.
 - [studio.md](studio.md) — running suites and recording cases in the browser.

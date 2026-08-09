@@ -50,5 +50,6 @@ edition has no undo): roll back code freely, roll schema forward with a follow-u
 ## Next
 
 - [deployment.md](deployment.md) — the environments being promoted between.
+- [governance.md](governance.md) — the review gate in the CI step above.
 - [admission.md](admission.md) — the gate a promotion passes.
 - [studio.md](studio.md) — where the edit was made.
