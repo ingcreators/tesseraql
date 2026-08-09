@@ -4,6 +4,7 @@ import io.tesseraql.core.dialect.SqlErrors;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.messaging.ChannelEvent;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
 import io.tesseraql.core.util.SqlScripts;
@@ -80,7 +81,8 @@ public final class JdbcEventChannelStore implements EventChannelStore {
     }
 
     @Override
-    public String publish(String channel, String topic, String key, String payloadJson) {
+    public String publish(String channel, String topic, String key, String payloadJson,
+            String appName) {
         String id = UUID.randomUUID().toString();
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
@@ -97,7 +99,7 @@ public final class JdbcEventChannelStore implements EventChannelStore {
                     ps.setString(4, key);
                     ps.setString(5, payloadJson);
                     ps.setTimestamp(6, Timestamp.from(Instant.now()));
-                    ps.setString(7, null);
+                    ps.setString(7, appName);
                     ps.executeUpdate();
                 }
                 // NOTIFY rides the same transaction, so it is delivered exactly when the row is
@@ -273,6 +275,92 @@ public final class JdbcEventChannelStore implements EventChannelStore {
         } catch (SQLException ex) {
             throw error("Failed to record event delivery failure", ex);
         }
+    }
+
+    /** The most recent messages (newest first), for the operations console's queue events log. */
+    @Override
+    public List<ChannelEvent> recent(int limit) {
+        List<ChannelEvent> events = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_event order by published_at desc, event_id "
+                                + io.tesseraql.core.dialect.Pagination.fetchClause(vendor()))) {
+            ps.setInt(1, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    events.add(read(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to list recent events", ex);
+        }
+        return events;
+    }
+
+    /** Message counts per status, for the console's queue summary and the dead-letter alert. */
+    @Override
+    public java.util.Map<String, Integer> countByStatus() {
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select status, count(*) as total from tql_event group by status");
+                ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                counts.put(rs.getString("status"), rs.getInt("total"));
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to count events", ex);
+        }
+        return counts;
+    }
+
+    /** Looks up one message, for the operations console's scope check before a redelivery. */
+    @Override
+    public java.util.Optional<ChannelEvent> find(String messageId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "select * from tql_event where event_id = ?")) {
+            ps.setString(1, messageId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? java.util.Optional.of(read(rs)) : java.util.Optional.empty();
+            }
+        } catch (SQLException ex) {
+            throw error("Failed to find event", ex);
+        }
+    }
+
+    /**
+     * Requeues a {@code DEAD} message: the status flips back to {@code PENDING} and the claim is
+     * cleared, so the next drain claims it immediately; the attempt count is kept so the history
+     * stays honest. Returns false when the message is unknown or not dead.
+     */
+    @Override
+    public boolean redeliver(String messageId) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(
+                        "update tql_event set status = 'PENDING', claimed_at = null "
+                                + "where event_id = ? and status = 'DEAD'")) {
+            ps.setString(1, messageId);
+            return ps.executeUpdate() == 1;
+        } catch (SQLException ex) {
+            throw error("Failed to redeliver event", ex);
+        }
+    }
+
+    private static ChannelEvent read(ResultSet rs) throws SQLException {
+        Timestamp publishedAt = rs.getTimestamp("published_at");
+        Timestamp consumedAt = rs.getTimestamp("consumed_at");
+        return new ChannelEvent(
+                rs.getString("event_id"),
+                rs.getString("channel"),
+                rs.getString("topic"),
+                rs.getString("msg_key"),
+                rs.getString("app_name"),
+                rs.getString("status"),
+                rs.getInt("attempts"),
+                rs.getString("last_error"),
+                publishedAt == null ? null : publishedAt.toInstant(),
+                consumedAt == null ? null : consumedAt.toInstant());
     }
 
     private static TqlException error(String message, SQLException ex) {

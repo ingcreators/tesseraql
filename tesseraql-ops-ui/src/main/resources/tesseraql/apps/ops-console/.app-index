@@ -5,6 +5,9 @@ web/_tesseraql/ops/console/executions/{id}/execution.html
 web/_tesseraql/ops/console/executions/{id}/get.yml
 web/_tesseraql/ops/console/audit/audit.html
 web/_tesseraql/ops/console/audit/get.yml
+web/_tesseraql/ops/console/events/events.html
+web/_tesseraql/ops/console/events/get.yml
+web/_tesseraql/ops/console/events/redeliver/post.yml
 web/_tesseraql/ops/console/get.yml
 web/_tesseraql/ops/console/jobs/get.yml
 web/_tesseraql/ops/console/jobs/jobs.html

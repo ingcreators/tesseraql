@@ -29,6 +29,7 @@ public final class OpsDashboard {
     private final AlertThresholds thresholds;
     private final io.tesseraql.core.diag.PinningMonitor pinning;
     private java.util.function.Supplier<Map<String, Integer>> outboxCounts;
+    private java.util.function.Supplier<Map<String, Integer>> eventCounts;
     private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
     private PollSourceStatus pollSources;
 
@@ -69,6 +70,16 @@ public final class OpsDashboard {
      */
     public OpsDashboard outboxCounts(java.util.function.Supplier<Map<String, Integer>> counts) {
         this.outboxCounts = counts;
+        return this;
+    }
+
+    /**
+     * Wires the messaging-channel queue status counts (docs/silent-tolerance.md O1), so a
+     * dead-lettered queue message raises an operational alert exactly like an outbox one — a
+     * consumer that throws on every message must not discard its stream in silence.
+     */
+    public OpsDashboard eventCounts(java.util.function.Supplier<Map<String, Integer>> counts) {
+        this.eventCounts = counts;
         return this;
     }
 
@@ -207,6 +218,14 @@ public final class OpsDashboard {
                 alerts.add(new Alert("TQL-OPS-9006", "warning",
                         dead + " outbox event(s) dead-lettered; inspect the outbox delivery"
                                 + " log and redeliver or discard them"));
+            }
+        }
+        if (eventCounts != null) {
+            int dead = eventCounts.get().getOrDefault("DEAD", 0);
+            if (dead > 0) {
+                alerts.add(new Alert("TQL-OPS-9008", "warning",
+                        dead + " queue event(s) dead-lettered; inspect the queue events log"
+                                + " and redeliver or discard them"));
             }
         }
         if (pollSources != null) {

@@ -273,6 +273,23 @@ class OpsDashboardTest {
     }
 
     @Test
+    void deadLetteredQueueEventsRaiseAlert() {
+        // The messaging mirror of the outbox alert (docs/silent-tolerance.md O1): a consumer
+        // that keeps throwing must reach the operator through the dashboard, not the business.
+        OpsDashboard dashboard = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .eventCounts(() -> Map.of("CONSUMED", 5, "DEAD", 3));
+
+        assertThat(dashboard.alerts()).singleElement().satisfies(alert -> {
+            assertThat(alert.code()).isEqualTo("TQL-OPS-9008");
+            assertThat(alert.message()).contains("3 queue event(s) dead-lettered");
+        });
+
+        OpsDashboard healthy = new OpsDashboard(null, null, null, new RingTracer(4), 200L)
+                .eventCounts(() -> Map.of("CONSUMED", 5));
+        assertThat(healthy.alerts()).isEmpty();
+    }
+
+    @Test
     void slowFlagHighlightsSpansOverThreshold() {
         RingTracer tracer = new RingTracer(10);
         tracer.start("tesseraql.route").end();

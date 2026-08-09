@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: tql.opsConsole.events.redeliver
+kind: route
+recipe: command-json
+
+# Requeues one dead-lettered queue message (docs/silent-tolerance.md O1): the hypermedia
+# face of POST /_tesseraql/ops/events/{id}/redeliver — same policy, same scope stance.
+security:
+  policy: ops.batch.run
+
+input:
+  id:
+    type: string
+    required: true
+
+sql:
+  service: ops.eventsRedeliver
+  params:
+    id: params.id
+    # Narrows to the caller's ops.app.<name> grants (deny by default).
+    permissions: principal.permissions
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/ops/console/events?redelivered=1

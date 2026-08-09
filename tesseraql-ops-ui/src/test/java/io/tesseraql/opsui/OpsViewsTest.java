@@ -222,4 +222,40 @@ class OpsViewsTest {
         List<Map<String, Object>> byStatus = (List<Map<String, Object>>) model.get("byStatus");
         assertThat(byStatus).hasSize(2);
     }
+
+    @Test
+    void eventsBuildsQueueLogModel() {
+        io.tesseraql.core.messaging.ChannelEvent dead = new io.tesseraql.core.messaging.ChannelEvent(
+                "msg-1", "events", "orders.created", "O-1", "demo-app", "DEAD", 3,
+                "Route queue.orders threw", java.time.Instant.parse("2026-06-10T00:00:00Z"),
+                null);
+        io.tesseraql.core.messaging.ChannelEvent consumed = new io.tesseraql.core.messaging.ChannelEvent(
+                "msg-2", "events", "orders.created", null, "demo-app", "CONSUMED", 1, null,
+                java.time.Instant.parse("2026-06-10T00:00:01Z"),
+                java.time.Instant.parse("2026-06-10T00:00:02Z"));
+
+        Map<String, Object> model = OpsViews.events(List.of(dead, consumed));
+
+        assertThat(model.get("hasRows")).isEqualTo(true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("rows");
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0))
+                .containsEntry("id", "msg-1")
+                .containsEntry("channel", "events")
+                .containsEntry("topic", "orders.created")
+                .containsEntry("status", "DEAD")
+                .containsEntry("statusVariant", "error")
+                .containsEntry("attempts", 3)
+                .containsEntry("dead", true)
+                .containsEntry("lastError", "Route queue.orders threw");
+        assertThat(rows.get(1))
+                .containsEntry("dead", false)
+                .containsEntry("key", "-")
+                .containsEntry("statusVariant", "success")
+                .containsEntry("consumedAt", "2026-06-10T00:00:02Z");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> byStatus = (List<Map<String, Object>>) model.get("byStatus");
+        assertThat(byStatus).hasSize(2);
+    }
 }

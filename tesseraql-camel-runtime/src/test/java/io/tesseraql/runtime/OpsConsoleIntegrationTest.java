@@ -118,7 +118,8 @@ class OpsConsoleIntegrationTest {
             String body = get(path, true).body();
             assertThat(body).contains("hc-shell__sidebar").contains("data-hc-nav-current")
                     .contains(">Overview<").contains(">Jobs<").contains(">Traces<")
-                    .contains(">Transfers<").contains(">Outbox<").contains(">Audit<")
+                    .contains(">Transfers<").contains(">Outbox<").contains(">Events<")
+                    .contains(">Audit<")
                     // the other system apps stay reachable
                     .contains(">Studio<").contains(">IAM Admin<")
                     // icons via the self-hosted sprite
@@ -281,6 +282,65 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
+    void eventsPageShowsDeadLettersWithRedeliverAndRaisesTheAlert() throws Exception {
+        // The queue events page is the outbox page's messaging mirror (silent-tolerance O1):
+        // a dead-lettered channel message renders with its error, only DEAD rows offer the
+        // redeliver form, and the dashboard raises TQL-OPS-9008 while any dead letter exists.
+        String deadId = seedDeadQueueEvent();
+        String pendingId = eventStore().publish("events", "items.changed", "K-2", "{}",
+                "user-admin");
+
+        String body = getWith("/_tesseraql/ops/console/events", scopedCookie).body();
+
+        assertThat(body).contains("Queue events")
+                .contains(deadId)
+                .contains("the consumer kept throwing")
+                .contains("action=\"/_tesseraql/ops/console/events/redeliver\"")
+                .contains("name=\"id\" value=\"" + deadId + "\"")
+                .doesNotContain("name=\"id\" value=\"" + pendingId + "\"");
+        assertThat(runtime.opsDashboard().alerts())
+                .anyMatch(alert -> "TQL-OPS-9008".equals(alert.code()));
+    }
+
+    @Test
+    void eventsRedeliverRequeuesADeadMessage() throws Exception {
+        String deadId = seedDeadQueueEvent();
+
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/events/redeliver",
+                "id=" + deadId, scopedCookie, scopedCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(303);
+        assertThat(response.headers().firstValue("location"))
+                .hasValueSatisfying(value -> assertThat(value).contains("redelivered=1"));
+        assertThat(eventStore().find(deadId).orElseThrow().status()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void eventsRedeliverOutOfScopeReadsAsUnknown() throws Exception {
+        String deadId = seedDeadQueueEvent();
+
+        // The plain admin session holds no ops.app.* grant: deny-by-default hides the
+        // message, and out-of-scope answers exactly like unknown (the JSON API's stance).
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/events/redeliver",
+                "id=" + deadId, adminCookie, adminCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(eventStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
+    }
+
+    @Test
+    void eventsRedeliverRequiresTheRunPolicy() throws Exception {
+        String deadId = seedDeadQueueEvent();
+
+        // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
+        HttpResponse<String> response = postForm("/_tesseraql/ops/console/events/redeliver",
+                "id=" + deadId, viewerCookie, viewerCsrf);
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(eventStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
+    }
+
+    @Test
     void jobsPageListsTheScopedCatalogWithRunButtons() throws Exception {
         String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
 
@@ -380,6 +440,20 @@ class OpsConsoleIntegrationTest {
         io.tesseraql.operations.outbox.JdbcOutboxStore outbox = outboxStore();
         String id = outbox.insert(outboxEvent());
         outbox.markDead(id, "delivery kept failing");
+        return id;
+    }
+
+    private static io.tesseraql.core.messaging.EventChannelStore eventStore() {
+        return runtime.camelContext().getRegistry().lookupByNameAndType(
+                io.tesseraql.camel.TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN,
+                io.tesseraql.core.messaging.EventChannelStore.class);
+    }
+
+    /** Publishes one channel message and dead-letters it (ceiling 1: one failure suffices). */
+    private static String seedDeadQueueEvent() {
+        io.tesseraql.core.messaging.EventChannelStore events = eventStore();
+        String id = events.publish("events", "items.changed", "K-1", "{}", "user-admin");
+        events.markFailed(id, "the consumer kept throwing", 1);
         return id;
     }
 

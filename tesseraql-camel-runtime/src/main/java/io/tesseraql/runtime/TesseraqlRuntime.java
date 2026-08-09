@@ -957,6 +957,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     pinningMonitor)
                     // Dead-lettered deliveries surface as an operational alert (Phase 20).
                     .outboxCounts(outboxStore::countByStatus)
+                    // Dead-lettered queue messages alert the same way (silent-tolerance O1).
+                    .eventCounts(eventChannelStore::countByStatus)
                     // A skipped or repeatedly failing poll source surfaces as an alert
                     // instead of only a startup log line (docs/poll-source-status.md).
                     .pollSources(pollSourceStatus)
@@ -1054,7 +1056,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
-                    outboxStore, metricsSettings, routeAuditStore, fileTransfers));
+                    outboxStore, eventChannelStore, metricsSettings, routeAuditStore,
+                    fileTransfers));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -1118,6 +1121,32 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                         "Not Found"));
                         return java.util.Map.of("id", event.id(),
                                 "redelivered", outboxStore.redeliver(id));
+                    })
+                    // The queue events log and its redelivery: the messaging mirror of the
+                    // ops.outbox pair (docs/silent-tolerance.md O1).
+                    .register("ops.events", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        return io.tesseraql.opsui.OpsViews.events(
+                                eventChannelStore.recent(100).stream()
+                                        .filter(event -> scope.test(event.appName()))
+                                        .toList());
+                    })
+                    .register("ops.eventsRedeliver", params -> {
+                        java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
+                                .allowedApps(params.get("permissions"));
+                        String id = String.valueOf(params.get("id"));
+                        // Out of scope reads exactly like unknown - the JSON API's stance
+                        // (docs/ops-console-actions.md); 4040 renders as a plain 404.
+                        io.tesseraql.core.messaging.ChannelEvent event = eventChannelStore
+                                .find(id)
+                                .filter(found -> scope.test(found.appName()))
+                                .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
+                                        new io.tesseraql.core.error.TqlErrorCode(
+                                                io.tesseraql.core.error.TqlDomain.BATCH, 4040),
+                                        "Not Found"));
+                        return java.util.Map.of("id", event.id(),
+                                "redelivered", eventChannelStore.redeliver(id));
                     })
                     .register("ops.jobs", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
@@ -1489,7 +1518,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null))) {
                     context.addService(new PgNotifyListener(dataSource,
                             new QueueConsumer(context, eventChannelStore, pgNotifySubs,
-                                    messagingMaxAttempts),
+                                    messagingMaxAttempts).meter(effectiveMeter),
                             backstop));
                 } else {
                     LOG.warn("{} pg-notify consumer(s) declared but the main datasource is not"
@@ -1499,7 +1528,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             if (!dbPollSubs.isEmpty()) {
                 context.addRoutes(new QueuePollRouteBuilder(new QueueConsumer(context,
-                        eventChannelStore, dbPollSubs, messagingMaxAttempts), backstop));
+                        eventChannelStore, dbPollSubs, messagingMaxAttempts)
+                        .meter(effectiveMeter), backstop));
             }
 
             IdentityService identity = new IdentityService(

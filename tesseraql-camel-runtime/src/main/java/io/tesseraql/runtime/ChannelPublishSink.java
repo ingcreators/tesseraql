@@ -36,7 +36,9 @@ final class ChannelPublishSink implements OutboxEventSink {
         // require() fails fast on an unknown channel; lint catches it at build, and at runtime the
         // throw routes the event through the outbox's retry/dead-letter path rather than dropping it.
         channels.require(envelope.channel());
+        // The outbox event's app tags the durable row, so the ops console's per-app scope
+        // (ops.app.<name>) sees exactly the publishing app's messages (silent-tolerance O1).
         store.publish(envelope.channel(), envelope.topic(), envelope.key(),
-                PublishEvents.payloadJson(envelope.payload()));
+                PublishEvents.payloadJson(envelope.payload()), event.appName());
     }
 }

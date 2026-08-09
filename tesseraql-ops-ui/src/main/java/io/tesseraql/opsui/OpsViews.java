@@ -207,6 +207,42 @@ public final class OpsViews {
     }
 
     /**
+     * The queue events log model (docs/silent-tolerance.md O1): recent channel messages with
+     * status, attempts and last error, already scope-filtered, plus per-status counts over those
+     * rows — the messaging mirror of {@link #outbox}. Dead-lettered rows carry a {@code dead}
+     * flag so the screen can offer redelivery.
+     */
+    public static Map<String, Object> events(
+            List<io.tesseraql.core.messaging.ChannelEvent> events) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (io.tesseraql.core.messaging.ChannelEvent event : events) {
+            counts.merge(event.status(), 1, Integer::sum);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", event.id());
+            row.put("channel", event.channel());
+            row.put("topic", event.topic());
+            row.put("key", dash(event.key()));
+            row.put("app", dash(event.appName()));
+            row.put("status", dash(event.status()));
+            row.put("statusVariant", variant(event.status()));
+            row.put("attempts", event.attempts());
+            row.put("lastError", dash(event.lastError()));
+            row.put("dead", "DEAD".equals(event.status()));
+            row.put("publishedAt",
+                    event.publishedAt() == null ? "-" : event.publishedAt().toString());
+            row.put("consumedAt",
+                    event.consumedAt() == null ? "-" : event.consumedAt().toString());
+            rows.add(row);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("rows", rows);
+        model.put("hasRows", !rows.isEmpty());
+        model.put("byStatus", byStatus(counts));
+        return model;
+    }
+
+    /**
      * One jobs-catalog row (docs/ops-console-actions.md): the declared job, its owning app,
      * its definition (trigger, params, and the operational policies), its most recent
      * execution (null when it has never run), and — for a calendar-qualified schedule — the
@@ -438,9 +474,9 @@ public final class OpsViews {
             return "neutral";
         }
         return switch (status.toUpperCase(java.util.Locale.ROOT)) {
-            case "COMPLETED", "SENT", "ACTIVE" -> "success";
+            case "COMPLETED", "SENT", "ACTIVE", "CONSUMED" -> "success";
             case "FAILED", "DEAD" -> "error";
-            case "RUNNING", "SENDING", "PENDING" -> "info";
+            case "RUNNING", "SENDING", "PENDING", "CLAIMED" -> "info";
             case "STOPPED" -> "warning";
             default -> "neutral";
         };
