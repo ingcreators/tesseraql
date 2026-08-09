@@ -36,8 +36,10 @@ final class SchemaReference {
                         + "main/resources/schema/tesseraql-v1.schema.json) — the schema the "
                         + "loader, the editors, and the linter share — on every refresh, so "
                         + "it cannot drift from what the framework accepts. One document = "
-                        + "one file under an app's `routes/` tree; which root properties "
-                        + "apply depends on the document's `kind`.\n");
+                        + "one file in the app tree — routes under `web/`, jobs under "
+                        + "`batch/`, consumers under `consume/`, views beside the route "
+                        + "they serve; which root properties apply depends on the "
+                        + "document's `kind`.\n");
         if (schema.hasNonNull("description")) {
             md.append('\n').append(schema.get("description").asText()).append('\n');
         }

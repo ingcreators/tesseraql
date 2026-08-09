@@ -5,11 +5,36 @@
   "description": "Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (batch/**/job.yml), queue consumers (consume/**), and declarative views (*.view.yml).",
   "$comment": "additionalProperties stays true so newer keys never break older editors; the route recipe enum is kept in sync with the linter by a build-time test.",
   "type": "object",
-  "required": ["version", "id", "kind"],
+  "required": [
+    "version",
+    "id",
+    "kind"
+  ],
   "properties": {
-    "version": { "const": "tesseraql/v1" },
-    "id": { "type": "string", "minLength": 1, "description": "Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs." },
-    "kind": { "enum": ["route", "job", "view", "workflow", "scope", "attachment", "tool", "resource", "ui", "prompt"], "description": "route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model." },
+    "version": {
+      "const": "tesseraql/v1",
+      "description": "The document format version. Always `tesseraql/v1`."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs."
+    },
+    "kind": {
+      "enum": [
+        "route",
+        "job",
+        "view",
+        "workflow",
+        "scope",
+        "attachment",
+        "tool",
+        "resource",
+        "ui",
+        "prompt"
+      ],
+      "description": "route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model."
+    },
     "recipe": {
       "description": "What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline.",
       "enum": [
@@ -28,30 +53,80 @@
     },
     "input": {
       "type": "object",
-      "description": "Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in input-binding.md and jobs.md.",
-      "additionalProperties": { "$ref": "#/$defs/inputField" }
+      "description": "Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md.",
+      "additionalProperties": {
+        "$ref": "#/$defs/inputField"
+      }
     },
-    "inputPolicy": { "type": "object", "additionalProperties": true, "description": "Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract.", "properties": { "unknownFields": { "enum": ["reject", "ignore"], "description": "How to treat request fields with no declared input: reject (default) or ignore." }, "readOnlyFieldBehavior": { "enum": ["reject", "ignore", "warn"], "description": "How to treat declared but non-writable fields when present: reject (default), ignore, or warn." } } },
+    "inputPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract.",
+      "properties": {
+        "unknownFields": {
+          "enum": [
+            "reject",
+            "ignore"
+          ],
+          "description": "How to treat request fields with no declared input: reject (default) or ignore."
+        },
+        "readOnlyFieldBehavior": {
+          "enum": [
+            "reject",
+            "ignore",
+            "warn"
+          ],
+          "description": "How to treat declared but non-writable fields when present: reject (default), ignore, or warn."
+        }
+      }
+    },
     "security": {
       "type": "object",
       "properties": {
         "auth": {
           "description": "bearer | browser | api-key | mtls | public (deny-by-default: no auth means no access to protected data).",
           "type": "string",
-          "enum": ["bearer", "browser", "api-key", "mtls", "public"]
+          "enum": [
+            "bearer",
+            "browser",
+            "api-key",
+            "mtls",
+            "public"
+          ]
         },
-        "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." },
-        "csrf": { "type": "string", "enum": ["auto", "required", "off"], "description": "CSRF posture: auto (browser state-changing routes are protected), required, or off - one enum here and in security.defaults rules alike." }
+        "policy": {
+          "type": "string",
+          "description": "A policy id under tesseraql.security.policies."
+        },
+        "csrf": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "required",
+            "off"
+          ],
+          "description": "CSRF posture: auto (browser state-changing routes are protected), required, or off - one enum here and in security.defaults rules alike."
+        }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "description": "How this document authenticates and authorizes. Routes are deny-by-default: one that declares no security is unreachable. Documented in authentication.md."
     },
     "idempotency": {
       "type": "object",
       "description": "Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md.",
       "properties": {
-        "required": { "type": "boolean", "description": "Whether the Idempotency-Key header is required on this command." },
-        "scope": { "type": "string", "description": "The replay scope key (default: the route id)." },
-        "ttl": { "type": "string", "description": "How long a stored response replays (duration string, default 24h)." }
+        "required": {
+          "type": "boolean",
+          "description": "Whether the Idempotency-Key header is required on this command."
+        },
+        "scope": {
+          "type": "string",
+          "description": "The replay scope key (default: the route id)."
+        },
+        "ttl": {
+          "type": "string",
+          "description": "How long a stored response replays (duration string, default 24h)."
+        }
       },
       "additionalProperties": true
     },
@@ -62,39 +137,101 @@
         "concurrency": {
           "type": "object",
           "properties": {
-            "maxInFlight": { "type": "integer", "description": "Maximum requests of this route in flight at once; excess is rejected." }
+            "maxInFlight": {
+              "type": "integer",
+              "description": "Maximum requests of this route in flight at once; excess is rejected."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Bound on how many of this route's requests run at once."
         },
         "rateLimit": {
           "type": "object",
           "properties": {
-            "requestsPerSecond": { "type": "integer" },
-            "burst": { "type": "integer", "description": "Burst capacity (default: requestsPerSecond)." },
-            "scope": { "type": "string", "enum": ["node", "cluster"], "description": "node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023)." }
+            "requestsPerSecond": {
+              "type": "integer",
+              "description": "Sustained requests per second allowed; excess is refused with 429."
+            },
+            "burst": {
+              "type": "integer",
+              "description": "Burst capacity (default: requestsPerSecond)."
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "node",
+                "cluster"
+              ],
+              "description": "node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023)."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Token-bucket rate limit for this route."
         },
-        "lane": { "type": "string", "description": "The execution lane this route runs on (tesseraql.lanes)." }
+        "lane": {
+          "type": "string",
+          "description": "The execution lane this route runs on (tesseraql.lanes)."
+        }
       },
       "additionalProperties": true
     },
-    "outbox": { "type": "object", "additionalProperties": true, "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md." },
+    "outbox": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md."
+    },
     "http": {
       "type": "object",
       "description": "Named HTTP sources on a query route (docs/connectors.md, \"HTTP sources\"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022).",
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "url": { "type": "string", "description": "Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070)." },
-          "headers": { "type": "object", "additionalProperties": { "type": "string" } },
-          "query": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Query-string bindings, each an expression over the execution context." },
-          "credential": { "type": "string", "description": "A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072)." },
-          "expectStatus": { "type": "integer" },
-          "connectTimeout": { "type": "string" },
-          "requestTimeout": { "type": "string" },
-          "select": { "type": "string", "description": "Dotted path into the response JSON naming the rows array or object the source exposes." },
-          "onError": { "type": "string", "enum": ["fail", "empty"], "description": "fail (default) or empty: the source degrades to zero rows and the page still renders." }
+          "url": {
+            "type": "string",
+            "description": "Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070)."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Static request headers sent with the call. Credential material belongs in a named credential, never here."
+          },
+          "query": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Query-string bindings, each an expression over the execution context."
+          },
+          "credential": {
+            "type": "string",
+            "description": "A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072)."
+          },
+          "expectStatus": {
+            "type": "integer",
+            "description": "The HTTP status the response must carry; any other status fails the call."
+          },
+          "connectTimeout": {
+            "type": "string",
+            "description": "How long to wait for the connection (duration string such as `2s`)."
+          },
+          "requestTimeout": {
+            "type": "string",
+            "description": "How long to wait for the complete response (duration string such as `10s`)."
+          },
+          "select": {
+            "type": "string",
+            "description": "Dotted path into the response JSON naming the rows array or object the source exposes."
+          },
+          "onError": {
+            "type": "string",
+            "enum": [
+              "fail",
+              "empty"
+            ],
+            "description": "fail (default) or empty: the source degrades to zero rows and the page still renders."
+          }
         },
         "additionalProperties": true
       }
@@ -103,18 +240,41 @@
       "type": "object",
       "description": "Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025).",
       "properties": {
-        "maxAge": { "type": "string", "description": "How long a client may reuse the response (duration string such as 30s or 5m)." },
-        "visibility": { "type": "string", "enum": ["private", "public"] },
-        "etag": { "type": "boolean", "description": "Hash the rendered body and answer If-None-Match with 304 (default true)." },
-        "staleWhileRevalidate": { "type": "string" }
+        "maxAge": {
+          "type": "string",
+          "description": "How long a client may reuse the response (duration string such as 30s or 5m)."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "private",
+            "public"
+          ],
+          "description": "`private` (the default) lets only the client cache the response; `public` permits shared caches and lints onto `auth: public` routes only."
+        },
+        "etag": {
+          "type": "boolean",
+          "description": "Hash the rendered body and answer If-None-Match with 304 (default true)."
+        },
+        "staleWhileRevalidate": {
+          "type": "string",
+          "description": "How long a stale response may still be served while it revalidates (duration string)."
+        }
       },
       "additionalProperties": true
     },
     "emit": {
       "description": "Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
       "oneOf": [
-        { "type": "string" },
-        { "type": "array", "items": { "type": "string" } }
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       ]
     },
     "refreshOn": {
@@ -125,15 +285,23 @@
       "type": "string",
       "description": "The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036)."
     },
-    "sql": { "$ref": "#/$defs/sqlBinding" },
+    "sql": {
+      "$ref": "#/$defs/sqlBinding",
+      "description": "The document's single statement: a colocated 2-way SQL file, a named IAM contract, or a service call. Its result binds as `rows`."
+    },
     "steps": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/$defs/sqlBinding" }
+      "additionalProperties": {
+        "$ref": "#/$defs/sqlBinding"
+      },
+      "description": "Named statements executed in order inside one transaction (command recipes). Each result binds under `steps.<name>`. Documented in transactional-writes.md."
     },
     "queries": {
       "type": "object",
       "description": "Additional named queries executed after sql, each bound into the execution context under its name.",
-      "additionalProperties": { "$ref": "#/$defs/sqlBinding" }
+      "additionalProperties": {
+        "$ref": "#/$defs/sqlBinding"
+      }
     },
     "validate": {
       "type": "object",
@@ -141,14 +309,41 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "rule": { "type": "string", "description": "A cross-field expression that must hold." },
-          "file": { "type": "string", "description": "Validation SQL returning one row per violation; must be a SELECT, and runs inside the command's transaction." },
-          "use": { "type": "string", "description": "Name of a shared rule declared under rules/. The reference supplies params: matching the rule's binds: contract, plus its own field:/when:/code:/message:." },
-          "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Binds for a SQL rule, as dotted source expressions." },
-          "field": { "type": "string", "description": "The input the violation is reported against." },
-          "when": { "type": "string", "description": "Guard expression; the rule is skipped when it is falsy." },
-          "code": { "type": "string", "description": "Machine-readable violation code." },
-          "message": { "type": "string", "description": "Message catalog key." }
+          "rule": {
+            "type": "string",
+            "description": "A cross-field expression that must hold."
+          },
+          "file": {
+            "type": "string",
+            "description": "Validation SQL returning one row per violation; must be a SELECT, and runs inside the command's transaction."
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a shared rule declared under rules/. The reference supplies params: matching the rule's binds: contract, plus its own field:/when:/code:/message:."
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Binds for a SQL rule, as dotted source expressions."
+          },
+          "field": {
+            "type": "string",
+            "description": "The input the violation is reported against."
+          },
+          "when": {
+            "type": "string",
+            "description": "Guard expression; the rule is skipped when it is falsy."
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable violation code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Message catalog key."
+          }
         },
         "additionalProperties": false
       }
@@ -159,53 +354,137 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "use": { "type": "string", "description": "Name of a decision declared under decisions/." },
-          "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, \"principal.role == 'officer'\")." },
-          "effectiveAt": { "type": "string", "description": "Reference instant of a dated table-backed decision's effective: window - audit.now unless wired to a document date (params.postingDate)." }
+          "use": {
+            "type": "string",
+            "description": "Name of a decision declared under decisions/."
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, \"principal.role == 'officer'\")."
+          },
+          "effectiveAt": {
+            "type": "string",
+            "description": "Reference instant of a dated table-backed decision's effective: window - audit.now unless wired to a document date (params.postingDate)."
+          }
         },
-        "required": ["use", "params"],
+        "required": [
+          "use",
+          "params"
+        ],
         "additionalProperties": false
       }
     },
-    "notify": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": true }, "description": "Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md." },
-    "errors": { "type": "object", "additionalProperties": true, "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md." },
-    "import": { "type": "object", "additionalProperties": true, "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md." },
-    "export": { "type": "object", "additionalProperties": true, "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md." },
+    "notify": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md."
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md."
+    },
+    "import": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md."
+    },
+    "export": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md."
+    },
     "webhook": {
       "type": "object",
       "properties": {
-        "provider": { "type": "string", "description": "A verifier under tesseraql.connectors.webhooks (an unknown provider fails the build)." }
+        "provider": {
+          "type": "string",
+          "description": "A verifier under tesseraql.connectors.webhooks (an unknown provider fails the build)."
+        }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "description": "Inbound webhook verification and payload mapping for a `webhook` route. Documented in connectors.md."
     },
     "publish": {
       "type": "object",
       "properties": {
-        "channel": { "type": "string" },
-        "topic": { "type": "string" },
-        "key": { "type": "string" },
-        "payload": { "type": "object", "additionalProperties": { "type": "string" } }
+        "channel": {
+          "type": "string",
+          "description": "The declared messaging channel to publish on."
+        },
+        "topic": {
+          "type": "string",
+          "description": "The topic the event is published under."
+        },
+        "key": {
+          "type": "string",
+          "description": "Ordering key for the event, as a bindable path; messages sharing a key keep their relative order."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The event body: each property name to the bindable path supplying its value."
+        }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "description": "The domain event this command publishes on a messaging channel after commit, on the same transactional outbox as `notify:`. Documented in messaging.md."
     },
     "consume": {
       "type": "object",
       "properties": {
-        "channel": { "type": "string" },
-        "topic": { "type": "string" },
-        "idempotencyKey": { "type": "string" }
+        "channel": {
+          "type": "string",
+          "description": "The declared messaging channel to consume from."
+        },
+        "topic": {
+          "type": "string",
+          "description": "The topic this consumer subscribes to."
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "A bindable path over the message whose value de-duplicates redeliveries, so an at-least-once channel applies each message once."
+        }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "description": "What a `consume/**` document subscribes to. Documented in messaging.md."
     },
     "pagination": {
       "description": "Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.",
       "type": "object",
       "properties": {
-        "strategy": { "enum": ["offset", "keyset"] },
-        "size": { "type": "integer", "minimum": 1 },
-        "maxSize": { "type": "integer", "minimum": 1 },
-        "count": { "type": "boolean" },
-        "by": { "type": "string", "description": "keyset cursor column" }
+        "strategy": {
+          "enum": [
+            "offset",
+            "keyset"
+          ],
+          "description": "`offset` (the default) pages by row offset; `keyset` pages by the `by:` cursor column and stays stable while rows are inserted."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Page size used when the request does not ask for one."
+        },
+        "maxSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Largest page size a request may ask for; a larger request is clamped."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "Also run a count query so the response carries the total row count."
+        },
+        "by": {
+          "type": "string",
+          "description": "keyset cursor column"
+        }
       },
       "additionalProperties": true
     },
@@ -215,101 +494,257 @@
         "json": {
           "type": "object",
           "properties": {
-            "status": { "type": "integer", "minimum": 100, "maximum": 599 },
-            "body": {},
-            "fields": { "type": "object", "additionalProperties": { "$ref": "#/$defs/fieldPolicy" } },
-            "statusWhen": { "$ref": "#/$defs/statusWhen" },
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599,
+              "description": "The status answered on success (default 200; a create conventionally declares 201)."
+            },
+            "body": {
+              "description": "What the response body is: a bindable path such as `rows` or `steps.<name>`, or a literal shape composing several."
+            },
+            "fields": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/fieldPolicy"
+              },
+              "description": "Per-field visibility, masking, and classification applied to the body. Documented in data-scoping.md."
+            },
+            "statusWhen": {
+              "$ref": "#/$defs/statusWhen",
+              "description": "Conditional statuses: the first entry whose expression matches decides the status."
+            },
             "nest": {
               "type": "array",
               "items": {
                 "type": "object",
                 "properties": {
-                  "into": { "type": "string" },
-                  "children": { "type": "string" },
-                  "as": { "type": "string" },
-                  "on": { "type": "object", "additionalProperties": { "type": "string" } }
+                  "into": {
+                    "type": "string",
+                    "description": "The parent collection the children are nested into."
+                  },
+                  "children": {
+                    "type": "string",
+                    "description": "The named query under `queries:` supplying the child rows."
+                  },
+                  "as": {
+                    "type": "string",
+                    "description": "The property name the children appear under on each parent row."
+                  },
+                  "on": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "The join: each parent property to the child property it matches."
+                  }
                 },
                 "additionalProperties": true
-              }
+              },
+              "description": "Compose the rows of a named query into the parent rows, so one request answers a parent-and-children shape without a second endpoint."
             }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "The JSON response: status, body, per-field policy, and nested composition."
         },
         "html": {
           "type": "object",
           "properties": {
-            "status": { "type": "integer", "minimum": 100, "maximum": 599 },
-            "template": { "type": "string" },
-            "view": { "type": "string", "description": "The id of a *.view.yml document (exclusive with template:)." },
-            "shell": { "type": "string", "enum": ["auto", "always", "never"], "description": "Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint." },
-            "views": { "type": "array", "items": { "type": "string" }, "description": "View ids whose models a template: route binds; each renders into views['<id>'] for the template to insert (illegal alongside view:)." },
-            "model": { "type": "object", "additionalProperties": true },
-            "headers": { "type": "object", "additionalProperties": true },
-            "headersWhen": { "type": "object", "additionalProperties": { "type": "string" } },
-            "statusWhen": { "$ref": "#/$defs/statusWhen" }
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599,
+              "description": "The status answered on success (default 200)."
+            },
+            "template": {
+              "type": "string",
+              "description": "The Thymeleaf template to render, relative to the app template root (exclusive with `view:`)."
+            },
+            "view": {
+              "type": "string",
+              "description": "The id of a *.view.yml document (exclusive with template:)."
+            },
+            "shell": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ],
+              "description": "Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint."
+            },
+            "views": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "View ids whose models a template: route binds; each renders into views['<id>'] for the template to insert (illegal alongside view:)."
+            },
+            "model": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Response headers to set, merged over the app-wide `responseHeaders` defaults."
+            },
+            "headersWhen": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Conditional response headers: the first entry whose expression matches decides the headers."
+            },
+            "statusWhen": {
+              "$ref": "#/$defs/statusWhen",
+              "description": "Conditional statuses: the first entry whose expression matches decides the status."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "The HTML response: a template or a view, its model, the status, and headers."
         },
         "stream": {
           "type": "object",
           "properties": {
-            "filename": { "type": "string" }
+            "filename": {
+              "type": "string",
+              "description": "The download filename offered to the client, as a literal or a bindable path."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Stream the generated file back as the response body (`query-export`). Documented in file-transfers.md."
         },
         "redirect": {
           "type": "object",
-          "required": ["location"],
+          "required": [
+            "location"
+          ],
           "properties": {
-            "status": { "type": "integer", "minimum": 300, "maximum": 399 },
-            "location": { "type": "string" }
+            "status": {
+              "type": "integer",
+              "minimum": 300,
+              "maximum": 399,
+              "description": "The redirect status; declare `303` after a command so the browser follows with GET."
+            },
+            "location": {
+              "type": "string",
+              "description": "Where to redirect, as a literal path or a bindable path."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Answer with a redirect instead of a body — the usual close of a browser form post."
         },
         "file": {
           "type": "object",
-          "required": ["template"],
+          "required": [
+            "template"
+          ],
           "properties": {
-            "status": { "type": "integer" },
-            "template": { "type": "string" },
-            "contentType": { "type": "string" },
-            "filename": { "type": "string" },
-            "model": { "type": "object" }
+            "status": {
+              "type": "integer",
+              "description": "The status answered on success (default 200)."
+            },
+            "template": {
+              "type": "string",
+              "description": "The template rendered into the file."
+            },
+            "contentType": {
+              "type": "string",
+              "description": "The Content-Type of the produced file."
+            },
+            "filename": {
+              "type": "string",
+              "description": "The download filename offered to the client, as a literal or a bindable path."
+            },
+            "model": {
+              "type": "object",
+              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Render a template into a file and answer with it as a download."
         },
         "onError": {
           "type": "object",
           "properties": {
-            "retarget": { "type": "string" },
-            "reswap": { "type": "string" }
+            "retarget": {
+              "type": "string",
+              "description": "The element an error response replaces, instead of the request target."
+            },
+            "reswap": {
+              "type": "string",
+              "description": "The htmx swap style an error response uses (for example `outerHTML`)."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "How an error response reaches htmx, so a failed submit lands in the right place instead of replacing the page. Documented in response-shaping.md."
         },
         "session": {
           "type": "object",
-          "description": "Browser-session handling for the response (docs/session-rotation.md).",
+          "description": "Browser-session handling for the response (docs/authentication.md).",
           "properties": {
-            "rotate": { "type": "boolean", "description": "Re-issue the caller's session cookie in place on success: a fresh id and CSRF token, the old id invalidated before the response leaves. Declare on routes that elevate the session (confirming an MFA enrollment); bearer or public callers are untouched." }
+            "rotate": {
+              "type": "boolean",
+              "description": "Re-issue the caller's session cookie in place on success: a fresh id and CSRF token, the old id invalidated before the response leaves. Declare on routes that elevate the session (confirming an MFA enrollment); bearer or public callers are untouched."
+            }
           },
           "additionalProperties": false
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "description": "How the result becomes an HTTP response: JSON, HTML, a redirect, a stream, or a rendered file. Documented in response-shaping.md."
     },
     "view": {
       "description": "Declarative view documents (kind: view): list | form | detail | dashboard.",
-      "enum": ["list", "form", "detail", "dashboard"]
+      "enum": [
+        "list",
+        "form",
+        "detail",
+        "dashboard"
+      ]
     },
-    "title": { "type": "string" },
-    "search": { "type": "string" },
-    "source": { "type": "string" },
-    "action": { "type": "string" },
-    "columns": { "type": "array" },
-    "fields": { "type": "array" },
-    "panels": { "type": "array" },
-    "children": { "type": "object", "additionalProperties": true },
-    "slots": { "type": "object", "additionalProperties": { "type": "string" } },
+    "title": {
+      "type": "string",
+      "description": "The heading a view document renders (`kind: view`)."
+    },
+    "search": {
+      "type": "string",
+      "description": "The input field a list view binds its search box to."
+    },
+    "source": {
+      "type": "string",
+      "description": "The id of the route a view reads its rows from."
+    },
+    "action": {
+      "type": "string",
+      "description": "The id of the route a form view submits to."
+    },
+    "columns": {
+      "type": "array",
+      "description": "The columns a list view renders, in order. Documented in declarative-views.md."
+    },
+    "fields": {
+      "type": "array",
+      "description": "The fields a form or detail view renders, in order. Documented in declarative-views.md."
+    },
+    "panels": {
+      "type": "array",
+      "description": "The panels a dashboard view composes, in order. Documented in declarative-views.md."
+    },
+    "children": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Views embedded inside this one, keyed by the slot each fills. Documented in declarative-views.md."
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Named regions this view exposes for a composing parent to fill. Documented in declarative-views.md."
+    },
     "trigger": {
       "type": "object",
       "description": "How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md.",
@@ -317,49 +752,134 @@
         "schedule": {
           "type": "object",
           "properties": {
-            "cron": { "type": "string", "description": "A Quartz cron expression; firings are claimed cluster-wide so one node runs each." },
-            "fixedDelay": { "type": "string", "description": "A period (duration string, e.g. 5m); mutually exclusive with cron." },
-            "calendar": { "type": "string", "description": "A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md." },
-            "runOn": { "type": "string", "enum": ["business-day", "first-business-day-of-month", "last-business-day-of-month"], "description": "Which considered firings count under the calendar (default business-day); mutually exclusive with dayOfMonth." },
-            "dayOfMonth": { "type": "integer", "minimum": 1, "maximum": 31, "description": "The shifted nominal-day rule: fire on this day of month, or its shifted business day when it is not one - and the run's business date is the nominal date. Rounds down to the month's last day. Documented in jobs.md." },
-            "shift": { "type": "string", "enum": ["next-business-day", "previous-business-day"], "description": "Where a non-business nominal day moves (default next-business-day); requires dayOfMonth." }
+            "cron": {
+              "type": "string",
+              "description": "A Quartz cron expression; firings are claimed cluster-wide so one node runs each."
+            },
+            "fixedDelay": {
+              "type": "string",
+              "description": "A period (duration string, e.g. 5m); mutually exclusive with cron."
+            },
+            "calendar": {
+              "type": "string",
+              "description": "A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md."
+            },
+            "runOn": {
+              "type": "string",
+              "enum": [
+                "business-day",
+                "first-business-day-of-month",
+                "last-business-day-of-month"
+              ],
+              "description": "Which considered firings count under the calendar (default business-day); mutually exclusive with dayOfMonth."
+            },
+            "dayOfMonth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31,
+              "description": "The shifted nominal-day rule: fire on this day of month, or its shifted business day when it is not one - and the run's business date is the nominal date. Rounds down to the month's last day. Documented in jobs.md."
+            },
+            "shift": {
+              "type": "string",
+              "enum": [
+                "next-business-day",
+                "previous-business-day"
+              ],
+              "description": "Where a non-business nominal day moves (default next-business-day); requires dayOfMonth."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Fire the job on a clock: a cron expression or a fixed delay, optionally filtered by a business-day calendar."
         },
         "poll": {
           "type": "object",
           "properties": {
-            "transport": { "type": "string", "enum": ["local", "sftp", "ftps"], "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts." },
-            "host": { "type": "string" },
-            "port": { "type": "integer" },
-            "path": { "type": "string", "description": "The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home." },
-            "credential": { "type": "string", "description": "A named credential under tesseraql.connectors.poll.credentials (required for remote sources)." },
-            "include": { "type": "string", "description": "An ant-style filename filter, e.g. *.csv." },
-            "delay": { "type": "string", "description": "Poll interval (duration string)." },
-            "move": { "type": "string", "description": "Relative directory for processed files (default .done). Plain names only - no paths or placeholders." },
-            "moveFailed": { "type": "string", "description": "Relative directory for failed files (default .error). Plain names only." }
+            "transport": {
+              "type": "string",
+              "enum": [
+                "local",
+                "sftp",
+                "ftps"
+              ],
+              "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts."
+            },
+            "host": {
+              "type": "string",
+              "description": "The remote host to poll; required for `sftp` and `ftps`, and it must be listed in `connectors.poll.allowedHosts`."
+            },
+            "port": {
+              "type": "integer",
+              "description": "The remote port; defaults to the transport's standard port."
+            },
+            "path": {
+              "type": "string",
+              "description": "The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home."
+            },
+            "credential": {
+              "type": "string",
+              "description": "A named credential under tesseraql.connectors.poll.credentials (required for remote sources)."
+            },
+            "include": {
+              "type": "string",
+              "description": "An ant-style filename filter, e.g. *.csv."
+            },
+            "delay": {
+              "type": "string",
+              "description": "Poll interval (duration string)."
+            },
+            "move": {
+              "type": "string",
+              "description": "Relative directory for processed files (default .done). Plain names only - no paths or placeholders."
+            },
+            "moveFailed": {
+              "type": "string",
+              "description": "Relative directory for failed files (default .error). Plain names only."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding the job's import pipeline."
         },
-        "after": { "type": "string", "description": "Light chaining: fire when the named job's execution completes successfully in the same app, carrying its business date. Documented in jobs.md." }
+        "after": {
+          "type": "string",
+          "description": "Light chaining: fire when the named job's execution completes successfully in the same app, carrying its business date. Documented in jobs.md."
+        }
       },
       "additionalProperties": true
     },
-    "overlap": { "type": "string", "enum": ["skip", "concurrent"], "description": "What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md." },
+    "overlap": {
+      "type": "string",
+      "enum": [
+        "skip",
+        "concurrent"
+      ],
+      "description": "What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md."
+    },
     "sla": {
       "type": "object",
       "description": "Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md.",
       "properties": {
-        "completeBy": { "type": "string", "description": "Wall-clock time (HH:mm) by which a day's run must have completed for that business date." },
-        "runningLongerThan": { "type": "string", "description": "A duration (e.g. 2h) beyond which a still-running execution raises the alert." }
+        "completeBy": {
+          "type": "string",
+          "description": "Wall-clock time (HH:mm) by which a day's run must have completed for that business date."
+        },
+        "runningLongerThan": {
+          "type": "string",
+          "description": "A duration (e.g. 2h) beyond which a still-running execution raises the alert."
+        }
       },
       "additionalProperties": true
     },
-    "perTenant": { "type": "boolean", "description": "Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md." },
+    "perTenant": {
+      "type": "boolean",
+      "description": "Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md."
+    },
     "pipeline": {
       "type": "array",
       "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, httpCall, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md.",
-      "items": { "type": "object", "additionalProperties": true }
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true,
@@ -367,30 +887,119 @@
     "inputField": {
       "type": "object",
       "properties": {
-        "domain": { "type": "string", "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local." },
-        "type": { "enum": ["string", "integer", "number", "boolean", "date", "array"] },
-        "required": { "type": "boolean" },
-        "default": {},
-        "min": { "type": "number" },
-        "max": { "type": "number" },
-        "maxLength": { "type": "integer", "minimum": 0 },
-        "minLength": { "type": "integer", "minimum": 0 },
-        "pattern": { "type": "string", "description": "Anchored regular expression (TQL-YAML-1012 when it does not compile)." },
-        "format": { "type": "string", "description": "string: email|uuid|url; date/number: a parse pattern.", "examples": ["email", "uuid", "url", "yyyy/MM/dd", "#,##0.##"] },
-        "requiredWhen": { "type": "string", "description": "A core expression over params./path./body. (TQL-YAML-1014)." },
-        "enum": { "type": "array", "items": { "type": "string" } },
-        "writable": { "type": "boolean" },
-        "classification": { "type": "string" },
-        "mask": { "type": "string" },
-        "widget": { "type": "string", "enum": ["text", "textarea", "number", "date", "datetime-local", "checkbox", "select", "hidden"], "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract." },
-        "policy": { "type": "string", "description": "Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain." },
+        "domain": {
+          "type": "string",
+          "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "date",
+            "array"
+          ],
+          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Refuse the request when this field is absent."
+        },
+        "default": {
+          "description": "The value bound when the request omits the field."
+        },
+        "min": {
+          "type": "number",
+          "description": "Smallest accepted numeric value."
+        },
+        "max": {
+          "type": "number",
+          "description": "Largest accepted numeric value."
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longest accepted string, in characters."
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Shortest accepted string, in characters."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Anchored regular expression (TQL-YAML-1012 when it does not compile)."
+        },
+        "format": {
+          "type": "string",
+          "description": "string: email|uuid|url; date/number: a parse pattern.",
+          "examples": [
+            "email",
+            "uuid",
+            "url",
+            "yyyy/MM/dd",
+            "#,##0.##"
+          ]
+        },
+        "requiredWhen": {
+          "type": "string",
+          "description": "A core expression over params./path./body. (TQL-YAML-1014)."
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The accepted values; anything else is refused."
+        },
+        "writable": {
+          "type": "boolean",
+          "description": "`false` makes the field read-only: it renders in a derived form but is never bound from the request."
+        },
+        "classification": {
+          "type": "string",
+          "description": "Data classification label carried into masking and audit. Documented in data-scoping.md."
+        },
+        "mask": {
+          "type": "string",
+          "description": "The masking rule applied when the principal may not see the value."
+        },
+        "widget": {
+          "type": "string",
+          "enum": [
+            "text",
+            "textarea",
+            "number",
+            "date",
+            "datetime-local",
+            "checkbox",
+            "select",
+            "hidden"
+          ],
+          "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract."
+        },
+        "policy": {
+          "type": "string",
+          "description": "Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain."
+        },
         "items": {
           "type": "object",
           "properties": {
-            "type": { "type": "string" },
-            "enum": { "type": "array", "items": { "type": "string" } }
+            "type": {
+              "type": "string",
+              "description": "The element type."
+            },
+            "enum": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The accepted element values; anything else is refused."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Element constraints for `type: array`."
         }
       },
       "additionalProperties": true
@@ -398,31 +1007,88 @@
     "sqlBinding": {
       "type": "object",
       "properties": {
-        "file": { "type": "string", "description": "A colocated 2-way SQL file (must exist; TQL-SQL-2103)." },
-        "contract": { "type": "string" },
-        "service": { "type": "string" },
-        "mode": { "type": "string", "examples": ["query", "query-one", "update", "query-spool"] },
-        "timeoutSeconds": { "type": "integer", "minimum": 0, "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s." },
-        "datasource": { "type": "string", "description": "The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)." },
-        "when": { "type": "string", "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form." },
-        "params": { "type": "object", "additionalProperties": { "type": "string" } },
-        "sequence": { "type": "string" },
-        "keys": { "type": "array", "items": { "type": "string" } },
+        "file": {
+          "type": "string",
+          "description": "A colocated 2-way SQL file (must exist; TQL-SQL-2103)."
+        },
+        "contract": {
+          "type": "string",
+          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Documented in authentication.md."
+        },
+        "service": {
+          "type": "string",
+          "description": "A named runtime service provider to call instead of running SQL. The provider is Java the framework supplies; an application declares the call, not the code."
+        },
+        "mode": {
+          "type": "string",
+          "examples": [
+            "query",
+            "query-one",
+            "update",
+            "query-spool"
+          ],
+          "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (a streamed result)."
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
+        },
+        "datasource": {
+          "type": "string",
+          "description": "The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)."
+        },
+        "when": {
+          "type": "string",
+          "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Arguments for a `service:` or `contract:` call: each name to the bindable path supplying its value."
+        },
+        "sequence": {
+          "type": "string",
+          "description": "Allocate the next value of a managed document-number sequence instead of running SQL; it binds as `steps.<name>.value`. Documented in transactional-writes.md."
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<name>.keys.<column>`."
+        },
         "materialize": {
           "type": "object",
           "properties": {
-            "maxRows": { "type": "integer" },
-            "onOverflow": { "type": "string" }
+            "maxRows": {
+              "type": "integer",
+              "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
+            },
+            "onOverflow": {
+              "type": "string",
+              "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "Bounds on how much of the result is held in memory."
         },
         "expect": {
           "type": "object",
           "properties": {
-            "rowCount": { "type": "integer", "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)." },
-            "onMismatch": { "type": "string" }
+            "rowCount": {
+              "type": "integer",
+              "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
+            },
+            "onMismatch": {
+              "type": "string",
+              "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
+            }
           },
-          "additionalProperties": true
+          "additionalProperties": true,
+          "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
         }
       },
       "additionalProperties": true
@@ -430,11 +1096,26 @@
     "fieldPolicy": {
       "type": "object",
       "properties": {
-        "visible": { "type": "boolean" },
-        "policy": { "type": "string" },
-        "mask": { "type": "string" },
-        "classification": { "type": "string" },
-        "unmaskWhen": { "type": "string" }
+        "visible": {
+          "type": "boolean",
+          "description": "`false` removes the field from the response entirely, for every caller."
+        },
+        "policy": {
+          "type": "string",
+          "description": "The security policy a principal must satisfy to see the value unmasked."
+        },
+        "mask": {
+          "type": "string",
+          "description": "The masking rule applied when the policy is not satisfied, such as showing only the last four characters."
+        },
+        "classification": {
+          "type": "string",
+          "description": "Data classification label carried into audit. Documented in data-scoping.md."
+        },
+        "unmaskWhen": {
+          "type": "string",
+          "description": "An expression that, when it matches, reveals the value despite the mask."
+        }
       },
       "additionalProperties": true
     },
@@ -442,10 +1123,21 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["when", "status"],
+        "required": [
+          "when",
+          "status"
+        ],
         "properties": {
-          "when": { "type": "string", "description": "A whitelist-only expression over the execution context; the first matching entry wins." },
-          "status": { "type": "integer", "minimum": 100, "maximum": 599, "description": "The HTTP status to answer when the expression is truthy." }
+          "when": {
+            "type": "string",
+            "description": "A whitelist-only expression over the execution context; the first matching entry wins."
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599,
+            "description": "The HTTP status to answer when the expression is truthy."
+          }
         },
         "additionalProperties": true
       }
