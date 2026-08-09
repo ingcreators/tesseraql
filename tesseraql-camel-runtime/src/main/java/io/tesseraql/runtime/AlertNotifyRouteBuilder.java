@@ -19,6 +19,9 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class AlertNotifyRouteBuilder extends RouteBuilder {
 
+    private static final System.Logger LOG = System
+            .getLogger(AlertNotifyRouteBuilder.class.getName());
+
     private final OpsDashboard dashboard;
     private final JdbcOutboxStore store;
     private final String channel;
@@ -47,12 +50,23 @@ final class AlertNotifyRouteBuilder extends RouteBuilder {
         Set<String> current = new java.util.HashSet<>();
         for (OpsDashboard.Alert alert : alerts) {
             current.add(alert.code());
-            if (notified.add(alert.code())) {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("code", alert.code());
-                payload.put("severity", alert.severity());
-                payload.put("message", alert.message());
+            if (notified.contains(alert.code())) {
+                continue;
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("code", alert.code());
+            payload.put("severity", alert.severity());
+            payload.put("message", alert.message());
+            try {
                 store.insert(NotifyEvents.event(channel, "ops.alert", payload, appName));
+                // Record the dedup key only after a successful enqueue — a failed insert used to
+                // mark the code anyway, so the alert was never re-sent while it stayed raised.
+                notified.add(alert.code());
+            } catch (RuntimeException ex) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Failed to enqueue alert notification " + alert.code()
+                                + "; will retry next tick",
+                        ex);
             }
         }
         // A cleared alert may notify again the next time it raises.
