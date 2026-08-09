@@ -28,10 +28,11 @@ never disagree with the build.
   declares, nothing more. Flow-map fields
   (`salary: { domain: salary, policy: hr.write }`) complete too.
 - **View-composition intelligence.** View ids complete at every reference position —
-  `response.html.view:`, `views: [..]` on template routes, and `view:` on dashboard
-  panels and detail children — from the app's `*.view.yml` registry (`web/` +
-  `templates/`); `shell:` offers the negotiation vocabulary (`auto`/`always`/`never`)
-  and `widget:` the field-widget enum.
+  `response.html.view:`, `views:` on template routes (flow list and block sequence),
+  and `view:` on dashboard panels and detail children — from the app's `*.view.yml`
+  registry (`web/` + `templates/`), and go-to-definition on any of those references
+  jumps to the referenced document's `id:` line; `shell:` offers the negotiation
+  vocabulary (`auto`/`always`/`never`) and `widget:` the field-widget enum.
 - **Test Explorer with SQL coverage.** App test suites run in the native Test
   Explorer (`tesseraql test --format json`), single cases included; a coverage run
   paints per-file SQL line coverage in the editor.

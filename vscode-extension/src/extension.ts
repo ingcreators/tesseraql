@@ -9,7 +9,7 @@ import { SuiteTestController } from './vscode/testing';
 import { ServeStatus } from './vscode/serveStatus';
 import { SymbolCompletionProvider, SymbolDefinitionProvider, SymbolIndex } from './vscode/language';
 import { EmailFragmentCompletionProvider } from './vscode/mailTemplate';
-import { ViewIntelCompletionProvider } from './vscode/viewIntel';
+import { ViewDefinitionProvider, ViewIntelCompletionProvider } from './vscode/viewIntel';
 import { registerMcpServer } from './vscode/mcpRegistration';
 import { studioSourceUrl } from './core/studio';
 import { routeDescription } from './core/symbols';
@@ -77,9 +77,12 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.languages.registerCompletionItemProvider('yaml',
           new SymbolCompletionProvider(symbols), ':', ' ', '.'),
       // The view-composition surface (docs/view-composition.md): view ids at the
-      // reference positions, shell: negotiation, and the widget: enum.
+      // reference positions, shell: negotiation, and the widget: enum — plus
+      // go-to-definition onto the referenced *.view.yml document.
       vscode.languages.registerCompletionItemProvider('yaml',
-          new ViewIntelCompletionProvider(() => homes), ':', ' ', '[', ','),
+          new ViewIntelCompletionProvider(() => homes), ':', ' ', '[', ',', '-'),
+      vscode.languages.registerDefinitionProvider('yaml',
+          new ViewDefinitionProvider(() => homes)),
       // HTML mail templates (docs/notifications.md "HTML mail"): the tql/email
       // fragment palette and the payload/event model inside ${...}.
       vscode.languages.registerCompletionItemProvider('html',
