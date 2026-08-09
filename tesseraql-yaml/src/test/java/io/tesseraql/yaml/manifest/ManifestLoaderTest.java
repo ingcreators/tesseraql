@@ -130,6 +130,33 @@ class ManifestLoaderTest {
     }
 
     @Test
+    void rejectsAnMcpDocumentWithAnUnknownKind(@org.junit.jupiter.api.io.TempDir Path dir)
+            throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("mcp"));
+        java.nio.file.Files.writeString(dir.resolve("mcp/find.sql"), "select 1\n");
+        // `resourse` is a typo for resource; it was silently published as a callable tool.
+        java.nio.file.Files.writeString(dir.resolve("mcp/find.yml"), """
+                version: tesseraql/v1
+                id: find
+                kind: resourse
+                recipe: query-json
+                description: Find users.
+                uri: data://users
+                sql:
+                  file: find.sql
+                  mode: query
+                """);
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> new ManifestLoader().load(dir))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("kind: resourse");
+    }
+
+    @Test
     void overlayDeepMergesOverConfig(@org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
         java.nio.file.Files.createDirectories(dir.resolve("config"));
         java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"), """

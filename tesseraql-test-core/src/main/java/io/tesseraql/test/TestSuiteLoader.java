@@ -15,6 +15,8 @@ import java.nio.file.Path;
 public final class TestSuiteLoader {
 
     private static final TqlErrorCode PARSE_ERROR = new TqlErrorCode(TqlDomain.YAML, 1401);
+    /** TQL-YAML-1403: an {@code expect:} block that is present but asserts nothing. */
+    private static final TqlErrorCode EMPTY_EXPECT = new TqlErrorCode(TqlDomain.YAML, 1403);
 
     private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
@@ -49,6 +51,29 @@ public final class TestSuiteLoader {
                     + ": version must be 'tesseraql/v1' (the tests document is versioned like"
                     + " every other TesseraQL document)");
         }
+        for (TestSuite.TestCase test : suite.tests()) {
+            rejectEmptyExpect(test.expect(), test.name(), source);
+            for (TestSuite.VerifyStep step : test.verify()) {
+                rejectEmptyExpect(step.expect(), test.name() + " verify step", source);
+            }
+        }
         return suite;
+    }
+
+    /**
+     * An {@code expect:} block that is present but asserts nothing (all of rowCount/rows/
+     * updateCount null/empty) is unreachable from correct authoring — omitting {@code expect:}
+     * entirely is the "just assert it runs" idiom — so it is the signature of a typo'd assertion
+     * key (e.g. {@code rowcount:}) that {@code ignoreUnknown} dropped, silently passing a case
+     * that asserts nothing.
+     */
+    private static void rejectEmptyExpect(TestSuite.Expectation expect, String where,
+            String source) {
+        if (expect != null && expect.rowCount() == null && expect.rows().isEmpty()
+                && expect.updateCount() == null) {
+            throw new TqlException(EMPTY_EXPECT, source + ": case '" + where + "' has an expect:"
+                    + " block that asserts nothing — check for a misspelled key (rowCount, rows,"
+                    + " updateCount), or omit expect: to only assert the case runs");
+        }
     }
 }

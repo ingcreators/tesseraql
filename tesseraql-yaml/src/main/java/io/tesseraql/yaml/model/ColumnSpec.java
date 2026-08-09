@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * <pre>
  * columns: [orderNo, qty]                      # simple: match by header (or order)
  * columns:
- *   - { name: productName, header: 商品名 }    # localized header label
+ *   - { name: productName, label: 商品名 }     # localized header label
  *   - { name: qty, column: D }                 # explicit position (letter or 1-based number)
  * </pre>
  *

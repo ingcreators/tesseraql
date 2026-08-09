@@ -549,6 +549,37 @@ class AppLinterTest {
     }
 
     @Test
+    void flagsARenamedDecisionSourceKeyColumn(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("decisions"));
+        // `source.id:` was renamed to keyColumn:; the drop is masked by the "id" default.
+        Files.writeString(dir.resolve("decisions/pricing.yml"), """
+                version: tesseraql/v1
+                decisions:
+                  pricing:
+                    hitPolicy: unique
+                    inputs:
+                      tier: { type: string }
+                    outputs:
+                      rate: { type: number }
+                    source:
+                      table: pricing_rules
+                      id: rule_key
+                      match:
+                        tier: { eq: tier_col }
+                      outputs:
+                        rate: rate_col
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-DECISION-4718") && f.isError()
+                && f.message().contains("keyColumn"));
+    }
+
+    @Test
     void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

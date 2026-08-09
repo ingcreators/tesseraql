@@ -144,8 +144,11 @@ public final class AppConfig {
             }
             int end = matchingBrace(value, start + 2);
             if (end < 0) {
-                out.append(value, from, value.length());
-                return out.toString();
+                // An unterminated ${ was previously emitted verbatim — handing the driver (or a
+                // header/CSP value) the literal placeholder text. Every other resolution failure
+                // throws TQL-YAML-1101; a missing brace is one too.
+                throw new TqlException(UNRESOLVED,
+                        "Unterminated placeholder in configuration value: " + value);
             }
             out.append(value, from, start);
             // Substituted values are not re-scanned: config values and fallbacks expand inside

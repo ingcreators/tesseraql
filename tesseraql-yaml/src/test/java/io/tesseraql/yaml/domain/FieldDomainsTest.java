@@ -71,6 +71,24 @@ class FieldDomainsTest {
     }
 
     @Test
+    void unknownKeysAreRejectedInsideAConstraint(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("domains"));
+        // `feild:` is a typo for field:; ignoreUnknown would drop the field mapping so the DB
+        // violation surfaces as an opaque error instead of a field error.
+        Files.writeString(dir.resolve("domains/bad.yml"), """
+                version: tesseraql/v1
+                constraints:
+                  uq_users_email:
+                    feild: email
+                    code: duplicate
+                """);
+
+        assertThatThrownBy(() -> FieldDomains.load(dir))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("feild");
+    }
+
+    @Test
     void duplicateNamesAndUnknownReferencesFail(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("domains"));
         Files.writeString(dir.resolve("domains/a.yml"), """

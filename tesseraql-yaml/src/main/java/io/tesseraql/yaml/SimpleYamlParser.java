@@ -74,6 +74,8 @@ public final class SimpleYamlParser {
     private static final java.util.Set<String> DOMAIN_KEYS = java.util.Set.of("type", "min",
             "max", "minLength", "maxLength", "pattern", "format", "enum", "items",
             "classification", "mask", "widget");
+    private static final java.util.Set<String> CONSTRAINT_KEYS = java.util.Set.of("field", "code",
+            "message");
 
     private static final TqlErrorCode DOMAIN_OPERATIONAL_KEY = new TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.FIELD, 4602);
@@ -116,6 +118,16 @@ public final class SimpleYamlParser {
         }
         java.util.Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> constraints = new java.util.LinkedHashMap<>();
         for (var entry : tree.path("constraints").properties()) {
+            for (String key : (Iterable<String>) () -> entry.getValue().fieldNames()) {
+                if (!CONSTRAINT_KEYS.contains(key)) {
+                    // Mirror the strict domains: check — ConstraintMapping is ignoreUnknown, so a
+                    // `feild:` typo would otherwise drop the field mapping and surface the DB
+                    // violation as an opaque error instead of a field error.
+                    throw new TqlException(DOMAIN_OPERATIONAL_KEY, "Constraint '" + entry.getKey()
+                            + "' (" + file + ") declares '" + key + "' — a constraint mapping"
+                            + " accepts only field, code, message");
+                }
+            }
             constraints.put(entry.getKey(), mapper.convertValue(entry.getValue(),
                     io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping.class));
         }

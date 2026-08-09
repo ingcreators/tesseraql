@@ -74,7 +74,7 @@ public record DecisionsDocument(String version, Map<String, Decision> decisions)
      * mapped column is the wildcard, exactly as an absent YAML cell is.
      *
      * @param table     the app-owned rule table
-     * @param id        the rule table's key column joining the {@code set:} child tables,
+     * @param keyColumn the rule table's key column joining the {@code set:} child tables,
      *                  defaulting to {@code id}
      * @param match     column realization per input: {@code eq}/{@code bool} → one nullable
      *                  column, {@code between} → a nullable min/max pair, {@code subtree} →
