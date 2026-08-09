@@ -68,16 +68,23 @@ final class JobSlaSweeper {
                         continue;
                     }
                     // Once per execution, cluster-wide: the claim key is the execution.
-                    if (repository.tryClaimFiring(owner + ":sla-running:" + execution.id(),
-                            execution.startTime())) {
+                    String key = owner + ":sla-running:" + execution.id();
+                    if (repository.tryClaimFiring(key, execution.startTime())) {
                         Map<String, Object> payload = new LinkedHashMap<>();
                         payload.put("jobId", jobId);
                         payload.put("executionId", execution.id());
                         payload.put("kind", "runningLongerThan");
                         payload.put("threshold", sla.runningLongerThan());
                         payload.put("startedAt", execution.startTime().toString());
-                        sink.alert(payload, owner);
-                        raised++;
+                        // Release the claim if the alert fails, or a failed send would burn the
+                        // claim and the SLA miss would never alert again.
+                        try {
+                            sink.alert(payload, owner);
+                            raised++;
+                        } catch (RuntimeException ex) {
+                            repository.releaseFiring(key, execution.startTime());
+                            throw ex;
+                        }
                     }
                 }
             }
@@ -88,14 +95,20 @@ final class JobSlaSweeper {
                         && !repository.hasCompleted(jobId, today)) {
                     // Once per business date, cluster-wide: the claim key is the date.
                     Instant window = today.atStartOfDay(now.getZone()).toInstant();
-                    if (repository.tryClaimFiring(owner + ":sla-complete:" + jobId, window)) {
+                    String key = owner + ":sla-complete:" + jobId;
+                    if (repository.tryClaimFiring(key, window)) {
                         Map<String, Object> payload = new LinkedHashMap<>();
                         payload.put("jobId", jobId);
                         payload.put("kind", "completeBy");
                         payload.put("deadline", sla.completeBy());
                         payload.put("businessDate", today.toString());
-                        sink.alert(payload, owner);
-                        raised++;
+                        try {
+                            sink.alert(payload, owner);
+                            raised++;
+                        } catch (RuntimeException ex) {
+                            repository.releaseFiring(key, window);
+                            throw ex;
+                        }
                     }
                 }
             }

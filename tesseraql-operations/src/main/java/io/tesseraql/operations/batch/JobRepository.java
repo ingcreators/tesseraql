@@ -87,6 +87,23 @@ public final class JobRepository {
         }
     }
 
+    /**
+     * Releases a claim taken by {@link #tryClaimFiring} — used when the side effect the claim
+     * guarded (an SLA alert) failed, so the next sweep can retry rather than the claim burning the
+     * firing permanently. Absent (already pruned) rows are a no-op.
+     */
+    public void releaseFiring(String jobId, Instant fireTime) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement delete = connection.prepareStatement(
+                        "delete from tql_job_claim where job_id = ? and fire_time = ?")) {
+            delete.setString(1, jobId);
+            delete.setTimestamp(2, Timestamp.from(fireTime));
+            delete.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Failed to release job firing claim for " + jobId, ex);
+        }
+    }
+
     public String startExecution(String jobId, String appName, String triggerType,
             String triggeredBy) {
         return startExecution(jobId, appName, triggerType, triggeredBy, null);
