@@ -254,8 +254,10 @@ public final class McpDevTools {
                                 "jobs", jobs.listExecutions(limit).stream()
                                         .map(McpDevTools::jobJson).toList()));
                     } catch (TqlException ex) {
-                        return McpToolResult.json(obj("note",
-                                "operations schema not present or unreadable: " + ex.getMessage()));
+                        // isError so an agent can tell a broken ops schema from "no events yet",
+                        // instead of reading a healthy-looking success envelope with only a note.
+                        return McpToolResult.error(
+                                "operations schema not present or unreadable: " + ex.getMessage());
                     }
                 })
                 .build();
@@ -285,11 +287,17 @@ public final class McpDevTools {
                             ResponseHeaderDefaults.from(config())).scaffold(schema);
                     ScaffoldWriter.Report report = new ScaffoldWriter().apply(appHome, files,
                             force);
-                    return McpToolResult.json(obj(
+                    Object payload = obj(
                             "written", report.written(),
                             "unchanged", report.unchanged(),
                             "skipped", report.skipped(),
-                            "blocked", report.blocked()));
+                            "blocked", report.blocked());
+                    // Blocked (hand-edited) files mean the scaffold did not fully apply; the CLI
+                    // exits 1 for the same condition, so the agent must see isError too — while
+                    // still receiving the blocked list.
+                    return report.blocked()
+                            ? McpToolResult.jsonError(payload)
+                            : McpToolResult.json(payload);
                 })
                 .build();
     }

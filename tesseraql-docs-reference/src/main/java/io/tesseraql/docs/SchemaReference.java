@@ -104,10 +104,13 @@ final class SchemaReference {
             String name = names.next();
             JsonNode property = properties.get(name);
             String childTitle = childTitle(title, name);
+            String description = property.path("description").asText("");
             md.append("| `").append(name).append('`')
                     .append(required.contains(name) ? " \\*" : "").append(" | ")
                     .append(typeOf(property, childTitle, children, name)).append(" | ")
-                    .append(ReferenceGenerator.cell(property.path("description").asText("")))
+                    // An undescribed property renders as an em dash, not a blank cell — the row is
+                    // still visible as an undocumented key (the ErrorIndex "—" convention).
+                    .append(description.isBlank() ? "—" : ReferenceGenerator.cell(description))
                     .append(" |\n");
         }
         for (String[] child : children) {
