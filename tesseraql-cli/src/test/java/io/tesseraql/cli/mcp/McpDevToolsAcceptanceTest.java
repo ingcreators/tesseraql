@@ -143,6 +143,37 @@ class McpDevToolsAcceptanceTest {
         assertThat(schema.get("versionColumn").asText()).isEqualToIgnoringCase("version");
     }
 
+    /**
+     * With no embedded database to fall back to, an unreadable datasource config says so. It used
+     * to be discarded and reported as "the app config declares no jdbcUrl" — false, and it sent
+     * the agent looking for a missing key instead of the placeholder it could not resolve
+     * (docs/silent-tolerance.md T9).
+     */
+    @Test
+    void anUnreadableDatasourceConfigIsNamedNotReportedAsAbsent(@TempDir Path dir)
+            throws Exception {
+        Path app = dir.resolve("unresolvable");
+        AppScaffolder scaffolder = new AppScaffolder();
+        scaffolder.writeNew(app, scaffolder.scaffold("unresolvable"));
+        // A placeholder nothing declares: reading the key throws rather than returning empty.
+        Files.writeString(app.resolve("config/application.yml"), """
+                tesseraql:
+                  datasources:
+                    main:
+                      jdbcUrl: ${db.main.url}
+                """);
+
+        McpServer server = new McpDevTools(app, false).toServer();
+        ObjectNode params = mapper.createObjectNode();
+        params.put("name", "schema_introspect");
+        params.set("arguments", mapper.valueToTree(Map.of("table", "items")));
+        JsonNode result = request(server, "tools/call", params).get("result");
+
+        assertThat(result.get("isError").asBoolean()).isTrue();
+        assertThat(result.get("content").toString())
+                .contains("could not be read").contains("db.main.url");
+    }
+
     private void migrate(Path app, String jdbcUrl) throws Exception {
         String sql = Files.readString(app.resolve("db/migration/V1__create_items.sql"));
         try (Connection connection = DriverManager.getConnection(jdbcUrl);

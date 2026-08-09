@@ -15,6 +15,8 @@
   <section class="hc-card">
     <div class="hc-card__header">Egress allow-lists</div>
     <div class="hc-card__body hc-stack">
+  <p class="hc-field__message">Saving here rewrites <code>config/overlay.yml</code> in canonical
+    formatting &mdash; comments and hand formatting in that file are not preserved.</p>
     <p class="hc-field__message">Outbound calls are deny-by-default: a host must be allow-listed
       (exact or <code>*.wildcard</code>) before <code>http-call</code> steps or poll triggers may
       reach it. Changes write <code>config/overlay.yml</code> (the full effective list) and apply
