@@ -232,6 +232,76 @@ public final class AppLinter {
     }
 
     /**
+     * Top-level keys renamed before v1 (docs/vocabulary-cleanup.md), per document-family root
+     * record. The old spelling deserializes away silently, dropping the whole block — so it is a
+     * hard error naming the replacement (TQL-YAML-1044), not a generic unknown-key warning. Only
+     * unambiguously top-level renames live here; {@code notify:} is current on routes and renamed
+     * only on workflows, so the map is keyed by the record it applies to.
+     */
+    private static final Map<Class<?>, Map<String, String>> REMOVED_TOP_LEVEL_KEYS = Map.of(
+            RouteDefinition.class, Map.of("page", "pagination", "policy", "admission",
+                    "params", "input"),
+            JobDefinition.class, Map.of("params", "input"),
+            WorkflowDefinition.class, Map.of("notify", "reminders"));
+
+    private final Map<Class<?>, Set<String>> acceptedKeyCache = new java.util.HashMap<>();
+
+    /**
+     * The YAML keys a document-family root record accepts, derived from its record components and
+     * their {@code @JsonProperty} overrides (so {@code notify}/{@code import}/{@code export} map
+     * correctly). Cached per class.
+     */
+    private Set<String> acceptedTopLevelKeys(Class<?> recordClass) {
+        return acceptedKeyCache.computeIfAbsent(recordClass, cls -> {
+            Set<String> keys = new java.util.TreeSet<>();
+            for (java.lang.reflect.RecordComponent component : cls.getRecordComponents()) {
+                com.fasterxml.jackson.annotation.JsonProperty json = component
+                        .getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
+                keys.add(json != null && !json.value().isEmpty()
+                        ? json.value()
+                        : component.getName());
+            }
+            return keys;
+        });
+    }
+
+    /**
+     * Flags unknown top-level keys on a document (TQL-YAML-1043, warning) and renamed ones
+     * (TQL-YAML-1044, error). The model records are {@code @JsonIgnoreProperties(ignoreUnknown)},
+     * so without this a typo'd {@code securty:} block drops auth with no diagnostic. Top-level
+     * only for now — nested blocks stay a follow-up. {@code extraKeys} carries keys a loader reads
+     * from the raw tree rather than the record (e.g. mcp {@code description}/{@code uri}).
+     */
+    private void lintUnknownTopLevelKeys(Path appHome, Path file, Class<?> recordClass,
+            Set<String> extraKeys, List<LintFinding> findings) {
+        Map<String, Object> tree;
+        try {
+            tree = new io.tesseraql.yaml.SimpleYamlParser().parseTree(file);
+        } catch (RuntimeException malformed) {
+            // A malformed document already failed the manifest load before lint ran; skip it.
+            return;
+        }
+        Set<String> accepted = acceptedTopLevelKeys(recordClass);
+        Map<String, String> renamed = REMOVED_TOP_LEVEL_KEYS.getOrDefault(recordClass, Map.of());
+        String source = relative(appHome, file);
+        for (String key : tree.keySet()) {
+            if (accepted.contains(key) || extraKeys.contains(key)) {
+                continue;
+            }
+            String replacement = renamed.get(key);
+            if (replacement != null) {
+                findings.add(new LintFinding("TQL-YAML-1044", "error", source,
+                        "'" + key + ":' was renamed to '" + replacement + ":' before v1 and is now "
+                                + "silently dropped — rename it"));
+            } else {
+                findings.add(new LintFinding("TQL-YAML-1043", "warning", source,
+                        "Unknown key '" + key + ":' (accepted: " + accepted
+                                + ") — it is silently ignored"));
+            }
+        }
+    }
+
+    /**
      * Validates the declared-input vocabulary (roadmap Phase 40): a {@code head.yml}/
      * {@code options.yml} route is rejected here with a clear code instead of failing deep in
      * the route compiler ({@code TQL-YAML-1011}); a {@code pattern:} must compile
@@ -2104,6 +2174,7 @@ public final class AppLinter {
             List<LintFinding> findings) {
         RouteDefinition definition = route.definition();
         String source = appHome.relativize(route.source()).toString().replace('\\', '/');
+        lintUnknownTopLevelKeys(appHome, route.source(), RouteDefinition.class, Set.of(), findings);
 
         if (!KNOWN_ROUTE_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding("TQL-YAML-1002", "error", source,
@@ -2339,6 +2410,8 @@ public final class AppLinter {
         Set<String> declared = new HashSet<>();
         for (ScopeFile scope : manifest.scopes()) {
             lintScopeDefinition(appHome, scope, findings);
+            lintUnknownTopLevelKeys(appHome, scope.source(), ScopeDefinition.class, Set.of(),
+                    findings);
             if (scope.definition().id() != null) {
                 declared.add(scope.definition().id());
             }
@@ -2828,6 +2901,8 @@ public final class AppLinter {
     private void lintWorkflow(Path appHome, AppConfig config, WorkflowFile workflow,
             List<LintFinding> findings) {
         String source = relative(appHome, workflow.source());
+        lintUnknownTopLevelKeys(appHome, workflow.source(), WorkflowDefinition.class, Set.of(),
+                findings);
         WorkflowDefinition def = workflow.definition();
         String id = def.id();
         Path dir = workflow.source().getParent();
@@ -3357,6 +3432,8 @@ public final class AppLinter {
             List<LintFinding> findings) {
         RouteDefinition definition = consumer.definition();
         String source = appHome.relativize(consumer.source()).toString().replace('\\', '/');
+        lintUnknownTopLevelKeys(appHome, consumer.source(), RouteDefinition.class, Set.of(),
+                findings);
         if (!"queue-consume".equals(definition.recipe())) {
             findings.add(new LintFinding("TQL-YAML-1010", "error", source, "a consume/ route must"
                     + " use the queue-consume recipe, not '" + definition.recipe() + "'"));
@@ -4001,6 +4078,7 @@ public final class AppLinter {
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.calendar.Calendars calendars, List<LintFinding> findings) {
         String source = appHome.relativize(job.source()).toString().replace('\\', '/');
+        lintUnknownTopLevelKeys(appHome, job.source(), JobDefinition.class, Set.of(), findings);
         if (job.definition().trigger() != null && job.definition().trigger().poll() != null) {
             lintPollJob(config, job, source, findings);
         }
