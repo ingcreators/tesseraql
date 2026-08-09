@@ -26,6 +26,17 @@ class FlagsSpecTest {
     }
 
     @Test
+    void aNonMapFlagsKeyIsAnError(@TempDir Path appHome) throws Exception {
+        // A mis-shaped flags: silently yielded no flags (every flags.* resolved null);
+        // it now fails the load (silent-tolerance K4).
+        writeFlags(appHome, "flags:\n  - beta\n  - gamma\n");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> FlagsSpec.load(appHome))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("must be a map");
+    }
+
+    @Test
     void liveReReadsOnlyWhenTheFileChanges(@TempDir Path appHome) throws Exception {
         assertThat(FlagsSpec.live(appHome).isEmpty()).isTrue();
 
