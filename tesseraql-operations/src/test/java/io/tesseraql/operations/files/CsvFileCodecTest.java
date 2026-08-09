@@ -50,12 +50,24 @@ class CsvFileCodecTest {
     }
 
     @Test
-    void missingHeaderLabelYieldsNullInsteadOfFailing() throws Exception {
-        List<Map<String, Object>> rows = read("name\nalpha\n",
+    void aDeclaredColumnAbsentFromTheHeaderFailsRatherThanReadingNulls() {
+        // A supplier renaming a header (or `qty` simply missing) used to import a full file of
+        // silent nulls for that column; now the transfer fails loudly (silent-tolerance O4).
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> read("name\nalpha\n",
                 new FileReadSpec(List.of(
                         new ColumnMapping("name", null, null),
-                        new ColumnMapping("qty", null, null)), true, null, 1));
-        assertThat(rows.get(0).get("qty")).isNull();
+                        new ColumnMapping("qty", null, null)), true, null, 1)))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("qty");
+    }
+
+    @Test
+    void columnsDerivedFromTheHeaderAreNeverFlaggedAsUnmatched() throws Exception {
+        // With no declared columns, the header itself defines them — they always match.
+        List<Map<String, Object>> rows = read("name,qty\nalpha,7\n",
+                new FileReadSpec(List.of(), true, null, 1));
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).get("name")).isEqualTo("alpha");
     }
 
     @Test

@@ -359,6 +359,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private static final io.tesseraql.core.error.TqlErrorCode NOT_RUNNING = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.BATCH, 4042);
 
+    /** TQL-BATCH-4043: a manual job-run request carried an unparseable JSON body (HTTP 400). */
+    private static final io.tesseraql.core.error.TqlErrorCode BAD_RUN_BODY = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.BATCH, 4043);
+
     private Object cancelExecution(Exchange exchange) {
         String id = exchange.getMessage().getHeader("id", String.class);
         JobExecution execution = repository.findExecution(id)
@@ -447,7 +451,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
             Map<String, Object> parsed = mapper.readValue(raw, Map.class);
             return parsed == null ? Map.of() : parsed;
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            return Map.of();
+            // A present-but-unparseable body was silently dropped, launching the job with no
+            // params (e.g. a typo'd businessDate) while answering 202 Accepted.
+            throw new io.tesseraql.core.error.TqlException(BAD_RUN_BODY,
+                    "Request body is not valid JSON: " + ex.getOriginalMessage());
         }
     }
 
