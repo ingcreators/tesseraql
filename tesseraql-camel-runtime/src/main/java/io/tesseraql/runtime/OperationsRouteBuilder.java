@@ -51,6 +51,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final Map<String, io.tesseraql.yaml.model.JobDefinition> definitions;
     private final io.tesseraql.opsui.OpsDashboard dashboard;
     private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
+    private final io.tesseraql.core.messaging.EventChannelStore events;
     private final MetricsSettings metrics;
     private final io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit;
     private final io.tesseraql.core.files.FileTransferService transfers;
@@ -80,7 +81,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
             Map<String, String> jobOwners,
             Map<String, io.tesseraql.yaml.model.JobDefinition> definitions,
             io.tesseraql.opsui.OpsDashboard dashboard,
-            io.tesseraql.operations.outbox.JdbcOutboxStore outbox, MetricsSettings metrics,
+            io.tesseraql.operations.outbox.JdbcOutboxStore outbox,
+            io.tesseraql.core.messaging.EventChannelStore events, MetricsSettings metrics,
             io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit,
             io.tesseraql.core.files.FileTransferService transfers) {
         this.runner = runner;
@@ -92,6 +94,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 .unmodifiableMap(new LinkedHashMap<>(definitions));
         this.dashboard = dashboard;
         this.outbox = outbox;
+        this.events = events;
         this.metrics = metrics;
         this.routeAudit = routeAudit;
     }
@@ -133,6 +136,10 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
         rest().get("/_tesseraql/ops/outbox").to("direct:ops.outbox");
         rest().post("/_tesseraql/ops/outbox/{id}/redeliver").to("direct:ops.outbox.redeliver");
+        // The messaging-channel queue event log and dead-letter redelivery, mirroring the
+        // outbox surface (docs/silent-tolerance.md O1).
+        rest().get("/_tesseraql/ops/events").to("direct:ops.events");
+        rest().post("/_tesseraql/ops/events/{id}/redeliver").to("direct:ops.events.redeliver");
         // Health for load balancers and deploy tooling (roadmap Phase 45): unauthenticated by
         // design, exposing only the status word - details stay behind the authorized ops API.
         // /health/live is pure liveness (the process answers; never touches a dependency);
@@ -275,6 +282,20 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.outbox.redeliver").routeId("ops.outbox.redeliver")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
                 .process(jsonProcessor(this::redeliverOutboxEvent));
+
+        from("direct:ops.events").routeId("ops.events")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> {
+                    Predicate<String> scope = scope(exchange);
+                    return events.recent(200).stream()
+                            .filter(event -> scope.test(event.appName()))
+                            .map(this::channelEventMap)
+                            .toList();
+                }));
+
+        from("direct:ops.events.redeliver").routeId("ops.events.redeliver")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .process(jsonProcessor(this::redeliverChannelEvent));
     }
 
     /** Requeues a FAILED/DEAD event; outside the caller's scope it reads as unknown. */
@@ -290,6 +311,37 @@ final class OperationsRouteBuilder extends RouteBuilder {
         result.put("id", id);
         result.put("redelivered", outbox.redeliver(id));
         return result;
+    }
+
+    /** Requeues a DEAD queue message; outside the caller's scope it reads as unknown. */
+    private Object redeliverChannelEvent(Exchange exchange) {
+        String id = exchange.getMessage().getHeader("id", String.class);
+        io.tesseraql.core.messaging.ChannelEvent event = events.find(id)
+                .filter(found -> scope(exchange).test(found.appName()))
+                .orElse(null);
+        if (event == null) {
+            throw notFound("Queue event '" + id + "'");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", id);
+        result.put("redelivered", events.redeliver(id));
+        return result;
+    }
+
+    private Map<String, Object> channelEventMap(io.tesseraql.core.messaging.ChannelEvent event) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", event.id());
+        map.put("channel", event.channel());
+        map.put("topic", event.topic());
+        map.put("key", event.key());
+        map.put("app", event.appName());
+        map.put("status", event.status());
+        map.put("attempts", event.attempts());
+        map.put("lastError", event.lastError());
+        map.put("publishedAt",
+                event.publishedAt() == null ? null : event.publishedAt().toString());
+        map.put("consumedAt", event.consumedAt() == null ? null : event.consumedAt().toString());
+        return map;
     }
 
     private Map<String, Object> outboxEventMap(io.tesseraql.core.outbox.OutboxEvent event) {

@@ -15,11 +15,20 @@ import java.util.List;
  * idempotency key, so a redelivery of an already-processed key is recognised by {@link #consumed}
  * and skipped. A failed consume is {@link #markFailed recorded} and retried until the dead-letter
  * ceiling — the durable row, not any transient signal, is what guarantees delivery.
+ *
+ * <p>Dead-letters staying visible is part of the contract, not an aspiration: {@link #recent} and
+ * {@link #countByStatus} are the read surface the operations console and its dead-letter alert
+ * render, and {@link #redeliver} is the operator's way back (docs/silent-tolerance.md O1) — the
+ * same triad the transactional outbox exposes.
  */
 public interface EventChannelStore {
 
-    /** Publishes a durable message to {@code channel}/{@code topic}; returns the new message id. */
-    String publish(String channel, String topic, String key, String payloadJson);
+    /**
+     * Publishes a durable message to {@code channel}/{@code topic}; returns the new message id.
+     * {@code appName} tags the row with the publishing app, so operators holding a per-app
+     * {@code ops.app.<name>} scope see exactly their events.
+     */
+    String publish(String channel, String topic, String key, String payloadJson, String appName);
 
     /**
      * Atomically claims up to {@code limit} unconsumed, unclaimed messages of {@code channel}/
@@ -45,4 +54,21 @@ public interface EventChannelStore {
      * retrying, stays visible to operators).
      */
     void markFailed(String messageId, String error, int maxAttempts);
+
+    /** The most recent messages across all channels (newest first), for the operations console. */
+    List<ChannelEvent> recent(int limit);
+
+    /** Message counts per status, for the console's summary chips and the dead-letter alert. */
+    java.util.Map<String, Integer> countByStatus();
+
+    /** Looks up one message, for the operations console's scope check before a redelivery. */
+    java.util.Optional<ChannelEvent> find(String messageId);
+
+    /**
+     * Requeues a {@code DEAD} message for delivery: the status flips back to {@code PENDING} and
+     * the claim is cleared; the attempt count is kept so the history stays honest — one more
+     * failure dead-letters it again. Returns false when the message is unknown or not dead.
+     * (Failed-but-not-dead messages are still {@code PENDING} and retry on their own.)
+     */
+    boolean redeliver(String messageId);
 }

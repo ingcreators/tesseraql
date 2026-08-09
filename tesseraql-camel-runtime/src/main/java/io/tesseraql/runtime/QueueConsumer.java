@@ -19,6 +19,11 @@ import org.apache.camel.support.DefaultExchange;
  *
  * <p>Draining is triggered by the {@link PgNotifyListener} the instant an event is published, and by
  * the same listener's poll timeout as a backstop, so a missed wake never strands a message.
+ *
+ * <p>A failed delivery is never silent (docs/silent-tolerance.md O1): every failure logs at warn,
+ * and one that crosses the dead-letter ceiling additionally counts on the
+ * {@code tesseraql.queue.deadletters} meter — the log-and-meter half of the {@code OutboxDispatcher}
+ * triad; the status row and the console alert are the store's and the dashboard's halves.
  */
 final class QueueConsumer {
 
@@ -27,10 +32,14 @@ final class QueueConsumer {
     /** A safety cap on rounds per drain, so a busy channel never hogs the listener thread. */
     private static final int MAX_ROUNDS = 50;
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(QueueConsumer.class);
+
     private final CamelContext context;
     private final EventChannelStore store;
     private final List<Subscription> subscriptions;
     private final int maxAttempts;
+    private io.tesseraql.core.telemetry.Meter meter = io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
     private volatile ProducerTemplate template;
 
     /** One queue-consume route subscribing to a channel/topic, fed via its direct: endpoint. */
@@ -47,6 +56,12 @@ final class QueueConsumer {
 
     List<Subscription> subscriptions() {
         return subscriptions;
+    }
+
+    /** Wires the meter that counts dead-lettered messages; defaults to the no-op meter. */
+    QueueConsumer meter(io.tesseraql.core.telemetry.Meter meter) {
+        this.meter = meter;
+        return this;
     }
 
     /** Drains every subscription (the backstop and the initial catch-up call both use this). */
@@ -85,7 +100,7 @@ final class QueueConsumer {
             exchange.getMessage().setHeader(TesseraqlProperties.QUEUE_MESSAGE_KEY, message.key());
             Exchange result = template().send("direct:queue." + subscription.routeId(), exchange);
             if (result.getException() != null) {
-                store.markFailed(message.id(), result.getException().getMessage(), maxAttempts);
+                failed(subscription, message, result.getException().getMessage());
                 return;
             }
             // The dedup processor stashed the resolved idempotency key; recording it with the
@@ -93,8 +108,28 @@ final class QueueConsumer {
             String idemKey = result.getProperty(TesseraqlProperties.QUEUE_IDEM_KEY, String.class);
             store.markConsumed(message.id(), subscription.channel(), subscription.topic(), idemKey);
         } catch (RuntimeException ex) {
-            store.markFailed(message.id(), ex.getMessage(), maxAttempts);
+            failed(subscription, message, ex.getMessage());
         }
+    }
+
+    /**
+     * Records a failed delivery, loudly: a message crossing the dead-letter ceiling is the one an
+     * operator must learn about from the runtime, not from the business — it stops retrying and
+     * only a console redelivery brings it back.
+     */
+    private void failed(Subscription subscription, EventMessage message, String error) {
+        // message.attempts() counts completed attempts; this failure is one more.
+        if (message.attempts() + 1 >= maxAttempts) {
+            LOG.warn("Queue delivery failed for {} on {}/{} ({} attempts); dead-lettering: {}",
+                    message.id(), subscription.channel(), subscription.topic(),
+                    message.attempts() + 1, error);
+            meter.counter("tesseraql.queue.deadletters").increment(java.util.Map.of(
+                    "channel", subscription.channel(), "topic", subscription.topic()));
+        } else {
+            LOG.warn("Queue delivery failed for {} on {}/{}: {}", message.id(),
+                    subscription.channel(), subscription.topic(), error);
+        }
+        store.markFailed(message.id(), error, maxAttempts);
     }
 
     /**

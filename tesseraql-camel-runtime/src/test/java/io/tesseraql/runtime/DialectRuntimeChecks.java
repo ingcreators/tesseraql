@@ -90,7 +90,8 @@ final class DialectRuntimeChecks {
         io.tesseraql.operations.messaging.JdbcEventChannelStore store = new io.tesseraql.operations.messaging.JdbcEventChannelStore(
                 dataSource);
         store.ensureSchema();
-        String id = store.publish("events", "orders.created", "K-1", "{\"orderId\":\"K-1\"}");
+        String id = store.publish("events", "orders.created", "K-1", "{\"orderId\":\"K-1\"}",
+                "dialect-check");
 
         // The claim renders the dialect's variant (Oracle ROWNUM / SQL Server TOP+READPAST); a
         // claimed-but-unconsumed row is not re-claimed within the abandoned window.

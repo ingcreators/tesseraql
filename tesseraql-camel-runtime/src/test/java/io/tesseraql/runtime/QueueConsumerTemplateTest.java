@@ -28,7 +28,8 @@ class QueueConsumerTemplateTest {
 
     private static final EventChannelStore EMPTY = new EventChannelStore() {
         @Override
-        public String publish(String channel, String topic, String key, String payloadJson) {
+        public String publish(String channel, String topic, String key, String payloadJson,
+                String appName) {
             return "0";
         }
 
@@ -51,6 +52,27 @@ class QueueConsumerTemplateTest {
 
         @Override
         public void markFailed(String messageId, String error, int maxAttempts) {
+        }
+
+        @Override
+        public List<io.tesseraql.core.messaging.ChannelEvent> recent(int limit) {
+            return List.of();
+        }
+
+        @Override
+        public java.util.Map<String, Integer> countByStatus() {
+            return java.util.Map.of();
+        }
+
+        @Override
+        public java.util.Optional<io.tesseraql.core.messaging.ChannelEvent> find(
+                String messageId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
+        public boolean redeliver(String messageId) {
+            return false;
         }
     };
 

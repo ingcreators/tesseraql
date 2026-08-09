@@ -173,8 +173,14 @@ command commit
 ```
 
 Every hop is durable: the outbox guarantees the event survives the commit, and `tql_event`
-guarantees it survives until a consumer acknowledges it. A failed consume is retried until a
-dead-letter ceiling (`tesseraql.outbox.dispatch.maxAttempts`), visible to operators like any outbox event.
+guarantees it survives until a consumer acknowledges it. A failed consume logs at warn and is
+retried until a dead-letter ceiling (`tesseraql.outbox.dispatch.maxAttempts`); a dead-lettered
+message stays visible to operators exactly like an outbox one — the console's **Events** page
+(`/_tesseraql/ops/console/events`) and the `GET /_tesseraql/ops/events` API list recent messages
+with status, attempts, and last error, the dashboard raises `TQL-OPS-9008` while any dead letter
+exists, and the `tesseraql.queue.deadletters` meter counts them per channel/topic. **Redeliver**
+(on the page, or `POST /_tesseraql/ops/events/{id}/redeliver`) requeues a dead letter for the
+consumer's next drain.
 
 ## Operational notes
 
