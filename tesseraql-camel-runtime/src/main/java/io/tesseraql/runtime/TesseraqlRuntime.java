@@ -3683,6 +3683,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             io.tesseraql.studio.ReportOverlay overlay = doc.report();
                             Map<String, Object> model = io.tesseraql.studio.DocViews
                                     .coverage(doc.appName(), overlay, doc.history());
+                            // A corrupt overlay or history reads as "nothing recorded yet"; the
+                            // page names the unreadable file instead (silent-tolerance T6).
+                            model.put("reportCorrupt", doc.reportCorrupt());
+                            model.put("historyCorrupt", doc.historyCorrupt());
                             // Offer a signed share link for the dashboard when sharing is configured
                             // and there is a run report to share (F8 slice 3, extended).
                             if (shareLinks.enabled() && overlay != null) {
@@ -3741,7 +3745,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         // streamed as downloadable JSON (the download routes' response.file emits the
                         // provider's raw JSON string verbatim).
                         .register("docs.export", params -> io.tesseraql.studio.DocViews
-                                .export(doc.appName(), doc.apiChangelog()))
+                                .export(doc.appName(), doc.apiChangelog(),
+                                        doc.apiChangelogCorrupt()))
                         // The release-diff page (roadmap Phase 46): one view consolidating
                         // what a promotion changes from the captured baselines — the API
                         // changelog (openapi.baseline.json), the schema DDL delta
@@ -3756,8 +3761,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             model.put("hasApiBaseline", doc.hasApiBaseline());
                             io.tesseraql.studio.DocViews.applyApiChangelog(model,
                                     doc.apiChangelog());
+                            // The same split the migration page got: an unreadable baseline is
+                            // not an absent one, and not "no changes" (silent-tolerance T6).
+                            model.put("apiBaselineCorrupt", doc.apiChangelogCorrupt());
+                            model.put("schemaBaselineCorrupt", doc.schemaBaselineCorrupt());
                             model.put("hasSchemaBaseline", doc.hasSchemaBaseline());
-                            String ddl = doc.hasSchemaBaseline() ? doc.schemaDiffDdl() : null;
+                            String ddl = doc.hasSchemaBaseline() && !doc.schemaBaselineCorrupt()
+                                    ? doc.schemaDiffDdl()
+                                    : null;
                             model.put("schemaDiff",
                                     ddl == null || ddl.isBlank() ? null : ddl);
                             // Line rows for the hc-code diff renderer (studio-ux-refresh

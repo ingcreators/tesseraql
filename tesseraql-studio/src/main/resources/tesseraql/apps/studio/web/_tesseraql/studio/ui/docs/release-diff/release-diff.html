@@ -39,8 +39,11 @@
       </li>
     </ul>
   </th:block>
-  <p class="hc-field__message" th:unless="${docs.hasBaseline}">No API baseline captured yet
-    — use <em>Capture baselines now</em> above at a release point.</p>
+  <p class="hc-field__message" th:if="${docs.apiBaselineCorrupt}">The captured API baseline
+    (<code>openapi.baseline.json</code>) cannot be read as an OpenAPI document &mdash; re-capture
+    it. This is not the same as having captured none.</p>
+  <p class="hc-field__message" th:if="${!docs.hasBaseline and !docs.apiBaselineCorrupt}">No API
+    baseline captured yet — use <em>Capture baselines now</em> above at a release point.</p>
 
   <h3>Schema</h3>
   <!-- The DDL delta reuses the route reference's line-numbered, state-shaded hc-code renderer
@@ -58,7 +61,12 @@
           th:attr="data-state=${ln.state}" th:text="${ln.text}"></li>
     </ol>
   </th:block>
-  <p class="hc-field__message" th:if="${docs.hasSchemaBaseline && docs.schemaDiff == null}">
+  <!-- Not "no changes": an unreadable baseline proves nothing about the database. -->
+  <p class="hc-field__message" th:if="${docs.schemaBaselineCorrupt}">The schema baseline
+    (<code>schema.baseline.json</code>) is unreadable, so no delta can be computed &mdash;
+    re-capture it before promoting.</p>
+  <p class="hc-field__message"
+     th:if="${docs.hasSchemaBaseline and !docs.schemaBaselineCorrupt and docs.schemaDiff == null}">
     No schema changes since the baseline.</p>
   <p class="hc-field__message" th:unless="${docs.hasSchemaBaseline}">No schema baseline
     captured yet — use <em>Capture baselines now</em> above at a release point.</p>

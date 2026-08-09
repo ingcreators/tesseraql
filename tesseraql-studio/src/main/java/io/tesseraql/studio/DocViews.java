@@ -679,6 +679,16 @@ public final class DocViews {
      * to its route page — so the page shows both the current spec and what changed since a release.
      */
     public static Map<String, Object> export(String appName, OpenApiDiff.ApiChangelog changelog) {
+        return export(appName, changelog, false);
+    }
+
+    /**
+     * As {@link #export(String, OpenApiDiff.ApiChangelog)}, but {@code baselineCorrupt} tells the
+     * page that a baseline is present and unreadable — otherwise it renders exactly like an absent
+     * one and invites the operator to capture a baseline they already have (silent-tolerance T6).
+     */
+    public static Map<String, Object> export(String appName, OpenApiDiff.ApiChangelog changelog,
+            boolean baselineCorrupt) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("appName", appName);
         List<Map<String, Object>> artifacts = new ArrayList<>();
@@ -693,6 +703,7 @@ public final class DocViews {
                         + "documenting the hypermedia surface."));
         model.put("artifacts", artifacts);
         applyApiChangelog(model, changelog);
+        model.put("baselineCorrupt", baselineCorrupt);
         return model;
     }
 

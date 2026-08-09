@@ -144,6 +144,16 @@ public final class DocService {
     }
 
     /**
+     * Whether the run overlay exists but cannot be parsed. A corrupt overlay makes
+     * {@link #report()} null, which every page renders as "no test run recorded yet" — telling an
+     * operator their results are missing when the file is right there, unreadable. Same split as
+     * {@link #schemaBaselineCorrupt()} (docs/silent-tolerance.md T6).
+     */
+    public boolean reportCorrupt() {
+        return hasReport() && report() == null;
+    }
+
+    /**
      * The bounded run-trend history ({@code history.json}), oldest run first, or an empty list when
      * the file is absent or unreadable. Feeds the coverage dashboard's trend sparklines (portal v2).
      */
@@ -156,6 +166,24 @@ public final class DocService {
             return List.of(MAPPER.readValue(file.toFile(), HistoryPoint[].class));
         } catch (IOException ex) {
             return List.of();
+        }
+    }
+
+    /**
+     * Whether the trend history exists but cannot be parsed. A corrupt history reads as an empty
+     * list, which drops the whole Trend card off the coverage page — an absence indistinguishable
+     * from "no runs yet" (docs/silent-tolerance.md T6).
+     */
+    public boolean historyCorrupt() {
+        Path file = appHome.resolve(HISTORY_PATH);
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        try {
+            MAPPER.readValue(file.toFile(), HistoryPoint[].class);
+            return false;
+        } catch (IOException ex) {
+            return true;
         }
     }
 
@@ -870,6 +898,16 @@ public final class DocService {
         } catch (IOException | TqlException ex) {
             return null;
         }
+    }
+
+    /**
+     * Whether the OpenAPI baseline exists but cannot be diffed — unreadable, or not a valid
+     * OpenAPI document. Both make {@link #apiChangelog()} null, which the export and release-diff
+     * pages render as "no baseline captured", inviting the operator to capture one they already
+     * have (docs/silent-tolerance.md T6).
+     */
+    public boolean apiChangelogCorrupt() {
+        return hasApiBaseline() && apiChangelog() == null;
     }
 
     /**
