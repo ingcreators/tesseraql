@@ -62,6 +62,20 @@ class MailComposerTest {
     }
 
     @Test
+    void aLeadingScaffoldChecksumMarkerSurvivesParseAndWrite() {
+        // Saving a scaffolded template used to delete its checksum marker (handing the file to the
+        // user permanently); the leading comment prelude is now captured and re-emitted.
+        String marker = "<!-- tesseraql-scaffold-checksum: sha256:abc123 -->";
+        String template = marker + "\n"
+                + MailComposer.write(new Composition("'Hi'", "'Hey'",
+                        List.of(new Block("hcHeading", List.of("'Hi'")))));
+
+        String rewritten = MailComposer.write(MailComposer.parse(template).orElseThrow());
+
+        assertThat(rewritten).startsWith(marker);
+    }
+
+    @Test
     void rejectsAnythingOutsideTheGrammar() {
         // Hand-authored Thymeleaf, plain text, foreign fragments, markup between blocks —
         // all fall back to the source editor instead of risking a lossy rewrite.
