@@ -332,13 +332,15 @@ can be named as a threshold, except `preference` and `queue-consume`, which are 
 
 ## Recording cases from Studio
 
-You do not have to write every case by hand. In Studio's API console, a successful invocation
-of a query route offers **Save as test case**: the sent query and body are mapped back onto the
-route's SQL parameters, the row count observed in the console's sandboxed run is captured as
-`expect.rowCount`, and the resulting `sql` case is appended to `tests/studio-recorded-test.yml`
-— from then on it runs in CI exactly like a hand-written case. Recording currently covers query
-routes with a bound SQL file and no path parameters; anything else states why it is not
-recordable.
+You do not have to write every case by hand. In [Studio](studio.md)'s API console, a
+successful invocation of a query route offers **Save as test case**. The sent query and body
+are mapped back onto the route's SQL parameters, the row count observed in the console's
+sandboxed run is captured as `expect.rowCount`, and the resulting `sql` case is appended to
+`tests/studio-recorded-test.yml`. From then on it runs in CI exactly like a hand-written
+case.
+
+Recording currently covers query routes with a bound SQL file and no path parameters.
+Anything else states why it is not recordable.
 
 ## Further reading
 

@@ -326,10 +326,11 @@ region and renders whole either way.
 
 ## Rendering pipeline and the fragment contract
 
-When `view:` is set, the HTML renderer parses the document at build time (cached,
-existence-checked), and at render time assembles a **view model** `v` and renders the framework entry fragment for the kind through the same
-template engine, wrapped in the existing `tql/shell` page (title, the `config/menu.yml`
-app menu, content) so a view is a complete page with the app's chrome.
+When `view:` is set, the HTML renderer parses the document at build time, cached and
+existence-checked. At render time it assembles a **view model** `v` and renders the
+framework entry fragment for the kind through the same template engine. The result is
+wrapped in the existing `tql/shell` page — title, the `config/menu.yml` app menu, content —
+so a view is a complete page carrying the app's chrome.
 
 The fragment set ships on the classpath under `tesseraql/templates/tql/view/` and is
 the **public rendering contract**:
@@ -381,12 +382,12 @@ as a hand-written template today.
   a hand-edited target blocks until explicitly overwritten), landing on the fresh
   template.
 
-Past L3, the template stays authorable without hand-writing HTML: Studio's **visual
-builder** ("Edit visually" on eligible templates — shell-wrapped pages like ejected
-views, and bare fragment files) edits the page as a canvas with real kit styling —
-select, drag to reorder, insert components, and edit attributes (with `th:*`
-expressions verbatim) — previewing against sample data and saving through the same
-draft/apply flow as the source editor. The wrapper around the editable region is
+Past L3, the template stays authorable without hand-writing HTML. Studio's **visual
+builder** offers "Edit visually" on eligible templates: shell-wrapped pages such as ejected
+views, and bare fragment files. It edits the page as a canvas with real kit styling — you
+select, drag to reorder, insert components, and edit attributes, with `th:*` expressions
+kept verbatim. It previews against sample data and saves through the same draft and apply
+flow as the source editor. The wrapper around the editable region is
 preserved byte-for-byte; a template outside those shapes opens read-only with the
 source editor as the escape hatch.
 

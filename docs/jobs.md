@@ -555,18 +555,18 @@ The `notify:` and `httpCall:` step families report their own codes in the same d
 [notifications](notifications.md), [managed connectors](connectors.md), and the
 [error-code reference](reference-error-codes.md).
 
-Lint checks jobs statically: a step not declaring exactly one of `sql:`/`notify:`/
-`httpCall:`/`chunk:`/`export:`/`push:` (`TQL-FIELD-2004`), a malformed `push:` step —
-no transfer reference, an unknown transport, a remote target without host/credential, or
-a non-bare delivered name (`TQL-YAML-1042`), a malformed `export:` step — no
-extraction query, no format, or a `download`-timed follow-up (`TQL-YAML-1041`, with the
-pdf template checks and the datasource refusal shared with routes), a job with both a
-schedule and a poll trigger or
-a malformed poll source (`TQL-YAML-1005`), a poll job without its `import:` block
-(`TQL-YAML-1006`), non-allow-listed poll or HTTP egress (`TQL-SEC-4070`,
-`TQL-SEC-4080`), calendar qualifiers that would fail open at fire time
-(`TQL-BATCH-4201`–`4203`), and a chunk step whose restart contract is broken or unstated
-(`TQL-BATCH-4206`–`4208`).
+Lint checks jobs statically:
+
+| Finding | Code |
+| --- | --- |
+| A step not declaring exactly one of `sql:` / `notify:` / `httpCall:` / `chunk:` / `export:` / `push:` | `TQL-FIELD-2004` |
+| A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
+| A malformed `export:` step: no extraction query, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
+| A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1005` |
+| A poll job without its `import:` block | `TQL-YAML-1006` |
+| Non-allow-listed poll or HTTP egress | `TQL-SEC-4070`, `TQL-SEC-4080` |
+| Calendar qualifiers that would fail open at fire time | `TQL-BATCH-4201`–`4203` |
+| A chunk step whose restart contract is broken or unstated | `TQL-BATCH-4206`–`4208` |
 
 ## Related pages
 

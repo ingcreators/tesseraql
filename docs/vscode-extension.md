@@ -66,14 +66,16 @@ itself); *Lint* runs headless into the Problems panel.
 
 ## The explorer
 
-A *TesseraQL* tree view over the app layout — routes grouped by kind (`web/`,
-`consume/`, `batch/`, `mcp/`), views, shared field domains (`domains/`,
-[field domains](field-domains.md)), shared validation rules with their SQL (`rules/`,
-[validation rule sets](validation-rule-sets.md)), shared decision tables
-(`decisions/`, [decision tables](declarative-validation.md#decision-tables)),
-`db/**/migration` trees, and `tests/` suites — built from the documented directory contract
-([app layout](app-layout.md)), refreshed on file events, one click to the source. No
-CLI call needed to navigate. When the symbols index has answered (see below), each
+A *TesseraQL* tree view over the app layout, built from the documented directory contract
+([app layout](app-layout.md)), refreshed on file events, one click to the source. It covers:
+
+- routes grouped by kind (`web/`, `consume/`, `batch/`, `mcp/`), and views;
+- the shared definitions — field domains (`domains/`), validation rules with their SQL
+  (`rules/`), and [decision tables](declarative-validation.md#decision-tables)
+  (`decisions/`);
+- `db/**/migration` trees and `tests/` suites.
+
+No CLI call is needed to navigate. When the symbols index has answered (see below), each
 route file additionally shows its served identity — `GET /api/users · query-json` —
 as the tree item's description; the tree itself never waits on the CLI.
 
@@ -91,23 +93,30 @@ line-by-line.
 The extension reads what the framework declares through the `tesseraql symbols`
 contract (see below), per app home and refreshed on save, and adds:
 
-- **Completion** for `policy:` values (the app's declared policies), `message:`
-  values (catalog keys), `domain:` values (the shared field domains under
-  `domains/`), `use:` values (the shared validation rules under `rules/` — and, in a
-  `decide:` block, the shared decisions under `decisions/`; the providers answer from
-  both namespaces), `decision:` values (a test suite's `decide:` target),
-  `workflow:` values (a suite's `transition:`/`dispatch:` targets — the declared
-  workflows, each carrying its transition and dispatch ids), `calendar:` values (the
-  business-day calendars under `calendars/` — a typo here fails open at fire time,
-  so the editor is where it gets caught), and `after:` values (the declared batch
-  jobs, each completion carrying its one-line trigger story).
-- **Go-to-definition** from a `policy:` value to its declaration in
-  `config/tesseraql.yml`, from a `message:` value (or a view `title:`/`label:`
-  that names an existing key) to its line in the default-locale catalog, from a
-  `domain:`, `use:`, or `decision:` value to the shared definition's line in its
-  `domains/*.yml`, `rules/*.yml`, or `decisions/*.yml` document, from a `calendar:`
-  value to its `calendars/*.yml` declaration, and from an `after:` value to the
-  chained job's document.
+**Completion**, for the values the app itself declares:
+
+| Key | Completes to |
+| --- | --- |
+| `policy:` | the app's declared policies |
+| `message:` | catalog keys |
+| `domain:` | the shared field domains under `domains/` |
+| `use:` | the shared validation rules under `rules/`; inside a `decide:` block, the shared decisions under `decisions/` (the providers answer from both namespaces) |
+| `decision:` | a test suite's `decide:` target |
+| `workflow:` | a suite's `transition:`/`dispatch:` targets — the declared workflows, each carrying its transition and dispatch ids |
+| `calendar:` | the business-day calendars under `calendars/` |
+| `after:` | the declared batch jobs, each completion carrying its one-line trigger story |
+
+A mistyped `calendar:` fails open at fire time, so the editor is where it gets caught.
+
+**Go-to-definition**, from a value to the line that declares it:
+
+- `policy:` → its declaration in `config/tesseraql.yml`.
+- `message:` — or a view `title:`/`label:` naming an existing key → the default-locale
+  catalog.
+- `domain:`, `use:`, `decision:` → the shared definition's line in its `domains/*.yml`,
+  `rules/*.yml`, or `decisions/*.yml` document.
+- `calendar:` → its `calendars/*.yml` declaration.
+- `after:` → the chained job's document.
 
 Unknown references stay lint findings — the providers navigate, they do not judge.
 A pre-shared-definitions CLI simply omits the `domains`/`rules`/`decisions` arrays
@@ -248,12 +257,12 @@ Prints what the framework declares:
 {"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
 ```
 
-Policies come from the app config, message keys from the default-locale catalog
-(flattened dotted keys with their source lines), domains, rules, and calendars from
-the shared-definition documents under `domains/`, `rules/`, and `calendars/` (each
-name with the file declaring it), routes, workflows (each workflow with its
-transition and dispatch ids), and jobs (each with its one-line trigger story) from
-the manifest; sorted, deterministic.
+Everything in it is sorted and deterministic. Policies come from the app config, and message
+keys from the default-locale catalog, as flattened dotted keys with their source lines.
+Domains, rules, and calendars come from the shared-definition documents under `domains/`,
+`rules/`, and `calendars/`, each name paired with the file declaring it. Routes, workflows
+(each with its transition and dispatch ids), and jobs (each with its one-line trigger story)
+come from the manifest.
 
 A document that does not parse is **skipped, not fatal**: it is listed in `broken`
 (with the parser's message) and on stderr, and everything else still prints. Editor
@@ -268,13 +277,13 @@ rather than leaving the missing completions unexplained.
 
 ## Publishing
 
-The extension versions independently of the framework, so its releases live in
-their own tag namespace: pushing an `ext-v<version>` tag runs the *Extension
-release* workflow (`.github/workflows/extension-release.yml`) — tests, a
-manifest-version-matches-tag gate, one `vsce package`, `vsce verify-pat`, then
-`vsce publish` of that exact vsix to the Visual Studio Marketplace (publisher
-`ingcreators`) and a GitHub release with the same vsix attached, so the archived
-artifact is byte-identical to what the Marketplace serves. The workflow
+The extension versions independently of the framework, so its releases live in their own tag
+namespace. Pushing an `ext-v<version>` tag runs the *Extension release* workflow
+(`.github/workflows/extension-release.yml`): tests, a manifest-version-matches-tag gate, one
+`vsce package`, `vsce verify-pat`, then `vsce publish` of that exact vsix to the Visual
+Studio Marketplace (publisher `ingcreators`), and a GitHub release with the same vsix
+attached. The archived artifact is therefore byte-identical to what the Marketplace serves.
+The workflow
 authenticates with the `VSCE_PAT` repository secret (an Azure DevOps PAT with the
 Marketplace *Manage* scope — it expires, so re-issuing it is a recurring operator
 task); running the workflow manually is a dry run that proves the token is still

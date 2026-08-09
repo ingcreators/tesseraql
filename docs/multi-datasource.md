@@ -132,12 +132,12 @@ Delivery semantics are [messaging](messaging.md)'s, unchanged, because the *bus*
 never moves: the event is written in the main command's transaction (a rolled-back
 command never publishes), relayed onto the durable `tql_event` log on `main`,
 claimed with `SKIP LOCKED` on `main`, deduplicated against `main`'s consumed-key
-records. Only the consumer's **apply transaction** runs on `reporting`. The apply
-commit and the consumed-mark are two transactions on two databases, so the honest
-contract is the one the messaging documentation already states: **at-least-once
-delivery, effectively exactly-once per idempotency key, and the projection SQL is
-an idempotent upsert** — a crash between apply and acknowledge redelivers, the key
-check skips it, and the upsert makes even the residual window harmless.
+records. Only the consumer's **apply transaction** runs on `reporting`. The apply commit and the
+consumed-mark are two transactions on two databases, so the honest contract is the one the
+messaging documentation already states: **at-least-once delivery, effectively exactly-once
+per idempotency key, and the projection SQL is an idempotent upsert**. A crash between apply
+and acknowledge redelivers, the key check skips it, and the upsert makes even the residual
+window harmless.
 
 What a non-main transaction cannot carry is anything whose tables live on `main`:
 `notify:`, `publish:`, `outbox:`, workflow transitions, `sequence:` allocation.

@@ -231,15 +231,19 @@ npx @hypermedia-components/cli email eject --tokens my-theme.json \
 The generated files carry a manifest comment (core version, axes, regen command) — edit
 the theme and regenerate rather than hand-editing.
 
-**Build-time wiring checks.** Because a mail body is otherwise only exercised at
-delivery, lint validates the wiring: a mail channel's literal `template:` must be a file
-inside the app home (`TQL-BATCH-5304` — the send-time code, surfaced at build time), an
-`.html` body may reference only fragments the `tql/email` library declares
-(`TQL-TPL-2002`, read from the app's shadow copy when present), and a `${...}` root in
-the body or `subject` that is neither `payload`/`event` nor a `th:each`/`th:with` alias
-warns (`TQL-TPL-2003`) — binds like `${ticket}` instead of `${payload.ticket}` render as
-empty at delivery and are otherwise invisible to tests. A `template:` value carrying a
-`${...}` config placeholder is environment-dependent and skipped.
+**Build-time wiring checks.** A mail body is otherwise only exercised at delivery, so lint
+validates the wiring:
+
+- A mail channel's literal `template:` must be a file inside the app home
+  (`TQL-BATCH-5304` — the send-time code, surfaced at build time).
+- An `.html` body may reference only fragments the `tql/email` library declares
+  (`TQL-TPL-2002`, read from the app's shadow copy when present).
+- A `${...}` root in the body or `subject` that is neither `payload`/`event` nor a
+  `th:each`/`th:with` alias warns (`TQL-TPL-2003`). A bind like `${ticket}` written for
+  `${payload.ticket}` renders empty at delivery and is otherwise invisible to tests.
+
+A `template:` value carrying a `${...}` config placeholder is environment-dependent and
+skipped.
 
 **Studio.** Studio's Mail page (sidebar → Mail) lists the app's mail channels and opens
 an `.html` template composed from these blocks in a no-code composer: add/reorder/remove

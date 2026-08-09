@@ -9,10 +9,11 @@
   },
   "scripts": {
     "sync": "node scripts/sync-content.mjs",
+    "lint:prose": "node scripts/lint-prose.mjs",
     "predev": "node scripts/sync-content.mjs",
     "dev": "astro dev",
     "start": "astro dev",
-    "prebuild": "node scripts/sync-content.mjs",
+    "prebuild": "node scripts/sync-content.mjs && node scripts/lint-prose.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"

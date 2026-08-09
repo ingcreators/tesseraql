@@ -56,12 +56,12 @@ safe:
   `NumberFormatException` instead of a parse error. Now wrapped as a coded rejection; the
   find is exactly the off-contract-exception class the harness exists to catch.
 - **YAML resource limits are the library's defaults, and the error contract is
-  inconsistent.** Jackson/SnakeYAML *do* cap nesting (1000) and document size (~3 MB code
-  points) by default, so an alias bomb or deep document is rejected — but the framework
-  sets no explicit bound of its own, and the rejection surfaces differently by entry
-  point: the **file** parse methods wrap it as a raw `UncheckedIOException` (uncoded),
-  while the **string** methods that the Studio endpoints call return a coded
-  `TQL-YAML-1001`. Same malformed input, two contracts.
+  inconsistent.** Jackson and SnakeYAML *do* cap nesting (1000) and document size
+  (~3 MB code points) by default, so an alias bomb or deep document is rejected. The
+  framework sets no explicit bound of its own, and the rejection surfaces differently by
+  entry point: the **file** parse methods wrap it as a raw, uncoded `UncheckedIOException`,
+  while the **string** methods the Studio endpoints call return a coded `TQL-YAML-1001`.
+  Same malformed input, two contracts.
 - **SCIM filters are safe.** The filter and group-patch parsers are single anchored
   regexes (`eq`-only), not recursive descent; deep nesting simply fails the match, and
   ReDoS probes (millions of quotes, spaces, and value characters) all terminate promptly.

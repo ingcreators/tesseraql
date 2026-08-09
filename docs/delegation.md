@@ -59,11 +59,11 @@ exactly what the per-task delegate operation and the deadline sweeper are for.
 The task inbox shows the provenance (“for &lt;delegator&gt;”), and the `assigned`
 reminder notification carries the *effective* assignee — the person who must act.
 
-Put together, on a typical approval app: an approver sets an absence with a
-delegate; a request submitted during the window lands in the delegate's inbox
-marked "for" the approver; the delegate approves it **as themselves** and the trail
-shows who acted for whom; after the window ends new requests reach the approver
-again — no permission ever borrowed, no chain ever followed.
+Put together, on a typical approval app, it reads like this. An approver sets an absence
+with a delegate. A request submitted during the window lands in the delegate's inbox, marked
+"for" the approver. The delegate approves it **as themselves**, and the trail shows who acted
+for whom. After the window ends, new requests reach the approver again. No permission is ever
+borrowed, and no chain is ever followed.
 
 ## The security stance
 

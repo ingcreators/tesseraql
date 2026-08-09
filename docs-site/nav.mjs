@@ -186,4 +186,7 @@ export const EXCLUDED = [
   'silent-tolerance.md',
   // Documentation information architecture (audit + section rebuild), 2026-08-09.
   'documentation-ia.md',
+  // The house style the documentation is written to: a contributor convention, not a
+  // page an application author needs.
+  'style-guide.md',
 ];

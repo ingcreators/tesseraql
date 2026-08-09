@@ -55,12 +55,19 @@ applications" is 21 pages flat, with `app-layout` and `duckdb` at equal weight.
 "Operations" holds four pages while `deployment.md` carries eleven H2 sections and is the
 second most-linked page in the corpus.
 
-**The prose is dense.** Sentences average 25.8 words against a 15–20 norm for technical
-documentation; 333 of 2,287 sentences exceed 40 words; em dashes run 19.7 per thousand
-words. The heaviest pages are `analytics` (35.3 words per sentence), `duckdb` (32.1),
-`notifications` (31.6), and `jobs` (30.6, with 23 sentences over 40 words). Surface names
-drift: `ops console` (23), `operations console` (12), `Ops Console` (2); `IAM Admin`
-(20), `IAM admin` (8).
+**The prose is dense** — though less so than this document first claimed. The original
+measurement split sentences on punctuation across the whole document, which glued each
+bulleted list into one enormous "sentence": it reported a 154-word sentence in `jobs.md`
+that was really six bullets, and inflated every figure. Measured per block, sentences
+average **22.1 words** against a 15–20 norm for technical documentation, **226 of 2,803**
+sentences (8.1%) exceed 40 words, and **28** exceed 60. Em dashes run 21.7 per thousand
+words, or about one every two and a half sentences, which is the figure that held up.
+Surface names drift: `ops console` (23), `operations console` (12), `Ops Console` (2);
+`IAM Admin` (20), `IAM admin` (8).
+
+The corrected figures are the ones the style guide and its lint are built on. The mistake is
+recorded here rather than quietly fixed, because the first version of this document was used
+to size the work.
 
 ## Decisions
 
