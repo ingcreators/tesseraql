@@ -109,18 +109,42 @@ public final class JwtAuthenticator {
     private void validateClaims(Map<String, Object> claims) {
         long nowSeconds = System.currentTimeMillis() / 1000L;
         long skew = config.clockSkew().toSeconds();
-        if (claims.get("exp") instanceof Number expSeconds
-                && nowSeconds - skew >= expSeconds.longValue()) {
+        Long exp = epochSecondsClaim(claims.get("exp"));
+        if (exp != null && nowSeconds - skew >= exp) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT has expired");
         }
         // RS256 IdP tokens commonly carry nbf; honor it within the configured leeway.
-        if (claims.get("nbf") instanceof Number nbfSeconds
-                && nbfSeconds.longValue() > nowSeconds + skew) {
+        Long nbf = epochSecondsClaim(claims.get("nbf"));
+        if (nbf != null && nbf > nowSeconds + skew) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT is not yet valid");
         }
         if (config.issuer() != null && !config.issuer().equals(claims.get("iss"))) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT issuer mismatch");
         }
+    }
+
+    /**
+     * The epoch-seconds value of a time claim ({@code exp}/{@code nbf}), or {@code null} when the
+     * claim is absent. A JSON number is read directly; a numeric <em>string</em> (some IdPs and
+     * hand-rolled mints emit {@code "exp": "1700000000"}) is coerced rather than silently skipping
+     * the check — a string {@code exp} previously made a token immortal. A present-but-unparseable
+     * value is rejected rather than ignored.
+     */
+    private static Long epochSecondsClaim(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return (long) Double.parseDouble(text.trim());
+            } catch (NumberFormatException ex) {
+                throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT time claim is not numeric");
+            }
+        }
+        throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT time claim is not numeric");
     }
 
     private Principal toPrincipal(Map<String, Object> claims) {

@@ -97,8 +97,7 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
                 .orElse(null);
         boolean allowIdpInitiated = config.getString("tesseraql.saml.allowIdpInitiated")
                 .map(Boolean::parseBoolean).orElse(false);
-        boolean requireSignedLogout = config.getString("tesseraql.saml.requireSignedLogout")
-                .map(Boolean::parseBoolean).orElse(true);
+        boolean requireSignedLogout = config.getBoolean("tesseraql.saml.requireSignedLogout", true);
         SamlAcsRouteBuilder.SamlSecurity security = new SamlAcsRouteBuilder.SamlSecurity(
                 replayGuard, spKey, idpKey, allowIdpInitiated, requireSignedLogout);
         context.camel().addRoutes(new SamlAcsRouteBuilder(

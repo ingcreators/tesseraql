@@ -17,16 +17,20 @@ public record SecuritySpec(String auth, String policy, String csrf) {
 
     /**
      * Whether the CSRF validator wires for this route: {@code required} always, {@code off}
-     * never, {@code auto} (and a defaults-injected {@code auto}) for a browser-authenticated
-     * non-GET. The one resolution point for the enum (docs/vocabulary-cleanup.md slice 1).
+     * never, {@code auto} for a browser-authenticated non-GET. An <em>absent</em> {@code csrf:}
+     * is {@code auto} (the documented default, "browser state-changing routes are protected") —
+     * not {@code off}; reading absent as off left a browser POST with no CSRF validator when no
+     * {@code security.defaults} rule supplied one. The one resolution point for the enum
+     * (docs/vocabulary-cleanup.md slice 1).
      */
     public boolean csrfEnforced(String httpMethod) {
-        if (csrf == null || "off".equals(csrf)) {
+        if ("off".equals(csrf)) {
             return false;
         }
         if ("required".equals(csrf)) {
             return true;
         }
+        // auto (explicit or absent): protect browser state-changing routes.
         return "browser".equals(auth) && httpMethod != null
                 && !"GET".equalsIgnoreCase(httpMethod);
     }

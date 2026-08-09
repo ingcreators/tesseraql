@@ -392,8 +392,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.security.throttle.CredentialThrottle credentialThrottle = new io.tesseraql.security.throttle.CredentialThrottle(
                 new io.tesseraql.security.throttle.CredentialThrottle.Config(
                         manifest.config()
-                                .getString("tesseraql.security.credentialThrottle.enabled")
-                                .map(Boolean::parseBoolean).orElse(true),
+                                .getBoolean("tesseraql.security.credentialThrottle.enabled", true),
                         manifest.config()
                                 .getString("tesseraql.security.credentialThrottle.loginAttempts")
                                 .map(Integer::parseInt).orElse(10),
@@ -1596,8 +1595,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     extensionSink.send(event);
                 }
             };
-            boolean readOnly = manifest.config().getString("tesseraql.studio.readOnly")
-                    .map(Boolean::parseBoolean).orElse(true);
+            boolean readOnly = manifest.config().getBoolean("tesseraql.studio.readOnly", true);
             io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
                     manifest, readOnly);
             RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio,
