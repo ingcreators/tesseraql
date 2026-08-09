@@ -25,6 +25,7 @@ import javax.sql.DataSource;
  */
 public final class RetentionSweeper {
 
+    private static final System.Logger LOG = System.getLogger(RetentionSweeper.class.getName());
     private static final TqlErrorCode SWEEP_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5201);
 
     private final DataSource dataSource;
@@ -83,12 +84,26 @@ public final class RetentionSweeper {
         }
         List<String> storageKeys = attachmentStore.deleteOlderThan(cutoff);
         if (blobStore != null) {
+            int failed = 0;
             for (String key : storageKeys) {
                 try {
                     blobStore.delete(new BlobRef(key, null, 0, null, null));
-                } catch (RuntimeException ignored) {
-                    // best-effort; an already-removed blob is fine
+                } catch (RuntimeException ex) {
+                    // The metadata row is already gone, so a failed blob delete is now an
+                    // unrecoverable orphan (auth/permission/network all look like this) — not the
+                    // harmless already-removed case the swallow assumed. Surface it: an operator
+                    // reconciling storage cost has no other signal.
+                    failed++;
+                    LOG.log(System.Logger.Level.WARNING,
+                            "Retention could not delete attachment blob {0}; its metadata is gone,"
+                                    + " so it is now an orphan in the object store",
+                            key);
                 }
+            }
+            if (failed > 0) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "Retention left {0} of {1} attachment blob(s) undeleted (orphaned)",
+                        failed, storageKeys.size());
             }
         }
         return storageKeys.size();
