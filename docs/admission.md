@@ -37,6 +37,8 @@ pinning; see [promotion](promotion.md) and [deployment](deployment.md).
 
 ## Next
 
+- [governance.md](governance.md) — the everyday review gate this profile builds on.
+- [extending.md](extending.md) — what "declarative-only" rules out, and what it does not.
 - [promotion.md](promotion.md) — getting a passing application into production.
 - [testing.md](testing.md) — the suites the profile counts.
 - [documentation-portal.md](documentation-portal.md) — the report the profile reads.

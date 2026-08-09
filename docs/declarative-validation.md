@@ -472,6 +472,8 @@ Lint reports statically what would otherwise fail at route build time:
 
 ## Next
 
+- [extending.md](extending.md) — where a custom function sits on the extension ladder.
+
 - [transactional-writes.md](transactional-writes.md) — the commands these rules guard.
 - [internationalization.md](internationalization.md) — translating the messages a rule produces.
 - [testing.md](testing.md) — exercising rules declaratively.

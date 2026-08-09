@@ -1013,11 +1013,11 @@
         },
         "contract": {
           "type": "string",
-          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Documented in authentication.md."
+          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Legal on sql: and queries:, and refused inside a command step. Documented in authentication.md."
         },
         "service": {
           "type": "string",
-          "description": "A named runtime service provider to call instead of running SQL. The provider is Java the framework supplies; an application declares the call, not the code."
+          "description": "A named runtime service provider to call instead of running SQL (docs/extending.md). Legal on sql: and queries:, and refused inside a command step — a transactional step must be a SQL file or a sequence."
         },
         "mode": {
           "type": "string",
