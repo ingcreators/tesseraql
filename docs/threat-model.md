@@ -1,5 +1,9 @@
 # Threat model
 
+**Who this is for.** Someone evaluating TesseraQL, or reviewing it for adoption. The threats
+here are the framework's, and the mitigations are the framework's; securing your own
+application starts at [authentication](authentication.md).
+
 This is TesseraQL's framework-level threat model: the actors, the trust boundaries, and a
 STRIDE pass over each surface that turns untrusted input into action — mapped to the control
 that mitigates each threat and the residual risk that remains. It is a maintainer artifact
