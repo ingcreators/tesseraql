@@ -64,10 +64,11 @@ final class TestCommand implements Callable<Integer> {
             "--history-limit"}, description = "Runs retained in history.json; 0 keeps all (default: 20).")
     int historyLimit = 20;
 
-    @Option(names = {"--sql-line-threshold"}, description = "Min SQL line coverage % recorded.")
+    @Option(names = {"--sql-line-threshold"}, description = "Min SQL line coverage %% recorded.")
     double sqlLineThreshold;
 
-    @Option(names = {"--sql-branch-threshold"}, description = "Min SQL branch coverage % recorded.")
+    @Option(names = {
+            "--sql-branch-threshold"}, description = "Min SQL branch coverage %% recorded.")
     double sqlBranchThreshold;
 
     @Option(names = {

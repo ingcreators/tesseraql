@@ -38,11 +38,11 @@ final class CoverageCommand implements Callable<Integer> {
     Path reportDir;
 
     @Option(names = {
-            "--sql-line-threshold"}, description = "Min SQL line coverage % (else config).")
+            "--sql-line-threshold"}, description = "Min SQL line coverage %% (else config).")
     double sqlLineThreshold;
 
     @Option(names = {
-            "--sql-branch-threshold"}, description = "Min SQL branch coverage % (else config).")
+            "--sql-branch-threshold"}, description = "Min SQL branch coverage %% (else config).")
     double sqlBranchThreshold;
 
     @Option(names = {"--modules"}, description = "Directory of extra module jars (composes with"
