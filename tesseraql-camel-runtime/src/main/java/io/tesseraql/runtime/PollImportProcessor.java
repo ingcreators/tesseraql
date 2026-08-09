@@ -99,11 +99,21 @@ final class PollImportProcessor implements Processor {
      */
     private void awaitImport(FileTransferService transfers, String transferId, String fileName) {
         while (true) {
-            String status = transfers.status(transferId)
-                    .map(FileTransferService.TransferStatus::status)
-                    .orElse("UNKNOWN");
+            FileTransferService.TransferStatus transfer = transfers.status(transferId).orElse(null);
+            String status = transfer == null ? "UNKNOWN" : transfer.status();
             switch (status) {
                 case "COMPLETED" -> {
+                    // Under onError: skip a wholly-rejected file completes with zero rows applied
+                    // and every row in errors — it used to archive to the success directory and
+                    // reset the consecutive-failure streak, hiding a broken feed. Route it to the
+                    // failure directory instead; a partial import (some rows applied) stays a
+                    // success, matching the documented skip contract.
+                    if (transfer != null && transfer.rows() == 0 && !transfer.errors().isEmpty()) {
+                        throw new TqlException(IMPORT_FAILED, "Polled file '" + fileName
+                                + "' imported no rows; all " + transfer.errors().size()
+                                + " were rejected (transfer " + transferId
+                                + "); it moves to the failure directory");
+                    }
                     return;
                 }
                 case "FAILED", "STOPPED" -> throw new TqlException(IMPORT_FAILED,
