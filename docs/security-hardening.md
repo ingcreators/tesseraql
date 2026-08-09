@@ -1,5 +1,10 @@
 # Security hardening and parser robustness
 
+**Who this is for.** Someone evaluating TesseraQL, or reviewing it for adoption. It
+describes the framework's own posture, not how to secure the application you are building —
+that is [authentication](authentication.md), [data scoping](data-scoping.md), and
+[multi-tenancy](multi-tenancy.md).
+
 This page is TesseraQL's security **self-assessment**: an OWASP ASVS-shaped map of the
 framework's controls to the mechanisms that implement them, and the parser-robustness
 work that hardens the untrusted-input edge. It is a maintainer document, not a

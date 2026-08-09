@@ -93,6 +93,51 @@ See [docs/deployment.md](docs/deployment.md) for the Kamal 2 + Cloudflare Tunnel
 story and [docs/app-layout.md](docs/app-layout.md) for how an application directory is
 organized.
 
+## Documentation
+
+The full documentation is at **[ingcreators.com/tesseraql](https://ingcreators.com/tesseraql)**
+— tutorials, guides by use case, the consoles, and generated references. The same pages are
+browsable here under [docs/](docs/).
+
+**Start here**
+
+- [What TesseraQL is](docs/overview.md) - the shape of an application, and what it is not
+- [Five-minute demo](docs/five-minute-demo.md) - a seeded application running, in one command
+- [Getting started](docs/getting-started.md) - install the CLI and scaffold your own
+- [Your first app](docs/your-first-app.md) - an empty directory to a tested feature
+- [Concepts](docs/concepts.md) - documents, recipes, and how a request travels
+
+**Guides by use case**
+
+- [An approval application](docs/guide-approval-workflow.md)
+- [Integration and batch](docs/guide-integration.md)
+- [Reporting and analytics](docs/guide-analytics.md)
+- [An API over an existing database](docs/guide-existing-database.md)
+
+**The consoles**
+
+- [Studio](docs/studio.md) - the browser IDE
+- [Operations console](docs/ops-console.md) - what the running system is doing
+- [IAM Admin](docs/iam-admin.md) - users, sessions, delegations
+
+**Reference**
+
+- [YAML surface](docs/reference-yaml-surface.md) · [CLI](docs/reference-cli.md) ·
+  [Configuration](docs/reference-config.md) · [Error codes](docs/reference-error-codes.md)
+
+**Evaluating TesseraQL**
+
+- [Admission profile](docs/admission.md) · [Security self-assessment](docs/security-hardening.md)
+  · [Threat model](docs/threat-model.md)
+
+**Working on the framework itself**
+
+- [docs/development-environment.md](docs/development-environment.md) - Dev Container details
+- [docs/build.md](docs/build.md) - build, test reports, coverage gates, dialect test suites
+- [docs/release.md](docs/release.md) - release procedure
+- [docs/roadmap.md](docs/roadmap.md) - post-0.1 roadmap toward an LOB application platform
+- [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md) - conventions and rules
+
 ## Modules
 
 | Module | Purpose |
@@ -118,21 +163,8 @@ organized.
 
 ## Java policy
 
-TesseraQL 1.x uses Java 21 as the baseline and tests Java 25 compatibility in CI
+TesseraQL uses Java 21 as the baseline and tests Java 25 compatibility in CI
 (build target `--release 21`; virtual threads are used on the Java 21 baseline).
-
-## Documentation
-
-- [docs/getting-started.md](docs/getting-started.md) - build an app without cloning the monorepo
-  (install the CLI, `tesseraql new`)
-- [docs/app-layout.md](docs/app-layout.md) - application directory anatomy and URL mapping
-- [docs/build.md](docs/build.md) - build, test reports, coverage gates, dialect test suites
-- [docs/deployment.md](docs/deployment.md) - container deployment (Kamal 2 + Cloudflare Tunnel)
-- [docs/release.md](docs/release.md) - release procedure
-- [docs/development-environment.md](docs/development-environment.md) - Dev Container details
-- [docs/app-developer-distribution.md](docs/app-developer-distribution.md) - building apps without cloning the monorepo (CLI/Maven parity, distribution, opt-in modules, proxy support)
-- [docs/proxy.md](docs/proxy.md) - corporate proxy, internal Maven mirror, and air-gapped networks
-- [docs/roadmap.md](docs/roadmap.md) - post-0.1 roadmap toward an LOB application platform
 
 ## License
 
