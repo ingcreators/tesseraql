@@ -168,4 +168,6 @@ export const EXCLUDED = [
   'view-composition.md',
   // Silent tolerance sweep (fail-open/unknown-key/observability/tooling defects), 2026-08-09.
   'silent-tolerance.md',
+  // Documentation information architecture (audit + section rebuild), 2026-08-09.
+  'documentation-ia.md',
 ];
