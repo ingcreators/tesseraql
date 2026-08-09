@@ -2136,6 +2136,9 @@ public final class AppLinter {
                             + " broadcast live-view topics"));
         }
         lintDatasource(config, tool.source(), definition, source, findings);
+        // An MCP tool's SQL is model-driven — its arguments come from an LLM — so it is the
+        // highest-risk surface for embedded-variable injection, and it was the one not checked.
+        lintEmbeddedVariables(tool.source(), definition, source, findings);
     }
 
     /**
@@ -2317,7 +2320,7 @@ public final class AppLinter {
         }
         lintPdfExport(route, definition, source, findings);
         lintDatasource(config, route.source(), definition, source, findings);
-        lintEmbeddedVariables(route, definition, source, findings);
+        lintEmbeddedVariables(route.source(), definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && !policyDefined(config, definition.security().policy())) {
             findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
@@ -2378,13 +2381,13 @@ public final class AppLinter {
      * unless allowlisted. This requires every placeholder that resolves to a request input to be
      * {@code enum}-constrained (the runtime guard against meta-characters is only defense in depth).
      */
-    private void lintEmbeddedVariables(RouteFile route, RouteDefinition definition, String source,
-            List<LintFinding> findings) {
+    private void lintEmbeddedVariables(Path documentSource, RouteDefinition definition,
+            String source, List<LintFinding> findings) {
         SqlBinding sql = definition.sql();
         if (sql == null || sql.isContract() || sql.file() == null) {
             return;
         }
-        Path sqlFile = route.source().getParent().resolve(sql.file());
+        Path sqlFile = documentSource.getParent().resolve(sql.file());
         if (!Files.isRegularFile(sqlFile)) {
             return; // missing-file is reported separately
         }
@@ -3562,6 +3565,9 @@ public final class AppLinter {
         lintPublish(config, definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintDatasource(config, consumer.source(), definition, source, findings);
+        // A consumer's SQL is fed by an external message payload — as untrusted as an HTTP body —
+        // so the embedded-variable injection guard (TQL-SQL-2109) applies here, not just on routes.
+        lintEmbeddedVariables(consumer.source(), definition, source, findings);
     }
 
     /**
