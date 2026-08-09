@@ -539,9 +539,11 @@ Investigated by the sweep and **cleared** — documented, deliberate degradation
   accepted; the login key is the one that must hold". Denying on a missing header would break
   every legitimate pre-tenant request.
 - **mTLS PKIX skipped when `trustBundle` is unset.** Already covered by lint `TQL-SEC-4065` and
-  documented as trusting the edge. (The SAN *type* confusion — email/URI/DNS matched
-  interchangeably — is a real documented-design weakness; type-qualifying `san:` is a config-
-  grammar break deferred as a separate hardening decision, not folded into this campaign.)
+  documented as trusting the edge. (The SAN *type* confusion it aggravated — email/URI/DNS matched
+  interchangeably — was **taken back in scope and fixed**: `san:` is replaced by the type-qualified
+  `sanDns`/`sanUri`/`sanEmail`/`sanIp`, and the untyped key is `TQL-SEC-4066` at lint and at boot.
+  A clean pre-1.0 break, not a compat alias: a config that keeps working while meaning something
+  weaker than it reads is the exact failure mode this campaign exists to remove.)
 - **Removing the 44 `@JsonIgnoreProperties` annotations.** Rejected in favor of the
   tree-walking lint — see the Wave K preamble for the three concrete blockers (MCP documents,
   no tolerant-load recovery, the forward-compat schema promise).

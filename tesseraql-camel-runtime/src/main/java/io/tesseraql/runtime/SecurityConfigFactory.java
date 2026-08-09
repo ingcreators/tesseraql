@@ -47,7 +47,7 @@ public final class SecurityConfigFactory {
                 String status = config.getString(prefix + "status").orElse("ACTIVE");
                 clients.put(String.valueOf(id), new MtlsClient(
                         config.getString(prefix + "subjectDn").orElse(null),
-                        config.getString(prefix + "san").orElse(null),
+                        sanMatcher(config, String.valueOf(id), prefix),
                         config.getString(prefix + "sha256").orElse(null),
                         config.getString(prefix + "subject").orElse(null),
                         config.getString(prefix + "tenantId").orElse(null),
@@ -61,6 +61,39 @@ public final class SecurityConfigFactory {
                 config.getString("tesseraql.security.mtls.trustBundle").orElse(null),
                 duration(config, "tesseraql.security.mtls.clockSkew"),
                 clients);
+    }
+
+    /**
+     * TQL-SEC-4066: the untyped {@code san:} matcher was removed — a certificate identity has to
+     * name the kind of Subject Alternative Name it means.
+     */
+    private static final io.tesseraql.core.error.TqlErrorCode UNTYPED_SAN = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4066);
+
+    /**
+     * The client's type-qualified SAN matcher, or null when it identifies by DN or fingerprint.
+     *
+     * <p>The removed untyped {@code san:} throws rather than being ignored: dropping it would leave
+     * the client with no matcher at all, and a service caller that silently stops authenticating is
+     * exactly the failure this grammar change exists to prevent. Lint reports the same code at
+     * build time; this is the backstop for a config that never ran through it.
+     */
+    private static MtlsConfig.SanMatcher sanMatcher(AppConfig config, String id, String prefix) {
+        if (config.getString(prefix + "san").isPresent()) {
+            throw new io.tesseraql.core.error.TqlException(UNTYPED_SAN,
+                    "mTLS client '" + id + "' declares the removed untyped san:; name the kind"
+                            + " with sanDns/sanUri/sanEmail/sanIp so a certificate's name of one"
+                            + " kind cannot satisfy a matcher meaning another");
+        }
+        for (MtlsConfig.SanType type : MtlsConfig.SanType.values()) {
+            String key = "san" + type.name().charAt(0)
+                    + type.name().substring(1).toLowerCase(java.util.Locale.ROOT);
+            String value = config.getString(prefix + key).orElse(null);
+            if (value != null) {
+                return new MtlsConfig.SanMatcher(type, value);
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

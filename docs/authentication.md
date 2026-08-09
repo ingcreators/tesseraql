@@ -229,10 +229,19 @@ Each client declares **exactly one** certificate matcher:
 
 - `subjectDn` — the certificate's subject distinguished name, compared order- and case-insensitively
   over its RDNs (so a CA that orders or cases the DN differently still matches).
-- `san` — a Subject Alternative Name value the certificate carries (DNS, URI, email, or IP); for
-  example a SPIFFE URI `spiffe://acme/ns/default/sa/billing`.
+- `sanDns`, `sanUri`, `sanEmail`, `sanIp` — a Subject Alternative Name of that specific kind; for
+  example `sanUri: spiffe://acme/ns/default/sa/billing` for a SPIFFE identity. A matcher only ever
+  compares against names of its own kind, so a certificate carrying `api.internal` as an email or a
+  URI can never satisfy `sanDns: api.internal`. DNS names compare case-insensitively (RFC 4343); the
+  other kinds compare exactly.
 - `sha256` — the hex SHA-256 fingerprint of the DER certificate (colons and case are ignored); the
   strongest binding, pinning one exact certificate.
+
+> **Removed: the untyped `san:`.** It compared its value against every kind of name at once, so a
+> certificate carrying the value under a kind you did not mean still authenticated — worst case, a
+> DNS name defeating a SPIFFE URI pin. It is an error (`TQL-SEC-4066`) at lint and at startup rather
+> than a silent alias, because the failure it caused was precisely a config that kept working while
+> meaning something weaker than it read. Replace it with the matching typed key.
 
 The forwarded certificate is parsed (JDK only — there is no third-party PKI dependency), its
 validity window checked against `clockSkew`, and its identity matched against the declared clients.
@@ -388,10 +397,11 @@ Returned at request time (distinct from the lint codes below, which are static c
 | `TQL-SEC-4053` | error | OIDC is enabled but no `redirectUri` is configured. |
 | `TQL-SEC-4060` | error | A route declares `auth: mtls` but no `tesseraql.security.mtls` is configured. |
 | `TQL-SEC-4061` | error | mTLS is configured but declares no `forwardedHeader` (the certificate has no source). |
-| `TQL-SEC-4062` | error | An mTLS client declares no certificate matcher (`subjectDn`/`san`/`sha256`). |
+| `TQL-SEC-4062` | error | An mTLS client declares no certificate matcher (`subjectDn`/`sanDns`/`sanUri`/`sanEmail`/`sanIp`/`sha256`). |
 | `TQL-SEC-4063` | error | An mTLS client declares more than one certificate matcher; set exactly one. |
 | `TQL-SEC-4064` | warning | An mTLS client grants no roles or permissions (least-privilege hint). |
 | `TQL-SEC-4065` | warning | mTLS declares no `trustBundle`; the runtime does not independently validate the chain. |
+| `TQL-SEC-4066` | error | An mTLS client declares the removed untyped `san:`; name the kind with `sanDns`/`sanUri`/`sanEmail`/`sanIp`. Also thrown at startup. |
 | `TQL-SEC-4130` | warning | The retired kind-keyed `security.defaults.api`/`htmx` shape is present; it has no effect — use the path-matched `security.defaults.routes` rules. |
 | `TQL-SEC-4131` | warning | A route is `public` while a matching security default rule declares a policy for its path — confirm the route is deliberately open. |
 | `TQL-SEC-4132` | error | A `security.defaults.routes` rule is malformed (missing `match`, invalid `csrf`, or an empty rule); the app fails to load. |

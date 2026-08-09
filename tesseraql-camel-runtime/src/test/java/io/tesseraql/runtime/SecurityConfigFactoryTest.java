@@ -32,4 +32,36 @@ class SecurityConfigFactoryTest {
 
         assertThat(config.policies().get("app.read").anyOf()).isEmpty();
     }
+
+    private static AppConfig mtlsClient(Map<String, Object> client) {
+        return new AppConfig(Map.of("tesseraql", Map.of("security", Map.of("mtls", Map.of(
+                "forwardedHeader", "ssl-client-cert",
+                "clients", Map.of("billing", client))))));
+    }
+
+    @Test
+    void aTypedSanMatcherIsParsedWithItsKind() {
+        io.tesseraql.security.mtls.MtlsConfig.MtlsClient client = SecurityConfigFactory
+                .build(mtlsClient(Map.of("sanUri", "spiffe://acme/ns/default/sa/billing")))
+                .mtls().clients().get("billing");
+
+        assertThat(client.san().type())
+                .isEqualTo(io.tesseraql.security.mtls.MtlsConfig.SanType.URI);
+        assertThat(client.san().value()).isEqualTo("spiffe://acme/ns/default/sa/billing");
+    }
+
+    /**
+     * The removed untyped {@code san:} fails the boot instead of being ignored: dropping it would
+     * leave the client with no matcher, and a service caller that silently stops authenticating is
+     * the failure the typed grammar exists to prevent (silent-tolerance Wave S follow-up).
+     */
+    @Test
+    void theRemovedUntypedSanFailsTheBoot() {
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> SecurityConfigFactory
+                        .build(mtlsClient(Map.of("san", "spiffe://acme/ns/default/sa/billing"))))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-SEC-4066")
+                .hasMessageContaining("sanDns/sanUri/sanEmail/sanIp");
+    }
 }
