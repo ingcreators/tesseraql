@@ -217,6 +217,26 @@ public final class DocService {
         return SchemaDiff.generate(baseline, schema());
     }
 
+    /**
+     * Whether the schema baseline sidecar exists but cannot be parsed. Like {@link #schemaCorrupt()},
+     * this distinguishes a corrupt baseline from an absent one: both make {@link #schemaDiffDdl()}
+     * return {@code null}, which the migration page renders as "no schema changes" — telling an
+     * operator with a corrupt baseline that the database matches, so they generate an empty
+     * migration. This lets the page name the actual problem instead.
+     */
+    public boolean schemaBaselineCorrupt() {
+        Path baselineFile = appHome.resolve(SCHEMA_BASELINE_PATH);
+        if (!Files.isRegularFile(baselineFile)) {
+            return false;
+        }
+        try {
+            MAPPER.readValue(baselineFile.toFile(), SchemaOverlay.class);
+            return false;
+        } catch (IOException ex) {
+            return true;
+        }
+    }
+
     /** One introspected table by datasource and name, or {@code null} when no such table exists. */
     public CatalogSchema.Table table(String datasource, String name) {
         SchemaOverlay overlay = schema();

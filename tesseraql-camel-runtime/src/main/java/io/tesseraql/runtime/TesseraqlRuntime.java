@@ -3107,6 +3107,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             if (!diffDoc.hasSchemaBaseline()) {
                                 ddl = "-- No schema baseline. Copy .tesseraql/docs/schema.json to "
                                         + "schema.baseline.json, then regenerate to see changes since.";
+                            } else if (diffDoc.schemaBaselineCorrupt()) {
+                                // A corrupt baseline used to read as "no changes" — an operator
+                                // would trust the database matched and generate an empty migration.
+                                ddl = "-- The schema baseline (schema.baseline.json) is unreadable;"
+                                        + " re-capture it before generating a migration.";
                             } else {
                                 String diff = diffDoc.schemaDiffDdl();
                                 ddl = diff == null || diff.isBlank()
