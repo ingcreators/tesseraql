@@ -219,12 +219,14 @@ final class ScaffoldCommand implements Runnable {
             try {
                 result = io.tesseraql.yaml.view.ViewEjects.eject(app, manifest, route, force);
             } catch (io.tesseraql.core.error.TqlException ex) {
-                System.out.println(ex.getMessage());
+                // Failure diagnostics go to stderr so `tesseraql scaffold eject-view … > out`
+                // does not swallow the reason behind a non-zero exit.
+                System.err.println(ex.getMessage());
                 return 1;
             }
             if (result.blocked()) {
-                System.out.println("  skipped   " + result.templatePath());
-                System.out.println("The target template exists with hand edits."
+                System.err.println("  skipped   " + result.templatePath());
+                System.err.println("The target template exists with hand edits."
                         + " Rerun with --force to overwrite it.");
                 return 1;
             }
