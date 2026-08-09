@@ -441,6 +441,7 @@ public final class McpDevTools {
             return new Datasource(url, user, password);
         }
         String configUrl;
+        String configFailure = null;
         try {
             configUrl = config.getString("tesseraql.datasources.main.jdbcUrl").orElse(null);
             if (user == null) {
@@ -451,8 +452,11 @@ public final class McpDevTools {
             }
         } catch (RuntimeException ex) {
             // Unresolvable placeholders (e.g. ${db.main.url} with no input declared) — exactly
-            // the situation the running embedded database can answer for.
+            // the situation the running embedded database can answer for. The reason is kept:
+            // "the config could not be read" and "the config declares nothing" are different
+            // problems, and the agent was being told the second one either way.
             configUrl = null;
+            configFailure = ex.getMessage();
         }
         Optional<String> marker = EmbeddedDbMarker.pick(appHome, configUrl, user, password,
                 EmbeddedDbMarker::reachable);
@@ -460,9 +464,12 @@ public final class McpDevTools {
             return new Datasource(marker.get(), null, null);
         }
         if (configUrl == null) {
-            throw new TqlException(NO_DATASOURCE, "No jdbcUrl argument, the app config"
-                    + " declares no tesseraql.datasources.main.jdbcUrl, and no running"
-                    + " serve --embedded-db was found");
+            throw new TqlException(NO_DATASOURCE, configFailure == null
+                    ? "No jdbcUrl argument, the app config declares no"
+                            + " tesseraql.datasources.main.jdbcUrl, and no running"
+                            + " serve --embedded-db was found"
+                    : "No jdbcUrl argument, the app config's datasource could not be read ("
+                            + configFailure + "), and no running serve --embedded-db was found");
         }
         return new Datasource(configUrl, user, password);
     }

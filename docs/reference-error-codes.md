@@ -246,7 +246,7 @@ All 446 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-MCP-3001` | Failed to serialize MCP tool result: … | — | [McpToolResultRenderer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/McpToolResultRenderer.java) |
 | `TQL-MCP-4002` | Missing required argument: … | [ai-mcp](ai-mcp.md) | [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java) |
 | `TQL-MCP-4030` | Write MCP tool '…' must declare a security.policy: an AI… agent must not mutate data without authorization (deny by default) | [app-mcp](app-mcp.md) | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) |
-| `TQL-MCP-5001` | No jdbcUrl argument, the app config… declares no tesseraql.datasources.main.jdbcUrl, and no running… serve --embedded-db was found | [ai-mcp](ai-mcp.md) | [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java) |
+| `TQL-MCP-5001` | No jdbcUrl argument, the app config declares no… tesseraql.datasources.main.jdbcUrl, and no running… serve --embedded-db was found | [ai-mcp](ai-mcp.md) | [McpDevTools.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-cli/src/main/java/io/tesseraql/cli/mcp/McpDevTools.java) |
 
 ## OIDC
 

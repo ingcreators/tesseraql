@@ -2094,6 +2094,13 @@ public final class StudioService {
      * Applies several dotted-path writes to {@code config/overlay.yml} in one save (Track J2):
      * the wizard write-through and connector editors compose their sections from this. Values are
      * scalars, lists, or maps; {@link #REMOVE} deletes the leaf.
+     *
+     * <p><strong>The whole file is re-serialized canonically.</strong> A single-key edit round-trips
+     * {@code config/overlay.yml} through the parser to a plain map and back, so every comment and
+     * all hand formatting in it are lost — including in sections the caller never touched. This is
+     * the same trade {@code routeFormSave} makes, and it says so in its javadoc and on its screen;
+     * this one silently did not (docs/silent-tolerance.md T9). The overlay-writing screens carry
+     * the note now.
      */
     public void writeOverlaySection(Map<String, Object> values, String action, String actor) {
         if (readOnly) {
