@@ -2105,6 +2105,13 @@ public final class AppLinter {
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
             }
         });
+        definition.queries().forEach((name, query) -> {
+            if (query.file() != null
+                    && !Files.isRegularFile(tool.source().getParent().resolve(query.file()))) {
+                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                        "Query '" + name + "' references a missing SQL file: " + query.file()));
+            }
+        });
 
         boolean write = "command-json".equals(definition.recipe())
                 || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
@@ -2141,19 +2148,27 @@ public final class AppLinter {
      * built-in catalog and are skipped).
      */
     private void lintI18n(Path appHome, AppManifest manifest, List<LintFinding> findings) {
-        if (!Files.isDirectory(appHome.resolve("messages"))) {
-            return;
-        }
-        io.tesseraql.yaml.i18n.MessageCatalog catalog;
-        try {
-            catalog = io.tesseraql.yaml.i18n.MessageCatalog.load(appHome.resolve("messages"));
-        } catch (io.tesseraql.core.error.TqlException ex) {
-            findings.add(new LintFinding("TQL-YAML-1007", "error", "messages", ex.getMessage()));
-            return;
-        }
         AppConfig config = manifest.config();
         String defaultTag = java.util.Locale.forLanguageTag(
                 config.getString("tesseraql.i18n.defaultLocale").orElse("en")).toLanguageTag();
+        boolean hasCatalog = Files.isDirectory(appHome.resolve("messages"));
+        io.tesseraql.yaml.i18n.MessageCatalog catalog;
+        if (hasCatalog) {
+            try {
+                catalog = io.tesseraql.yaml.i18n.MessageCatalog.load(appHome.resolve("messages"));
+            } catch (io.tesseraql.core.error.TqlException ex) {
+                findings.add(new LintFinding("TQL-YAML-1007", "error", "messages",
+                        ex.getMessage()));
+                return;
+            }
+        } else {
+            // No catalog files to check, but a declared message: key must still resolve — with no
+            // messages/ every non-tql. key falls through to the raw key at runtime (the user sees
+            // 'order.qty.tooLarge' as the error text), which the reference loop below now reports.
+            catalog = io.tesseraql.yaml.i18n.MessageCatalog.empty();
+            lintMessageKeyReferences(appHome, manifest, catalog, defaultTag, findings);
+            return;
+        }
 
         Object declared = config.navigate("tesseraql.i18n.locales");
         if (declared instanceof List<?> tags) {
@@ -2186,6 +2201,17 @@ public final class AppLinter {
             }
         }
 
+        lintMessageKeyReferences(appHome, manifest, catalog, defaultTag, findings);
+    }
+
+    /**
+     * Checks every declared {@code message:} key (validate rules, constraint mappings) resolves in
+     * the catalog. Runs whether or not a {@code messages/} tree exists — an app with no catalog but
+     * a {@code message:} reference otherwise gets no diagnostic and the raw key leaks to the user.
+     */
+    private void lintMessageKeyReferences(Path appHome, AppManifest manifest,
+            io.tesseraql.yaml.i18n.MessageCatalog catalog, String defaultTag,
+            List<LintFinding> findings) {
         for (RouteFile route : manifest.routes()) {
             String source = appHome.relativize(route.source()).toString().replace('\\', '/');
             route.definition().validate().forEach((id, rule) -> lintMessageKey(catalog,
@@ -2230,6 +2256,20 @@ public final class AppLinter {
                     "sql.timeoutSeconds must be >= 0 (0 disables the statement timeout)",
                     lineOf(route.source(), "timeoutSeconds:"), null));
         }
+        // A negative timeout on a step or named query was clamped to 0 = unlimited by the
+        // compiler — the inverse of the author's intent — so the guard was missing here.
+        definition.steps().forEach((name, step) -> {
+            if (step.timeoutSeconds() != null && step.timeoutSeconds() < 0) {
+                findings.add(new LintFinding("TQL-YAML-1021", "error", source,
+                        "Step '" + name + "' timeoutSeconds must be >= 0"));
+            }
+        });
+        definition.queries().forEach((name, query) -> {
+            if (query.timeoutSeconds() != null && query.timeoutSeconds() < 0) {
+                findings.add(new LintFinding("TQL-YAML-1021", "error", source,
+                        "Query '" + name + "' timeoutSeconds must be >= 0"));
+            }
+        });
         if (definition.sql() != null && !definition.sql().isContract()
                 && definition.sql().file() != null) {
             Path sqlFile = route.source().getParent().resolve(definition.sql().file());
@@ -2243,6 +2283,13 @@ public final class AppLinter {
                     && !Files.isRegularFile(route.source().getParent().resolve(step.file()))) {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
+            }
+        });
+        definition.queries().forEach((name, query) -> {
+            if (query.file() != null
+                    && !Files.isRegularFile(route.source().getParent().resolve(query.file()))) {
+                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                        "Query '" + name + "' references a missing SQL file: " + query.file()));
             }
         });
         lintOptimisticLocking(route, definition, source, findings);

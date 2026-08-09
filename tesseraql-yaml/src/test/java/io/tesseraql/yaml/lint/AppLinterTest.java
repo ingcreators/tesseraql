@@ -580,6 +580,73 @@ class AppLinterTest {
     }
 
     @Test
+    void reportsAMissingQueryFileAndANegativeQueryTimeout(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/main.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: main.sql
+                queries:
+                  detail:
+                    file: recnt.sql
+                    timeoutSeconds: -1
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2103") && f.isError()
+                && f.message().contains("detail") && f.message().contains("recnt.sql"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1021") && f.isError()
+                && f.message().contains("detail"));
+    }
+
+    @Test
+    void reportsAnUnresolvableMessageKeyEvenWithNoMessagesDirectory(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/main.sql"), "select 1\n");
+        // A validate rule declares a message: key but the app has no messages/ catalog at all.
+        Files.writeString(dir.resolve("web/api/items/post.yml"), """
+                version: tesseraql/v1
+                id: items.create
+                kind: route
+                recipe: command-json
+                validate:
+                  qty:
+                    rule: body.qty > 0
+                    field: qty
+                    code: too-small
+                    message: items.qty.tooSmall
+                sql:
+                  file: main.sql
+                  mode: update
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-FIELD-2005") && !f.isError()
+                && f.message().contains("items.qty.tooSmall"));
+    }
+
+    @Test
     void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
