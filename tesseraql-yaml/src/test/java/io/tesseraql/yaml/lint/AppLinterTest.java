@@ -1699,6 +1699,42 @@ class AppLinterTest {
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4046") && !f.isError());
     }
 
+    /**
+     * An enabled SAML SP with no {@code sp.acsUrl} silently stops checking the assertion's
+     * SubjectConfirmation recipient. The URL stays optional (IdP-initiated-only deployments have
+     * none), so this is a warning — the {@code TQL-SEC-4065} stance for the analogous optional
+     * mTLS trustBundle, whose asymmetry with SAML's silence is what this closes.
+     */
+    @Test
+    void warnsSamlWithoutAcsUrl(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  saml:
+                    enabled: true
+                    sp:
+                      audience: https://app.example.com/saml
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4092") && !f.isError()
+                && f.message().contains("recipient"));
+    }
+
+    @Test
+    void acceptsSamlWithAcsUrlAndIsSilentWhenDisabled(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  saml:
+                    enabled: true
+                    sp:
+                      audience: https://app.example.com/saml
+                      acsUrl: https://app.example.com/_tesseraql/saml/acs
+                """)).noneMatch(f -> f.code().equals("TQL-SEC-4092"));
+
+        // A SAML block that is present but off is not a deployment choice to warn about.
+        assertThat(lintWithConfig(dir, """
+                  saml:
+                    enabled: false
+                    sp:
+                      audience: https://app.example.com/saml
+                """)).noneMatch(f -> f.code().equals("TQL-SEC-4092"));
+    }
+
     @Test
     void flagsOidcWithoutDiscoveryUri(@TempDir Path dir) throws Exception {
         assertThat(lintWithConfig(dir, """
