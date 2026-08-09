@@ -9,13 +9,13 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `version` \* | const `tesseraql/v1` |  |
+| `version` \* | const `tesseraql/v1` | — |
 | `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
 | `kind` \* | enum: `route` \| `job` \| `view` \| `workflow` \| `scope` \| `attachment` \| `tool` \| `resource` \| `ui` \| `prompt` | route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model. |
 | `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline. |
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in input-binding.md and jobs.md. |
 | `inputPolicy` | [object](#inputpolicy) | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
-| `security` | [object](#security) |  |
+| `security` | [object](#security) | — |
 | `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
 | `admission` | [object](#admission) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
 | `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
@@ -24,8 +24,8 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `emit` | any | Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
 | `refreshOn` | string | List, detail, and dashboard views (not forms): refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
-| `sql` | [sqlBinding](#sqlbinding) |  |
-| `steps` | map of [sqlBinding](#sqlbinding) |  |
+| `sql` | [sqlBinding](#sqlbinding) | — |
+| `steps` | map of [sqlBinding](#sqlbinding) | — |
 | `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
 | `validate` | map of [object](#validate) | Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools. |
 | `decide` | map of [object](#decide) | Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md. |
@@ -33,21 +33,21 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
 | `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
 | `export` | object | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md. |
-| `webhook` | [object](#webhook) |  |
-| `publish` | [object](#publish) |  |
-| `consume` | [object](#consume) |  |
+| `webhook` | [object](#webhook) | — |
+| `publish` | [object](#publish) | — |
+| `consume` | [object](#consume) | — |
 | `pagination` | [object](#pagination) | Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH. |
-| `response` | [object](#response) |  |
+| `response` | [object](#response) | — |
 | `view` | enum: `list` \| `form` \| `detail` \| `dashboard` | Declarative view documents (kind: view): list \| form \| detail \| dashboard. |
-| `title` | string |  |
-| `search` | string |  |
-| `source` | string |  |
-| `action` | string |  |
-| `columns` | array of any |  |
-| `fields` | array of any |  |
-| `panels` | array of any |  |
-| `children` | object |  |
-| `slots` | map of string |  |
+| `title` | string | — |
+| `search` | string | — |
+| `source` | string | — |
+| `action` | string | — |
+| `columns` | array of any | — |
+| `fields` | array of any | — |
+| `panels` | array of any | — |
+| `children` | object | — |
+| `slots` | map of string | — |
 | `trigger` | [object](#trigger) | How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md. |
 | `overlap` | enum: `skip` \| `concurrent` | What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md. |
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
@@ -87,8 +87,8 @@ Admission policy for this route: concurrency, rate limiting, and the execution l
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `concurrency` | [object](#admissionconcurrency) |  |
-| `rateLimit` | [object](#admissionratelimit) |  |
+| `concurrency` | [object](#admissionconcurrency) | — |
+| `rateLimit` | [object](#admissionratelimit) | — |
 | `lane` | string | The execution lane this route runs on (tesseraql.lanes). |
 
 #### admission.concurrency
@@ -101,7 +101,7 @@ Admission policy for this route: concurrency, rate limiting, and the execution l
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `requestsPerSecond` | integer |  |
+| `requestsPerSecond` | integer | — |
 | `burst` | integer | Burst capacity (default: requestsPerSecond). |
 | `scope` | enum: `node` \| `cluster` | node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023). |
 
@@ -110,12 +110,12 @@ Admission policy for this route: concurrency, rate limiting, and the execution l
 | Property | Type | Description |
 | --- | --- | --- |
 | `url` | string | Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070). |
-| `headers` | map of string |  |
+| `headers` | map of string | — |
 | `query` | map of string | Query-string bindings, each an expression over the execution context. |
 | `credential` | string | A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072). |
-| `expectStatus` | integer |  |
-| `connectTimeout` | string |  |
-| `requestTimeout` | string |  |
+| `expectStatus` | integer | — |
+| `connectTimeout` | string | — |
+| `requestTimeout` | string | — |
 | `select` | string | Dotted path into the response JSON naming the rows array or object the source exposes. |
 | `onError` | enum: `fail` \| `empty` | fail (default) or empty: the source degrades to zero rows and the page still renders. |
 
@@ -126,9 +126,9 @@ Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-C
 | Property | Type | Description |
 | --- | --- | --- |
 | `maxAge` | string | How long a client may reuse the response (duration string such as 30s or 5m). |
-| `visibility` | enum: `private` \| `public` |  |
+| `visibility` | enum: `private` \| `public` | — |
 | `etag` | boolean | Hash the rendered body and answer If-None-Match with 304 (default true). |
-| `staleWhileRevalidate` | string |  |
+| `staleWhileRevalidate` | string | — |
 
 ### validate
 
@@ -161,18 +161,18 @@ Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-C
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `channel` | string |  |
-| `topic` | string |  |
-| `key` | string |  |
-| `payload` | map of string |  |
+| `channel` | string | — |
+| `topic` | string | — |
+| `key` | string | — |
+| `payload` | map of string | — |
 
 ### consume
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `channel` | string |  |
-| `topic` | string |  |
-| `idempotencyKey` | string |  |
+| `channel` | string | — |
+| `topic` | string | — |
+| `idempotencyKey` | string | — |
 
 ### pagination
 
@@ -180,86 +180,86 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `strategy` | enum: `offset` \| `keyset` |  |
-| `size` | integer ≥ 1 |  |
-| `maxSize` | integer ≥ 1 |  |
-| `count` | boolean |  |
+| `strategy` | enum: `offset` \| `keyset` | — |
+| `size` | integer ≥ 1 | — |
+| `maxSize` | integer ≥ 1 | — |
+| `count` | boolean | — |
 | `by` | string | keyset cursor column |
 
 ### response
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `json` | [object](#responsejson) |  |
-| `html` | [object](#responsehtml) |  |
-| `stream` | [object](#responsestream) |  |
-| `redirect` | [object](#responseredirect) |  |
-| `file` | [object](#responsefile) |  |
-| `onError` | [object](#responseonerror) |  |
+| `json` | [object](#responsejson) | — |
+| `html` | [object](#responsehtml) | — |
+| `stream` | [object](#responsestream) | — |
+| `redirect` | [object](#responseredirect) | — |
+| `file` | [object](#responsefile) | — |
+| `onError` | [object](#responseonerror) | — |
 | `session` | [object](#responsesession) | Browser-session handling for the response (docs/session-rotation.md). |
 
 #### response.json
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `status` | integer ≥ 100 ≤ 599 |  |
-| `body` | any |  |
-| `fields` | map of [fieldPolicy](#fieldpolicy) |  |
-| `statusWhen` | [statusWhen](#statuswhen) |  |
-| `nest` | array of [object](#responsejsonnest) |  |
+| `status` | integer ≥ 100 ≤ 599 | — |
+| `body` | any | — |
+| `fields` | map of [fieldPolicy](#fieldpolicy) | — |
+| `statusWhen` | [statusWhen](#statuswhen) | — |
+| `nest` | array of [object](#responsejsonnest) | — |
 
 ##### response.json.nest
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `into` | string |  |
-| `children` | string |  |
-| `as` | string |  |
-| `on` | map of string |  |
+| `into` | string | — |
+| `children` | string | — |
+| `as` | string | — |
+| `on` | map of string | — |
 
 #### response.html
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `status` | integer ≥ 100 ≤ 599 |  |
-| `template` | string |  |
+| `status` | integer ≥ 100 ≤ 599 | — |
+| `template` | string | — |
 | `view` | string | The id of a *.view.yml document (exclusive with template:). |
 | `shell` | enum: `auto` \| `always` \| `never` | Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint. |
 | `views` | array of string | View ids whose models a template: route binds; each renders into views['<id>'] for the template to insert (illegal alongside view:). |
-| `model` | object |  |
-| `headers` | object |  |
-| `headersWhen` | map of string |  |
-| `statusWhen` | [statusWhen](#statuswhen) |  |
+| `model` | object | — |
+| `headers` | object | — |
+| `headersWhen` | map of string | — |
+| `statusWhen` | [statusWhen](#statuswhen) | — |
 
 #### response.stream
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `filename` | string |  |
+| `filename` | string | — |
 
 #### response.redirect
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `status` | integer ≥ 300 ≤ 399 |  |
-| `location` \* | string |  |
+| `status` | integer ≥ 300 ≤ 399 | — |
+| `location` \* | string | — |
 
 #### response.file
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `status` | integer |  |
-| `template` \* | string |  |
-| `contentType` | string |  |
-| `filename` | string |  |
-| `model` | object |  |
+| `status` | integer | — |
+| `template` \* | string | — |
+| `contentType` | string | — |
+| `filename` | string | — |
+| `model` | object | — |
 
 #### response.onError
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `retarget` | string |  |
-| `reswap` | string |  |
+| `retarget` | string | — |
+| `reswap` | string | — |
 
 #### response.session
 
@@ -275,8 +275,8 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `schedule` | [object](#triggerschedule) |  |
-| `poll` | [object](#triggerpoll) |  |
+| `schedule` | [object](#triggerschedule) | — |
+| `poll` | [object](#triggerpoll) | — |
 | `after` | string | Light chaining: fire when the named job's execution completes successfully in the same app, carrying its business date. Documented in jobs.md. |
 
 #### trigger.schedule
@@ -295,8 +295,8 @@ How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source f
 | Property | Type | Description |
 | --- | --- | --- |
 | `transport` | enum: `local` \| `sftp` \| `ftps` | local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts. |
-| `host` | string |  |
-| `port` | integer |  |
+| `host` | string | — |
+| `port` | integer | — |
 | `path` | string | The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home. |
 | `credential` | string | A named credential under tesseraql.connectors.poll.credentials (required for remote sources). |
 | `include` | string | An ant-style filename filter, e.g. *.csv. |
@@ -435,71 +435,71 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | Property | Type | Description |
 | --- | --- | --- |
 | `domain` | string | Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local. |
-| `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `array` |  |
-| `required` | boolean |  |
-| `default` | any |  |
-| `min` | number |  |
-| `max` | number |  |
-| `maxLength` | integer ≥ 0 |  |
-| `minLength` | integer ≥ 0 |  |
+| `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `array` | — |
+| `required` | boolean | — |
+| `default` | any | — |
+| `min` | number | — |
+| `max` | number | — |
+| `maxLength` | integer ≥ 0 | — |
+| `minLength` | integer ≥ 0 | — |
 | `pattern` | string | Anchored regular expression (TQL-YAML-1012 when it does not compile). |
 | `format` | string | string: email\|uuid\|url; date/number: a parse pattern. |
 | `requiredWhen` | string | A core expression over params./path./body. (TQL-YAML-1014). |
-| `enum` | array of string |  |
-| `writable` | boolean |  |
-| `classification` | string |  |
-| `mask` | string |  |
+| `enum` | array of string | — |
+| `writable` | boolean | — |
+| `classification` | string | — |
+| `mask` | string | — |
 | `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
 | `policy` | string | Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain. |
-| `items` | [object](#inputfielditems) |  |
+| `items` | [object](#inputfielditems) | — |
 
 #### inputField.items
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `type` | string |  |
-| `enum` | array of string |  |
+| `type` | string | — |
+| `enum` | array of string | — |
 
 ### sqlBinding
 
 | Property | Type | Description |
 | --- | --- | --- |
 | `file` | string | A colocated 2-way SQL file (must exist; TQL-SQL-2103). |
-| `contract` | string |  |
-| `service` | string |  |
-| `mode` | string |  |
+| `contract` | string | — |
+| `service` | string | — |
+| `mode` | string | — |
 | `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
 | `datasource` | string | The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |
 | `when` | string | Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form. |
-| `params` | map of string |  |
-| `sequence` | string |  |
-| `keys` | array of string |  |
-| `materialize` | [object](#sqlbindingmaterialize) |  |
-| `expect` | [object](#sqlbindingexpect) |  |
+| `params` | map of string | — |
+| `sequence` | string | — |
+| `keys` | array of string | — |
+| `materialize` | [object](#sqlbindingmaterialize) | — |
+| `expect` | [object](#sqlbindingexpect) | — |
 
 #### sqlBinding.materialize
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `maxRows` | integer |  |
-| `onOverflow` | string |  |
+| `maxRows` | integer | — |
+| `onOverflow` | string | — |
 
 #### sqlBinding.expect
 
 | Property | Type | Description |
 | --- | --- | --- |
 | `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
-| `onMismatch` | string |  |
+| `onMismatch` | string | — |
 
 ### fieldPolicy
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `visible` | boolean |  |
-| `policy` | string |  |
-| `mask` | string |  |
-| `classification` | string |  |
-| `unmaskWhen` | string |  |
+| `visible` | boolean | — |
+| `policy` | string | — |
+| `mask` | string | — |
+| `classification` | string | — |
+| `unmaskWhen` | string | — |
 
 ### statusWhen
 

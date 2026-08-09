@@ -41,6 +41,15 @@ public final class McpToolResult {
         return new McpToolResult(List.of(new Content("text", message)), true, null);
     }
 
+    /**
+     * A tool-level failure that still carries a structured value — so a caller can both see
+     * {@code isError} and read the payload (e.g. which scaffold files were blocked). The value is
+     * serialized as {@code structuredContent} and mirrored as a text block.
+     */
+    public static McpToolResult jsonError(Object value) {
+        return new McpToolResult(List.of(), true, value);
+    }
+
     public List<Content> content() {
         return content;
     }
