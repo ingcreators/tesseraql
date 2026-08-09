@@ -54,8 +54,7 @@ public record TenancySettings(
             throw new IllegalStateException("tenancy.resolver.source must be a host pattern"
                     + " of the form {tenant}.example.com, got '" + source + "'");
         }
-        boolean required = config.getString("tenancy.required").map(Boolean::parseBoolean)
-                .orElse(true);
+        boolean required = config.getBoolean("tenancy.required", true);
         return new TenancySettings(true, mode, resolver, source, required);
     }
 }

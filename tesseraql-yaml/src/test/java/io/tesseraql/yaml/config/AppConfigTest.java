@@ -32,6 +32,29 @@ class AppConfigTest {
     }
 
     @Test
+    void getBooleanAcceptsTheCommonTruthyAndFalsySpellings() {
+        AppConfig config = config(Map.of("a", "yes", "b", "on", "c", 1, "d", "no", "e", "off",
+                "f", "FALSE", "g", true), Map.of());
+
+        assertThat(config.getBoolean("a", false)).isTrue();
+        assertThat(config.getBoolean("b", false)).isTrue();
+        assertThat(config.getBoolean("c", false)).isTrue();
+        assertThat(config.getBoolean("d", true)).isFalse();
+        assertThat(config.getBoolean("e", true)).isFalse();
+        assertThat(config.getBoolean("f", true)).isFalse();
+        assertThat(config.getBoolean("g", false)).isTrue();
+    }
+
+    @Test
+    void getBooleanReturnsTheDefaultWhenAbsentAndRejectsGarbage() {
+        AppConfig config = config(Map.of("x", "maybe"), Map.of());
+
+        assertThat(config.getBoolean("missing", true)).isTrue();
+        assertThat(config.getBoolean("missing", false)).isFalse();
+        assertThatThrownBy(() -> config.getBoolean("x", true)).isInstanceOf(TqlException.class);
+    }
+
+    @Test
     void resolvesCrossFileReference() {
         Map<String, Object> root = Map.of(
                 "db", Map.of("main", Map.of("url", "jdbc:postgresql://h/db")),

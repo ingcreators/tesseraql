@@ -14,7 +14,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `kind` \* | enum: `route` \| `job` \| `view` \| `workflow` \| `scope` \| `attachment` \| `tool` \| `resource` \| `ui` \| `prompt` | route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model. |
 | `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline. |
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in input-binding.md and jobs.md. |
-| `inputPolicy` | object | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
+| `inputPolicy` | [object](#inputpolicy) | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
 | `security` | [object](#security) |  |
 | `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
 | `admission` | [object](#admission) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
@@ -53,6 +53,15 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
 | `pipeline` | array of object | A batch-pipeline job's ordered steps (exactly one of sql, notify, httpCall, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md. |
+
+### inputPolicy
+
+Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `unknownFields` | enum: `reject` \| `ignore` | How to treat request fields with no declared input: reject (default) or ignore. |
+| `readOnlyFieldBehavior` | enum: `reject` \| `ignore` \| `warn` | How to treat declared but non-writable fields when present: reject (default), ignore, or warn. |
 
 ### security
 

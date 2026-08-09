@@ -31,7 +31,7 @@
       "description": "Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in input-binding.md and jobs.md.",
       "additionalProperties": { "$ref": "#/$defs/inputField" }
     },
-    "inputPolicy": { "type": "object", "additionalProperties": true, "description": "Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract." },
+    "inputPolicy": { "type": "object", "additionalProperties": true, "description": "Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract.", "properties": { "unknownFields": { "enum": ["reject", "ignore"], "description": "How to treat request fields with no declared input: reject (default) or ignore." }, "readOnlyFieldBehavior": { "enum": ["reject", "ignore", "warn"], "description": "How to treat declared but non-writable fields when present: reject (default), ignore, or warn." } } },
     "security": {
       "type": "object",
       "properties": {

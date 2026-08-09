@@ -375,6 +375,63 @@ class AppLinterTest {
     }
 
     @Test
+    void rejectsAMisspelledRouteLocalCsrfValue(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/post.yml"), """
+                version: tesseraql/v1
+                id: items.create
+                kind: route
+                recipe: command-json
+                security:
+                  auth: bearer
+                  csrf: requred
+                sql:
+                  text: insert into items(name) values (:name)
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4132") && f.isError()
+                && f.message().contains("requred"));
+    }
+
+    @Test
+    void rejectsAMisspelledInputPolicyValue(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/post.yml"), """
+                version: tesseraql/v1
+                id: items.create
+                kind: route
+                recipe: command-json
+                security:
+                  auth: bearer
+                inputPolicy:
+                  unknownFields: Reject
+                sql:
+                  text: insert into items(name) values (:name)
+                response:
+                  json:
+                    body:
+                      ok: true
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-FIELD-2006") && f.isError()
+                && f.message().contains("mass-assignment"));
+    }
+
+    @Test
     void dottedPolicyNamesResolveAsKeysOfThePoliciesMap(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

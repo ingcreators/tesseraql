@@ -84,6 +84,32 @@ class JwtAuthenticatorTest {
     }
 
     @Test
+    void rejectsExpiredTokenWhoseExpIsAString() throws Exception {
+        // Some IdPs and hand-rolled mints emit exp as a string; it must still be enforced, not
+        // silently skipped (which made a string-exp token immortal).
+        String jwt = token(Map.of("sub", "u001", "exp", "1"));
+        assertThatThrownBy(() -> new JwtAuthenticator(config()).authenticate("Bearer " + jwt))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("expired");
+    }
+
+    @Test
+    void acceptsAValidStringExp() throws Exception {
+        long future = System.currentTimeMillis() / 1000L + 3600;
+        String jwt = token(Map.of("sub", "u001", "exp", Long.toString(future)));
+        assertThat(new JwtAuthenticator(config()).authenticate("Bearer " + jwt).subject())
+                .isEqualTo("u001");
+    }
+
+    @Test
+    void rejectsANonNumericExp() throws Exception {
+        String jwt = token(Map.of("sub", "u001", "exp", "not-a-number"));
+        assertThatThrownBy(() -> new JwtAuthenticator(config()).authenticate("Bearer " + jwt))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("numeric");
+    }
+
+    @Test
     void rejectsAlgNone() throws Exception {
         // A token claiming "none" must never validate against an HS256 config, even though its
         // (ignored) signature segment is correctly computed: the alg is bound from config.

@@ -238,7 +238,7 @@ final class DuckDbDatasources {
                 config.getString(prefix + "region").orElse(null),
                 config.getString(prefix + "endpoint").orElse(null),
                 "path".equals(config.getString(prefix + "urlStyle").orElse("vhost")),
-                config.getString(prefix + "useSsl").map(Boolean::parseBoolean).orElse(true),
+                config.getBoolean(prefix + "useSsl", true),
                 keyId, secretKey, instanceChain);
     }
 

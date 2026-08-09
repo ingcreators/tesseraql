@@ -20,6 +20,8 @@ import java.util.Optional;
 public final class AppConfig {
 
     private static final TqlErrorCode UNRESOLVED = new TqlErrorCode(TqlDomain.YAML, 1101);
+    /** TQL-YAML-1107: a config value expected to be a boolean was not a recognized spelling. */
+    private static final TqlErrorCode NOT_BOOLEAN = new TqlErrorCode(TqlDomain.YAML, 1107);
     private static final int MAX_DEPTH = 32;
 
     private static final io.tesseraql.yaml.secret.SecretResolvers DEFAULT_SECRETS = io.tesseraql.yaml.secret.SecretResolvers
@@ -83,6 +85,28 @@ public final class AppConfig {
             throw new TqlException(UNRESOLVED,
                     "Configuration key '" + dottedPath + "' is not a number: " + raw);
         }
+    }
+
+    /**
+     * Resolves a boolean config value, returning {@code defaultValue} when the path is absent.
+     * Accepts (case-insensitively) {@code true/false}, {@code yes/no}, {@code on/off}, {@code 1/0}
+     * and throws {@link #NOT_BOOLEAN} on anything else. Replaces {@code getString(...)
+     * .map(Boolean::parseBoolean)}, which mapped every non-{@code "true"} spelling — {@code yes},
+     * {@code on}, {@code 1} — to {@code false}, silently disabling any protection whose default is
+     * on.
+     */
+    public boolean getBoolean(String dottedPath, boolean defaultValue) {
+        Object raw = navigate(dottedPath);
+        if (raw == null) {
+            return defaultValue;
+        }
+        String value = resolve(String.valueOf(raw), 0).trim();
+        return switch (value.toLowerCase(java.util.Locale.ROOT)) {
+            case "true", "yes", "on", "1" -> true;
+            case "false", "no", "off", "0" -> false;
+            default -> throw new TqlException(NOT_BOOLEAN, "Configuration key '" + dottedPath
+                    + "' is not a boolean (expected true/false, yes/no, on/off or 1/0): " + raw);
+        };
     }
 
     /** Returns the raw (unresolved) node at a dotted path, or {@code null}. */

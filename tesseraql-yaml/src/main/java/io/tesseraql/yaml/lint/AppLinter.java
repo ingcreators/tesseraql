@@ -15,6 +15,7 @@ import io.tesseraql.yaml.manifest.WorkflowFile;
 import io.tesseraql.yaml.model.DeadlineSpec;
 import io.tesseraql.yaml.model.ImportSpec;
 import io.tesseraql.yaml.model.InputField;
+import io.tesseraql.yaml.model.InputPolicy;
 import io.tesseraql.yaml.model.JobDefinition;
 import io.tesseraql.yaml.model.MatchArm;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -2083,7 +2084,49 @@ public final class AppLinter {
                     "Route references undefined policy '" + definition.security().policy()
                             + "' (deny by default)"));
         }
+        if (definition.security() != null) {
+            String csrf = definition.security().csrf();
+            // The route-local csrf value gets the same enum check the config-side
+            // security.defaults rules already enforce (TQL-SEC-4132) — a typo like `requred`
+            // silently resolved to auto (no enforcement on a bearer route) before this.
+            if (csrf != null && !"auto".equals(csrf) && !"required".equals(csrf)
+                    && !"off".equals(csrf)) {
+                findings.add(new LintFinding("TQL-SEC-4132", "error", source,
+                        "Route '" + definition.id() + "' csrf must be auto, required or off, not '"
+                                + csrf + "'"));
+            }
+        }
+        lintInputPolicy(definition, source, findings);
+        lintInputPolicy(definition, source, findings);
         lintTenantPredicate(config, route, definition, source, findings);
+    }
+
+    /**
+     * Validates the {@code inputPolicy:} value vocabulary (TQL-FIELD-2006). A value outside the
+     * enum silently disabled the guard: {@code unknownFields: Reject} (or {@code rejct}, {@code
+     * deny}) made {@code rejectsUnknownFields()} false and admitted every undeclared body field.
+     * The schema types {@code inputPolicy} openly, so this is the only value check.
+     */
+    private void lintInputPolicy(RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        InputPolicy policy = definition.inputPolicy();
+        if (policy == null) {
+            return;
+        }
+        String unknown = policy.unknownFields();
+        if (unknown != null && !"reject".equals(unknown) && !"ignore".equals(unknown)) {
+            findings.add(new LintFinding("TQL-FIELD-2006", "error", source,
+                    "Route '" + definition.id() + "' inputPolicy.unknownFields must be reject or "
+                            + "ignore, not '" + unknown + "' (an unrecognized value silently "
+                            + "disables the mass-assignment guard)"));
+        }
+        String readOnly = policy.readOnlyFieldBehavior();
+        if (readOnly != null && !"reject".equals(readOnly) && !"ignore".equals(readOnly)
+                && !"warn".equals(readOnly)) {
+            findings.add(new LintFinding("TQL-FIELD-2006", "error", source,
+                    "Route '" + definition.id() + "' inputPolicy.readOnlyFieldBehavior must be "
+                            + "reject, ignore or warn, not '" + readOnly + "'"));
+        }
     }
 
     /** A {@code {placeholder}} reference inside an embedded-variable template. */
