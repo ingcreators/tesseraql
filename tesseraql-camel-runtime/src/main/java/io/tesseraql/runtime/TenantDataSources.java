@@ -31,9 +31,11 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
             4031);
 
     private final Map<String, HikariDataSource> byTenant;
+    private final boolean perTenant;
 
-    private TenantDataSources(Map<String, HikariDataSource> byTenant) {
+    private TenantDataSources(Map<String, HikariDataSource> byTenant, boolean perTenant) {
         this.byTenant = byTenant;
+        this.perTenant = perTenant;
     }
 
     static TenantDataSources load(AppConfig config) {
@@ -41,7 +43,7 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
         boolean perTenant = "database-per-tenant".equals(mode) || "schema-per-tenant".equals(mode);
         Object node = config.navigate("tenancy.datasources");
         if (!perTenant || !(node instanceof Map<?, ?> datasources) || datasources.isEmpty()) {
-            return new TenantDataSources(Map.of());
+            return new TenantDataSources(Map.of(), perTenant);
         }
         Map<String, HikariDataSource> built = new LinkedHashMap<>();
         for (Object key : datasources.keySet()) {
@@ -49,7 +51,7 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
             built.put(tenant, DataSources.create(
                     config, "tesseraql-tenant-" + tenant, "tenancy.datasources." + tenant + "."));
         }
-        return new TenantDataSources(Map.copyOf(built));
+        return new TenantDataSources(Map.copyOf(built), perTenant);
     }
 
     boolean isEmpty() {
@@ -61,10 +63,26 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
         return byTenant.keySet();
     }
 
-    /** The tenant's own pool, or {@code fallback} (the shared pool) when none is configured. */
+    /**
+     * The tenant's own pool. In a per-tenant isolation mode a tenant with no configured pool is
+     * rejected with {@code TQL-TENANT-4031} rather than falling back — running its job against the
+     * shared pool would read and write another tenant's rows, and per-tenant isolation is
+     * structural (no {@code tenant.id} predicate). In shared-schema mode there are no per-tenant
+     * pools by design, so every tenant resolves to {@code fallback} (scoped by the {@code tenant.id}
+     * bind).
+     */
     DataSource dataSourceFor(String tenantId, DataSource fallback) {
         HikariDataSource pool = byTenant.get(tenantId);
-        return pool != null ? pool : fallback;
+        if (pool != null) {
+            return pool;
+        }
+        if (perTenant) {
+            throw new TqlException(NO_TENANT_DATASOURCE,
+                    "No datasource configured for tenant '" + tenantId + "' in a per-tenant "
+                            + "isolation mode; add a tenancy.datasources." + tenantId + " block "
+                            + "(a shared-pool fallback would expose another tenant's data)");
+        }
+        return fallback;
     }
 
     @Override

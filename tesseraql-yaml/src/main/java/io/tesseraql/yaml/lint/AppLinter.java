@@ -2527,6 +2527,12 @@ public final class AppLinter {
         }
         int set = (when.role() != null ? 1 : 0) + (when.permission() != null ? 1 : 0)
                 + (when.claim() != null ? 1 : 0);
+        if (set == 0) {
+            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                    where + " when declares no role/permission/claim (an empty block or a "
+                            + "misspelled key would match every principal); remove when for an "
+                            + "unconditional arm, or name a predicate"));
+        }
         if (set > 1) {
             findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
                     where + " when must set only one of role/permission/claim"));

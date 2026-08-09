@@ -186,4 +186,20 @@ class AppLinterScopeTest {
                 """);
         assertThat(scopeCodes(new AppLinter().lint(dir))).contains("TQL-SCOPE-3012");
     }
+
+    @Test
+    void whenWithNoRecognizedPredicateIsAnError(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("scope"));
+        // `roles:` is a typo for `role:`; the unknown key deserializes away, leaving an empty
+        // when: that would otherwise compile to a rule matching every principal.
+        Files.writeString(dir.resolve("scope/leaky.yml"), """
+                version: tesseraql/v1
+                id: leaky
+                kind: scope
+                match:
+                  - when: { roles: [org-admin] }
+                    apply: all
+                """);
+        assertThat(scopeCodes(new AppLinter().lint(dir))).contains("TQL-SCOPE-3012");
+    }
 }
