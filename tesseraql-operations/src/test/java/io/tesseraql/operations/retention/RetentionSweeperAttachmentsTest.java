@@ -34,6 +34,38 @@ class RetentionSweeperAttachmentsTest {
         assertThat(new RetentionSweeper(null).sweepAttachments(Instant.now())).isZero();
     }
 
+    @Test
+    void aBlobDeleteFailureIsSurfacedNotSwallowedButStillCountsTheMetadata() {
+        // A failed blob delete (auth/network) is now an unrecoverable orphan — the sweep logs it
+        // (silent-tolerance O3) rather than swallowing it as "already removed"; the metadata count
+        // it returns is unchanged.
+        BlobStore failing = new BlobStore() {
+            @Override
+            public BlobWriter createWriter(BlobSpec spec) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public InputStream openInput(BlobRef ref) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public boolean exists(BlobRef ref) {
+                return true;
+            }
+
+            @Override
+            public void delete(BlobRef ref) {
+                throw new RuntimeException("access denied");
+            }
+        };
+        StubAttachmentStore store = new StubAttachmentStore(List.of("uploads/a"));
+        RetentionSweeper sweeper = new RetentionSweeper(null, store, failing);
+
+        assertThat(sweeper.sweepAttachments(Instant.now())).isEqualTo(1);
+    }
+
     private static final class RecordingBlobStore implements BlobStore {
         final List<String> deletedKeys = new ArrayList<>();
 
