@@ -25,8 +25,21 @@ public final class MailComposer {
     public record Block(String fragment, List<String> args) {
     }
 
-    /** The composed document: the layout's title/preheader expressions plus the blocks. */
-    public record Composition(String title, String preheader, List<Block> blocks) {
+    /**
+     * The composed document: the layout's title/preheader expressions plus the blocks, and any
+     * verbatim leading comment prelude (a scaffold-checksum marker or author note) captured so a
+     * save re-emits it rather than deleting it.
+     */
+    public record Composition(String title, String preheader, List<Block> blocks, String prelude) {
+
+        public Composition {
+            prelude = prelude == null ? "" : prelude;
+        }
+
+        /** A composition with no leading prelude. */
+        public Composition(String title, String preheader, List<Block> blocks) {
+            this(title, preheader, blocks, "");
+        }
     }
 
     private static final String LIBRARY = "tql/email/hc-email";
@@ -58,6 +71,10 @@ public final class MailComposer {
         if (template == null) {
             return Optional.empty();
         }
+        // Capture the leading comment prelude verbatim (e.g. the scaffold-checksum marker, whose
+        // deletion hands the file permanently to the user) so write() can re-emit it. Comments
+        // are still stripped for grammar matching, but the leading ones are no longer lost.
+        String prelude = leadingComments(template);
         String text = template.replaceAll("(?s)<!--.*?-->", "").trim();
         String wrapperOpen = "<div th:replace=\"~{" + LAYOUT + " :: hcLayout(";
         if (!text.startsWith(wrapperOpen) || !text.endsWith("</div>")) {
@@ -97,12 +114,26 @@ public final class MailComposer {
         if (!body.substring(consumed).isBlank()) {
             return Optional.empty();
         }
-        return Optional.of(new Composition(layoutArgs.get(0), layoutArgs.get(1), blocks));
+        return Optional.of(new Composition(layoutArgs.get(0), layoutArgs.get(1), blocks, prelude));
+    }
+
+    /** The verbatim run of leading HTML comments (and the whitespace between them). */
+    private static String leadingComments(String template) {
+        Matcher lead = Pattern.compile("\\A\\s*(?:<!--.*?-->\\s*)+", Pattern.DOTALL)
+                .matcher(template);
+        return lead.find() ? template.substring(0, lead.end()) : "";
     }
 
     /** The canonical template text — the same shape the composer's exporter emits. */
     public static String write(Composition composition) {
         StringBuilder out = new StringBuilder();
+        // Re-emit the captured prelude (scaffold-checksum marker / author note) so a save keeps it.
+        if (composition.prelude() != null && !composition.prelude().isBlank()) {
+            out.append(composition.prelude());
+            if (!composition.prelude().endsWith("\n")) {
+                out.append('\n');
+            }
+        }
         out.append("<div th:replace=\"~{").append(LAYOUT).append(" :: hcLayout(")
                 .append(composition.title()).append(",\n    ")
                 .append(composition.preheader()).append(", ~{:: content})}\">\n");
