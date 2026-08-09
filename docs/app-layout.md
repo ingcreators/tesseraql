@@ -16,7 +16,16 @@ web/                    routes; the directory tree mirrors the URL space one-to-
     get.yml
     search-table.sql
     table.html
+  items/                a declarative-view page (declarative-views.md)
+    get.yml             response.html.view references the document below by its id
+    list.view.yml       kind: view document, colocated; id-unique app-wide
 batch/                  job definitions (yml + colocated sql)
+domains/                field domains (declarative-validation.md): named field knowledge
+                        (type, bounds, classification, widget) referenced from input
+                        fields with domain:, plus the app constraint catalog
+rules/                  shared validation rule sets referenced from validate: with use:
+decisions/              decision tables referenced from decide: (declarative-validation.md)
+scope/                  data-scope definitions (data-scoping.md)
 db/migration/           Flyway-managed schema migrations (V1__name.sql, ...) for the main
                         datasource, applied when the app is mounted; per-app history table,
                         run per tenant pool in schema/database-per-tenant modes

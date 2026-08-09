@@ -141,6 +141,15 @@ test('domain, use, and decision values resolve under the cursor', () => {
   assert.equal(decision?.value, 'approvalRoute');
 });
 
+test('flow-map domain: and policy: values complete — the wave-4 input shape', () => {
+  // salary: { domain: salary, policy: hr.write } (docs/view-composition.md wave 4).
+  const line = '  salary: { domain: salary, policy: hr.write }';
+  assert.equal(completionKindAt(line, line.indexOf('salary,')), 'domain');
+  assert.equal(completionKindAt(line, line.indexOf(' }')), 'policy');
+  const open = '  salary: { domain: sal';
+  assert.equal(completionKindAt(open, open.length), 'domain');
+});
+
 test('completion kind is detected mid-typing', () => {
   assert.equal(completionKindAt('  policy: app.', 14), 'policy');
   assert.equal(completionKindAt('  message: ', 11), 'message');

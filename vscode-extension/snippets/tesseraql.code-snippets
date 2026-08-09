@@ -118,7 +118,7 @@
   },
   "TesseraQL dashboard view": {
     "prefix": "tql-view-dashboard",
-    "description": "A declarative dashboard: stat + kit chart + table panels (docs/declarative-views.md)",
+    "description": "A declarative dashboard: stat + kit chart + table panels; panels and detail children can also embed a registered view (docs/view-composition.md)",
     "body": [
       "version: tesseraql/v1",
       "id: ${1:overview}",
@@ -137,7 +137,22 @@
       "      - { column: ${10:value}, label: ${11:Value} }",
       "  - type: table",
       "    source: ${12:recent}",
-      "    title: ${13:Recent}"
+      "    title: ${13:Recent}",
+      "  # or embed a registered view: - { type: view, view: requests.recent }"
+    ]
+  },
+  "TesseraQL embedded-view panel": {
+    "prefix": "tql-view-embed",
+    "description": "Embed a registered view as a dashboard panel - the host route stays the data owner; detail children use { view: <id>, source: <query> } (docs/view-composition.md)",
+    "body": [
+      "- { type: view, view: ${1:requests.recent} }"
+    ]
+  },
+  "TesseraQL template views binding": {
+    "prefix": "tql-views",
+    "description": "Bind registered views to a hand-owned template route - each id lands in the template model as views['<id>'], inserted via ~{tql/view/list :: view(...)} (docs/view-composition.md)",
+    "body": [
+      "views: [${1:requests.recent}]"
     ]
   },
   "TesseraQL chart panel": {
