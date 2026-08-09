@@ -48,7 +48,7 @@ tesseraql scaffold crud --app . --table items
 
 ### First login
 
-Studio and the ops console sign in against the identity store, which is **not seeded** — while
+[Studio](studio.md) and [the ops console](ops-console.md) sign in against the identity store, which is **not seeded** — while
 no users exist, `serve` says so and prints this step. Create the first administrator once (in a
 second terminal, with `serve` still running):
 

@@ -1,6 +1,6 @@
 # Environments and promotion
 
-How an edit made in dev Studio reaches production: it travels through git, passes the CI
+How an edit made in dev [Studio](studio.md) reaches production: it travels through git, passes the CI
 gates, and lands as the same artifact configured per environment by a profile. Nothing here
 is new machinery — it composes the pieces the framework already ships.
 

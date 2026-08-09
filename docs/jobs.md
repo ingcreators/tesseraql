@@ -360,7 +360,7 @@ pipeline:
 - **`after:` runs in the extraction transaction.** `timing: download` stays route
   vocabulary — a job-produced file's download is an ops action, not a business signal
   (`TQL-YAML-1041` at build time).
-- **Retrieval is the operations console**: the transfers page links every completed
+- **Retrieval is the [operations console](ops-console.md)**: the transfers page links every completed
   export, and machine callers fetch
   `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under `ops.batch.view`. The
   step publishes `transferId`, `rows`, and `filename` into the step context, so a

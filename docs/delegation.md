@@ -82,7 +82,7 @@ again — no permission ever borrowed, no chain ever followed.
 
 ## The operator surface
 
-The IAM admin has a read-only **Active delegations** panel
+[IAM Admin](iam-admin.md) has a read-only **Active delegations** panel
 (`/_tesseraql/admin/delegations`): who is absent, who covers, until when — the
 operator's answer to "why did this land with X?".
 

@@ -1,6 +1,6 @@
 # Studio copilot
 
-An in-Studio chat panel that drives the framework's **existing gated loop** as tools.
+An in-[Studio](studio.md) chat panel that drives the framework's **existing gated loop** as tools.
 Describe → the copilot reads routes, sources, lint and schema, previews
 buffers — and, only when you hold an edit role, saves **drafts**. Nothing it does is served
 until you review and apply the draft in the editor's diff-confirm UI, and every

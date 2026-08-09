@@ -171,7 +171,7 @@ deterministic rejection, not a sign the dependency is down.
 
 A call is successful when its status is `2xx`, or equals `expectStatus` when one is declared;
 any other outcome fails the step (and so the job). The call is recorded as a
-`tesseraql.http.call` span in the job's trace, visible in the operations console.
+`tesseraql.http.call` span in the job's trace, visible in the [operations console](ops-console.md).
 
 ## Governance
 

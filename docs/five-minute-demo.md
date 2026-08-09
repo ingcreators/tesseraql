@@ -76,7 +76,7 @@ around — every stop is live against the seeded data:
    off CSV files and a price trend from the lake's snapshots, live database and analytics
    engine composing in one page. The product pages share your browser login (the demo
    app's JSON APIs stay `auth: bearer` for machine callers).
-7. **The close, end to end** — on the ops console's jobs page
+7. **The close, end to end** — on the [ops console](ops-console.md)'s jobs page
    (`/_tesseraql/ops/console/jobs`), run `pricing.loadSummary`: the ETL reads the CSV drop,
    lands the summary on the live database, and appends a lake snapshot — then the chained
    `pricing.dailyReport` writes the day's CSV and drops it in `outbox/reports/`. The
