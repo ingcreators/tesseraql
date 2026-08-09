@@ -92,6 +92,14 @@ class ErrorResponseRendererTest {
     }
 
     @Test
+    void aMalformedBatchRunBodyIsABadRequest() {
+        // TQL-BATCH-4043: a manual job-run with an unparseable JSON body is a 400, not a silent
+        // parameterless 202 (silent-tolerance O8).
+        assertThat(ErrorResponseRenderer.httpStatus(new TqlErrorCode(TqlDomain.BATCH, 4043)))
+                .isEqualTo(400);
+    }
+
+    @Test
     void htmxFragmentRendersTheGuardRefusalMessageAsTheAlertBody() throws Exception {
         Exchange exchange = exchangeWith(TqlException
                 .builder(new TqlErrorCode(TqlDomain.WORKFLOW, 3202))

@@ -439,7 +439,7 @@ public final class ErrorResponseRenderer implements Processor {
             // matching the JSON ops API's Not Found body for the same code.
             case BATCH -> switch (code.number()) {
                 case 4040 -> 404;
-                case 4041 -> 400;
+                case 4041, 4043 -> 400; // 4043: manual run body is not valid JSON
                 case 4042 -> 409; // cancel target is not running - nothing left to stop
                 default -> 500;
             };

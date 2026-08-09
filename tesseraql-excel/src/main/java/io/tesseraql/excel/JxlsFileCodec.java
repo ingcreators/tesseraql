@@ -81,10 +81,14 @@ public final class JxlsFileCodec implements FileCodec {
                         header.add(text(headerRow.getCell(i)));
                     }
                 }
-                List<ColumnMapping> columns = spec.columns().isEmpty() && header != null
-                        ? header.stream().map(ColumnMapping::of).toList()
-                        : spec.columns();
+                boolean declared = !spec.columns().isEmpty();
+                List<ColumnMapping> columns = declared || header == null
+                        ? spec.columns()
+                        : header.stream().map(ColumnMapping::of).toList();
                 int[] positions = Tables.positions(columns, header);
+                if (declared) {
+                    Tables.requireDeclaredHeadersMatched(columns, header, positions);
+                }
                 long rowNumber = 0;
                 while (iterator.hasNext()) {
                     org.dhatim.fastexcel.reader.Row row = iterator.next();
