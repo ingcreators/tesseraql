@@ -18,6 +18,9 @@ import java.util.Map;
  */
 public final class SecurityConfigFactory {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
+            .getLogger(SecurityConfigFactory.class);
+
     private SecurityConfigFactory() {
     }
 
@@ -98,7 +101,17 @@ public final class SecurityConfigFactory {
         if (spec instanceof Map<?, ?> map && map.get("anyOf") instanceof List<?> anyOf) {
             for (Object element : anyOf) {
                 if (element instanceof Map<?, ?> rule) {
-                    parseRule((Map<String, Object>) rule).ifPresent(rules::add);
+                    java.util.Optional<Policy.Rule> parsed = parseRule((Map<String, Object>) rule);
+                    if (parsed.isPresent()) {
+                        rules.add(parsed.get());
+                    } else {
+                        // An unrecognized rule shape (a typo'd role:/permission:/claim:) was
+                        // dropped silently — a policy whose anyOf rules are all unrecognized
+                        // becomes deny-all, and an operator debugging the 403 had nothing to go on.
+                        LOG.warn("Security policy '{}' has an unrecognized rule (keys: {}) — it is "
+                                + "ignored; a policy with no rules denies everyone", id,
+                                ((Map<?, ?>) rule).keySet());
+                    }
                 }
             }
         }

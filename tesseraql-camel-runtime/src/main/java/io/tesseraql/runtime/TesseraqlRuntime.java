@@ -4289,6 +4289,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         try (java.sql.Connection connection = dataSource.getConnection()) {
             return connection.isValid(2);
         } catch (Exception ex) {
+            // The health roll-up only sees false; without this the operator gets a DOWN with no
+            // diagnosable cause (bad credentials, network, missing driver all look identical).
+            LOG.warn("Datasource health probe failed", ex);
             return false;
         }
     }
