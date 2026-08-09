@@ -10,10 +10,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-/** One registered view document: its id and the home-relative source path. */
+/** One registered view document: its id, home-relative source path, and the id line. */
 export interface ViewDocument {
   id: string;
   source: string;
+  /** 0-based line of the explicit top-level `id:` (0 when filename-derived). */
+  idLine: number;
 }
 
 const VIEW_SUFFIX = '.view.yml';
@@ -27,15 +29,23 @@ const VIEW_ROOTS = ['web', 'templates'] as const;
  * no YAML semantics enter the extension.
  */
 export function viewIdOf(fileName: string, content: string): string {
-  for (const line of content.split('\n')) {
-    const match = /^id:\s*(["']?)([^\s#"']+)\1\s*(?:#.*)?$/u.exec(line);
+  return viewIdInfoOf(fileName, content).id;
+}
+
+/** {@link viewIdOf} plus the 0-based line the id was declared on (0 when derived). */
+export function viewIdInfoOf(fileName: string, content: string):
+    { id: string; idLine: number } {
+  const lines = content.split('\n');
+  for (let index = 0; index < lines.length; index++) {
+    const match = /^id:\s*(["']?)([^\s#"']+)\1\s*(?:#.*)?$/u.exec(lines[index]);
     if (match !== null) {
-      return match[2];
+      return { id: match[2], idLine: index };
     }
   }
-  return fileName.endsWith(VIEW_SUFFIX)
+  const id = fileName.endsWith(VIEW_SUFFIX)
       ? fileName.slice(0, fileName.length - VIEW_SUFFIX.length)
       : fileName;
+  return { id, idLine: 0 };
 }
 
 /**
@@ -66,12 +76,12 @@ export function scanViewDocuments(home: string): ViewDocument[] {
       } catch {
         continue;
       }
-      const id = viewIdOf(path.basename(file), content);
+      const { id, idLine } = viewIdInfoOf(path.basename(file), content);
       if (seen.has(id)) {
         continue;
       }
       seen.add(id);
-      views.push({ id, source: [root, ...entry.split(path.sep)].join('/') });
+      views.push({ id, idLine, source: [root, ...entry.split(path.sep)].join('/') });
     }
   }
   return views;
@@ -99,13 +109,43 @@ export type ViewCompletionContext =
   | { kind: 'widget' };
 
 /**
+ * Whether a `- <id>` line is an item of a `views:` block sequence — the alternative
+ * spelling of the wave-2c binding list. Line-based like every context here: walk up
+ * past blank/comment lines and same-indent sibling items; the first other line must
+ * be a less-indented `views:` key.
+ */
+export function isViewsSequenceItem(lineText: string,
+    linesAbove: readonly string[]): boolean {
+  if (!/^\s*-\s*["']?[\p{L}\p{N}_.-]*$/u.test(lineText)) {
+    return false;
+  }
+  const itemIndent = /^\s*/.exec(lineText)![0].length;
+  for (let index = linesAbove.length - 1; index >= 0; index--) {
+    const above = linesAbove[index];
+    if (/^\s*(#|$)/.test(above)) {
+      continue;
+    }
+    if (/^\s*-\s/.test(above)) {
+      if (/^\s*/.exec(above)![0].length === itemIndent) {
+        continue;
+      }
+      return false;
+    }
+    const key = /^(\s*)views:\s*(#.*)?$/.exec(above);
+    return key !== null && key[1].length < itemIndent;
+  }
+  return false;
+}
+
+/**
  * The completion context of a cursor inside the view-composition surface. `view:` and
  * `widget:` match in block form and inside flow maps (`- { type: view, view: … }`);
- * `views:` matches inside its flow list. Identifier runs are Unicode
- * (docs/unicode-identifiers.md) — a half-typed Japanese view id keeps its context.
+ * `views:` matches inside its flow list and — given {@code linesAbove} — as a block
+ * sequence. Identifier runs are Unicode (docs/unicode-identifiers.md) — a half-typed
+ * Japanese view id keeps its context.
  */
-export function viewCompletionAt(lineText: string, character: number):
-    ViewCompletionContext | undefined {
+export function viewCompletionAt(lineText: string, character: number,
+    linesAbove?: readonly string[]): ViewCompletionContext | undefined {
   const head = lineText.slice(0, character);
   // response.html.view:, a `type: view` panel entry, or a detail child.
   if (/(?:^\s*(?:-\s+)?|[{,]\s*)view:\s*["']?[\p{L}\p{N}_.-]*$/u.test(head)) {
@@ -115,11 +155,64 @@ export function viewCompletionAt(lineText: string, character: number):
   if (/^\s*views:\s*\[(?:[^\]#]*,)?\s*["']?[\p{L}\p{N}_.-]*$/u.test(head)) {
     return { kind: 'view-id' };
   }
+  // views: as a block sequence — `- <partial>` under a less-indented views: key.
+  if (linesAbove !== undefined && /^\s*-\s*["']?[\p{L}\p{N}_.-]*$/u.test(head)
+      && isViewsSequenceItem(head, linesAbove)) {
+    return { kind: 'view-id' };
+  }
   if (/^\s*shell:\s*["']?[a-z]*$/.test(head)) {
     return { kind: 'shell' };
   }
   if (/(?:^\s*(?:-\s+)?|[{,]\s*)widget:\s*["']?[a-z-]*$/.test(head)) {
     return { kind: 'widget' };
+  }
+  return undefined;
+}
+
+/** A view-id reference under the cursor, with its exact span. */
+export interface ViewReference {
+  id: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * The view-id reference the cursor sits on — the go-to-definition counterpart of
+ * {@link viewCompletionAt}: `view: <id>` (block form or inside a flow map), an id
+ * inside `views: [ ... ]`, or a `- <id>` item of a `views:` block sequence.
+ */
+export function viewReferenceAt(lineText: string, character: number,
+    linesAbove?: readonly string[]): ViewReference | undefined {
+  // view: <id> — anywhere on the line, but never a longer key like preview:.
+  for (const match of lineText.matchAll(
+      /(?<![\p{L}\p{N}_.-])view:\s*(["']?)([\p{L}\p{N}_.-]+)\1/gu)) {
+    const start = match.index + match[0].length - match[2].length - match[1].length;
+    const end = start + match[2].length;
+    if (character >= start && character <= end) {
+      return { id: match[2], start, end };
+    }
+  }
+  const flowList = /^(\s*views:\s*\[)/.exec(lineText);
+  if (flowList !== null) {
+    for (const match of lineText.slice(flowList[1].length)
+        .matchAll(/[\p{L}\p{N}_.-]+/gu)) {
+      const start = flowList[1].length + match.index;
+      const end = start + match[0].length;
+      if (character >= start && character <= end) {
+        return { id: match[0], start, end };
+      }
+    }
+    return undefined;
+  }
+  if (linesAbove !== undefined && isViewsSequenceItem(lineText, linesAbove)) {
+    const item = /^(\s*-\s*["']?)([\p{L}\p{N}_.-]+)/u.exec(lineText);
+    if (item !== null) {
+      const start = item[1].length;
+      const end = start + item[2].length;
+      if (character >= start && character <= end) {
+        return { id: item[2], start, end };
+      }
+    }
   }
   return undefined;
 }
