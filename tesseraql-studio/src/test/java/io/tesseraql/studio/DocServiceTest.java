@@ -222,6 +222,27 @@ class DocServiceTest {
         assertThat(service.hasSchemaBaseline()).isTrue();
         assertThat(service.schemaDiffDdl())
                 .isEqualTo("ALTER TABLE users ADD COLUMN email varchar(320);\n");
+        assertThat(service.schemaBaselineCorrupt()).isFalse();
+    }
+
+    @Test
+    void schemaBaselineCorruptDistinguishesAnUnreadableBaselineFromAnAbsentOne(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: demo\n");
+        // Absent baseline: not corrupt (schemaDiffDdl is null = a legitimate "no baseline").
+        DocService absent = new DocService(new ManifestLoader().load(dir));
+        assertThat(absent.schemaBaselineCorrupt()).isFalse();
+
+        // Corrupt baseline: schemaDiffDdl still degrades to null, but this predicate now says why,
+        // so the migration page names the problem instead of reading it as "no changes".
+        Files.createDirectories(dir.resolve(".tesseraql/docs"));
+        Files.writeString(dir.resolve(".tesseraql/docs/schema.baseline.json"), "{ not json");
+        DocService corrupt = new DocService(new ManifestLoader().load(dir));
+        assertThat(corrupt.hasSchemaBaseline()).isTrue();
+        assertThat(corrupt.schemaDiffDdl()).isNull();
+        assertThat(corrupt.schemaBaselineCorrupt()).isTrue();
     }
 
     @Test
