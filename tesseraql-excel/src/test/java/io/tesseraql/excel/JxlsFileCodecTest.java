@@ -202,7 +202,7 @@ class JxlsFileCodecTest {
                 .drain(store, rows.iterator())) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             codec.write(out, new FileWriteSpec(List.of(), null, template, null, null, null, null,
-                    "dept"),
+                    "dept", null),
                     io.tesseraql.core.files.ExportModel.repeatable(spooled, Map.of()));
 
             try (XSSFWorkbook workbook = new XSSFWorkbook(

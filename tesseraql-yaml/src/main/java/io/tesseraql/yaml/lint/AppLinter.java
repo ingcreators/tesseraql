@@ -5229,13 +5229,23 @@ public final class AppLinter {
                         + " section missing, so an export whose source failed should fail"));
             }
         });
+        if (spec.splitBy() != null && !spec.splitBy().isBlank()) {
+            String filename = spec.filename();
+            if (filename == null || !filename.contains("{key}")) {
+                findings.add(new LintFinding("TQL-YAML-1006", "error", source, label
+                        + "splitBy: writes one document per group, so filename: must carry {key}"
+                        + " - otherwise every group would be written to the same name and only"
+                        + " the last would survive"));
+            }
+            lintGroupOrdering(spec, extractionSql, spec.splitBy(), label, source, findings);
+        }
         if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
             if (spec.template() == null) {
                 findings.add(new LintFinding("TQL-LD-5312", "warning", source, label
                         + "export declares groupBy: but no template: - a " + spec.format()
                         + " export writes rows and nothing else, so the groups have no reader"));
             }
-            lintGroupOrdering(spec, extractionSql, label, source, findings);
+            lintGroupOrdering(spec, extractionSql, spec.groupBy(), label, source, findings);
         }
         boolean templated = spec.template() != null;
         if (templated || (spec.queries().isEmpty() && httpSources.isEmpty())) {
@@ -5270,7 +5280,8 @@ public final class AppLinter {
      * shape the mail lints already use — a heuristic, hence a warning.
      */
     private void lintGroupOrdering(io.tesseraql.yaml.model.ExportSpec spec,
-            java.nio.file.Path sql, String label, String source, List<LintFinding> findings) {
+            java.nio.file.Path sql, String column, String label, String source,
+            List<LintFinding> findings) {
         if (sql == null || !Files.isRegularFile(sql)) {
             return;
         }
@@ -5282,12 +5293,11 @@ public final class AppLinter {
         }
         int orderBy = text.lastIndexOf("order by");
         if (orderBy >= 0
-                && text.substring(orderBy).contains(spec.groupBy().toLowerCase(
-                        java.util.Locale.ROOT))) {
+                && text.substring(orderBy).contains(column.toLowerCase(java.util.Locale.ROOT))) {
             return;
         }
         findings.add(new LintFinding("TQL-LD-5311", "warning", source, label
-                + "export groups by '" + spec.groupBy() + "' but its query has no order by"
+                + "export groups by '" + column + "' but its query has no order by"
                 + " naming that column - the runtime detects group boundaries on a single pass,"
                 + " so unordered rows fail rather than writing one group as several"));
     }

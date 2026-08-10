@@ -47,6 +47,9 @@ import java.util.List;
  *                   out. A streaming format is never capped
  *                   (docs/export-pipeline.md, decision 7)
  * @param onOverflow {@code fail} (default) or {@code warn}, which truncates at the cap
+ * @param splitBy    a column that splits the export into one document per value, delivered as a
+ *                   single ZIP; {@code filename} must carry {@code {key}}
+ *                   (docs/export-pipeline.md, decision 12)
  * @param groupBy    a column the rows are grouped by, exposed to the template as {@code groups};
  *                   the extraction must be ordered by it (docs/export-pipeline.md, decision 3)
  * @param queries    named queries a template composes around the rows — the order header, the
@@ -58,7 +61,7 @@ import java.util.List;
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
         SqlBinding sql, AfterSpec after, Integer maxRows, String onOverflow,
-        java.util.Map<String, SqlBinding> queries, String groupBy) {
+        java.util.Map<String, SqlBinding> queries, String groupBy, String splitBy) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
@@ -76,7 +79,7 @@ public record ExportSpec(String format, String filename, String template, String
                 startCell == null || startCell.isBlank()
                         ? null
                         : io.tesseraql.core.files.CellRef.parse(startCell),
-                resources, null, null, groupBy);
+                resources, null, null, groupBy, splitBy);
     }
 
     /**
