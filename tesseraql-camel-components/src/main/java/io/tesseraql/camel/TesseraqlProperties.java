@@ -29,6 +29,8 @@ public final class TesseraqlProperties {
     public static final String EXPORT_CODEC = "TesseraqlExportCodec";
     /** The {@code FileWriteSpec} (columns, formats, resolved locale/zone) for {@code query-export}. */
     public static final String EXPORT_SPEC = "TesseraqlExportSpec";
+    /** The {@code ExportRowCap} a buffering codec's export runs under (export-pipeline, dec. 7). */
+    public static final String EXPORT_ROW_CAP = "TesseraqlExportRowCap";
     public static final String TENANT_DATASOURCE_RESOLVER_BEAN = "tesseraqlTenantDataSources";
     /** The data-scope resolver expanding {@code /*%scope%/} directives (roadmap Phase 29). */
     public static final String SCOPE_RESOLVER_BEAN = "tesseraqlScopeResolver";

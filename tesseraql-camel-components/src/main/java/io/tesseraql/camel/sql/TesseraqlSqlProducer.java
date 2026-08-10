@@ -245,7 +245,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 // The writer closes first (listed first); toRef() is only valid after close.
                 try (writer; ResultSet resultSet = statement.executeQuery()) {
                     codec.write(new SpoolOutputStream(writer), spec,
-                            new ResultRows(resultSet, writer));
+                            new ResultRows(resultSet, writer, rowCap(exchange, codec, spec)));
                 }
                 ref = writer.toRef();
             } finally {
@@ -282,17 +282,36 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         });
     }
 
+    /**
+     * The cap this export runs under: the route's declaration, but only where the codec holds the
+     * rows for this spec (docs/export-pipeline.md, decisions 6 and 7). A streaming export
+     * accumulates nothing, so a ceiling there would exist only to be raised.
+     */
+    private static io.tesseraql.core.files.ExportRowCap rowCap(Exchange exchange, FileCodec codec,
+            FileWriteSpec spec) {
+        if (codec.streams(spec)) {
+            return io.tesseraql.core.files.ExportRowCap.unbounded();
+        }
+        io.tesseraql.core.files.ExportRowCap cap = exchange.getProperty(
+                TesseraqlProperties.EXPORT_ROW_CAP, io.tesseraql.core.files.ExportRowCap.class);
+        return cap != null ? cap : io.tesseraql.core.files.ExportRowCap.unbounded();
+    }
+
     /** Streams result-set rows to the codec as label-normalized maps, counting them as read. */
     private final class ResultRows implements java.util.Iterator<Map<String, Object>> {
 
         private final ResultSet resultSet;
         private final SpoolWriter writer;
+        private final io.tesseraql.core.files.ExportRowCap cap;
         private final List<String> labels = new ArrayList<>();
         private Boolean pending;
+        private long written;
 
-        ResultRows(ResultSet resultSet, SpoolWriter writer) throws java.sql.SQLException {
+        ResultRows(ResultSet resultSet, SpoolWriter writer,
+                io.tesseraql.core.files.ExportRowCap cap) throws java.sql.SQLException {
             this.resultSet = resultSet;
             this.writer = writer;
+            this.cap = cap;
             ResultSetMetaData metaData = resultSet.getMetaData();
             for (int col = 1; col <= metaData.getColumnCount(); col++) {
                 labels.add(io.tesseraql.core.dialect.Labels.normalize(
@@ -306,7 +325,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 if (pending == null) {
                     pending = resultSet.next();
                 }
-                return pending;
+                // The cap is asked before the row is handed over, so warn mode truncates cleanly
+                // and fail mode raises before the codec has accepted a row it cannot hold.
+                return pending && cap.admits(written);
             } catch (java.sql.SQLException ex) {
                 throw executionError(ex);
             }
@@ -326,6 +347,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     row.put(labels.get(col - 1), resultSet.getObject(col));
                 }
                 writer.incrementRows(1);
+                written++;
                 return row;
             } catch (java.sql.SQLException ex) {
                 throw executionError(ex);

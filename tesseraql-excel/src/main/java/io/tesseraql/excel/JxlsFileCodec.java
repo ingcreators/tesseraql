@@ -157,6 +157,15 @@ public final class JxlsFileCodec implements FileCodec {
         }
     }
 
+    /**
+     * The grid streams through fastexcel's writer; both template modes hold the workbook (and, in
+     * report mode, the rows) in memory, so they are capped (docs/export-pipeline.md, decision 6).
+     */
+    @Override
+    public boolean streams(FileWriteSpec spec) {
+        return spec.template() == null;
+    }
+
     private static Sheet sheet(Workbook workbook, String name) {
         Sheet sheet = name == null || name.isBlank()
                 ? workbook.getSheetAt(0)

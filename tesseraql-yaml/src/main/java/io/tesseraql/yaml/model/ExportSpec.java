@@ -41,11 +41,17 @@ import java.util.List;
  * @param columns   column selection/order, header labels and placement positions
  * @param sql       the extraction query
  * @param after     optional follow-up statement and its timing
+ * @param maxRows    the ceiling for a format that holds every row before it writes (pdf, and the
+ *                   workbook template modes); defaults to
+ *                   {@code tesseraql.resultMaterialization.maxRows}, and a negative value opts
+ *                   out. A streaming format is never capped
+ *                   (docs/export-pipeline.md, decision 7)
+ * @param onOverflow {@code fail} (default) or {@code warn}, which truncates at the cap
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
-        SqlBinding sql, AfterSpec after) {
+        SqlBinding sql, AfterSpec after, Integer maxRows, String onOverflow) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);

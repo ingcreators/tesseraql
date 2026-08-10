@@ -28,10 +28,19 @@ public interface FileTransferService {
             Path rowSqlFile, String onError) {
     }
 
-    /** An export to generate: the query streams into the file; {@code afterSqlFile} optional. */
+    /**
+     * An export to generate: the query streams into the file; {@code afterSqlFile} optional.
+     *
+     * @param rowCap the ceiling a buffering codec's export runs under, unbounded for a streaming
+     *               one (docs/export-pipeline.md, decision 7)
+     */
     record ExportRequest(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, Path querySqlFile, Map<String, Object> params,
-            String afterTiming, Path afterSqlFile) {
+            String afterTiming, Path afterSqlFile, ExportRowCap rowCap) {
+
+        public ExportRequest {
+            rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
+        }
     }
 
     /** One rejected import row. */
@@ -76,7 +85,11 @@ public interface FileTransferService {
      */
     record InlineExport(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, io.tesseraql.core.sql.BoundSql query,
-            io.tesseraql.core.sql.BoundSql afterExtract) {
+            io.tesseraql.core.sql.BoundSql afterExtract, ExportRowCap rowCap) {
+
+        public InlineExport {
+            rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
+        }
     }
 
     /** The produced transfer: its id (also the download handle) and the row count written. */

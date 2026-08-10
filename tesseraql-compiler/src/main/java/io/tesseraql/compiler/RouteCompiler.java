@@ -802,7 +802,8 @@ public final class RouteCompiler {
                         formatDeclaration(spec == null ? null : spec.locale(),
                                 "tesseraql.files.locale"),
                         formatDeclaration(spec == null ? null : spec.timezone(),
-                                "tesseraql.files.timezone")))
+                                "tesseraql.files.timezone"),
+                        declaredExportRowCap(spec, format)))
                 .to(sqlUri);
     }
 
@@ -861,7 +862,8 @@ public final class RouteCompiler {
                         spec.toWriteSpec(template, appHome),
                         formatDeclaration(spec.locale(), "tesseraql.files.locale"),
                         formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
-                        spec.filename(), querySql, afterTiming, afterSql));
+                        spec.filename(), querySql, afterTiming, afterSql,
+                        declaredExportRowCap(spec, spec.format())));
         mountTransferStatus(builder, routeFile, routeId);
 
         String fileDirect = "direct:" + routeId + ".file";
@@ -1458,6 +1460,25 @@ public final class RouteCompiler {
                 .orElse("fail");
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds(
                 timeout, maxRows, onOverflow);
+    }
+
+    /**
+     * The ceiling an export declares (docs/export-pipeline.md, decision 7): the export's own
+     * override, then the materializing-query configuration, then the default. Whether it applies
+     * at all is the executing path's question, asked of the codec through
+     * {@link io.tesseraql.core.files.FileCodec#streams} — a streaming export is never capped.
+     */
+    private io.tesseraql.core.files.ExportRowCap declaredExportRowCap(
+            io.tesseraql.yaml.model.ExportSpec spec, String format) {
+        int maxRows = spec != null && spec.maxRows() != null
+                ? spec.maxRows()
+                : config.getString("tesseraql.resultMaterialization.maxRows")
+                        .map(Integer::parseInt)
+                        .orElse(DEFAULT_MAX_ROWS);
+        String onOverflow = spec != null && spec.onOverflow() != null
+                ? spec.onOverflow()
+                : config.getString("tesseraql.resultMaterialization.onOverflow").orElse("fail");
+        return new io.tesseraql.core.files.ExportRowCap(maxRows, onOverflow, format);
     }
 
     /** Resolves the effective row cap: route override, then global config, then default (ch. 28.7). */

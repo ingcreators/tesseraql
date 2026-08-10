@@ -713,6 +713,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // longest anything goes unnoticed — nobody is waiting for the response.
                 .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
                         .map(Integer::parseInt).orElse(30))
+                // A job has no request to read configuration from, so the export step's default
+                // ceiling arrives the same way its timeout does (docs/export-pipeline.md, dec. 7).
+                .exportRowBounds(
+                        manifest.config().getString("tesseraql.resultMaterialization.maxRows")
+                                .map(Integer::parseInt).orElse(10_000),
+                        manifest.config().getString("tesseraql.resultMaterialization.onOverflow")
+                                .orElse("fail"))
                 .notificationOutbox(outboxStore)
                 // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
                 .preferenceStore(preferences)

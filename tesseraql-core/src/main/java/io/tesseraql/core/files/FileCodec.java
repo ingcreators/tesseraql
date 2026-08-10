@@ -29,4 +29,20 @@ public interface FileCodec {
     /** Writes the rows (column-name-to-value maps) to the output. */
     void write(OutputStream out, FileWriteSpec spec, Iterator<Map<String, Object>> rows)
             throws IOException;
+
+    /**
+     * Whether this codec writes the rows through as they arrive for the given spec, rather than
+     * holding them (docs/export-pipeline.md, decision 6).
+     *
+     * <p>The answer takes the spec because one codec can have modes that differ: the Excel codec
+     * streams a plain grid and buffers both of its template modes, so a per-format flag would have
+     * to be wrong for two of the three. A codec that buffers is exactly as exposed as a
+     * materializing query, so an export through it is capped ({@link ExportRowCap}); a streaming
+     * one is not, because nothing accumulates and a ceiling there would exist only to be raised.
+     *
+     * <p>Defaults to true: a codec that holds rows is the exception and should say so.
+     */
+    default boolean streams(FileWriteSpec spec) {
+        return true;
+    }
 }
