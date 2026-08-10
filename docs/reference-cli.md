@@ -5,7 +5,7 @@ Every `tesseraql` subcommand, generated from the command model the binary itself
 
 Most commands take `--app <dir>`, the application home they act on. Every subcommand calls the same engine as the matching Maven goal, so a CLI loop and a CI pipeline do the same work.
 
-[`serve`](#serve) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
+[`serve`](#serve) · [`host`](#host) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
 
 ## `serve`
 
@@ -23,6 +23,16 @@ Start the runtime and serve the app over HTTP.
 | `--embedded-db <data-dir>` | — | Run with an embedded PostgreSQL (no external database). Pass a directory to persist data across restarts; omit it for an ephemeral run. |
 | `--embedded-db-port <port>` | — | Bind the embedded PostgreSQL to a fixed TCP port (default: a random free port chosen at startup). Use it to connect a local client (e.g. psql) at a stable address. Listens on localhost only. |
 | `--embedded-db-version <version>` | — | Pin the embedded PostgreSQL binary version (e.g. 17.10.0). Default: the CLI's built-in version, or, for a persistent data directory, the version it was created with. A persistent directory records the version that ran it and re-resolves that version on later starts, so bumping the default never breaks an existing directory. |
+
+## `host`
+
+Serve every installed app from one port, each in its own runtime.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `--install-root <installRoot>` | yes | Directory holding catalog.json and the installed app trees. |
+| `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
+| `--mode <suite\|isolated>` | — | suite: one origin, /apps/<id>/ per app, one session across them. isolated: a hostname per app, sessions not shared. Default suite. |
 
 ## `routes`
 

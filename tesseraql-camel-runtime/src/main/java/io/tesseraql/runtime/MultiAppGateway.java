@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import java.io.IOException;
@@ -32,6 +33,29 @@ import org.slf4j.LoggerFactory;
  */
 public final class MultiAppGateway implements AutoCloseable {
 
+    /**
+     * How the gateway addresses the apps behind it — a deployment's choice, not a per-app one
+     * (docs/app-isolation-model.md decision 2).
+     *
+     * <p>The two are exclusive on purpose. Serving both at once means an app reached on its own
+     * hostname is *also* reachable on the shared origin, so a browser session taken through the
+     * prefix carries across every app the gateway fronts — which is exactly the separation
+     * declaring hostnames was meant to obtain. Whichever mode is chosen, the other addressing
+     * answers 404.
+     */
+    public enum Mode {
+        /**
+         * One origin, {@code /apps/<appId>/} per app: related applications of one organization,
+         * sharing a session by design.
+         */
+        SUITE,
+        /**
+         * A hostname per app: applications that must not see each other's sessions. Every app
+         * must declare at least one hostname, or it would have no address at all.
+         */
+        ISOLATED
+    }
+
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppGateway.class);
     private static final String PREFIX = "/apps/";
 
@@ -48,6 +72,10 @@ public final class MultiAppGateway implements AutoCloseable {
 
     /** TQL-APP-5020: the gateway failed to forward the request to the app's runtime (HTTP 502). */
     private static final String GATEWAY_ERROR = "TQL-APP-5020";
+
+    /** An isolated-hosting app that declares no hostname would be started and unreachable. */
+    private static final io.tesseraql.core.error.TqlErrorCode NO_HOSTNAME = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.APP, 5003);
 
     private final MultiAppHost host;
     private final HttpServer server;
@@ -91,11 +119,13 @@ public final class MultiAppGateway implements AutoCloseable {
      * authoritative one (docs/app-isolation-model.md decision 3).
      */
     private final Map<String, Set<String>> ingressStripByApp;
+    private final Mode mode;
 
     private MultiAppGateway(MultiAppHost host, HttpServer server, List<InstalledApp> hostedApps,
-            java.nio.file.Path installRoot) {
+            java.nio.file.Path installRoot, Mode mode) {
         this.host = host;
         this.server = server;
+        this.mode = mode;
         Map<String, String> hosts = new java.util.HashMap<>();
         Map<String, InstalledApp> byId = new java.util.HashMap<>();
         Map<String, Set<String>> strip = new java.util.HashMap<>();
@@ -119,15 +149,34 @@ public final class MultiAppGateway implements AutoCloseable {
         server.start();
     }
 
-    /** Hosts all catalogued apps and fronts them on {@code frontPort} (0 picks an ephemeral port). */
-    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort) {
+    /**
+     * Hosts all catalogued apps and fronts them on {@code frontPort} (0 picks an ephemeral port),
+     * addressed as {@code mode} says.
+     *
+     * <p>{@link Mode#ISOLATED} refuses to start when an app declares no hostname: it would be
+     * catalogued, started, and unreachable — a silence worth failing on, since the deployment
+     * that chose per-host addressing is the one that cares about which app answers where.
+     */
+    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort, Mode mode) {
+        List<InstalledApp> catalogued = new AppCatalog(installRoot).list();
+        if (mode == Mode.ISOLATED) {
+            List<String> addressless = catalogued.stream()
+                    .filter(app -> app.hosts().isEmpty())
+                    .map(InstalledApp::id)
+                    .toList();
+            if (!addressless.isEmpty()) {
+                throw new TqlException(NO_HOSTNAME, "Isolated hosting addresses each app by"
+                        + " hostname, and these declare none: " + String.join(", ", addressless)
+                        + ". Declare hostnames in the catalog, or host them as a suite.");
+            }
+        }
         MultiAppHost host = MultiAppHost.start(installRoot);
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(frontPort), 0);
-            List<InstalledApp> hosted = new AppCatalog(installRoot).list().stream()
+            List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))
                     .toList();
-            return new MultiAppGateway(host, server, hosted, installRoot);
+            return new MultiAppGateway(host, server, hosted, installRoot, mode);
         } catch (IOException ex) {
             host.close();
             throw new UncheckedIOException(ex);
@@ -170,11 +219,11 @@ public final class MultiAppGateway implements AutoCloseable {
 
             String appId;
             String downstreamPath;
-            if (hostApp != null) {
+            if (mode == Mode.ISOLATED && hostApp != null) {
                 // Host-based: the matched app owns the whole address, forward the path unchanged.
                 appId = hostApp;
                 downstreamPath = rawPath.isEmpty() ? "/" : rawPath;
-            } else if (rawPath.startsWith(PREFIX)) {
+            } else if (mode == Mode.SUITE && rawPath.startsWith(PREFIX)) {
                 String remainder = rawPath.substring(PREFIX.length());
                 int slash = remainder.indexOf('/');
                 appId = slash < 0 ? remainder : remainder.substring(0, slash);
