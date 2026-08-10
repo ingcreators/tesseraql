@@ -116,6 +116,11 @@ public final class JobExecutor {
      * is precisely the place a runaway statement goes unnoticed longest: nobody is waiting for
      * the response.
      */
+    public JobExecutor sqlTimeoutSeconds(int seconds) {
+        this.sqlTimeoutSeconds = Math.max(0, seconds);
+        return this;
+    }
+
     /**
      * The materializing-result bounds a step's {@code export:} inherits when it declares none of
      * its own (docs/export-pipeline.md, decision 7). A job has no request to read configuration
@@ -134,11 +139,6 @@ public final class JobExecutor {
                 export.maxRows() != null ? export.maxRows() : exportMaxRows,
                 export.onOverflow() != null ? export.onOverflow() : exportOnOverflow,
                 export.format());
-    }
-
-    public JobExecutor sqlTimeoutSeconds(int seconds) {
-        this.sqlTimeoutSeconds = Math.max(0, seconds);
-        return this;
     }
 
     /** Wires the outbox store {@code notify:} steps enqueue on (roadmap Phase 20). */
