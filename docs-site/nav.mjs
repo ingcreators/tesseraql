@@ -211,4 +211,6 @@ export const EXCLUDED = [
   // The house style the documentation is written to: a contributor convention, not a
   // page an application author needs.
   'style-guide.md',
+  // Application isolation model (which multi-app mechanism serves what), 2026-08-10.
+  'app-isolation-model.md',
 ];
