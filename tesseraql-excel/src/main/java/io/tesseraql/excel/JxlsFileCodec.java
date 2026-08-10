@@ -145,15 +145,17 @@ public final class JxlsFileCodec implements FileCodec {
     }
 
     @Override
-    public void write(OutputStream out, FileWriteSpec spec, Iterator<Map<String, Object>> rows)
-            throws IOException {
+    public void write(OutputStream out, FileWriteSpec spec,
+            io.tesseraql.core.files.ExportModel model) throws IOException {
         boolean hasTemplate = spec.template() != null && Files.isRegularFile(spec.template());
         if (hasTemplate && spec.startCell() != null) {
-            writePlacement(out, spec, rows);
+            // Placement walks the rows once, but its mode is declared as buffering because the
+            // template workbook is held whole — so the re-readable source is the one it is given.
+            writePlacement(out, spec, model.repeatableRows().iterator());
         } else if (hasTemplate) {
-            writeWithJxlsTemplate(out, spec, rows);
+            writeWithJxlsTemplate(out, spec, model.repeatableRows());
         } else {
-            writeGrid(out, spec, rows);
+            writeGrid(out, spec, model.rows());
         }
     }
 
@@ -307,14 +309,16 @@ public final class JxlsFileCodec implements FileCodec {
         return styles;
     }
 
-    /** Report mode: the jxls template iterates the materialized rows as {@code rows}. */
+    /**
+     * Report mode: the jxls template drives its own iteration over {@code rows}. jxls's
+     * EachCommand iterates an Iterable, so the re-readable row set goes in as it is — a template
+     * may walk it more than once, and nothing is collected into a list to allow that.
+     */
     private static void writeWithJxlsTemplate(OutputStream out, FileWriteSpec spec,
-            Iterator<Map<String, Object>> rows) throws IOException {
-        List<Map<String, Object>> data = new ArrayList<>();
-        rows.forEachRemaining(data::add);
+            Iterable<Map<String, Object>> rows) throws IOException {
         // jxls adds its loop variables to the context, so the map must be mutable.
         Map<String, Object> context = new LinkedHashMap<>();
-        context.put("rows", data);
+        context.put("rows", rows);
         try (InputStream template = Files.newInputStream(spec.template())) {
             JxlsPoiTemplateFillerBuilder.newInstance()
                     .withTemplate(template)

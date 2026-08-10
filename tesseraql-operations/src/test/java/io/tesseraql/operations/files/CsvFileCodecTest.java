@@ -81,7 +81,8 @@ class CsvFileCodecTest {
                 new ColumnMapping("held_on", null, null, null, "yyyy/MM/dd HH:mm"),
                 new ColumnMapping("fee", null, null, "number", "#,##0.00")),
                 null, null, null, "de-DE", "Asia/Tokyo"),
-                List.of(row).iterator());
+                io.tesseraql.core.files.ExportModel.streaming(List.of(row).iterator(),
+                        java.util.Map.of()));
 
         assertThat(out.toString(StandardCharsets.UTF_8))
                 .contains("2026/06/11 08:30") // rendered in the transfer's time zone
@@ -97,7 +98,8 @@ class CsvFileCodecTest {
         codec.write(out, new FileWriteSpec(List.of(
                 new ColumnMapping("productName", "商品名", null),
                 new ColumnMapping("qty", "数量", null)), null, null, null),
-                List.of(row).iterator());
+                io.tesseraql.core.files.ExportModel.streaming(List.of(row).iterator(),
+                        java.util.Map.of()));
 
         assertThat(out.toString(StandardCharsets.UTF_8))
                 .startsWith("商品名,数量")

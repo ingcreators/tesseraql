@@ -48,7 +48,8 @@ class PdfFileCodecTest {
         codec.write(out, new FileWriteSpec(List.of(
                 new ColumnMapping("user_name", "氏名", null, null, null),
                 new ColumnMapping("joined_on", "登録日", null, "date", null)),
-                null, null, null, appHome, null, "Asia/Tokyo"), rows().iterator());
+                null, null, null, appHome, null, "Asia/Tokyo"),
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
 
         assertThat(out.toByteArray()).startsWith("%PDF-".getBytes(StandardCharsets.US_ASCII));
         String text = extractText(out.toByteArray());
@@ -61,8 +62,10 @@ class PdfFileCodecTest {
         ByteArrayOutputStream first = new ByteArrayOutputStream();
         ByteArrayOutputStream second = new ByteArrayOutputStream();
         FileWriteSpec spec = new FileWriteSpec(List.of(), null, null, null, appHome, null, null);
-        codec.write(first, spec, rows().iterator());
-        codec.write(second, spec, rows().iterator());
+        codec.write(first, spec,
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
+        codec.write(second, spec,
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
 
         assertThat(first.toByteArray()).isEqualTo(second.toByteArray());
     }
@@ -71,7 +74,7 @@ class PdfFileCodecTest {
     void normalizedMetadataCarriesNoTimestamps() throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         codec.write(out, new FileWriteSpec(List.of(), null, null, null, appHome, null, null),
-                rows().iterator());
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
 
         try (PDDocument document = Loader.loadPDF(out.toByteArray())) {
             assertThat(document.getDocumentInformation().getProducer()).isEqualTo("TesseraQL");
@@ -111,7 +114,7 @@ class PdfFileCodecTest {
                 new ColumnMapping("user_name", null, null, null, null),
                 new ColumnMapping("joined_on", null, null, "date", null)),
                 null, routeDir.resolve("print.html"), null, appHome, null, "Asia/Tokyo"),
-                rows().iterator());
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of()));
 
         String text = extractText(out.toByteArray());
         assertThat(text).contains("利用者一覧", "佐藤花子", "田中太郎", "1 / 1");
@@ -124,7 +127,7 @@ class PdfFileCodecTest {
 
         assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(),
                 new FileWriteSpec(List.of(), null, template, null, appHome, null, null),
-                rows().iterator()))
+                io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of())))
                 .isInstanceOf(TqlException.class)
                 .satisfies(ex -> assertThat(((TqlException) ex).code().toString())
                         .isEqualTo("TQL-LD-2832"));
@@ -147,7 +150,7 @@ class PdfFileCodecTest {
         try {
             assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(),
                     new FileWriteSpec(List.of(), null, null, null, appHome, null, null),
-                    rows().iterator()))
+                    io.tesseraql.core.files.ExportModel.repeatable(rows(), java.util.Map.of())))
                     .isInstanceOf(TqlException.class)
                     .satisfies(ex -> assertThat(((TqlException) ex).code().toString())
                             .isEqualTo("TQL-LD-2833"));

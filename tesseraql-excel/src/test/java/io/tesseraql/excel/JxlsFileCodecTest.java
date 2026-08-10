@@ -37,6 +37,14 @@ class JxlsFileCodecTest {
 
     private final JxlsFileCodec codec = new JxlsFileCodec();
 
+    private static io.tesseraql.core.files.ExportModel streaming(List<Map<String, Object>> rows) {
+        return io.tesseraql.core.files.ExportModel.streaming(rows.iterator(), Map.of());
+    }
+
+    private static io.tesseraql.core.files.ExportModel repeatable(List<Map<String, Object>> rows) {
+        return io.tesseraql.core.files.ExportModel.repeatable(rows, Map.of());
+    }
+
     private static List<Map<String, Object>> rows() {
         List<Map<String, Object>> rows = new ArrayList<>();
         Map<String, Object> first = new LinkedHashMap<>();
@@ -53,7 +61,7 @@ class JxlsFileCodecTest {
     @Test
     void gridWriteAndReadRoundTrip() throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        codec.write(out, new FileWriteSpec(List.of(), "items", null, null), rows().iterator());
+        codec.write(out, new FileWriteSpec(List.of(), "items", null, null), streaming(rows()));
 
         List<Map<String, Object>> read = new ArrayList<>();
         codec.read(new ByteArrayInputStream(out.toByteArray()),
@@ -91,7 +99,7 @@ class JxlsFileCodecTest {
         codec.write(out, new FileWriteSpec(List.of(
                 new ColumnMapping("name", null, ColumnMapping.parseColumn("B")),
                 new ColumnMapping("qty", null, ColumnMapping.parseColumn("D"))),
-                null, template, CellRef.parse("B5")), rows().iterator());
+                null, template, CellRef.parse("B5")), repeatable(rows()));
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(out.toByteArray()))) {
@@ -120,14 +128,14 @@ class JxlsFileCodecTest {
                 new ColumnMapping("qty", null, ColumnMapping.parseColumn("D"))),
                 null, template, CellRef.parse("B5"));
 
-        assertThatCode(() -> codec.write(new ByteArrayOutputStream(), spec, rows().iterator()))
+        assertThatCode(() -> codec.write(new ByteArrayOutputStream(), spec, repeatable(rows())))
                 .as("two rows fit above the band")
                 .doesNotThrowAnyException();
 
         List<Map<String, Object>> tooMany = new ArrayList<>(rows());
         tooMany.add(new LinkedHashMap<>(Map.of("name", "gamma", "qty", 3)));
         assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(), spec,
-                tooMany.iterator()))
+                repeatable(tooMany)))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("row 7")
                 .hasMessageContaining("2 rows")
@@ -146,7 +154,7 @@ class JxlsFileCodecTest {
                 new ColumnMapping("held_on", null, null, "datetime", "yyyy/mm/dd hh:mm"),
                 new ColumnMapping("fee", null, null, "number", "#,##0.00")),
                 null, null, null, null, "Asia/Tokyo"),
-                List.of(row).iterator());
+                streaming(List.of(row)));
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(out.toByteArray()))) {
@@ -166,7 +174,7 @@ class JxlsFileCodecTest {
     void jxlsTemplateRendersReportStyleOutput() throws Exception {
         Path template = writeJxlsTemplate();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        codec.write(out, new FileWriteSpec(List.of(), null, template, null), rows().iterator());
+        codec.write(out, new FileWriteSpec(List.of(), null, template, null), repeatable(rows()));
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(out.toByteArray()))) {

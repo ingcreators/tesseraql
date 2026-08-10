@@ -3,8 +3,6 @@ package io.tesseraql.core.files;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Iterator;
-import java.util.Map;
 
 /**
  * Reads and writes one tabular file format for the {@code file-import} / {@code file-export}
@@ -26,9 +24,15 @@ public interface FileCodec {
     /** Streams the file's records to the handler, one column-name-to-value map per row. */
     void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception;
 
-    /** Writes the rows (column-name-to-value maps) to the output. */
-    void write(OutputStream out, FileWriteSpec spec, Iterator<Map<String, Object>> rows)
-            throws IOException;
+    /**
+     * Writes the export to the output: the model carries the rows and whatever else the export
+     * declared for a template to compose around them (docs/export-pipeline.md, decision 1).
+     *
+     * <p>Take the rows from {@link ExportModel#rows()} when {@link #streams(FileWriteSpec)} says
+     * this codec writes them through, and from {@link ExportModel#repeatableRows()} when it does
+     * not; the other one fails, so the declaration and the behaviour cannot drift apart.
+     */
+    void write(OutputStream out, FileWriteSpec spec, ExportModel model) throws IOException;
 
     /**
      * Whether this codec writes the rows through as they arrive for the given spec, rather than

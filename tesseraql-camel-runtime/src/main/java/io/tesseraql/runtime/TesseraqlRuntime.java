@@ -4561,7 +4561,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.core.files.FileWriteSpec spec = export.toWriteSpec(template, appHome);
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         try {
-            codec.write(out, spec, rows.iterator());
+            codec.write(out, spec, io.tesseraql.core.files.ExportModel.repeatable(rows,
+                    java.util.Map.of()));
         } catch (Exception ex) {
             throw new IllegalStateException("PDF render failed: " + ex.getMessage(), ex);
         }
@@ -4591,7 +4592,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 columns, null, null, null, appHome, null, null);
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         try {
-            codec.write(out, spec, rows.iterator());
+            codec.write(out, spec, io.tesseraql.core.files.ExportModel.repeatable(rows,
+                    java.util.Map.of()));
         } catch (Exception ex) {
             throw new IllegalStateException("Routes PDF render failed: " + ex.getMessage(), ex);
         }

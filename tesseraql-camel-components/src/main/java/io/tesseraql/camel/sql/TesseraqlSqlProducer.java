@@ -5,8 +5,10 @@ import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileWriteSpec;
+import io.tesseraql.core.files.SpooledRows;
 import io.tesseraql.core.spool.FileTempStore;
 import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
@@ -244,8 +246,21 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 SpoolWriter writer = tempStore.createWriter(kind);
                 // The writer closes first (listed first); toRef() is only valid after close.
                 try (writer; ResultSet resultSet = statement.executeQuery()) {
-                    codec.write(new SpoolOutputStream(writer), spec,
-                            new ResultRows(resultSet, writer, rowCap(exchange, codec, spec)));
+                    ResultRows rows = new ResultRows(resultSet, writer,
+                            rowCap(exchange, codec, spec));
+                    // A codec that holds its rows is handed a re-readable set instead of the
+                    // cursor, so a template may walk it more than once without the result set
+                    // living in memory (docs/export-pipeline.md, decision 1). The row cap still
+                    // fires during the drain, before anything reaches the spool.
+                    if (codec.streams(spec)) {
+                        codec.write(new SpoolOutputStream(writer), spec,
+                                ExportModel.streaming(rows, Map.of()));
+                    } else {
+                        try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
+                            codec.write(new SpoolOutputStream(writer), spec,
+                                    ExportModel.repeatable(spooled, Map.of()));
+                        }
+                    }
                 }
                 ref = writer.toRef();
             } finally {

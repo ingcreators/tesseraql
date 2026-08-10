@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileCodecs;
 import io.tesseraql.core.files.FileTransferService;
+import io.tesseraql.core.files.FileWriteSpec;
+import io.tesseraql.core.files.SpooledRows;
 import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
 import io.tesseraql.core.spool.SpoolWriter;
@@ -218,7 +221,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, extractionDialect,
                             effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    codec.write(out, request.writeSpec(), iterator);
+                    writeThrough(codec, out, request.writeSpec(), iterator);
                     rows = iterator.count;
                     writer.incrementRows(rows);
                 }
@@ -463,7 +466,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, vendor(),
                             effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    codec.write(out, request.writeSpec(), iterator);
+                    writeThrough(codec, out, request.writeSpec(), iterator);
                     rows = iterator.count;
                     writer.incrementRows(rows);
                 }
@@ -512,12 +515,29 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     /**
+     * Hands the codec the row source its streaming declaration asks for
+     * (docs/export-pipeline.md, decision 1): the cursor itself when it writes rows through, and a
+     * spooled re-readable set when it holds them, so a template may walk the rows more than once
+     * without the result set living in memory. The row cap fires during the drain either way.
+     */
+    private void writeThrough(FileCodec codec, OutputStream out, FileWriteSpec writeSpec,
+            Iterator<Map<String, Object>> rows) throws IOException {
+        if (codec.streams(writeSpec)) {
+            codec.write(out, writeSpec, ExportModel.streaming(rows, Map.of()));
+            return;
+        }
+        try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
+            codec.write(out, writeSpec, ExportModel.repeatable(spooled, Map.of()));
+        }
+    }
+
+    /**
      * The declared cap, but only where the codec holds the rows for this spec
      * (docs/export-pipeline.md, decisions 6 and 7). A streaming export accumulates nothing, so a
      * ceiling there would exist only to be raised.
      */
     private static io.tesseraql.core.files.ExportRowCap effectiveCap(FileCodec codec,
-            io.tesseraql.core.files.FileWriteSpec writeSpec,
+            FileWriteSpec writeSpec,
             io.tesseraql.core.files.ExportRowCap declared) {
         return codec.streams(writeSpec)
                 ? io.tesseraql.core.files.ExportRowCap.unbounded()
