@@ -160,8 +160,24 @@ public final class JxlsFileCodec implements FileCodec {
     }
 
     /**
-     * The grid streams through fastexcel's writer; both template modes hold the workbook (and, in
-     * report mode, the rows) in memory, so they are capped (docs/export-pipeline.md, decision 6).
+     * The grid streams through fastexcel's writer; both template modes hold the workbook in
+     * memory, so they are capped (docs/export-pipeline.md, decision 6).
+     *
+     * <p>Report mode holds only the workbook since decision 9 — its rows arrive re-readable off a
+     * spool and jxls writes through SXSSF — but a workbook of a size worth capping is still a
+     * workbook, so the answer stays the same.
+     *
+     * <p>Placement mode cannot stream at all, which decision 10 allowed for and this is the
+     * recorded answer. SXSSF appends past the last written row and refuses anything before it
+     * ("Attempting to write a row[4] in the range [0,4] that is already written to disk"), while
+     * placement writes <em>into</em> the template's own data area — the {@code startCell} row is
+     * both the style prototype and the first data row. Removing the prototype row before wrapping
+     * does not help a template that carries anything below the data area at all. Streaming it
+     * would mean rebuilding the template sheet through the streaming API, copying every row, cell,
+     * merged region, image and print setting by hand: a re-implementation with new fidelity risks,
+     * for the mode whose entire purpose is that the template's fidelity is not TesseraQL's
+     * business. So placement stays capped, and a template-styled export declares the number of
+     * rows it can carry.
      */
     @Override
     public boolean streams(FileWriteSpec spec) {
