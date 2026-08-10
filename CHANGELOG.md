@@ -34,6 +34,14 @@ All notable changes to TesseraQL are documented here. The format follows
   each by its own hostname, so sessions do not cross. The machinery existed and had no
   entry point.
 
+### Documentation
+
+- **[hosting.md](docs/hosting.md)**: running several applications on one machine — the two
+  modes of `tesseraql host`, what the install root holds, and what runtime isolation does and
+  does not promise. The mechanism had no user page at all.
+- The **admission profile** is no longer named after a marketplace that does not exist, and
+  says plainly that it is a gate you opt into for distribution rather than a house style.
+
 ### Removed
 
 - **A user application can no longer be mounted into another runtime**

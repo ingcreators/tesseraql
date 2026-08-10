@@ -8,7 +8,7 @@ declared state machine rather than adding a new runtime subsystem. The worked ex
 is a purchase-request approval application built only with YAML, 2-way SQL, and templates.
 
 This is **not** route governance. The route-governance approval gate
-(the build-time gate behind [marketplace admission](admission.md))
+(the build-time gate behind [admission](admission.md))
 reviews *routes* at build time — a deploy-time control over the application's own surface. Approval
 workflow reviews *documents* at run time — a business control over the data an application moves.
 The two share neither namespace nor lint family.

@@ -96,6 +96,7 @@ export const SECTIONS = [
     label: 'Running in production',
     items: [
       'deployment',
+      'hosting',
       'promotion',
       'upgrading',
       'proxy',

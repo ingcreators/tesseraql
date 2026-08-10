@@ -18,12 +18,12 @@ All 447 `TQL-*` codes, scanned from the framework sources on every refresh and g
 
 | Code | Meaning | Documented in | Raised in |
 | --- | --- | --- | --- |
-| `TQL-ADM-4701` | binds a runtime service provider (mode extended); marketplace apps… are declarative-only · plugin jars are not admissible; marketplace apps are… declarative-only … | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
+| `TQL-ADM-4701` | binds a runtime service provider (mode extended); shared apps… are declarative-only · plugin jars are not admissible; shared apps are… declarative-only … | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
 | `TQL-ADM-4702` | deny-by-default requires the policy to be DEFINED here: … | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
 | `TQL-ADM-4703` | a bare '*' egress entry is unbounded; list hosts or *.domain… wildcards | [admission](admission.md), [connectors](connectors.md), [security-hardening](security-hardening.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
 | `TQL-ADM-4704` | HTML response without a Content-Security-Policy header | [admission](admission.md), [security-hardening](security-hardening.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
-| `TQL-ADM-4705` | a governance violation — a review-worthy route with no valid approval — fails marketplace admission. | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
-| `TQL-ADM-4706` | every linter error in the app tree is a marketplace admission failure. | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
+| `TQL-ADM-4705` | a governance violation — a review-worthy route with no valid approval — fails admission. | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
+| `TQL-ADM-4706` | every linter error in the app tree is an admission failure. | [admission](admission.md) | [AdmissionProfile.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/governance/AdmissionProfile.java) |
 
 ## APP
 

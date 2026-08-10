@@ -1,11 +1,12 @@
-# Marketplace admission profile
+# Admission profile
 
 You built an app that other people will install, or you are vetting one before running it:
 the admission profile is the machine-checkable bar a shared app must clear before anyone
-else runs it. Run `tesseraql admission --app .` (or the `tesseraql:admission` Maven goal,
+else runs it. It is a gate you opt into for distribution, not a house style: an app you
+deploy yourself may use every rung of [extending.md](extending.md). Run `tesseraql admission --app .` (or the `tesseraql:admission` Maven goal,
 bound to `verify`) and ship only on exit 0.
 
-The profile composes the existing gates and adds the marketplace constraints:
+The profile composes the existing gates and adds the constraints distribution needs:
 
 | Code | Constraint |
 | --- | --- |
