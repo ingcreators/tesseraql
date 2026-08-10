@@ -71,6 +71,12 @@ export:
   template: orders.xlsx       # workbook/print template colocated with the route
   sheet: Orders               # workbook formats: the sheet to write
   startCell: B5               # workbook placement mode: where data rows start
+  maxRows: 5000               # formats that hold every row: the ceiling (see below)
+  groupBy: department         # template reads the rows as groups (see below)
+  splitBy: customer_id        # one document per value, bundled as a ZIP (see below)
+  queries:                    # other data the template composes around the rows
+    header:
+      file: select-order.sql
   sql:                        # file-export only: the extraction query
     file: select-orders.sql
   after:                      # file-export only: the follow-up statement
@@ -93,6 +99,87 @@ export:
   where each column lands (`- { name: qty, column: D }`); a jx:-annotated template without
   `startCell:` is a full jxls report. PDF output uses a colocated XHTML print template instead —
   see [printable-documents.md](printable-documents.md).
+- A template path that does not exist fails the build rather than quietly producing a plain
+  grid, and `startCell:` without a template is refused: the mode a declaration selects should be
+  the mode it names.
+
+## What a template can see
+
+An export's template reads the extraction's `rows`, and whatever else the export declares:
+
+```yaml
+export:
+  format: pdf
+  template: order.html
+  queries:
+    header:
+      file: select-order.sql    # the template reads header.rows[0].customer
+  http:                         # declared on the route, beside export:
+    rates:
+      url: https://rates.example/today
+```
+
+- **`queries:`** run on the extraction's own connection, inside its transaction and before it, so
+  a document reads exactly the state its rows came from. Each result is shaped like a read
+  route's named query — `rows` and `rowCount` — so a template written against one reads the same
+  as the other. This is how a header-and-lines document stops denormalizing its header onto every
+  line.
+- **`http:` sources** are declared on the route and reach the template the same way. On an export
+  they run *before* the extraction, and on an asynchronous export they are called when the export
+  is requested rather than when the worker gets to it: the data is as of submission, which is the
+  rule bound parameters already follow, and no network call happens while the extraction holds a
+  connection and a cursor. `onError: empty` is refused on an export — a document that is archived
+  and mailed should not look complete with a section missing.
+- Declaring either beside a format with no template is a warning (`TQL-LD-5312`): CSV and the
+  Excel grid write rows and nothing else, so the source would run to be discarded.
+
+## Large results
+
+Which formats stream, and which hold every row before they write:
+
+| Format | Streams | Capped |
+| --- | --- | --- |
+| `csv` | yes | no |
+| `excel`, plain grid | yes | no |
+| `excel`, jxls report | rows yes, workbook no | yes |
+| `excel`, placement | no | yes |
+| `pdf` | no | yes |
+
+A format that holds its rows runs under `maxRows:`, defaulting to
+`tesseraql.resultMaterialization.maxRows`; passing it fails with `TQL-LD-2850`, and
+`onOverflow: warn` truncates instead. A streaming format is not capped at all — nothing
+accumulates, so a ceiling there would exist only to be raised. An uncapped buffering export is a
+build warning (`TQL-LD-5310`).
+
+**`groupBy:`** lets a template read the rows as ordered groups, each with its `key` and its own
+`rows` — one group is held at a time, so a grouped report is not a materialized one. A jxls
+report can put each group on its own sheet with `multisheet`:
+
+```
+jx:each(items="groups" var="g" multisheet="groupKeys" lastCell="A3")
+jx:each(items="g.rows" var="r" lastCell="A3")
+```
+
+**`splitBy:`** goes further and writes one *document* per group, delivered as a single ZIP. This
+is what a printable document does instead of streaming: page numbers stay per document, a
+partly-empty last page is the end of a document rather than a seam, and a footer total is that
+group's total. `filename:` must carry `{key}`:
+
+```yaml
+export:
+  format: pdf
+  template: invoice.html
+  filename: invoice-{key}.pdf
+  splitBy: customer_id
+```
+
+One file still leaves the export, so downloads, push destinations and mail attachments are
+unchanged. One group still produces a ZIP and no rows produce an empty one — the output shape is
+a property of the route, not of today's data.
+
+**Both require the extraction to be ordered by the column.** Group boundaries are found on a
+single pass, so unordered rows fail with `TQL-LD-2851` rather than writing one group as several;
+a missing `order by` is a build warning (`TQL-LD-5311`).
 
 ## Asynchronous export: file-export
 
@@ -203,6 +290,13 @@ queries like any other query.
 | `TQL-LD-2823` | The transfer has no downloadable file yet (still running, failed, or an import) — 409 |
 | `TQL-LD-2824` / `TQL-LD-2825` | Poll-driven import variants — see [connectors.md](connectors.md) |
 | `TQL-LD-2830` | PDF is output-only; `file-import` cannot read it |
+| `TQL-LD-2850` | A format that holds every row passed its `maxRows:` |
+| `TQL-LD-2851` | Group keys are not in order — the extraction needs an `order by` on the `groupBy:` / `splitBy:` column |
+| `TQL-LD-2852` | A placement export's rows reached template content below the data area |
+| `TQL-LD-2853` / `TQL-LD-2854` / `TQL-LD-2855` | A row value, shape or spool the re-readable row set could not carry |
+| `TQL-LD-2856` | A codec asked for a row source its streaming declaration does not match |
+| `TQL-LD-2857` | Two `splitBy:` keys name the same file once made safe for a filesystem |
+| `TQL-LD-2858` | A `splitBy:` export's `filename:` carries no `{key}` |
 | `TQL-YAML-1041` | A malformed `export:` **pipeline step** — no extraction query, no format, or a `download`-timed follow-up ([the export step](jobs.md#the-export-step)) |
 
 A scheduled job can produce a file through the same vocabulary — the

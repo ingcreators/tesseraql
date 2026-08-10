@@ -155,6 +155,32 @@ it covered when a suite case exercises one of its SQL artifacts; gate it with
 | `TQL-LD-2833` | `tesseraql.pdf.engine` names no available engine |
 | `TQL-LD-2834` | a font under `fonts/` cannot be read |
 
+## How much data a document can carry
+
+A PDF holds its rows, then the whole document as one string, then as one byte array — a paginated
+layout is not a stream, and the engine needs the whole document to place page breaks and repeat
+headers. So a printable export runs under `maxRows:` (`TQL-LD-2850` past it), and a large one
+splits by meaning rather than by row count:
+
+```yaml
+export:
+  format: pdf
+  template: invoice.html
+  filename: invoice-{key}.pdf
+  splitBy: customer_id      # one invoice per customer, bundled as a ZIP
+  queries:
+    header:
+      file: select-customer.sql
+```
+
+`splitBy:` keeps everything a single document gets right — page numbers are per invoice, fonts
+embed once per document, and a footer total is that customer's total — because the boundary is one
+the reader already believes in. Chunking one logical table and merging the pieces back would lose
+all three. See [file-transfers.md](file-transfers.md#large-results) for the ordering contract and
+the `{key}` rule.
+
+`queries:` is how an invoice reads its customer without denormalizing them onto every line.
+
 ## Next
 
 - [file-transfers.md](file-transfers.md) — the export routes that stream them.

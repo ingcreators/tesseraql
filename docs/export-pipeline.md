@@ -1,6 +1,6 @@
 # The export pipeline
 
-Status: **designed 2026-08-10** — no slice shipped yet.
+Status: **complete 2026-08-10** — every slice shipped.
 
 Everything between a query and a delivered file: how rows reach a codec, what a template is allowed
 to see, and what happens when there are a great many rows. The three concerns turned out to be one
@@ -141,7 +141,9 @@ labels with. It is the header-and-lines case, answered where the asymmetry was r
 denormalizing into the line query.
 
 **`queries:`** run before the extraction, on the same connection and inside the same transaction as
-the export query, so a document reads exactly the state its rows came from.
+the export query, so a document reads exactly the state its rows came from. They are declared as
+**`export.queries:`** rather than at route level, which is where this decision first put them: a
+batch export step has no route level, and one idea should not have two shapes.
 
 **`http:` sources** are ordered before the extraction too, which reverses the read-route order
 (where they run after the SQL). The reason is not composition but the connection: `runExport` takes
@@ -237,8 +239,11 @@ Overflow raises **`TQL-LD-2850`**, distinct from `TQL-LD-0001` because the cause
 differ: the message names the format and mode that buffer, and points at a streaming format or
 `splitBy` rather than at pagination.
 
-A build lint (**`TQL-LD-5310`**, warning) flags an export whose codec buffers for this spec and
-which declares neither `maxRows` nor `splitBy` — the configuration that is uncapped today.
+A build lint (**`TQL-LD-5310`**, warning) flags an export whose codec buffers and declares no
+`maxRows` — the configuration that is uncapped today. It reads the declaration rather than asking
+`streams(spec)`: the optional codec modules are not on the linter's classpath, so the predicate
+this decision wanted every consumer to share has one consumer it cannot serve. The linter's
+javadoc says so, and a codec that streams a templated format can declare `maxRows: -1`.
 
 Rejected: capping every export uniformly. It would put a ceiling on the CSV path that has no
 technical reason to exist, and would train authors to raise a number instead of choosing a format
@@ -365,30 +370,40 @@ recipient.
 ## Slices
 
 1. **Streaming profile on the asynchronous export path** (decision 5) and the phantom-mode message
-   (decision 13). No contract change; the largest effect per line in the campaign.
+   (decision 13). No contract change; the largest effect per line in the campaign. **Done** (#706).
 2. **Mode selection stops being silent** (decision 4): route-level template existence, `startCell`
    without a template, and the placement collision check with `TQL-LD-2852`. Independent of
-   everything else, and it stops a class of silent corruption.
+   everything else, and it stops a class of silent corruption. **Done** (#707).
 3. **Codec streaming capability and the export cap** (decisions 6, 7): `FileCodec.streams`,
-   `export.maxRows` / `export.onOverflow`, `TQL-LD-2850`, and the `TQL-LD-5310` lint.
+   `export.maxRows` / `export.onOverflow`, `TQL-LD-2850`, and the `TQL-LD-5310` lint. **Done**
+   (#709) — the declared ceiling and the rule that applies it were separated so a batch step could
+   inherit the bound without acquiring a codec dependency.
 4. **`SpooledRows`** (decision 8) in `tesseraql-core` over `TempStore`, with the tagged encoding and
-   its round-trip tests. It lands alone because three later slices depend on it.
+   its round-trip tests. It lands alone because three later slices depend on it. **Done** (#708).
 5. **`ExportModel`** (decision 1): the SPI change, every bundled codec migrated, the two row
    sources wired to `streams(spec)`. No author-visible behaviour yet — the slice exists so that the
-   next two are additions rather than rewrites.
+   next two are additions rather than rewrites. **Done** (#710).
 6. **Named queries and HTTP sources in export templates** (decision 2), for jxls reports and PDF
    documents: `queries:` on the extraction connection, `http:` called at submission and carried in
    the handoff record, `onError: empty` rejected, and the `TQL-LD-5312` lint. This is the
-   header-and-lines slice.
+   header-and-lines slice. **Done** (#711).
 7. **`groupBy`, `groups`, and jxls report streaming** (decisions 3, 9): the ordered grouping engine,
-   `withStreaming`, and a `multisheet` template that streams.
-8. **Excel placement streaming** (decision 10). **Done — the answer is "no"**, recorded in
+   `withStreaming`, and a `multisheet` template that streams. **Done** (#712) — two things had to be
+   learned by running it: streaming *every* sheet includes the template's own, which jxls reads to
+   know what to write, so only the generated sheets stream; and a template's expression language
+   resolves `g.key` through `getKey()`, not through a record's own accessor.
+8. **Excel placement streaming** (decision 10). **Done** (#713) — the answer is "no", recorded in
    decision 10 and in the codec's javadoc so the experiment is not repeated.
 9. **`splitBy` and ZIP bundling** (decision 12) over slice 7's grouping engine: `{key}` filenames,
-   the per-group cap, the lints.
+   the per-group cap, the lints. **Done** (#714) — each document follows its codec's own streaming
+   declaration, which decision 1's contract caught: a CSV split failed loudly until the per-group
+   model matched what CSV declared.
 10. **Documentation**: `file-transfers.md` gains what an export template can see and which formats
     stream; `printable-documents.md` gains the header-and-lines shape and `splitBy`; the generated
-    reference is regenerated for the new keys and codes.
+    reference is regenerated for the new keys and codes. **Done** (#715), along with the three
+    amendments this document needed once the code existed: `export.queries:` rather than
+    route-level `queries:` (decision 2), the linter's inability to ask `streams(spec)`
+    (decisions 6 and 7), and placement's recorded "no" (decision 10).
 
 ## Out of scope
 
