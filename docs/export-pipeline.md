@@ -1,6 +1,7 @@
 # The export pipeline
 
-Status: **complete 2026-08-10** — every slice shipped.
+Status: **wave 1 complete 2026-08-10** (slices 1-10, #705-#715). **Wave 2 designed 2026-08-10** —
+slices 11-12, below.
 
 Everything between a query and a delivered file: how rows reach a codec, what a template is allowed
 to see, and what happens when there are a great many rows. The three concerns turned out to be one
@@ -460,3 +461,108 @@ recipient.
   uncapped; one group and zero rows both producing a ZIP; two values colliding after sanitization
   failing rather than overwriting.
 - **Determinism**: the PDF byte-comparison guard keeps holding for each document inside the ZIP.
+
+---
+
+# Wave 2: composition
+
+Wave 1 gave a codec a model. Using it against real reporting requirements showed three things the
+model gets wrong, and they share a cause: the extraction and the named queries were made to look
+like different kinds of thing, when the only real difference between them is which one the export
+is *about*.
+
+## What wave 1 left
+
+**The export's shape does not match a route's.** On a route the default result lands under `sql`
+and a named one under its name, both shaped `{rows, rowCount}`. In an export the extraction became
+a bare `rows` and a named query stayed `{rows, rowCount}`, so one template reads `${rows}` and
+`${header.rows}` side by side and has to know why. That divergence was introduced here, not
+inherited.
+
+**Named query results are materialized.** Wave 1 spooled the extraction and left named queries as
+`List<Map>`, so a workbook whose second sheet is a large named query is exactly the memory problem
+this campaign set out to remove, entering through a door it opened itself. The row cap does not
+count them either.
+
+**A split export writes the same values into every document.** `SplitExport` passes one `values`
+map to every group, so five hundred invoices split by customer print the same customer. The only
+way out today is to denormalize the header onto every line and read `rows[0]` — the pattern
+decision 2 exists to end. The flagship case of `splitBy` is the one it serves worst.
+
+## Decisions
+
+### 14. An export's model is shaped like a route's context
+
+The extraction is published as **`sql`**, with `rows` and `rowCount`, exactly as a named query is.
+A template reads `${sql.rows}` and `${header.rows}`, and the only difference left between them is
+the one that is real: which result the export is *about*.
+
+`rowCount` is answerable because a template mode is a buffering mode — its rows are spooled, and a
+spool knows its size. A streaming codec has no template and reads neither.
+
+This breaks existing report and print templates, which is what pre-1.0 is for (mandatory rule 10).
+The blast radius is one gallery template, the framework's own bundled PDF grid, and the tests. It
+buys one sentence of explanation instead of two: *an export's template sees what a route's template
+sees*.
+
+Rejected: publishing `rows` **and** `sql.rows`. Two names for one thing is worse than either name.
+
+### 15. Every result an export carries is re-readable and capped
+
+Named query results are drained into a `SpooledRows` like the extraction, keeping the
+`{rows, rowCount}` shape a template reads. Nothing changes in a template; what changes is that a
+second sheet of a hundred thousand rows costs a spool instead of a heap.
+
+The row cap counts them too. A cap that bounds the subject and lets a named query run unbounded
+bounds nothing — the sheet that overflows is as likely to be the summary as the detail.
+
+This is also the prerequisite for decision 16: a value can only be narrowed per document if it can
+be read more than once.
+
+### 16. A split export narrows the values that name its groups
+
+For each document, a named result whose rows carry the **split column** is narrowed to that group's
+rows; one that does not carry it is shared whole.
+
+That rule reads directly from what the query selected, so an author states the relationship by
+selecting the column rather than by declaring anything:
+
+```yaml
+export:
+  splitBy: customer_id
+  filename: invoice-{key}.pdf
+  queries:
+    customer: { file: select-customers.sql }   # selects customer_id → per document
+    company:  { file: select-company.sql }     # does not → the same in every document
+```
+
+One query runs for the whole export, not one per document: five hundred invoices cost one customer
+query, not five hundred. The narrowing is the same ordered grouping the extraction already uses, so
+a named query that carries the split column inherits the ordering contract — unordered rows fail
+with `TQL-LD-2851` naming the query.
+
+Rejected: running each named query once per group with the key bound. It reads well and it is an
+N+1; the grouping machinery already exists and does not need it.
+
+## Slices
+
+11. **The model mirrors a route's context, and every result is re-readable** (decisions 14, 15):
+    `sql.rows` in place of `rows`, named results spooled, the cap counting them, and the templates
+    that move with it.
+12. **Per-document values on a split export** (decision 16), over slice 11's re-readable results.
+
+## Out of scope for wave 2
+
+- **`splitBy` composed with `groupBy`** — one workbook per branch with a sheet per department. It
+  fails today (`groupedBy` needs a spool and a split group is a lightweight view). Real, and
+  separable from these three.
+- **Grouping more than one level deep** — an order, its lines, their shipments. No requirement has
+  asked for it yet; wave 2 does not pre-empt one.
+- **Named queries against a second datasource** — they run on the extraction's connection by
+  construction (decision 2), which is what makes them transactionally honest. An `http:` source
+  covers the external case.
+- **Renaming `sql:` to something that names its role.** The distinguished binding is a *default* —
+  the one a panel's `source:`, pagination, a command's response body and an export's subject point
+  at when nothing says otherwise — and that default earns its keep. Its name describes the
+  mechanism rather than the role, which is a fair criticism and a framework-wide vocabulary change,
+  not an export one.
