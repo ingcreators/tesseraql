@@ -2416,6 +2416,7 @@ public final class AppLinter {
                     + definition.recipe() + "' recipe"));
         }
         lintRouteExport(route, definition, source, findings);
+        lintExportRowCap(definition.fileExport(), "", source, findings);
         lintDatasource(config, route.source(), definition, source, findings);
         lintEmbeddedVariables(route.source(), definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
@@ -4458,6 +4459,7 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1006", "error", source, "Step '" + step.id()
                     + "': export references a missing template: " + export.template()));
         }
+        lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
     }
 
     /**
@@ -5194,6 +5196,33 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1006", "error", source,
                     "export references a missing template: " + spec.template()));
         }
+    }
+
+    /**
+     * An export through a format that holds every row before it writes runs under a ceiling
+     * (docs/export-pipeline.md, decision 7), and an author who has not chosen one is the case
+     * worth naming: until that decision, nothing at all stood between such an export and the heap.
+     *
+     * <p>The runtime authority is {@code FileCodec.streams(spec)}, which the linter cannot ask —
+     * the optional codec modules are not on its classpath. This reads the declaration instead,
+     * which answers for the formats the framework ships; anything else can say {@code maxRows: -1}
+     * to state that it streams.
+     */
+    private void lintExportRowCap(io.tesseraql.yaml.model.ExportSpec spec, String label,
+            String source, List<LintFinding> findings) {
+        if (spec == null || spec.maxRows() != null) {
+            return;
+        }
+        boolean buffers = "pdf".equals(spec.format())
+                || ("excel".equals(spec.format()) && spec.template() != null);
+        if (!buffers) {
+            return;
+        }
+        findings.add(new LintFinding("TQL-LD-5310", "warning", source, label
+                + "export holds every row before it writes (" + spec.format()
+                + (spec.template() == null ? "" : " through a template")
+                + ") and declares no maxRows:, so it runs under the app-wide default - declare"
+                + " export.maxRows: for the number this document can actually carry"));
     }
 
     private void lintRuleExpression(String ruleId, String expression, String source,

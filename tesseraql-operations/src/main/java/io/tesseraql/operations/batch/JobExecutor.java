@@ -51,6 +51,8 @@ public final class JobExecutor {
             4041);
 
     private int sqlTimeoutSeconds;
+    private int exportMaxRows = 10_000;
+    private String exportOnOverflow = "fail";
 
     /** Observes failed job executions (roadmap Phase 20 operations alerts). */
     @FunctionalInterface
@@ -114,6 +116,26 @@ public final class JobExecutor {
      * is precisely the place a runaway statement goes unnoticed longest: nobody is waiting for
      * the response.
      */
+    /**
+     * The materializing-result bounds a step's {@code export:} inherits when it declares none of
+     * its own (docs/export-pipeline.md, decision 7). A job has no request to read configuration
+     * from, so the runtime hands them over the way it does the SQL timeout.
+     */
+    public JobExecutor exportRowBounds(int maxRows, String onOverflow) {
+        this.exportMaxRows = maxRows;
+        this.exportOnOverflow = onOverflow == null ? "fail" : onOverflow;
+        return this;
+    }
+
+    /** The ceiling a step's export declares; whether it applies is the codec's answer. */
+    private io.tesseraql.core.files.ExportRowCap declaredExportRowCap(
+            io.tesseraql.yaml.model.ExportSpec export) {
+        return new io.tesseraql.core.files.ExportRowCap(
+                export.maxRows() != null ? export.maxRows() : exportMaxRows,
+                export.onOverflow() != null ? export.onOverflow() : exportOnOverflow,
+                export.format());
+    }
+
     public JobExecutor sqlTimeoutSeconds(int seconds) {
         this.sqlTimeoutSeconds = Math.max(0, seconds);
         return this;
@@ -592,7 +614,8 @@ public final class JobExecutor {
                 .exportInline(new io.tesseraql.core.files.FileTransferService.InlineExport(
                         jobFile.definition().id() + "#" + step.id(), appName,
                         export.format(), writeSpec,
-                        interpolate(export.filename(), context), query, afterExtract),
+                        interpolate(export.filename(), context), query, afterExtract,
+                        declaredExportRowCap(export)),
                         dataSource);
         Map<String, Object> stepResult = new LinkedHashMap<>();
         stepResult.put("affectedRows", (int) result.rows());

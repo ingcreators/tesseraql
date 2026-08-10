@@ -18,13 +18,16 @@ public final class QueryExportBinder implements Processor {
     private final FileWriteSpec writeSpec;
     private final String localeDeclaration;
     private final String timezoneDeclaration;
+    private final io.tesseraql.core.files.ExportRowCap rowCap;
 
     public QueryExportBinder(FileCodec codec, FileWriteSpec writeSpec,
-            String localeDeclaration, String timezoneDeclaration) {
+            String localeDeclaration, String timezoneDeclaration,
+            io.tesseraql.core.files.ExportRowCap rowCap) {
         this.codec = codec;
         this.writeSpec = writeSpec;
         this.localeDeclaration = localeDeclaration;
         this.timezoneDeclaration = timezoneDeclaration;
+        this.rowCap = rowCap;
     }
 
     @Override
@@ -33,5 +36,6 @@ public final class QueryExportBinder implements Processor {
         exchange.setProperty(TesseraqlProperties.EXPORT_SPEC, writeSpec.withFormatting(
                 FormatSources.resolve(exchange, localeDeclaration),
                 FormatSources.resolve(exchange, timezoneDeclaration)));
+        exchange.setProperty(TesseraqlProperties.EXPORT_ROW_CAP, rowCap);
     }
 }

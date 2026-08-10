@@ -216,7 +216,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                                 request.query(), extractionDialect);
                         ResultSet results = statement.executeQuery();
                         OutputStream out = new SpoolOutputStream(writer)) {
-                    RowIterator iterator = new RowIterator(results, extractionDialect);
+                    RowIterator iterator = new RowIterator(results, extractionDialect,
+                            effectiveCap(codec, request.writeSpec(), request.rowCap()));
                     codec.write(out, request.writeSpec(), iterator);
                     rows = iterator.count;
                     writer.incrementRows(rows);
@@ -460,7 +461,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                                 vendor());
                         ResultSet results = statement.executeQuery();
                         OutputStream out = new SpoolOutputStream(writer)) {
-                    RowIterator iterator = new RowIterator(results, vendor());
+                    RowIterator iterator = new RowIterator(results, vendor(),
+                            effectiveCap(codec, request.writeSpec(), request.rowCap()));
                     codec.write(out, request.writeSpec(), iterator);
                     rows = iterator.count;
                     writer.incrementRows(rows);
@@ -507,6 +509,19 @@ public final class JdbcFileTransferService implements FileTransferService {
         try (PreparedStatement statement = prepare(connection, bound)) {
             return statement.executeUpdate();
         }
+    }
+
+    /**
+     * The declared cap, but only where the codec holds the rows for this spec
+     * (docs/export-pipeline.md, decisions 6 and 7). A streaming export accumulates nothing, so a
+     * ceiling there would exist only to be raised.
+     */
+    private static io.tesseraql.core.files.ExportRowCap effectiveCap(FileCodec codec,
+            io.tesseraql.core.files.FileWriteSpec writeSpec,
+            io.tesseraql.core.files.ExportRowCap declared) {
+        return codec.streams(writeSpec)
+                ? io.tesseraql.core.files.ExportRowCap.unbounded()
+                : declared;
     }
 
     private PreparedStatement prepare(Connection connection, BoundSql bound)
@@ -569,12 +584,15 @@ public final class JdbcFileTransferService implements FileTransferService {
     private static final class RowIterator implements Iterator<Map<String, Object>> {
 
         private final ResultSet results;
+        private final io.tesseraql.core.files.ExportRowCap cap;
         private final List<String> labels;
         private Boolean hasNext;
         private long count;
 
-        RowIterator(ResultSet results, String vendor) throws SQLException {
+        RowIterator(ResultSet results, String vendor,
+                io.tesseraql.core.files.ExportRowCap cap) throws SQLException {
             this.results = results;
+            this.cap = cap;
             ResultSetMetaData metaData = results.getMetaData();
             List<String> columnLabels = new ArrayList<>();
             for (int i = 1; i <= metaData.getColumnCount(); i++) {
@@ -594,7 +612,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                             "Export query failed: " + ex.getMessage());
                 }
             }
-            return hasNext;
+            // Asked before the row is handed over: warn mode truncates cleanly, fail mode raises
+            // before the codec has accepted a row it cannot hold.
+            return hasNext && cap.admits(count);
         }
 
         @Override

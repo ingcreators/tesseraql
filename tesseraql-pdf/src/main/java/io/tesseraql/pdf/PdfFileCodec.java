@@ -57,6 +57,17 @@ public final class PdfFileCodec implements FileCodec {
         return ".pdf";
     }
 
+    /**
+     * Never: a paginated layout is not a stream (docs/export-pipeline.md, decision 11). The rows
+     * are collected, then the whole document becomes one XHTML string, then one byte array the
+     * normalizer round-trips again — and the engine needs the whole box tree to place page breaks
+     * and repeat headers.
+     */
+    @Override
+    public boolean streams(FileWriteSpec spec) {
+        return false;
+    }
+
     @Override
     public void read(InputStream in, FileReadSpec spec, RowHandler handler) {
         throw new TqlException(IMPORT_UNSUPPORTED,
