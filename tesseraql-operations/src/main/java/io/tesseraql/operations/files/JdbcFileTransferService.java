@@ -212,8 +212,10 @@ public final class JdbcFileTransferService implements FileTransferService {
         try (Connection connection = extraction.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
+            List<SpooledRows> spools = new ArrayList<>();
             try {
-                Map<String, Object> values = renderedValues(connection, request.queries());
+                Map<String, Object> values = renderedValues(connection, request.queries(),
+                        effectiveCap(codec, request.writeSpec(), request.rowCap()), spools);
                 long rows;
                 SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
                 try (writer;
@@ -239,6 +241,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 throw ex;
             } finally {
                 connection.setAutoCommit(autoCommit);
+                // The named results outlive the codec's write and nothing else, so their spools
+                // are this method's to reclaim.
+                spools.forEach(SpooledRows::close);
             }
         } catch (Exception ex) {
             jobs.failExecution(transferId, ex.getMessage());
@@ -457,10 +462,12 @@ public final class JdbcFileTransferService implements FileTransferService {
         try (Connection connection = dataSource.getConnection()) {
             boolean autoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
+            List<SpooledRows> spools = new ArrayList<>();
             try {
                 BoundSql bound = SqlRenderer.render(query, request.params());
                 Map<String, Object> values = composedValues(connection, request.queries(),
-                        request.params(), request.values());
+                        request.params(), request.values(),
+                        effectiveCap(codec, request.writeSpec(), request.rowCap()), spools);
                 long rows;
                 SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
                 try (writer;
@@ -487,6 +494,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                 throw ex;
             } finally {
                 connection.setAutoCommit(autoCommit);
+                // The named results outlive the codec's write and nothing else, so their spools
+                // are this method's to reclaim.
+                spools.forEach(SpooledRows::close);
             }
         } catch (Exception ex) {
             LOG.warn("File export {} failed: {}", transferId, ex.getMessage());
@@ -548,29 +558,33 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     /** The inline shape: a batch step pre-renders its named queries, so only execution is left. */
     private Map<String, Object> renderedValues(Connection connection,
-            Map<String, BoundSql> queries) throws SQLException {
+            Map<String, BoundSql> queries, io.tesseraql.core.files.ExportRowCap cap,
+            List<SpooledRows> spools) throws SQLException {
         if (queries.isEmpty()) {
             return Map.of();
         }
         Map<String, Object> values = new LinkedHashMap<>();
         for (Map.Entry<String, BoundSql> query : queries.entrySet()) {
-            values.put(query.getKey(), execute(connection, query.getValue()));
+            values.put(query.getKey(), execute(connection, query.getValue(), cap, spools));
         }
         return Map.copyOf(values);
     }
 
-    /** One named query's result, shaped like a read route's: {@code rows} plus {@code rowCount}. */
-    private Map<String, Object> execute(Connection connection, BoundSql bound) throws SQLException {
+    /**
+     * One named query's result, shaped like a read route's — {@code rows} plus {@code rowCount} —
+     * and spooled like the extraction (docs/export-pipeline.md, decision 15). A second sheet of a
+     * hundred thousand rows costs a spool rather than a heap, and it runs under the same ceiling:
+     * a cap that bounds the subject and lets a named query run unbounded bounds nothing.
+     */
+    private Map<String, Object> execute(Connection connection, BoundSql bound,
+            io.tesseraql.core.files.ExportRowCap cap,
+            List<SpooledRows> spools) throws SQLException {
         try (PreparedStatement statement = prepare(connection, bound);
                 ResultSet results = statement.executeQuery()) {
-            RowIterator iterator = new RowIterator(results, vendor(),
-                    io.tesseraql.core.files.ExportRowCap.unbounded());
-            List<Map<String, Object>> rows = new ArrayList<>();
-            iterator.forEachRemaining(rows::add);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("rows", rows);
-            result.put("rowCount", rows.size());
-            return result;
+            SpooledRows spooled = SpooledRows.drain(tempStore,
+                    new RowIterator(results, vendor(), cap));
+            spools.add(spooled);
+            return ExportModel.result(spooled, spooled.size());
         }
     }
 
@@ -581,14 +595,16 @@ public final class JdbcFileTransferService implements FileTransferService {
      * {@code rows} and {@code rowCount} — so a template reads one the way it reads the other.
      */
     private Map<String, Object> composedValues(Connection connection, List<ExportQuery> queries,
-            Map<String, Object> params, Map<String, Object> resolved) throws SQLException {
+            Map<String, Object> params, Map<String, Object> resolved,
+            io.tesseraql.core.files.ExportRowCap cap, List<SpooledRows> spools)
+            throws SQLException {
         if (queries.isEmpty()) {
             return resolved;
         }
         Map<String, Object> values = new LinkedHashMap<>(resolved);
         for (ExportQuery query : queries) {
-            values.put(query.name(),
-                    execute(connection, SqlRenderer.render(parse(query.sqlFile()), params)));
+            values.put(query.name(), execute(connection,
+                    SqlRenderer.render(parse(query.sqlFile()), params), cap, spools));
         }
         return Map.copyOf(values);
     }

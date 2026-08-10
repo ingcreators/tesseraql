@@ -338,7 +338,8 @@ class JxlsFileCodecTest {
             each.createCell(0).setCellValue("${r.name}");
             each.createCell(1).setCellValue("${r.qty}");
             comment(sheet, title.getCell(0), "jx:area(lastCell=\"B2\")");
-            comment(sheet, each.getCell(0), "jx:each(items=\"rows\" var=\"r\" lastCell=\"B2\")");
+            comment(sheet, each.getCell(0),
+                    "jx:each(items=\"sql.rows\" var=\"r\" lastCell=\"B2\")");
             try (OutputStream out = Files.newOutputStream(template)) {
                 workbook.write(out);
             }

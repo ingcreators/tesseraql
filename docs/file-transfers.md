@@ -119,11 +119,19 @@ export:
       url: https://rates.example/today
 ```
 
+An export's template sees the same shapes a route's template sees: the extraction under `sql`, and
+each named query under its own name, all carrying `rows`, `rowCount` and `first`.
+
+```html
+<h1 th:text="${header.first.customer}">Customer</h1>
+<tr th:each="row : ${sql.rows}"><td th:text="${row.item}">item</td></tr>
+```
+
 - **`queries:`** run on the extraction's own connection, inside its transaction and before it, so
-  a document reads exactly the state its rows came from. Each result is shaped like a read
-  route's named query — `rows` and `rowCount` — so a template written against one reads the same
-  as the other. This is how a header-and-lines document stops denormalizing its header onto every
-  line.
+  a document reads exactly the state its rows came from. This is how a header-and-lines document
+  stops denormalizing its header onto every line.
+- **Results are read in sequence**, so `rows[0]` does not resolve — a single-row query is read
+  through `first`. A template that wants the third row wants a query that returns it.
 - **`http:` sources** are declared on the route and reach the template the same way. On an export
   they run *before* the extraction, and on an asynchronous export they are called when the export
   is requested rather than when the worker gets to it: the data is as of submission, which is the
@@ -147,7 +155,8 @@ Which formats stream, and which hold every row before they write:
 
 A format that holds its rows runs under `maxRows:`, defaulting to
 `tesseraql.resultMaterialization.maxRows`; passing it fails with `TQL-LD-2850`, and
-`onOverflow: warn` truncates instead. A streaming format is not capped at all — nothing
+`onOverflow: warn` truncates instead. It counts the named queries too — a ceiling that bounds the
+extraction and lets a second sheet run unbounded bounds nothing. A streaming format is not capped at all — nothing
 accumulates, so a ceiling there would exist only to be raised. An uncapped buffering export is a
 build warning (`TQL-LD-5310`).
 

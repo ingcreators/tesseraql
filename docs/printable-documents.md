@@ -83,7 +83,7 @@ Page-oriented CSS drives the print layout:
   <table>
     <thead><tr><th th:each="column : ${columns}" th:text="${column.header}">h</th></tr></thead>
     <tbody>
-      <tr th:each="row : ${rows}"><td th:text="${row.name}">name</td></tr>
+      <tr th:each="row : ${sql.rows}"><td th:text="${row.name}">name</td></tr>
     </tbody>
   </table>
 </body>
