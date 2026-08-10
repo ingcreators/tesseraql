@@ -18,7 +18,9 @@ All notable changes to TesseraQL are documented here. The format follows
   generated OpenAPI document's `servers` entry. The bundled applications — Studio, the
   operations console, IAM Admin, account, and the sign-in pages — emit their URLs through it
   as well, so a suite-hosted application no longer renders a sign-in form that posts into a
-  void.
+  void. `TQL-TPL-2004` warns when an application that configured a prefix writes a
+  root-absolute `href`/`src`/`action` in its own templates — a warning, not an error, because
+  a page may legitimately link outside its own mount point.
 
 ### Added
 

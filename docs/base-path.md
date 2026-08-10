@@ -211,7 +211,10 @@ have been the smaller change.
    model-supplied URLs through `@{${…}}`, the Studio preview `srcdoc` head, and the JavaScript
    of decision 8. A test walks the shipped templates and fails on a root-absolute URL, because
    a sweep this size is worth doing once.
-4. **The lint** (decision 3).
+4. **The lint** (decision 3). **Done** — `TQL-TPL-2004`, a warning over the application's own
+   `web/**` and `templates/**` markup, raised only when a base path is configured. It catches
+   the literal-substitution spelling too, that being how forty-seven of the framework's own
+   URLs survived slice 3's first pass.
 5. **The cookie path**: supplied by the host beside the prefix (decision 4).
 6. **Suite mode end to end**: an HTML page served through `/apps/<id>/` with its assets,
    navigation, forms, and htmx swaps working — the case that opened this document.
