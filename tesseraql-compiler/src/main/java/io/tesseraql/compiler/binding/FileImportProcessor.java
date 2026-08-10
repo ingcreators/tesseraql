@@ -103,17 +103,20 @@ public final class FileImportProcessor implements Processor {
     /** The shared 202 response: transfer id plus the status (and for exports file) URLs. */
     static void respondAccepted(Exchange exchange, String urlPath, String transferId,
             boolean withFileUrl) {
+        // The route's declared path is base-relative; what a caller is handed must be an address
+        // this runtime answers at (docs/base-path.md).
+        String statusUrl = io.tesseraql.camel.BasePath.url(exchange, urlPath + "/" + transferId);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("transferId", transferId);
-        body.put("statusUrl", urlPath + "/" + transferId);
+        body.put("statusUrl", statusUrl);
         if (withFileUrl) {
-            body.put("fileUrl", urlPath + "/" + transferId + "/file");
+            body.put("fileUrl", statusUrl + "/file");
         }
         exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
         // 202 points at the status resource (docs/vocabulary-cleanup.md slice 3); the body
         // keeps statusUrl/fileUrl for existing consumers.
-        exchange.getMessage().setHeader("Location", urlPath + "/" + transferId);
+        exchange.getMessage().setHeader("Location", statusUrl);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
             exchange.getMessage().setBody(MAPPER.writeValueAsString(body));

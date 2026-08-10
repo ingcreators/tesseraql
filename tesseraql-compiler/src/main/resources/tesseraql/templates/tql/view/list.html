@@ -29,7 +29,7 @@
        /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
        the SSE event carries no data. Empty values drop the attributes (plain list). -->
   <div th:id="|${v.id}-table|"
-       th:attr="hx-ext=${v.liveExt},sse-connect=${v.liveConnect},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-include=${v.liveInclude},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
+       th:attr="hx-ext=${v.liveExt},sse-connect=@{${v.liveConnect}},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-include=${v.liveInclude},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
     <input type="hidden" name="sort" th:if="${v.sort != ''}" th:value="${v.sort}">
     <input type="hidden" name="dir" th:if="${v.dir != ''}" th:value="${v.dir}">
     <th:block th:insert="~{tql/view/table :: table(|${v.id}-table|, ${v.columns}, ${v.rows})}"/>

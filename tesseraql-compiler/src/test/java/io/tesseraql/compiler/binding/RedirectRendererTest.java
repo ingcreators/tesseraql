@@ -53,6 +53,43 @@ class RedirectRendererTest {
         assertThat(exchange.getMessage().getHeader("Location")).isEqualTo("/items");
     }
 
+    /**
+     * A redirect names an address the browser will ask for, so under a base path it must name one
+     * this runtime serves (docs/base-path.md slice 2). Both branches carry it, because htmx
+     * navigates on {@code HX-Redirect} exactly as the browser navigates on {@code Location}.
+     */
+    @Test
+    void aRedirectCarriesTheApplicationsBasePath() {
+        DefaultCamelContext context = new DefaultCamelContext();
+        io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
+
+        Exchange plain = new DefaultExchange(context);
+        plain.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
+        renderer.process(plain);
+        assertThat(plain.getMessage().getHeader("Location")).isEqualTo("/apps/shop-a/items/42");
+
+        Exchange htmx = new DefaultExchange(context);
+        htmx.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
+        htmx.getMessage().setHeader("HX-Request", "true");
+        renderer.process(htmx);
+        assertThat(htmx.getMessage().getHeader("HX-Redirect")).isEqualTo("/apps/shop-a/items/42");
+    }
+
+    /** An off-site redirect is not this application's to prefix. */
+    @Test
+    void anAbsoluteRedirectIsLeftAlone() {
+        DefaultCamelContext context = new DefaultCamelContext();
+        io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
+        Exchange exchange = new DefaultExchange(context);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
+
+        new RedirectRenderer(new RedirectResponse(303, "https://example.test/pay"))
+                .process(exchange);
+
+        assertThat(exchange.getMessage().getHeader("Location"))
+                .isEqualTo("https://example.test/pay");
+    }
+
     private static Exchange exchange(String hxRequest) {
         Exchange exchange = new DefaultExchange(new DefaultCamelContext());
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));

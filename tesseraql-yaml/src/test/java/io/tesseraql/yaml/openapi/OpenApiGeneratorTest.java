@@ -60,6 +60,50 @@ class OpenApiGeneratorTest {
         assertThat(json).contains("\"name\" : \"受注番号\"").contains("\"in\" : \"path\"");
     }
 
+    /**
+     * An application served under a prefix answers at {@code <base>/api/users}
+     * (docs/base-path.md): the generated document says so once, in {@code servers}, and leaves
+     * the declared route paths alone.
+     */
+    @Test
+    void aConfiguredBasePathBecomesTheDocumentsServer() {
+        String json = new OpenApiGenerator().toJson(withBasePath("/apps/shop-a/"));
+
+        assertThat(json).contains("\"url\" : \"/apps/shop-a\"");
+        assertThat(json).contains("\"/受注\"");
+    }
+
+    @Test
+    void noBasePathMeansNoServersEntry() {
+        assertThat(new OpenApiGenerator().toJson(withBasePath(null)))
+                .doesNotContain("\"servers\"");
+    }
+
+    private static AppManifest withBasePath(String basePath) {
+        io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
+        Path home = Path.of("/app").toAbsolutePath().normalize();
+        var route = new io.tesseraql.yaml.manifest.RouteFile("get", "/受注",
+                home.resolve("web/受注/get.yml"), parser.parseRoute("""
+                        version: tesseraql/v1
+                        id: orders.list
+                        kind: route
+                        recipe: query-json
+                        sql:
+                          file: list.sql
+                        """, "list"));
+        java.util.Map<String, Object> config = basePath == null
+                ? java.util.Map.of()
+                : java.util.Map.of("tesseraql",
+                        java.util.Map.of("http", java.util.Map.of("basePath", basePath)));
+        return new AppManifest(home,
+                new io.tesseraql.yaml.config.AppConfig(config, name -> null),
+                java.util.List.of(route), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                io.tesseraql.yaml.manifest.ManifestIndex.of(java.util.Map.of(), "test"));
+    }
+
     @Test
     void recipesShapeResponses() {
         String json = new OpenApiGenerator().toJson(exampleApp());

@@ -20,8 +20,8 @@
   <div class="hc-card__body hc-stack">
   <div class="hc-empty" th:if="${v.notFound}"><p class="hc-empty__title"
       th:text="#{tql.view.notFound}">Not found.</p></div>
-  <form th:unless="${v.notFound}" th:id="${v.formId}" method="post" th:action="${v.action}"
-        th:attr="hx-post=${v.action},hx-target=|#${v.formId}-errors|"
+  <form th:unless="${v.notFound}" th:id="${v.formId}" method="post" th:action="@{${v.action}}"
+        th:attr="hx-post=@{${v.action}},hx-target=|#${v.formId}-errors|"
         hx-swap="innerHTML"
         hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
     <input type="hidden" name="_csrf" th:if="${_csrf != null}" th:value="${_csrf}">

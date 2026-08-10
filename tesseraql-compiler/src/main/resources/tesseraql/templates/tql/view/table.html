@@ -25,7 +25,7 @@
         <tbody class="hc-datagrid__body">
           <tr class="hc-datagrid__row" th:each="r : ${rows}">
             <td class="hc-datagrid__cell" th:each="cell : ${r}">
-              <a th:if="${cell.href != null}" th:href="${cell.href}"
+              <a th:if="${cell.href != null}" th:href="@{${cell.href}}"
                  th:class="${cell.button} ? 'hc-button' : null"
                  th:attr="data-size=${cell.button} ? 'sm' : null"
                  th:text="${cell.text}">value</a>

@@ -73,10 +73,18 @@ final class AssetsRouteBuilder extends RouteBuilder {
         headers.setOutFilterPattern("(?i)(Camel|org\\.apache\\.camel)[\\.|a-zA-Z0-9]*");
         getContext().getRegistry().bind("tqlAssetHeaderFilter", headers);
 
-        from("platform-http:/assets?matchOnUriPrefix=true&httpMethodRestrict=GET"
+        // Assets are served by a platform-http consumer, outside the REST DSL that carries the
+        // app's base path on its context-wide configuration — so this one mount applies the
+        // prefix itself (docs/base-path.md slice 2).
+        from("platform-http:" + assetRoot() + "?matchOnUriPrefix=true&httpMethodRestrict=GET"
                 + "&headerFilterStrategy=#tqlAssetHeaderFilter")
                 .routeId("tql.assets")
                 .process(this::serve);
+    }
+
+    /** Where the asset tree is mounted: {@code /assets}, under the app's prefix. */
+    private String assetRoot() {
+        return io.tesseraql.camel.BasePath.of(getContext()) + "/assets";
     }
 
     /** The app's configured response headers, empty when the app declares none. */
@@ -87,7 +95,7 @@ final class AssetsRouteBuilder extends RouteBuilder {
         return headers == null ? java.util.Map.of() : headers;
     }
     private void serve(Exchange exchange) throws IOException {
-        String path = requestPath(exchange);
+        String path = requestPath(exchange, assetRoot());
         String ifNoneMatch = exchange.getMessage().getHeader("If-None-Match", String.class);
         // The ?locale= query parameter of the client catalog module (platform-http exposes
         // query parameters as headers).
@@ -180,12 +188,16 @@ final class AssetsRouteBuilder extends RouteBuilder {
         }
     }
 
-    private static String requestPath(Exchange exchange) {
+    private static String requestPath(Exchange exchange, String assetRoot) {
         String raw = exchange.getMessage().getHeader(Exchange.HTTP_PATH, String.class);
         if (raw == null) {
             return null;
         }
-        String path = raw.startsWith("/assets") ? raw.substring("/assets".length()) : raw;
+        // platform-http reports the matched path; under a base path that is the prefixed mount,
+        // and the bare form is kept because a consumer may report only what followed the prefix.
+        String path = raw.startsWith(assetRoot)
+                ? raw.substring(assetRoot.length())
+                : raw.startsWith("/assets") ? raw.substring("/assets".length()) : raw;
         while (path.startsWith("/")) {
             path = path.substring(1);
         }

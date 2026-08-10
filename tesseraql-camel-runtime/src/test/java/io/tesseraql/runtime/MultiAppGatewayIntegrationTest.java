@@ -244,8 +244,8 @@ class MultiAppGatewayIntegrationTest {
      * nothing at that address — a page that loaded and could not be used. The multi-app tests
      * all exercised a JSON route, which emits no links and so survived a prefix by accident.
      *
-     * <p>Scoped to the framework templates this slice swept; the bundled apps carry their own
-     * absolute URLs until their slice lands.
+     * <p>Scoped to the framework templates; the bundled apps carry their own absolute URLs until
+     * their slice lands.
      */
     @Test
     void aShellPageUnderThePrefixEmitsUrlsThatAnswer() throws Exception {
@@ -263,9 +263,29 @@ class MultiAppGatewayIntegrationTest {
                 .doesNotContain("href=\"/assets/")
                 .doesNotContain("src=\"/assets/");
 
-        // Serving those assets is the next slice: the asset routes are Java, not templates
-        // (docs/base-path.md slice 2). What this pins is that the page now asks for the right
-        // address instead of one nothing could ever answer.
+        // And every one of them answers. Asserting on the markup alone was what let the original
+        // defect through in the other direction: a page can name a perfectly-formed address that
+        // nothing serves, and only a request finds out.
+        List<String> assetUrls = assetUrlsIn(page.body());
+        assertThat(assetUrls).isNotEmpty();
+        for (String url : assetUrls) {
+            assertThat(statusOf(gateway, url)).as(url).isEqualTo(200);
+        }
+
+        assertThat(statusOf(gateway, "/assets/_tesseraql/tesseraql.css"))
+                .as("and the asset tree is not left mounted at the origin as well")
+                .isEqualTo(404);
+    }
+
+    /** Every {@code href}/{@code src} in the page pointing into the asset tree, de-duplicated. */
+    private static List<String> assetUrlsIn(String html) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:href|src)=\"(/apps/shop-a/assets/[^\"#]+)").matcher(html);
+        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
+        while (matcher.find()) {
+            urls.add(matcher.group(1));
+        }
+        return List.copyOf(urls);
     }
 
     /**

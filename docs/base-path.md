@@ -130,6 +130,25 @@ point, not a large job.** 446 template URLs meant a link builder was being overl
 route mounts meant a REST configuration was. Both libraries offered exactly one place to put
 the rule. Check for that place before counting the call sites.
 
+### 7. A URL is base-relative inside the runtime and acquires the prefix on its way out
+
+Slice 2 had to answer a question decision 2 left open for everything that is not markup: *when*
+does a URL become prefixed? Two answers were both live in the code and they contradict each
+other — a `Location` built from a route's declared path (`/api/items/import`) needs the prefix,
+and a `Location` built from `HTTP_URI` already carries it, because the runtime serves under the
+prefix and the request arrived at the full address.
+
+The rule, now stated once in `BasePaths`: **a URL is base-relative everywhere inside the runtime
+and acquires the prefix at the moment it becomes a wire URL.** In markup that moment is the link
+builder; in a response header it is `RedirectRenderer.negotiate`, the framework's one redirect.
+A URL read back off the request is already a wire URL and is left alone — which is why the login
+page's `next` target is stored base-relative: it is handed back to the redirect helper after
+sign-in, and would otherwise be prefixed twice.
+
+The one deliberate exception is pins and recents, which the browser captures from its own
+location bar. Those are wire URLs by origin, they are compared against the request URI, and they
+are per-user state in a database, so re-deriving them costs more than it settles.
+
 ### 5. The runtime serves under the prefix; it does not merely emit it
 
 Two models exist for putting an application under a path, and both are real deployments:
@@ -159,7 +178,11 @@ have been the smaller change.
 2. **The framework's own URL emission.** What remains after decision 6: the asset route
    (`platform-http:/assets`, outside the REST DSL and so outside `contextPath`), redirects,
    the live-events endpoint, and generated OpenAPI servers. The 47 REST mounts this slice was
-   sized around need no change.
+   sized around need no change. **Done** — four mount points and one redirect helper
+   (decision 7), plus the framework templates' remaining non-link attributes: the command
+   palette's `data-value`, the shell's `sse-connect`, and the model-supplied URLs the view
+   patterns render (`v.action`, `cell.href`, `liveConnect`), which are base-relative and so go
+   through `@{${…}}`.
 3. **The bundled apps.** Studio, ops console, IAM Admin, account, auth-ui — the 264 sites,
    mechanical once slice 1 defines the idiom.
 4. **The lint** (decision 3).
