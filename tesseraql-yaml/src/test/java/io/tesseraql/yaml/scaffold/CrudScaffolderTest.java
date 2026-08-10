@@ -195,7 +195,9 @@ class CrudScaffolderTest {
         // footer slot; it posts the current row's id/version off the view model.
         assertThat(content(files, "web/items/frags.html"))
                 .contains("th:fragment=\"confirm-delete\"")
-                .contains("hx-post=|/items/${v.row['id']}/delete|")
+                // A link expression, so a scaffolded page keeps working under a base path
+                // (docs/base-path.md) — and shows the author the idiom.
+                .contains("hx-post=@{|/items/${v.row['id']}/delete|}")
                 .contains("hx-trigger=\"hc:confirmed\"")
                 .contains("data-hc-confirm=\"Delete this record?\"")
                 .contains("name=\"version\" th:value=\"${v.row['version']}\"")

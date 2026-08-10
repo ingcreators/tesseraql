@@ -227,7 +227,13 @@ have been the smaller change.
    OIDC flow cookie is the exception that proves the rule: scoped to `/_tesseraql/oidc`, it
    follows the *base* path, because it is scoped to endpoints rather than to a sign-in.
 6. **Suite mode end to end**: an HTML page served through `/apps/<id>/` with its assets,
-   navigation, forms, and htmx swaps working — the case that opened this document.
+   navigation, forms, and htmx swaps working — the case that opened this document. **Done** —
+   `SuiteModeIntegrationTest` asks for the page, then asks for every URL the page named, which
+   is the check the original defect would have failed. It also covers Studio behind the gateway
+   ([app-isolation-model.md](app-isolation-model.md) slice 5), the sign-in redirect, one
+   sign-in reaching both applications, and the converse under independent hosting. The example
+   application's own templates moved to link expressions with it, the scaffolder's generated
+   fragments included — the first application to meet the lint of slice 4 was ours.
 
 ## Out of scope
 
@@ -240,7 +246,6 @@ have been the smaller change.
 
 ## Interim honesty
 
-Until slice 6 lands, **suite mode serves JSON APIs and not HTML applications**. That is the
-state `tesseraql host --mode suite` shipped in, and the flag's help text and the hosting
-documentation say so rather than letting an operator discover it from a page with no
-stylesheet.
+**Closed by slice 6.** `tesseraql host --mode suite` shipped serving JSON APIs and not HTML
+applications, and said so in its help text rather than letting an operator discover it from a
+page with no stylesheet. It now serves both, and the help text no longer carries the caveat.

@@ -13,9 +13,9 @@
     <p class="hc-field__message" th:text="#{users.list.hint}">The table is loaded over the authenticated session via htmx; typing filters the results.</p>
     <input class="hc-input" type="search" name="q" placeholder="Search by name..."
            th:placeholder="#{users.list.searchPlaceholder}"
-           hx-get="/users/fragments/table" hx-trigger="input changed delay:300ms, search"
+           th:hx-get="@{/users/fragments/table}" hx-trigger="input changed delay:300ms, search"
            hx-target="#user-table-area" hx-swap="innerHTML">
-    <div id="user-table-area" hx-get="/users/fragments/table" hx-trigger="load" hx-swap="innerHTML">
+    <div id="user-table-area" th:hx-get="@{/users/fragments/table}" hx-trigger="load" hx-swap="innerHTML">
       <p class="hc-field__message" th:text="#{users.list.loading}">Loading...</p>
     </div>
   </div>
