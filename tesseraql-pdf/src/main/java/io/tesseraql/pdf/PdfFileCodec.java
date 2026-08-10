@@ -75,8 +75,9 @@ public final class PdfFileCodec implements FileCodec {
     }
 
     @Override
-    public void write(OutputStream out, FileWriteSpec spec, Iterator<Map<String, Object>> rows)
-            throws IOException {
+    public void write(OutputStream out, FileWriteSpec spec,
+            io.tesseraql.core.files.ExportModel model) throws IOException {
+        Iterator<Map<String, Object>> rows = model.repeatableRows().iterator();
         Locale locale = ColumnValues.locale(spec.locale());
         ZoneId zone = ColumnValues.zone(spec.timezone());
         List<ColumnMapping> columns = new ArrayList<>(spec.columns());

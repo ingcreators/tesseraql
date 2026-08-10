@@ -90,8 +90,9 @@ public final class CsvFileCodec implements FileCodec {
     // The printer is deliberately not closed: closing it would close the caller-owned stream;
     // the codec contract is flush-only.
     @SuppressWarnings("resource")
-    public void write(OutputStream out, FileWriteSpec spec, Iterator<Map<String, Object>> rows)
-            throws IOException {
+    public void write(OutputStream out, FileWriteSpec spec,
+            io.tesseraql.core.files.ExportModel model) throws IOException {
+        Iterator<Map<String, Object>> rows = model.rows();
         CSVPrinter printer = new CSVPrinter(
                 new OutputStreamWriter(out, StandardCharsets.UTF_8), CSVFormat.RFC4180);
         java.util.Locale locale = io.tesseraql.core.files.ColumnValues.locale(spec.locale());
