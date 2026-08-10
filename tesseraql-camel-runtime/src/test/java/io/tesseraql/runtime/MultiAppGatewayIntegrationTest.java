@@ -20,6 +20,8 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -91,6 +93,32 @@ class MultiAppGatewayIntegrationTest {
 
         assertThat(executor.isShutdown()).as("the server's executor").isTrue();
         assertThat(client.isTerminated()).as("the outbound HTTP client").isTrue();
+    }
+
+    /**
+     * A client cannot present the header its target app trusts for mTLS.
+     *
+     * <p>A client certificate is public, so PKIX proves issuance rather than possession — the
+     * edge's trust in the forwarded header *is* the control. The gateway forwarded a
+     * client-supplied copy verbatim, so a caller could hand the app the very header it was
+     * configured to believe. Only an edge in front of the gateway may set it.
+     *
+     * <p>{@code X-Tenant-Id} stays forwarded on purpose: the entitlement check here is a
+     * convenience filter and the app's own tenancy resolution is the authoritative one
+     * (docs/app-isolation-model.md decision 3), so stripping it would remove tenant context
+     * from a request without adding a guarantee.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theTrustedMtlsHeaderIsStrippedOnIngress() throws Exception {
+        Map<String, Set<String>> strip = field(gateway, "ingressStripByApp", Map.class);
+
+        assertThat(strip.get("shop-a"))
+                .as("the header shop-a's configuration tells it to trust")
+                .containsExactly("x-client-cert");
+        assertThat(strip.get("shop-a"))
+                .as("the tenant header stays, by decision")
+                .doesNotContain("x-tenant-id");
     }
 
     private static <T> T field(MultiAppGateway gateway, String name, Class<T> type)
@@ -226,6 +254,10 @@ class MultiAppGatewayIntegrationTest {
                     url: %s&currentSchema=%s
                     username: %s
                     password: %s
+                tesseraql:
+                  security:
+                    mtls:
+                      forwardedHeader: X-Client-Cert
                 """.formatted(POSTGRES.getJdbcUrl(), schema,
                 POSTGRES.getUsername(), POSTGRES.getPassword()));
 

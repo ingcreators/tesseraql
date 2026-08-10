@@ -61,25 +61,54 @@ public final class MultiAppGateway implements AutoCloseable {
      */
     static final int MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024;
 
+    /**
+     * The largest response body the gateway will relay.
+     *
+     * <p>The request side was bounded and the response side was not, which left the same
+     * question open from the other direction: a hosted app answering a large export decided how
+     * much of the gateway's heap it took. The body streams through a bounded buffer instead of
+     * materializing, so an oversized response fails the exchange rather than the process.
+     */
+    static final long MAX_RESPONSE_BODY_BYTES = 64L * 1024 * 1024;
+
     private final HttpClient client;
     private final java.util.concurrent.ExecutorService executor;
     private final int port;
     private final Map<String, String> hostToApp;
     private final Map<String, InstalledApp> appsById;
+    /**
+     * Per app, the headers a client must never be able to supply for itself: the mTLS
+     * forwarded header that app trusts, lowercased.
+     *
+     * <p>A client certificate is public, so PKIX proves issuance rather than possession — the
+     * edge's trust in this header *is* the control. The gateway forwarded a client-supplied copy
+     * verbatim, which let a caller present the header the app was configured to believe.
+     * TesseraQL's own front strips it on ingress; only an edge in front of the gateway may set
+     * it (docs/deployment.md).
+     *
+     * <p>{@code X-Tenant-Id} is deliberately *not* stripped: the gateway's entitlement check is
+     * a convenience filter, not a control, and the app's own tenancy resolution is the
+     * authoritative one (docs/app-isolation-model.md decision 3).
+     */
+    private final Map<String, Set<String>> ingressStripByApp;
 
-    private MultiAppGateway(MultiAppHost host, HttpServer server, List<InstalledApp> hostedApps) {
+    private MultiAppGateway(MultiAppHost host, HttpServer server, List<InstalledApp> hostedApps,
+            java.nio.file.Path installRoot) {
         this.host = host;
         this.server = server;
         Map<String, String> hosts = new java.util.HashMap<>();
         Map<String, InstalledApp> byId = new java.util.HashMap<>();
+        Map<String, Set<String>> strip = new java.util.HashMap<>();
         for (InstalledApp app : hostedApps) {
             byId.put(app.id(), app);
             for (String hostName : app.hosts()) {
                 hosts.put(hostName.toLowerCase(Locale.ROOT), app.id());
             }
+            strip.put(app.id(), ingressStripHeaders(installRoot, app));
         }
         this.hostToApp = Map.copyOf(hosts);
         this.appsById = Map.copyOf(byId);
+        this.ingressStripByApp = Map.copyOf(strip);
         this.client = HttpClient.newHttpClient();
         this.port = server.getAddress().getPort();
         server.createContext("/", this::handle);
@@ -98,10 +127,31 @@ public final class MultiAppGateway implements AutoCloseable {
             List<InstalledApp> hosted = new AppCatalog(installRoot).list().stream()
                     .filter(app -> host.appIds().contains(app.id()))
                     .toList();
-            return new MultiAppGateway(host, server, hosted);
+            return new MultiAppGateway(host, server, hosted, installRoot);
         } catch (IOException ex) {
             host.close();
             throw new UncheckedIOException(ex);
+        }
+    }
+
+    /**
+     * The headers to drop from a request bound for {@code app}: the mTLS forwarded header its
+     * configuration names, if any. Best-effort — an app whose config cannot be read strips
+     * nothing extra, because the alternative is refusing to host it over a header it may not
+     * even use.
+     */
+    private static Set<String> ingressStripHeaders(java.nio.file.Path installRoot,
+            InstalledApp app) {
+        try {
+            java.nio.file.Path appHome = installRoot.resolve(app.path()).normalize();
+            return new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config()
+                    .getString("tesseraql.security.mtls.forwardedHeader")
+                    .map(header -> Set.of(header.toLowerCase(Locale.ROOT)))
+                    .orElseGet(Set::of);
+        } catch (RuntimeException unreadable) {
+            LOG.warn("Could not read '{}' configuration for ingress header stripping: {}",
+                    app.id(), unreadable.getMessage());
+            return Set.of();
         }
     }
 
@@ -151,7 +201,8 @@ public final class MultiAppGateway implements AutoCloseable {
                 respond(exchange, 404, "{\"error\":{\"code\":\"TQL-APP-4040\"}}");
                 return;
             }
-            forward(exchange, appPort, downstreamPath);
+            forward(exchange, appPort, downstreamPath,
+                    ingressStripByApp.getOrDefault(appId, Set.of()));
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
@@ -163,8 +214,8 @@ public final class MultiAppGateway implements AutoCloseable {
         }
     }
 
-    private void forward(HttpExchange exchange, int appPort, String downstreamPath)
-            throws IOException, InterruptedException {
+    private void forward(HttpExchange exchange, int appPort, String downstreamPath,
+            Set<String> stripOnIngress) throws IOException, InterruptedException {
         String query = exchange.getRequestURI().getRawQuery();
         URI target = URI.create("http://localhost:" + appPort + downstreamPath
                 + (query == null ? "" : "?" + query));
@@ -182,7 +233,8 @@ public final class MultiAppGateway implements AutoCloseable {
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofByteArray(body));
         exchange.getRequestHeaders().forEach((name, values) -> {
-            if (!SKIP_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
+            String lower = name.toLowerCase(Locale.ROOT);
+            if (!SKIP_HEADERS.contains(lower) && !stripOnIngress.contains(lower)) {
                 for (String value : values) {
                     try {
                         request.header(name, value);
@@ -193,18 +245,44 @@ public final class MultiAppGateway implements AutoCloseable {
             }
         });
 
-        HttpResponse<byte[]> response = client.send(request.build(),
-                HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<java.io.InputStream> response = client.send(request.build(),
+                HttpResponse.BodyHandlers.ofInputStream());
         response.headers().map().forEach((name, values) -> {
             if (!SKIP_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
                 exchange.getResponseHeaders().put(name, List.copyOf(values));
             }
         });
-        byte[] responseBody = response.body();
-        exchange.sendResponseHeaders(response.statusCode(),
-                responseBody.length == 0 ? -1 : responseBody.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(responseBody);
+        // The declared length is relayed when the app declared one, so a download still reports
+        // its size and the wire format matches what the app produced; only an app that answers
+        // without a length makes this chunked (0). Either way the body streams through a fixed
+        // buffer — the gateway never holds a whole response, which is what the request side has
+        // bounded since it grew a cap.
+        long declared = response.headers().firstValueAsLong("content-length").orElse(-1);
+        if (declared > MAX_RESPONSE_BODY_BYTES) {
+            LOG.warn("App on port {} declared a {}-byte response, past the {}-byte relay bound",
+                    appPort, declared, MAX_RESPONSE_BODY_BYTES);
+            response.body().close();
+            respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
+            return;
+        }
+        exchange.sendResponseHeaders(response.statusCode(), declared == 0 ? -1 : declared);
+        try (java.io.InputStream downstream = response.body();
+                OutputStream out = exchange.getResponseBody()) {
+            byte[] buffer = new byte[8192];
+            long relayed = 0;
+            int read;
+            while ((read = downstream.read(buffer)) != -1) {
+                relayed += read;
+                if (relayed > MAX_RESPONSE_BODY_BYTES) {
+                    // An undeclared length that runs past the bound: the status is already sent,
+                    // so the only honest signal left is to break the response. A truncated body
+                    // the client detects beats one it cannot.
+                    LOG.warn("Response from app on port {} exceeded {} bytes; relay aborted",
+                            appPort, MAX_RESPONSE_BODY_BYTES);
+                    return;
+                }
+                out.write(buffer, 0, read);
+            }
         }
     }
 
