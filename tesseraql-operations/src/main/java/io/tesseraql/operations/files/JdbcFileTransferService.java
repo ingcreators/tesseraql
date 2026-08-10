@@ -223,7 +223,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, extractionDialect,
                             effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    writeThrough(codec, out, request.writeSpec(), iterator, values);
+                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename);
                     rows = iterator.count;
                     writer.incrementRows(rows);
                 }
@@ -470,7 +470,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, vendor(),
                             effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    writeThrough(codec, out, request.writeSpec(), iterator, values);
+                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename);
                     rows = iterator.count;
                     writer.incrementRows(rows);
                 }
@@ -525,7 +525,18 @@ public final class JdbcFileTransferService implements FileTransferService {
      * without the result set living in memory. The row cap fires during the drain either way.
      */
     private void writeThrough(FileCodec codec, OutputStream out, FileWriteSpec writeSpec,
-            Iterator<Map<String, Object>> rows, Map<String, Object> values) throws IOException {
+            Iterator<Map<String, Object>> rows, Map<String, Object> values, String filename)
+            throws IOException {
+        if (writeSpec.splitBy() != null && !writeSpec.splitBy().isBlank()) {
+            // One document per group, bundled (docs/export-pipeline.md, decision 12). The rows are
+            // spooled whatever the codec declared: splitting is a deliberate choice, and holding
+            // one group at a time is what it buys.
+            try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
+                io.tesseraql.core.files.SplitExport.write(codec, writeSpec, spooled, values,
+                        writeSpec.splitBy(), filename, out);
+            }
+            return;
+        }
         if (codec.streams(writeSpec)) {
             codec.write(out, writeSpec, ExportModel.streaming(rows, values));
             return;

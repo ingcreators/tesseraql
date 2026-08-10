@@ -66,6 +66,34 @@ class ExportRowCapIntegrationTest {
     }
 
     @Test
+    void aSplitExportBundlesOneDocumentPerGroup() throws Exception {
+        HttpResponse<byte[]> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/items/bundle"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // One file leaves the export whatever the document format inside it, so the spool, the
+        // transfer record and every delivery destination keep working untouched.
+        assertThat(response.headers().firstValue("content-type").orElse(""))
+                .contains("application/zip");
+        assertThat(response.headers().firstValue("content-disposition").orElse(""))
+                .contains(".zip");
+
+        java.util.List<String> names = new java.util.ArrayList<>();
+        try (java.util.zip.ZipInputStream zip = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(response.body()))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                names.add(entry.getName());
+                // Each entry is a document in its own right, not a fragment of one.
+                assertThat(zip.readAllBytes()).isNotEmpty();
+            }
+        }
+        assertThat(names).containsExactlyInAnyOrder("items-east.csv", "items-west.csv");
+    }
+
+    @Test
     void theSameQueryThroughAStreamingCodecIsNotCapped() throws Exception {
         HttpResponse<String> response = get("/api/items/dump");
 
@@ -99,10 +127,10 @@ class ExportRowCapIntegrationTest {
         Path migrations = home.resolve("db/migration");
         Files.createDirectories(migrations);
         Files.writeString(migrations.resolve("V1__items.sql"), """
-                create table items (name varchar(100) primary key);
-                insert into items (name) values ('alpha');
-                insert into items (name) values ('beta');
-                insert into items (name) values ('gamma');
+                create table items (name varchar(100) primary key, region varchar(20));
+                insert into items (name, region) values ('alpha', 'east');
+                insert into items (name, region) values ('beta', 'west');
+                insert into items (name, region) values ('gamma', 'east');
                 """);
 
         Path print = home.resolve("web/api/items/print");
@@ -139,6 +167,25 @@ class ExportRowCapIntegrationTest {
                     - { name: name, label: Name }
                 """);
         Files.writeString(dump.resolve("items.sql"), "select name from items order by name\n;\n");
+
+        Path bundle = home.resolve("web/api/items/bundle");
+        Files.createDirectories(bundle);
+        Files.writeString(bundle.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: items.bundle
+                kind: route
+                recipe: query-export
+                sql:
+                  file: regions.sql
+                export:
+                  format: csv
+                  filename: items-{key}.csv
+                  splitBy: region
+                  columns:
+                    - { name: name, label: Name }
+                """);
+        Files.writeString(bundle.resolve("regions.sql"),
+                "select region, name from items order by region, name\n;\n");
         return home;
     }
 

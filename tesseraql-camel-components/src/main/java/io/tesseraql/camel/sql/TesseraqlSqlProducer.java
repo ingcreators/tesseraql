@@ -254,7 +254,16 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     // cursor, so a template may walk it more than once without the result set
                     // living in memory (docs/export-pipeline.md, decision 1). The row cap still
                     // fires during the drain, before anything reaches the spool.
-                    if (codec.streams(spec)) {
+                    if (spec.splitBy() != null && !spec.splitBy().isBlank()) {
+                        // One document per group, bundled (docs/export-pipeline.md, dec. 12): the
+                        // rows spool whatever the codec declared, because holding one group at a
+                        // time is what splitting buys.
+                        try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
+                            io.tesseraql.core.files.SplitExport.write(codec, spec, spooled, values,
+                                    spec.splitBy(), endpoint.getFilename(),
+                                    new SpoolOutputStream(writer));
+                        }
+                    } else if (codec.streams(spec)) {
                         codec.write(new SpoolOutputStream(writer), spec,
                                 ExportModel.streaming(rows, values));
                     } else {
@@ -283,9 +292,13 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             throw executionError(ex);
         }
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, codec.contentType());
+        boolean split = spec.splitBy() != null && !spec.splitBy().isBlank();
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                split ? "application/zip" : codec.contentType());
         exchange.getMessage().setHeader("Content-Disposition",
-                "attachment; filename=\"" + endpoint.getFilename() + "\"");
+                "attachment; filename=\"" + (split
+                        ? zipName(endpoint.getFilename())
+                        : endpoint.getFilename()) + "\"");
         exchange.getExchangeExtension().addOnCompletion(new org.apache.camel.spi.Synchronization() {
             @Override
             public void onComplete(Exchange completed) {
@@ -422,6 +435,15 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 throw executionError(ex);
             }
         }
+    }
+
+    /** The bundle's own name: the declared filename with its placeholder and extension dropped. */
+    private static String zipName(String filename) {
+        String withoutKey = filename.replace(io.tesseraql.core.files.SplitExport.KEY, "")
+                .replaceAll("[-_.]+$", "");
+        int dot = withoutKey.lastIndexOf('.');
+        String stem = dot > 0 ? withoutKey.substring(0, dot) : withoutKey;
+        return (stem.isBlank() ? "export" : stem) + ".zip";
     }
 
     /** Adapts the spool writer to the {@link java.io.OutputStream} the codecs write to. */
