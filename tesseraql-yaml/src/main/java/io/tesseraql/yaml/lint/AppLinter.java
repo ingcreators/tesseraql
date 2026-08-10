@@ -2415,7 +2415,7 @@ public final class AppLinter {
                     + " supported on a queue-consume route under consume/, not the '"
                     + definition.recipe() + "' recipe"));
         }
-        lintPdfExport(route, definition, source, findings);
+        lintRouteExport(route, definition, source, findings);
         lintDatasource(config, route.source(), definition, source, findings);
         lintEmbeddedVariables(route.source(), definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
@@ -4445,6 +4445,12 @@ public final class AppLinter {
                                 + " engine before PDF conversion)"));
             }
         }
+        if (!"pdf".equals(export.format()) && export.startCell() != null
+                && export.template() == null) {
+            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+                    + "': startCell: places data into a template, but none is declared - add"
+                    + " template:, or drop startCell: for a plain grid"));
+        }
         if (export.template() != null && (!"pdf".equals(export.format())
                 || export.template().endsWith(".html"))
                 && !Files.isRegularFile(
@@ -5145,33 +5151,48 @@ public final class AppLinter {
     }
 
     /**
-     * Statically checks a printable-document export (roadmap Phase 21): {@code format: pdf} is a
-     * print format, so the workbook-only options ({@code sheet:}, {@code startCell:}) do not
-     * apply, and the template - rendered through the standard template engine - must be an
-     * {@code .html} file colocated with the route.
+     * Statically checks a route's {@code export:} block (docs/export-pipeline.md, decision 4).
+     *
+     * <p>The workbook mode is inferred from the declaration — a template with {@code startCell:}
+     * is placement, a template alone is a jxls report, neither is a grid — so a declaration that
+     * cannot mean what it says silently produces a different document. A missing template file
+     * used to fall through to a plain grid on routes (job steps have been checked all along), and
+     * {@code startCell:} without a template named a mode that does not exist.
+     *
+     * <p>{@code format: pdf} is a print format on top of that: the workbook-only options do not
+     * apply, and its template renders through the standard template engine, so it must be
+     * {@code .html}.
      */
-    private void lintPdfExport(RouteFile route, RouteDefinition definition, String source,
+    private void lintRouteExport(RouteFile route, RouteDefinition definition, String source,
             List<LintFinding> findings) {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
-        if (spec == null || !"pdf".equals(spec.format())) {
+        if (spec == null) {
             return;
         }
-        if (spec.sheet() != null || spec.startCell() != null) {
+        boolean pdf = "pdf".equals(spec.format());
+        if (pdf && (spec.sheet() != null || spec.startCell() != null)) {
             findings.add(new LintFinding("TQL-YAML-1005", "error", source,
                     "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
                             + " through its template, not cell placement"));
         }
+        if (!pdf && spec.startCell() != null && spec.template() == null) {
+            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                    "export: startCell: places data into a template, but none is declared -"
+                            + " add template:, or drop startCell: for a plain grid"));
+        }
         if (spec.template() == null) {
             return;
         }
-        if (!spec.template().endsWith(".html")) {
+        if (pdf && !spec.template().endsWith(".html")) {
             findings.add(new LintFinding("TQL-YAML-1006", "error", source,
                     "pdf export template '" + spec.template()
                             + "' must be an .html file (it renders through the template"
                             + " engine before PDF conversion)"));
-        } else if (!Files.isRegularFile(route.source().getParent().resolve(spec.template()))) {
+            return;
+        }
+        if (!Files.isRegularFile(route.source().getParent().resolve(spec.template()))) {
             findings.add(new LintFinding("TQL-YAML-1006", "error", source,
-                    "pdf export references a missing template: " + spec.template()));
+                    "export references a missing template: " + spec.template()));
         }
     }
 

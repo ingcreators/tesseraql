@@ -1,5 +1,8 @@
 package io.tesseraql.excel;
 
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.CellRef;
 import io.tesseraql.core.files.ColumnMapping;
 import io.tesseraql.core.files.FileCodec;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -37,6 +41,9 @@ import org.jxls.transform.poi.JxlsPoiTemplateFillerBuilder;
  * drives its own iteration over {@code rows}.
  */
 public final class JxlsFileCodec implements FileCodec {
+
+    /** TQL-LD-2852: placement data reached template content below the data area. */
+    private static final TqlErrorCode PLACEMENT_COLLISION = new TqlErrorCode(TqlDomain.LD, 2852);
 
     @Override
     public String format() {
@@ -176,6 +183,12 @@ public final class JxlsFileCodec implements FileCodec {
             int[] positions = null;
             CellStyle[] styles = null;
             int rowIndex = start.row();
+            // Placement writes downward and never shifts anything: a template band below the data
+            // area would be overwritten in the mapped columns while its labels survived, which
+            // reads as a plausible file rather than a broken one (docs/export-pipeline.md,
+            // decision 4). The template's used range is small, so the first occupied row is known
+            // before a byte is written.
+            int firstOccupiedBelow = firstOccupiedRowBelow(sheet, start.row());
             while (rows.hasNext()) {
                 Map<String, Object> row = rows.next();
                 if (columns.isEmpty()) {
@@ -185,6 +198,15 @@ public final class JxlsFileCodec implements FileCodec {
                     positions = placementPositions(columns, start.col());
                     styles = columnStyles(workbook, columns,
                             prototypeStyles(sheet, start.row(), positions));
+                }
+                if (rowIndex >= firstOccupiedBelow) {
+                    throw new TqlException(PLACEMENT_COLLISION,
+                            "placement export reached row " + (firstOccupiedBelow + 1)
+                                    + " of sheet '" + sheet.getSheetName() + "', which the"
+                                    + " template already uses - the data area below startCell "
+                                    + spec.startCell() + " holds "
+                                    + (firstOccupiedBelow - start.row()) + " rows (move the"
+                                    + " band down, or split the export with splitBy:)");
                 }
                 Row target = sheet.getRow(rowIndex);
                 if (target == null) {
@@ -227,6 +249,28 @@ public final class JxlsFileCodec implements FileCodec {
             styles[i] = style;
         }
         return styles;
+    }
+
+    /**
+     * The first row below {@code startRow} carrying any non-blank cell, or
+     * {@link Integer#MAX_VALUE} when the sheet is clear all the way down. A row that only carries
+     * styles is not occupied: templates commonly format a range well past their content, and
+     * refusing to write into formatting would reject the ordinary case.
+     */
+    private static int firstOccupiedRowBelow(Sheet sheet, int startRow) {
+        for (int index = startRow + 1; index <= sheet.getLastRowNum(); index++) {
+            Row row = sheet.getRow(index);
+            if (row == null) {
+                continue;
+            }
+            for (int col = row.getFirstCellNum(); col >= 0 && col < row.getLastCellNum(); col++) {
+                Cell cell = row.getCell(col);
+                if (cell != null && cell.getCellType() != CellType.BLANK) {
+                    return index;
+                }
+            }
+        }
+        return Integer.MAX_VALUE;
     }
 
     /** Explicit positions win; the rest fill sequentially from the start column. */
