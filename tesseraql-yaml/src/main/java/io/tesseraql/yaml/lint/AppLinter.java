@@ -2417,7 +2417,8 @@ public final class AppLinter {
         }
         lintRouteExport(route, definition, source, findings);
         lintExportRowCap(definition.fileExport(), "", source, findings);
-        lintExportSources(definition.fileExport(), definition.http(), "", source, findings);
+        lintExportSources(definition.fileExport(), definition.http(),
+                extractionSqlFile(route, definition), "", source, findings);
         lintDatasource(config, route.source(), definition, source, findings);
         lintEmbeddedVariables(route.source(), definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
@@ -4461,8 +4462,11 @@ public final class AppLinter {
                     + "': export references a missing template: " + export.template()));
         }
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
-        lintExportSources(export, java.util.Map.of(), "Step '" + step.id() + "': ", source,
-                findings);
+        lintExportSources(export, java.util.Map.of(),
+                export.sql() == null || export.sql().file() == null
+                        ? null
+                        : job.source().getParent().resolve(export.sql().file()),
+                "Step '" + step.id() + "': ", source, findings);
     }
 
     /**
@@ -5212,7 +5216,8 @@ public final class AppLinter {
      */
     private void lintExportSources(io.tesseraql.yaml.model.ExportSpec spec,
             java.util.Map<String, io.tesseraql.yaml.model.HttpSourceSpec> httpSources,
-            String label, String source, List<LintFinding> findings) {
+            java.nio.file.Path extractionSql, String label, String source,
+            List<LintFinding> findings) {
         if (spec == null) {
             return;
         }
@@ -5224,6 +5229,14 @@ public final class AppLinter {
                         + " section missing, so an export whose source failed should fail"));
             }
         });
+        if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
+            if (spec.template() == null) {
+                findings.add(new LintFinding("TQL-LD-5312", "warning", source, label
+                        + "export declares groupBy: but no template: - a " + spec.format()
+                        + " export writes rows and nothing else, so the groups have no reader"));
+            }
+            lintGroupOrdering(spec, extractionSql, label, source, findings);
+        }
         boolean templated = spec.template() != null;
         if (templated || (spec.queries().isEmpty() && httpSources.isEmpty())) {
             return;
@@ -5232,6 +5245,51 @@ public final class AppLinter {
                 + "export declares " + (spec.queries().isEmpty() ? "http: sources" : "queries:")
                 + " but no template: - a " + spec.format() + " export writes rows and nothing"
                 + " else, so they would run to be discarded"));
+    }
+
+    /**
+     * The file an export extracts from: {@code query-export} reads the route's own {@code sql:},
+     * while {@code file-export} carries its query inside the {@code export:} block.
+     */
+    private static java.nio.file.Path extractionSqlFile(RouteFile route,
+            RouteDefinition definition) {
+        io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
+        if (spec != null && spec.sql() != null && spec.sql().file() != null) {
+            return route.source().getParent().resolve(spec.sql().file());
+        }
+        if (definition.sql() != null && definition.sql().file() != null) {
+            return route.source().getParent().resolve(definition.sql().file());
+        }
+        return null;
+    }
+
+    /**
+     * A grouped export detects its boundaries on a pass through the rows, so unordered rows would
+     * write one group as several (docs/export-pipeline.md, decision 3). The runtime refuses them
+     * with {@code TQL-LD-2851}; this says so at build time, from the text of the 2-way SQL, in the
+     * shape the mail lints already use — a heuristic, hence a warning.
+     */
+    private void lintGroupOrdering(io.tesseraql.yaml.model.ExportSpec spec,
+            java.nio.file.Path sql, String label, String source, List<LintFinding> findings) {
+        if (sql == null || !Files.isRegularFile(sql)) {
+            return;
+        }
+        String text;
+        try {
+            text = Files.readString(sql).toLowerCase(java.util.Locale.ROOT);
+        } catch (java.io.IOException ex) {
+            return;
+        }
+        int orderBy = text.lastIndexOf("order by");
+        if (orderBy >= 0
+                && text.substring(orderBy).contains(spec.groupBy().toLowerCase(
+                        java.util.Locale.ROOT))) {
+            return;
+        }
+        findings.add(new LintFinding("TQL-LD-5311", "warning", source, label
+                + "export groups by '" + spec.groupBy() + "' but its query has no order by"
+                + " naming that column - the runtime detects group boundaries on a single pass,"
+                + " so unordered rows fail rather than writing one group as several"));
     }
 
     /**

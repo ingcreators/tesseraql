@@ -47,6 +47,8 @@ import java.util.List;
  *                   out. A streaming format is never capped
  *                   (docs/export-pipeline.md, decision 7)
  * @param onOverflow {@code fail} (default) or {@code warn}, which truncates at the cap
+ * @param groupBy    a column the rows are grouped by, exposed to the template as {@code groups};
+ *                   the extraction must be ordered by it (docs/export-pipeline.md, decision 3)
  * @param queries    named queries a template composes around the rows — the order header, the
  *                   totals, the master data. They run on the extraction's connection, inside its
  *                   transaction and before it, so a document reads the state its rows came from
@@ -56,7 +58,7 @@ import java.util.List;
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
         SqlBinding sql, AfterSpec after, Integer maxRows, String onOverflow,
-        java.util.Map<String, SqlBinding> queries) {
+        java.util.Map<String, SqlBinding> queries, String groupBy) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
@@ -74,7 +76,7 @@ public record ExportSpec(String format, String filename, String template, String
                 startCell == null || startCell.isBlank()
                         ? null
                         : io.tesseraql.core.files.CellRef.parse(startCell),
-                resources, null, null);
+                resources, null, null, groupBy);
     }
 
     /**
