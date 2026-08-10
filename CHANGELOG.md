@@ -20,7 +20,10 @@ All notable changes to TesseraQL are documented here. The format follows
   as well, so a suite-hosted application no longer renders a sign-in form that posts into a
   void. `TQL-TPL-2004` warns when an application that configured a prefix writes a
   root-absolute `href`/`src`/`action` in its own templates — a warning, not an error, because
-  a page may legitimately link outside its own mount point.
+  a page may legitimately link outside its own mount point. The session cookie's `Path` comes
+  from whatever starts the runtime: a suite gateway issues it at `/`, so one sign-in reaches
+  every application, and a standalone application scopes it to its own prefix so its session
+  is not offered to whatever else shares the origin.
 
 ### Added
 

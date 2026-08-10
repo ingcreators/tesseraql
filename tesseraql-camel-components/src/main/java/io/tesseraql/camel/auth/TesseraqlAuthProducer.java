@@ -77,9 +77,9 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         String cookieHeader = exchange.getMessage().getHeader("Cookie", String.class);
         String fresh = sessions.rotate(sessions.sessionIdFromCookie(cookieHeader));
         if (fresh != null) {
-            // Login's exact attributes (LoginRouteBuilder): Secure stays the edge's concern.
-            exchange.getMessage().setHeader("Set-Cookie", sessions.cookieName() + "=" + fresh
-                    + "; Path=/; HttpOnly; SameSite=Lax");
+            exchange.getMessage().setHeader("Set-Cookie",
+                    io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
+                            fresh, io.tesseraql.camel.CookiePath.of(exchange)));
         }
     }
 

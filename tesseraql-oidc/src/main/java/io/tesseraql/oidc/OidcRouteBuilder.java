@@ -111,8 +111,11 @@ final class OidcRouteBuilder extends RouteBuilder {
         // short-lived HttpOnly cookie, so the callback can return the user to the page they wanted.
         String next = LoginRedirects.sanitize(header(exchange, "next"), null);
         if (next != null) {
+            // Scoped to the OIDC endpoints, so this one follows the base path they are
+            // mounted under rather than the session cookie's (docs/base-path.md).
             exchange.getMessage().setHeader("Set-Cookie", NEXT_COOKIE + "=" + encode(next)
-                    + "; Path=/_tesseraql/oidc; HttpOnly; SameSite=Lax; Max-Age=600");
+                    + "; Path=" + io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/oidc")
+                    + "; HttpOnly; SameSite=Lax; Max-Age=600");
         }
 
         Map<String, String> params = new LinkedHashMap<>();
@@ -162,8 +165,9 @@ final class OidcRouteBuilder extends RouteBuilder {
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
                         String.class)));
-        exchange.getMessage().setHeader("Set-Cookie", sessions.cookieName() + "=" + sessionId
-                + "; Path=/; HttpOnly; SameSite=Lax");
+        exchange.getMessage().setHeader("Set-Cookie",
+                io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
+                        sessionId, io.tesseraql.camel.CookiePath.of(exchange)));
         redirect(exchange, postLoginTarget(exchange));
     }
 
@@ -179,7 +183,8 @@ final class OidcRouteBuilder extends RouteBuilder {
         String sessionId = cookieValue(header(exchange, "Cookie"), sessions.cookieName());
         sessions.invalidate(sessionId);
         exchange.getMessage().setHeader("Set-Cookie",
-                sessions.cookieName() + "=; Path=/; HttpOnly; Max-Age=0");
+                io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
+                        io.tesseraql.camel.CookiePath.of(exchange)));
         try {
             URI endSession = discovery.metadata().endSessionEndpoint();
             if (endSession != null) {
@@ -235,9 +240,16 @@ final class OidcRouteBuilder extends RouteBuilder {
                 existing -> existing != null ? existing : new OidcTokenValidator(metadata, config));
     }
 
+    /**
+     * The provider's authorization or end-session URL, or a local post-login target. An absolute
+     * URL is the provider's and is left alone; a local target is base-relative and acquires the
+     * application's prefix here, like every other URL leaving the runtime (docs/base-path.md
+     * decision 7).
+     */
     private void redirect(Exchange exchange, String location) {
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location", location);
+        exchange.getMessage().setHeader("Location",
+                io.tesseraql.camel.BasePath.url(exchange, location));
         exchange.getMessage().setBody(null);
     }
 
