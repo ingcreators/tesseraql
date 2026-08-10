@@ -75,6 +75,19 @@ public final class ExportModel {
         return values;
     }
 
+    /**
+     * The rows grouped by {@code column} (docs/export-pipeline.md, decision 3). Only a re-readable
+     * export can answer: grouping walks the rows to find the boundaries, and each group walks them
+     * again for its own.
+     */
+    public ExportGroups groupedBy(String column) {
+        if (!(repeatable instanceof SpooledRows spooled)) {
+            throw new TqlException(WRONG_ROW_SOURCE, "groups are only available to a codec that"
+                    + " holds its rows - this export streams them");
+        }
+        return ExportGroups.of(spooled, column);
+    }
+
     /** The model with one more named value; used while the declared sources are collected. */
     public ExportModel with(String name, Object value) {
         Map<String, Object> merged = new LinkedHashMap<>(values);

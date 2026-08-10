@@ -153,7 +153,7 @@ public final class JxlsFileCodec implements FileCodec {
             // template workbook is held whole — so the re-readable source is the one it is given.
             writePlacement(out, spec, model.repeatableRows().iterator());
         } else if (hasTemplate) {
-            writeWithJxlsTemplate(out, spec, model.repeatableRows(), model.values());
+            writeWithJxlsTemplate(out, spec, model);
         } else {
             writeGrid(out, spec, model.rows());
         }
@@ -315,14 +315,35 @@ public final class JxlsFileCodec implements FileCodec {
      * may walk it more than once, and nothing is collected into a list to allow that.
      */
     private static void writeWithJxlsTemplate(OutputStream out, FileWriteSpec spec,
-            Iterable<Map<String, Object>> rows, Map<String, Object> values) throws IOException {
+            io.tesseraql.core.files.ExportModel model) throws IOException {
         // jxls adds its loop variables to the context, so the map must be mutable. The export's
         // other declared sources go in under their own names (docs/export-pipeline.md, dec. 2).
-        Map<String, Object> context = new LinkedHashMap<>(values);
-        context.put("rows", rows);
+        Map<String, Object> context = new LinkedHashMap<>(model.values());
+        context.put("rows", model.repeatableRows());
+        org.jxls.builder.JxlsStreaming streaming = org.jxls.builder.JxlsStreaming.STREAMING_ON;
+        if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
+            // Grouping is the framework's, not the template's: jxls's own groupBy materializes
+            // (groupIterable returns a Collection of GroupData holding Collections), so a
+            // multisheet report written against it would buffer every row again. A template that
+            // walks `groups` and each group's `rows` calls neither (decision 3).
+            io.tesseraql.core.files.ExportGroups groups = model.groupedBy(spec.groupBy());
+            context.put("groups", groups);
+            List<String> sheetNames = groups.keys().stream().map(String::valueOf).toList();
+            context.put("groupKeys", sheetNames);
+            // Only the generated sheets stream. Streaming every sheet includes the template's
+            // own, and jxls reads that one to know what to write — a multisheet report came out
+            // with the right sheet names and nothing in them.
+            streaming = sheetNames.isEmpty()
+                    ? org.jxls.builder.JxlsStreaming.STREAMING_OFF
+                    : org.jxls.builder.JxlsStreaming.streamingWithGivenSheets(
+                            new java.util.LinkedHashSet<>(sheetNames));
+        }
         try (InputStream template = Files.newInputStream(spec.template())) {
             JxlsPoiTemplateFillerBuilder.newInstance()
                     .withTemplate(template)
+                    // SXSSF output: the workbook stops being held whole, which is the other half
+                    // of streaming a report — the re-readable row set was the first (decision 9).
+                    .withStreaming(streaming)
                     .build()
                     .fill(context, new JxlsOutput() {
                         @Override

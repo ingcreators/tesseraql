@@ -186,6 +186,84 @@ class JxlsFileCodecTest {
         }
     }
 
+    @Test
+    void aMultisheetReportStreamsThroughTheFrameworksGroups() throws Exception {
+        // The framework's groups, not jxls's groupBy: jxls groups by materializing, so a
+        // multisheet report written that way would buffer every row again — the whole point of
+        // decision 3 (docs/export-pipeline.md).
+        Path template = writeMultisheetTemplate();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        rows.add(new LinkedHashMap<>(Map.of("dept", "sales", "name", "ann")));
+        rows.add(new LinkedHashMap<>(Map.of("dept", "sales", "name", "bob")));
+        rows.add(new LinkedHashMap<>(Map.of("dept", "ops", "name", "cat")));
+        io.tesseraql.core.spool.FileTempStore store = new io.tesseraql.core.spool.FileTempStore(
+                dir.resolve("spool"));
+        try (io.tesseraql.core.files.SpooledRows spooled = io.tesseraql.core.files.SpooledRows
+                .drain(store, rows.iterator())) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            codec.write(out, new FileWriteSpec(List.of(), null, template, null, null, null, null,
+                    "dept"),
+                    io.tesseraql.core.files.ExportModel.repeatable(spooled, Map.of()));
+
+            try (XSSFWorkbook workbook = new XSSFWorkbook(
+                    new ByteArrayInputStream(out.toByteArray()))) {
+                assertThat(sheetNames(workbook)).contains("sales", "ops");
+                assertThat(textOf(workbook.getSheet("sales"))).contains("sales", "ann", "bob");
+                assertThat(textOf(workbook.getSheet("ops"))).contains("ops", "cat");
+                // Each group's rows land on its own sheet and nowhere else.
+                assertThat(textOf(workbook.getSheet("ops"))).doesNotContain("ann");
+            }
+        }
+    }
+
+    /** A multisheet template: one sheet per group, that group's rows written inside it. */
+    private Path writeMultisheetTemplate() throws Exception {
+        Path template = dir.resolve("by-dept.xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("dept");
+            Row anchor = sheet.createRow(0);
+            anchor.createCell(0).setCellValue("Report");
+            Row outer = sheet.createRow(1);
+            outer.createCell(0).setCellValue("${g.key}");
+            Row inner = sheet.createRow(2);
+            inner.createCell(0).setCellValue("${r.name}");
+            comment(sheet, anchor.getCell(0), "jx:area(lastCell=\"A3\")");
+            comment(sheet, outer.getCell(0),
+                    "jx:each(items=\"groups\" var=\"g\" multisheet=\"groupKeys\""
+                            + " lastCell=\"A3\")");
+            comment(sheet, inner.getCell(0),
+                    "jx:each(items=\"g.rows\" var=\"r\" lastCell=\"A3\")");
+            try (OutputStream out = Files.newOutputStream(template)) {
+                workbook.write(out);
+            }
+        }
+        return template;
+    }
+
+    private static List<String> sheetNames(XSSFWorkbook workbook) {
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+            names.add(workbook.getSheetName(i));
+        }
+        return names;
+    }
+
+    /** Every string cell on the sheet, so a template's layout can move without the test moving. */
+    private static String textOf(Sheet sheet) {
+        StringBuilder text = new StringBuilder();
+        if (sheet == null) {
+            return "";
+        }
+        for (Row row : sheet) {
+            for (org.apache.poi.ss.usermodel.Cell cell : row) {
+                if (cell.getCellType() == org.apache.poi.ss.usermodel.CellType.STRING) {
+                    text.append(cell.getStringCellValue()).append('\n');
+                }
+            }
+        }
+        return text.toString();
+    }
+
     /** Two title rows, a localized header row at row 3, then two data rows. */
     private static byte[] workbookWithTitleRows() throws Exception {
         try (XSSFWorkbook workbook = new XSSFWorkbook();

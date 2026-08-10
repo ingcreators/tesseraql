@@ -72,6 +72,39 @@ class AppLinterExportSourcesTest {
     }
 
     @Test
+    void aGroupedExportWantsAnOrderedQuery(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, """
+                export:
+                  format: pdf
+                  template: order.html
+                  maxRows: 100
+                  groupBy: item
+                """));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-LD-5311");
+            assertThat(finding.severity()).isEqualTo("warning");
+            assertThat(finding.message()).contains("no order by", "one group as several");
+        });
+    }
+
+    @Test
+    void anOrderedGroupedExportIsClean(@TempDir Path dir) throws Exception {
+        Path app = app(dir, """
+                export:
+                  format: pdf
+                  template: order.html
+                  maxRows: 100
+                  groupBy: item
+                """);
+        Files.writeString(app.resolve("web/orders/lines.sql"),
+                "select item from order_lines order by item\n");
+
+        assertThat(new AppLinter().lint(app))
+                .noneMatch(finding -> "TQL-LD-5311".equals(finding.code()));
+    }
+
+    @Test
     void anHttpSourceDegradingToEmptyIsRefusedOnAnExport(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """
                 http:
