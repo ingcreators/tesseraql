@@ -1066,10 +1066,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     aggregatingMeter, pollSourceStatus);
             Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
+            // What this runtime serves: the host app plus anything mounted into it. The ops
+            // tables live in a business database several runtimes may share, so the console
+            // scopes to its own apps before the caller's grants narrow it further
+            // (docs/app-isolation-model.md decision 4).
+            java.util.Set<String> servedApps = new java.util.LinkedHashSet<>();
+            servedApps.add(appName);
+            mountedApps.forEach(mounted -> servedApps.add(mounted.name()));
             context.addRoutes(new OperationsRouteBuilder(
                     jobRunner, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
                     outboxStore, eventChannelStore, metricsSettings, routeAuditStore,
-                    fileTransfers));
+                    fileTransfers, servedApps));
             // Service providers expose non-SQL runtime state to mounted yaml/template apps
             // (the bundled ops-console and studio apps render these, design ch. 26.11, 16, 47).
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
@@ -1080,7 +1087,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("ops.overview",
                             params -> io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
                                     io.tesseraql.opsui.OpsScope.allowedApps(
-                                            params.get("permissions"))),
+                                            params.get("permissions"), servedApps)),
                                     dashboardRef.health(),
                                     io.tesseraql.core.TesseraqlVersion.current()))
                     // The audit page is always mounted; the provider owns the honest
@@ -1094,18 +1101,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                     : auditStoreRef.recent(200,
                                                             io.tesseraql.opsui.OpsScope
                                                                     .allowedApps(params
-                                                                            .get("permissions"))),
+                                                                            .get("permissions"),
+                                                                            servedApps)),
                                             params.get("route"), params.get("actor"),
                                             params.get("status")),
                                     auditStoreRef != null))
                     .register("ops.traces",
                             params -> io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
                                     io.tesseraql.opsui.OpsScope.allowedApps(
-                                            params.get("permissions")))))
+                                            params.get("permissions"), servedApps))))
                     .register("ops.transfers", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
                                 .allowedApps(
-                                        params.get("permissions"));
+                                        params.get("permissions"), servedApps);
                         return io.tesseraql.opsui.OpsViews.transfers(
                                 fileTransfers.recent(50).stream()
                                         .filter(transfer -> scope.test(transfer.appName()))
@@ -1113,7 +1121,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     .register("ops.outbox", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
-                                .allowedApps(params.get("permissions"));
+                                .allowedApps(params.get("permissions"), servedApps);
                         return io.tesseraql.opsui.OpsViews.outbox(
                                 outboxStore.recent(100).stream()
                                         .filter(event -> scope.test(event.appName()))
@@ -1121,7 +1129,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     .register("ops.outboxRedeliver", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
-                                .allowedApps(params.get("permissions"));
+                                .allowedApps(params.get("permissions"), servedApps);
                         String id = String.valueOf(params.get("id"));
                         // Out of scope reads exactly like unknown - the JSON API's stance
                         // (docs/ops-console-actions.md); 4040 renders as a plain 404.
@@ -1138,7 +1146,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // ops.outbox pair (docs/silent-tolerance.md O1).
                     .register("ops.events", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
-                                .allowedApps(params.get("permissions"));
+                                .allowedApps(params.get("permissions"), servedApps);
                         return io.tesseraql.opsui.OpsViews.events(
                                 eventChannelStore.recent(100).stream()
                                         .filter(event -> scope.test(event.appName()))
@@ -1146,7 +1154,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     .register("ops.eventsRedeliver", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
-                                .allowedApps(params.get("permissions"));
+                                .allowedApps(params.get("permissions"), servedApps);
                         String id = String.valueOf(params.get("id"));
                         // Out of scope reads exactly like unknown - the JSON API's stance
                         // (docs/ops-console-actions.md); 4040 renders as a plain 404.
@@ -1162,7 +1170,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     .register("ops.jobs", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
-                                .allowedApps(params.get("permissions"));
+                                .allowedApps(params.get("permissions"), servedApps);
                         List<io.tesseraql.opsui.OpsViews.JobCatalogEntry> entries = new java.util.ArrayList<>();
                         jobs.forEach((id, jobFile) -> {
                             String owner = jobOwners.getOrDefault(id, appName);
@@ -1179,7 +1187,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     .register("ops.jobRun", params -> {
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
-                                .allowedApps(params.get("permissions"));
+                                .allowedApps(params.get("permissions"), servedApps);
                         String id = String.valueOf(params.get("id"));
                         // Out of scope reads exactly like unknown - the JSON API's stance.
                         if (!jobs.containsKey(id)
@@ -1214,7 +1222,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 : String.valueOf(params.get("id"));
                         java.util.function.Predicate<String> scope = io.tesseraql.opsui.OpsScope
                                 .allowedApps(
-                                        params.get("permissions"));
+                                        params.get("permissions"), servedApps);
                         // An execution outside the caller's scope renders as not found.
                         JobExecution execution = jobRepository.findExecution(id)
                                 .filter(found -> scope.test(found.appName()))
