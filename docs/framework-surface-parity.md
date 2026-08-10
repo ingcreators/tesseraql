@@ -60,7 +60,7 @@ a documented, verified-intentional exemption.
 | `McpHttpHandler` sessions | n/a | yes (idle TTL + cap) | n/a | n/a |
 | `McpHttpHandler` sessions | n/a | **— (no TTL, no cap)** | n/a | n/a |
 | `QueueConsumer` `ProducerTemplate` | yes (context-owned) | yes | yes | yes |
-| `MultiAppGateway` | yes | yes (10 MB request cap) | yes | partial |
+| `MultiAppGateway` | yes | yes (10 MB request, 64 MB response) | yes | yes |
 | `TesseraqlRuntime.start()` failure path | **— (context never stopped, and hard to reach)** | n/a | n/a | n/a |
 | `JdbcFileTransferService` | yes | yes | yes (`guarded()`) | yes |
 | `DatasetSpool`, caches, `JwksKeySource` | yes | yes (LRU/TTL) | yes | yes |
@@ -206,6 +206,13 @@ own front should strip the configured mTLS header and `X-Tenant-Id` on ingress r
 through — a client certificate is public, so PKIX proves issuance, not possession, and header trust
 remains the actual control.
 
+**Closed 2026-08-10, in part.** The gateway now reads each hosted app's
+`tesseraql.security.mtls.forwardedHeader` and strips that header from requests bound for it, so a
+caller can no longer present the header its target was configured to believe. `X-Tenant-Id` stays
+forwarded, deliberately: the entitlement check here is a convenience filter and the app's own
+tenancy resolution is the authoritative one (docs/app-isolation-model.md decision 3), so stripping
+it would remove tenant context from the request without adding a guarantee.
+
 ### The rest
 
 - **`RouteWatcher`'s thread dies permanently on `UncheckedIOException`.** Reproduced: walking a tree
@@ -228,9 +235,11 @@ remains the actual control.
   and orphan the loser.
 - **Studio's try-it console builds an `HttpClient` per invocation** and abandons it, where every
   other call site in the codebase caches one.
-- **`MultiAppGateway.close()`** releases neither its `HttpClient` nor its virtual-thread executor,
+- ~~**`MultiAppGateway.close()`** releases neither its `HttpClient` nor its virtual-thread executor,
   and the gateway buffers whole request and response bodies with no cap on a virtual-thread-per-request
-  server.
+  server.~~ **Closed.** `close()` releases both; the request side gained a 10 MB cap; the response
+  side now streams through a fixed buffer under a 64 MB bound, relaying the app's declared
+  `Content-Length` when it has one so a download still reports its size.
 - **`FrameworkMigrations.COMPONENTS` registers 2 of ~14 framework schema families**; the rest rely on
   each store's idempotent `ensureSchema()` with no versioned history, so a future non-idempotent
   column change has no upgrade vehicle. Possibly deliberate; the enumerated map has certainly not
