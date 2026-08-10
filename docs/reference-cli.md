@@ -208,7 +208,7 @@ Assess route governance and apply the review gate.
 
 ## `admission`
 
-Run the marketplace admission profile over an app tree.
+Run the admission profile over an app tree.
 
 | Argument | Required? | Description |
 | --- | --- | --- |

@@ -40,12 +40,10 @@ otherwise (status word only). Point container health checks at
 previous image.
 
 **B. Several applications on one host.** `tesseraql host --install-root <dir>` starts every
-installed application in [its own runtime](app-isolation-model.md) behind one port — its own
-Camel context, datasource set, Studio and traces. `--mode suite` addresses them as
-`/apps/<id>/` on one origin and shares a sign-in across them; `--mode isolated` gives each its
-own hostname and no shared session. Getting the packages onto the host is a deployment step
-(`tesseraql app install`, or an image that already contains them), not something the runtime
-does at boot.
+installed application in its own runtime behind one port — its own Camel context, datasource
+set, Studio and traces. `--mode suite` addresses them as `/apps/<id>/` on one origin and
+shares a sign-in across them; `--mode isolated` gives each its own hostname and no shared
+session. See [hosting.md](hosting.md).
 
 One runtime serves **one** application plus the framework's own surfaces. Mounting further
 applications into it — `tesseraql.apps.<name>.path` / `.package` / `.url`, previously

@@ -15,10 +15,10 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * The marketplace admission profile (roadmap Phase 47, realizing Phase 37's admission gate):
+ * The admission profile (roadmap Phase 47, realizing Phase 37's admission gate):
  * the machine-checkable bar a shared app must clear before anyone else runs it. It composes
  * the primitives that already exist — {@link AppLinter} and {@link GovernanceGate} — and adds
- * the marketplace-specific constraints the roadmap names: declarative-only (the framework is
+ * the constraints distribution needs: declarative-only (the framework is
  * the sandbox), deny-by-default policies actually defined, egress bounded, and CSP intact on
  * every HTML surface. Pure file reads; deterministic; fit for CI and the publish pipeline.
  */
@@ -26,11 +26,11 @@ public final class AdmissionProfile {
 
     /**
      * TQL-ADM-4705: a governance violation — a review-worthy route with no valid approval —
-     * fails marketplace admission.
+     * fails admission.
      */
     private static final String GOVERNANCE_VIOLATION = "TQL-ADM-4705";
 
-    /** TQL-ADM-4706: every linter error in the app tree is a marketplace admission failure. */
+    /** TQL-ADM-4706: every linter error in the app tree is an admission failure. */
     private static final String LINT_ERROR = "TQL-ADM-4706";
 
     private AdmissionProfile() {
@@ -89,7 +89,7 @@ public final class AdmissionProfile {
                                 + String.join(", ", assessment.riskFactors())));
             } else if ("extended".equals(assessment.mode())) {
                 failures.add(new Finding("TQL-ADM-4701", assessment.routeId(),
-                        "binds a runtime service provider (mode extended); marketplace apps"
+                        "binds a runtime service provider (mode extended); shared apps"
                                 + " are declarative-only"));
             }
         }
@@ -101,7 +101,7 @@ public final class AdmissionProfile {
             try (Stream<Path> jars = Files.list(plugins)) {
                 if (jars.anyMatch(jar -> jar.getFileName().toString().endsWith(".jar"))) {
                     failures.add(new Finding("TQL-ADM-4701", relative(appHome, plugins),
-                            "plugin jars are not admissible; marketplace apps are"
+                            "plugin jars are not admissible; shared apps are"
                                     + " declarative-only"));
                 }
             } catch (IOException ignored) {

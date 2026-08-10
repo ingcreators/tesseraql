@@ -37,7 +37,7 @@ surface:
 
 - **Classpath drift** — a dependency upgrade or a new opt-in module puts `camel-exec` (or any
   scripting component) on the classpath; Camel's auto-discovery happily registers it.
-- **Plugins and marketplace modules** — a plugin JAR can register components directly with the
+- **Plugins and modules** — a plugin JAR can register components directly with the
   CamelContext; [admission](admission.md) reviews an app's YAML tree, not a JAR's classpath.
 - **Framework regressions** — a future recipe or connector wiring a component the posture never
   intended.

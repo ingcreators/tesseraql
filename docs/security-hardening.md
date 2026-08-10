@@ -36,7 +36,7 @@ Exposure differs by parser, and the assessment is honest about it:
 
 | Parser | Where it parses | Input trust |
 | --- | --- | --- |
-| 2-way SQL (`Sql2WayParser`) | app SQL files, at build and boot | author-controlled; **semi-trusted** for a marketplace `.tqlapp` the admission gate parses |
+| 2-way SQL (`Sql2WayParser`) | app SQL files, at build and boot | author-controlled; **semi-trusted** for a shared `.tqlapp` the admission gate parses |
 | Expressions (`ExpressionParser`) | route conditions, binds, `validate:` rules | author-controlled (compiled once; values bind at runtime, the tree does not re-parse) |
 | YAML (`SimpleYamlParser` over Jackson/SnakeYAML) | app documents at boot **and request bodies at the Studio editor endpoints** | author files are trusted; **Studio request bodies are runtime, authenticated, client-controlled** |
 | SCIM filter (`ScimFilter`, `ScimGroupPatch`) | the `?filter=` / PATCH path from a provisioning client | **runtime, authenticated, client-controlled** |
@@ -49,7 +49,7 @@ safe:
 - **2-way SQL: deep directive nesting overflows the stack.** A template nesting
   `/*%if …*/` / `/*%for …*/` / `/*%scope …*/` past roughly 1500 levels raises a raw
   `StackOverflowError` from the recursive-descent block parser, rather than a clean parse
-  error. Author-controlled in the common case, but a marketplace app could crash the
+  error. Author-controlled in the common case, but a shared app could crash the
   admission linter this way.
 - **Expressions: deep nesting overflows the stack.** `((((…))))` grouping or a `!!!!…`
   unary chain past roughly the same depth overflows `ExpressionParser`. Same class, same
@@ -160,7 +160,7 @@ reviewer can check each claim against the source.
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| Deny-by-default security posture | met | routes require an auth mode and a policy unless `auth: public`; egress, uploads, and marketplace admission all default closed |
+| Deny-by-default security posture | met | routes require an auth mode and a policy unless `auth: public`; egress, uploads, and admission all default closed |
 | Trust boundaries and component isolation | met | module boundaries hold (`tesseraql-core` dependency-free); heavy/optional capabilities sit behind SPIs (`FileCodec`, `BlobStore`, `SecretResolver`, `PasswordVerifier`); the DuckDB engine runs behind a per-connection fence |
 | A documented threat model | gap | this page is the first hardening artifact; a full threat-model refresh is follow-up work |
 
@@ -262,7 +262,7 @@ reviewer can check each claim against the source.
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| Deny-by-default egress | met | `tesseraql.http.outbound.allowedHosts` (and the copilot endpoint, `TQL-SEC-4085`); a bare `*` is rejected at marketplace admission (`TQL-ADM-4703`) |
+| Deny-by-default egress | met | `tesseraql.http.outbound.allowedHosts` (and the copilot endpoint, `TQL-SEC-4085`); a bare `*` is rejected at admission (`TQL-ADM-4703`) |
 | A hardening gate for shared apps | met | the admission profile enforces declarative-only, defined policies, bounded egress, and CSP before publish |
 | Secret hygiene in development | met | `SECURITY.md` — never commit secrets; do not bind-mount host credential directories into the Dev Container |
 | A published security policy surfaced to users | met | [`SECURITY.md`](https://github.com/ingcreators/tesseraql/blob/main/SECURITY.md) states the supported-versions policy (latest-release-only pre-1.0, tightening to a support window at 1.0), private vulnerability reporting, and dev-secret hygiene; linked from this page |

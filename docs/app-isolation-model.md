@@ -186,7 +186,11 @@ replacement.
 7. **Documentation.** `deployment.md`'s shipping configurations, a user page for ② and its
    modes, the corrections outstanding in `extending.md` (a mounted `.tqlapp`'s `plugins/` is
    never read; admission is opt-in, so internal and vendor distribution may extend freely),
-   and the admission profile's marketplace-named heading.
+   and the admission profile's marketplace-named heading. **Done** — `hosting.md` is the user
+   page, on the site under "Running in production"; `extending.md` says that `plugins/` is
+   read from the one application a runtime serves, and that admission is a gate for
+   distribution rather than a house style; the admission profile is no longer named after a
+   marketplace that does not exist, in its page, its command and its findings.
 
 ## Out of scope
 

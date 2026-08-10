@@ -110,9 +110,15 @@ this repository is a complete worked example, at about the size a real extension
 ### Two ways in
 
 An extension is discovered from the **runtime classpath** — a jar added with
-`--modules`, or a dependency of your own runtime build — or from the app's **`plugins/`
-directory**. The classpath route is simpler and needs no signing; `plugins/` is the one that
-travels with the application.
+`--modules`, or a dependency of your own runtime build — or from the **`plugins/` directory**
+of the application the runtime serves. The classpath route is simpler and needs no signing;
+`plugins/` is the one that travels with the application.
+
+`plugins/` is read from that one application. Extensions are a host decision: they register
+routes and beans on the runtime, which is runtime-wide, so a runtime hosting an application
+loads that application's plugins and no others. Under
+[`tesseraql host`](hosting.md) each application has its own runtime, and therefore its own
+`plugins/`.
 
 ### Signing a plugin jar
 
@@ -171,8 +177,12 @@ quietly.
 - **Do you need routes or beans the framework does not have?** Rung 3 — and prefer the
   classpath over `plugins/` unless the extension must travel with the application.
 
-If you are building something other applications will install, stop at rung 0. That is what
-the admission profile means by declarative-only, and it is checked rather than trusted.
+If you are building something other people will install, stop at rung 0. That is what the
+admission profile means by declarative-only, and it is checked rather than trusted.
+
+Admission is opt-in: it is the bar for an application someone else runs without reviewing it.
+An application you deploy yourself, or one a vendor ships to a customer who has read the
+contract, may use every rung — the profile is a gate for distribution, not a house style.
 
 ## Next
 
