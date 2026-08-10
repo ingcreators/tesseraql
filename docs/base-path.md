@@ -1,8 +1,10 @@
 # Serving an application under a base path
 
-Status: design accepted 2026-08-10; decisions 4 and 5 settled the same day, after
-implementation surfaced the second. Every URL a TesseraQL application emits is rooted at `/`, so an
-application can only be served at the root of its origin. That blocks two things: hosting
+Status: **complete 2026-08-10** — every slice shipped; decisions 4, 5, 7 and 8 were settled
+during implementation, which is where the last three came from.
+
+Every URL a TesseraQL application emitted was rooted at `/`, so an application could only be
+served at the root of its origin. That blocked two things: hosting
 several applications on one origin under `/apps/<id>/`
 ([app-isolation-model.md](app-isolation-model.md) suite mode), and the ordinary case of a
 single application behind a reverse proxy at `/myapp`.
@@ -199,7 +201,7 @@ have been the smaller change.
    mounting (decision 5), `BasePathLinkBuilder` on the shared engine, and the sweep of
    framework templates (`tql/**`) to `@{…}`. An unset base is byte-identical, held by a test.
    The gateway stops stripping the prefix and starts supplying it to each runtime in the same
-   slice, since the two halves must move together.
+   slice, since the two halves must move together. **Done** (#695, corrected by #696).
 2. **The framework's own URL emission.** What remains after decision 6: the asset route
    (`platform-http:/assets`, outside the REST DSL and so outside `contextPath`), redirects,
    the live-events endpoint, and generated OpenAPI servers. The 47 REST mounts this slice was
