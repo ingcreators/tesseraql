@@ -58,6 +58,23 @@ public final class HtmlResponseRenderer implements Processor {
     private final Map<String, Expr> compiledModel = new LinkedHashMap<>();
     private final java.util.List<JsonResponseRenderer.CompiledStatus> statusWhen;
     private final ObjectMapper mapper = new ObjectMapper();
+    /**
+     * The application's base path, published to every template as {@code base}
+     * (docs/base-path.md decision 2). Empty unless the deployment asked for a prefix, which
+     * makes {@code |${base}/assets/x|} render as {@code /assets/x} — byte-identical to what
+     * shipped before the prefix existed.
+     */
+    private String basePath = "";
+
+    /**
+     * Sets the application's base path, returning {@code this} so the compiler can apply it at
+     * construction. Separate from the constructors because five of them chain, and a prefix is
+     * an application-wide fact rather than a per-route one.
+     */
+    public HtmlResponseRenderer basePath(String basePath) {
+        this.basePath = basePath == null ? "" : basePath;
+        return this;
+    }
 
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir) {
         this(response, appHome, routeDir, "en");
@@ -220,6 +237,10 @@ public final class HtmlResponseRenderer implements Processor {
         // Publish the browser session's CSRF token (stashed on authentication) as the reserved
         // model variable `_csrf`, so the shell can emit <meta name="csrf-token"> for the
         // Hypermedia Components installCsrfHeader convention and forms can carry a hidden field.
+        // Every template resolves its own URLs against this, so an application under a prefix
+        // emits the URLs it also serves (docs/base-path.md).
+        model.put("base", basePath);
+
         String csrfToken = exchange.getProperty(TesseraqlProperties.CSRF_TOKEN, String.class);
         if (csrfToken != null) {
             model.put("_csrf", csrfToken);

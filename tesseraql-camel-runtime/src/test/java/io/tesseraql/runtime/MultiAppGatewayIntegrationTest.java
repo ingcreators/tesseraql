@@ -235,6 +235,39 @@ class MultiAppGatewayIntegrationTest {
         }
     }
 
+    /**
+     * A page rendered through the framework shell emits its URLs under the prefix, and they
+     * answer.
+     *
+     * <p>This is what the base-path design exists for (docs/base-path.md). Before it, a page
+     * under {@code /apps/<id>/} returned 200 with its stylesheet at {@code /assets/…} and
+     * nothing at that address — a page that loaded and could not be used. The multi-app tests
+     * all exercised a JSON route, which emits no links and so survived a prefix by accident.
+     *
+     * <p>Scoped to the framework templates this slice swept; the bundled apps carry their own
+     * absolute URLs until their slice lands.
+     */
+    @Test
+    void aShellPageUnderThePrefixEmitsUrlsThatAnswer() throws Exception {
+        java.net.http.HttpResponse<String> page = java.net.http.HttpClient.newHttpClient().send(
+                java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                        "http://localhost:" + gateway.port() + "/apps/shop-a/users")).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(page.statusCode()).isEqualTo(200);
+
+        assertThat(page.body())
+                .as("the shell's asset URLs carry the prefix")
+                .contains("/apps/shop-a/assets/");
+        assertThat(page.body())
+                .as("and none is left rooted at the origin, where nothing answers")
+                .doesNotContain("href=\"/assets/")
+                .doesNotContain("src=\"/assets/");
+
+        // Serving those assets is the next slice: the asset routes are Java, not templates
+        // (docs/base-path.md slice 2). What this pins is that the page now asks for the right
+        // address instead of one nothing could ever answer.
+    }
+
     private static int statusOf(MultiAppGateway target, String path) throws Exception {
         return java.net.http.HttpClient.newHttpClient().send(
                 java.net.http.HttpRequest.newBuilder(java.net.URI.create(

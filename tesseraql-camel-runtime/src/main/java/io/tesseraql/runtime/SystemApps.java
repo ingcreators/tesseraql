@@ -85,7 +85,7 @@ final class SystemApps {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> childMap(Map<String, Object> parent, String key) {
+    static Map<String, Object> childMap(Map<String, Object> parent, String key) {
         Object child = parent.get(key);
         if (child instanceof Map<?, ?> map) {
             return (Map<String, Object>) map;
@@ -96,7 +96,7 @@ final class SystemApps {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> deepCopy(Map<String, Object> tree) {
+    static Map<String, Object> deepCopy(Map<String, Object> tree) {
         Map<String, Object> copy = new HashMap<>();
         tree.forEach((key, value) -> copy.put(key, value instanceof Map<?, ?> map
                 ? deepCopy((Map<String, Object>) map)

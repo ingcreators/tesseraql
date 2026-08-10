@@ -31,21 +31,21 @@
      request (rendered only when an authenticated session resolved the token). -->
 <meta name="csrf-token" th:if="${_csrf}" th:content="${_csrf}">
 <title th:text="${title}">TesseraQL</title>
-<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <!-- The neutral variant ramp (enum-validated server-side): hc.min.css carries only the default
      ramp, so a non-default neutral links its token sheet on top. -->
 <link rel="stylesheet" th:if="${_neutral}"
-      th:href="|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|">
-<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
-<script src="/assets/vendor/htmx.org/dist/htmx.min.js" defer></script>
+      th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
+<link rel="stylesheet" th:href="@{/assets/_tesseraql/tesseraql.css}">
+<script th:src="@{/assets/vendor/htmx.org/dist/htmx.min.js}" defer></script>
 <!-- htmx's sse extension (bundled in the htmx WebJar): the EventSource behind the live
      inbox badge and the copilot's streaming reply. Deferred, so it runs after htmx. -->
-<script src="/assets/vendor/htmx.org/dist/ext/sse.js" defer></script>
+<script th:src="@{/assets/vendor/htmx.org/dist/ext/sse.js}" defer></script>
 <!-- The locale's message catalog must merge into the kit before its behaviors install at
      DOMContentLoaded; module scripts execute in document order, so this stays first. -->
-<script type="module" th:src="|/assets/_tesseraql/messages.js?locale=${#locale.toLanguageTag()}|"
+<script type="module" th:src="@{|/assets/_tesseraql/messages.js?locale=${#locale.toLanguageTag()}|}"
         src="/assets/_tesseraql/messages.js?locale=en"></script>
-<script type="module" src="/assets/_tesseraql/tesseraql.js"></script>
+<script type="module" th:src="@{/assets/_tesseraql/tesseraql.js}"></script>
 </head>
 <body>
 <div class="hc-shell">
@@ -72,13 +72,13 @@
       <span class="hc-spacer"></span>
       <!-- Pin/Unpin the current page (roadmap Phase 51): a pinned URL keeps its query
            string, so pinning a filtered list IS saving the filter. -->
-      <form th:if="${_shortcuts != null}" method="post" action="/_tesseraql/account/pins/toggle">
+      <form th:if="${_shortcuts != null}" method="post" th:action="@{/_tesseraql/account/pins/toggle}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="href" th:value="${_shortcuts.current}">
         <input type="hidden" name="label" th:value="${title}">
         <button class="hc-button" data-variant="ghost" type="submit"
                 th:attr="aria-label=${_shortcuts.pinnedCurrent} ? 'Unpin this page' : 'Pin this page'">
-          <svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#pin"/></svg>
+          <svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#pin}"/></svg>
           <span th:text="${_shortcuts.pinnedCurrent} ? 'Unpin' : 'Pin'">Pin</span>
         </button>
       </form>
@@ -90,7 +90,7 @@
       <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
          aria-label="Notifications" id="tql-inbox-bell"
          hx-ext="sse" sse-connect="/_tesseraql/events">
-        <svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg>
+        <svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg>
         <span id="tql-inbox-badge" sse-swap="inbox:badge" hx-swap="innerHTML"
               th:utext="${_inbox.badge}"></span>
       </a>
@@ -102,7 +102,7 @@
            name comes from the kit's catalog (themeToggle.label), localized per request. -->
       <button th:if="${_account.accountHref != null}" class="hc-button" data-variant="ghost"
               data-hc-theme-toggle type="button">
-        <svg class="hc-icon" aria-hidden="true"><use href="/assets/_tesseraql/icons.svg#sun-moon"/></svg>
+        <svg class="hc-icon" aria-hidden="true"><use th:href="@{/assets/_tesseraql/icons.svg#sun-moon}"/></svg>
       </button>
       <button class="hc-avatar" type="button" popovertarget="tql-account-menu"
               th:attr="aria-label=${_account.name}">
@@ -139,7 +139,7 @@
       <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-pinned">
         <p class="tql-nav__group" id="tql-nav-pinned">Pinned</p>
         <a class="hc-item" th:each="pin : ${_shortcuts.pins}" th:href="${pin.href}">
-          <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#pin"/></svg></span>
+          <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#pin}"/></svg></span>
           <span class="hc-item__title hc-shell__label" th:text="${pin.label}">pin</span>
         </a>
       </div>
@@ -167,9 +167,9 @@
      served by AssetsRouteBuilder); each label is wrapped in `.hc-shell__label` so it hides in the
      collapsed icon rail while keeping the link's accessible name. -->
 <th:block th:fragment="system-nav">
-  <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
-  <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#layout-dashboard"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
-  <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
 </th:block>
 <!-- The Studio app's own section navigation (Studio platform UX, tracks H1 + sidebar IA): the system
      console `page(...)` form only renders the 3-app `system-nav`, leaving Studio with no section nav,
@@ -191,7 +191,7 @@
        (hx-trigger="intersect once" — nothing is fetched until the palette is opened).
        Selection is wired by the bootstrap's hc:commandselect listener: item values are URLs. -->
   <button type="button" class="hc-item" data-tql-open-dialog="#studio-command">
-    <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#search"/></svg></span>
+    <span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#search}"/></svg></span>
     <span class="hc-item__title hc-shell__label">Search <kbd class="hc-kbd">&#8984;K</kbd></span>
   </button>
   <dialog class="hc-command-dialog" id="studio-command" data-hotkey="k">
@@ -236,55 +236,55 @@
           <div class="hc-command__item" role="option" data-value="/_tesseraql/ops/console">Operations console</div>
           <div class="hc-command__item" role="option" data-value="/_tesseraql/admin/users">IAM Admin</div>
         </div>
-        <div hx-get="/_tesseraql/studio/ui/command" hx-trigger="intersect once"
+        <div th:hx-get="@{/_tesseraql/studio/ui/command}" hx-trigger="intersect once"
              hx-swap="outerHTML"></div>
       </div>
       <div class="hc-command__empty" hidden>No results.</div>
     </div>
   </dialog>
-  <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#compass"/></svg></span><span class="hc-item__title hc-shell__label">Explorer</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#compass}"/></svg></span><span class="hc-item__title hc-shell__label">Explorer</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-docs">
     <p class="tql-nav__group" id="tql-nav-docs">Documentation</p>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#book-open"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/schema"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#database"/></svg></span><span class="hc-item__title hc-shell__label">Schema</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/domains"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#waypoints"/></svg></span><span class="hc-item__title hc-shell__label">Domains</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/rules"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#list-checks"/></svg></span><span class="hc-item__title hc-shell__label">Rules</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/decisions"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#table"/></svg></span><span class="hc-item__title hc-shell__label">Decisions</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/coverage"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#shield-check"/></svg></span><span class="hc-item__title hc-shell__label">Coverage</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/release-diff"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#arrow-left-right"/></svg></span><span class="hc-item__title hc-shell__label">Release diff</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/docs/export"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#share-2"/></svg></span><span class="hc-item__title hc-shell__label">Export</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#book-open}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/schema}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#database}"/></svg></span><span class="hc-item__title hc-shell__label">Schema</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/domains}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Domains</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/rules}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#list-checks}"/></svg></span><span class="hc-item__title hc-shell__label">Rules</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/decisions}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#table}"/></svg></span><span class="hc-item__title hc-shell__label">Decisions</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/coverage}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#shield-check}"/></svg></span><span class="hc-item__title hc-shell__label">Coverage</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/release-diff}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#arrow-left-right}"/></svg></span><span class="hc-item__title hc-shell__label">Release diff</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/docs/export}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#share-2}"/></svg></span><span class="hc-item__title hc-shell__label">Export</span></a>
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-authoring">
     <p class="tql-nav__group" id="tql-nav-authoring">Authoring</p>
-    <a class="hc-item" href="/_tesseraql/studio/ui/pages"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#compass"/></svg></span><span class="hc-item__title hc-shell__label">Pages</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/scaffold"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#blocks"/></svg></span><span class="hc-item__title hc-shell__label">Scaffold</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/sql-builder"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#wrench"/></svg></span><span class="hc-item__title hc-shell__label">SQL builder</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/validation-builder"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#check-check"/></svg></span><span class="hc-item__title hc-shell__label">Validation</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/decision-builder"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#waypoints"/></svg></span><span class="hc-item__title hc-shell__label">Decide builder</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/decisions"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#table"/></svg></span><span class="hc-item__title hc-shell__label">Decision rows</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/migration"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#database-zap"/></svg></span><span class="hc-item__title hc-shell__label">Migration</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/mail"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg></span><span class="hc-item__title hc-shell__label">Mail</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/menu"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#panel-left"/></svg></span><span class="hc-item__title hc-shell__label">Menu</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/wizard"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#wand-sparkles"/></svg></span><span class="hc-item__title hc-shell__label">Wizards</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/try"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#send"/></svg></span><span class="hc-item__title hc-shell__label">API console</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/messages"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#languages"/></svg></span><span class="hc-item__title hc-shell__label">Messages</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/copilot"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bot"/></svg></span><span class="hc-item__title hc-shell__label">Copilot</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/pages}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#compass}"/></svg></span><span class="hc-item__title hc-shell__label">Pages</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/scaffold}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#blocks}"/></svg></span><span class="hc-item__title hc-shell__label">Scaffold</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/sql-builder}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#wrench}"/></svg></span><span class="hc-item__title hc-shell__label">SQL builder</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/validation-builder}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#check-check}"/></svg></span><span class="hc-item__title hc-shell__label">Validation</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/decision-builder}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Decide builder</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/decisions}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#table}"/></svg></span><span class="hc-item__title hc-shell__label">Decision rows</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/migration}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#database-zap}"/></svg></span><span class="hc-item__title hc-shell__label">Migration</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/mail}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg></span><span class="hc-item__title hc-shell__label">Mail</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/menu}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#panel-left}"/></svg></span><span class="hc-item__title hc-shell__label">Menu</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/wizard}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#wand-sparkles}"/></svg></span><span class="hc-item__title hc-shell__label">Wizards</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/try}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#send}"/></svg></span><span class="hc-item__title hc-shell__label">API console</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/messages}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#languages}"/></svg></span><span class="hc-item__title hc-shell__label">Messages</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/copilot}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bot}"/></svg></span><span class="hc-item__title hc-shell__label">Copilot</span></a>
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-governance">
     <p class="tql-nav__group" id="tql-nav-governance">Governance</p>
-    <a class="hc-item" href="/_tesseraql/studio/ui/drafts"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#file-pen"/></svg></span><span class="hc-item__title hc-shell__label">Drafts</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/audit"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#scroll-text"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/health"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#shield-check"/></svg></span><span class="hc-item__title hc-shell__label">Health</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/security"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#lock"/></svg></span><span class="hc-item__title hc-shell__label">Security</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/config"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#settings"/></svg></span><span class="hc-item__title hc-shell__label">Config</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/data"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#table"/></svg></span><span class="hc-item__title hc-shell__label">Data</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/flags"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#flag"/></svg></span><span class="hc-item__title hc-shell__label">Flags</span></a>
-    <a class="hc-item" href="/_tesseraql/studio/ui/connectors"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#plug"/></svg></span><span class="hc-item__title hc-shell__label">Connectors</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/drafts}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#file-pen}"/></svg></span><span class="hc-item__title hc-shell__label">Drafts</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/audit}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#scroll-text}"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/health}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#shield-check}"/></svg></span><span class="hc-item__title hc-shell__label">Health</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/security}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Security</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/config}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#settings}"/></svg></span><span class="hc-item__title hc-shell__label">Config</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/data}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#table}"/></svg></span><span class="hc-item__title hc-shell__label">Data</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/flags}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#flag}"/></svg></span><span class="hc-item__title hc-shell__label">Flags</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui/connectors}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#plug}"/></svg></span><span class="hc-item__title hc-shell__label">Connectors</span></a>
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-system">
     <p class="tql-nav__group" id="tql-nav-system">System</p>
-    <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
-    <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
 </th:block>
 <!-- The Operations console's own section navigation (sidebar IA, mirroring studio-nav): the console
@@ -294,17 +294,17 @@
 <th:block th:fragment="ops-page(title, header, content)"
           th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-nav}, ${header}, ${content}, true, 'compact')}"/>
 <th:block th:fragment="ops-nav">
-  <a class="hc-item" href="/_tesseraql/ops/console"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#activity"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
-  <a class="hc-item" href="/_tesseraql/ops/console/jobs"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#timer"/></svg></span><span class="hc-item__title hc-shell__label">Jobs</span></a>
-  <a class="hc-item" href="/_tesseraql/ops/console/traces"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#waypoints"/></svg></span><span class="hc-item__title hc-shell__label">Traces</span></a>
-  <a class="hc-item" href="/_tesseraql/ops/console/transfers"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#arrow-left-right"/></svg></span><span class="hc-item__title hc-shell__label">Transfers</span></a>
-  <a class="hc-item" href="/_tesseraql/ops/console/outbox"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#send"/></svg></span><span class="hc-item__title hc-shell__label">Outbox</span></a>
-  <a class="hc-item" href="/_tesseraql/ops/console/events"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#share-2"/></svg></span><span class="hc-item__title hc-shell__label">Events</span></a>
-  <a class="hc-item" href="/_tesseraql/ops/console/audit"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#scroll-text"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/jobs}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#timer}"/></svg></span><span class="hc-item__title hc-shell__label">Jobs</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/traces}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Traces</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/transfers}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#arrow-left-right}"/></svg></span><span class="hc-item__title hc-shell__label">Transfers</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/outbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#send}"/></svg></span><span class="hc-item__title hc-shell__label">Outbox</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/events}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#share-2}"/></svg></span><span class="hc-item__title hc-shell__label">Events</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/audit}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#scroll-text}"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
     <p class="tql-nav__group" id="ops-nav-system">System</p>
-    <a class="hc-item" href="/_tesseraql/studio/ui"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#layout-dashboard"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
-    <a class="hc-item" href="/_tesseraql/admin/users"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+    <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
 </th:block>
 <!-- Renders the app's declarative, role-filtered menu (the `_menu` model variable = a list of

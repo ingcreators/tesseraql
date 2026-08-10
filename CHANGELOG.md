@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql.http.basePath`** (docs/base-path.md): serve an application under a path
+  prefix — behind a reverse proxy at `/myapp`, or as one of several applications a
+  `tesseraql host --mode suite` gateway fronts. Routes mount under the prefix and emitted
+  URLs carry it, so the application answers at the addresses it advertises. Unset, which is
+  every deployment that has not asked for one, renders byte-identical output.
+
+### Added
+
 - **`tesseraql host`** (docs/app-isolation-model.md): serves every application installed
   under an install root, each in its own runtime — its own Camel context, datasource set,
   Studio and traces — behind one port. `--mode suite` addresses them as

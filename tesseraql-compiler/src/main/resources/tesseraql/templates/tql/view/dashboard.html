@@ -60,8 +60,8 @@
        the fragment so an embedded dashboard brings them along (docs/view-composition.md
        wave 0). Both are self-hosted; the CSP stays default-src 'self'. -->
   <th:block th:if="${v.hasChart}">
-    <script src="/assets/vendor/observablehq__plot/dist/plot.umd.min.js" defer></script>
-    <script type="module" src="/assets/_tesseraql/charts.js"></script>
+    <script th:src="@{/assets/vendor/observablehq__plot/dist/plot.umd.min.js}" defer></script>
+    <script type="module" th:src="@{/assets/_tesseraql/charts.js}"></script>
   </th:block>
 </div>
 <th:block th:if="${v.slots['footer'] != null}">
