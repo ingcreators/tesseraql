@@ -145,6 +145,11 @@ A URL read back off the request is already a wire URL and is left alone — whic
 page's `next` target is stored base-relative: it is handed back to the redirect helper after
 sign-in, and would otherwise be prefixed twice.
 
+The single sign-on post-login targets follow the same rule: an absolute URL is the provider's
+and is left alone, a local target is base-relative and acquires the prefix on the way out. A
+link that hands SSO a wire URL as its `next` or `RelayState` would be prefixed twice, which is
+why the framework's own surfaces hand it a base-relative one.
+
 The one deliberate exception is pins and recents, which the browser captures from its own
 location bar. Those are wire URLs by origin, they are compared against the request URI, and they
 are per-user state in a database, so re-deriving them costs more than it settles.
@@ -215,7 +220,12 @@ have been the smaller change.
    `web/**` and `templates/**` markup, raised only when a base path is configured. It catches
    the literal-substitution spelling too, that being how forty-seven of the framework's own
    URLs survived slice 3's first pass.
-5. **The cookie path**: supplied by the host beside the prefix (decision 4).
+5. **The cookie path**: supplied by the host beside the prefix (decision 4). **Done** —
+   `TesseraqlRuntime.start` takes it beside the base path, the suite gateway passes `/`, and a
+   standalone start defaults to the application's own prefix. The seven places that assembled
+   the header by hand, in five modules, agreeing by copy, became one `SessionCookie`. The
+   OIDC flow cookie is the exception that proves the rule: scoped to `/_tesseraql/oidc`, it
+   follows the *base* path, because it is scoped to endpoints rather than to a sign-in.
 6. **Suite mode end to end**: an HTML page served through `/apps/<id>/` with its assets,
    navigation, forms, and htmx swaps working — the case that opened this document.
 

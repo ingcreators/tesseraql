@@ -66,6 +66,11 @@ public final class TesseraqlProperties {
      * {@code ""} or {@code /a/b}. Read through {@link BasePath}.
      */
     public static final String BASE_PATH_BEAN = "tesseraqlBasePath";
+    /**
+     * The {@code Path} the session cookie is issued with, supplied by whatever started this
+     * runtime rather than derived from the base path. Read through {@link CookiePath}.
+     */
+    public static final String COOKIE_PATH_BEAN = "tesseraqlCookiePath";
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";

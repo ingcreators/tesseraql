@@ -121,7 +121,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         AppManifest manifest = new ManifestLoader().load(appHome);
         int port = manifest.config().getString("server.port").map(Integer::parseInt).orElse(8080);
         return start(appHome, manifest, port, new io.tesseraql.core.telemetry.RingTracer(100),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null);
     }
 
     /** Starts the runtime against {@code appHome} on an explicit port (used by tests). */
@@ -134,33 +134,35 @@ public final class TesseraqlRuntime implements AutoCloseable {
             DataSources.MainDatasourceOverride override) {
         return start(appHome, new ManifestLoader().load(appHome), port,
                 new io.tesseraql.core.telemetry.RingTracer(100),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null);
     }
 
     /** Starts the runtime with an explicit tracer (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer) {
         return start(appHome, new ManifestLoader().load(appHome), port, tracer,
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, null);
     }
 
     /** Starts the runtime with an explicit tracer and meter (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
-        return start(appHome, new ManifestLoader().load(appHome), port, tracer, meter, null);
+        return start(appHome, new ManifestLoader().load(appHome), port, tracer, meter, null, null);
     }
 
     /**
-     * Starts with the base path a host supplies, overriding whatever the app's own configuration
-     * says (docs/base-path.md decision 1). Suite-mode hosting passes {@code /apps/<id>}; the
-     * value belongs to the deployment, not to the application's files, so the same package
-     * mounts at two prefixes in two places.
+     * Starts with the addressing a host supplies, overriding whatever the app's own configuration
+     * says (docs/base-path.md decisions 1 and 4). Suite-mode hosting passes {@code /apps/<id>}
+     * and a cookie path of {@code /}; the values belong to the deployment, not to the
+     * application's files, so the same package mounts at two prefixes in two places — and only
+     * the host knows whether these applications are one suite sharing a sign-in.
      */
-    static TesseraqlRuntime start(Path appHome, int port, String basePathOverride) {
+    static TesseraqlRuntime start(Path appHome, int port, String basePathOverride,
+            String cookiePath) {
         AppManifest loaded = new ManifestLoader().load(appHome);
         return start(appHome, withBasePath(loaded, basePathOverride), port,
                 io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, cookiePath);
     }
 
     /** The manifest with {@code tesseraql.http.basePath} replaced by the host's value. */
@@ -179,9 +181,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 manifest.views(), manifest.index());
     }
 
+    /**
+     * @param cookiePath the {@code Path} session cookies are issued with, supplied by whatever
+     *                   starts the runtime (docs/base-path.md decision 4). Null means the
+     *                   standalone answer: the application's own base path, so its cookie is not
+     *                   offered to whatever else lives on that origin.
+     */
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
-            DataSources.MainDatasourceOverride override) {
+            DataSources.MainDatasourceOverride override, String cookiePath) {
         DefaultCamelContext context = new DefaultCamelContext();
         // The component policy guards every registration from here on
         // (docs/component-guard.md): baseline-denied components fail boot, config or not.
@@ -190,8 +198,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // or emits a URL (docs/base-path.md). The compiler sets it on the REST configuration;
         // the surfaces outside the REST DSL — static assets, the SSE streams — and the response
         // headers that carry a URL read it from here.
-        io.tesseraql.camel.BasePath.bind(context,
+        String basePath = io.tesseraql.core.http.BasePaths.normalize(
                 manifest.config().getString("tesseraql.http.basePath").orElse(null));
+        io.tesseraql.camel.BasePath.bind(context, basePath);
+        io.tesseraql.camel.CookiePath.bind(context,
+                cookiePath != null ? cookiePath : basePath);
         // Every datasource declared under tesseraql.datasources gets a pool, registered by name
         // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
         Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),

@@ -159,7 +159,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                 sessions.cookieName());
         sessions.invalidate(sessionId);
         exchange.getMessage().setHeader("Set-Cookie",
-                sessions.cookieName() + "=; Path=/; HttpOnly; Max-Age=0");
+                io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
+                        io.tesseraql.camel.CookiePath.of(exchange)));
 
         String responseXml = new LogoutResponse(endpoints.spEntityId(), endpoints.idpSloUrl(),
                 request.id()).toXml("_" + UUID.randomUUID(), Instant.now());
@@ -174,7 +175,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         SessionStore.Session session = sessions.session(sessionId);
         sessions.invalidate(sessionId);
         exchange.getMessage().setHeader("Set-Cookie",
-                sessions.cookieName() + "=; Path=/; HttpOnly; Max-Age=0");
+                io.tesseraql.security.session.SessionCookie.expire(sessions.cookieName(),
+                        io.tesseraql.camel.CookiePath.of(exchange)));
 
         String nameId = session == null
                 ? null
@@ -276,7 +278,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                 exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
                         String.class)));
         exchange.getMessage().setHeader("Set-Cookie",
-                sessions.cookieName() + "=" + sessionId + "; Path=/; HttpOnly; SameSite=Lax");
+                io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
+                        sessionId, io.tesseraql.camel.CookiePath.of(exchange)));
 
         // A browser SP-initiated login carries its return target as RelayState (already matched
         // against the pending request by the replay guard): send the user there, same-origin paths
@@ -285,7 +288,10 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         String target = LoginRedirects.sanitize(returnedRelayState(exchange), null);
         if (target != null) {
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
-            exchange.getMessage().setHeader("Location", target);
+            // Base-relative, like every other URL inside the runtime (docs/base-path.md
+            // decision 7): the prefix goes on here, where it becomes a wire URL.
+            exchange.getMessage().setHeader("Location",
+                    io.tesseraql.camel.BasePath.url(exchange, target));
             exchange.getMessage().setBody(null);
             return;
         }

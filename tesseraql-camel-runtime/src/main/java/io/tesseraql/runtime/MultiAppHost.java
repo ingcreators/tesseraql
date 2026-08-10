@@ -45,7 +45,7 @@ public final class MultiAppHost implements AutoCloseable {
      * with a staged canary candidate is also hosted in a separate runtime for traffic splitting.
      */
     public static MultiAppHost start(Path installRoot) {
-        return start(installRoot, appId -> null);
+        return start(installRoot, appId -> null, "/");
     }
 
     /**
@@ -53,9 +53,14 @@ public final class MultiAppHost implements AutoCloseable {
      * for it (docs/base-path.md). Suite-mode hosting answers {@code /apps/<id>}, so the app
      * serves the prefix the gateway forwards; isolated hosting answers null, since each app owns
      * its own origin.
+     *
+     * <p>{@code cookiePath} is the other half, and the half only a host can decide (decision 4):
+     * a suite shares one sign-in across its applications, which requires a cookie every one of
+     * them receives. Scoping it per prefix would make each application a separate sign-in and
+     * delete the mode's reason to exist.
      */
     public static MultiAppHost start(Path installRoot,
-            java.util.function.Function<String, String> basePathFor) {
+            java.util.function.Function<String, String> basePathFor, String cookiePath) {
         AppCatalog catalog = new AppCatalog(installRoot);
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
@@ -65,7 +70,7 @@ public final class MultiAppHost implements AutoCloseable {
             for (InstalledApp app : catalog.list()) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
                 started.put(app.id(), TesseraqlRuntime.start(appHome, freePort(),
-                        basePathFor.apply(app.id())));
+                        basePathFor.apply(app.id()), cookiePath));
                 appIds.add(app.id());
                 LOG.info("Hosting app {} v{} from {}", app.id(), app.version(), appHome);
 
@@ -75,7 +80,7 @@ public final class MultiAppHost implements AutoCloseable {
                     // serves the same base path.
                     started.put(app.id() + CANARY_SLOT,
                             TesseraqlRuntime.start(candidateHome, freePort(),
-                                    basePathFor.apply(app.id())));
+                                    basePathFor.apply(app.id()), cookiePath));
                     canaryWeights.put(app.id(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
                             app.id(), canary.candidate().version(), canary.weightPercent());

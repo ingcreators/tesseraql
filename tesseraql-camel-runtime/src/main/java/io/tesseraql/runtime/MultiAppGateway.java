@@ -172,8 +172,12 @@ public final class MultiAppGateway implements AutoCloseable {
         }
         // Suite mode forwards the prefix, so each app is started serving it; isolated mode gives
         // each app its own origin and no prefix at all (docs/base-path.md decision 5).
+        // The session cookie is the gateway's call, not the applications'
+        // (docs/base-path.md decision 4): a suite is one sign-in across one origin, so the
+        // cookie is issued at the root of it rather than scoped to each app's prefix. Isolated
+        // hosting gives every application its own origin, where "/" is already its own alone.
         MultiAppHost host = MultiAppHost.start(installRoot,
-                appId -> mode == Mode.SUITE ? PREFIX + appId : null);
+                appId -> mode == Mode.SUITE ? PREFIX + appId : null, "/");
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(frontPort), 0);
             List<InstalledApp> hosted = catalogued.stream()

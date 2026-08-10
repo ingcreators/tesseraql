@@ -180,8 +180,8 @@ final class LoginRouteBuilder extends RouteBuilder {
                 exchange.getMessage().getHeader("X-Forwarded-For", String.class),
                 exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
                         String.class)));
-        setSessionCookie(exchange, sessions.cookieName() + "=" + sessionId
-                + "; Path=/; HttpOnly; SameSite=Lax");
+        setSessionCookie(exchange, io.tesseraql.security.session.SessionCookie.issue(
+                sessions.cookieName(), sessionId, io.tesseraql.camel.CookiePath.of(exchange)));
         if (browserForm) {
             redirect(exchange, 303, next);
             return;
@@ -202,8 +202,8 @@ final class LoginRouteBuilder extends RouteBuilder {
         new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
         sessions.invalidateFromCookie(cookie);
         // Expire the cookie client-side too (Max-Age=0), then land on the login page.
-        setSessionCookie(exchange, sessions.cookieName()
-                + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+        setSessionCookie(exchange, io.tesseraql.security.session.SessionCookie.expire(
+                sessions.cookieName(), io.tesseraql.camel.CookiePath.of(exchange)));
         redirect(exchange, 303, LOGIN_PATH);
     }
 
@@ -233,8 +233,8 @@ final class LoginRouteBuilder extends RouteBuilder {
         }
         if (sessions.session(sessionId) == null) {
             // The revoked device was this one: an ordinary sign-out.
-            setSessionCookie(exchange, sessions.cookieName()
-                    + "=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+            setSessionCookie(exchange, io.tesseraql.security.session.SessionCookie.expire(
+                    sessions.cookieName(), io.tesseraql.camel.CookiePath.of(exchange)));
             redirect(exchange, 303, LOGIN_PATH);
             return;
         }

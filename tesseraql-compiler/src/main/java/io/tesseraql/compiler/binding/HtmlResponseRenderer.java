@@ -423,8 +423,12 @@ public final class HtmlResponseRenderer implements Processor {
             model.put("_density", density);
         }
         if (storedTheme != null && !storedTheme.equals(cookieTheme)) {
+            // The same Path as the session cookie: the preference belongs to whoever is signed
+            // in, and follows the sign-in across the suite or stays with the one application
+            // (docs/base-path.md decision 4).
             exchange.getMessage().setHeader("Set-Cookie", "tesseraql_theme=" + storedTheme
-                    + "; Path=/; Max-Age=31536000; SameSite=Lax");
+                    + "; Path=" + io.tesseraql.camel.CookiePath.of(exchange)
+                    + "; Max-Age=31536000; SameSite=Lax");
         }
 
         // Shell negotiation (docs/view-composition.md wave 2a): one URL serves both shapes.
