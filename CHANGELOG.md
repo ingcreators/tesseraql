@@ -6,6 +6,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **`tesseraql host`** (docs/app-isolation-model.md): serves every application installed
+  under an install root, each in its own runtime — its own Camel context, datasource set,
+  Studio and traces — behind one port. `--mode suite` addresses them as
+  `/apps/<id>/` on one origin, so a session spans the suite; `--mode isolated` addresses
+  each by its own hostname, so sessions do not cross. The machinery existed and had no
+  entry point.
+
+### Changed
+
+- **The multi-app gateway serves one addressing per mode.** Host-based and
+  `/apps/<id>/` routing both answered at once, so an operator who separated applications
+  by hostname — the reason being that a session must not cross — still had every one of
+  them on a single shared origin, where it does. Isolated hosting now refuses to start an
+  application that declares no hostname (`TQL-APP-5003`) rather than cataloguing it,
+  starting it, and leaving it unreachable.
+
 ### Changed
 
 - **The operations console reports on its own runtime's applications**

@@ -63,7 +63,7 @@ class MultiAppCanaryIntegrationTest {
         upgrader.upgrade(candidate, installRoot, SemanticVersion.parse("0.1.0"), true);
         upgrader.setCanaryWeight("shop", installRoot, 50);
 
-        gateway = MultiAppGateway.start(installRoot, 0);
+        gateway = MultiAppGateway.start(installRoot, 0, MultiAppGateway.Mode.SUITE);
     }
 
     @AfterAll

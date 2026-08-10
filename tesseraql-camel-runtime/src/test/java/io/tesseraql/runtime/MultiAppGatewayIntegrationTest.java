@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,7 +53,7 @@ class MultiAppGatewayIntegrationTest {
         installRoot = Files.createTempDirectory("tesseraql-gateway-it");
         installApp("shop-a", "a", List.of());
         installApp("shop-b", "b", List.of("tenant-b"));
-        gateway = MultiAppGateway.start(installRoot, 0);
+        gateway = MultiAppGateway.start(installRoot, 0, MultiAppGateway.Mode.SUITE);
     }
 
     @AfterAll
@@ -82,7 +83,8 @@ class MultiAppGatewayIntegrationTest {
      */
     @Test
     void closingTheGatewayReleasesItsClientAndExecutor() throws Exception {
-        MultiAppGateway second = MultiAppGateway.start(installRoot, 0);
+        MultiAppGateway second = MultiAppGateway.start(installRoot, 0,
+                MultiAppGateway.Mode.SUITE);
         java.net.http.HttpClient client = field(second, "client",
                 java.net.http.HttpClient.class);
         java.util.concurrent.ExecutorService executor = field(second, "executor",
@@ -180,23 +182,80 @@ class MultiAppGatewayIntegrationTest {
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    /**
+     * Isolated hosting addresses each app by its own hostname, and the shared-origin prefix is
+     * not also live (docs/app-isolation-model.md decision 2).
+     *
+     * <p>Both addressings used to answer at once, so an operator who separated apps by hostname
+     * — the reason to separate them being that a session must not cross — still had every app on
+     * one origin through {@code /apps/<id>/}, where a session does cross. One mode, one address.
+     */
     @Test
-    void routesByHostHeader() throws Exception {
-        // The same path on different hosts reaches different apps (no /apps prefix).
-        assertThat(itemNameForHost("shop-a.localhost")).isEqualTo("from-a");
-        assertThat(itemNameForHost("shop-b.localhost")).isEqualTo("from-b");
+    void isolatedModeRoutesByHostAndRefusesTheSharedPrefix() throws Exception {
+        try (MultiAppGateway isolated = MultiAppGateway.start(installRoot, 0,
+                MultiAppGateway.Mode.ISOLATED)) {
+            assertThat(itemNameForHost(isolated, "shop-a.localhost")).isEqualTo("from-a");
+            assertThat(itemNameForHost(isolated, "shop-b.localhost")).isEqualTo("from-b");
+
+            assertThat(statusOf(isolated, "/apps/shop-a/api/items"))
+                    .as("the shared origin is not an address in isolated hosting")
+                    .isEqualTo(404);
+        }
     }
 
-    private static String itemNameForHost(String hostName) throws Exception {
-        String body = rawGet("/api/items", hostName);
+    /** And the converse: suite mode answers on the prefix and not on a hostname. */
+    @Test
+    void suiteModeRoutesByPrefixAndIgnoresHostnames() throws Exception {
+        assertThat(itemName("shop-a")).isEqualTo("from-a");
+
+        String response = rawGet(gateway, "/api/items", "shop-a.localhost");
+        assertThat(response)
+                .as("a hostname is not an address in suite mode")
+                .startsWith("HTTP/1.1 404");
+    }
+
+    /**
+     * An app with no hostname would be catalogued, started, and unreachable under isolated
+     * hosting. Failing the start says so; a silent unreachable app does not.
+     */
+    @Test
+    void isolatedModeRefusesAnAppWithNoHostname() throws Exception {
+        Path root = Files.createTempDirectory("tesseraql-gw-addressless");
+        try {
+            new AppCatalog(root).register(
+                    new InstalledApp("addressless", "1.0.0", "addressless/1.0.0", List.of()));
+
+            assertThatThrownBy(() -> MultiAppGateway.start(root, 0, MultiAppGateway.Mode.ISOLATED))
+                    .hasMessageContaining("addressless")
+                    .hasMessageContaining("hostname");
+        } finally {
+            try (Stream<Path> files = Files.walk(root)) {
+                files.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+            }
+        }
+    }
+
+    private static int statusOf(MultiAppGateway target, String path) throws Exception {
+        return java.net.http.HttpClient.newHttpClient().send(
+                java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                        "http://localhost:" + target.port() + path)).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    private static String itemNameForHost(MultiAppGateway target, String hostName)
+            throws Exception {
+        String body = rawGet(target, "/api/items", hostName);
+        int split = body.indexOf("\r\n\r\n");
+        body = body.substring(split + 4);
         JsonNode data = MAPPER.readTree(body).get("data");
         assertThat(data).hasSize(1);
         return data.get(0).get("name").asText();
     }
 
     /** Sends a raw HTTP/1.1 GET so a custom Host header can be set (the HTTP client forbids it). */
-    private static String rawGet(String path, String hostName) throws IOException {
-        try (java.net.Socket socket = new java.net.Socket("localhost", gateway.port())) {
+    private static String rawGet(MultiAppGateway target, String path, String hostName)
+            throws IOException {
+        try (java.net.Socket socket = new java.net.Socket("localhost", target.port())) {
             String request = "GET " + path + " HTTP/1.1\r\nHost: " + hostName
                     + "\r\nConnection: close\r\n\r\n";
             socket.getOutputStream()
@@ -204,9 +263,7 @@ class MultiAppGatewayIntegrationTest {
             socket.getOutputStream().flush();
             String response = new String(socket.getInputStream().readAllBytes(),
                     java.nio.charset.StandardCharsets.UTF_8);
-            assertThat(response).startsWith("HTTP/1.1 200");
-            int split = response.indexOf("\r\n\r\n");
-            return response.substring(split + 4);
+            return response;
         }
     }
 
