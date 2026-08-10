@@ -494,7 +494,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 }
                 throw TqlException.builder(MATERIALIZATION_OVERFLOW)
                         .message("Result exceeds maxRows=" + maxRows
-                                + " (use pagination, query-stream, or query-export)")
+                                + " (use pagination or query-export)")
                         .source(endpoint.getSqlPath())
                         .build();
             }

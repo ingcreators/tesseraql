@@ -198,6 +198,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                         ? null
                         : AFTER_EXTRACT,
                 null, Map.of());
+        // The extraction runs on the caller's datasource, so its vendor decides both the label
+        // normalization and the streaming profile — this service's own may be a different one.
+        String extractionDialect = io.tesseraql.core.util.DatabaseVendors.vendor(extraction)
+                .orElse(null);
         // The runExport shape, synchronous: extraction and follow-up commit together on the
         // caller's datasource; bookkeeping lands in the shared tables so the ops transfers
         // page and the download endpoint see a step-produced file like any other.
@@ -208,12 +212,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                 long rows;
                 SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
                 try (writer;
-                        PreparedStatement statement = prepare(connection, request.query());
+                        PreparedStatement statement = prepareExtraction(connection,
+                                request.query(), extractionDialect);
                         ResultSet results = statement.executeQuery();
                         OutputStream out = new SpoolOutputStream(writer)) {
-                    RowIterator iterator = new RowIterator(results,
-                            io.tesseraql.core.util.DatabaseVendors.vendor(extraction)
-                                    .orElse(null));
+                    RowIterator iterator = new RowIterator(results, extractionDialect);
                     codec.write(out, request.writeSpec(), iterator);
                     rows = iterator.count;
                     writer.incrementRows(rows);
@@ -453,7 +456,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                 long rows;
                 SpoolWriter writer = tempStore.createWriter(SpoolKind.BINARY);
                 try (writer;
-                        PreparedStatement statement = prepare(connection, bound);
+                        PreparedStatement statement = prepareExtraction(connection, bound,
+                                vendor());
                         ResultSet results = statement.executeQuery();
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, vendor());
@@ -509,11 +513,39 @@ public final class JdbcFileTransferService implements FileTransferService {
             throws SQLException {
         PreparedStatement statement = connection.prepareStatement(bound.sql());
         applyTimeout(statement);
+        bind(statement, bound);
+        return statement;
+    }
+
+    /**
+     * The extraction statement of an export, prepared to stream (docs/export-pipeline.md,
+     * decision 5): forward-only and read-only, with the dialect's fetch size so the driver opens
+     * a cursor instead of reading the whole result into the client. Auto-commit is already off on
+     * both export methods, which is PostgreSQL's other cursor condition.
+     *
+     * <p>Separate from {@link #prepare} because that one also prepares the {@code after:}
+     * statement: MySQL streams with a fetch size of {@link Integer#MIN_VALUE}, which is not a
+     * thing to hand an update.
+     *
+     * @param dialect the vendor of {@code connection}'s datasource, which is not always this
+     *                service's own — an inline export runs on the caller's
+     */
+    private PreparedStatement prepareExtraction(Connection connection, BoundSql bound,
+            String dialect) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(bound.sql(),
+                ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+        applyTimeout(statement);
+        statement.setFetchSize(
+                io.tesseraql.core.dialect.StreamingProfiles.forDialect(dialect).fetchSize());
+        bind(statement, bound);
+        return statement;
+    }
+
+    private static void bind(PreparedStatement statement, BoundSql bound) throws SQLException {
         List<BoundParameter> parameters = bound.parameters();
         for (int i = 0; i < parameters.size(); i++) {
             statement.setObject(i + 1, parameters.get(i).value());
         }
-        return statement;
     }
 
     /**
