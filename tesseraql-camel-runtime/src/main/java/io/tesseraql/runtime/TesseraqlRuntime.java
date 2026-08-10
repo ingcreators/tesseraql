@@ -150,6 +150,35 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return start(appHome, new ManifestLoader().load(appHome), port, tracer, meter, null);
     }
 
+    /**
+     * Starts with the base path a host supplies, overriding whatever the app's own configuration
+     * says (docs/base-path.md decision 1). Suite-mode hosting passes {@code /apps/<id>}; the
+     * value belongs to the deployment, not to the application's files, so the same package
+     * mounts at two prefixes in two places.
+     */
+    static TesseraqlRuntime start(Path appHome, int port, String basePathOverride) {
+        AppManifest loaded = new ManifestLoader().load(appHome);
+        return start(appHome, withBasePath(loaded, basePathOverride), port,
+                io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null);
+    }
+
+    /** The manifest with {@code tesseraql.http.basePath} replaced by the host's value. */
+    private static AppManifest withBasePath(AppManifest manifest, String basePath) {
+        if (basePath == null || basePath.isBlank()) {
+            return manifest;
+        }
+        Map<String, Object> root = SystemApps.deepCopy(manifest.config().root());
+        SystemApps.childMap(SystemApps.childMap(root, "tesseraql"), "http")
+                .put("basePath", basePath);
+        AppConfig config = new AppConfig(root);
+        return new AppManifest(manifest.appHome(), config, manifest.routes(), manifest.jobs(),
+                manifest.tools(), manifest.resources(), manifest.uiResources(),
+                manifest.consumers(), manifest.scopes(), manifest.workflows(),
+                manifest.attachments(), manifest.migrations(), manifest.prompts(),
+                manifest.views(), manifest.index());
+    }
+
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override) {

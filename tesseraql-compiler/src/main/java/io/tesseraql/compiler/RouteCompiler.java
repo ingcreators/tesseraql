@@ -47,6 +47,12 @@ public final class RouteCompiler {
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
 
     private AppConfig config;
+    /**
+     * Cached so a prefix is resolved once per compile rather than per route; {@code null} until
+     * first use, and the empty string when unset (which is every deployment that has not asked
+     * for one).
+     */
+    private String basePath;
     private io.tesseraql.yaml.config.ResponseHeaderDefaults responseHeaders;
     private AppManifest manifest;
     private java.nio.file.Path compiledAppHome;
@@ -927,7 +933,7 @@ public final class RouteCompiler {
                 }
             }
             route.process(new HtmlResponseRenderer(withDefaultHeaders(html), appHome,
-                    routeDir, i18n.defaultTag(), viewBinding, boundViews));
+                    routeDir, i18n.defaultTag(), viewBinding, boundViews).basePath(basePath()));
         }
         applyHttpCache(route, routeFile.definition());
         // pipelineThroughSql opened the idempotency record; closing it here is what stops a
@@ -1123,7 +1129,7 @@ public final class RouteCompiler {
                             definition.effectiveDatasource()));
         }
         step.process(new HtmlResponseRenderer(withDefaultHeaders(definition.response().html()),
-                appHome, uiDir, i18n.defaultTag()));
+                appHome, uiDir, i18n.defaultTag()).basePath(basePath()));
     }
 
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */
@@ -1494,10 +1500,46 @@ public final class RouteCompiler {
         }
     }
 
+    /**
+     * The prefix every route of this application mounts under and every URL it emits carries
+     * ({@code tesseraql.http.basePath}, docs/base-path.md).
+     *
+     * <p>Normalized to either the empty string or a leading-slash, no-trailing-slash form, so
+     * concatenation with a route path is always well-formed. Unset is the empty string, which
+     * makes every existing deployment byte-identical.
+     */
+    String basePath() {
+        if (basePath == null) {
+            basePath = normalizeBasePath(
+                    config == null
+                            ? null
+                            : config.getString("tesseraql.http.basePath")
+                                    .orElse(null));
+        }
+        return basePath;
+    }
+
+    /** Trims a configured prefix into {@code ""} or {@code /a/b}. */
+    static String normalizeBasePath(String configured) {
+        if (configured == null || configured.isBlank() || "/".equals(configured.trim())) {
+            return "";
+        }
+        String trimmed = configured.trim();
+        if (!trimmed.startsWith("/")) {
+            trimmed = "/" + trimmed;
+        }
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
     private RestDefinition restEndpoint(RouteBuilder builder, String method, String path) {
         // The router-facing template swaps non-wire-safe parameter names for positional
         // stand-ins; the RequestBinder maps them back to the declared names (WireNames).
-        String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
+        // The base path goes on first, so an application served under a prefix answers at the
+        // URLs it emits rather than only advertising them (docs/base-path.md decision 5).
+        String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(basePath() + path);
         return switch (method) {
             case "GET" -> builder.rest().get(wirePath);
             case "POST" -> builder.rest().post(wirePath);

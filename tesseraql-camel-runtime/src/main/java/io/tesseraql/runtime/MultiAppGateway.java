@@ -170,7 +170,10 @@ public final class MultiAppGateway implements AutoCloseable {
                         + ". Declare hostnames in the catalog, or host them as a suite.");
             }
         }
-        MultiAppHost host = MultiAppHost.start(installRoot);
+        // Suite mode forwards the prefix, so each app is started serving it; isolated mode gives
+        // each app its own origin and no prefix at all (docs/base-path.md decision 5).
+        MultiAppHost host = MultiAppHost.start(installRoot,
+                appId -> mode == Mode.SUITE ? PREFIX + appId : null);
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(frontPort), 0);
             List<InstalledApp> hosted = catalogued.stream()
@@ -227,7 +230,10 @@ public final class MultiAppGateway implements AutoCloseable {
                 String remainder = rawPath.substring(PREFIX.length());
                 int slash = remainder.indexOf('/');
                 appId = slash < 0 ? remainder : remainder.substring(0, slash);
-                downstreamPath = slash < 0 ? "/" : remainder.substring(slash);
+                // The prefix is forwarded, not stripped: the app is configured with the same
+                // base path, so it serves the URLs it emits (docs/base-path.md decision 5).
+                // Stripping left the runtime answering at one address and advertising another.
+                downstreamPath = rawPath;
             } else {
                 respond(exchange, 404, "{\"error\":{\"code\":\"TQL-APP-4040\"}}");
                 return;

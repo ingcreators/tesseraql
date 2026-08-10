@@ -53,21 +53,29 @@ That this serves the standalone reverse-proxy case is the reason to build it at 
 mode is one consumer; "put the app under a path" is a request the framework cannot answer
 today at any scale.
 
-### 2. Templates read `${base}`, and an unset base changes nothing
+### 2. Templates use Thymeleaf link expressions, and one link builder resolves them
 
-The renderer already assembles `_csrf`, `_menu`, `_account` into every model
-(`HtmlResponseRenderer`). It gains `base`: the configured prefix, or the empty string.
-Framework templates become `th:href="|${base}/assets/…|"`, and the framework generates the
-same prefix into redirects, asset URLs, and the live-events endpoint.
+Templates write `th:href="@{/assets/x}"`. A `BasePathLinkBuilder` installed on the shared
+`TemplateEngine` overrides `StandardLinkBuilder.computeContextPath` and returns the
+application's prefix, so **the prefix rule lives in one method** rather than in every URL.
+The renderer publishes `base` into the model for the builder to read; template authors never
+name it.
 
-**The load-bearing property is that an unset base renders byte-identical output.** `${base}`
-is `""`, so `|${base}/assets/x|` is `/assets/x` — what ships today. Every existing
-deployment, which is every deployment, is unaffected. The contract only changes for someone
-who opts into a base path.
+**The load-bearing property is that an unset base renders byte-identical output** — the
+builder returns the empty string, and `@{/assets/x}` is `/assets/x`, what ships today.
 
-Thymeleaf's `@{…}` link syntax was considered and rejected: it derives a context path from a
-servlet environment TesseraQL does not render in, so it would need the same variable wired
-underneath while also rewriting all 446 sites into a second syntax.
+**Corrected 2026-08-10.** This document first decided the opposite: templates would carry
+`th:href="|${base}/assets/…|"`, and `@{…}` was rejected on the grounds that "it derives a
+context path from a servlet environment TesseraQL does not render in". **That reason was
+wrong.** Thymeleaf 3.1 exposes `ILinkBuilder`, and `StandardLinkBuilder.computeContextPath`
+is precisely the hook for supplying a context path without a servlet container.
+
+The string-concatenation approach was implemented first and produced three classes of bug in
+one sitting, all of them invisible until a page was rendered: a duplicated `th:src` where an
+element already carried one, silently skipped URLs that were already expressions, and a
+second sweep that fixed the first and missed the same cases from the other direction. Four
+hundred string concatenations are four hundred chances to make each of those. One overridden
+method is one.
 
 ### 3. A hand-written root-absolute link is a lint warning, not a break
 
@@ -121,10 +129,11 @@ have been the smaller change.
 
 ## Slices
 
-1. **The setting and the model variable.** `tesseraql.http.basePath`, prefix-aware route
-   mounting (decision 5), `base` in the template model, and the sweep of framework templates
-   (`tql/**`). An unset base is byte-identical, held by a test. The gateway stops stripping
-   the prefix in the same slice, since the two halves must move together.
+1. **The setting and the link builder.** `tesseraql.http.basePath`, prefix-aware route
+   mounting (decision 5), `BasePathLinkBuilder` on the shared engine, and the sweep of
+   framework templates (`tql/**`) to `@{…}`. An unset base is byte-identical, held by a test.
+   The gateway stops stripping the prefix and starts supplying it to each runtime in the same
+   slice, since the two halves must move together.
 2. **The framework's own URL emission.** Redirects, asset routes, the live-events endpoint,
    generated OpenAPI servers.
 3. **The bundled apps.** Studio, ops console, IAM Admin, account, auth-ui — the 264 sites,

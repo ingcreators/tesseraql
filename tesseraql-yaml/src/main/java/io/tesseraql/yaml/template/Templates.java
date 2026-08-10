@@ -105,6 +105,10 @@ public final class Templates {
             engine.addTemplateResolver(shared);
             engine.addTemplateResolver(html);
             engine.addTemplateResolver(text);
+            // @{/x} resolves against the app's base path (docs/base-path.md); with none
+            // configured it renders exactly what it says, so nothing changes for an app that
+            // never asked for a prefix.
+            engine.setLinkBuilder(new BasePathLinkBuilder());
             engine.setMessageResolver(new CatalogMessageResolver(
                     key.resolve("messages"), I18nSettings.builtinCatalog()));
             return engine;

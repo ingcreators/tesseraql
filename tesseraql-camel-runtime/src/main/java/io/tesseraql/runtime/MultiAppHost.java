@@ -45,6 +45,17 @@ public final class MultiAppHost implements AutoCloseable {
      * with a staged canary candidate is also hosted in a separate runtime for traffic splitting.
      */
     public static MultiAppHost start(Path installRoot) {
+        return start(installRoot, appId -> null);
+    }
+
+    /**
+     * Hosts every catalogued app, each started under the base path {@code basePathFor} returns
+     * for it (docs/base-path.md). Suite-mode hosting answers {@code /apps/<id>}, so the app
+     * serves the prefix the gateway forwards; isolated hosting answers null, since each app owns
+     * its own origin.
+     */
+    public static MultiAppHost start(Path installRoot,
+            java.util.function.Function<String, String> basePathFor) {
         AppCatalog catalog = new AppCatalog(installRoot);
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
@@ -53,14 +64,18 @@ public final class MultiAppHost implements AutoCloseable {
         try {
             for (InstalledApp app : catalog.list()) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
-                started.put(app.id(), TesseraqlRuntime.start(appHome, freePort()));
+                started.put(app.id(), TesseraqlRuntime.start(appHome, freePort(),
+                        basePathFor.apply(app.id())));
                 appIds.add(app.id());
                 LOG.info("Hosting app {} v{} from {}", app.id(), app.version(), appHome);
 
                 upgrader.canary(app.id(), installRoot).ifPresent(canary -> {
                     Path candidateHome = installRoot.resolve(canary.candidate().path()).normalize();
+                    // The candidate answers the same address as the app it may replace, so it
+                    // serves the same base path.
                     started.put(app.id() + CANARY_SLOT,
-                            TesseraqlRuntime.start(candidateHome, freePort()));
+                            TesseraqlRuntime.start(candidateHome, freePort(),
+                                    basePathFor.apply(app.id())));
                     canaryWeights.put(app.id(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
                             app.id(), canary.candidate().version(), canary.weightPercent());
