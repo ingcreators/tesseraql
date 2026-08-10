@@ -30,7 +30,7 @@
     </div>
     <!-- The test recorder (roadmap Phase 43, Track J3): a recordable invocation saves as a
          declarative sql: test case under tests/, expectation captured from the sandbox. -->
-    <form class="hc-cluster" method="post" action="/_tesseraql/studio/ui/try/record"
+    <form class="hc-cluster" method="post" th:action="@{/_tesseraql/studio/ui/try/record}"
           th:if="${result.recordable != null && result.recordable && result.status < 400}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="method" th:value="${result.method}">

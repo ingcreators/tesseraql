@@ -24,7 +24,7 @@
     <input class="hc-input" data-size="sm" id="explorer-filter" type="search" name="q"
            th:value="${studio.query}" aria-label="Filter by id, path, recipe"
            placeholder="Filter by id, path, recipe…" autocomplete="off"
-           hx-get="/_tesseraql/studio/ui" hx-trigger="keyup changed delay:250ms, search"
+           th:hx-get="@{/_tesseraql/studio/ui}" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#explorer-tree" hx-select="#explorer-tree" hx-swap="outerHTML"
            hx-indicator="next .htmx-indicator">
     <!-- The palette hint (slice 7): this box filters the tree; ⌘K searches everything. -->
@@ -32,18 +32,18 @@
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
     <th:block th:if="${studio.editable}">
       <button type="button" class="hc-button" data-variant="primary" data-size="sm"
-              hx-get="/_tesseraql/studio/ui/new" hx-target="#new-route-dialog" hx-swap="innerHTML">New route</button>
+              th:hx-get="@{/_tesseraql/studio/ui/new}" hx-target="#new-route-dialog" hx-swap="innerHTML">New route</button>
       <button type="button" class="hc-button" data-size="sm" popovertarget="explorer-create-menu">Create &#9662;</button>
       <div class="hc-popover" id="explorer-create-menu" popover data-side="bottom" data-align="end">
         <nav class="hc-menu" aria-label="Create with">
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/scaffold">Scaffold</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/migration">Migration</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/wizard">Wizards</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/calendars">Calendars</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/mail">Mail</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/jobs">Job policies</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/connectors">Connectors</a>
-          <a class="hc-menu__item" href="/_tesseraql/studio/ui/copilot">Copilot</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/scaffold}">Scaffold</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/migration}">Migration</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/wizard}">Wizards</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/calendars}">Calendars</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/mail}">Mail</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/jobs}">Job policies</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/connectors}">Connectors</a>
+          <a class="hc-menu__item" th:href="@{/_tesseraql/studio/ui/copilot}">Copilot</a>
         </nav>
       </div>
     </th:block>
@@ -54,7 +54,7 @@
   <!-- The palette's "new route here" landing (slice 7): ?create=<prefix>/ auto-opens the
        New-route drawer seeded to that folder — same drawer, same remote-dialog root. -->
   <div th:if="${studio.editable and !#strings.isEmpty(studio.createPrefix)}"
-       th:attr="hx-get=|/_tesseraql/studio/ui/new?prefix=${studio.createPrefix}|"
+       th:attr="hx-get=@{|/_tesseraql/studio/ui/new?prefix=${studio.createPrefix}|}"
        hx-trigger="load" hx-target="#new-route-dialog" hx-swap="innerHTML"></div>
   <!-- The directory tree is the kit's hc-tree (docs/studio-ux-refresh.md slice 4): semantic
        nested <ul>/<li> upgraded by installTree with the APG keyboard model (roving tabindex,
@@ -89,8 +89,8 @@
          buttons too (hc-briefs.md brief 5, shipped), so either form is safe now. -->
     <a th:if="${studio.editable}" class="hc-button tql-tree-action"
        data-variant="ghost" data-size="sm"
-       th:href="|/_tesseraql/studio/ui/new?prefix=${folder.path}/|"
-       th:attr="hx-get=|/_tesseraql/studio/ui/new?prefix=${folder.path}/|,aria-label=|New route under ${folder.path}/|"
+       th:href="@{|/_tesseraql/studio/ui/new?prefix=${folder.path}/|}"
+       th:attr="hx-get=@{|/_tesseraql/studio/ui/new?prefix=${folder.path}/|},aria-label=|New route under ${folder.path}/|"
        hx-target="#new-route-dialog" hx-swap="innerHTML">+ New route</a>
   </span>
   <ul class="hc-tree__group">
@@ -108,7 +108,7 @@
     <span class="hc-badge"
           th:attr="data-variant=${leaf.kind == 'job'} ? 'info' : (${leaf.kind == 'draft'} ? 'success' : null)"
           th:text="${leaf.badge}"></span>
-    <span class="hc-tree__label"><a th:href="${leaf.sourceUrl}" th:text="${leaf.label}"></a></span>
+    <span class="hc-tree__label"><a th:href="@{${leaf.sourceUrl}}" th:text="${leaf.label}"></a></span>
     <span class="hc-field__message" th:text="${leaf.recipe}" th:unless="${#strings.isEmpty(leaf.recipe)}"></span>
     <!-- Draft state (Studio sidebar IA): a served entry with an unsaved draft, and a conflict when
          the source moved underneath it. A new draft is its own leaf (kind=draft, the 'new' badge). -->

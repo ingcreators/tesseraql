@@ -4,8 +4,8 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: shell(|Inbox &middot; TesseraQL|, ~{:: #inbox-nav}, ~{}, ~{:: #page-content})}">
 <th:block id="inbox-nav">
-  <a class="hc-item" href="/_tesseraql/inbox"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg></span><span class="hc-item__title">Inbox</span></a>
-  <a class="hc-item" href="/_tesseraql/account"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title">Account</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/inbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg></span><span class="hc-item__title">Inbox</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/account}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title">Account</span></a>
 </th:block>
 <div id="page-content" class="hc-stack">
   <section class="hc-card">
@@ -20,7 +20,7 @@
     <th:block th:if="${inbox.enabled}">
       <div class="hc-cluster">
         <p th:text="|${inbox.unread} unread|">0 unread</p>
-        <form method="post" action="/_tesseraql/inbox/read-all"
+        <form method="post" th:action="@{/_tesseraql/inbox/read-all}"
               th:if="${inbox.unread > 0}">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
           <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Mark all read</button>
@@ -41,7 +41,7 @@
           <div class="hc-cluster">
             <small class="hc-field__message" th:text="${message.source}">source</small>
             <span class="hc-spacer"></span>
-            <form method="post" action="/_tesseraql/inbox/read" th:unless="${message.read}">
+            <form method="post" th:action="@{/_tesseraql/inbox/read}" th:unless="${message.read}">
               <input type="hidden" name="_csrf" th:value="${_csrf}">
               <input type="hidden" name="eventId" th:value="${message.eventId}">
               <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Mark read</button>

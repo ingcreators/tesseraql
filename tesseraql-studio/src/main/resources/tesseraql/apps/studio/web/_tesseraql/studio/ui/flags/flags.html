@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -43,7 +43,7 @@
                      data-tql-submit-on-change bootstrap stand-in owns the submit; the checkbox
                      itself is unnamed so only the explicit value posts. -->
                 <th:block th:if="${flag.type == 'boolean'}">
-                  <form th:if="${f.editable}" method="post" action="/_tesseraql/studio/ui/flags/set">
+                  <form th:if="${f.editable}" method="post" th:action="@{/_tesseraql/studio/ui/flags/set}">
                     <input type="hidden" name="_csrf" th:value="${_csrf}">
                     <input type="hidden" name="name" th:value="${flag.name}">
                     <input type="hidden" name="type" value="boolean">
@@ -68,7 +68,7 @@
               <td class="hc-datagrid__cell" th:if="${f.editable}">
                 <!-- Removing a LIVE flag gates on a confirm (slice 6): templates and rules may
                      read it on the very next request. -->
-                <form method="post" action="/_tesseraql/studio/ui/flags/remove">
+                <form method="post" th:action="@{/_tesseraql/studio/ui/flags/remove}">
                   <input type="hidden" name="_csrf" th:value="${_csrf}">
                   <input type="hidden" name="name" th:value="${flag.name}">
                   <button type="submit" class="hc-button" data-variant="error" data-size="sm"
@@ -85,7 +85,7 @@
 
     <details class="hc-collapsible" th:if="${f.editable}" th:attr="open=${f.hasFlags} ? null : true">
       <summary class="hc-collapsible__trigger">Set a flag <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/flags/set">
+      <form class="hc-stack hc-collapsible__content" method="post" th:action="@{/_tesseraql/studio/ui/flags/set}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">

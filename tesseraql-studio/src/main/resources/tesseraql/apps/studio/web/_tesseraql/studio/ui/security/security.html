@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -47,7 +47,7 @@
       <input class="hc-input" data-size="sm" id="security-filter" type="search" name="q"
              th:value="${sec.query}" aria-label="Filter by method, path, policy"
              placeholder="Filter by method, path, policy&hellip;" autocomplete="off"
-             hx-get="/_tesseraql/studio/ui/security" hx-trigger="keyup changed delay:250ms, search"
+             th:hx-get="@{/_tesseraql/studio/ui/security}" hx-trigger="keyup changed delay:250ms, search"
              hx-target="#security-routes" hx-select="#security-routes" hx-swap="outerHTML"
              hx-indicator="next .htmx-indicator"
              th:attr="hx-vals=|{&quot;status&quot;:&quot;${sec.status}&quot;}|">
@@ -60,13 +60,13 @@
       <strong>undefined policy</strong>.</p>
     <!-- URL-routed hc-tabs (the kit's second tabs pattern): the active filter is aria-current. -->
     <nav class="hc-tabs__list" aria-label="Status filter">
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/security}"
          th:attr="aria-current=${#strings.isEmpty(sec.status)} ? 'page' : null">All</a>
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security?status=unprotected"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/security?status=unprotected}"
          th:attr="aria-current=${sec.status == 'unprotected'} ? 'page' : null">Unprotected</a>
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security?status=csrf-gap"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/security?status=csrf-gap}"
          th:attr="aria-current=${sec.status == 'csrf-gap'} ? 'page' : null">CSRF gaps</a>
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/security?status=undefined-policy"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/security?status=undefined-policy}"
          th:attr="aria-current=${sec.status == 'undefined-policy'} ? 'page' : null">Undefined policy</a>
     </nav>
     <div id="security-routes" class="hc-stack">
@@ -86,7 +86,7 @@
             <tr class="hc-datagrid__row" th:each="r : ${sec.routes}"
                 th:classappend="${r.unprotected} ? 'tql-stripe-error' : (${r.csrfGap or r.unknownPolicy} ? 'tql-stripe-warning' : null)">
               <td class="hc-datagrid__cell">
-                <a th:href="${r.sourceUrl}"><span th:text="${r.method}">GET</span>
+                <a th:href="@{${r.sourceUrl}}"><span th:text="${r.method}">GET</span>
                   <code th:text="${r.path}">/path</code></a>
               </td>
               <td class="hc-datagrid__cell">
@@ -137,7 +137,7 @@
                   <span class="hc-badge" th:each="rule : ${p.rules}">
                     <span th:text="${rule.label}">role X</span>
                     <form th:if="${sec.editable and rule.editable}" method="post"
-                          action="/_tesseraql/studio/ui/security/policy/remove-rule">
+                          th:action="@{/_tesseraql/studio/ui/security/policy/remove-rule}">
                       <input type="hidden" name="_csrf" th:value="${_csrf}">
                       <input type="hidden" name="policy" th:value="${p.id}">
                       <input type="hidden" name="kind" th:value="${rule.kind}">
@@ -155,7 +155,7 @@
                   <summary class="hc-collapsible__trigger" th:text="|${p.usedBy} route(s)|">0 route(s)</summary>
                   <ul class="hc-stack hc-collapsible__content">
                     <li th:each="r : ${p.routes}">
-                      <a th:href="${r.sourceUrl}"><span th:text="${r.method}">GET</span>
+                      <a th:href="@{${r.sourceUrl}}"><span th:text="${r.method}">GET</span>
                         <code th:text="${r.path}">/path</code></a>
                     </li>
                   </ul>
@@ -173,7 +173,7 @@
         rule is written to <code>config/overlay.yml</code> (the base config is left intact) and takes
         effect immediately. A policy grants access when the caller matches <em>any</em> of its rules.
         A base-defined policy can be overridden here but not deleted.</p>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/security/policy/add-rule">
+      <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/security/policy/add-rule}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">

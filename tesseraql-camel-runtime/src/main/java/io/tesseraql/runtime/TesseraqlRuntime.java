@@ -3627,7 +3627,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             return io.tesseraql.studio.StudioViews.render(studio.render(path,
                                     content == null ? null : String.valueOf(content),
                                     sample == null ? null : String.valueOf(sample), rows,
-                                    studioMask, studioPdf));
+                                    studioMask, studioPdf),
+                                    io.tesseraql.camel.BasePath.of(context));
                         })
                         .register("studio.runTests",
                                 params -> studioTests

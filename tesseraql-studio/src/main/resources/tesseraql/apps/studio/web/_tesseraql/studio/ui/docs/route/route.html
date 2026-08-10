@@ -5,7 +5,7 @@
   <span class="hc-spacer"></span>
   <nav class="hc-breadcrumb" aria-label="Breadcrumb">
     <ol class="hc-breadcrumb__list">
-      <li class="hc-breadcrumb__item"><a class="hc-breadcrumb__link" href="/_tesseraql/studio/ui/docs">Docs</a></li>
+      <li class="hc-breadcrumb__item"><a class="hc-breadcrumb__link" th:href="@{/_tesseraql/studio/ui/docs}">Docs</a></li>
       <li class="hc-breadcrumb__item"><span class="hc-breadcrumb__current" aria-current="page" th:text="${doc.id}">route</span></li>
     </ol>
   </nav>
@@ -22,7 +22,7 @@
         <div class="hc-cluster">
           <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-route">Copy</button>
           <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-             th:href="${doc.shareUrl}">Open shared view &rarr;</a>
+             th:href="@{${doc.shareUrl}}">Open shared view &rarr;</a>
         </div>
       </div>
     </div>
@@ -46,7 +46,7 @@
           <span class="hc-badge" data-variant="info" th:text="${doc.recipe}"></span>
           <span class="hc-spacer"></span>
           <a class="hc-button" data-variant="ghost" data-size="sm"
-             th:href="|/_tesseraql/studio/ui/try?path=${#uris.escapeQueryParam(doc.path)}&amp;method=${#uris.escapeQueryParam(doc.method)}|">Try in API console &rarr;</a>
+             th:href="@{|/_tesseraql/studio/ui/try?path=${#uris.escapeQueryParam(doc.path)}&amp;method=${#uris.escapeQueryParam(doc.method)}|}">Try in API console &rarr;</a>
         </div>
       </div>
     </section>
@@ -164,14 +164,14 @@
         <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.reads)}">
           <span class="hc-field__label">reads</span>
           <th:block th:each="t : ${doc.reads}">
-            <a class="hc-badge" data-variant="info" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
+            <a class="hc-badge" data-variant="info" th:if="${t.url}" th:href="@{${t.url}}" th:text="${t.name}"></a>
             <span class="hc-badge" data-variant="info" th:unless="${t.url}" th:text="${t.name}"></span>
           </th:block>
         </div>
         <div class="hc-cluster" th:unless="${#lists.isEmpty(doc.writes)}">
           <span class="hc-field__label">writes</span>
           <th:block th:each="t : ${doc.writes}">
-            <a class="hc-badge" data-variant="warning" th:if="${t.url}" th:href="${t.url}" th:text="${t.name}"></a>
+            <a class="hc-badge" data-variant="warning" th:if="${t.url}" th:href="@{${t.url}}" th:text="${t.name}"></a>
             <span class="hc-badge" data-variant="warning" th:unless="${t.url}" th:text="${t.name}"></span>
           </th:block>
         </div>

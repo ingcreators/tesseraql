@@ -16,7 +16,7 @@ import {
   setAttribute,
   setText,
   Overlay,
-} from '/assets/vendor/hypermedia-components__editor-kit/src/index.js';
+} from '../vendor/hypermedia-components__editor-kit/src/index.js';
 
 const host = document.getElementById('builder-canvas-host');
 if (host) init();
@@ -36,7 +36,7 @@ async function init() {
   // The core manifest drives the inspector's attribute enums (docs/page-builder.md);
   // without it the builder still works, just without per-component attribute knowledge.
   const manifest = await fetch(
-    '/assets/vendor/hypermedia-components__core/dist/manifest.json',
+    new URL('../vendor/hypermedia-components__core/dist/manifest.json', import.meta.url),
   ).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const blocks = new Map((manifest?.components ?? []).map((c) => [c.block, c]));
 

@@ -149,6 +149,26 @@ The one deliberate exception is pins and recents, which the browser captures fro
 location bar. Those are wire URLs by origin, they are compared against the request URI, and they
 are per-user state in a database, so re-deriving them costs more than it settles.
 
+### 8. The framework's own JavaScript resolves against the module, not the origin
+
+Slice 3 found the surface no link builder reaches: the bundled `.js` assets, which import
+`/assets/vendor/…` and `fetch("/_tesseraql/…")` as absolute URLs. Under a prefix all of them
+resolve at the origin and 404 — the same defect as the markup, in a place markup rules cannot
+see.
+
+They do not need a base path threaded into them, because **each module is itself served from
+under the prefix**. A module specifier resolves against the importing module's URL, so
+`../vendor/hc.behaviors.min.js` is right at every mount point; a `fetch` resolves against the
+document instead, so those take `new URL("../../_tesseraql/…", import.meta.url)`. Six sites,
+no configuration, and nothing to keep in sync.
+
+The generated per-locale message module (`ClientMessages`) is the same story and lost the
+`basePath` parameter it was first given.
+
+This narrows the "absolute URLs in application JavaScript" exclusion below rather than removing
+it: an application's own scripts are still the author's, and `import.meta.url` is the idiom to
+point them at.
+
 ### 5. The runtime serves under the prefix; it does not merely emit it
 
 Two models exist for putting an application under a path, and both are real deployments:
@@ -184,7 +204,13 @@ have been the smaller change.
    patterns render (`v.action`, `cell.href`, `liveConnect`), which are base-relative and so go
    through `@{${…}}`.
 3. **The bundled apps.** Studio, ops console, IAM Admin, account, auth-ui — the 264 sites,
-   mechanical once slice 1 defines the idiom.
+   mechanical once slice 1 defines the idiom. **Done** — 260 attributes rewritten to
+   `th:href="@{/x}"` (Thymeleaf's default attribute processor gives `th:hx-post` and
+   `th:data-value` for free, so htmx attributes need no `th:attr` list), 47 literal
+   substitutions `th:href="|/x/${id}|"` that read as though they were already dynamic, 39
+   model-supplied URLs through `@{${…}}`, the Studio preview `srcdoc` head, and the JavaScript
+   of decision 8. A test walks the shipped templates and fails on a root-absolute URL, because
+   a sweep this size is worth doing once.
 4. **The lint** (decision 3).
 5. **The cookie path**: supplied by the host beside the prefix (decision 4).
 6. **Suite mode end to end**: an HTML page served through `/apps/<id>/` with its assets,

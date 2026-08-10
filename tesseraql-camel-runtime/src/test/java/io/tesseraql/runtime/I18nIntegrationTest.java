@@ -159,10 +159,10 @@ class I18nIntegrationTest {
                 .startsWith("text/javascript");
         assertThat(response.body())
                 .contains("import { setMessages } from "
-                        + "\"/assets/vendor/hypermedia-components__core/dist/hc.behaviors.min.js\"")
+                        + "\"../vendor/hypermedia-components__core/dist/hc.behaviors.min.js\"")
                 // The kit's official locale pack (hc 0.1.1) loads before the app entries.
                 .contains("import pack from "
-                        + "\"/assets/vendor/hypermedia-components__core/dist/locales/ja.js\"")
+                        + "\"../vendor/hypermedia-components__core/dist/locales/ja.js\"")
                 .contains("users.provision.unknown-user");
 
         // The pack itself is servable through the version-less vendor route.

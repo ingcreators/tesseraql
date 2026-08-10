@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -22,7 +22,7 @@
       <!-- Server-side narrowing of the fetched window (docs/console-ux-refresh.md
            slice 5). The form sits outside the auto-refreshing results region below, so
            the 15s refresh can never discard what the operator is typing. -->
-      <form method="get" action="/_tesseraql/ops/console/audit" class="hc-cluster">
+      <form method="get" th:action="@{/_tesseraql/ops/console/audit}" class="hc-cluster">
         <label class="hc-field">
           <span class="hc-field__label">Route contains</span>
           <input class="hc-input" data-size="sm" name="route" th:value="${route}">
@@ -38,11 +38,11 @@
         <button class="hc-button" data-size="sm" type="submit">Filter</button>
         <a class="hc-button" data-variant="ghost" data-size="sm"
            th:if="${route != null or actor != null or status != null}"
-           href="/_tesseraql/ops/console/audit">Clear</a>
+           th:href="@{/_tesseraql/ops/console/audit}">Clear</a>
       </form>
       <div id="audit-results" class="hc-stack" hx-trigger="every 15s"
            hx-select="#audit-results" hx-target="this" hx-swap="outerHTML"
-           th:attr="hx-get=|/_tesseraql/ops/console/audit?route=${#uris.escapeQueryParam(route != null ? route : '')}&amp;actor=${#uris.escapeQueryParam(actor != null ? actor : '')}&amp;status=${#uris.escapeQueryParam(status != null ? status : '')}|">
+           th:attr="hx-get=@{|/_tesseraql/ops/console/audit?route=${#uris.escapeQueryParam(route != null ? route : '')}&amp;actor=${#uris.escapeQueryParam(actor != null ? actor : '')}&amp;status=${#uris.escapeQueryParam(status != null ? status : '')}|}">
       <div class="hc-empty" th:unless="${audit.hasRows}"><p class="hc-empty__title">No audited requests recorded yet.</p></div>
       <div class="hc-datagrid" th:if="${audit.hasRows}">
         <div class="hc-datagrid__scroll">

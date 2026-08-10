@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -33,7 +33,7 @@
       <input class="hc-input" data-size="sm" id="health-filter" type="search" name="q"
              th:value="${health.query}" aria-label="Filter by code, source, message"
              placeholder="Filter by code, source, message&hellip;" autocomplete="off"
-             hx-get="/_tesseraql/studio/ui/health" hx-trigger="keyup changed delay:250ms, search"
+             th:hx-get="@{/_tesseraql/studio/ui/health}" hx-trigger="keyup changed delay:250ms, search"
              hx-target="#health-table" hx-select="#health-table" hx-swap="outerHTML"
              hx-indicator="next .htmx-indicator"
              th:attr="hx-vals=|{&quot;severity&quot;:&quot;${health.severity}&quot;}|">
@@ -47,11 +47,11 @@
     <!-- URL-routed hc-tabs (the kit's second tabs pattern): plain navigation, the active
          filter marked aria-current — the browser owns keyboard and focus. -->
     <nav class="hc-tabs__list" aria-label="Severity filter">
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/health"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/health}"
          th:attr="aria-current=${#strings.isEmpty(health.severity)} ? 'page' : null">All</a>
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/health?severity=error"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/health?severity=error}"
          th:attr="aria-current=${health.severity == 'error'} ? 'page' : null">Errors</a>
-      <a class="hc-tabs__tab" href="/_tesseraql/studio/ui/health?severity=warning"
+      <a class="hc-tabs__tab" th:href="@{/_tesseraql/studio/ui/health?severity=warning}"
          th:attr="aria-current=${health.severity == 'warning'} ? 'page' : null">Warnings</a>
     </nav>
 
@@ -81,7 +81,7 @@
               </td>
               <td class="hc-datagrid__cell"><code th:text="${f.code}">TQL-…</code></td>
               <td class="hc-datagrid__cell">
-                <a th:if="${f.sourceUrl}" th:href="${f.sourceUrl}" th:text="${f.source}">source</a>
+                <a th:if="${f.sourceUrl}" th:href="@{${f.sourceUrl}}" th:text="${f.source}">source</a>
                 <span th:unless="${f.sourceUrl}" th:text="${f.source}">config</span>
                 <span class="hc-field__message" th:if="${f.line != null}"
                       th:text="|line ${f.line}|">line 3</span>

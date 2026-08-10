@@ -4,8 +4,8 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a href="/_tesseraql/studio/ui/migration">&larr; new migration</a>
-    <a href="/_tesseraql/studio/ui">explorer &rarr;</a>
+    <a th:href="@{/_tesseraql/studio/ui/migration}">&larr; new migration</a>
+    <a th:href="@{/_tesseraql/studio/ui}">explorer &rarr;</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -19,8 +19,8 @@
     <p class="hc-field__message">Edit the DDL in the source editor, then apply it right here
       &mdash; Migrate now runs the pending migrations against the dev datasource, no restart.</p>
     <div class="hc-cluster">
-      <a class="hc-button" data-variant="primary" th:href="${mig.editorUrl}">Open in editor &rarr;</a>
-      <form method="post" action="/_tesseraql/studio/ui/migration/migrate">
+      <a class="hc-button" data-variant="primary" th:href="@{${mig.editorUrl}}">Open in editor &rarr;</a>
+      <form method="post" th:action="@{/_tesseraql/studio/ui/migration/migrate}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="confirm" value="true">
         <button class="hc-button" type="submit"

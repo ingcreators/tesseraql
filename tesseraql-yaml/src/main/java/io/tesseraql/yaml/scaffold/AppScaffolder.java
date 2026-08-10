@@ -348,7 +348,7 @@ public final class AppScaffolder {
             <!-- App-wide sidebar navigation (design ch. 4), referenced from pages as
                  ~{templates/nav.html :: app-nav}. Add an hc-item entry per page. -->
             <th:block xmlns:th="http://www.thymeleaf.org" th:fragment="app-nav">
-              <a class="hc-item" href="/">Home</a>
+              <a class="hc-item" th:href="@{/}">Home</a>
             </th:block>
             """;
 

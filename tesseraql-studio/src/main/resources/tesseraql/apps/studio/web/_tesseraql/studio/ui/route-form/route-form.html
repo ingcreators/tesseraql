@@ -5,8 +5,8 @@
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
     <a class="hc-button" data-variant="ghost" data-size="sm"
-       th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(rf.form.path)}|">Text editor</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+       th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(rf.form.path)}|}">Text editor</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -19,7 +19,7 @@
       <p class="hc-alert" data-variant="error" role="alert"
          th:text="|The document does not parse as YAML: ${rf.form.error}|"></p>
       <p class="hc-field__message">Fix it in the
-        <a th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(rf.form.path)}|">text editor</a>
+        <a th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(rf.form.path)}|}">text editor</a>
         first &mdash; the form needs a parseable document.</p>
     </th:block>
     <th:block th:if="${rf.form.error == null}">
@@ -29,7 +29,7 @@
         it from the text editor, which stays the escape hatch for everything else.</p>
       <p class="hc-field__message" th:unless="${rf.editable}">You do not have permission to edit
         routes; the fields below are read-only.</p>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/route-form"
+      <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/route-form}"
             th:attr="data-readonly=${rf.readOnly}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="path" th:value="${rf.form.path}">

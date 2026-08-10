@@ -4,8 +4,8 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a href="/_tesseraql/studio/ui/migration">&larr; new migration</a>
-    <a href="/_tesseraql/studio/ui">explorer &rarr;</a>
+    <a th:href="@{/_tesseraql/studio/ui/migration}">&larr; new migration</a>
+    <a th:href="@{/_tesseraql/studio/ui}">explorer &rarr;</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -22,9 +22,9 @@
     <p class="hc-field__message" th:if="${mig.applied == 0}">Nothing was pending &mdash; the dev
       datasource already has every migration.</p>
     <div class="hc-cluster">
-      <a class="hc-button" data-variant="primary" href="/_tesseraql/studio/ui/scaffold">Scaffold
+      <a class="hc-button" data-variant="primary" th:href="@{/_tesseraql/studio/ui/scaffold}">Scaffold
         CRUD from a table &rarr;</a>
-      <a class="hc-button" href="/_tesseraql/studio/ui/migration">New migration</a>
+      <a class="hc-button" th:href="@{/_tesseraql/studio/ui/migration}">New migration</a>
     </div>
     </div>
   </section>

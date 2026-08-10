@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(row.table)}|">&larr; data browser</a>
+    <a th:href="@{|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(row.table)}|}">&larr; data browser</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -18,7 +18,7 @@
         leave the rest untouched. A ticked empty value sets <code>NULL</code>. Primary-key
         columns are not editable. The change is audited (row identity and column names, never
         values).</p>
-      <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/data/edit">
+      <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/data/edit}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="table" th:value="${row.table}">
         <input type="hidden" name="confirm" value="true">

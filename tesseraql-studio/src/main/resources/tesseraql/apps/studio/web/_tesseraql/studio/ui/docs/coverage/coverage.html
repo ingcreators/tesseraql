@@ -6,7 +6,7 @@
   <div class="hc-cluster">
     <!-- Schema is a sidebar Documentation-group link now (sidebar IA); the header keeps only the
          back-to-docs affordance so it does not duplicate the sidebar. -->
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/docs}">&larr; docs</a>
     <!-- Share is a header action, not a card (docs/studio-ux-refresh.md slice 4). -->
     <th:block th:if="${cov.shareUrl}">
       <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
@@ -19,7 +19,7 @@
           <div class="hc-cluster">
             <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-coverage">Copy</button>
             <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-               th:href="${cov.shareUrl}">Open shared view &rarr;</a>
+               th:href="@{${cov.shareUrl}}">Open shared view &rarr;</a>
           </div>
         </div>
       </div>

@@ -5,7 +5,7 @@
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
     <span class="hc-badge" th:each="u : ${user}" th:text="${u.login_id}"></span>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/admin/users">&larr; users</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">&larr; users</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -43,11 +43,11 @@
   <div class="hc-card__header">Actions</div>
   <div class="hc-card__body hc-stack">
     <div class="hc-cluster">
-      <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/enable|" th:if="${u.status != 'ACTIVE'}">
+      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/enable|}" th:if="${u.status != 'ACTIVE'}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="primary">Enable user</button>
       </form>
-      <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/disable|" th:if="${u.status == 'ACTIVE'}">
+      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/disable|}" th:if="${u.status == 'ACTIVE'}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="error"
                 th:attr="data-hc-confirm=|Disable user ${u.login_id}? Their active sessions end immediately.|"
@@ -75,7 +75,7 @@
               <td th:text="${#strings.isEmpty(s.expiresAt)} ? '&mdash;' : ${s.expiresAt}"></td>
               <td>
                 <form th:if="${!#strings.isEmpty(s.handle)}" method="post"
-                      th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke-one|">
+                      th:action="@{|/_tesseraql/admin/users/${u.user_id}/sessions/revoke-one|}">
                   <input type="hidden" name="_csrf" th:value="${_csrf}">
                   <input type="hidden" name="handle" th:value="${s.handle}">
                   <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
@@ -88,7 +88,7 @@
           </tbody>
         </table>
       </div>
-      <form method="post" th:action="|/_tesseraql/admin/users/${u.user_id}/sessions/revoke|">
+      <form method="post" th:action="@{|/_tesseraql/admin/users/${u.user_id}/sessions/revoke|}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button type="submit" class="hc-button" data-variant="error"
                 th:attr="data-hc-confirm=|Sign ${u.login_id} out everywhere?|"

@@ -5,14 +5,14 @@
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.isRouteDoc}"
-       th:href="|/_tesseraql/studio/ui/route-form?path=${#uris.escapeQueryParam(src.path)}|">Edit as form</a>
+       th:href="@{|/_tesseraql/studio/ui/route-form?path=${#uris.escapeQueryParam(src.path)}|}">Edit as form</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.builderEligible}"
-       th:href="|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(src.path)}|">Edit visually</a>
+       th:href="@{|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(src.path)}|}">Edit visually</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.mailComposable}"
-       th:href="|/_tesseraql/studio/ui/mail/composer?path=${#uris.escapeQueryParam(src.path)}|">Compose mail</a>
+       th:href="@{|/_tesseraql/studio/ui/mail/composer?path=${#uris.escapeQueryParam(src.path)}|}">Compose mail</a>
     <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${src.editorHref != null}"
-       th:href="${src.editorHref}">Open in editor</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+       th:href="@{${src.editorHref}}">Open in editor</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -32,7 +32,7 @@
       </label>
       <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
       <div id="render-result" class="hc-stack" aria-live="polite"
-           hx-post="/_tesseraql/studio/ui/render" hx-trigger="load, change from:#render-scripts"
+           th:hx-post="@{/_tesseraql/studio/ui/render}" hx-trigger="load, change from:#render-scripts"
            hx-include="#src-path, #render-scripts" hx-target="this" hx-swap="innerHTML"
            hx-indicator="previous span"></div>
     </details>
@@ -52,13 +52,13 @@
          no longer scrolls. The save form is submit-associated from the sticky action bar below
          (form=), and data-tql-hotkey-save gives it Ctrl/Cmd+S (bootstrap stand-in). -->
     <div class="tql-editor-layout">
-      <form id="save-form" method="post" action="/_tesseraql/studio/ui/save" class="hc-stack" data-tql-hotkey-save>
+      <form id="save-form" method="post" th:action="@{/_tesseraql/studio/ui/save}" class="hc-stack" data-tql-hotkey-save>
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" id="src-path" name="path" th:value="${src.path}">
         <div class="hc-code" data-editable data-gutter="line-numbers" th:attr="data-lang=${src.lang}">
           <textarea id="source-editor" name="content" class="hc-code__input" spellcheck="false" aria-label="Source editor"
                     th:text="${src.content}"
-                    hx-post="/_tesseraql/studio/ui/preview"
+                    th:hx-post="@{/_tesseraql/studio/ui/preview}"
                     hx-trigger="keyup changed delay:300ms, change"
                     hx-include="#src-path"
                     hx-target="#preview-result" hx-swap="innerHTML"
@@ -86,7 +86,7 @@
         </label>
         <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
         <div id="render-result" class="hc-stack" aria-live="polite"
-             hx-post="/_tesseraql/studio/ui/render"
+             th:hx-post="@{/_tesseraql/studio/ui/render}"
              hx-trigger="load, keyup changed delay:400ms from:#source-editor, keyup changed delay:400ms from:#sample-editor, change from:#render-live, change from:#render-scripts"
              hx-include="#src-path, #source-editor, #sample-editor, #render-live, #render-scripts"
              hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
@@ -121,7 +121,7 @@
       <div class="hc-tabs__panel hc-stack" role="tabpanel" id="panel-dry-run" aria-labelledby="tab-dry-run"
            th:if="${tabDry}" th:attr="hidden=${tabCompare} ? 'hidden' : null">
         <p class="hc-field__message">Runs this migration's DDL against the dev datasource in a sandboxed transaction that is rolled back &mdash; nothing persists &mdash; so you can check it applies before the next migrate. Postgres only (other dialects auto-commit DDL).</p>
-        <form hx-post="/_tesseraql/studio/ui/dry-run" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <form th:hx-post="@{/_tesseraql/studio/ui/dry-run}" hx-include="#source-editor" hx-target="#dry-run-result" hx-swap="innerHTML" hx-disabled-elt="find button">
           <input type="hidden" name="path" th:value="${src.path}">
           <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Dry-run</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
         </form>
@@ -130,7 +130,7 @@
       <div class="hc-tabs__panel hc-stack" role="tabpanel" id="panel-tests" aria-labelledby="tab-tests"
            th:if="${tabTests}" th:attr="hidden=${tabCompare or tabDry} ? 'hidden' : null">
         <p class="hc-field__message">Runs the declarative test cases covering this <span th:text="${src.isJob} ? 'job' : 'route'">route</span> (<code>sql</code>, <code>validate</code>, <code>notify</code>, <code>http-call</code>) against the dev datasource, sandboxed (auto-rollback, timeout, row cap) &mdash; a write case executes and is rolled back, so nothing persists.</p>
-        <form hx-post="/_tesseraql/studio/ui/run-tests" hx-target="#run-tests-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <form th:hx-post="@{/_tesseraql/studio/ui/run-tests}" hx-target="#run-tests-result" hx-swap="innerHTML" hx-disabled-elt="find button">
           <input type="hidden" name="path" th:value="${src.path}">
           <div class="hc-cluster"><button type="submit" class="hc-button" data-variant="primary">Run tests</button><th:block th:replace="~{tql/shell :: busy('Running…')}"/></div>
         </form>
@@ -141,12 +141,12 @@
         <p class="hc-field__message">Generate a <code>select</code>/<code>insert</code>/<code>update</code>/<code>delete</code>
           2-way SQL snippet for a table and append it to the editor above (the bind directives are
           written for you; a <code>-- sql.params</code> comment lists the mappings to add to the route).</p>
-        <form hx-post="/_tesseraql/studio/ui/sql-builder/build"
+        <form th:hx-post="@{/_tesseraql/studio/ui/sql-builder/build}"
               hx-target="#source-editor" hx-swap="beforeend" hx-disabled-elt="find button">
           <div class="hc-cluster">
             <div class="hc-field"><label class="hc-field__label">Table</label>
               <select class="hc-select" name="table" required
-                      hx-get="/_tesseraql/studio/ui/sql-builder/columns"
+                      th:hx-get="@{/_tesseraql/studio/ui/sql-builder/columns}"
                       hx-target="#sb-col" hx-swap="innerHTML" hx-trigger="load, change">
                 <option th:each="t : ${src.tables}" th:value="${t}" th:text="${t}"></option>
               </select>
@@ -175,7 +175,7 @@
          into a hand-owned template and flips to template:. Plain POST + hc-confirm; the
          hidden confirm satisfies the confirm-before-apply gate — the dialog is the
          acknowledgment. -->
-    <form method="post" action="/_tesseraql/studio/ui/eject-view" class="hc-cluster"
+    <form method="post" th:action="@{/_tesseraql/studio/ui/eject-view}" class="hc-cluster"
           th:if="${src.ejectableView}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="path" th:value="${src.path}">
@@ -193,7 +193,7 @@
          work, and this was the page's one unconfirmed destroyer. -->
     <div class="tql-editor-bar">
       <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
-      <form class="hc-cluster" hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+      <form class="hc-cluster" th:hx-post="@{/_tesseraql/studio/ui/apply}" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="path" th:value="${src.path}">
         <label class="hc-field" th:if="${src.conflict}">
           <input type="checkbox" name="force" value="true" required>
@@ -206,7 +206,7 @@
         <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
       </form>
       <span class="hc-spacer"></span>
-      <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${src.hasDraft}">
+      <form method="post" th:action="@{/_tesseraql/studio/ui/discard}" th:if="${src.hasDraft}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="path" th:value="${src.path}">
         <button type="submit" class="hc-button" data-variant="error"

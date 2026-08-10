@@ -4,14 +4,14 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
 <!-- Only the status table auto-refreshes (docs/console-ux-refresh.md slice 3): the Run
      forms live in their own card below, outside the swapped region, so a 15s refresh can
      never discard a parameter the operator is typing. -->
-<section class="hc-card" id="jobs-status" hx-get="/_tesseraql/ops/console/jobs"
+<section class="hc-card" id="jobs-status" th:hx-get="@{/_tesseraql/ops/console/jobs}"
          hx-trigger="every 15s" hx-select="#jobs-status" hx-target="this" hx-swap="outerHTML">
   <div class="hc-card__header">Batch jobs</div>
   <div class="hc-card__body hc-stack">
@@ -53,7 +53,7 @@
                 <span th:unless="${j.hasPollSource}">-</span>
               </td>
               <td class="hc-datagrid__cell">
-                <a th:if="${j.hasRun}" th:href="|/_tesseraql/ops/console/executions/${j.lastExecutionId}|"><span
+                <a th:if="${j.hasRun}" th:href="@{|/_tesseraql/ops/console/executions/${j.lastExecutionId}|}"><span
                     class="hc-badge" th:attr="data-variant=${j.lastStatusVariant}" th:text="${j.lastStatus}"></span></a>
                 <span th:unless="${j.hasRun}" th:text="${j.lastStatus}"></span>
               </td>
@@ -76,7 +76,7 @@
         <span th:text="${j.id}">job</span>
         <span class="hc-field__message" th:text="${j.trigger}">trigger</span> <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span>
       </summary>
-      <form method="post" action="/_tesseraql/ops/console/jobs/run"
+      <form method="post" th:action="@{/_tesseraql/ops/console/jobs/run}"
             class="hc-cluster hc-collapsible__content">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="id" th:value="${j.id}">

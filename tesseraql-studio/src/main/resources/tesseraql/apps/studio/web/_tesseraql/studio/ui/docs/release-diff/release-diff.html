@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/">&larr; docs</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/docs/}">&larr; docs</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -12,7 +12,7 @@
   <div class="hc-card__header">
     Release diff
     <span class="hc-spacer"></span>
-    <form th:if="${docs.editable}" method="post" action="/_tesseraql/studio/ui/docs/release-diff/capture">
+    <form th:if="${docs.editable}" method="post" th:action="@{/_tesseraql/studio/ui/docs/release-diff/capture}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button class="hc-button" data-size="sm" type="submit">Capture baselines now</button>
     </form>

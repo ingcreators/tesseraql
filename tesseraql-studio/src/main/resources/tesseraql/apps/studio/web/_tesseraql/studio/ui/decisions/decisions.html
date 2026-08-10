@@ -4,9 +4,9 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/decision-builder">Decide builder</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/decisions">Reference</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/decision-builder}">Decide builder</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/docs/decisions}">Reference</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -15,10 +15,10 @@
     <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Edit a YAML-backed decision's rows as a grid &mdash; the
       contract (inputs, outputs, policies) stays in the
-      <a href="/_tesseraql/studio/ui/source">text editor</a>. Table-backed decisions keep their
+      <a th:href="@{/_tesseraql/studio/ui/source}">text editor</a>. Table-backed decisions keep their
       rows in the app table; edit those in the
-      <a href="/_tesseraql/studio/ui/data">data browser</a>.</p>
-    <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/decisions">
+      <a th:href="@{/_tesseraql/studio/ui/data}">data browser</a>.</p>
+    <form class="hc-cluster" method="get" th:action="@{/_tesseraql/studio/ui/decisions}">
       <div class="hc-field">
         <label class="hc-field__label" for="dr-name">Decision</label>
         <select class="hc-select" id="dr-name" name="name">
@@ -42,7 +42,7 @@
     <th:block th:if="${dg.grid.error == null}">
       <p class="hc-alert" data-variant="warning" role="status" th:unless="${dg.grid.yamlBacked}">
         This decision is table-backed &mdash; its rows live in the app table; edit them in the
-        <a href="/_tesseraql/studio/ui/data">data browser</a>.</p>
+        <a th:href="@{/_tesseraql/studio/ui/data}">data browser</a>.</p>
       <th:block th:if="${dg.grid.yamlBacked}">
         <p class="hc-alert" data-variant="warning" role="status" th:if="${dg.grid.tooLarge}">
           This decision exceeds the grid (20 rows &times; 12 columns) &mdash; edit its rows in
@@ -57,7 +57,7 @@
             preserved); review and apply it from the text editor. The draft is validated first
             &mdash; a bad cell answers with its <code>TQL-DECISION</code> code and nothing is
             written.</p>
-          <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/decisions/save">
+          <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/decisions/save}">
             <input type="hidden" name="_csrf" th:value="${_csrf}">
             <input type="hidden" name="name" th:value="${dg.grid.name}">
             <th:block th:each="j : ${#numbers.sequence(0, dg.grid.columns.size() - 1)}">
@@ -92,7 +92,7 @@
             <div class="hc-cluster" th:if="${dg.editable}">
               <button class="hc-button" data-variant="primary" type="submit">Save as draft</button>
               <span class="hc-field__message">Then review the diff and apply from the
-                <a th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(dg.grid.path)}|">text editor</a>
+                <a th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(dg.grid.path)}|}">text editor</a>
                 (applying recompiles the decision before it lands).</span>
             </div>
             <p class="hc-field__message" th:unless="${dg.editable}">You do not have permission

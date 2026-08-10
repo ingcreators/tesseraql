@@ -386,7 +386,7 @@ public final class StudioViews {
      * a standalone document linking the Hypermedia Components stylesheet so a sandboxed iframe shows
      * the actual styled result.
      */
-    public static Map<String, Object> render(RenderResult result) {
+    public static Map<String, Object> render(RenderResult result, String basePath) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("ok", result.ok());
         model.put("kind", result.kind());
@@ -405,7 +405,7 @@ public final class StudioViews {
                     Highlighter.highlight(isHtml ? "output.html" : "output.txt", output));
         }
         if (result.ok() && isHtml) {
-            model.put("previewDoc", previewDoc(output));
+            model.put("previewDoc", previewDoc(output, basePath));
         }
         return model;
     }
@@ -520,13 +520,21 @@ public final class StudioViews {
      * plus the shell's scripts, so the opt-in live preview (the {@code allow-scripts} sandbox,
      * docs/page-builder.md follow-up) initializes hc behaviors on bare fragments too. In the
      * default scriptless sandbox the script tags are inert, so they ride unconditionally.
+     *
+     * <p>Built here rather than written in a template, so the prefix is applied by hand: this is
+     * markup for an iframe {@code srcdoc}, which no link expression reaches (docs/base-path.md).
      */
-    private static final String PREVIEW_HEAD = "<meta charset=\"utf-8\">"
-            + "<link rel=\"stylesheet\""
-            + " href=\"/assets/vendor/hypermedia-components__core/dist/hc.min.css\">"
-            + "<link rel=\"stylesheet\" href=\"/assets/_tesseraql/tesseraql.css\">"
-            + "<script src=\"/assets/vendor/htmx.org/dist/htmx.min.js\" defer></script>"
-            + "<script type=\"module\" src=\"/assets/_tesseraql/tesseraql.js\"></script>";
+    private static String previewHead(String basePath) {
+        String base = basePath == null ? "" : basePath;
+        return "<meta charset=\"utf-8\">"
+                + "<link rel=\"stylesheet\" href=\"" + base
+                + "/assets/vendor/hypermedia-components__core/dist/hc.min.css\">"
+                + "<link rel=\"stylesheet\" href=\"" + base + "/assets/_tesseraql/tesseraql.css\">"
+                + "<script src=\"" + base
+                + "/assets/vendor/htmx.org/dist/htmx.min.js\" defer></script>"
+                + "<script type=\"module\" src=\"" + base
+                + "/assets/_tesseraql/tesseraql.js\"></script>";
+    }
 
     /**
      * Wraps rendered HTML for a sandboxed iframe {@code srcdoc}: a full-page render (one that brings
@@ -534,13 +542,13 @@ public final class StudioViews {
      * fragment is wrapped in a minimal document linking the hc stylesheet so it is styled like the
      * real app. The dark theme matches the Studio shell.
      */
-    private static String previewDoc(String html) {
+    private static String previewDoc(String html, String basePath) {
         String lower = html.stripLeading().toLowerCase(java.util.Locale.ROOT);
         if (lower.startsWith("<!doctype") || lower.startsWith("<html")) {
             return html;
         }
-        return "<!DOCTYPE html><html lang=\"en\" data-theme=\"dark\"><head>" + PREVIEW_HEAD
-                + "</head><body>" + html + "</body></html>";
+        return "<!DOCTYPE html><html lang=\"en\" data-theme=\"dark\"><head>"
+                + previewHead(basePath) + "</head><body>" + html + "</body></html>";
     }
 
     /**

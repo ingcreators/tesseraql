@@ -4,10 +4,10 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
   </div>
 </th:block>
-<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/events" hx-trigger="every 15s"
+<div id="page-content" class="hc-stack" th:hx-get="@{/_tesseraql/ops/console/events}" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
   <div class="hc-card__header">Queue events</div>
@@ -49,7 +49,7 @@
               <td class="hc-datagrid__cell" th:text="${e.consumedAt}"></td>
               <td class="hc-datagrid__cell">
                 <!-- DEAD rows only: failed-but-not-dead messages are still PENDING and retry on their own. -->
-                <form th:if="${e.dead}" method="post" action="/_tesseraql/ops/console/events/redeliver">
+                <form th:if="${e.dead}" method="post" th:action="@{/_tesseraql/ops/console/events/redeliver}">
                   <input type="hidden" name="_csrf" th:value="${_csrf}">
                   <input type="hidden" name="id" th:value="${e.id}">
                   <button class="hc-button" data-size="sm" type="submit">Redeliver</button>

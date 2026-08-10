@@ -15,7 +15,10 @@ All notable changes to TesseraQL are documented here. The format follows
   every deployment that has not asked for one, renders byte-identical output. The surfaces
   outside Camel's REST configuration carry it too: static assets, the SSE streams, every
   redirect the framework emits, the file-transfer `Location` and status URLs, and the
-  generated OpenAPI document's `servers` entry.
+  generated OpenAPI document's `servers` entry. The bundled applications — Studio, the
+  operations console, IAM Admin, account, and the sign-in pages — emit their URLs through it
+  as well, so a suite-hosted application no longer renders a sign-in form that posts into a
+  void.
 
 ### Added
 

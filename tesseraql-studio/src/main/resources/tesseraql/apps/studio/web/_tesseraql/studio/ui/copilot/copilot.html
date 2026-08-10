@@ -4,11 +4,11 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <form method="post" action="/_tesseraql/studio/ui/copilot/reset" th:if="${chat.enabled}">
+    <form method="post" th:action="@{/_tesseraql/studio/ui/copilot/reset}" th:if="${chat.enabled}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">New conversation</button>
     </form>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -39,8 +39,8 @@
         </ol>
       </div>
       <form id="copilot-composer" class="hc-cluster" method="post"
-            action="/_tesseraql/studio/ui/copilot/send"
-            hx-post="/_tesseraql/studio/ui/copilot/send"
+            th:action="@{/_tesseraql/studio/ui/copilot/send}"
+            th:hx-post="@{/_tesseraql/studio/ui/copilot/send}"
             hx-target="#copilot-chat-list" hx-swap="beforeend"
             hx-disabled-elt="find button[type=submit]">
         <input type="hidden" name="_csrf" th:value="${_csrf}">

@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -25,7 +25,7 @@
 
     <details class="hc-collapsible" th:if="${msg.editable}" th:attr="open=${msg.keyCount == 0} ? true : null">
       <summary class="hc-collapsible__trigger">Set a translation <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/messages/set">
+      <form class="hc-stack hc-collapsible__content" method="post" th:action="@{/_tesseraql/studio/ui/messages/set}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">

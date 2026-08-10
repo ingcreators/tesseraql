@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -15,7 +15,7 @@
       response (status, headers, body). The request runs against the live app, so its route enforces
       its own security &mdash; public routes just work; for a <code>bearer</code> route paste a token.
       A <code>POST</code>/<code>PUT</code>/<code>DELETE</code> hits the real route and can modify data.</p>
-    <form class="hc-stack" hx-post="/_tesseraql/studio/ui/try/run"
+    <form class="hc-stack" th:hx-post="@{/_tesseraql/studio/ui/try/run}"
           hx-target="#tryit-result" hx-swap="innerHTML" hx-disabled-elt="find button">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <div class="hc-cluster">

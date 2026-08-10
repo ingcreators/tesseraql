@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -49,13 +49,13 @@
               <td>
                 <div class="hc-cluster">
                   <a class="hc-button" data-variant="ghost" data-size="sm"
-                     th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(p.source)}|"
+                     th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(p.source)}|}"
                      th:text="${p.ejectable} ? 'Route · Eject…' : 'Route'"></a>
                   <a class="hc-button" data-variant="ghost" data-size="sm" th:if="${p.refPath != null}"
-                     th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(p.refPath)}|"
+                     th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(p.refPath)}|}"
                      th:text="${p.mode == 'view'} ? 'View doc' : 'Template'"></a>
                   <a class="hc-button" data-variant="primary" data-size="sm" th:if="${p.builderEligible}"
-                     th:href="|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(p.refPath)}|">Edit visually</a>
+                     th:href="@{|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(p.refPath)}|}">Edit visually</a>
                 </div>
               </td>
             </tr>
