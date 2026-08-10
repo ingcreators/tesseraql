@@ -213,4 +213,6 @@ export const EXCLUDED = [
   'style-guide.md',
   // Application isolation model (which multi-app mechanism serves what), 2026-08-10.
   'app-isolation-model.md',
+  // Serving an application under a base path (prefix hosting, reverse proxies), 2026-08-10.
+  'base-path.md',
 ];
