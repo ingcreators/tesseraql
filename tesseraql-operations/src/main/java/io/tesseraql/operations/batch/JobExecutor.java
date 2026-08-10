@@ -132,6 +132,24 @@ public final class JobExecutor {
         return this;
     }
 
+    /**
+     * A step's export queries, rendered here because the executor already owns dialect-variant
+     * resolution and the file placeholders (docs/export-pipeline.md, decision 2). The service then
+     * only executes them, on the extraction's connection and before the extraction.
+     */
+    private Map<String, io.tesseraql.core.sql.BoundSql> renderStepExportQueries(
+            io.tesseraql.yaml.manifest.JobFile jobFile, io.tesseraql.yaml.model.ExportSpec export,
+            javax.sql.DataSource dataSource, Map<String, Object> context,
+            io.tesseraql.core.sql.FilePathResolver filePathResolver) {
+        if (export.queries().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, io.tesseraql.core.sql.BoundSql> rendered = new LinkedHashMap<>();
+        export.queries().forEach((name, binding) -> rendered.put(name,
+                renderStepSql(jobFile, binding, dataSource, context, filePathResolver)));
+        return Map.copyOf(rendered);
+    }
+
     /** The ceiling a step's export declares; whether it applies is the codec's answer. */
     private io.tesseraql.core.files.ExportRowCap declaredExportRowCap(
             io.tesseraql.yaml.model.ExportSpec export) {
@@ -615,7 +633,9 @@ public final class JobExecutor {
                         jobFile.definition().id() + "#" + step.id(), appName,
                         export.format(), writeSpec,
                         interpolate(export.filename(), context), query, afterExtract,
-                        declaredExportRowCap(export)),
+                        declaredExportRowCap(export),
+                        renderStepExportQueries(jobFile, export, dataSource, context,
+                                filePathResolver)),
                         dataSource);
         Map<String, Object> stepResult = new LinkedHashMap<>();
         stepResult.put("affectedRows", (int) result.rows());

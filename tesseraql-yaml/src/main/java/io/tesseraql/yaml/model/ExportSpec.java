@@ -47,14 +47,20 @@ import java.util.List;
  *                   out. A streaming format is never capped
  *                   (docs/export-pipeline.md, decision 7)
  * @param onOverflow {@code fail} (default) or {@code warn}, which truncates at the cap
+ * @param queries    named queries a template composes around the rows — the order header, the
+ *                   totals, the master data. They run on the extraction's connection, inside its
+ *                   transaction and before it, so a document reads the state its rows came from
+ *                   (docs/export-pipeline.md, decision 2)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
-        SqlBinding sql, AfterSpec after, Integer maxRows, String onOverflow) {
+        SqlBinding sql, AfterSpec after, Integer maxRows, String onOverflow,
+        java.util.Map<String, SqlBinding> queries) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
+        queries = queries == null ? java.util.Map.of() : java.util.Map.copyOf(queries);
     }
 
     /**

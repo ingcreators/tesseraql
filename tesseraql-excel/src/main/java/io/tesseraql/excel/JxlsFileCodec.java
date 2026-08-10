@@ -153,7 +153,7 @@ public final class JxlsFileCodec implements FileCodec {
             // template workbook is held whole — so the re-readable source is the one it is given.
             writePlacement(out, spec, model.repeatableRows().iterator());
         } else if (hasTemplate) {
-            writeWithJxlsTemplate(out, spec, model.repeatableRows());
+            writeWithJxlsTemplate(out, spec, model.repeatableRows(), model.values());
         } else {
             writeGrid(out, spec, model.rows());
         }
@@ -315,9 +315,10 @@ public final class JxlsFileCodec implements FileCodec {
      * may walk it more than once, and nothing is collected into a list to allow that.
      */
     private static void writeWithJxlsTemplate(OutputStream out, FileWriteSpec spec,
-            Iterable<Map<String, Object>> rows) throws IOException {
-        // jxls adds its loop variables to the context, so the map must be mutable.
-        Map<String, Object> context = new LinkedHashMap<>();
+            Iterable<Map<String, Object>> rows, Map<String, Object> values) throws IOException {
+        // jxls adds its loop variables to the context, so the map must be mutable. The export's
+        // other declared sources go in under their own names (docs/export-pipeline.md, dec. 2).
+        Map<String, Object> context = new LinkedHashMap<>(values);
         context.put("rows", rows);
         try (InputStream template = Files.newInputStream(spec.template())) {
             JxlsPoiTemplateFillerBuilder.newInstance()

@@ -2417,6 +2417,7 @@ public final class AppLinter {
         }
         lintRouteExport(route, definition, source, findings);
         lintExportRowCap(definition.fileExport(), "", source, findings);
+        lintExportSources(definition.fileExport(), definition.http(), "", source, findings);
         lintDatasource(config, route.source(), definition, source, findings);
         lintEmbeddedVariables(route.source(), definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
@@ -4460,6 +4461,8 @@ public final class AppLinter {
                     + "': export references a missing template: " + export.template()));
         }
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
+        lintExportSources(export, java.util.Map.of(), "Step '" + step.id() + "': ", source,
+                findings);
     }
 
     /**
@@ -5196,6 +5199,39 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1006", "error", source,
                     "export references a missing template: " + spec.template()));
         }
+    }
+
+    /**
+     * An export's other declared sources (docs/export-pipeline.md, decision 2) need somewhere to
+     * go. CSV and the Excel grid write rows and nothing else, so a named query or an HTTP source
+     * declared beside them runs to be discarded — a cost with no reader.
+     *
+     * <p>{@code onError: empty} is refused outright on an export. On a page, degrading to zero
+     * rows leaves a gap a human sees; in a document that is archived, mailed and filed, it
+     * produces something that looks complete and is not.
+     */
+    private void lintExportSources(io.tesseraql.yaml.model.ExportSpec spec,
+            java.util.Map<String, io.tesseraql.yaml.model.HttpSourceSpec> httpSources,
+            String label, String source, List<LintFinding> findings) {
+        if (spec == null) {
+            return;
+        }
+        httpSources.forEach((name, http) -> {
+            if (http != null && http.degradesToEmpty()) {
+                findings.add(new LintFinding("TQL-YAML-1006", "error", source, label
+                        + "http: source '" + name + "' declares onError: empty on an export -"
+                        + " a document that is archived and mailed would look complete with a"
+                        + " section missing, so an export whose source failed should fail"));
+            }
+        });
+        boolean templated = spec.template() != null;
+        if (templated || (spec.queries().isEmpty() && httpSources.isEmpty())) {
+            return;
+        }
+        findings.add(new LintFinding("TQL-LD-5312", "warning", source, label
+                + "export declares " + (spec.queries().isEmpty() ? "http: sources" : "queries:")
+                + " but no template: - a " + spec.format() + " export writes rows and nothing"
+                + " else, so they would run to be discarded"));
     }
 
     /**

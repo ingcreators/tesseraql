@@ -31,11 +31,15 @@ public final class FileExportStartProcessor implements Processor {
     private final String afterTiming;
     private final Path afterSqlFile;
     private final io.tesseraql.core.files.ExportRowCap rowCap;
+    private final java.util.List<io.tesseraql.core.files.ExportQuery> queries;
+    private final java.util.Set<String> httpSources;
 
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
             FileWriteSpec writeSpec, String localeDeclaration, String timezoneDeclaration,
             String filename, Path querySqlFile, String afterTiming, Path afterSqlFile,
-            io.tesseraql.core.files.ExportRowCap rowCap) {
+            io.tesseraql.core.files.ExportRowCap rowCap,
+            java.util.List<io.tesseraql.core.files.ExportQuery> queries,
+            java.util.Set<String> httpSources) {
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -48,6 +52,8 @@ public final class FileExportStartProcessor implements Processor {
         this.afterTiming = afterTiming;
         this.afterSqlFile = afterSqlFile;
         this.rowCap = rowCap;
+        this.queries = java.util.List.copyOf(queries);
+        this.httpSources = java.util.Set.copyOf(httpSources);
     }
 
     @Override
@@ -67,7 +73,7 @@ public final class FileExportStartProcessor implements Processor {
                         FormatSources.resolve(exchange, localeDeclaration),
                         FormatSources.resolve(exchange, timezoneDeclaration)),
                 filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
-                rowCap));
+                rowCap, queries, ExportSources.values(exchange, httpSources)));
         FileImportProcessor.respondAccepted(exchange, urlPath, transferId, true);
     }
 }
