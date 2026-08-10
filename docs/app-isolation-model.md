@@ -1,9 +1,10 @@
 # Application isolation model
 
-Status: design accepted 2026-08-10. The framework carries two multi-app models. One is
-documented, reachable, and shares everything; the other isolates properly and has never had a
-caller. This decides which serves what, scopes each honestly, and records what the framework
-does **not** promise.
+Status: **complete 2026-08-10** — every slice shipped.
+
+The framework carried two multi-app models. One was documented, reachable, and shared
+everything; the other isolated properly and had never had a caller. This decides which serves
+what, scopes each honestly, and records what the framework does **not** promise.
 
 ## What exists today
 
@@ -168,14 +169,18 @@ replacement.
 1. **Gateway hardening.** The recorded defects in `MultiAppGateway`: `close()` releasing
    neither its `HttpClient` nor its executor, unbounded request/response body buffering, and
    ingress header handling that does not behave like the trusted edge it forwards to.
+   **Done** (#691).
 2. **Route audit to the business datasource** (decision 5), amending
-   `framework-datasource.md`'s bucket-3 criteria.
+   `framework-datasource.md`'s bucket-3 criteria. **Done** (#690).
 3. **Per-app ops console** (decision 4): the console shows its own app, `ops.app.<name>`
-   becomes an open permission, scope clauses stay.
+   becomes an open permission, scope clauses stay. **Done** (#692).
 4. **An entry point for ②**: a CLI verb that starts `MultiAppHost` behind the gateway, with
-   the mode (shared suite / independent hosting) declared in configuration.
+   the mode (shared suite / independent hosting) declared in configuration. **Done** (#693):
+   `tesseraql host --install-root <dir> --mode <suite|isolated>`.
 5. **Studio under ②**: confirm a per-runtime Studio behaves correctly behind the gateway —
-   path prefixes, redirects, CSRF, and asset URLs.
+   path prefixes, redirects, CSRF, and asset URLs. **Done** (#701) — it needed the whole base
+   path campaign first, and `SuiteModeIntegrationTest` now opens Studio through
+   `/apps/<id>/`, checks its CSRF token and command palette, and requests every URL it emits.
 6. **Reduce ①** (decision 1): drop `configuredDirectories` and `HttpAppSource`; simplify the
    `mountedApps` plumbing in `TesseraqlRuntime` and `RouteReloader`. **Done** — `AppSources`
    discovers the `ServiceLoader` providers and nothing else, and `HttpAppSource`,
