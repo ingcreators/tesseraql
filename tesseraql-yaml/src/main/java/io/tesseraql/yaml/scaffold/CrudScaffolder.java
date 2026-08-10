@@ -364,10 +364,10 @@ public final class CrudScaffolder {
                      pages' back link, and the confirmed delete the edit view mounts in its footer
                      slot (docs/declarative-views.md, docs/hypermedia-ui.md). -->
                 <html xmlns:th="http://www.thymeleaf.org">
-                <a th:fragment="new-link" class="hc-button" data-variant="primary" href="%s/new">New</a>
-                <a th:fragment="back-link" class="hc-button" data-variant="ghost" data-size="sm" href="%s">&larr; %s</a>
-                <form th:fragment="confirm-delete" id="%s-delete-form" method="post" th:action="|%s/${v.row['%s']}/delete|"
-                      th:attr="hx-post=|%s/${v.row['%s']}/delete|" hx-trigger="hc:confirmed"
+                <a th:fragment="new-link" class="hc-button" data-variant="primary" th:href="@{%s/new}">New</a>
+                <a th:fragment="back-link" class="hc-button" data-variant="ghost" data-size="sm" th:href="@{%s}">&larr; %s</a>
+                <form th:fragment="confirm-delete" id="%s-delete-form" method="post" th:action="@{|%s/${v.row['%s']}/delete|}"
+                      th:attr="hx-post=@{|%s/${v.row['%s']}/delete|}" hx-trigger="hc:confirmed"
                       hx-target="#%s-delete-form-errors" hx-swap="innerHTML"
                       hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
                   <input type="hidden" name="_csrf" th:value="${_csrf}">

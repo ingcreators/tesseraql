@@ -32,7 +32,7 @@ Serve every installed app from one port, each in its own runtime.
 | --- | --- | --- |
 | `--install-root <installRoot>` | yes | Directory holding catalog.json and the installed app trees. |
 | `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
-| `--mode <suite\|isolated>` | — | suite: one origin, /apps/<id>/ per app, one session across them — JSON APIs only until base-path support lands (docs/base-path.md). isolated: a hostname per app, sessions not shared; HTML applications work here today. Default suite. |
+| `--mode <suite\|isolated>` | — | suite: one origin, /apps/<id>/ per app, one session across them. isolated: a hostname per app, sessions not shared. Default suite. |
 
 ## `routes`
 

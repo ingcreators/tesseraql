@@ -1,12 +1,12 @@
-<!-- tesseraql-scaffold-checksum: sha256:358783f3f35753a96a56a66a802ebbf7684048e59fbf5e068d343001b94fdfa7 -->
+<!-- tesseraql-scaffold-checksum: sha256:aa42fb6a31ec9f5b529d24df38a206cc350abef7db6cb9533e624d122aa5e436 -->
 <!-- Scaffolded slot fragments for the items pages: the list's New button, the form
      pages' back link, and the confirmed delete the edit view mounts in its footer
      slot (docs/declarative-views.md, docs/hypermedia-ui.md). -->
 <html xmlns:th="http://www.thymeleaf.org">
-<a th:fragment="new-link" class="hc-button" data-variant="primary" href="/items/new">New</a>
-<a th:fragment="back-link" class="hc-button" data-variant="ghost" data-size="sm" href="/items">&larr; Items</a>
-<form th:fragment="confirm-delete" id="items-delete-form" method="post" th:action="|/items/${v.row['id']}/delete|"
-      th:attr="hx-post=|/items/${v.row['id']}/delete|" hx-trigger="hc:confirmed"
+<a th:fragment="new-link" class="hc-button" data-variant="primary" th:href="@{/items/new}">New</a>
+<a th:fragment="back-link" class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/items}">&larr; Items</a>
+<form th:fragment="confirm-delete" id="items-delete-form" method="post" th:action="@{|/items/${v.row['id']}/delete|}"
+      th:attr="hx-post=@{|/items/${v.row['id']}/delete|}" hx-trigger="hc:confirmed"
       hx-target="#items-delete-form-errors" hx-swap="innerHTML"
       hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner">
   <input type="hidden" name="_csrf" th:value="${_csrf}">

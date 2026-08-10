@@ -2,6 +2,6 @@
      ~{templates/nav.html :: app-nav}. hc-item gives the links their hover and, with the
      framework-set aria-current="page", their selected treatment. -->
 <th:block xmlns:th="http://www.thymeleaf.org" th:fragment="app-nav">
-  <a class="hc-item" href="/users">Users</a>
-  <a class="hc-item" href="/admin/users">User Management (IAM)</a>
+  <a class="hc-item" th:href="@{/users}">Users</a>
+  <a class="hc-item" th:href="@{/admin/users}">User Management (IAM)</a>
 </th:block>

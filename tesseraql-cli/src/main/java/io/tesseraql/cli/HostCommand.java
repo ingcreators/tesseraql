@@ -28,10 +28,8 @@ final class HostCommand implements Callable<Integer> {
     int port = 8080;
 
     @Option(names = {
-            "--mode"}, paramLabel = "<suite|isolated>", description = "suite: one origin, /apps/<id>/ per app, one session across them"
-                    + " — JSON APIs only until base-path support lands"
-                    + " (docs/base-path.md). isolated: a hostname per app, sessions not"
-                    + " shared; HTML applications work here today. Default suite.")
+            "--mode"}, paramLabel = "<suite|isolated>", description = "suite: one origin, /apps/<id>/ per app, one session across them."
+                    + " isolated: a hostname per app, sessions not shared. Default suite.")
     String mode = "suite";
 
     @Override

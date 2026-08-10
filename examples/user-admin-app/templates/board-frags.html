@@ -2,5 +2,5 @@
      docs/declarative-views.md). -->
 <html xmlns:th="http://www.thymeleaf.org">
 <a th:fragment="backLink" class="hc-button" data-variant="ghost" data-size="sm"
-   href="/users">&larr; Users</a>
+   th:href="@{/users}">&larr; Users</a>
 </html>
