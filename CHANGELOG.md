@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **BREAKING: `FileCodec.write` takes an `ExportModel`** (docs/export-pipeline.md) in place of a
+  bare `Iterator<Map<String, Object>>`. A codec received the rows and nothing else, and three
+  unrelated-looking problems followed from that one signature: a header-and-lines document had to
+  denormalize its header onto every line, a report template could not group without materializing,
+  and a large export was a memory question. The model carries the rows plus the export's other
+  declared sources, and it offers the row source twice — a single-pass iterator to a codec whose
+  `streams(FileWriteSpec)` says it writes rows through, and a re-readable view over a `TempStore`
+  spool to one that holds them. Asking for the other one fails (`TQL-LD-2856`), so a codec's
+  declaration and its behaviour cannot drift apart. Third-party codecs must migrate; the bundled
+  CSV, Excel and PDF codecs have.
+
 ### Added
 
 - **`tesseraql.http.basePath`** (docs/base-path.md): serve an application under a path
