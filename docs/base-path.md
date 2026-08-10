@@ -1,7 +1,7 @@
 # Serving an application under a base path
 
-Status: design 2026-08-10, accepted in principle; the open question in decision 4 is called
-out rather than settled. Every URL a TesseraQL application emits is rooted at `/`, so an
+Status: design accepted 2026-08-10; decisions 4 and 5 settled the same day, after
+implementation surfaced the second. Every URL a TesseraQL application emits is rooted at `/`, so an
 application can only be served at the root of its origin. That blocks two things: hosting
 several applications on one origin under `/apps/<id>/`
 ([app-isolation-model.md](app-isolation-model.md) suite mode), and the ordinary case of a
@@ -78,7 +78,7 @@ link off-site or to a path outside its own prefix, and the framework cannot tell
 Applications that never set a base path are never warned, so the lint is silent for everyone
 until the day it is useful.
 
-### 4. Open: the session cookie's `Path` (suite sharing versus proxy correctness)
+### 4. The host supplies the cookie path, because only the host knows it is a suite
 
 The session cookie is issued with `Path=/` in three places. Under a base path there are two
 correct answers and they conflict:
@@ -89,22 +89,48 @@ correct answers and they conflict:
   ([app-isolation-model.md](app-isolation-model.md) decision 2). Scoping per prefix would
   make each app a separate sign-in and delete the mode's reason to exist.
 
-So the cookie path is not derivable from the base path alone; it needs its own setting, or
-the host must supply it alongside the prefix. **This is not settled here.** The slices below
-stop short of it, and it is decided before the cookie work lands — with a bias toward the
-host supplying both, since it is the host that knows whether the apps are a suite.
+The cookie path is therefore not derivable from the base path, and it is **supplied
+alongside it by whatever starts the runtime**. A standalone `serve` uses the base path; a
+suite-mode gateway passes `/`, because it is the component that knows these applications are
+one suite. An isolated-mode gateway passes each app's own path, since there is nothing to
+share.
+
+A separate configuration key was considered and rejected: an operator who sets it wrongly
+gets either a silently unshared suite or a session offered to every neighbour on the origin,
+and neither failure announces itself. The knowledge belongs to the host, so the host carries
+it.
+
+### 5. The runtime serves under the prefix; it does not merely emit it
+
+Two models exist for putting an application under a path, and both are real deployments:
+
+- **Prefix-aware serving** — the runtime binds `<base>/users`, and the proxy passes the path
+  through unchanged.
+- **Prefix-stripping** — the proxy removes `/myapp`, the runtime serves `/users` as today,
+  and only its *emitted* URLs carry the prefix.
+
+TesseraQL takes the first. An application that emits `<base>/users` should answer at
+`<base>/users`: the alternative leaves a runtime advertising URLs it cannot serve, which is a
+standing invitation to inconsistency and cannot be tested without a proxy in front of it.
+Prefix-aware serving also works behind a proxy that does nothing but pass paths along, which
+is the configuration an operator is most likely to get right.
+
+The cost is real and accepted: the multi-app gateway currently strips `/apps/<id>` before
+forwarding and stops doing so, and route mounting learns the prefix. Prefix-stripping would
+have been the smaller change.
 
 ## Slices
 
-1. **The setting and the model variable.** `tesseraql.http.basePath`, route mounting under
-   it, `base` in the template model, and the sweep of framework templates (`tql/**`). An
-   unset base is byte-identical, held by a test.
+1. **The setting and the model variable.** `tesseraql.http.basePath`, prefix-aware route
+   mounting (decision 5), `base` in the template model, and the sweep of framework templates
+   (`tql/**`). An unset base is byte-identical, held by a test. The gateway stops stripping
+   the prefix in the same slice, since the two halves must move together.
 2. **The framework's own URL emission.** Redirects, asset routes, the live-events endpoint,
    generated OpenAPI servers.
 3. **The bundled apps.** Studio, ops console, IAM Admin, account, auth-ui — the 264 sites,
    mechanical once slice 1 defines the idiom.
 4. **The lint** (decision 3).
-5. **The cookie path**, after decision 4 is settled.
+5. **The cookie path**: supplied by the host beside the prefix (decision 4).
 6. **Suite mode end to end**: an HTML page served through `/apps/<id>/` with its assets,
    navigation, forms, and htmx swaps working — the case that opened this document.
 
