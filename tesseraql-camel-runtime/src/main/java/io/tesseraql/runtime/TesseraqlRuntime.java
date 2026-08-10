@@ -422,11 +422,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
         context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
         // The opt-in business-route audit log (roadmap Phase 45): who called what, with the
         // declared decision-relevant params, per-app scoped like every other ops table.
+        //
+        // On the BUSINESS datasource, not tesseraql.framework.datasource
+        // (docs/app-isolation-model.md): this store writes once per audited request — business
+        // request rate — and that key exists to keep a long-running business query from
+        // starving login of a connection. Business-rate writes on the login pool defeat it.
+        // It also keeps the ops console reading one database: every other page it serves
+        // (jobs, executions, outbox, events) is bucket-1 and pinned here.
         io.tesseraql.operations.audit.JdbcRouteAuditStore routeAuditStore = null;
         if (manifest.config().getString("tesseraql.audit.routes.enabled")
                 .map(Boolean::parseBoolean).orElse(false)) {
             routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(
-                    frameworkDataSource);
+                    dataSource);
             routeAuditStore.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
                     routeAuditStore);

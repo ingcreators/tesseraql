@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **The route audit log moves to the business datasource**
+  (docs/app-isolation-model.md). `tesseraql.audit.routes.enabled` wrote through
+  `tesseraql.framework.datasource`, but that key exists to keep a long-running business
+  query from starving *login* of a connection, and the audit store writes once per
+  audited request — business request rate — so it was loading the pool it was meant to
+  protect. It also left the ops console reading two databases: seven of its eight pages
+  come from the business datasource. A deployment that configured a separate framework
+  datasource keeps its existing `tql_route_audit` rows readable where they are; the table
+  bootstraps on the business datasource and logs there from now on. `framework-datasource.md`
+  is amended: bucket 3 is ambient **authentication-path** state.
+
 ### Added
 
 - **Shared views** (docs/declarative-views.md): one view document may now serve several
