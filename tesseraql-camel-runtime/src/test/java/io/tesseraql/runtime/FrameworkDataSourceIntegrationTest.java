@@ -85,6 +85,26 @@ class FrameworkDataSourceIntegrationTest {
                 .isZero();
     }
 
+    /**
+     * The 2026-08-10 amendment (docs/app-isolation-model.md): the route audit store writes at
+     * business request rate, so it stays on the business datasource rather than the pool that
+     * exists to keep business load off login. It is the one bucket-3 store that moved back.
+     */
+    @Test
+    void auditBootstrapsOnTheBusinessDatabaseNotOnFramework() throws Exception {
+        assertThat(count(POSTGRES.getJdbcUrl(),
+                "select count(*) from information_schema.tables"
+                        + " where table_name = 'tql_route_audit'"))
+                .as("the audit table belongs with the other ops tables, on the business database")
+                .isEqualTo(1);
+
+        assertThat(count(frameworkUrl,
+                "select count(*) from information_schema.tables"
+                        + " where table_name = 'tql_route_audit'"))
+                .as("business-rate writes must not land on the login pool's database")
+                .isZero();
+    }
+
     @Test
     void anUnknownDatasourceNameRefusesTheBoot() throws Exception {
         Path broken = Files.createTempDirectory("tesseraql-fwds-broken");
@@ -142,6 +162,9 @@ class FrameworkDataSourceIntegrationTest {
                 tesseraql:
                   sessions:
                     store: jdbc
+                  audit:
+                    routes:
+                      enabled: true
                   framework:
                     datasource: framework
                   app:

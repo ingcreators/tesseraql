@@ -31,15 +31,24 @@ guarantees:
 - `JdbcWebhookReplayStore` — inbound replay protection guards business writes the same
   way.
 
-**Bucket 3 — ambient framework state: movable.** No transactional or integrity coupling
-to business writes; loss is inconvenience, never corruption:
+**Bucket 3 — ambient authentication-path state: movable.** No transactional or integrity
+coupling to business writes, loss is inconvenience rather than corruption, *and the store
+serves the sign-in path* — which is what the key exists to protect:
 
 `JdbcSessionStore` (everyone signs in again), `JdbcCredentialTokenStore` (outstanding
 reset/invite links die), `SamlReplayGuard` and `OidcStateStore` (short-TTL flow state),
-`JdbcRateLeaseStore` (ephemeral leases), `JdbcRouteAuditStore` (fire-and-forget
-telemetry, already WARN-on-failure), `JdbcPreferenceStore` / `JdbcShortcutStore` (UI
-preferences). `JdbcTempStore` stays out: spool placement already has its own mechanism
-(`tesseraql.temp.*`).
+`JdbcRateLeaseStore` (ephemeral leases), `JdbcPreferenceStore` / `JdbcShortcutStore` (UI
+preferences, read on the signed-in shell). `JdbcTempStore` stays out: spool placement
+already has its own mechanism (`tesseraql.temp.*`).
+
+**Amended 2026-08-10** (docs/app-isolation-model.md): the bucket first read "ambient
+framework state", tested only for absence of coupling, and `JdbcRouteAuditStore` passed
+that test — it is fire-and-forget and already WARN-on-failure. But it writes **once per
+audited request**, at business request rate, and this key exists to keep a long-running
+business query from starving *login*. Putting business-rate writes on the login pool
+defeats the isolation it was configured for. The criterion now names the intent the
+original three words only implied, and the audit store moves back to the business
+datasource with the other ops stores.
 
 ## Decisions
 
@@ -84,9 +93,13 @@ here rather than discovered in surprise.
 ### 5. Migration honesty
 
 Switching an existing deployment: every session ends (everyone signs in again),
-outstanding reset/invite links die, old audit rows stay in the business database
-(readable there, not migrated), replay-guard state resets within its TTL window.
+outstanding reset/invite links die, replay-guard state resets within its TTL window.
 Nothing in business data is touched. These are the recorded costs; none is corruption.
+
+A deployment that ran with an audit store on the framework datasource before the 2026-08-10
+amendment keeps those rows where they are; the store bootstraps its table on the business
+datasource and logs from there onward. The old rows stay readable in place, unmigrated —
+the same honesty this section already applies to sessions.
 
 ## Session store hardening (bundled)
 
@@ -112,9 +125,10 @@ Nothing in business data is touched. These are the recorded costs; none is corru
 ## Testing
 
 - `FrameworkDataSourceIntegrationTest`: a runtime with `framework.datasource` naming a
-  second database — sessions/tokens/audit tables bootstrap **there** and not in `main`;
-  login and an audited business route work; the business tables stay on `main`; a
-  runtime naming an unknown datasource refuses to boot with a config error.
+  second database — session/token tables bootstrap **there** and not in `main`, while the
+  audit table bootstraps on `main` with the business tables (the 2026-08-10 amendment);
+  login and an audited business route work; a runtime naming an unknown datasource refuses
+  to boot with a config error.
 - `JdbcSessionStoreIntegrationTest`: rotation behavior unchanged through the
   transactional rewrite (carry-over, cap interplay); `ensureSchema` stays re-runnable
   with V4.
