@@ -95,7 +95,7 @@ public final class PdfFileCodec implements FileCodec {
             data.add(formatted);
         }
         List<PdfSource.PdfFont> fonts = PdfFonts.scan(spec.resources());
-        String xhtml = render(spec, model(columns, data, fonts));
+        String xhtml = render(spec, model(columns, data, fonts, model.values()));
         ByteArrayOutputStream rendered = new ByteArrayOutputStream();
         try {
             PdfEngines.selected().render(new PdfSource(xhtml, spec.resources(), fonts), rendered);
@@ -111,9 +111,15 @@ public final class PdfFileCodec implements FileCodec {
         out.write(DeterministicPdf.normalize(rendered.toByteArray()));
     }
 
+    /**
+     * The template's model: the rows, the column headers, the embeddable font families — and the
+     * export's other declared sources under their own names (docs/export-pipeline.md, decision 2),
+     * which is how a header-and-lines document stops denormalizing its header onto every line.
+     */
     private static Map<String, Object> model(List<ColumnMapping> columns,
-            List<Map<String, Object>> data, List<PdfSource.PdfFont> fonts) {
-        Map<String, Object> model = new LinkedHashMap<>();
+            List<Map<String, Object>> data, List<PdfSource.PdfFont> fonts,
+            Map<String, Object> values) {
+        Map<String, Object> model = new LinkedHashMap<>(values);
         model.put("rows", data);
         model.put("columns", columns.stream()
                 .map(column -> Map.of("name", column.name(), "header", column.effectiveHeader()))

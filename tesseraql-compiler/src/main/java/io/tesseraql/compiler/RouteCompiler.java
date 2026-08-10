@@ -796,14 +796,16 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
-        route.process(
-                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome))
-                .process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
-                        formatDeclaration(spec == null ? null : spec.locale(),
-                                "tesseraql.files.locale"),
-                        formatDeclaration(spec == null ? null : spec.timezone(),
-                                "tesseraql.files.timezone"),
-                        declaredExportRowCap(spec, format)))
+        ProcessorDefinition<?> step = route.process(
+                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome));
+        step = exportHttpSources(step, definition);
+        step.process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
+                formatDeclaration(spec == null ? null : spec.locale(),
+                        "tesseraql.files.locale"),
+                formatDeclaration(spec == null ? null : spec.timezone(),
+                        "tesseraql.files.timezone"),
+                declaredExportRowCap(spec, format), exportQueries(spec, routeDir),
+                definition.http().keySet()))
                 .to(sqlUri);
     }
 
@@ -855,15 +857,17 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
-        route.process(
-                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome))
-                .process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
-                        routeId, routeFile.urlPath(), appName, spec.format(),
-                        spec.toWriteSpec(template, appHome),
-                        formatDeclaration(spec.locale(), "tesseraql.files.locale"),
-                        formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
-                        spec.filename(), querySql, afterTiming, afterSql,
-                        declaredExportRowCap(spec, spec.format())));
+        ProcessorDefinition<?> exportStep = route.process(
+                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome));
+        exportStep = exportHttpSources(exportStep, definition);
+        exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
+                routeId, routeFile.urlPath(), appName, spec.format(),
+                spec.toWriteSpec(template, appHome),
+                formatDeclaration(spec.locale(), "tesseraql.files.locale"),
+                formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
+                spec.filename(), querySql, afterTiming, afterSql,
+                declaredExportRowCap(spec, spec.format()),
+                exportQueries(spec, routeDir), definition.http().keySet()));
         mountTransferStatus(builder, routeFile, routeId);
 
         String fileDirect = "direct:" + routeId + ".file";
@@ -1460,6 +1464,40 @@ public final class RouteCompiler {
                 .orElse("fail");
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds(
                 timeout, maxRows, onOverflow);
+    }
+
+    /**
+     * An export's {@code http:} sources run before its extraction, which reverses the read-route
+     * order (docs/export-pipeline.md, decision 2): the export holds a connection, an open
+     * transaction and a cursor for the whole write, so a network call inside that window pins them
+     * for however long the partner takes.
+     */
+    private static ProcessorDefinition<?> exportHttpSources(ProcessorDefinition<?> step,
+            RouteDefinition definition) {
+        ProcessorDefinition<?> current = step;
+        for (var entry : definition.http().entrySet()) {
+            current = current.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                    entry.getKey(), entry.getValue()));
+        }
+        return current;
+    }
+
+    /**
+     * The export's named queries, resolved against the declaring directory
+     * (docs/export-pipeline.md, decision 2). They are a document's other data — the order header,
+     * the totals — and run on the extraction's own connection, so the executing path receives the
+     * files rather than a second set of route steps.
+     */
+    private static java.util.List<io.tesseraql.core.files.ExportQuery> exportQueries(
+            io.tesseraql.yaml.model.ExportSpec spec, Path dir) {
+        if (spec == null || spec.queries().isEmpty()) {
+            return java.util.List.of();
+        }
+        java.util.List<io.tesseraql.core.files.ExportQuery> queries = new java.util.ArrayList<>();
+        spec.queries().forEach((name, binding) -> queries.add(
+                new io.tesseraql.core.files.ExportQuery(name,
+                        dir.resolve(binding.file()).normalize())));
+        return java.util.List.copyOf(queries);
     }
 
     /**

@@ -31,15 +31,22 @@ public interface FileTransferService {
     /**
      * An export to generate: the query streams into the file; {@code afterSqlFile} optional.
      *
-     * @param rowCap the ceiling a buffering codec's export runs under, unbounded for a streaming
-     *               one (docs/export-pipeline.md, decision 7)
+     * @param rowCap  the ceiling a buffering codec's export runs under, unbounded for a streaming
+     *                one (docs/export-pipeline.md, decision 7)
+     * @param queries named queries run on the extraction connection before the extraction, whose
+     *                results a template composes around the rows (decision 2)
+     * @param values  results already resolved by the caller — an export's {@code http:} sources are
+     *                called at submission, so no network call happens while a cursor is held
      */
     record ExportRequest(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, Path querySqlFile, Map<String, Object> params,
-            String afterTiming, Path afterSqlFile, ExportRowCap rowCap) {
+            String afterTiming, Path afterSqlFile, ExportRowCap rowCap,
+            List<ExportQuery> queries, Map<String, Object> values) {
 
         public ExportRequest {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
+            queries = queries == null ? List.of() : List.copyOf(queries);
+            values = values == null ? Map.of() : Map.copyOf(values);
         }
     }
 
@@ -85,10 +92,12 @@ public interface FileTransferService {
      */
     record InlineExport(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, io.tesseraql.core.sql.BoundSql query,
-            io.tesseraql.core.sql.BoundSql afterExtract, ExportRowCap rowCap) {
+            io.tesseraql.core.sql.BoundSql afterExtract, ExportRowCap rowCap,
+            Map<String, io.tesseraql.core.sql.BoundSql> queries) {
 
         public InlineExport {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
+            queries = queries == null ? Map.of() : Map.copyOf(queries);
         }
     }
 

@@ -59,6 +59,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private static final System.Logger LOG = System.getLogger(TesseraqlSqlProducer.class.getName());
 
     private final TesseraqlSqlEndpoint endpoint;
+    private final Map<Path, List<SqlNode>> exportQueryNodes = new java.util.concurrent.ConcurrentHashMap<>();
     private List<SqlNode> nodes;
 
     public TesseraqlSqlProducer(TesseraqlSqlEndpoint endpoint) {
@@ -246,6 +247,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 SpoolWriter writer = tempStore.createWriter(kind);
                 // The writer closes first (listed first); toRef() is only valid after close.
                 try (writer; ResultSet resultSet = statement.executeQuery()) {
+                    Map<String, Object> values = composedValues(exchange, connection);
                     ResultRows rows = new ResultRows(resultSet, writer,
                             rowCap(exchange, codec, spec));
                     // A codec that holds its rows is handed a re-readable set instead of the
@@ -254,11 +256,11 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     // fires during the drain, before anything reaches the spool.
                     if (codec.streams(spec)) {
                         codec.write(new SpoolOutputStream(writer), spec,
-                                ExportModel.streaming(rows, Map.of()));
+                                ExportModel.streaming(rows, values));
                     } else {
                         try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
                             codec.write(new SpoolOutputStream(writer), spec,
-                                    ExportModel.repeatable(spooled, Map.of()));
+                                    ExportModel.repeatable(spooled, values));
                         }
                     }
                 }
@@ -293,6 +295,58 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             @Override
             public void onFailure(Exchange failed) {
                 tempStore.delete(ref);
+            }
+        });
+    }
+
+    /**
+     * The export's other data (docs/export-pipeline.md, decision 2): the {@code http:} sources the
+     * route already resolved before the extraction, plus its named queries run here — on the
+     * extraction's own connection, inside its transaction and before it, so a document reads
+     * exactly the state its rows came from. Each result is shaped like a read route's named query,
+     * {@code rows} plus {@code rowCount}, so one template reads the same as the other.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> composedValues(Exchange exchange, Connection connection) {
+        Map<String, Object> resolved = exchange.getProperty(TesseraqlProperties.EXPORT_VALUES,
+                Map.of(), Map.class);
+        List<io.tesseraql.core.files.ExportQuery> queries = exchange.getProperty(
+                TesseraqlProperties.EXPORT_QUERIES, List.of(), List.class);
+        if (queries.isEmpty()) {
+            return resolved;
+        }
+        Map<String, Object> params = exchange.getProperty(TesseraqlProperties.SQL_PARAMS, Map.of(),
+                Map.class);
+        Map<String, Object> values = new LinkedHashMap<>(resolved);
+        for (io.tesseraql.core.files.ExportQuery query : queries) {
+            BoundSql bound = SqlRenderer.render(exportQueryNodes(query), params);
+            try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
+                applyTimeout(statement);
+                bindParameters(statement, bound.parameters());
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    List<Map<String, Object>> rows = readRows(resultSet);
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("rows", rows);
+                    result.put("rowCount", rows.size());
+                    values.put(query.name(), result);
+                }
+            } catch (java.sql.SQLException ex) {
+                throw executionError(ex);
+            }
+        }
+        return Map.copyOf(values);
+    }
+
+    /** An export query's parsed SQL, read once per file and kept for the endpoint's lifetime. */
+    private List<SqlNode> exportQueryNodes(io.tesseraql.core.files.ExportQuery query) {
+        return exportQueryNodes.computeIfAbsent(query.sqlFile(), file -> {
+            try {
+                return Sql2WayParser.parse(Files.readString(
+                        io.tesseraql.core.dialect.DialectSqlResolver.resolve(file,
+                                endpoint.getDialect())));
+            } catch (java.io.IOException ex) {
+                throw new TqlException(EXECUTION_ERROR,
+                        "Cannot read export query '" + query.name() + "': " + ex.getMessage());
             }
         });
     }

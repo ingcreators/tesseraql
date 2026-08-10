@@ -90,7 +90,7 @@ class ExportStreamingProfileIntegrationTest {
                         "items.csv",
                         sql("select id, name from export_source order by id"),
                         sql("update export_source set extracted = true"),
-                        io.tesseraql.core.files.ExportRowCap.unbounded()),
+                        io.tesseraql.core.files.ExportRowCap.unbounded(), java.util.Map.of()),
                 extraction);
 
         assertThat(result.rows()).isEqualTo(3);
