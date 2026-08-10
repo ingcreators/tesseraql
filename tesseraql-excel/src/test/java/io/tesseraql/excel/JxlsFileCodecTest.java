@@ -1,7 +1,10 @@
 package io.tesseraql.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.CellRef;
 import io.tesseraql.core.files.ColumnMapping;
 import io.tesseraql.core.files.FileReadSpec;
@@ -106,6 +109,33 @@ class JxlsFileCodecTest {
     }
 
     @Test
+    void placementRefusesToWriteOverATemplateBandBelowTheDataArea() throws Exception {
+        // A total band four rows under startCell: two rows fit, three do not. Placement writes
+        // downward and never shifts, so the old behaviour overwrote the band's mapped columns and
+        // left its label standing — a file that looks complete and is not
+        // (docs/export-pipeline.md, decision 4).
+        Path template = writePlacementTemplateWithTotalsAt(6);
+        FileWriteSpec spec = new FileWriteSpec(List.of(
+                new ColumnMapping("name", null, ColumnMapping.parseColumn("B")),
+                new ColumnMapping("qty", null, ColumnMapping.parseColumn("D"))),
+                null, template, CellRef.parse("B5"));
+
+        assertThatCode(() -> codec.write(new ByteArrayOutputStream(), spec, rows().iterator()))
+                .as("two rows fit above the band")
+                .doesNotThrowAnyException();
+
+        List<Map<String, Object>> tooMany = new ArrayList<>(rows());
+        tooMany.add(new LinkedHashMap<>(Map.of("name", "gamma", "qty", 3)));
+        assertThatThrownBy(() -> codec.write(new ByteArrayOutputStream(), spec,
+                tooMany.iterator()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("row 7")
+                .hasMessageContaining("2 rows")
+                .extracting(error -> ((TqlException) error).code().toString())
+                .isEqualTo("TQL-LD-2852");
+    }
+
+    @Test
     void typedColumnsBecomeRealDateAndNumberCellsWithFormats() throws Exception {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("held_on", java.sql.Timestamp.from(
@@ -184,6 +214,26 @@ class JxlsFileCodecTest {
             Row prototype = sheet.createRow(4);
             prototype.createCell(1).setCellStyle(bordered);
             prototype.createCell(3).setCellStyle(bordered);
+            try (OutputStream out = Files.newOutputStream(template)) {
+                workbook.write(out);
+            }
+        }
+        return template;
+    }
+
+    /** The placement template with a totals band at the given 0-based row, under the data area. */
+    private Path writePlacementTemplateWithTotalsAt(int totalsRow) throws Exception {
+        Path template = dir.resolve("orders-with-totals.xlsx");
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("orders");
+            sheet.createRow(0).createCell(1).setCellValue("Order Report");
+            Row header = sheet.createRow(3);
+            header.createCell(1).setCellValue("Name");
+            header.createCell(3).setCellValue("Qty");
+            sheet.createRow(4);
+            Row totals = sheet.createRow(totalsRow);
+            totals.createCell(1).setCellValue("Total");
+            totals.createCell(3).setCellFormula("SUM(D5:D" + totalsRow + ")");
             try (OutputStream out = Files.newOutputStream(template)) {
                 workbook.write(out);
             }
