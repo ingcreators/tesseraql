@@ -268,6 +268,10 @@ public final class MailNotifier {
         StringTemplateResolver resolver = new StringTemplateResolver();
         resolver.setTemplateMode(TemplateMode.TEXT);
         TemplateEngine engine = new TemplateEngine();
+        // Shared framework templates use @{/x}; Thymeleaf's own builder refuses a
+        // context-relative link outside a web context, so every engine needs this one
+        // (docs/base-path.md).
+        engine.setLinkBuilder(new io.tesseraql.yaml.template.BasePathLinkBuilder());
         engine.setTemplateResolver(resolver);
         return engine;
     }

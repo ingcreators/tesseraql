@@ -20,11 +20,17 @@ import org.thymeleaf.linkbuilder.StandardLinkBuilder;
  * query parameters, fragment identifiers, leaving absolute and protocol-relative URLs alone.
  * Only the context path is missing outside a servlet environment, and that is exactly the one
  * method it exposes for the purpose.
+ *
+ * <p>Every engine in the codebase installs it, not only the one that renders pages. Thymeleaf's
+ * own builder <em>refuses</em> a context-relative {@code @{/x}} outside a web context rather than
+ * passing it through, so an engine without this one fails on any shared framework template the
+ * moment those templates use link expressions — which is how Studio's preview engine announced
+ * itself.
  */
-final class BasePathLinkBuilder extends StandardLinkBuilder {
+public final class BasePathLinkBuilder extends StandardLinkBuilder {
 
     /** The model variable the renderer publishes; absent or empty means no prefix. */
-    static final String BASE_PATH_VARIABLE = "base";
+    public static final String BASE_PATH_VARIABLE = "base";
 
     /**
      * The prefix comes from the rendering context rather than from this instance, so one engine

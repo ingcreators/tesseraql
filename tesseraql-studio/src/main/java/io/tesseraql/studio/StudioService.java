@@ -2621,6 +2621,10 @@ public final class StudioService {
      */
     private org.thymeleaf.TemplateEngine templateEngine(String relativePath) {
         org.thymeleaf.TemplateEngine engine = new org.thymeleaf.TemplateEngine();
+        // Shared framework templates use @{/x}; Thymeleaf's own builder refuses a
+        // context-relative link outside a web context, so every engine needs this one
+        // (docs/base-path.md).
+        engine.setLinkBuilder(new io.tesseraql.yaml.template.BasePathLinkBuilder());
 
         org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared = new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
                 StudioService.class.getClassLoader());
