@@ -37,45 +37,27 @@ class AppSourcesTest {
                 .doesNotContain("test-app");
     }
 
+    /**
+     * A user application is no longer mountable here (docs/app-isolation-model.md decision 1).
+     * The keys are simply not read any more: one runtime serves one application plus the
+     * framework's own surfaces, and several applications are hosted by {@code tesseraql host},
+     * which gives each its own runtime, URL space, Studio and traces.
+     */
     @Test
-    void mountsConfiguredDirectories() throws Exception {
+    void aConfiguredUserApplicationIsNotMounted() throws Exception {
         Files.createDirectories(dir.resolve("extra"));
         AppConfig config = config(Map.of("tesseraql", Map.of("apps",
                 Map.of("extra", Map.of("path", dir.resolve("extra").toString())))));
 
-        List<AppSource> sources = AppSources.discover(config);
-
-        assertThat(sources).extracting(AppSource::name).contains("extra", "test-app");
-        AppSource extra = sources.stream().filter(s -> s.name().equals("extra")).findFirst()
-                .orElseThrow();
-        assertThat(extra.materialize(dir)).isEqualTo(dir.resolve("extra"));
-    }
-
-    @Test
-    void mountsConfiguredPackages() throws Exception {
-        Path tqlapp = dir.resolve("demo.tqlapp");
-        try (var out = Files.newOutputStream(tqlapp);
-                var zip = new java.util.zip.ZipOutputStream(out)) {
-            zip.putNextEntry(new java.util.zip.ZipEntry("web/ping/get.yml"));
-            zip.write("version: tesseraql/v1\nid: ping\n".getBytes());
-            zip.closeEntry();
-        }
-        AppConfig config = config(Map.of("tesseraql", Map.of("apps",
-                Map.of("demo", Map.of("package", tqlapp.toString())))));
-
-        List<AppSource> sources = AppSources.discover(config);
-
-        AppSource demo = sources.stream().filter(s -> s.name().equals("demo")).findFirst()
-                .orElseThrow();
-        assertThat(demo).isInstanceOf(ZipAppSource.class);
-        assertThat(Files.readString(demo.materialize(dir).resolve("web/ping/get.yml")))
-                .contains("id: ping");
+        assertThat(AppSources.discover(config)).extracting(AppSource::name)
+                .containsExactly("test-app");
     }
 
     @Test
     void duplicateNamesAreRejected() {
-        AppSourceProvider duplicate = config -> List.of(
-                new DirectoryAppSource("dup", dir), new DirectoryAppSource("dup", dir));
+        AppSource same = new ClasspathAppSource("dup", "tesseraql/apps/test-app",
+                AppSourcesTest.class.getClassLoader());
+        AppSourceProvider duplicate = config -> List.of(same, same);
 
         assertThatThrownBy(() -> AppSources.discover(config(Map.of()), List.of(duplicate)))
                 .isInstanceOf(TqlException.class)

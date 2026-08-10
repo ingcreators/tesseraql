@@ -77,8 +77,8 @@ framework-required component (warning, floor applies).
 
 ## Out of scope
 
-- Per-route or per-app component grants for mounted apps. Mounted apps run on the host's
-  CamelContext; the guard is context-wide. A mounted app needing a component the host denies is
+- Per-route or per-app component grants for the framework's own surfaces. They run on the
+  application's CamelContext; the guard is context-wide. A hosted app needing a component the host denies is
   a deployment conversation, not a config merge.
 - Endpoint-parameter policing (e.g. `file:` path constraints). The duckdb/file-transfer work
   already fences the data-path surfaces; this guard is about which components exist at all.

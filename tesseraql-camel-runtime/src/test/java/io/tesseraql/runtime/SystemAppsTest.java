@@ -94,22 +94,45 @@ class SystemAppsTest {
         return new ManifestLoader().load(home);
     }
 
+    /**
+     * The system apps mount with the host's configuration — shared datasources, policies and
+     * dialect — which is the whole point of ①: Studio edits the host's files, the operations
+     * console reads its job repository (docs/app-isolation-model.md decision 1).
+     */
     @Test
-    void loadsConfigMountedAppWithMainConfig() throws Exception {
+    void systemAppsMountWithTheHostConfig() {
+        AppConfig mainConfig = new AppConfig(Map.of("tesseraql",
+                Map.of("app", Map.of("name", "the-host"))), name -> null);
+
+        List<SystemApps.MountedApp> mounted = SystemApps.load(mainConfig, dir.resolve("main"));
+
+        assertThat(mounted).extracting(SystemApps.MountedApp::name).contains("iam-admin");
+        SystemApps.MountedApp admin = mounted.stream()
+                .filter(m -> m.name().equals("iam-admin"))
+                .findFirst().orElseThrow();
+        assertThat(admin.manifest().routes()).isNotEmpty();
+        assertThat(admin.manifest().config().getString("tesseraql.app.name"))
+                .contains("the-host");
+        // The one whitelisted subtree of a bundled app's own config/: it owns its pages'
+        // security headers, and a host config can neither weaken nor restyle them.
+        assertThat(admin.manifest().config()
+                .navigate("tesseraql.security.responseHeaders")).isNotNull();
+    }
+
+    /**
+     * A user application is not mountable: one runtime serves one application plus the
+     * framework's own surfaces, and several applications are hosted by {@code tesseraql host}
+     * (docs/app-isolation-model.md decision 1). The keys are simply not read any more.
+     */
+    @Test
+    void aConfiguredUserApplicationIsNotMounted() throws Exception {
         Path home = app("extra", "extra.ping", "extra/ping");
         AppConfig mainConfig = new AppConfig(Map.of("tesseraql", Map.of("apps",
                 Map.of("extra", Map.of("path", home.toString())))), name -> null);
 
-        List<SystemApps.MountedApp> mounted = SystemApps.load(mainConfig, dir.resolve("main"));
-
-        // The classpath also contributes bundled system apps (e.g. iam-admin); find ours.
-        SystemApps.MountedApp extra = mounted.stream()
-                .filter(m -> m.name().equals("extra"))
-                .findFirst().orElseThrow();
-        assertThat(extra.manifest().appHome()).isEqualTo(home);
-        assertThat(extra.manifest().routes()).hasSize(1);
-        // The mounted app's manifest carries the MAIN config (shared datasources/policies).
-        assertThat(extra.manifest().config()).isSameAs(mainConfig);
+        assertThat(SystemApps.load(mainConfig, dir.resolve("main")))
+                .extracting(SystemApps.MountedApp::name)
+                .doesNotContain("extra");
     }
 
     @Test
