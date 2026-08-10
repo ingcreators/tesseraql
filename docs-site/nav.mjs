@@ -216,4 +216,6 @@ export const EXCLUDED = [
   'app-isolation-model.md',
   // Serving an application under a base path (prefix hosting, reverse proxies), 2026-08-10.
   'base-path.md',
+  // The export pipeline (codec model, workbook modes, streaming, split documents), 2026-08-10.
+  'export-pipeline.md',
 ];
