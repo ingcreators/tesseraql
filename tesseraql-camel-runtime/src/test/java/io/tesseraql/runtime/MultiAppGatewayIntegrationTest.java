@@ -268,6 +268,26 @@ class MultiAppGatewayIntegrationTest {
         // address instead of one nothing could ever answer.
     }
 
+    /**
+     * The framework's own endpoints move under the prefix with the application's.
+     *
+     * <p>They are mounted by hand in the runtime's route builders — forty-seven
+     * {@code rest().get("/_tesseraql/…")} calls across five classes — not through the
+     * compiler's single mount point. Setting the prefix on Camel's context-wide REST
+     * configuration reaches all of them at once (docs/base-path.md); concatenating it per route
+     * would have had to find every one, and could have missed one silently.
+     */
+    @Test
+    void frameworkEndpointsMoveUnderThePrefixToo() throws Exception {
+        assertThat(statusOf(gateway, "/apps/shop-a/_tesseraql/health"))
+                .as("a hand-mounted framework endpoint answers under the app's prefix")
+                .isEqualTo(200);
+
+        assertThat(statusOf(gateway, "/_tesseraql/health"))
+                .as("and is not left exposed at the origin as well")
+                .isEqualTo(404);
+    }
+
     private static int statusOf(MultiAppGateway target, String path) throws Exception {
         return java.net.http.HttpClient.newHttpClient().send(
                 java.net.http.HttpRequest.newBuilder(java.net.URI.create(

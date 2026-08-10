@@ -50,6 +50,13 @@ final class RouteReloader {
     private final StudioService studio;
     private final String appName;
     private final List<SystemApps.MountedApp> mountedApps;
+    /**
+     * The app's base path, resolved once. Restated on every REST configuration this class
+     * builds: a reloaded or stubbed route re-enters the context-wide configuration, and a hot
+     * reload must not quietly move a route out from under the app's prefix
+     * (docs/base-path.md).
+     */
+    private final String basePath;
     private AppManifest current;
     /** Per-route content fingerprints (source-directory digests) from the last good reload. */
     private Map<String, String> fingerprints;
@@ -66,6 +73,8 @@ final class RouteReloader {
         this.studio = studio;
         this.appName = appName;
         this.mountedApps = List.copyOf(mountedApps);
+        this.basePath = io.tesseraql.compiler.RouteCompiler.normalizeBasePath(
+                current.config().getString("tesseraql.http.basePath").orElse(null));
         this.fingerprints = fingerprintsOf(current);
         this.appFingerprint = appFingerprintOf(appHome);
         this.workflowFingerprint = workflowFingerprintOf(appHome);
@@ -410,8 +419,12 @@ final class RouteReloader {
                 @Override
                 public void configure() {
                     // Pinned for the same reason RouteCompiler pins it
-                    // (docs/transition-engine.md track E): topology is a choice.
-                    restConfiguration().component("platform-http").inlineRoutes(true);
+                    // (docs/transition-engine.md track E): topology is a choice. The base path
+                    // is restated for the same reason: a reloaded route re-enters the same
+                    // REST configuration, and a hot reload must not quietly move a route out
+                    // from under the app's prefix (docs/base-path.md).
+                    restConfiguration().component("platform-http").inlineRoutes(true)
+                            .contextPath(basePath.isEmpty() ? null : basePath);
                     String direct = "direct:" + id;
                     switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
                         case "POST" -> rest().post(route.urlPath()).to(direct);

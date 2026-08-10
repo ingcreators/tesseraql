@@ -103,7 +103,14 @@ public final class RouteCompiler {
                     // it decides whether from(direct:) transition routes keep their own
                     // consumers, and a Camel default flip must not silently rewire the topology
                     // (the dispatch selector's 30s DirectComponent.getConsumer hang).
-                    restConfiguration().component("platform-http").inlineRoutes(true);
+                    // contextPath carries the app's base path (docs/base-path.md). It is set
+                    // once, on the context-wide REST configuration, so every REST route the
+                    // runtime mounts inherits it — the application's own, and the framework's
+                    // hand-written /_tesseraql/** endpoints in the runtime's route builders
+                    // alike. Concatenating the prefix per route would have had to find all of
+                    // them; this cannot miss one.
+                    restConfiguration().component("platform-http").inlineRoutes(true)
+                            .contextPath(basePath().isEmpty() ? null : basePath());
                 }
                 // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
                 // time from the failing route id; the error renderer is one shared exception handler.
@@ -1520,7 +1527,7 @@ public final class RouteCompiler {
     }
 
     /** Trims a configured prefix into {@code ""} or {@code /a/b}. */
-    static String normalizeBasePath(String configured) {
+    public static String normalizeBasePath(String configured) {
         if (configured == null || configured.isBlank() || "/".equals(configured.trim())) {
             return "";
         }
@@ -1539,7 +1546,7 @@ public final class RouteCompiler {
         // stand-ins; the RequestBinder maps them back to the declared names (WireNames).
         // The base path goes on first, so an application served under a prefix answers at the
         // URLs it emits rather than only advertising them (docs/base-path.md decision 5).
-        String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(basePath() + path);
+        String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         return switch (method) {
             case "GET" -> builder.rest().get(wirePath);
             case "POST" -> builder.rest().post(wirePath);

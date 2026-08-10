@@ -108,6 +108,28 @@ gets either a silently unshared suite or a session offered to every neighbour on
 and neither failure announces itself. The knowledge belongs to the host, so the host carries
 it.
 
+### 6. One REST configuration carries the prefix, not one concatenation per route
+
+`restConfiguration().contextPath(basePath)` is set on Camel's **context-wide** REST
+configuration, and every REST route the runtime mounts inherits it — the application's own,
+and the framework's hand-written `/_tesseraql/**` endpoints alike. Verified: with a prefix
+configured, `/apps/shop-a/_tesseraql/health` answers 200 and `/_tesseraql/health` answers
+404, without any of those endpoints being touched.
+
+`RouteReloader` restates it, because a reloaded or stubbed route re-enters the same
+configuration and a hot reload must not quietly move a route out from under the prefix.
+
+**Corrected 2026-08-10, and this is the second time the same mistake was made.** Slice 1
+concatenated the prefix inside `RouteCompiler.restEndpoint`, and this document planned slice
+2 as threading the prefix through six route builders to reach **47 hand-written
+`rest().get("/_tesseraql/…")` calls**. None of that is needed, and none of it is done.
+
+The pattern is worth naming, because it also produced the `${base}` mistake corrected in
+decision 2: **a slice sized in hundreds of call sites is evidence of a missing extension
+point, not a large job.** 446 template URLs meant a link builder was being overlooked; 47
+route mounts meant a REST configuration was. Both libraries offered exactly one place to put
+the rule. Check for that place before counting the call sites.
+
 ### 5. The runtime serves under the prefix; it does not merely emit it
 
 Two models exist for putting an application under a path, and both are real deployments:
@@ -134,8 +156,10 @@ have been the smaller change.
    framework templates (`tql/**`) to `@{…}`. An unset base is byte-identical, held by a test.
    The gateway stops stripping the prefix and starts supplying it to each runtime in the same
    slice, since the two halves must move together.
-2. **The framework's own URL emission.** Redirects, asset routes, the live-events endpoint,
-   generated OpenAPI servers.
+2. **The framework's own URL emission.** What remains after decision 6: the asset route
+   (`platform-http:/assets`, outside the REST DSL and so outside `contextPath`), redirects,
+   the live-events endpoint, and generated OpenAPI servers. The 47 REST mounts this slice was
+   sized around need no change.
 3. **The bundled apps.** Studio, ops console, IAM Admin, account, auth-ui — the 264 sites,
    mechanical once slice 1 defines the idiom.
 4. **The lint** (decision 3).
