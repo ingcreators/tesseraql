@@ -42,14 +42,14 @@ messages/               message catalogs, one <locale>.yml per BCP-47 tag (en.ym
                         built-in tql.* texts (see internationalization.md)
 fonts/                  embeddable fonts (*.ttf / *.otf) for printable documents; the pdf
                         codec registers each under the family name in the font itself
-assets/                 static files, served at /assets/** (mounted apps at /assets/<app>/**)
+assets/                 static files, served at /assets/** (system apps at /assets/<app>/**)
 security/               identity contract SQL (sql realms), key material paths
 governance/             approvals.yml - the route review ledger (route id + approved source
                         SHA-256), gating routes whose mode or risk score requires review
 plugins/                optional runtime-extension jars, each with a detached Ed25519
                         signature (<jar>.sig) verified against tesseraql.plugins.trustedKeys
                         and loaded in an isolated class loader
-work/                   runtime scratch (drafts, spools, mounted apps); never committed
+work/                   runtime scratch (drafts, spools, system apps); never committed
 ```
 
 ## URL mapping

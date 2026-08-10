@@ -39,25 +39,19 @@ otherwise (status word only). Point container health checks at
 (`lint`, `test`, `governance`, `release-evidence`) run before the build, and rollback is the
 previous image.
 
-**B. Local `.tqlapp`.** One runtime hosts several apps mounted from packages:
-`tesseraql.apps.<name>.package` + `sha256`. App updates replace the file and restart; the
-runtime refuses a package whose hash does not match.
+**B. Several applications on one host.** `tesseraql host --install-root <dir>` starts every
+installed application in [its own runtime](app-isolation-model.md) behind one port — its own
+Camel context, datasource set, Studio and traces. `--mode suite` addresses them as
+`/apps/<id>/` on one origin and shares a sign-in across them; `--mode isolated` gives each its
+own hostname and no shared session. Getting the packages onto the host is a deployment step
+(`tesseraql app install`, or an image that already contains them), not something the runtime
+does at boot.
 
-**C. Fetched `.tqlapp` (multi-server).** The configuration names a URL and pins the hash; every
-node fetches and verifies the same bytes at boot:
-
-```yaml
-tesseraql:
-  apps:
-    orders:
-      url: https://artifacts.example.com/orders-1.2.0.tqlapp
-      sha256: 4f2a...   # required - remote content is never mounted unpinned
-```
-
-Downloads land under `work/downloads` and are reused across restarts while the hash matches,
-so nodes reboot without the artifact store being reachable. Rolling out a new version is a
-config change (new url + sha) plus a rolling restart; pointing one host at the new hash first
-is a per-host canary.
+One runtime serves **one** application plus the framework's own surfaces. Mounting further
+applications into it — `tesseraql.apps.<name>.path` / `.package` / `.url`, previously
+documented here as shipping configurations B and C — is gone: it shared one URL space with no
+per-application prefix, one Studio that could not see the mounted applications, and one trace
+buffer for all of them ([app-isolation-model.md](app-isolation-model.md) decision 1).
 
 ## Bootstrap and migrations
 

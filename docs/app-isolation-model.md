@@ -177,7 +177,12 @@ replacement.
 5. **Studio under ②**: confirm a per-runtime Studio behaves correctly behind the gateway —
    path prefixes, redirects, CSRF, and asset URLs.
 6. **Reduce ①** (decision 1): drop `configuredDirectories` and `HttpAppSource`; simplify the
-   `mountedApps` plumbing in `TesseraqlRuntime` and `RouteReloader`.
+   `mountedApps` plumbing in `TesseraqlRuntime` and `RouteReloader`. **Done** — `AppSources`
+   discovers the `ServiceLoader` providers and nothing else, and `HttpAppSource`,
+   `ZipAppSource` and `DirectoryAppSource` are deleted with it. The `mountedApps` plumbing
+   stays as it is: the five system apps still travel through it, and it is the same code path
+   whether one app is mounted or five. `deployment.md` loses shipping configurations B and C,
+   which is the point of doing this after slice 4 rather than before it.
 7. **Documentation.** `deployment.md`'s shipping configurations, a user page for ② and its
    modes, the corrections outstanding in `extending.md` (a mounted `.tqlapp`'s `plugins/` is
    never read; admission is opt-in, so internal and vendor distribution may extend freely),

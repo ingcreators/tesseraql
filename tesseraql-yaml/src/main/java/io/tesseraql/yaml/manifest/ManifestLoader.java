@@ -759,7 +759,7 @@ public final class ManifestLoader {
         Path normalized = file.toAbsolutePath().normalize();
         if (!normalized.startsWith(home)) {
             throw new TqlException(TRAVERSAL,
-                    "Path escapes app home (design ch. 20.2): " + file);
+                    "Path escapes app home: " + file);
         }
     }
 

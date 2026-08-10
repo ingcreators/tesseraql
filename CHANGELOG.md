@@ -34,6 +34,19 @@ All notable changes to TesseraQL are documented here. The format follows
   each by its own hostname, so sessions do not cross. The machinery existed and had no
   entry point.
 
+### Removed
+
+- **A user application can no longer be mounted into another runtime**
+  (docs/app-isolation-model.md decision 1): `tesseraql.apps.<name>.path`, `.package` and
+  `.url` stop mounting apps, and the URL-fetching app source is deleted with them. One runtime
+  serves one application plus the framework's own surfaces; several applications are hosted by
+  `tesseraql host`, which gives each its own runtime, URL space, Studio and traces. Mounting
+  gave none of those: a flat URL space that two independently authored apps could collide in,
+  a Studio blind to everything it mounted, and one trace buffer for all of them.
+  `tesseraql.apps.<name>.enabled` stays — it turns off individual system apps. Shipping
+  configurations B and C leave `deployment.md`, and `app-mcp.md` stops describing a catalog
+  spanning mounted applications.
+
 ### Changed
 
 - **The multi-app gateway serves one addressing per mode.** Host-based and

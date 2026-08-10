@@ -233,29 +233,29 @@ Write a [(${tone})] welcome message for [(${name})].
 
 ## Mounted-app tools
 
-A TesseraQL runtime hosts the main app and any mounted or bundled system apps —
-the ops console, Studio, IAM admin, and apps listed under `tesseraql.apps.<name>`. Each is a plain
+A TesseraQL runtime hosts one application plus the framework's own surfaces — the ops console,
+Studio, IAM admin, the account pages and the sign-in pages. Each is a plain
 YAML/SQL/template tree compiled by the same route compiler, so each may declare its own MCP tools,
 resources, and UI resources under `mcp/`. The runtime serves them all from the one
 `/_tesseraql/mcp` endpoint, so an agent sees one catalog spanning every hosted app:
 
 - **One endpoint, every app.** `tools/list` and `resources/list` advertise the tools, resources, and
-  UI resources of the main app and every mounted app together; the MCP Apps UI extension is
+  UI resources of the application and the framework's surfaces together; the MCP Apps UI extension is
   negotiated in `initialize` when *any* hosted app serves a `ui://` resource. The single
   `tesseraql.mcp.enabled` flag governs the whole endpoint.
-- **Security stays per-route.** A mounted-app tool's `tools/call` (or resource read) runs the
-  route that app declared, with that route's own `auth`/`policy`. The MCP request's bearer token
-  rides into it exactly as for a main-app tool. Mounted apps share the main app's configuration
-  (datasources, security policies, JWT verification), so a policy and the token verifier resolve the
-  same way across apps.
+- **Security stays per-route.** A tool's `tools/call` (or resource read) runs the route that
+  declared it, with that route's own `auth`/`policy`. The MCP request's bearer token rides into it
+  the same way for every hosted app, which share the application's configuration (datasources,
+  security policies, JWT verification), so a policy and the token verifier resolve the same way
+  across them.
 - **Names and uris are unique across apps.** Because every app's surface shares the one endpoint, a
   tool name (a tool's `id`), a resource `uri`, and a UI `ui://` uri must be unique across all hosted
   apps — resources and UI resources share one uri namespace. The startup route-conflict check (the
-  same guard that rejects duplicate HTTP route ids and method+path pairs across mounted apps) rejects
-  the collision with a clear error, so a clash fails the mount rather than silently shadowing a tool.
+  same guard that rejects duplicate HTTP route ids and method+path pairs) rejects the collision with
+  a clear error, so a clash fails the mount rather than silently shadowing a tool.
 
-This needs no new YAML: an app declares its MCP surface the same way whether it runs as the main app
-or is mounted into another.
+This needs no new YAML: an app declares its MCP surface the same way whether it is the application a
+runtime serves or one of the framework's own surfaces.
 
 ## Error codes
 

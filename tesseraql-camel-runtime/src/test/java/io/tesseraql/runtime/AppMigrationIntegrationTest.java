@@ -24,9 +24,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Integration test for app-mounted Flyway migrations (design ch. 31, 32): db/migration applies at
- * boot for the main app and mounted apps (per-app history tables), runs per tenant pool in
- * schema-per-tenant mode, and re-mounting the same version is idempotent.
+ * Flyway migrations at boot: {@code db/migration} applies for the application under a history
+ * table named for it, a named datasource carries its own set under {@code db/<name>/migration},
+ * every tenant pool migrates in schema-per-tenant mode, and restarting the same version applies
+ * nothing new.
  */
 @Testcontainers
 class AppMigrationIntegrationTest {
@@ -38,24 +39,20 @@ class AppMigrationIntegrationTest {
 
     TesseraqlRuntime runtime;
     Path appHome;
-    Path mountedHome;
 
     @AfterEach
     void stop() throws IOException {
         if (runtime != null) {
             runtime.close();
         }
-        for (Path root : new Path[]{appHome, mountedHome}) {
-            if (root != null) {
-                deleteRecursively(root);
-            }
+        if (appHome != null) {
+            deleteRecursively(appHome);
         }
     }
 
     @Test
-    void migratesMainAndMountedAppsIdempotently() throws Exception {
-        mountedHome = prepareMountedApp();
-        appHome = prepareMainApp(mountedHome);
+    void migratesTheApplicationAndItsNamedDatasourcesIdempotently() throws Exception {
+        appHome = prepareMainApp();
 
         runtime = TesseraqlRuntime.start(appHome, freePort());
 
@@ -65,13 +62,8 @@ class AppMigrationIntegrationTest {
         assertThat(MAPPER.readTree(items.body()).get("data").get(0).get("name").asText())
                 .isEqualTo("seeded");
 
-        // The mounted app migrated its own table under its own history table.
-        HttpResponse<String> notes = get("/sysapp/notes");
-        assertThat(notes.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(notes.body()).get("data").get(0).get("note").asText())
-                .isEqualTo("mounted");
+        // Each app migrates under its own history table, named for it.
         assertThat(historyCount("tql_schema_history_demo_app")).isEqualTo(2);
-        assertThat(historyCount("tql_schema_history_sysapp")).isEqualTo(1);
 
         // The named 'audit' datasource migrated db/audit/migration into its own history table.
         try (Connection connection = connect();
@@ -82,13 +74,12 @@ class AppMigrationIntegrationTest {
         }
         assertThat(historyCount("tql_schema_history_demo_app__audit")).isEqualTo(1);
 
-        // The mounted app's batch job joined the runtime's job surface, and its execution record
-        // is tagged with the owning app, not the hosting runtime's app name.
-        var execution = runtime.runJob("sysapp.touchNotes", java.util.Map.of());
-        assertThat(execution.appName()).isEqualTo("sysapp");
+        // A job execution record is tagged with the app that declared it.
+        var execution = runtime.runJob("demo.touchItems", java.util.Map.of());
+        assertThat(execution.appName()).isEqualTo("demo-app");
         assertThat(execution.status().name()).isEqualTo("COMPLETED");
 
-        // Re-mounting the same version applies nothing new (idempotent boot).
+        // Restarting the same version applies nothing new (idempotent boot).
         runtime.close();
         runtime = TesseraqlRuntime.start(appHome, freePort());
         assertThat(get("/api/items").statusCode()).isEqualTo(200);
@@ -144,7 +135,7 @@ class AppMigrationIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    private static Path prepareMainApp(Path mounted) throws IOException {
+    private static Path prepareMainApp() throws IOException {
         Path home = Files.createTempDirectory("tesseraql-migration-main");
         Files.createDirectories(home.resolve("config"));
         Files.writeString(home.resolve("config/application.yml"), """
@@ -169,11 +160,8 @@ class AppMigrationIntegrationTest {
                       jdbcUrl: ${db.main.url}
                       username: ${db.main.username}
                       password: ${db.main.password}
-                  apps:
-                    sysapp:
-                      path: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword(), mounted));
+                POSTGRES.getPassword()));
         Path migrations = home.resolve("db/migration");
         Files.createDirectories(migrations);
         Files.writeString(migrations.resolve("V1__create_items.sql"),
@@ -202,37 +190,11 @@ class AppMigrationIntegrationTest {
                       data: sql.rows
                 """);
         Files.writeString(route.resolve("list.sql"), "select name from items order by id\n;\n");
-        return home;
-    }
-
-    private static Path prepareMountedApp() throws IOException {
-        Path home = Files.createTempDirectory("tesseraql-migration-mounted");
-        Path migrations = home.resolve("db/migration");
-        Files.createDirectories(migrations);
-        Files.writeString(migrations.resolve("V1__create_notes.sql"),
-                "create table sysapp_notes (id serial primary key, note varchar(100) not null);\n"
-                        + "insert into sysapp_notes (note) values ('mounted');\n");
-        Path route = home.resolve("web/sysapp/notes");
-        Files.createDirectories(route);
-        Files.writeString(route.resolve("get.yml"), """
-                version: tesseraql/v1
-                id: sysapp.notes
-                kind: route
-                recipe: query-json
-                sql:
-                  file: notes.sql
-                  mode: query
-                response:
-                  json:
-                    body:
-                      data: sql.rows
-                """);
-        Files.writeString(route.resolve("notes.sql"), "select note from sysapp_notes\n;\n");
-        Path job = home.resolve("batch/touch-notes");
+        Path job = home.resolve("batch/touch-items");
         Files.createDirectories(job);
         Files.writeString(job.resolve("job.yml"), """
                 version: tesseraql/v1
-                id: sysapp.touchNotes
+                id: demo.touchItems
                 kind: job
                 recipe: batch-pipeline
                 pipeline:
@@ -241,8 +203,7 @@ class AppMigrationIntegrationTest {
                       file: touch.sql
                       mode: update
                 """);
-        Files.writeString(job.resolve("touch.sql"),
-                "update sysapp_notes set note = note\n;\n");
+        Files.writeString(job.resolve("touch.sql"), "update items set name = name\n;\n");
         return home;
     }
 

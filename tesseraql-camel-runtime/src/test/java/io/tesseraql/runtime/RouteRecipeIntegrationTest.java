@@ -23,12 +23,19 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Integration test for mounted apps (design ch. 32): a second app listed under
- * {@code tesseraql.apps.<name>.path} is compiled by the same route compiler and served alongside
- * the main app, sharing its datasources.
+ * The recipes an application composes a page out of, and the static assets under them: a
+ * query-json route with a second named query, a command route answering post/redirect/get, a
+ * page route with no SQL at all, a template-generated download, and the asset tree with its
+ * ETag revalidation and its traversal refusals.
+ *
+ * <p>These routes used to be a second application mounted into this runtime through
+ * {@code tesseraql.apps.<name>.path}. That mechanism is gone
+ * (docs/app-isolation-model.md decision 1): several applications are hosted by
+ * {@code tesseraql host}, each in its own runtime. The routes moved into the application, where
+ * they exercise the same compiler through the same recipes.
  */
 @Testcontainers
-class MountedAppIntegrationTest {
+class RouteRecipeIntegrationTest {
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
@@ -37,12 +44,10 @@ class MountedAppIntegrationTest {
 
     static TesseraqlRuntime runtime;
     static Path appHome;
-    static Path mountedHome;
 
     @BeforeAll
     static void start() throws Exception {
-        mountedHome = prepareMountedApp();
-        appHome = prepareAppHome(mountedHome);
+        appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
         seedDatabase();
     }
@@ -52,15 +57,11 @@ class MountedAppIntegrationTest {
         if (runtime != null) {
             runtime.close();
         }
-        for (Path root : new Path[]{appHome, mountedHome}) {
-            if (root != null) {
-                deleteRecursively(root);
-            }
-        }
+        deleteRecursively(appHome);
     }
 
     @Test
-    void mountedAppRouteIsServed() throws Exception {
+    void queryRouteIsServed() throws Exception {
         HttpResponse<String> response = get("/sysapp/ping");
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -140,14 +141,6 @@ class MountedAppIntegrationTest {
         assertThat(HttpClient.newHttpClient()
                 .send(conditional, HttpResponse.BodyHandlers.ofString()).statusCode())
                 .isEqualTo(304);
-    }
-
-    @Test
-    void servesMountedAppAssetsUnderAppName() throws Exception {
-        HttpResponse<String> response = get("/assets/sysapp/app.css");
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains(".sysapp");
     }
 
     @Test
@@ -237,8 +230,8 @@ class MountedAppIntegrationTest {
         }
     }
 
-    private static Path prepareMountedApp() throws IOException {
-        Path home = Files.createTempDirectory("tesseraql-mounted-app");
+    /** The recipe routes above, written into the application's own web/ tree. */
+    private static void writeRecipeRoutes(Path home) throws IOException {
         Path routeDir = home.resolve("web/sysapp/ping");
         Files.createDirectories(routeDir);
         Files.writeString(routeDir.resolve("get.yml"), """
@@ -246,6 +239,8 @@ class MountedAppIntegrationTest {
                 id: sysapp.ping
                 kind: route
                 recipe: query-json
+                security:
+                  auth: public
                 sql:
                   file: ping.sql
                   mode: query
@@ -265,6 +260,8 @@ class MountedAppIntegrationTest {
                 id: sysapp.multi
                 kind: route
                 recipe: query-json
+                security:
+                  auth: public
                 input:
                   n:
                     type: integer
@@ -296,6 +293,8 @@ class MountedAppIntegrationTest {
                 id: sysapp.touch
                 kind: route
                 recipe: command-json
+                security:
+                  auth: public
                 input:
                   n:
                     type: integer
@@ -320,6 +319,8 @@ class MountedAppIntegrationTest {
                 id: sysapp.hello
                 kind: route
                 recipe: page
+                security:
+                  auth: public
                 input:
                   who:
                     type: string
@@ -330,7 +331,6 @@ class MountedAppIntegrationTest {
                     model:
                       who: params.who
                 """);
-        Files.createDirectories(home.resolve("templates"));
         Files.writeString(home.resolve("templates/hello.html"),
                 "<!DOCTYPE html>\n<html><body><h1>Hello [[${who}]]</h1></body></html>\n");
 
@@ -342,6 +342,8 @@ class MountedAppIntegrationTest {
                 id: sysapp.conf
                 kind: route
                 recipe: page
+                security:
+                  auth: public
                 input:
                   appName:
                     type: string
@@ -360,13 +362,9 @@ class MountedAppIntegrationTest {
                     name: "[(${appName})]"
                 """);
 
-        // Static assets served under /assets/<app-name>/ for mounted apps.
-        Files.createDirectories(home.resolve("assets"));
-        Files.writeString(home.resolve("assets/app.css"), ".sysapp{color:#fff}\n");
-        return home;
     }
 
-    private static Path prepareAppHome(Path mounted) throws IOException {
+    private static Path prepareAppHome() throws IOException {
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         Path target = Files.createTempDirectory("tesseraql-mounted-it");
         try (Stream<Path> files = Files.walk(source)) {
@@ -381,13 +379,9 @@ class MountedAppIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-
-                tesseraql:
-                  apps:
-                    sysapp:
-                      path: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                POSTGRES.getPassword(), mounted));
+                POSTGRES.getPassword()));
+        writeRecipeRoutes(target);
         Files.createDirectories(target.resolve("assets"));
         Files.writeString(target.resolve("assets/site.css"), ".main{color:#000}\n");
         return target;
