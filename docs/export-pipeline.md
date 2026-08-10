@@ -95,7 +95,7 @@ Two things about that inference are not safe:
 | --- | --- | --- |
 | `csv` | yes | each row is written through as it arrives |
 | `excel`, grid | yes | fastexcel's streaming writer |
-| `excel`, placement | no | `XSSFWorkbook` holds the whole workbook |
+| `excel`, placement | no | `XSSFWorkbook` holds the whole workbook, and decision 10 records why it stays that way |
 | `excel`, report | no | `rows.forEachRemaining(data::add)`, then a POI workbook |
 | `pdf` | no | see below |
 
@@ -281,17 +281,28 @@ Two changes, and neither alone is worth making. **Output**: `JxlsPoiTemplateFill
 `withOptions`. **Input**: jxls's `EachCommand` iterates an `Iterable<?>`, so decision 8's re-readable
 view is exactly what it wants, and decision 3's `groups` keeps `multisheet` on the streaming side.
 
-### 10. Excel placement mode streams if the template allows it
+### 10. Excel placement mode does not stream — the recorded answer is "no"
 
-`SXSSFWorkbook(XSSFWorkbook, rowAccessWindowSize)` is the standard remedy, but SXSSF permits only
-monotonically increasing row access and flushes rows past the window. Writing downward from
-`startCell` fits that; a template carrying content **below** the data area does not — which
-decision 4 now rejects at the boundary anyway, so the two decisions agree about which templates are
-supportable.
+This slice was the one permitted to end in "no", and it did. The reasoning that led here was
+half right: SXSSF permits only monotonically increasing row access, and writing downward from
+`startCell` looked like it fit.
 
-The slice verifies this against a real template. **This is the one slice permitted to end in
-"no"**: if it does not hold, placement mode keeps `streams(spec) == false`, lives under decision 7's
-cap, and the documentation says which template shapes cost memory.
+It does not, for a reason the design missed. SXSSF appends past the last written row and refuses
+anything before it — *"Attempting to write a row[4] in the range [0,4] that is already written to
+disk"* — while placement writes **into** the template's own data area: the `startCell` row is both
+the style prototype and the first data row, and the rows above it are the title and header the
+template exists for. Reading the prototype styles before wrapping solves one problem and not this
+one. Removing the prototype row first does not help either, because a template with anything at all
+below the data area puts the whole range out of reach.
+
+Streaming placement would mean rebuilding the template sheet through the streaming API — copying
+every row, cell, merged region, image and print setting by hand. That is a re-implementation with
+new fidelity risks, for the mode whose entire purpose is that the template's fidelity is not the
+framework's business.
+
+So placement mode keeps `streams(spec) == false`, lives under decision 7's cap, and a
+template-styled export declares the number of rows it can carry. The codec's javadoc records this
+so the experiment is not repeated.
 
 ### 11. PDF is not made streaming
 
@@ -371,8 +382,8 @@ recipient.
    header-and-lines slice.
 7. **`groupBy`, `groups`, and jxls report streaming** (decisions 3, 9): the ordered grouping engine,
    `withStreaming`, and a `multisheet` template that streams.
-8. **Excel placement streaming** (decision 10), which may end in "no". Either outcome is recorded
-   here and in the documentation table.
+8. **Excel placement streaming** (decision 10). **Done — the answer is "no"**, recorded in
+   decision 10 and in the codec's javadoc so the experiment is not repeated.
 9. **`splitBy` and ZIP bundling** (decision 12) over slice 7's grouping engine: `{key}` filenames,
    the per-group cap, the lints.
 10. **Documentation**: `file-transfers.md` gains what an export template can see and which formats
