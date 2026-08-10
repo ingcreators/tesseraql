@@ -187,11 +187,17 @@ public final class ErrorResponseRenderer implements Processor {
     private static void redirectToLogin(Exchange exchange) {
         String path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
         String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
-        String next = (path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path)
+        // The request URI is a wire URL and already carries the application's prefix; `next` is
+        // handed back to the redirect helper after sign-in, which prefixes it again, so it is
+        // stored base-relative like every other URL inside the runtime (docs/base-path.md).
+        String next = io.tesseraql.camel.BasePath.relative(exchange,
+                path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path)
                 + (query == null || query.isBlank() ? "" : "?" + query);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location", LOGIN_PATH + "?next="
-                + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8));
+        exchange.getMessage().setHeader("Location", io.tesseraql.camel.BasePath.url(exchange,
+                LOGIN_PATH + "?next="
+                        + java.net.URLEncoder.encode(next,
+                                java.nio.charset.StandardCharsets.UTF_8)));
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
         exchange.getMessage().setBody("");
     }

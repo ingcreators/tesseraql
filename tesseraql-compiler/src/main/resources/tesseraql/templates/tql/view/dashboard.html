@@ -20,7 +20,7 @@
      /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
      the SSE event carries no data. Empty values drop the attributes (plain dashboard). -->
 <div class="hc-grid" th:id="|${v.id}-view|" th:fragment="view(v)"
-     th:attr="hx-ext=${v.liveExt},sse-connect=${v.liveConnect},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
+     th:attr="hx-ext=${v.liveExt},sse-connect=@{${v.liveConnect}},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
   <th:block th:each="p : ${v.panels}">
   <!-- A view panel embeds another view document's own entry fragment — it brings its own
        card, so the panel chrome steps aside (docs/view-composition.md wave 2b). -->

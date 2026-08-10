@@ -59,16 +59,17 @@ final class CopilotRouteBuilder extends RouteBuilder {
                         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
                         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
                                 "text/html; charset=utf-8");
+                        // The placeholder's hx-get is markup, not a template — it carries the
+                        // app's prefix from here (docs/base-path.md).
                         exchange.getMessage().setBody(CopilotFragments.entryHtml(
                                 new CopilotService.Entry("user", message, null))
-                                + CopilotFragments.placeholder(PAGE + "/stream?turn=" + turn)
+                                + CopilotFragments.placeholder(io.tesseraql.camel.BasePath.url(
+                                        exchange, PAGE + "/stream?turn=" + turn))
                                 + CopilotFragments.messageInput(true));
                         return;
                     }
                     copilot.send(actor, message, canEdit);
-                    exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 303);
-                    exchange.getMessage().setHeader("Location", PAGE);
-                    exchange.getMessage().setBody("");
+                    io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, 303, PAGE);
                 });
 
     }

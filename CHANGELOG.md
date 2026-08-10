@@ -12,7 +12,10 @@ All notable changes to TesseraQL are documented here. The format follows
   prefix — behind a reverse proxy at `/myapp`, or as one of several applications a
   `tesseraql host --mode suite` gateway fronts. Routes mount under the prefix and emitted
   URLs carry it, so the application answers at the addresses it advertises. Unset, which is
-  every deployment that has not asked for one, renders byte-identical output.
+  every deployment that has not asked for one, renders byte-identical output. The surfaces
+  outside Camel's REST configuration carry it too: static assets, the SSE streams, every
+  redirect the framework emits, the file-transfer `Location` and status URLs, and the
+  generated OpenAPI document's `servers` entry.
 
 ### Added
 

@@ -87,9 +87,9 @@
            kit's sse-updates recipe): the bell owns an EventSource to /_tesseraql/events and
            the framework pushes the same pre-rendered fragment the page loaded with
            (InboxBadge, one markup source) whenever the unread count changes. -->
-      <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
+      <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="@{${_inbox.href}}"
          aria-label="Notifications" id="tql-inbox-bell"
-         hx-ext="sse" sse-connect="/_tesseraql/events">
+         hx-ext="sse" th:sse-connect="@{/_tesseraql/events}">
         <svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg>
         <span id="tql-inbox-badge" sse-swap="inbox:badge" hx-swap="innerHTML"
               th:utext="${_inbox.badge}"></span>
@@ -112,9 +112,9 @@
         <nav class="hc-menu" th:attr="aria-label=${_account.name}">
           <span class="hc-menu__label" th:text="${_account.name}">User</span>
           <a class="hc-menu__item" th:if="${_account.accountHref != null}"
-             th:href="${_account.accountHref}">Account settings</a>
+             th:href="@{${_account.accountHref}}">Account settings</a>
           <!-- Sign-out is a state change: a CSRF-carrying POST, never a GET link. -->
-          <form method="post" th:action="${_account.logoutHref}">
+          <form method="post" th:action="@{${_account.logoutHref}}">
             <input type="hidden" name="_csrf" th:value="${_csrf}">
             <button class="hc-menu__item" type="submit">Sign out</button>
           </form>
@@ -201,40 +201,40 @@
       <div class="hc-command__list" role="listbox" id="studio-command-list">
         <div class="hc-command__group" role="group" aria-labelledby="cmd-nav">
           <div class="hc-command__group-heading" id="cmd-nav">Navigate</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui">Explorer</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs">Docs overview</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/schema">Schema</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/domains">Domains</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/rules">Rules</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/decisions">Decisions</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/coverage">Coverage</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/release-diff">Release diff</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/docs/export">Export</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/pages">Pages</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/mail">Mail</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/scaffold">Scaffold</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/sql-builder">SQL builder</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/validation-builder">Validation builder</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/decision-builder">Decide builder</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/decisions">Decision rows</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/migration">Migration</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/menu">Menu</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/wizard">Wizards</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/try">API console</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/messages">Messages</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/copilot">Copilot</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/drafts">Drafts</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/audit">Audit</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/health">Health</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/security">Security</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/config">Config</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/data">Data browser</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/flags">Flags</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/connectors">Connectors</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/calendars">Calendars</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/studio/ui/jobs">Job policies</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/ops/console">Operations console</div>
-          <div class="hc-command__item" role="option" data-value="/_tesseraql/admin/users">IAM Admin</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui}">Explorer</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs}">Docs overview</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/schema}">Schema</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/domains}">Domains</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/rules}">Rules</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/decisions}">Decisions</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/coverage}">Coverage</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/release-diff}">Release diff</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/docs/export}">Export</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/pages}">Pages</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/mail}">Mail</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/scaffold}">Scaffold</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/sql-builder}">SQL builder</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/validation-builder}">Validation builder</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/decision-builder}">Decide builder</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/decisions}">Decision rows</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/migration}">Migration</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/menu}">Menu</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/wizard}">Wizards</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/try}">API console</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/messages}">Messages</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/copilot}">Copilot</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/drafts}">Drafts</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/audit}">Audit</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/health}">Health</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/security}">Security</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/config}">Config</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/data}">Data browser</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/flags}">Flags</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/connectors}">Connectors</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/calendars}">Calendars</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/jobs}">Job policies</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/ops/console}">Operations console</div>
+          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/admin/users}">IAM Admin</div>
         </div>
         <div th:hx-get="@{/_tesseraql/studio/ui/command}" hx-trigger="intersect once"
              hx-swap="outerHTML"></div>
@@ -309,10 +309,11 @@
 </th:block>
 <!-- Renders the app's declarative, role-filtered menu (the `_menu` model variable = a list of
      MenuSpec.MenuItem the caller may see). Reuses the hc-item + sprite-icon + hc-shell__label pattern;
-     the icon is optional (a text-only item when absent). href is set raw (no URL rewriting). -->
+     the icon is optional (a text-only item when absent). The href is a declared, base-relative
+     app path, so it resolves through a link expression like every other URL. -->
 <th:block th:fragment="app-menu(items)">
-  <a class="hc-item" th:each="item : ${items}" th:attr="href=${item.href}">
-    <span class="hc-item__media" aria-hidden="true" th:if="${item.icon}"><svg class="hc-icon"><use th:attr="href=|/assets/_tesseraql/icons.svg#${item.icon}|"/></svg></span>
+  <a class="hc-item" th:each="item : ${items}" th:attr="href=@{${item.href}}">
+    <span class="hc-item__media" aria-hidden="true" th:if="${item.icon}"><svg class="hc-icon"><use th:attr="href=@{|/assets/_tesseraql/icons.svg#${item.icon}|}"/></svg></span>
     <span class="hc-item__title hc-shell__label" th:text="${item.label}">Item</span>
   </a>
 </th:block>

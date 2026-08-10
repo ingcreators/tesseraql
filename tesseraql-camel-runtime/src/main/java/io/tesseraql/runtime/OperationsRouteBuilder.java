@@ -407,8 +407,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // Work accepted, poll the execution: the same 202 + Location contract the
         // file-transfer start answers (docs/vocabulary-cleanup.md slice 3).
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
-        exchange.getMessage().setHeader("Location",
-                "/_tesseraql/ops/batch/executions/" + execution.id());
+        exchange.getMessage().setHeader("Location", io.tesseraql.camel.BasePath.url(exchange,
+                "/_tesseraql/ops/batch/executions/" + execution.id()));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("executionId", execution.id());
         result.put("status", execution.status().name());

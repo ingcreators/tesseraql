@@ -1517,28 +1517,13 @@ public final class RouteCompiler {
      */
     String basePath() {
         if (basePath == null) {
-            basePath = normalizeBasePath(
+            basePath = io.tesseraql.core.http.BasePaths.normalize(
                     config == null
                             ? null
                             : config.getString("tesseraql.http.basePath")
                                     .orElse(null));
         }
         return basePath;
-    }
-
-    /** Trims a configured prefix into {@code ""} or {@code /a/b}. */
-    public static String normalizeBasePath(String configured) {
-        if (configured == null || configured.isBlank() || "/".equals(configured.trim())) {
-            return "";
-        }
-        String trimmed = configured.trim();
-        if (!trimmed.startsWith("/")) {
-            trimmed = "/" + trimmed;
-        }
-        while (trimmed.endsWith("/")) {
-            trimmed = trimmed.substring(0, trimmed.length() - 1);
-        }
-        return trimmed;
     }
 
     private RestDefinition restEndpoint(RouteBuilder builder, String method, String path) {

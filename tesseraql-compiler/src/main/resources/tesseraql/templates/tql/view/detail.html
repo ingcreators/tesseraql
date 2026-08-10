@@ -19,7 +19,7 @@
        /_tesseraql/topics stream and re-GETs the page itself, selecting this same region —
        the SSE event carries no data. Empty values drop the attributes (plain detail). -->
   <div th:id="|${v.id}-view|"
-       th:attr="hx-ext=${v.liveExt},sse-connect=${v.liveConnect},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
+       th:attr="hx-ext=${v.liveExt},sse-connect=@{${v.liveConnect}},hx-get=${v.liveGet},hx-trigger=${v.liveTrigger},hx-select=${v.liveSelect},hx-target=${v.liveTarget},hx-swap=${v.liveSwap}">
   <div class="hc-empty" th:if="${v.notFound}"><p class="hc-empty__title"
       th:text="#{tql.view.notFound}">Not found.</p></div>
   <div class="hc-stack" th:unless="${v.notFound}">

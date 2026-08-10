@@ -67,12 +67,18 @@ final class SseRoutes {
         return headers == null ? java.util.Map.of() : headers;
     }
 
-    /** Registers {@code GET path} as an SSE endpoint on the started platform router. */
+    /**
+     * Registers {@code GET path} as an SSE endpoint on the started platform router. The path is
+     * base-relative and mounted under the application's prefix (docs/base-path.md): these are
+     * router routes, so Camel's REST configuration — where the prefix reaches every other
+     * framework endpoint at once — does not apply to them.
+     */
     static void register(CamelContext camelContext, int port, String path, Handler handler) {
         VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
                 VertxPlatformHttpRouter.getRouterNameFromPort(port));
-        router.route(HttpMethod.GET, path)
-                .handler(ctx -> serve(camelContext, router, ctx, path, handler));
+        String mounted = io.tesseraql.camel.BasePath.of(camelContext) + path;
+        router.route(HttpMethod.GET, mounted)
+                .handler(ctx -> serve(camelContext, router, ctx, mounted, handler));
     }
 
     private static void serve(CamelContext camelContext, VertxPlatformHttpRouter router,

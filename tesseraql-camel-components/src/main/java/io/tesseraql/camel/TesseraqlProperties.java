@@ -61,6 +61,11 @@ public final class TesseraqlProperties {
      * which write their own responses outside a compiled route.
      */
     public static final String RESPONSE_HEADERS_BEAN = "tesseraqlResponseHeaders";
+    /**
+     * The prefix the application is served under ({@code tesseraql.http.basePath}), normalized to
+     * {@code ""} or {@code /a/b}. Read through {@link BasePath}.
+     */
+    public static final String BASE_PATH_BEAN = "tesseraqlBasePath";
     public static final String TEMP_STORE_BEAN = "tesseraqlTempStore";
     public static final String IDEMPOTENCY_STORE_BEAN = "tesseraqlIdempotencyStore";
     public static final String OUTBOX_STORE_BEAN = "tesseraqlOutboxStore";

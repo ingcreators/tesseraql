@@ -54,6 +54,16 @@ public final class OpenApiGenerator {
         info.put("version", manifest.config().getString("app.version").orElse("1.0.0"));
         doc.put("info", info);
 
+        // An application served under a prefix answers at <base>/users, not /users
+        // (docs/base-path.md): the paths below stay base-relative — they are the route paths the
+        // app declares — and the prefix is stated once, where OpenAPI states it. Unset, the
+        // document has no servers entry, exactly as before.
+        String base = io.tesseraql.core.http.BasePaths.normalize(
+                manifest.config().getString("tesseraql.http.basePath").orElse(null));
+        if (!base.isEmpty()) {
+            doc.put("servers", java.util.List.of(Map.of("url", base)));
+        }
+
         Map<String, Object> paths = new TreeMap<>();
         for (RouteFile route : manifest.routes()) {
             pathItem(paths, route.urlPath()).put(route.httpMethod().toLowerCase(),

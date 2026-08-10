@@ -73,7 +73,7 @@ final class RouteReloader {
         this.studio = studio;
         this.appName = appName;
         this.mountedApps = List.copyOf(mountedApps);
-        this.basePath = io.tesseraql.compiler.RouteCompiler.normalizeBasePath(
+        this.basePath = io.tesseraql.core.http.BasePaths.normalize(
                 current.config().getString("tesseraql.http.basePath").orElse(null));
         this.fingerprints = fingerprintsOf(current);
         this.appFingerprint = appFingerprintOf(appHome);

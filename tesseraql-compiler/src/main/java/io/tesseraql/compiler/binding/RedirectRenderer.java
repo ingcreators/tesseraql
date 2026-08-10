@@ -52,15 +52,7 @@ public final class RedirectRenderer implements Processor {
         }
         matcher.appendTail(location);
 
-        if (isHtmxRequest(exchange)) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
-            exchange.getMessage().setHeader("HX-Redirect", location.toString());
-        } else {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
-                    redirect.effectiveStatus());
-            exchange.getMessage().setHeader("Location", location.toString());
-        }
-        exchange.getMessage().setBody("");
+        negotiate(exchange, redirect.effectiveStatus(), location.toString());
     }
 
     private static boolean isHtmxRequest(Exchange exchange) {
@@ -72,14 +64,20 @@ public final class RedirectRenderer implements Processor {
      * {@code 204 + HX-Redirect} (a swap would inline the target page), everyone else the given
      * 3xx + {@code Location}. Framework route builders use this instead of hand-rolling the
      * negotiation.
+     *
+     * <p>The location is base-relative and acquires the application's prefix here
+     * (docs/base-path.md): a redirect is a URL the browser will ask for, so it must name an
+     * address this runtime serves. Being the one redirect in the framework, this is also the one
+     * place the prefix has to go.
      */
     public static void negotiate(Exchange exchange, int status, String location) {
+        String target = io.tesseraql.camel.BasePath.url(exchange, location);
         if (isHtmxRequest(exchange)) {
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
-            exchange.getMessage().setHeader("HX-Redirect", location);
+            exchange.getMessage().setHeader("HX-Redirect", target);
         } else {
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
-            exchange.getMessage().setHeader("Location", location);
+            exchange.getMessage().setHeader("Location", target);
         }
         exchange.getMessage().setBody("");
     }
