@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The operations console reports on its own runtime's applications**
+  (docs/app-isolation-model.md decision 4). The ops tables live in a business database
+  that several runtimes may share, and the console scoped its rows by the caller's
+  `ops.app.<name>` grants alone — so a grant was enough to list another runtime's jobs,
+  executions, transfers and audit entries, rows that console has no relationship with. A
+  wildcard `ops.app.*` meant "every app in the database". Scope is now the intersection:
+  what this runtime serves, narrowed by what the caller was granted. A single-application
+  deployment is unaffected.
+
+### Changed
+
 - **The route audit log moves to the business datasource**
   (docs/app-isolation-model.md). `tesseraql.audit.routes.enabled` wrote through
   `tesseraql.framework.datasource`, but that key exists to keep a long-running business

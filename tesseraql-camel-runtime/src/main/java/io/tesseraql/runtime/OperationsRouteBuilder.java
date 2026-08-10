@@ -55,6 +55,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private final MetricsSettings metrics;
     private final io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit;
     private final io.tesseraql.core.files.FileTransferService transfers;
+    /** The applications this runtime serves; ops never reports on another runtime's rows. */
+    private final java.util.Set<String> servedApps;
 
     /**
      * Runs a job by id; decouples the route builder from the runtime instance. The trigger
@@ -84,7 +86,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
             io.tesseraql.operations.outbox.JdbcOutboxStore outbox,
             io.tesseraql.core.messaging.EventChannelStore events, MetricsSettings metrics,
             io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit,
-            io.tesseraql.core.files.FileTransferService transfers) {
+            io.tesseraql.core.files.FileTransferService transfers,
+            java.util.Set<String> servedApps) {
+        this.servedApps = java.util.Set.copyOf(servedApps);
         this.runner = runner;
         this.repository = repository;
         this.transfers = transfers;
@@ -358,10 +362,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
         return map;
     }
 
-    /** The caller's per-app scope from the authenticated principal (design ch. 26.11). */
-    private static Predicate<String> scope(Exchange exchange) {
+    /**
+     * The caller's per-app scope: what this runtime serves, narrowed by the principal's
+     * {@code ops.app.*} grants (docs/app-isolation-model.md decision 4).
+     */
+    private Predicate<String> scope(Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
-        return OpsScope.allowedApps(principal == null ? null : principal.permissions());
+        return OpsScope.allowedApps(
+                principal == null ? null : principal.permissions(), servedApps);
     }
 
     /** One declared job for the API listing: identity, trigger story, and policies. */
