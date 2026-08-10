@@ -9,12 +9,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in &middot; TesseraQL</title>
-<link rel="stylesheet" href="/assets/vendor/hypermedia-components__core/dist/hc.min.css">
+<link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <!-- The configured neutral ramp rides on top of hc.min.css exactly as the app shell links
      it: the sign-in screen must match everything behind it. -->
 <link rel="stylesheet" th:if="${_neutral}"
-      th:href="|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|">
-<link rel="stylesheet" href="/assets/_tesseraql/tesseraql.css">
+      th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
+<link rel="stylesheet" th:href="@{/assets/_tesseraql/tesseraql.css}">
 </head>
 <body>
 <main class="hc-stack" style="max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
@@ -40,7 +40,7 @@
       <p class="hc-alert__title">Invalid credentials. Please try again.</p>
     </div>
 
-    <form th:if="${methods.password}" class="hc-stack" method="post" action="/_tesseraql/login">
+    <form th:if="${methods.password}" class="hc-stack" method="post" th:action="@{/_tesseraql/login}">
       <input type="hidden" name="next" th:value="${next}">
       <div class="hc-field">
         <label class="hc-field__label" for="loginId">Login</label>
@@ -59,7 +59,7 @@
       </div>
       <button class="hc-button" data-variant="primary" type="submit">Sign in</button>
       <p class="hc-field__message" th:if="${methods.recovery}">
-        <a href="/_tesseraql/reset">Forgot password?</a>
+        <a th:href="@{/_tesseraql/reset}">Forgot password?</a>
       </p>
     </form>
 

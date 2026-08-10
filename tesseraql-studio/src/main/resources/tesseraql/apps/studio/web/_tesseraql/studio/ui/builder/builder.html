@@ -5,8 +5,8 @@
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
     <a class="hc-button" data-variant="ghost" data-size="sm"
-       th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(cmp.path)}|">Open in source editor</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+       th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(cmp.path)}|}">Open in source editor</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -45,7 +45,7 @@
       <!-- The builder half: toolbar, canvas iframe, palette, inspector. The save form
            reuses the source editor's draft flow — the exporter concatenates
            prefix + serialized region + suffix into the hidden content field. -->
-      <form id="save-form" method="post" action="/_tesseraql/studio/ui/save" class="hc-stack" data-tql-hotkey-save>
+      <form id="save-form" method="post" th:action="@{/_tesseraql/studio/ui/save}" class="hc-stack" data-tql-hotkey-save>
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" id="builder-path" name="path" th:value="${cmp.path}">
         <textarea id="builder-content" name="content" hidden th:text="${cmp.source}"
@@ -103,7 +103,7 @@
         </label>
         <th:block th:replace="~{tql/shell :: busy('Rendering…')}"/>
         <div id="render-result" class="hc-stack" aria-live="polite"
-             hx-post="/_tesseraql/studio/ui/render"
+             th:hx-post="@{/_tesseraql/studio/ui/render}"
              hx-trigger="load, change delay:400ms from:#builder-content, keyup changed delay:400ms from:#sample-editor, change from:#render-scripts"
              hx-include="#builder-path, #builder-content, #sample-editor, #render-scripts"
              hx-target="this" hx-swap="innerHTML" hx-indicator="previous span"></div>
@@ -115,7 +115,7 @@
     <div id="apply-result" class="hc-stack" aria-live="polite"></div>
     <div class="tql-editor-bar">
       <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
-      <form class="hc-cluster" hx-post="/_tesseraql/studio/ui/apply" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+      <form class="hc-cluster" th:hx-post="@{/_tesseraql/studio/ui/apply}" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="path" th:value="${cmp.path}">
         <label class="hc-field" th:if="${cmp.conflict}">
           <input type="checkbox" name="force" value="true" required>
@@ -128,7 +128,7 @@
         <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
       </form>
       <span class="hc-spacer"></span>
-      <form method="post" action="/_tesseraql/studio/ui/discard" th:if="${cmp.hasDraft}">
+      <form method="post" th:action="@{/_tesseraql/studio/ui/discard}" th:if="${cmp.hasDraft}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="path" th:value="${cmp.path}">
         <button type="submit" class="hc-button" data-variant="error"
@@ -137,7 +137,7 @@
                 data-hc-confirm-variant="error">Discard draft</button>
       </form>
     </div>
-    <script type="module" src="/assets/_tesseraql/page-builder.js"></script>
+    <script type="module" th:src="@{/assets/_tesseraql/page-builder.js}"></script>
   </th:block>
 </section>
 </div>

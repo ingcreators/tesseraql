@@ -6,8 +6,8 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{tql/shell :: shell(|Account &middot; TesseraQL|, ~{:: #account-nav}, ~{}, ~{:: #page-content})}">
 <th:block id="account-nav">
-  <a class="hc-item" href="/_tesseraql/account"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#users"/></svg></span><span class="hc-item__title">Profile</span></a>
-  <a class="hc-item" href="/_tesseraql/inbox"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use href="/assets/_tesseraql/icons.svg#bell"/></svg></span><span class="hc-item__title">Inbox</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/account}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title">Profile</span></a>
+  <a class="hc-item" th:href="@{/_tesseraql/inbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg></span><span class="hc-item__title">Inbox</span></a>
 </th:block>
 <div id="page-content" class="hc-stack">
   <!-- Every save confirms (docs/console-ux-refresh.md slice 2): the post/redirect/get
@@ -58,7 +58,7 @@
   <section class="hc-card">
     <div class="hc-card__header">Language</div>
     <div class="hc-card__body hc-stack">
-    <form method="post" action="/_tesseraql/account/language" class="hc-stack">
+    <form method="post" th:action="@{/_tesseraql/account/language}" class="hc-stack">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-field">
         <span class="hc-field__label">Display language</span>
@@ -76,7 +76,7 @@
   <section class="hc-card">
     <div class="hc-card__header">Appearance</div>
     <div class="hc-card__body hc-stack">
-    <form method="post" action="/_tesseraql/account/appearance" class="hc-stack">
+    <form method="post" th:action="@{/_tesseraql/account/appearance}" class="hc-stack">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-radio-label">
         <input class="hc-radio" type="radio" name="theme" value="light"
@@ -96,7 +96,7 @@
     <p class="hc-field__message">Notifications addressed to you personally honor these choices.
       Channel-level announcements are not affected.</p>
     <form th:each="channel : ${profile.notifyChannels}" method="post"
-          action="/_tesseraql/account/notifications" class="hc-cluster">
+          th:action="@{/_tesseraql/account/notifications}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="channel" th:value="${channel.name}">
       <label class="hc-switch-label">
@@ -121,7 +121,7 @@
       <li th:each="pin : ${profile.shortcuts.pins}" class="hc-cluster">
         <a th:href="${pin.href}" th:text="${pin.label}">pin</a>
         <span class="hc-spacer"></span>
-        <form method="post" action="/_tesseraql/account/shortcuts/remove">
+        <form method="post" th:action="@{/_tesseraql/account/shortcuts/remove}">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
           <input type="hidden" name="kind" value="pin">
           <input type="hidden" name="href" th:value="${pin.href}">
@@ -137,7 +137,7 @@
       <li th:each="recent : ${profile.shortcuts.recents}" class="hc-cluster">
         <a th:href="${recent.href}" th:text="${recent.label}">recent</a>
         <span class="hc-spacer"></span>
-        <form method="post" action="/_tesseraql/account/shortcuts/remove">
+        <form method="post" th:action="@{/_tesseraql/account/shortcuts/remove}">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
           <input type="hidden" name="kind" value="recent">
           <input type="hidden" name="href" th:value="${recent.href}">
@@ -158,7 +158,7 @@
       <p class="hc-alert__title"
          th:text="|Delegate: ${profile.delegation.delegate} — ${profile.delegation.startsAt} to ${profile.delegation.endsAt}${profile.delegation.active ? ' (active now)' : ''}|">rule</p>
     </div>
-    <form method="post" action="/_tesseraql/account/delegation" class="hc-cluster">
+    <form method="post" th:action="@{/_tesseraql/account/delegation}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <label class="hc-field">
         <span class="hc-field__label">Delegate (login)</span>
@@ -174,7 +174,7 @@
       </label>
       <button class="hc-button" data-variant="primary" type="submit">Save</button>
     </form>
-    <form method="post" action="/_tesseraql/account/delegation/clear"
+    <form method="post" th:action="@{/_tesseraql/account/delegation/clear}"
           th:if="${profile.delegation.delegate != null}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Clear</button>
@@ -188,7 +188,7 @@
       (<code>config/preferences.yml</code>); routes read them back as
       <code>preference.&lt;key&gt;</code>.</p>
     <form th:each="pref : ${profile.appPreferences}" method="post"
-          action="/_tesseraql/account/app" class="hc-cluster">
+          th:action="@{/_tesseraql/account/app}" class="hc-cluster">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="key" th:value="${pref.key}">
       <th:block th:if="${pref.type == 'boolean'}">
@@ -236,7 +236,7 @@
           <td>
             <!-- Signing out the device that is this browser is an ordinary sign-out
                  (docs/session-visibility.md); the handle is never the session id. -->
-            <form th:if="${!#strings.isEmpty(session.handle)}" method="post" action="/_tesseraql/logout-device">
+            <form th:if="${!#strings.isEmpty(session.handle)}" method="post" th:action="@{/_tesseraql/logout-device}">
               <input type="hidden" name="_csrf" th:value="${_csrf}">
               <input type="hidden" name="handle" th:value="${session.handle}">
               <button class="hc-button" data-variant="ghost" data-size="sm" type="submit"
@@ -248,7 +248,7 @@
       </tbody>
     </table>
     </div>
-    <form method="post" action="/_tesseraql/logout-others">
+    <form method="post" th:action="@{/_tesseraql/logout-others}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button class="hc-button" data-variant="ghost" type="submit"
               data-hc-confirm="Sign out every other session?" data-hc-confirm-title="Confirm sign-out"
@@ -260,7 +260,7 @@
     <div class="hc-card__header">Password</div>
     <div class="hc-card__body hc-stack">
     <th:block th:if="${profile.passwordEnabled}">
-      <form method="post" action="/_tesseraql/account/password" class="hc-stack">
+      <form method="post" th:action="@{/_tesseraql/account/password}" class="hc-stack">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <label class="hc-field">
           <span class="hc-field__label">Current password</span>
@@ -282,7 +282,7 @@
     <div class="hc-card__body hc-stack">
     <th:block th:if="${profile.totp.enrolled}">
       <p>A second factor protects this account: signing in also asks for a 6-digit code.</p>
-      <form method="post" action="/_tesseraql/account/totp/disable" class="hc-stack">
+      <form method="post" th:action="@{/_tesseraql/account/totp/disable}" class="hc-stack">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <label class="hc-field">
           <span class="hc-field__label">Current password (to turn it off)</span>
@@ -306,7 +306,7 @@
         </th:block>
         <p class="hc-field__message" style="word-break: break-all"
            th:text="${profile.totp.otpauth}">otpauth://...</p>
-        <form method="post" action="/_tesseraql/account/totp/confirm" class="hc-cluster">
+        <form method="post" th:action="@{/_tesseraql/account/totp/confirm}" class="hc-cluster">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
           <label class="hc-field">
             <span class="hc-field__label">6-digit code</span>
@@ -316,7 +316,7 @@
           <button class="hc-button" data-variant="primary" type="submit">Confirm</button>
         </form>
       </th:block>
-      <form method="post" action="/_tesseraql/account/totp/begin">
+      <form method="post" th:action="@{/_tesseraql/account/totp/begin}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <button class="hc-button" data-variant="ghost" type="submit"
                 th:text="${profile.totp.pendingSecret != null} ? 'Generate a new secret' : 'Set up two-factor authentication'">Set up</button>

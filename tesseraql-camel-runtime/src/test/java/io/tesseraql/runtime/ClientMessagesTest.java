@@ -23,11 +23,13 @@ class ClientMessagesTest {
                 StandardCharsets.UTF_8);
 
         assertThat(script)
+                // Relative to the generated module, so it resolves under the application's
+                // base path without the catalog knowing there is one (docs/base-path.md).
                 .startsWith("import { setMessages } from "
-                        + "\"/assets/vendor/hypermedia-components__core/dist/hc.behaviors.min.js\"")
+                        + "\"../vendor/hypermedia-components__core/dist/hc.behaviors.min.js\"")
                 // The kit's official pack (hc 0.1.1) loads first...
                 .contains("import pack from "
-                        + "\"/assets/vendor/hypermedia-components__core/dist/locales/ja.js\"")
+                        + "\"../vendor/hypermedia-components__core/dist/locales/ja.js\"")
                 .contains("setMessages(pack);")
                 // ...then the app's own entries layer over it (later merges win).
                 .contains("\"users.provision.unknown-user\":\"指定されたユーザーは存在しません。\"");

@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/wizard">&larr; wizards</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/wizard}">&larr; wizards</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -15,8 +15,8 @@
   The outbound token stays an environment-variable reference; never paste the literal secret.</p>
   <!-- Configure → Review YAML → Apply (slice 5): live preview below, overlay write emphasized. -->
   <th:block th:replace="~{templates/wizard.html :: stepper(1, false)}"/>
-  <form method="post" action="/_tesseraql/studio/ui/wizard/scim"
-        hx-post="/_tesseraql/studio/ui/wizard/preview"
+  <form method="post" th:action="@{/_tesseraql/studio/ui/wizard/scim}"
+        th:hx-post="@{/_tesseraql/studio/ui/wizard/preview}"
         hx-trigger="change delay:300ms, keyup changed delay:500ms"
         hx-target="#wizard-preview" hx-swap="innerHTML">
     <input type="hidden" name="kind" value="scim">
@@ -41,7 +41,7 @@
     </div>
     <div class="hc-cluster">
       <button class="hc-button" data-variant="primary" type="submit"
-              formaction="/_tesseraql/studio/ui/wizard/scim/apply"
+              th:formaction="@{/_tesseraql/studio/ui/wizard/scim/apply}"
               data-hc-confirm="Write these SCIM settings to config/overlay.yml? Only secret references are stored; they apply on the next start."
               data-hc-confirm-title="Write to overlay" data-hc-confirm-label="Write">Write to config overlay</button>
       <button type="submit" class="hc-button" data-variant="ghost">Generate &amp; download config</button>

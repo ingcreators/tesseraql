@@ -4,10 +4,10 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/ops/console">&larr; console</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
   </div>
 </th:block>
-<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console/transfers" hx-trigger="every 15s"
+<div id="page-content" class="hc-stack" th:hx-get="@{/_tesseraql/ops/console/transfers}" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <section class="hc-card">
   <div class="hc-card__header">File transfers</div>
@@ -38,7 +38,7 @@
               <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${t.statusVariant}" th:text="${t.status}"></span></td>
               <td class="hc-datagrid__cell" data-numeric th:text="${t.rows}"></td>
               <td class="hc-datagrid__cell">
-                <a th:if="${t.downloadHref != null}" th:href="${t.downloadHref}" download
+                <a th:if="${t.downloadHref != null}" th:href="@{${t.downloadHref}}" download
                    th:text="${t.filename}">file</a>
                 <span th:if="${t.downloadHref == null}" th:text="${t.filename}"></span>
                 <span class="hc-badge"

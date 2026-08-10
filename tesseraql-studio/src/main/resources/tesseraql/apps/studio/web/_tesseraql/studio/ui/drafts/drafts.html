@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -14,7 +14,7 @@
     <span class="hc-spacer"></span>
     <input class="hc-input" data-size="sm" id="drafts-filter" type="search" name="q" th:value="${page.query}"
            aria-label="Filter by path" placeholder="Filter by path&hellip;" autocomplete="off"
-           hx-get="/_tesseraql/studio/ui/drafts" hx-trigger="keyup changed delay:250ms, search"
+           th:hx-get="@{/_tesseraql/studio/ui/drafts}" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#drafts-table" hx-select="#drafts-table" hx-swap="outerHTML"
            hx-indicator="next .htmx-indicator">
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
@@ -30,11 +30,11 @@
        (CSRF via installCsrfHeader), and the server redirects back here with a flash. -->
   <div class="hc-cluster" th:if="${page.editable and page.hasDrafts}">
     <button type="button" class="hc-button" data-variant="primary"
-            hx-post="/_tesseraql/studio/ui/drafts/apply-all" hx-trigger="hc:confirmed"
+            th:hx-post="@{/_tesseraql/studio/ui/drafts/apply-all}" hx-trigger="hc:confirmed"
             data-hc-confirm="Apply every clean draft? Routes reload and new ones serve immediately."
             data-hc-confirm-title="Apply all clean drafts" data-hc-confirm-label="Apply all">Apply all clean</button>
     <button type="button" class="hc-button" data-variant="ghost"
-            hx-post="/_tesseraql/studio/ui/drafts/discard-all" hx-trigger="hc:confirmed"
+            th:hx-post="@{/_tesseraql/studio/ui/drafts/discard-all}" hx-trigger="hc:confirmed"
             data-hc-confirm="Discard every pending draft? This cannot be undone."
             data-hc-confirm-title="Discard all drafts" data-hc-confirm-label="Discard all"
             data-hc-confirm-variant="error">Discard all</button>
@@ -53,7 +53,7 @@
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="d : ${page.drafts}">
-              <td class="hc-datagrid__cell"><a th:href="${d.sourceUrl}" th:text="${d.path}"></a></td>
+              <td class="hc-datagrid__cell"><a th:href="@{${d.sourceUrl}}" th:text="${d.path}"></a></td>
               <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${d.isNew} ? 'info' : null" th:text="${d.kind}"></span></td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge" data-variant="warning" th:if="${d.conflict}">conflict</span>

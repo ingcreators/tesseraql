@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -27,7 +27,7 @@
       <code>config/overlay.yml</code> (the base config is left intact) and <strong>applied on the
       next restart</strong>; clearing a value removes the override. Engine-critical settings
       (datasources, security, Camel) are not editable here.</p>
-    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/config/set"
+    <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/config/set}"
           th:each="s : ${cfg.settings}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="key" th:value="${s.key}">
@@ -55,7 +55,7 @@
       <input class="hc-input" data-size="sm" id="config-filter" type="search" name="q"
              th:value="${cfg.query}" aria-label="Filter by key or value"
              placeholder="Filter by key or value&hellip;" autocomplete="off"
-             hx-get="/_tesseraql/studio/ui/config" hx-trigger="keyup changed delay:250ms, search"
+             th:hx-get="@{/_tesseraql/studio/ui/config}" hx-trigger="keyup changed delay:250ms, search"
              hx-target="#config-table" hx-select="#config-table" hx-swap="outerHTML"
              hx-indicator="next .htmx-indicator">
       <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>

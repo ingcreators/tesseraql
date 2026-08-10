@@ -12,7 +12,7 @@ import {
   removeNode,
   setAttribute,
   Overlay,
-} from '/assets/vendor/hypermedia-components__editor-kit/src/index.js';
+} from '../vendor/hypermedia-components__editor-kit/src/index.js';
 
 const canvas = document.getElementById('mail-canvas');
 if (canvas) {

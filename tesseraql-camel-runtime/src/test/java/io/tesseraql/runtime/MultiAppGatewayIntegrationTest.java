@@ -277,6 +277,33 @@ class MultiAppGatewayIntegrationTest {
                 .isEqualTo(404);
     }
 
+    /**
+     * A bundled app under the prefix, end to end: the login page is markup the framework ships,
+     * not the application's, and it is the one page an operator meets before anything else.
+     *
+     * <p>Its form posted to {@code /_tesseraql/login} at the origin, where the suite gateway
+     * answers 404 — so a suite-hosted application could render a sign-in form that could not
+     * sign anybody in (docs/base-path.md slice 3).
+     */
+    @Test
+    void aBundledAppPageUnderThePrefixPostsBackToItself() throws Exception {
+        java.net.http.HttpResponse<String> page = java.net.http.HttpClient.newHttpClient().send(
+                java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:"
+                        + gateway.port() + "/apps/shop-a/_tesseraql/login")).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("action=\"/apps/shop-a/_tesseraql/login\"");
+        assertThat(page.body())
+                .as("no URL is left rooted at the origin, where the gateway answers 404")
+                .doesNotContain("=\"/_tesseraql/")
+                .doesNotContain("=\"/assets/");
+
+        for (String url : assetUrlsIn(page.body())) {
+            assertThat(statusOf(gateway, url)).as(url).isEqualTo(200);
+        }
+    }
+
     /** Every {@code href}/{@code src} in the page pointing into the asset tree, de-duplicated. */
     private static List<String> assetUrlsIn(String html) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern

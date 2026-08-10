@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -19,7 +19,7 @@
       <p class="hc-field__message">Create one below, or start from the <code>tql-calendar</code>
         editor snippet.</p>
     </div>
-    <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars"
+    <form class="hc-cluster" method="get" th:action="@{/_tesseraql/studio/ui/calendars}"
           th:if="${cal.hasCalendars}">
       <div class="hc-field">
         <label class="hc-field__label" for="cal-name">Calendar</label>
@@ -45,8 +45,8 @@
       <p class="hc-alert" data-variant="warning" role="status" th:if="${cal.grid.tableBacked}">
         Table-backed holidays: the preview reads the <strong>main</strong> datasource; the rows
         themselves are data &mdash; maintain them in the
-        <a href="/_tesseraql/studio/ui/data">data browser</a>.</p>
-      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars">
+        <a th:href="@{/_tesseraql/studio/ui/data}">data browser</a>.</p>
+      <form class="hc-cluster" method="get" th:action="@{/_tesseraql/studio/ui/calendars}">
         <input type="hidden" name="name" th:value="${cal.grid.name}">
         <input type="hidden" name="month" th:value="${cal.grid.prevMonth}">
         <input type="hidden" name="dayOfMonth" th:value="${cal.grid.dayOfMonth}">
@@ -54,7 +54,7 @@
         <button class="hc-button" data-size="sm" type="submit">&larr;</button>
         <strong th:text="${cal.grid.monthLabel}"></strong>
       </form>
-      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars">
+      <form class="hc-cluster" method="get" th:action="@{/_tesseraql/studio/ui/calendars}">
         <input type="hidden" name="name" th:value="${cal.grid.name}">
         <input type="hidden" name="month" th:value="${cal.grid.nextMonth}">
         <input type="hidden" name="dayOfMonth" th:value="${cal.grid.dayOfMonth}">
@@ -86,7 +86,7 @@
           </table>
         </div>
       </div>
-      <form class="hc-cluster" method="get" action="/_tesseraql/studio/ui/calendars">
+      <form class="hc-cluster" method="get" th:action="@{/_tesseraql/studio/ui/calendars}">
         <input type="hidden" name="name" th:value="${cal.grid.name}">
         <input type="hidden" name="month" th:value="${cal.grid.month}">
         <div class="hc-field">
@@ -121,7 +121,7 @@
          input). The card renders the PENDING DRAFT's state, so successive toggles accumulate
          visibly; the month grid above stays the SERVED calendar until the draft is applied. -->
     <div class="tql-editor-layout">
-      <form hx-post="/_tesseraql/studio/ui/calendars/toggle"
+      <form th:hx-post="@{/_tesseraql/studio/ui/calendars/toggle}"
             hx-trigger="hc:calendarchange" hx-target="#page-content"
             hx-select="#page-content" hx-swap="outerHTML">
         <input type="hidden" name="name" th:value="${cal.selected.name}">
@@ -137,7 +137,7 @@
         </ul>
       </div>
     </div>
-    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/calendars/save">
+    <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/calendars/save}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="name" th:value="${cal.selected.name}">
       <div class="hc-field">

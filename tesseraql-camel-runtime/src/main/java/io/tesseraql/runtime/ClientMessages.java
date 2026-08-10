@@ -22,7 +22,12 @@ import java.util.Map;
  */
 final class ClientMessages {
 
-    private static final String VENDOR_BASE = "/assets/vendor/hypermedia-components__core/dist/";
+    /**
+     * Relative to this generated module, which is served from {@code <base>/assets/_tesseraql/}:
+     * a module specifier resolves against the importing module's own URL, so the import carries
+     * the application's base path without this class ever being told it (docs/base-path.md).
+     */
+    private static final String VENDOR_BASE = "../vendor/hypermedia-components__core/dist/";
     private static final String WEBJAR = "hypermedia-components__core";
     private static final String WEBJAR_RESOURCES = "META-INF/resources/webjars/";
 

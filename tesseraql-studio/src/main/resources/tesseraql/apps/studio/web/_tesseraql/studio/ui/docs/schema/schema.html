@@ -4,11 +4,11 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <form th:if="${sch.editable}" method="post" action="/_tesseraql/studio/ui/docs/schema/refresh">
+    <form th:if="${sch.editable}" method="post" th:action="@{/_tesseraql/studio/ui/docs/schema/refresh}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <button class="hc-button" data-size="sm" type="submit">Refresh schema</button>
     </form>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs">&larr; docs</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/docs}">&larr; docs</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -39,15 +39,15 @@
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell" data-sortable data-col="name" th:attr="aria-sort=${sch.ariaSort.name}"><a th:href="${sch.sortHref.name}">Table</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="type" th:attr="aria-sort=${sch.ariaSort.type}"><a th:href="${sch.sortHref.type}">Type</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="columnCount" th:attr="aria-sort=${sch.ariaSort.columnCount}"><a th:href="${sch.sortHref.columnCount}">Columns</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="name" th:attr="aria-sort=${sch.ariaSort.name}"><a th:href="@{${sch.sortHref.name}}">Table</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="type" th:attr="aria-sort=${sch.ariaSort.type}"><a th:href="@{${sch.sortHref.type}}">Type</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="columnCount" th:attr="aria-sort=${sch.ariaSort.columnCount}"><a th:href="@{${sch.sortHref.columnCount}}">Columns</a></th>
             <th class="hc-datagrid__headcell">Primary key</th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="foreignKeyCount" th:attr="aria-sort=${sch.ariaSort.foreignKeyCount}"><a th:href="${sch.sortHref.foreignKeyCount}">FKs</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="foreignKeyCount" th:attr="aria-sort=${sch.ariaSort.foreignKeyCount}"><a th:href="@{${sch.sortHref.foreignKeyCount}}">FKs</a></th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="t : ${ds.tables}">
-              <td class="hc-datagrid__cell"><a th:href="${t.detailUrl}" th:text="${t.name}"></a></td>
+              <td class="hc-datagrid__cell"><a th:href="@{${t.detailUrl}}" th:text="${t.name}"></a></td>
               <td class="hc-datagrid__cell"><span class="hc-badge" data-variant="info" th:text="${t.type}"></span></td>
               <td class="hc-datagrid__cell" th:text="${t.columnCount}"></td>
               <td class="hc-datagrid__cell" th:text="${t.primaryKey}"></td>

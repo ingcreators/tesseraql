@@ -327,10 +327,13 @@ public final class ViewEjector {
         html.append("</div>\n");
         slot(html, appHome, routeDir, spec, "footer", "");
         if (hasChart) {
-            // installChart needs Observable Plot; both self-hosted, CSP stays 'self'.
-            html.append("<script src=\"/assets/vendor/observablehq__plot/dist/plot.umd.min.js\""
-                    + " defer></script>\n"
-                    + "<script type=\"module\" src=\"/assets/_tesseraql/charts.js\"></script>\n");
+            // installChart needs Observable Plot; both self-hosted, CSP stays 'self'. Ejected as
+            // link expressions like the pattern they replace, so the ejected page keeps working
+            // under a base path — and shows the author the idiom (docs/base-path.md).
+            html.append("<script th:src=\"@{/assets/vendor/observablehq__plot/dist/"
+                    + "plot.umd.min.js}\" defer></script>\n"
+                    + "<script type=\"module\" th:src=\"@{/assets/_tesseraql/charts.js}\">"
+                    + "</script>\n");
         }
         return pageClose(html);
     }

@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -15,7 +15,7 @@
     <input class="hc-input" data-size="sm" id="audit-filter" type="search" name="q" th:value="${page.query}"
            aria-label="Filter by actor, action, target"
            placeholder="Filter by actor, action, target&hellip;" autocomplete="off"
-           hx-get="/_tesseraql/studio/ui/audit" hx-trigger="keyup changed delay:250ms, search"
+           th:hx-get="@{/_tesseraql/studio/ui/audit}" hx-trigger="keyup changed delay:250ms, search"
            hx-target="#audit-table" hx-select="#audit-table" hx-swap="outerHTML"
            hx-indicator="next .htmx-indicator" th:attr="hx-vals=${page.hxVals}">
     <th:block th:replace="~{tql/shell :: busy('Filtering…')}"/>
@@ -30,10 +30,10 @@
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell" data-sortable data-col="at" th:attr="aria-sort=${page.ariaSort.at}"><a th:href="${page.sortHref.at}">When</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="actor" th:attr="aria-sort=${page.ariaSort.actor}"><a th:href="${page.sortHref.actor}">Actor</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="action" th:attr="aria-sort=${page.ariaSort.action}"><a th:href="${page.sortHref.action}">Action</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="target" th:attr="aria-sort=${page.ariaSort.target}"><a th:href="${page.sortHref.target}">Target</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="at" th:attr="aria-sort=${page.ariaSort.at}"><a th:href="@{${page.sortHref.at}}">When</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="actor" th:attr="aria-sort=${page.ariaSort.actor}"><a th:href="@{${page.sortHref.actor}}">Actor</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="action" th:attr="aria-sort=${page.ariaSort.action}"><a th:href="@{${page.sortHref.action}}">Action</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="target" th:attr="aria-sort=${page.ariaSort.target}"><a th:href="@{${page.sortHref.target}}">Target</a></th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="e : ${page.entries}">
@@ -41,7 +41,7 @@
               <td class="hc-datagrid__cell" th:text="${e.actor}"></td>
               <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.action == 'scaffold'} ? 'info' : 'success'" th:text="${e.action}"></span></td>
               <td class="hc-datagrid__cell">
-                <a th:if="${e.targetUrl}" th:href="${e.targetUrl}" th:text="${e.target}"></a>
+                <a th:if="${e.targetUrl}" th:href="@{${e.targetUrl}}" th:text="${e.target}"></a>
                 <code th:unless="${e.targetUrl}" th:text="${e.target}"></code>
               </td>
             </tr>

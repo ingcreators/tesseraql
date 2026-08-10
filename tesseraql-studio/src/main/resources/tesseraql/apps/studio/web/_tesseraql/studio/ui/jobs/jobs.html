@@ -4,8 +4,8 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/calendars">Calendars</a>
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/calendars}">Calendars</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -15,7 +15,7 @@
     <p class="hc-field__message">A job's trigger &mdash; schedule with its calendar
       qualifiers, or an <code>after:</code> chain &mdash; and its operational promises
       (<code>overlap:</code>, <code>sla:</code>) as a form. Pipeline steps stay in the
-      <a href="/_tesseraql/studio/ui/source">text editor</a>.</p>
+      <a th:href="@{/_tesseraql/studio/ui/source}">text editor</a>.</p>
     <div class="hc-empty" th:unless="${jp.hasJobs}"><p class="hc-empty__title">No jobs declared
       under batch/.</p></div>
     <!-- The declared jobs as a real list (docs/studio-ux-refresh.md slice 6): id, the trigger
@@ -34,11 +34,11 @@
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="j : ${jp.jobs}">
               <td class="hc-datagrid__cell">
-                <a th:href="|/_tesseraql/studio/ui/jobs?name=${j.id}|"><code th:text="${j.id}"></code></a>
+                <a th:href="@{|/_tesseraql/studio/ui/jobs?name=${j.id}|}"><code th:text="${j.id}"></code></a>
               </td>
               <td class="hc-datagrid__cell" th:text="${j.trigger}"></td>
               <td class="hc-datagrid__cell">
-                <a th:if="${j.calendar}" th:href="|/_tesseraql/studio/ui/calendars?name=${j.calendar}|"
+                <a th:if="${j.calendar}" th:href="@{|/_tesseraql/studio/ui/calendars?name=${j.calendar}|}"
                    th:text="${j.calendar}"></a>
                 <span th:unless="${j.calendar}">&mdash;</span>
               </td>
@@ -60,8 +60,8 @@
       Review the diff and apply it from the text editor.</p>
     <p class="hc-alert" data-variant="warning" role="status" th:if="${jp.form.pollTriggered}">
       This job is poll-triggered &mdash; its trigger carries connector security; edit it in the
-      <a href="/_tesseraql/studio/ui/source">text editor</a>.</p>
-    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/jobs/save"
+      <a th:href="@{/_tesseraql/studio/ui/source}">text editor</a>.</p>
+    <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/jobs/save}"
           th:if="${jp.editable && !jp.form.pollTriggered}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <input type="hidden" name="name" th:value="${jp.form.jobId}">

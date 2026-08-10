@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -18,11 +18,11 @@
         the view document no longer drives rendering — delete it when you are done.</p>
       <div class="hc-cluster">
         <a class="hc-button" data-variant="primary"
-           th:href="|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(eject.templatePath)}|">Open in builder</a>
+           th:href="@{|/_tesseraql/studio/ui/builder?path=${#uris.escapeQueryParam(eject.templatePath)}|}">Open in builder</a>
         <a class="hc-button" data-variant="ghost"
-           th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(eject.templatePath)}|">Open template source</a>
+           th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(eject.templatePath)}|}">Open template source</a>
         <a class="hc-button" data-variant="ghost"
-           th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(eject.routePath)}|">Back to the route</a>
+           th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(eject.routePath)}|}">Back to the route</a>
       </div>
     </div>
   </section>
@@ -33,7 +33,7 @@
       <p class="hc-alert" data-variant="warning" role="alert">The target template
         <code th:text="${eject.templatePath}"></code> already exists with hand edits — nothing
         was changed. Overwriting discards those edits.</p>
-      <form method="post" action="/_tesseraql/studio/ui/eject-view">
+      <form method="post" th:action="@{/_tesseraql/studio/ui/eject-view}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="path" th:value="${eject.routePath}">
         <input type="hidden" name="confirm" value="true">
@@ -44,7 +44,7 @@
                   data-hc-confirm-title="Eject with overwrite" data-hc-confirm-label="Overwrite"
                   data-hc-confirm-variant="error">Eject anyway (overwrite)</button>
           <a class="hc-button" data-variant="ghost"
-             th:href="|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(eject.routePath)}|">Back to the route</a>
+             th:href="@{|/_tesseraql/studio/ui/source?path=${#uris.escapeQueryParam(eject.routePath)}|}">Back to the route</a>
         </div>
       </form>
     </div>

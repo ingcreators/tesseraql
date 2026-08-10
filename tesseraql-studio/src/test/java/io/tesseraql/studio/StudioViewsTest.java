@@ -176,7 +176,7 @@ class StudioViewsTest {
     @Test
     void renderModelCarriesPdfDataUrl() {
         Map<String, Object> model = StudioViews.render(
-                StudioService.RenderResult.ok("pdf", "data:application/pdf;base64,JVBERi0="));
+                StudioService.RenderResult.ok("pdf", "data:application/pdf;base64,JVBERi0="), "");
 
         assertThat(model).containsEntry("isPdf", true).containsEntry("isHtml", false)
                 .containsEntry("pdfUrl", "data:application/pdf;base64,JVBERi0=")
@@ -345,7 +345,7 @@ class StudioViewsTest {
     @Test
     void renderJsonKindHasNoVisualPreview() {
         Map<String, Object> json = StudioViews.render(
-                StudioService.RenderResult.ok("json", "{\n  \"a\" : 1\n}"));
+                StudioService.RenderResult.ok("json", "{\n  \"a\" : 1\n}"), "");
 
         assertThat(json).containsEntry("ok", true).containsEntry("isHtml", false)
                 .containsEntry("kind", "json").containsEntry("output", "{\n  \"a\" : 1\n}");
@@ -356,7 +356,7 @@ class StudioViewsTest {
     void renderBuildsModelWithHighlightedTextAndIframeDoc() {
         // A bare fragment is wrapped into a standalone doc linking the hc stylesheet for the iframe.
         Map<String, Object> ok = StudioViews.render(
-                StudioService.RenderResult.ok("html", "<p class=\"hc-alert\">Hi</p>"));
+                StudioService.RenderResult.ok("html", "<p class=\"hc-alert\">Hi</p>"), "");
         assertThat(ok).containsEntry("ok", true).containsEntry("isHtml", true)
                 .containsEntry("output", "<p class=\"hc-alert\">Hi</p>");
         assertThat((String) ok.get("outputHtml")).contains("hc-code__tok");
@@ -368,19 +368,20 @@ class StudioViewsTest {
         // A full-page render (its own <html>) is previewed verbatim, not double-wrapped.
         Map<String, Object> page = StudioViews.render(
                 StudioService.RenderResult.ok("html",
-                        "<!DOCTYPE html><html><body>x</body></html>"));
+                        "<!DOCTYPE html><html><body>x</body></html>"),
+                "");
         assertThat((String) page.get("previewDoc"))
                 .isEqualTo("<!DOCTYPE html><html><body>x</body></html>");
 
         // A TEXT render has no visual iframe (isHtml false, no previewDoc).
         Map<String, Object> text = StudioViews.render(
-                StudioService.RenderResult.ok("text", "name: value"));
+                StudioService.RenderResult.ok("text", "name: value"), "");
         assertThat(text).containsEntry("isHtml", false);
         assertThat(text.get("previewDoc")).isNull();
 
         // A failed render surfaces the error and offers no output.
         Map<String, Object> bad = StudioViews.render(
-                StudioService.RenderResult.invalid("html", "boom"));
+                StudioService.RenderResult.invalid("html", "boom"), "");
         assertThat(bad).containsEntry("ok", false).containsEntry("error", "boom");
         assertThat(bad.get("previewDoc")).isNull();
     }

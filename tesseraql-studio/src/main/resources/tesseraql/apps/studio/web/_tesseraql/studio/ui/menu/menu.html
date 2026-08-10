@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
     <span class="hc-badge" data-variant="warning" th:if="${menu.readOnly}">read-only</span>
   </div>
 </th:block>
@@ -50,14 +50,14 @@
             <tr class="hc-datagrid__row" th:each="item : ${menu.items}">
               <td class="hc-datagrid__cell">
                 <div class="hc-cluster">
-                  <form method="post" action="/_tesseraql/studio/ui/menu/move">
+                  <form method="post" th:action="@{/_tesseraql/studio/ui/menu/move}">
                     <input type="hidden" name="_csrf" th:value="${_csrf}">
                     <input type="hidden" name="index" th:value="${item.index}">
                     <input type="hidden" name="dir" value="up">
                     <button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
                             th:disabled="${item.first}" aria-label="Move up">&uarr;</button>
                   </form>
-                  <form method="post" action="/_tesseraql/studio/ui/menu/move">
+                  <form method="post" th:action="@{/_tesseraql/studio/ui/menu/move}">
                     <input type="hidden" name="_csrf" th:value="${_csrf}">
                     <input type="hidden" name="index" th:value="${item.index}">
                     <input type="hidden" name="dir" value="down">
@@ -82,7 +82,7 @@
               </td>
               <td class="hc-datagrid__cell">
                 <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
-                        hx-post="/_tesseraql/studio/ui/menu/remove" hx-trigger="hc:confirmed"
+                        th:hx-post="@{/_tesseraql/studio/ui/menu/remove}" hx-trigger="hc:confirmed"
                         th:attr="hx-vals=|{&quot;index&quot;: &quot;${item.index}&quot;}|"
                         data-hc-confirm="Remove this menu item?"
                         data-hc-confirm-title="Remove menu item" data-hc-confirm-label="Remove"
@@ -96,7 +96,7 @@
 
     <details class="hc-collapsible" th:attr="open=${menu.hasItems} ? null : true">
       <summary class="hc-collapsible__trigger">Add menu item <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/menu/add">
+      <form class="hc-stack hc-collapsible__content" method="post" th:action="@{/_tesseraql/studio/ui/menu/add}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <div class="hc-field">
@@ -151,7 +151,7 @@
       <summary class="hc-collapsible__trigger">Preview as role <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
       <p class="hc-field__message hc-collapsible__content">See exactly which items a caller holding a given role or permission
         would see — the same server-side filter the app applies.</p>
-      <form class="hc-stack" hx-get="/_tesseraql/studio/ui/menu/preview"
+      <form class="hc-stack" th:hx-get="@{/_tesseraql/studio/ui/menu/preview}"
             hx-target="#menu-preview" hx-swap="innerHTML" hx-trigger="submit, change delay:250ms">
         <div class="hc-cluster">
           <div class="hc-field">

@@ -30,7 +30,7 @@
           </details>
         </li>
       </ul>
-      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/scaffold/apply"
+      <form class="hc-stack" th:hx-post="@{/_tesseraql/studio/ui/scaffold/apply}"
             hx-target="#scaffold-apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="table" th:value="${scaffold.table}">
         <label class="hc-field" th:if="${scaffold.hasConflicts}">

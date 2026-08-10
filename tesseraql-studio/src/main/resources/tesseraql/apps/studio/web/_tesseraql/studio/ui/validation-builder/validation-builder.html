@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -12,7 +12,7 @@
     <div class="hc-card__header">Field domains</div>
     <div class="hc-card__body hc-stack">
     <p class="hc-field__message">Single-field constraints (type, bounds, pattern, enum) belong in
-      a <a href="/_tesseraql/studio/ui/docs/domains">field domain</a> referenced from
+      a <a th:href="@{/_tesseraql/studio/ui/docs/domains}">field domain</a> referenced from
       <code>input:</code> &mdash; this builder is for cross-field and SQL rules that a domain
       cannot express.</p>
     <div class="hc-cluster">
@@ -27,7 +27,7 @@
       copy it into a command route. Expression rules use the core expression language
       (<code>&amp;&amp; || == != &lt; &gt; &lt;= &gt;=</code>); a SQL rule points at a validation SQL
       file whose returned rows are the violations.</p>
-    <form class="hc-stack" hx-post="/_tesseraql/studio/ui/validation-builder/build"
+    <form class="hc-stack" th:hx-post="@{/_tesseraql/studio/ui/validation-builder/build}"
           hx-target="#vb-result" hx-swap="innerHTML" hx-trigger="submit, change delay:300ms"
           hx-disabled-elt="find button">
       <div class="hc-cluster">

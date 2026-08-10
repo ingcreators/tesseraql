@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
     <span class="hc-badge" data-variant="warning" th:if="${mig.readOnly}">read-only</span>
   </div>
 </th:block>
@@ -25,7 +25,7 @@
       is <code>R__&lt;name&gt;</code>. Apply it with <strong>Migrate now</strong> from the
       created page (or the next start) &mdash; no restart needed. Flyway has no built-in undo on the
       free edition: roll back by writing a follow-up migration (fix-forward).</p>
-    <form class="hc-stack" method="post" action="/_tesseraql/studio/ui/migration">
+    <form class="hc-stack" method="post" th:action="@{/_tesseraql/studio/ui/migration}">
       <input type="hidden" name="_csrf" th:value="${_csrf}">
       <div class="hc-field">
         <label class="hc-field__label" for="mig-kind">Kind</label>
@@ -71,21 +71,21 @@
         database back into a migration. Additive changes become real DDL; destructive ones are
         emitted as comments to review.</p>
       <form class="hc-stack" th:if="${mig.hasSchemaBaseline}"
-            hx-post="/_tesseraql/studio/ui/migration/diff" hx-target="#mig-ddl" hx-swap="beforeend" hx-disabled-elt="find button">
+            th:hx-post="@{/_tesseraql/studio/ui/migration/diff}" hx-target="#mig-ddl" hx-swap="beforeend" hx-disabled-elt="find button">
         <div class="hc-cluster">
           <button type="submit" class="hc-button" data-variant="ghost">Append from diff &uarr;</button><th:block th:replace="~{tql/shell :: busy('Diffing…')}"/>
         </div>
       </form>
       <p class="hc-field__message" th:unless="${mig.hasSchemaBaseline}">No schema baseline captured.
         Use <em>Capture baselines now</em> on the
-        <a href="/_tesseraql/studio/ui/docs/release-diff">release diff page</a> (e.g. at a
+        <a th:href="@{/_tesseraql/studio/ui/docs/release-diff}">release diff page</a> (e.g. at a
         release), then this generates the migration for changes since.</p>
     </details>
     <details class="hc-collapsible">
       <summary class="hc-collapsible__trigger">DDL builder (optional) <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
       <p class="hc-field__message hc-collapsible__content">Generate standard DDL for a common operation and drop it into the
         DDL field above to review and refine. Identifiers are not validated &mdash; check the result.</p>
-      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
+      <form class="hc-stack" th:hx-post="@{/_tesseraql/studio/ui/migration/build}"
             hx-target="#mig-ddl" hx-swap="beforeend" hx-disabled-elt="find button">
         <input type="hidden" name="operation" value="add-column">
         <h3>Add column</h3>
@@ -121,7 +121,7 @@
           <button type="submit" class="hc-button" data-variant="ghost">Append &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/>
         </div>
       </form>
-      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
+      <form class="hc-stack" th:hx-post="@{/_tesseraql/studio/ui/migration/build}"
             hx-target="#mig-ddl" hx-swap="beforeend" hx-disabled-elt="find button">
         <input type="hidden" name="operation" value="create-table">
         <h3>Create table</h3>
@@ -140,14 +140,14 @@
           <button type="submit" class="hc-button" data-variant="ghost">Append &uarr;</button><th:block th:replace="~{tql/shell :: busy('Building…')}"/>
         </div>
       </form>
-      <form class="hc-stack" hx-post="/_tesseraql/studio/ui/migration/build"
+      <form class="hc-stack" th:hx-post="@{/_tesseraql/studio/ui/migration/build}"
             hx-target="#mig-ddl" hx-swap="beforeend" hx-disabled-elt="find button">
         <input type="hidden" name="operation" value="create-index">
         <h3>Create index</h3>
         <div class="hc-cluster">
           <div class="hc-field"><label class="hc-field__label">Table</label>
             <select class="hc-select" name="table" th:if="${mig.hasTables}" required
-                    hx-get="/_tesseraql/studio/ui/migration/columns"
+                    th:hx-get="@{/_tesseraql/studio/ui/migration/columns}"
                     hx-target="#index-cols" hx-swap="innerHTML" hx-trigger="change">
               <option value="" disabled selected>Choose a table&hellip;</option>
               <option th:each="t : ${mig.tables}" th:value="${t}" th:text="${t}"></option>

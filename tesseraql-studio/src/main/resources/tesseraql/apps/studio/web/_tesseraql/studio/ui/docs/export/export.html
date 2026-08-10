@@ -4,7 +4,7 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui/docs/">&larr; docs</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui/docs/}">&larr; docs</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -24,7 +24,7 @@
         <td th:text="${a.description}"></td>
         <td>
           <a class="hc-button" data-variant="primary" data-size="sm"
-             th:href="${a.url}" th:attr="download=${a.filename}" th:text="|Download|"></a>
+             th:href="@{${a.url}}" th:attr="download=${a.filename}" th:text="|Download|"></a>
         </td>
       </tr>
     </tbody>
@@ -56,7 +56,7 @@
           <span class="hc-badge"
                 th:attr="data-variant=${c.method == 'GET'} ? 'info' : (${c.method == 'POST'} ? 'success' : (${c.method == 'DELETE'} ? 'error' : 'warning'))"
                 th:text="${c.method}"></span>
-          <a th:if="${c.url}" th:href="${c.url}"><code th:text="${c.path}"></code></a>
+          <a th:if="${c.url}" th:href="@{${c.url}}"><code th:text="${c.path}"></code></a>
           <code th:unless="${c.url}" th:text="${c.path}"></code>
           <span class="hc-field__label" th:if="${c.operationId}" th:text="${c.operationId}"></span>
         </div>
@@ -71,7 +71,7 @@
     can be computed &mdash; re-capture it.</p>
   <p class="hc-field__label" th:if="${!docs.hasBaseline and !docs.baselineCorrupt}">No baseline captured. Use
     <em>Capture baselines now</em> on the
-    <a href="/_tesseraql/studio/ui/docs/release-diff">release diff page</a> (for example at release
+    <a th:href="@{/_tesseraql/studio/ui/docs/release-diff}">release diff page</a> (for example at release
     time) to track what changed since then.</p>
   </div>
 </section>
@@ -81,7 +81,7 @@
     <p class="hc-field__label">The app's routes as a PDF table, rendered server-side &mdash; for
       sharing or printing.</p>
     <a class="hc-button" data-variant="ghost" data-size="sm"
-       href="/_tesseraql/studio/ui/docs/export/pdf">Open printable catalog &rarr;</a>
+       th:href="@{/_tesseraql/studio/ui/docs/export/pdf}">Open printable catalog &rarr;</a>
   </div>
 </section>
 </div>

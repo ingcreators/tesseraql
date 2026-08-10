@@ -5,7 +5,7 @@
   <span class="hc-spacer"></span>
   <nav class="hc-breadcrumb" aria-label="Breadcrumb">
     <ol class="hc-breadcrumb__list">
-      <li class="hc-breadcrumb__item"><a class="hc-breadcrumb__link" href="/_tesseraql/studio/ui/docs/schema">Schema</a></li>
+      <li class="hc-breadcrumb__item"><a class="hc-breadcrumb__link" th:href="@{/_tesseraql/studio/ui/docs/schema}">Schema</a></li>
       <li class="hc-breadcrumb__item"><span class="hc-breadcrumb__current" aria-current="page" th:text="${tbl.name}">table</span></li>
     </ol>
   </nav>
@@ -21,7 +21,7 @@
         <div class="hc-cluster">
           <button type="button" class="hc-button" data-variant="ghost" data-size="sm" data-hc-copy="#share-table">Copy</button>
           <a class="hc-button" data-variant="ghost" data-size="sm" target="_blank" rel="noopener"
-             th:href="${tbl.shareUrl}">Open shared view &rarr;</a>
+             th:href="@{${tbl.shareUrl}}">Open shared view &rarr;</a>
         </div>
       </div>
     </div>
@@ -46,10 +46,10 @@
         <!-- The decisions this table backs (docs/decision-tables.md): its rows are a decision's
              rule rows (or an `in` child table's members), not plain data. -->
         <a class="hc-badge" data-variant="info" th:each="d : ${tbl.backingDecisions}"
-           href="/_tesseraql/studio/ui/docs/decisions" th:text="|backs ${d}|"></a>
+           th:href="@{/_tesseraql/studio/ui/docs/decisions}" th:text="|backs ${d}|"></a>
         <span class="hc-spacer"></span>
         <a class="hc-button" data-variant="ghost" data-size="sm"
-           th:href="|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(tbl.name)}|">Browse data &rarr;</a>
+           th:href="@{|/_tesseraql/studio/ui/data?table=${#uris.escapeQueryParam(tbl.name)}|}">Browse data &rarr;</a>
       </div>
       </div>
     </section>
@@ -70,12 +70,12 @@
         <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.readByRoutes)}">
           <span class="hc-field__label">read by</span>
           <a class="hc-badge" data-variant="info" th:each="r : ${tbl.readByRoutes}"
-             th:href="${r.url}" th:text="${r.id}"></a>
+             th:href="@{${r.url}}" th:text="${r.id}"></a>
         </div>
         <div class="hc-cluster" th:unless="${#lists.isEmpty(tbl.writeByRoutes)}">
           <span class="hc-field__label">written by</span>
           <a class="hc-badge" data-variant="warning" th:each="r : ${tbl.writeByRoutes}"
-             th:href="${r.url}" th:text="${r.id}"></a>
+             th:href="@{${r.url}}" th:text="${r.id}"></a>
         </div>
       </div>
     </section>
@@ -100,7 +100,7 @@
             </td>
             <td>
               <!-- The live field domain (docs/field-domains.md) scaffolded for this column. -->
-              <a class="hc-badge" th:if="${c.domain}" href="/_tesseraql/studio/ui/docs/domains" th:text="${c.domain}"></a>
+              <a class="hc-badge" th:if="${c.domain}" th:href="@{/_tesseraql/studio/ui/docs/domains}" th:text="${c.domain}"></a>
               <span th:unless="${c.domain}">&mdash;</span>
             </td>
           </tr>
@@ -119,7 +119,7 @@
           <tr th:each="f : ${tbl.foreignKeys}">
             <td th:text="${f.name}"></td>
             <td th:text="${f.columns}"></td>
-            <td><a th:href="${f.refUrl}" th:text="|${f.refTable}(${f.refColumns})|"></a></td>
+            <td><a th:href="@{${f.refUrl}}" th:text="|${f.refTable}(${f.refColumns})|"></a></td>
           </tr>
         </tbody>
       </table>

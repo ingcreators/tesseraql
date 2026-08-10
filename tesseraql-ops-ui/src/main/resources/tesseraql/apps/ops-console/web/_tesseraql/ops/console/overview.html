@@ -10,7 +10,7 @@
     <span class="hc-badge" data-variant="warning" th:if="${ops.warning}">WARN</span>
   </div>
 </th:block>
-<div id="page-content" class="hc-stack" hx-get="/_tesseraql/ops/console" hx-trigger="every 15s"
+<div id="page-content" class="hc-stack" th:hx-get="@{/_tesseraql/ops/console}" hx-trigger="every 15s"
      hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
 <!-- Quick in-page nav for the long dashboard (sidebar IA): jump to a section without scrolling.
      Anchors the always-present sections; auto-refresh re-renders these links unchanged. -->
@@ -80,7 +80,7 @@
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="e : ${ops.recent}">
-              <td class="hc-datagrid__cell"><a th:href="|/_tesseraql/ops/console/executions/${e.id}|" th:text="${e.id}"></a></td>
+              <td class="hc-datagrid__cell"><a th:href="@{|/_tesseraql/ops/console/executions/${e.id}|}" th:text="${e.id}"></a></td>
               <td class="hc-datagrid__cell" th:text="${e.jobId}"></td>
               <td class="hc-datagrid__cell" th:text="${e.app}"></td>
               <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>

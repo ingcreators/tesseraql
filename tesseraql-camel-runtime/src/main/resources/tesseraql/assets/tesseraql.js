@@ -5,7 +5,10 @@
 // The behaviors bundle auto-installs every behavior at DOMContentLoaded; importing it for
 // its side effect is the whole setup. registerCodeLanguage is the kit's pluggable-grammar hook
 // for the live hc-code editor overlay (hc #264).
-import { registerCodeLanguage } from "/assets/vendor/hypermedia-components__core/dist/hc.behaviors.min.js";
+// Relative to this module, not to the origin: an application served under a base path
+// (docs/base-path.md) loads it from <base>/assets/_tesseraql/, and a module specifier
+// resolves against the importing module's own URL — which already carries the prefix.
+import { registerCodeLanguage } from "../vendor/hypermedia-components__core/dist/hc.behaviors.min.js";
 
 // A 2-way SQL grammar for the live editor (Studio backlog E): it mirrors the server-side
 // SqlHighlighter so the editor matches the read-only / diff surfaces — crucially classifying
@@ -177,7 +180,9 @@ document.addEventListener("hc:themechange", (event) => {
     if (!csrf) {
         return;
     }
-    fetch("/_tesseraql/account/appearance", {
+    // A fetch resolves against the document, not this module, so the endpoint is built
+    // from import.meta.url — the one URL here that carries the application's base path.
+    fetch(new URL("../../_tesseraql/account/appearance", import.meta.url), {
         method: "POST",
         redirect: "manual",
         headers: {

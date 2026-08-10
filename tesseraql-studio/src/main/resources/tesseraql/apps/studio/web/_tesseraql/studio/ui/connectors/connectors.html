@@ -4,9 +4,9 @@
 <th:block id="page-header">
   <span class="hc-spacer"></span>
   <div class="hc-cluster">
-    <a href="/_tesseraql/studio/ui/wizard">wizards</a>
-    <a href="/_tesseraql/studio/ui/config">config</a>
-    <a href="/_tesseraql/studio/ui">explorer &rarr;</a>
+    <a th:href="@{/_tesseraql/studio/ui/wizard}">wizards</a>
+    <a th:href="@{/_tesseraql/studio/ui/config}">config</a>
+    <a th:href="@{/_tesseraql/studio/ui}">explorer &rarr;</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -27,7 +27,7 @@
         <ul class="hc-stack" th:with="hosts=${scope == 'outbound' ? cx.outboundHosts : cx.pollHosts}">
           <li class="hc-cluster" th:each="h : ${hosts}">
             <code th:text="${h}"></code>
-            <form method="post" action="/_tesseraql/studio/ui/connectors/egress" th:if="${cx.editable}">
+            <form method="post" th:action="@{/_tesseraql/studio/ui/connectors/egress}" th:if="${cx.editable}">
               <input type="hidden" name="_csrf" th:value="${_csrf}">
               <input type="hidden" name="scope" th:value="${scope}">
               <input type="hidden" name="host" th:value="${h}">
@@ -41,7 +41,7 @@
           </li>
           <li th:if="${hosts.isEmpty()}" class="hc-field__message">No hosts allow-listed.</li>
         </ul>
-        <form class="hc-cluster" method="post" action="/_tesseraql/studio/ui/connectors/egress"
+        <form class="hc-cluster" method="post" th:action="@{/_tesseraql/studio/ui/connectors/egress}"
               th:if="${cx.editable}">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
           <input type="hidden" name="scope" th:value="${scope}">
@@ -81,7 +81,7 @@
     <details class="hc-collapsible" th:if="${cx.editable}">
       <summary class="hc-collapsible__trigger">Add or replace a credential
         <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/connectors/credential">
+      <form class="hc-stack hc-collapsible__content" method="post" th:action="@{/_tesseraql/studio/ui/connectors/credential}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <label class="hc-field"><span class="hc-field__label">Scope</span>
@@ -135,7 +135,7 @@
     <details class="hc-collapsible" th:if="${cx.editable}">
       <summary class="hc-collapsible__trigger">Add or replace a verifier
         <span class="hc-collapsible__icon" aria-hidden="true">&#9662;</span></summary>
-      <form class="hc-stack hc-collapsible__content" method="post" action="/_tesseraql/studio/ui/connectors/webhook">
+      <form class="hc-stack hc-collapsible__content" method="post" th:action="@{/_tesseraql/studio/ui/connectors/webhook}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <div class="hc-cluster">
           <label class="hc-field"><span class="hc-field__label">Provider name</span>

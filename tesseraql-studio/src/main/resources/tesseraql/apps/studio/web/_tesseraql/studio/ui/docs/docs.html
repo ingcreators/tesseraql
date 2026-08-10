@@ -7,7 +7,7 @@
     <!-- The Documentation section links (Overview/Schema/Coverage/Export) live in the sidebar group
          now (sidebar IA); the header keeps only the back-to-explorer affordance so it no longer
          duplicates the sidebar. -->
-    <a class="hc-button" data-variant="ghost" data-size="sm" href="/_tesseraql/studio/ui">&larr; explorer</a>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/studio/ui}">&larr; explorer</a>
   </div>
 </th:block>
 <div id="page-content" class="hc-stack">
@@ -18,7 +18,7 @@
     <input class="hc-input" data-size="sm" type="search" name="q" autocomplete="off"
            aria-label="Search routes, paths, SQL, tests"
            placeholder="Search routes, paths, SQL, tests&hellip;"
-           hx-get="/_tesseraql/studio/ui/docs/search" hx-trigger="input changed delay:200ms, search"
+           th:hx-get="@{/_tesseraql/studio/ui/docs/search}" hx-trigger="input changed delay:200ms, search"
            hx-target="#docs-search-results" hx-swap="innerHTML" hx-indicator="next .htmx-indicator">
     <th:block th:replace="~{tql/shell :: busy('Searching…')}"/>
   </div>
@@ -33,17 +33,17 @@
       <div class="hc-datagrid__scroll">
         <table class="hc-datagrid__table">
           <thead class="hc-datagrid__head"><tr>
-            <th class="hc-datagrid__headcell" data-sortable data-col="id" th:attr="aria-sort=${docs.ariaSort.id}"><a th:href="${docs.sortHref.id}">Id</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="method" th:attr="aria-sort=${docs.ariaSort.method}"><a th:href="${docs.sortHref.method}">Method</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="path" th:attr="aria-sort=${docs.ariaSort.path}"><a th:href="${docs.sortHref.path}">Path</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="recipe" th:attr="aria-sort=${docs.ariaSort.recipe}"><a th:href="${docs.sortHref.recipe}">Recipe</a></th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="testCount" th:attr="aria-sort=${docs.ariaSort.testCount}"><a th:href="${docs.sortHref.testCount}">Tests</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="id" th:attr="aria-sort=${docs.ariaSort.id}"><a th:href="@{${docs.sortHref.id}}">Id</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="method" th:attr="aria-sort=${docs.ariaSort.method}"><a th:href="@{${docs.sortHref.method}}">Method</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="path" th:attr="aria-sort=${docs.ariaSort.path}"><a th:href="@{${docs.sortHref.path}}">Path</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="recipe" th:attr="aria-sort=${docs.ariaSort.recipe}"><a th:href="@{${docs.sortHref.recipe}}">Recipe</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="testCount" th:attr="aria-sort=${docs.ariaSort.testCount}"><a th:href="@{${docs.sortHref.testCount}}">Tests</a></th>
             <th class="hc-datagrid__headcell" th:if="${docs.hasReport}">Result</th>
-            <th class="hc-datagrid__headcell" data-sortable data-col="linePct" th:if="${docs.hasReport}" th:attr="aria-sort=${docs.ariaSort.linePct}"><a th:href="${docs.sortHref.linePct}">Coverage</a></th>
+            <th class="hc-datagrid__headcell" data-sortable data-col="linePct" th:if="${docs.hasReport}" th:attr="aria-sort=${docs.ariaSort.linePct}"><a th:href="@{${docs.sortHref.linePct}}">Coverage</a></th>
           </tr></thead>
           <tbody class="hc-datagrid__body">
             <tr class="hc-datagrid__row" th:each="r : ${docs.routes}">
-              <td class="hc-datagrid__cell"><a th:href="${r.detailUrl}" th:text="${r.id}"></a></td>
+              <td class="hc-datagrid__cell"><a th:href="@{${r.detailUrl}}" th:text="${r.id}"></a></td>
               <td class="hc-datagrid__cell">
                 <span class="hc-badge"
                       th:attr="data-variant=${r.method == 'GET'} ? 'info' : (${r.method == 'POST'} ? 'success' : (${r.method == 'DELETE'} ? 'error' : 'warning'))"
