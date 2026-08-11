@@ -56,4 +56,12 @@ public record HttpCallSpec(
     public String effectiveMethod() {
         return method == null || method.isBlank() ? "GET" : method.trim().toUpperCase(Locale.ROOT);
     }
+
+    /**
+     * Whether this method carries a request body. A {@code body:} declared beside one that does
+     * not is a build error rather than a body quietly dropped (docs/lookups.md, decision 16).
+     */
+    public boolean carriesBody() {
+        return !"GET".equals(effectiveMethod()) && !"HEAD".equals(effectiveMethod());
+    }
 }

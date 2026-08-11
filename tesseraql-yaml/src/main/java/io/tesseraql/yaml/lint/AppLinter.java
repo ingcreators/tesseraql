@@ -5003,7 +5003,7 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-YAML-1022", "error", source,
                         "http: source '" + name + "' shadows a SQL result key"));
             }
-            lintHttpCall(config, name, spec.toCall(), source, findings);
+            lintHttpCall(config, name, spec.call(), source, findings);
         });
     }
 
@@ -5017,6 +5017,15 @@ public final class AppLinter {
      */
     private void lintHttpCall(AppConfig config, String id,
             io.tesseraql.yaml.model.HttpCallSpec spec, String source, List<LintFinding> findings) {
+        // A body on a method that carries none used to be documented as "ignored"; the client
+        // in fact sends it, and either way the author asked for something that does not
+        // happen. Refuse it at build time (docs/lookups.md, decision 16).
+        if (spec.body() != null && !spec.body().isBlank() && !spec.carriesBody()) {
+            findings.add(new LintFinding("TQL-YAML-1049", "error", source,
+                    "'" + id + "': body: is declared with method " + spec.effectiveMethod()
+                            + ", which carries no request body — declare the method that does"
+                            + " (POST, PUT, PATCH), or drop the body"));
+        }
         String resolved = null;
         if (spec.url() != null && !spec.url().isBlank()) {
             try {

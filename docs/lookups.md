@@ -1,7 +1,7 @@
 # Lookups and enrichment
 
-Status: **designed 2026-08-11**. **Slice 1 complete** (composition: `nest:` gains `merge:` and
-composite `on:`); slices 2-9 below.
+Status: **designed 2026-08-11**. **Slices 1-2 complete** (composition, and `enrich:` with a SQL
+reference); decisions 15-18 and slices 3-10 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
@@ -422,6 +422,75 @@ Four properties, each of which is a defect if omitted:
 Per-tenant catalogs key the cache and the stamp by tenant, so one tenant's refresh neither
 serves another's data nor invalidates it.
 
+### 15. One outbound call, one vocabulary
+
+`method`, `url`, `headers`, `query`, `body`, `credential`, `expectStatus`, `connectTimeout`
+and `requestTimeout` mean the same thing wherever a call is declared — a job's `httpCall:`
+step, a route's `http:` source, an enrichment's `http:` reference. They are one record, not
+two overlapping ones, and `HttpSourceSpec`'s restatement of nine `HttpCallSpec` fields ends.
+
+`select:` (which part of the response becomes rows) and `onError:` (`fail` | `empty`) are the
+read side's additions, and they appear wherever a response becomes rows.
+
+The structure this settles is a 2×2 rather than a list of features:
+
+| | publishes a named result | folds into rows |
+| --- | --- | --- |
+| SQL | `queries:` | `enrich:` with `sql:` |
+| HTTP | `http:` | `enrich:` with `http:` |
+
+### 16. Read-only is defined by effect, not by HTTP method
+
+`http:` sources were GET-only and body-less, as the proxy for "a read route performs no
+write". The proxy is both too strict and too weak. Too strict: JSON-RPC, GraphQL, and every
+`POST /partners/search {"codes": […]}` batch-lookup endpoint are refused — which is to say,
+precisely the references worth batching. Too weak: nothing stops a partner's `GET` from
+mutating, so the guarantee was never the method's to give.
+
+What actually holds the line stays exactly where it was: `http:` and `enrich:` are unavailable
+on command routes (`TQL-YAML-1022`), so no outbound call is ever made inside the framework's
+own write transaction. On top of that:
+
+- **A non-GET call is declared, never inferred.** `method: POST` is written out; the presence
+  of `body:` does not silently change the method.
+- **`body:` on a method that carries none is a build error**, not a body dropped on the floor
+  — today the client documents it as "ignored", which is the silent tolerance this codebase
+  has spent a campaign removing.
+
+This is a breaking change to a published contract (`docs/connectors.md` states "Always GET,
+never a body"), taken deliberately before 1.0 under mandatory rule 10.
+
+### 17. Batching is one primitive across SQL and HTTP
+
+Wave 1's slice 3 was designed as "HTTP is per-row, and the cache carries it". That was a
+conclusion drawn from the GET-only constraint rather than from the problem, and decision 16
+removes the constraint. A reference that accepts a key list should get the same one-round-trip
+property SQL has:
+
+- **`mode: batch`** sends the distinct key set in one request — `body: keys`, the same
+  `keys` bind the SQL reference receives — and `batchSize`/`maxKeys` mean what they mean for
+  SQL.
+- **`mode: perRow`** issues one request per distinct key, for the `GET /partners/{code}`
+  shape that cannot take a list. It stays the default for HTTP, because that shape is the
+  common one; it is no longer the only option.
+
+A **batch** response must carry the key columns in its rows — `on:`'s reference side matches
+them exactly as it matches a SQL reference's. A **perRow** response needs no key: the answer
+belongs to the key that was asked for, so the match is implicit.
+
+### 18. A body envelope is a separate decision, not a smuggled one
+
+`body:` resolves a single context path and serializes it
+(`HttpCallClient.bodyPublisher`), so `body: keys` sends `["P1","P2"]` and nothing more
+elaborate. JSON-RPC's `{"jsonrpc": "2.0", "method": …, "params": {…}, "id": …}` and GraphQL's
+`{"query": …, "variables": {…}}` need a body *template*, which is a new authoring surface with
+its own questions (interpolation syntax, escaping, where the response's `id` correlation
+lives). Decisions 15-17 deliberately stop short of it: they are worth having without it, and
+it is worth deciding on its own evidence.
+
+Until then, an envelope-shaped API is reachable the way it always was — a job step or a
+service — and a plain `POST … {"codes": […]}` endpoint is reachable directly.
+
 ## Waves and slices
 
 **Wave 1 — composition and enrichment**
@@ -439,30 +508,36 @@ serves another's data nor invalidates it.
    *result sets* — `sql` or a named query, in the execution context — which is why it reaches
    an HTML list's `columns:` and an export's, and why it is a second block rather than a
    fifth key on `nest:`.
-3. **HTTP source, `perRow`.** Reuses the existing outbound gateway, its egress allowlist and
-   its degradation metric; adds `onError:` and decision 6's all-or-nothing rule.
+3. **One outbound-call vocabulary** (decisions 15-16). `HttpSourceSpec` stops restating
+   `HttpCallSpec`'s fields; `http:` sources gain `method:` and `body:` and lose the GET-only
+   restriction; `body:` on a bodyless method becomes a build error. Breaking, and no new
+   feature of its own — the vocabulary has to be one before an enrichment can borrow it.
+4. **`enrich:` with an `http:` reference** (decision 17). `mode: perRow` (default) and
+   `mode: batch` over the same key set, the same `batchSize`/`maxKeys`, the existing gateway's
+   egress allow-list, credentials and degradation metric, plus `onError:` under decision 6's
+   all-or-nothing rule.
 
 **Wave 2 — catalogs**
 
-4. **`catalogs:` and `domains.codes:` (single language).** Whole-table load, the `codes` context
+5. **`catalogs:` and `domains.codes:` (single language).** Whole-table load, the `codes` context
    object, `of(...)`, render-time resolution in declarative views and in ejected templates,
    `active:`, `order:`, `<select>` options, validation with miss-rechecks.
-5. **Multi-language.** The language dimension, i18n's locale resolution and fallback, the
+6. **Multi-language.** The language dimension, i18n's locale resolution and fallback, the
    per-surface locale table of decision 12 and the build-time refusal of an undeclared one,
    message-sourced labels.
-6. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
+7. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
    atomic swap and its failure behavior, the operations surface, the scaffolder emitting
    `invalidates:` for generated maintenance screens.
 
 **Wave 3 — the remaining surfaces**
 
-7. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
+8. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
    the enrichment becomes a sliding window over `batchSize` rows and the request-scoped cache
    stops being an optimization and starts being load-bearing.
-8. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
+9. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.
-9. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
+10. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
    and `from:`, a catalogs page listing rows, last load, last error, and refresh.
 
 ## Out of scope (documented, not implied)

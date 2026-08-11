@@ -1,43 +1,58 @@
 package io.tesseraql.yaml.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
 
 /**
- * One named {@code http:} source on a query route (docs/connectors.md, "HTTP sources"): a GET
+ * One named {@code http:} source on a query route (docs/connectors.md, "HTTP sources"): a call
  * against an external JSON API at render time, composed with the route's SQL results in the
- * response or view. Deliberately a strict subset of a job's {@code httpCall:} step — always
- * GET, never a body — because a query route must stay a read; it executes through the same
- * outbound gateway (deny-by-default allow-list, named credentials, timeouts, circuit breaker).
+ * response or view.
  *
- * @param url            the absolute http(s) URL; config placeholders resolve
- * @param headers        extra request headers
- * @param query          query-string bindings, each an expression over the execution context
- * @param credential     a named credential under {@code tesseraql.http.outbound.credentials}
- * @param expectStatus   the status treated as success (default 200)
- * @param connectTimeout connect-timeout duration override
- * @param requestTimeout request-timeout duration override
- * @param select         optional dotted path into the response JSON naming the rows array or
- *                       object the source exposes (default: the whole body)
- * @param onError        {@code fail} (default: the request fails) or {@code empty} (the source
- *                       degrades to zero rows and the page still renders)
+ * <p>The call itself is an {@link HttpCallSpec} — the same declaration a job's
+ * {@code httpCall:} step and an enrichment's {@code http:} reference carry, so
+ * {@code method}, {@code url}, {@code headers}, {@code query}, {@code body},
+ * {@code credential}, {@code expectStatus} and the timeouts mean one thing everywhere
+ * (docs/lookups.md, decision 15). A source adds only what the read side needs: which part of
+ * the response becomes rows, and what happens when the call fails.
+ *
+ * <p>A source is <em>not</em> restricted to GET. That restriction stood for "a read route
+ * performs no write", which it neither achieved — nothing stops a partner's GET from mutating
+ * — nor came free: it refused JSON-RPC, GraphQL, and every {@code POST …/search} batch-lookup
+ * endpoint (docs/lookups.md, decision 16). What holds the line instead is that {@code http:}
+ * is unavailable on command routes, so no outbound call is made inside the framework's own
+ * write transaction.
+ *
+ * @param call    the outbound call, in the vocabulary every call site shares
+ * @param select  optional dotted path into the response JSON naming the rows array or object
+ *                the source exposes (default: the whole body)
+ * @param onError {@code fail} (default: the request fails) or {@code empty} (the source
+ *                degrades to zero rows and the page still renders)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record HttpSourceSpec(
-        String url,
-        Map<String, String> headers,
-        Map<String, String> query,
-        String credential,
-        @JsonProperty("expectStatus") Integer expectStatus,
-        String connectTimeout,
-        String requestTimeout,
-        String select,
-        String onError) {
+public record HttpSourceSpec(HttpCallSpec call, String select, String onError) {
 
-    public HttpSourceSpec {
-        headers = headers == null ? Map.of() : Map.copyOf(headers);
-        query = query == null ? Map.of() : Map.copyOf(query);
+    /**
+     * The flat authoring form: a source's YAML is the call's keys and the source's own, on one
+     * level. The mapping lives here so {@link HttpCallSpec} stays the single definition of what
+     * a call is — a field added there reaches sources without a second edit.
+     */
+    @JsonCreator
+    public static HttpSourceSpec of(
+            @JsonProperty("method") String method,
+            @JsonProperty("url") String url,
+            @JsonProperty("headers") Map<String, String> headers,
+            @JsonProperty("query") Map<String, String> query,
+            @JsonProperty("credential") String credential,
+            @JsonProperty("body") String body,
+            @JsonProperty("expectStatus") Integer expectStatus,
+            @JsonProperty("connectTimeout") String connectTimeout,
+            @JsonProperty("requestTimeout") String requestTimeout,
+            @JsonProperty("select") String select,
+            @JsonProperty("onError") String onError) {
+        return new HttpSourceSpec(new HttpCallSpec(method, url, headers, query, credential, body,
+                expectStatus, connectTimeout, requestTimeout), select, onError);
     }
 
     /** Whether a failed call degrades to an empty source instead of failing the request. */
@@ -45,9 +60,8 @@ public record HttpSourceSpec(
         return "empty".equals(onError);
     }
 
-    /** The equivalent {@code httpCall} step the outbound gateway executes: a body-less GET. */
-    public HttpCallSpec toCall() {
-        return new HttpCallSpec("GET", url, headers, query, credential, null, expectStatus,
-                connectTimeout, requestTimeout);
+    /** The target URL, for the lint and test surfaces that read it without making the call. */
+    public String url() {
+        return call.url();
     }
 }

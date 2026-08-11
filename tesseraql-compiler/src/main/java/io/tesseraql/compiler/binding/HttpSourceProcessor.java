@@ -49,7 +49,7 @@ public final class HttpSourceProcessor implements Processor {
                     + "' declared but no outbound gateway is bound");
         }
         try {
-            Map<String, Object> result = gateway.call(spec.toCall(), context);
+            Map<String, Object> result = gateway.call(spec.call(), context);
             context.put(name, shape(result));
         } catch (RuntimeException ex) {
             if (!spec.degradesToEmpty()) {

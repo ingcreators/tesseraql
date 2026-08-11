@@ -41,6 +41,8 @@ class HttpSourceIntegrationTest {
     static Path appHome;
     static final java.util.List<String> seenAuthorizations = java.util.Collections
             .synchronizedList(new java.util.ArrayList<>());
+    static final java.util.List<String> seenSearchRequests = java.util.Collections
+            .synchronizedList(new java.util.ArrayList<>());
 
     @BeforeAll
     static void start() throws Exception {
@@ -58,6 +60,20 @@ class HttpSourceIntegrationTest {
                     {"base":"USD","rates":[{"code":"JPY","value":150.1},
                      {"code":"EUR","value":0.9}]}
                     """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        upstream.createContext("/v1/search", exchange -> {
+            // Echo what the source posted, so the test can assert the method and the body
+            // actually left the runtime.
+            byte[] posted = exchange.getRequestBody().readAllBytes();
+            seenSearchRequests.add(exchange.getRequestMethod() + " "
+                    + new String(posted, StandardCharsets.UTF_8));
+            byte[] body = ("{\"matches\":[{\"code\":\"JPY\",\"name\":\"yen\"}],"
+                    + "\"echo\":" + new String(posted, StandardCharsets.UTF_8) + "}")
+                    .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -110,6 +126,19 @@ class HttpSourceIntegrationTest {
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.get("rows")).hasSize(1);
         assertThat(body.get("fx")).isEmpty();
+    }
+
+    /** A reference API keyed by a list: the read side is no longer GET-only. */
+    @Test
+    void aSourceMayPostAQueryBody() throws Exception {
+        HttpResponse<String> response = get("/search");
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = MAPPER.readTree(response.body());
+        assertThat(body.get("matches")).hasSize(1);
+        assertThat(body.get("matches").get(0).get("name").asText()).isEqualTo("yen");
+        // The method and the body reached the upstream, rather than being dropped.
+        assertThat(seenSearchRequests).anyMatch(seen -> seen.startsWith("POST ")
+                && seen.contains("JPY"));
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
@@ -182,6 +211,28 @@ class HttpSourceIntegrationTest {
                       fx: rates.rows
                       base: meta.body.base
                 """.formatted(upstreamPort, upstreamPort));
+        Path search = target.resolve("web/search");
+        Files.createDirectories(search);
+        Files.writeString(search.resolve("search.sql"), "select 'JPY' as code\n");
+        Files.writeString(search.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: search.list
+                kind: route
+                recipe: query-json
+                sql:
+                  file: search.sql
+                http:
+                  matches:
+                    method: POST
+                    url: http://localhost:%d/v1/search
+                    body: sql.rows
+                    select: matches
+                response:
+                  json:
+                    status: 200
+                    body:
+                      matches: matches.rows
+                """.formatted(upstreamPort));
         Path degraded = target.resolve("web/degraded");
         Files.createDirectories(degraded);
         Files.writeString(degraded.resolve("degraded.sql"), "select 1 as id\n");

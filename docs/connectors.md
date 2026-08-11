@@ -77,8 +77,10 @@ subsequent steps; use a webhook notification for fire-and-forget delivery.
 
 The read-side counterpart of `httpCall`: a query route can compose an external JSON API with
 its SQL result **in one screen or one JSON response**, declaratively. Each named `http:`
-source is a body-less GET executed after the route's SQL, landing in the execution context
-exactly like a named query:
+source is one call executed after the route's SQL, landing in the execution context exactly
+like a named query. It carries the same call vocabulary a job step does — `method`, `url`,
+`headers`, `query`, `body`, `credential`, `expectStatus`, and the timeouts — plus `select:`
+and `onError:`, which are the read side's own:
 
 ```yaml
 # web/orders/get.yml
@@ -117,8 +119,12 @@ response:
   and no shadowing of SQL result keys (`TQL-YAML-1022`), plus the same host/url/credential
   checks as a job step (`TQL-SEC-4070/4071/4072`).
 - **Reads stay reads**: `http:` is not available on command routes — a transactional write
-  never blocks on a third party (the outbox is the write-side integration, above). Always
-  GET, never a body.
+  never blocks on a third party (the outbox is the write-side integration, above). That, not
+  the HTTP method, is what holds the line: a source declares `method:` and `body:` like any
+  other call, because a reference API is as often `POST …/search` with a list of keys as it
+  is a `GET`. A non-GET method is written out rather than inferred from `body:`, and a `body:`
+  beside a method that carries none is a build error (`TQL-YAML-1049`), not a body silently
+  dropped.
 - An `httpCall` **test case** plans a route's sources like a job's steps, without a network
   request: `httpCall: {route: orders.list}` rows carry the resolved url, host, allow-list
   verdict, and credential — and `send: true` performs the call for real against the runner's

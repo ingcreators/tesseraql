@@ -6,7 +6,33 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **`enrich:` folds a keyed reference into a result set's rows** (docs/lookups.md). The rows of
+  `into:` (the route's `sql:` result, or one of its `queries:`) carry a key; the reference behind
+  it is fetched by the *distinct* keys, in batches, and each match is merged onto the row it
+  belongs to. A hundred-row page over sixty distinct partners costs one round trip, not sixty, and
+  because it composes the result set rather than the response body, an HTML list's `columns:` sees
+  the merged column. `batchSize:` defaults from the dialect and the key's arity — Oracle refuses an
+  `IN` list past 1000 expressions, SQL Server a statement past 2100 parameters — and `maxKeys:`
+  bounds the fan-out (`TQL-SQL-2114`) rather than letting it grow unwatched.
+- **A `nest:` entry may `merge:` columns** instead of attaching a list under `as:`, and `on:` takes
+  one entry per key column rather than exactly one. A many-to-one reference stops arriving as a
+  one-element array.
+- **An `http:` source may declare `method:` and `body:`.** A reference API is as often
+  `POST …/search` with a list of keys as it is a `GET`.
+
 ### Changed
+
+- **BREAKING: `http:` sources are no longer GET-only and body-less** (docs/lookups.md, decision
+  16). That restriction stood for "a read route performs no write", which it neither achieved —
+  nothing stops a partner's `GET` from mutating — nor came free: it refused JSON-RPC, GraphQL, and
+  every batch-lookup endpoint. What holds the line is unchanged: `http:` is unavailable on command
+  routes, so no outbound call is made inside the framework's own write transaction. A non-GET
+  method is written out rather than inferred from `body:`, and a `body:` beside a method that
+  carries none is now a build error (`TQL-YAML-1049`) instead of a body dropped in flight.
+  `HttpSourceSpec` no longer restates `HttpCallSpec`'s nine fields — a source *is* a call plus
+  `select:` and `onError:` — so a field added to a call reaches every call site.
 
 - **BREAKING: an export's template reads `${sql.rows}`, not `${rows}`**
   (docs/export-pipeline.md, decision 14). A route publishes its default result under `sql` and a

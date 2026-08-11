@@ -232,9 +232,17 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
+          "method": {
+            "type": "string",
+            "description": "The HTTP method, defaulting to GET. A reference API that takes a key list or a query document (POST .../search, JSON-RPC, GraphQL) declares its own; a non-GET method is written out, never inferred from `body`."
+          },
           "url": {
             "type": "string",
             "description": "Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070)."
+          },
+          "body": {
+            "type": "string",
+            "description": "A source expression resolving to the JSON request body. Declaring it beside a method that carries no body (GET, HEAD) is a build error (TQL-YAML-1049)."
           },
           "headers": {
             "type": "object",
