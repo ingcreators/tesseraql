@@ -723,13 +723,16 @@ join, the same answer enrichment gives.
    the surface's locale, i18n's resolution and the fallback to the default language rather than
    to the raw code, the key set staying language-independent so validation cannot reject a code
    for a missing translation, and the once-per-load report of what is untranslated.
-11b. **The remaining label sources.** The `file:` escape hatch (a catalog whose shape a table
-   and equality filters cannot express — a join to a table of per-language names — which is why
-   it lands here rather than earlier, accepted and read by nothing), and message-sourced labels
-   (`label: { message: ... }`), which put the names in the translation workflow the Studio
-   message editor already serves and add no per-language table. Decision 12's per-surface
-   locale rule ships with each surface as it gains `codes` (slice 13 for export, and mail),
-   because a refusal cannot be written against a surface that cannot render a code.
+11b. **The remaining label sources.** The `file:` escape hatch — a catalog whose shape a table
+   and equality filters cannot express, which is why it lands with the multi-language slice
+   rather than earlier — with `tables:` beside it so invalidation reaches it without anything
+   parsing SQL, and its result columns named by the same `key:`/`label:`/`language:`/`active:`
+   keys a table's are. And message-sourced labels (`label: { message: ... }`), which put the
+   names in the translation workflow the Studio message editor already serves and add no
+   per-language table: the load says which codes exist, and one row becomes one entry per
+   supported locale. Decision 12's per-surface locale rule ships with each surface as it gains
+   `codes` (slice 13 for export, and mail), because a refusal cannot be written against a
+   surface that cannot render a code.
 12a. **`invalidates:` on a command.** The declaration, the post-commit placement it shares with
    `emit:`, the store dropping every catalog that reads the named table, the two ways the
    declaration silently does nothing (`TQL-FIELD-4620`), and the scaffolder emitting it for a

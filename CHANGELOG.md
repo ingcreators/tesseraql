@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A catalog may be declared by a SQL file, and its names may come from the message catalog**
+  (docs/lookups.md, decisions 12-13). `file: 通貨.sql` covers the shape `table:` and equality
+  filters cannot express — codes in one table, their names per language in another — and then
+  `tables:` lists what the SQL reads, so a maintenance command's `invalidates:` reaches it
+  without anything parsing SQL. `label: { message: "code.優先度.{key}" }` takes the names from
+  the message catalog instead, which puts them in the translation workflow the Studio message
+  editor already serves and adds no per-language table: the load says which codes exist, and one
+  row becomes one entry per locale the app supports. `file:` and `table:` are exclusive, `file:`
+  refuses `where:`/`order:` (the SQL owns both) and requires `tables:` (`TQL-FIELD-4621`), and
+  the SQL must resolve under `catalogs/`.
 - **`invalidates:` drops the code catalogs a command's write made stale** (docs/lookups.md,
   decision 13). The declaration names **source tables**, not catalog names, because a
   maintenance screen for a shared code master writes a row whose kind is request data — which of
