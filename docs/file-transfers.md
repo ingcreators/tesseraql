@@ -186,6 +186,22 @@ One file still leaves the export, so downloads, push destinations and mail attac
 unchanged. One group still produces a ZIP and no rows produce an empty one — the output shape is
 a property of the route, not of today's data.
 
+**Each document reads its own values.** A named query whose rows carry the split column is narrowed
+to that document; one that does not is shared by all of them. The author states which is which by
+selecting the column:
+
+```yaml
+export:
+  splitBy: customer_id
+  filename: invoice-{key}.pdf
+  queries:
+    customer: { file: select-customers.sql }   # selects customer_id → this invoice's customer
+    company:  { file: select-company.sql }     # does not → the same on every invoice
+```
+
+One query runs for the whole export, not one per document. A narrowed query inherits the ordering
+contract, and unordered rows fail with the query named.
+
 **Both require the extraction to be ordered by the column.** Group boundaries are found on a
 single pass, so unordered rows fail with `TQL-LD-2851` rather than writing one group as several;
 a missing `order by` is a build warning (`TQL-LD-5311`).

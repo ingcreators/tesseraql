@@ -11,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -76,6 +77,34 @@ class ExportDataSourcesIntegrationTest {
         }
     }
 
+    @Test
+    void eachSplitDocumentPrintsItsOwnCustomer() throws Exception {
+        HttpResponse<byte[]> response = HTTP.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/orders/bill"))
+                        .GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        Map<String, String> invoices = new java.util.LinkedHashMap<>();
+        try (java.util.zip.ZipInputStream zip = new java.util.zip.ZipInputStream(
+                new java.io.ByteArrayInputStream(response.body()))) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                try (PDDocument document = Loader.loadPDF(zip.readAllBytes())) {
+                    invoices.put(entry.getName(), new PDFTextStripper().getText(document));
+                }
+            }
+        }
+
+        assertThat(invoices).containsOnlyKeys("invoice-SO-1001.pdf", "invoice-SO-1002.pdf");
+        // Each invoice prints its own customer, from one query run for the whole export — the
+        // case that printed the same customer on every document until now.
+        assertThat(invoices.get("invoice-SO-1001.pdf"))
+                .contains("Acme Corporation").doesNotContain("Globex");
+        assertThat(invoices.get("invoice-SO-1002.pdf"))
+                .contains("Globex").doesNotContain("Acme Corporation");
+    }
+
     private static Path prepareAppHome() throws Exception {
         Path home = Files.createTempDirectory("export-sources-app");
         Files.createDirectories(home.resolve("config"));
@@ -99,8 +128,10 @@ class ExportDataSourcesIntegrationTest {
                 create table orders (order_no varchar(20) primary key, customer varchar(100));
                 create table order_lines (order_no varchar(20), item varchar(50), qty int);
                 insert into orders (order_no, customer) values ('SO-1001', 'Acme Corporation');
+                insert into orders (order_no, customer) values ('SO-1002', 'Globex');
                 insert into order_lines (order_no, item, qty) values ('SO-1001', 'widget', 3);
                 insert into order_lines (order_no, item, qty) values ('SO-1001', 'gadget', 5);
+                insert into order_lines (order_no, item, qty) values ('SO-1002', 'sprocket', 7);
                 """);
 
         Path print = home.resolve("web/api/orders/print");
@@ -126,7 +157,54 @@ class ExportDataSourcesIntegrationTest {
                 """);
         // The line query carries no customer column: that is the point of the header query.
         Files.writeString(print.resolve("lines.sql"),
-                "select item, qty from order_lines order by item\n;\n");
+                "select item, qty from order_lines where order_no = 'SO-1001' order by item\n;\n");
+
+        Path bill = home.resolve("web/api/orders/bill");
+        Files.createDirectories(bill);
+        Files.writeString(bill.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.bill
+                kind: route
+                recipe: query-export
+                sql:
+                  file: all-lines.sql
+                export:
+                  format: pdf
+                  filename: invoice-{key}.pdf
+                  template: invoice.html
+                  maxRows: 100
+                  splitBy: order_no
+                  queries:
+                    customer:
+                      file: customers.sql
+                    company:
+                      file: company.sql
+                  columns:
+                    - { name: item, label: Item }
+                    - { name: qty,  label: Qty }
+                """);
+        Files.writeString(bill.resolve("all-lines.sql"),
+                "select order_no, item, qty from order_lines order by order_no, item\n;\n");
+        // Selects the split column, so each invoice reads its own row.
+        Files.writeString(bill.resolve("customers.sql"),
+                "select order_no, customer from orders order by order_no\n;\n");
+        // Does not, so every invoice reads the same one.
+        Files.writeString(bill.resolve("company.sql"),
+                "select 'TesseraQL KK' as issuer\n;\n");
+        Files.writeString(bill.resolve("invoice.html"), """
+                <html xmlns:th="http://www.thymeleaf.org">
+                <head><title>Invoice</title></head>
+                <body>
+                  <h1 th:text="${customer.first.customer}">Customer</h1>
+                  <p th:text="${company.first.issuer}">Issuer</p>
+                  <table>
+                    <tr th:each="row : ${sql.rows}">
+                      <td th:text="${row.item}">item</td>
+                    </tr>
+                  </table>
+                </body>
+                </html>
+                """);
         Files.writeString(print.resolve("header.sql"),
                 "select order_no, customer from orders order by order_no\n;\n");
         Files.writeString(print.resolve("order.html"), """
