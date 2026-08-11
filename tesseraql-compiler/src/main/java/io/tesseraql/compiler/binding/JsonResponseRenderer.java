@@ -6,6 +6,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.rows.JoinKeys;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.yaml.model.ResponseSpec;
@@ -28,6 +29,9 @@ import org.apache.camel.Processor;
 public final class JsonResponseRenderer implements Processor {
 
     private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.CAMEL, 3001);
+
+    /** TQL-CAMEL-3113: a nest: merge matched more than one child row for one parent key. */
+    static final TqlErrorCode AMBIGUOUS_MERGE = new TqlErrorCode(TqlDomain.CAMEL, 3113);
 
     private final ResponseSpec.JsonResponse response;
     private final Object compiledBody;
@@ -136,9 +140,10 @@ public final class JsonResponseRenderer implements Processor {
     }
 
     /**
-     * Nested composition (roadmap Phase 41): attaches each nest:'s child rows under the
-     * matching parent rows of a body key, grouped by the declared join key. Parents are
-     * copied, so shared context rows are never mutated.
+     * Composition (roadmap Phase 41, docs/lookups.md): composes each nest:'s child rows into
+     * the matching parent rows of a body key, grouped by the declared join key — attached as
+     * a list ({@code as:}) or merged as columns ({@code merge:}). Parents are copied, so
+     * shared context rows are never mutated.
      */
     @SuppressWarnings("unchecked")
     private Object nest(Object body, Map<String, Object> context) {
@@ -156,14 +161,15 @@ public final class JsonResponseRenderer implements Processor {
             if (!(childRowsRaw instanceof List)) {
                 continue;
             }
-            var entry = nest.on().entrySet().iterator().next();
-            String parentKey = entry.getKey();
-            String childKey = entry.getValue();
+            // Both column lists come from one iteration of the same map, so the parent and
+            // child sides of a composite key are built in the same order.
+            List<String> parentColumns = List.copyOf(nest.on().keySet());
+            List<String> childColumns = parentColumns.stream().map(nest.on()::get).toList();
             Map<Object, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
             for (Object childRaw : (List<Object>) childRowsRaw) {
                 if (childRaw instanceof Map) {
                     Map<String, Object> child = (Map<String, Object>) childRaw;
-                    grouped.computeIfAbsent(normalize(child.get(childKey)),
+                    grouped.computeIfAbsent(JoinKeys.of(child, childColumns),
                             key -> new ArrayList<>()).add(child);
                 }
             }
@@ -172,8 +178,8 @@ public final class JsonResponseRenderer implements Processor {
                 if (parentRaw instanceof Map) {
                     Map<String, Object> parent = new LinkedHashMap<>(
                             (Map<String, Object>) parentRaw);
-                    parent.put(nest.as(), grouped.getOrDefault(
-                            normalize(parent.get(parentKey)), List.of()));
+                    compose(nest, parent,
+                            grouped.getOrDefault(JoinKeys.of(parent, parentColumns), List.of()));
                     parents.add(parent);
                 } else {
                     parents.add(parentRaw);
@@ -184,8 +190,27 @@ public final class JsonResponseRenderer implements Processor {
         return shaped;
     }
 
-    /** Join keys compare by canonical text, so INTEGER 1 matches BIGINT 1 across drivers. */
-    private static Object normalize(Object key) {
-        return key == null ? null : String.valueOf(key);
+    /**
+     * Composes one parent row with the children that matched its key: a list under
+     * {@code as:}, or the named columns of the one matching row under {@code merge:}. An
+     * unmatched merge writes nulls rather than omitting the columns, so a client reading the
+     * response sees one row shape and not two.
+     */
+    private void compose(ResponseSpec.NestSpec nest, Map<String, Object> parent,
+            List<Map<String, Object>> matched) {
+        if (!nest.merges()) {
+            parent.put(nest.as(), matched);
+            return;
+        }
+        if (matched.size() > 1) {
+            throw new TqlException(AMBIGUOUS_MERGE, "nest: merge of '" + nest.children()
+                    + "' into '" + nest.into() + "' matched " + matched.size()
+                    + " rows for one parent key; a merge is many-to-one - use as: to attach"
+                    + " them as a list, or narrow the child query");
+        }
+        Map<String, Object> match = matched.isEmpty() ? Map.of() : matched.get(0);
+        for (String column : nest.merge()) {
+            parent.put(column, match.get(column));
+        }
     }
 }

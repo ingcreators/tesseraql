@@ -135,17 +135,29 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
     }
 
     /**
-     * Nested composition (roadmap Phase 41): groups a named query's child rows under each
-     * parent row of a body key — {@code into} names the body key holding the parent rows,
-     * {@code children} the context result whose rows attach, {@code as} the field added to
-     * each parent, and {@code on} the single {@code parentColumn: childColumn} join key.
+     * Composition of one named query into a body key's rows (roadmap Phase 41,
+     * docs/lookups.md): {@code into} names the body key holding the parent rows,
+     * {@code children} the context result whose rows compose, and {@code on} the
+     * {@code parentColumn: childColumn} join — one entry, or several for a composite key.
+     *
+     * <p>The composition is one of two shapes, and exactly one may be declared:
+     * {@code as} attaches the matching rows as a list under that field (one-to-many), while
+     * {@code merge} copies the named columns of the single matching row onto the parent
+     * (many-to-one). A merge with no match leaves the columns present and null, so every row
+     * keeps the same shape; a merge matching more than one row is an error.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record NestSpec(String into, String children, String as,
-            java.util.Map<String, String> on) {
+            java.util.List<String> merge, java.util.Map<String, String> on) {
 
         public NestSpec {
             on = on == null ? java.util.Map.of() : java.util.Map.copyOf(on);
+            merge = merge == null ? java.util.List.of() : java.util.List.copyOf(merge);
+        }
+
+        /** Whether this entry merges columns onto the parent rather than attaching a list. */
+        public boolean merges() {
+            return !merge.isEmpty();
         }
     }
 

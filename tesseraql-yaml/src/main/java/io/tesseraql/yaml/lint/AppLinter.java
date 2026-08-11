@@ -370,11 +370,18 @@ public final class AppLinter {
                 var queries = route.definition().queries();
                 boolean childDeclared = queries != null
                         && queries.containsKey(nestSpec.children());
-                if (!bodyHasKey || !childDeclared || nestSpec.on().size() != 1
-                        || nestSpec.as() == null || nestSpec.as().isBlank()) {
+                // as: attaches a list, merge: copies columns onto the parent; exactly one of
+                // them composes, and declaring both leaves the shape undecided.
+                boolean attaches = nestSpec.as() != null && !nestSpec.as().isBlank();
+                boolean merges = nestSpec.merges()
+                        && nestSpec.merge().stream().noneMatch(c -> c == null || c.isBlank());
+                if (!bodyHasKey || !childDeclared || nestSpec.on().isEmpty()
+                        || attaches == merges) {
                     findings.add(new LintFinding("TQL-YAML-1019", "error", source,
-                            "nest: needs into: (a body key), children: (a named query), as:,"
-                                    + " and a single on: parentColumn: childColumn entry",
+                            "nest: needs into: (a body key), children: (a named query),"
+                                    + " a non-empty on: parentColumn: childColumn map, and"
+                                    + " exactly one of as: (attach a list) or merge:"
+                                    + " (copy columns onto each parent)",
                             lineOf(route.source(), "nest:"), null));
                 }
             }
