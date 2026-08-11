@@ -57,11 +57,29 @@ public final class CodeCatalog {
     }
 
     /**
-     * The name behind a code, or {@code null} when the catalog does not carry it. Varargs so a
-     * composite catalog reads the same as a single-keyed one at the call site.
+     * The name behind a code — and, when the catalog does not carry that code, the code itself.
+     * Varargs so a composite catalog reads the same as a single-keyed one at the call site.
+     *
+     * <p>The fallback is the point. A code with no name is a gap in the master data, not a
+     * reason to blank a cell: an order that carries a code retired before the labels were
+     * imported still has to say <em>something</em>, and the code is the truest thing available.
+     * Returning {@code null} here would put that decision in every template, and a template
+     * that forgets it renders an empty column. Existence is {@link #has} — the question
+     * validation asks, and the only one whose answer depends on the key set alone.
      */
     public String of(Object... key) {
-        return labels.get(canonical(key.length == 1 ? key[0] : List.of(key)));
+        Object canonical = canonical(key.length == 1 ? key[0] : List.of(key));
+        String label = labels.get(canonical);
+        if (label != null) {
+            return label;
+        }
+        // The code as it reads: one part as itself, a composite as its parts over a slash,
+        // which is at least a code an operator can search the master for.
+        if (canonical instanceof List<?> parts) {
+            return parts.stream().map(part -> part == null ? "" : part.toString())
+                    .reduce((a, b) -> a + "/" + b).orElse("");
+        }
+        return canonical == null ? null : canonical.toString();
     }
 
     /** Whether the code exists at all — the check validation makes, ignoring labels. */

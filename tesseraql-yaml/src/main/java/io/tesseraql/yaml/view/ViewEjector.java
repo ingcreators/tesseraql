@@ -49,11 +49,12 @@ public final class ViewEjector {
     public static ScaffoldedFile eject(Path appHome, Path routeDir, String viewRef,
             ViewSpec spec, List<ViewFields.FieldDef> fields, String targetPath,
             java.util.function.Function<String, String> embedTemplate) {
+        java.util.Map<String, String> codes = catalogByColumn(appHome, viewRef, spec);
         String body = switch (spec.view()) {
-            case ViewSpec.LIST -> list(appHome, routeDir, spec);
-            case ViewSpec.DETAIL -> detail(appHome, routeDir, spec, embedTemplate);
+            case ViewSpec.LIST -> list(appHome, routeDir, spec, codes);
+            case ViewSpec.DETAIL -> detail(appHome, routeDir, spec, codes, embedTemplate);
             case ViewSpec.FORM -> form(appHome, routeDir, spec, fields);
-            case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec, embedTemplate);
+            case ViewSpec.DASHBOARD -> dashboard(appHome, routeDir, spec, codes, embedTemplate);
             default -> throw new TqlException(ViewSpec.INVALID_VIEW,
                     "Cannot eject view kind " + spec.view());
         };
@@ -95,7 +96,8 @@ public final class ViewEjector {
         return matcher.replaceFirst(replacement);
     }
 
-    private static String list(Path appHome, Path routeDir, ViewSpec spec) {
+    private static String list(Path appHome, Path routeDir, ViewSpec spec,
+            java.util.Map<String, String> codes) {
         require(!spec.columns().isEmpty(),
                 "a list view needs explicit columns: before ejecting — the template pins them");
         StringBuilder html = pageOpen(spec);
@@ -116,7 +118,7 @@ public final class ViewEjector {
                 + "          <tr class=\"hc-datagrid__row\" th:each=\"row : ${")
                 .append(spec.source()).append(".rows}\">\n");
         for (ViewSpec.Column column : spec.columns()) {
-            cell(html, column, "            ");
+            cell(html, column, codes, "            ");
         }
         html.append("          </tr>\n"
                 + "        </tbody>\n"
@@ -129,6 +131,7 @@ public final class ViewEjector {
     }
 
     private static String detail(Path appHome, Path routeDir, ViewSpec spec,
+            java.util.Map<String, String> codes,
             java.util.function.Function<String, String> embedTemplate) {
         require(!spec.fields().isEmpty(),
                 "a detail view needs explicit fields: before ejecting — the template pins them");
@@ -150,8 +153,9 @@ public final class ViewEjector {
             html.append("    <div class=\"hc-field\">\n"
                     + "      <span class=\"hc-field__label\">").append(escape(labelText))
                     .append("</span>\n"
-                            + "      <span th:text=\"${row == null ? '' : row")
-                    .append(key(field.name())).append("}\">").append(field.name())
+                            + "      <span th:text=\"${row == null ? '' : ")
+                    .append(value(codes, field.name(), "row")).append("}\">")
+                    .append(field.name())
                     .append("</span>\n"
                             + "    </div>\n");
         }
@@ -184,7 +188,7 @@ public final class ViewEjector {
                     + "            <tr class=\"hc-datagrid__row\" th:each=\"child : ${")
                     .append(child.source()).append(".rows}\">\n");
             for (ViewSpec.Column column : child.columns()) {
-                childCell(html, column, "              ");
+                childCell(html, column, codes, "              ");
             }
             html.append("            </tr>\n"
                     + "          </tbody>\n"
@@ -208,6 +212,7 @@ public final class ViewEjector {
      * derivation has no static equivalent; the hand-owned template can pin one.
      */
     private static String dashboard(Path appHome, Path routeDir, ViewSpec spec,
+            java.util.Map<String, String> codes,
             java.util.function.Function<String, String> embedTemplate) {
         for (ViewSpec.Panel panel : spec.panels()) {
             switch (panel.type()) {
@@ -312,7 +317,7 @@ public final class ViewEjector {
                             + "              <tr class=\"hc-datagrid__row\" th:each=\"row : ${")
                             .append(source).append(".rows}\">\n");
                     for (ViewSpec.Column column : panel.columns()) {
-                        cell(html, column, "                ");
+                        cell(html, column, codes, "                ");
                     }
                     html.append("              </tr>\n"
                             + "            </tbody>\n"
@@ -494,30 +499,76 @@ public final class ViewEjector {
         return home.relativize(file).toString().replace('\\', '/');
     }
 
-    private static void cell(StringBuilder html, ViewSpec.Column column, String indent) {
+    private static void cell(StringBuilder html, ViewSpec.Column column,
+            java.util.Map<String, String> codes, String indent) {
+        cell(html, column, codes, "row", indent);
+    }
+
+    private static void childCell(StringBuilder html, ViewSpec.Column column,
+            java.util.Map<String, String> codes, String indent) {
+        cell(html, column, codes, "child", indent);
+    }
+
+    private static void cell(StringBuilder html, ViewSpec.Column column,
+            java.util.Map<String, String> codes, String var, String indent) {
+        String text = value(codes, column.name(), var);
         if (column.link() != null) {
             html.append(indent).append("<td class=\"hc-datagrid__cell\"><a th:href=\"|")
-                    .append(linkTemplate(column.link(), "row")).append("|\" th:text=\"${row")
-                    .append(key(column.name())).append("}\">").append(column.name())
+                    .append(linkTemplate(column.link(), var)).append("|\" th:text=\"${")
+                    .append(text).append("}\">").append(column.name())
                     .append("</a></td>\n");
         } else {
-            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${row")
-                    .append(key(column.name())).append("}\">").append(column.name())
+            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${")
+                    .append(text).append("}\">").append(column.name())
                     .append("</td>\n");
         }
     }
 
-    private static void childCell(StringBuilder html, ViewSpec.Column column, String indent) {
-        if (column.link() != null) {
-            html.append(indent).append("<td class=\"hc-datagrid__cell\"><a th:href=\"|")
-                    .append(linkTemplate(column.link(), "child")).append("|\" th:text=\"${child")
-                    .append(key(column.name())).append("}\">").append(column.name())
-                    .append("</a></td>\n");
-        } else {
-            html.append(indent).append("<td class=\"hc-datagrid__cell\" th:text=\"${child")
-                    .append(key(column.name())).append("}\">").append(column.name())
-                    .append("</td>\n");
+    /**
+     * The expression a cell reads: the row value, or — where the column's {@code domain:} names
+     * a catalog — that value resolved through the same {@code codes} object the pattern used
+     * (docs/lookups.md, decision 8).
+     *
+     * <p>The resolution is emitted as a call, not as the labels of the day. Ejecting freezes
+     * the layout, never the data: a code renamed next month renames on the ejected page too,
+     * which is the same promise the ejected {@code <select>} makes about its options.
+     */
+    private static String value(java.util.Map<String, String> codes, String column, String var) {
+        String catalog = codes.get(column);
+        return catalog == null
+                ? var + key(column)
+                : "codes" + key(catalog) + ".of(" + var + key(column) + ")";
+    }
+
+    /**
+     * Which of the view's columns and fields resolve their value through a catalog: the
+     * {@code domain:} references that name a domain whose legal values are a catalog's codes.
+     * Resolved at eject time so the emitted template names the catalog directly.
+     */
+    private static java.util.Map<String, String> catalogByColumn(Path appHome, String viewRef,
+            ViewSpec spec) {
+        java.util.Map<String, String> domains = new java.util.LinkedHashMap<>();
+        java.util.stream.Stream.of(spec.columns().stream(),
+                spec.children().stream().flatMap(child -> child.columns().stream()),
+                spec.panels().stream().flatMap(panel -> panel.columns().stream()))
+                .flatMap(stream -> stream)
+                .filter(column -> column.domain() != null)
+                .forEach(column -> domains.put(column.name(), column.domain()));
+        spec.fields().stream().filter(field -> field.domain() != null)
+                .forEach(field -> domains.put(field.name(), field.domain()));
+        if (domains.isEmpty()) {
+            return java.util.Map.of();
         }
+        io.tesseraql.yaml.domain.FieldDomains declared = io.tesseraql.yaml.domain.FieldDomains
+                .load(appHome);
+        java.util.Map<String, String> catalogs = new java.util.LinkedHashMap<>();
+        domains.forEach((column, domain) -> {
+            String catalog = declared.require(domain, "view " + viewRef).codes();
+            if (catalog != null && !catalog.isBlank()) {
+                catalogs.put(column, catalog);
+            }
+        });
+        return catalogs;
     }
 
     /** {@code /users?sel={name}} &rarr; {@code /users?sel=${row['name']}} inside a literal. */

@@ -162,6 +162,13 @@ them. On the read side, a `columns:` or detail `fields:` entry takes an explicit
 `domain:` reference (no name-based inference, ever) — the link that brings the
 domain's presentation and data-classification knowledge to rendered output.
 
+Where that domain names a code catalog, the column renders the **name**
+behind the code rather than the code: on a list, on a detail field, inside a detail's
+child table, in a dashboard's table panel, and in the template the page is ejected
+into, which calls the catalog rather than carrying today's names as literals. A code
+the catalog does not name renders as itself — a missing name does not blank a cell.
+Ordering is still the SQL's, so a `sortable:` coded column sorts by code.
+
 A form's `action:` resolves `{placeholder}`s per record, and prefills fall back from
 camelCase input names to snake_case columns.
 

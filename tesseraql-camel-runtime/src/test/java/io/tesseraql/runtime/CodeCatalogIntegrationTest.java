@@ -46,7 +46,9 @@ class CodeCatalogIntegrationTest {
                     + " ('01', '9', '手形', 3, '0'), ('02', '1', '国内', 1, '1')");
             statement.execute("create table 受注 (受注番号 varchar(8) primary key,"
                     + " 取引区分 varchar(2) not null)");
-            statement.execute("insert into 受注 values ('J-1001', '1'), ('J-1002', '9')");
+            // '8' is in no catalog: the master is incomplete, which a screen has to survive.
+            statement.execute("insert into 受注 values ('J-1001', '1'), ('J-1002', '9'),"
+                    + " ('J-1003', '8')");
         }
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
@@ -120,6 +122,29 @@ class CodeCatalogIntegrationTest {
         assertThat(html).contains("<option value=\"2\"").contains("振込");
         assertThat(html.indexOf("振込")).isLessThan(html.indexOf("現金"));
         assertThat(html).doesNotContain("手形");
+    }
+
+    /** A list column's domain: resolves the name, without the page owning a template. */
+    @Test
+    void aListColumnResolvesItsCodeThroughTheDomainsCatalog() throws Exception {
+        String html = get("/受注一覧").body();
+        // The cell carries the name, not the code — the pattern renders it, not a template.
+        assertThat(html).contains("<span>現金</span>").contains("<span>手形</span>");
+    }
+
+    /** A code the master does not name renders as the code — the row is not blanked. */
+    @Test
+    void anUnnamedCodeRendersAsItself() throws Exception {
+        assertThat(get("/受注一覧").body()).contains("J-1003").contains("<span>8</span>");
+    }
+
+    /** The detail case: the head field and the history child resolve through the same object. */
+    @Test
+    void aDetailFieldAndItsHistoryChildBothResolve() throws Exception {
+        String html = get("/受注明細").body();
+        assertThat(html).contains("履歴");
+        // The head field is J-1001's 現金; the child table carries every row, retired names too.
+        assertThat(html).contains("<span>現金</span>").contains("<span>手形</span>");
     }
 
     private static HttpResponse<String> post(String path, String body) throws Exception {
@@ -234,6 +259,76 @@ class CodeCatalogIntegrationTest {
                     status: 201
                     body:
                       ok: true
+                """);
+
+        // The declarative pair: a list whose column names a coded domain, and a detail whose
+        // history child does the same — the two surfaces docs/lookups.md opens with.
+        Path list = target.resolve("web/受注一覧");
+        Files.createDirectories(list);
+        Files.writeString(list.resolve("orders.sql"),
+                "select 受注番号, 取引区分 from 受注 order by 受注番号\n");
+        Files.writeString(list.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 受注.grid
+                kind: route
+                recipe: query-html
+                security: { auth: public }
+                sql:
+                  file: orders.sql
+                response:
+                  html:
+                    view: 受注.grid.view
+                """);
+        Files.writeString(list.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                id: 受注.grid.view
+                kind: view
+                recipe: list
+                title: 受注一覧
+                columns:
+                  - name: 受注番号
+                  - name: 取引区分
+                    domain: 取引区分
+                """);
+
+        Path detail = target.resolve("web/受注明細");
+        Files.createDirectories(detail);
+        Files.writeString(detail.resolve("head.sql"),
+                "select 受注番号, 取引区分 from 受注 where 受注番号 = 'J-1001'\n");
+        Files.writeString(detail.resolve("history.sql"),
+                "select 受注番号, 取引区分 from 受注 order by 受注番号\n");
+        Files.writeString(detail.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 受注.detail
+                kind: route
+                recipe: query-html
+                security: { auth: public }
+                sql:
+                  file: head.sql
+                queries:
+                  履歴:
+                    file: history.sql
+                response:
+                  html:
+                    view: 受注.detail.view
+                """);
+        Files.writeString(detail.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                id: 受注.detail.view
+                kind: view
+                recipe: detail
+                title: 受注明細
+                fields:
+                  - name: 受注番号
+                  - name: 取引区分
+                    domain: 取引区分
+                children:
+                  - source: 履歴
+                    title: 履歴
+                    columns:
+                      - name: 受注番号
+                      - name: 取引区分
+                        domain: 取引区分
                 """);
 
         Path form = target.resolve("web/受注/新規");

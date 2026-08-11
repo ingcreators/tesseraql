@@ -57,11 +57,13 @@ public final class ViewBinding {
     private final Map<Integer, Embed> childEmbeds;
     private final Map<Integer, Embed> panelEmbeds;
     private final Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies;
+    private final Map<String, String> catalogByColumn;
 
     private ViewBinding(ViewSpec spec, String entryTemplate, List<ViewFields.FieldDef> fields,
             Map<String, String> slots, Path appHome, Map<Integer, Embed> childEmbeds,
             Map<Integer, Embed> panelEmbeds,
-            Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies) {
+            Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies,
+            Map<String, String> catalogByColumn) {
         this.spec = spec;
         this.entryTemplate = entryTemplate;
         this.fields = fields;
@@ -70,6 +72,7 @@ public final class ViewBinding {
         this.childEmbeds = childEmbeds;
         this.panelEmbeds = panelEmbeds;
         this.readPolicies = readPolicies;
+        this.catalogByColumn = catalogByColumn;
     }
 
     /**
@@ -153,11 +156,21 @@ public final class ViewBinding {
         // vocabulary the JSON renderer applies, so one row can never render masked in JSON
         // and raw in HTML.
         Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies = new LinkedHashMap<>();
+        Map<String, String> catalogByColumn = new LinkedHashMap<>();
         Map<String, String> domainByColumn = new LinkedHashMap<>();
         spec.columns().stream().filter(column -> column.domain() != null)
                 .forEach(column -> domainByColumn.put(column.name(), column.domain()));
         spec.fields().stream().filter(field -> field.domain() != null)
                 .forEach(field -> domainByColumn.put(field.name(), field.domain()));
+        // A child's and a panel's columns carry domain: too. They were left out until now,
+        // which meant a masked domain named on a detail view's history table rendered raw —
+        // the applier keys on the column name and never saw it.
+        spec.children().stream().flatMap(child -> child.columns().stream())
+                .filter(column -> column.domain() != null)
+                .forEach(column -> domainByColumn.put(column.name(), column.domain()));
+        spec.panels().stream().flatMap(panel -> panel.columns().stream())
+                .filter(column -> column.domain() != null)
+                .forEach(column -> domainByColumn.put(column.name(), column.domain()));
         if (!domainByColumn.isEmpty()) {
             io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
                     .load(home);
@@ -169,9 +182,17 @@ public final class ViewBinding {
                             new io.tesseraql.yaml.model.ResponseSpec.FieldPolicy(null, null,
                                     domain.mask(), domain.classification(), null));
                 }
+                // The read side of docs/lookups.md decision 8: a domain whose legal values are
+                // a catalog's codes names, for every surface that renders that column, the
+                // catalog the code's name comes from.
+                if (domain.codes() != null && !domain.codes().isBlank()) {
+                    catalogByColumn.put(column, domain.codes());
+                }
             });
         }
         // Embedded views mask through the host render, so their policies join the host's.
+        // Their catalog references stay with them: the embedded binding assembles its own
+        // model and resolves its own names.
         for (Embed embedded : childEmbeds.values()) {
             readPolicies.putAll(embedded.binding().readPolicies);
         }
@@ -182,7 +203,8 @@ public final class ViewBinding {
                 ? HtmlResponseRenderer.resolveTemplate(home, viewDir, spec.template())
                 : "tql/view/" + spec.view();
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
-                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), Map.copyOf(readPolicies));
+                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), Map.copyOf(readPolicies),
+                Map.copyOf(catalogByColumn));
     }
 
     /**
@@ -374,7 +396,7 @@ public final class ViewBinding {
             Map<String, Object> row = firstRow(data);
             v.put("row", row);
             v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
-            v.put("fields", detailFields(catalog, locale, row));
+            v.put("fields", detailFields(catalog, locale, context, row));
             List<Map<String, Object>> children = new ArrayList<>();
             for (int index = 0; index < spec.children().size(); index++) {
                 ViewSpec.Child child = spec.children().get(index);
@@ -395,7 +417,7 @@ public final class ViewBinding {
                                 : "view." + spec.id() + "." + child.source(),
                         child.title() != null ? child.title() : humanize(child.source())));
                 c.put("columns", renderedColumns(catalog, locale, columns));
-                c.put("rows", cellMatrix(columns, childRows));
+                c.put("rows", cellMatrix(context, columns, childRows));
                 children.add(c);
             }
             v.put("children", children);
@@ -474,7 +496,7 @@ public final class ViewBinding {
                     case "table" -> {
                         List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
                         m.put("columns", renderedColumns(catalog, locale, columns));
-                        m.put("rows", cellMatrix(columns, rows));
+                        m.put("rows", cellMatrix(context, columns, rows));
                     }
                     case "view" -> {
                         // An embedded view (docs/view-composition.md wave 2b): the sub-model
@@ -527,7 +549,7 @@ public final class ViewBinding {
                         + (active && !descending ? "desc" : "asc"));
             }
             v.put("columns", rendered);
-            v.put("rows", cellMatrix(columns, rows));
+            v.put("rows", cellMatrix(context, columns, rows));
         }
         return v;
     }
@@ -638,7 +660,7 @@ public final class ViewBinding {
 
     /** A detail view's labelled values: explicit {@code fields:}, else the row's own columns. */
     private List<Map<String, Object>> detailFields(MessageCatalog catalog, Locale locale,
-            Map<String, Object> row) {
+            Map<String, Object> context, Map<String, Object> row) {
         List<Map<String, Object>> rendered = new ArrayList<>();
         List<ViewSpec.Field> selection = spec.fields();
         if (selection.isEmpty()) {
@@ -655,11 +677,38 @@ public final class ViewBinding {
                             ? field.label()
                             : "view." + spec.id() + "." + field.name(),
                     field.label() != null ? field.label() : humanize(field.name())));
-            Object value = row.get(field.name());
-            f.put("value", value == null ? "" : String.valueOf(value));
+            f.put("value", resolved(context, field.name(), row.get(field.name())));
             rendered.add(f);
         }
         return rendered;
+    }
+
+    /**
+     * A cell's text: the name behind a code where the column's {@code domain:} names a catalog
+     * (docs/lookups.md, decision 8), and the value itself everywhere else.
+     *
+     * <p>Two fallbacks beyond the catalog's own. A catalog with no store bound renders the code,
+     * so a screen degrades to what the database holds rather than to nothing. And because the
+     * output policies have already been applied to this context, a masked value simply misses
+     * the catalog and stays masked: resolution can never un-mask a column.
+     */
+    private String resolved(Map<String, Object> context, String column, Object value) {
+        if (value == null) {
+            return "";
+        }
+        String catalogName = catalogByColumn.get(column);
+        io.tesseraql.core.catalog.CodeCatalog codes = catalogName == null
+                ? null
+                : catalog(context, catalogName);
+        return codes == null ? String.valueOf(value) : codes.of(value);
+    }
+
+    /** One catalog out of the {@code codes} object the {@link CatalogBinder} publishes. */
+    private static io.tesseraql.core.catalog.CodeCatalog catalog(Map<String, Object> context,
+            String name) {
+        Object catalogs = context.get(io.tesseraql.camel.TesseraqlProperties.CODES);
+        Object catalog = catalogs instanceof Map<?, ?> map ? map.get(name) : null;
+        return catalog instanceof io.tesseraql.core.catalog.CodeCatalog codes ? codes : null;
     }
 
     /** The column headers, labels resolved through the catalog with humanized fallbacks. */
@@ -680,8 +729,8 @@ public final class ViewBinding {
     }
 
     /** The cell matrix: text per column per row, links resolved against the row's values. */
-    private static List<List<Map<String, Object>>> cellMatrix(List<ViewSpec.Column> columns,
-            List<Map<String, Object>> rows) {
+    private List<List<Map<String, Object>>> cellMatrix(Map<String, Object> context,
+            List<ViewSpec.Column> columns, List<Map<String, Object>> rows) {
         List<List<Map<String, Object>>> cells = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             EvaluationContext rowContext = new EvaluationContext(row);
@@ -691,7 +740,7 @@ public final class ViewBinding {
                 Object value = row.get(column.name());
                 cell.put("text", column.text() != null
                         ? column.text()
-                        : value == null ? "" : String.valueOf(value));
+                        : resolved(context, column.name(), value));
                 cell.put("button", column.text() != null);
                 cell.put("href", column.link() == null
                         ? null
@@ -737,9 +786,8 @@ public final class ViewBinding {
             Map<String, Object> context) {
         List<Map<String, Object>> options = new ArrayList<>();
         if (field.codes() != null && !field.codes().isBlank()) {
-            Object catalogs = context.get(io.tesseraql.camel.TesseraqlProperties.CODES);
-            Object catalog = catalogs instanceof Map<?, ?> map ? map.get(field.codes()) : null;
-            if (catalog instanceof io.tesseraql.core.catalog.CodeCatalog codes) {
+            io.tesseraql.core.catalog.CodeCatalog codes = catalog(context, field.codes());
+            if (codes != null) {
                 codes.options().forEach(entry -> {
                     Map<String, Object> option = new LinkedHashMap<>();
                     option.put("value", String.valueOf(entry.key()));
