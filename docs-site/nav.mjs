@@ -218,4 +218,6 @@ export const EXCLUDED = [
   'base-path.md',
   // The export pipeline (codec model, workbook modes, streaming, split documents), 2026-08-10.
   'export-pipeline.md',
+  // Lookups and enrichment (keyed row enrichment + code catalogs), 2026-08-11.
+  'lookups.md',
 ];
