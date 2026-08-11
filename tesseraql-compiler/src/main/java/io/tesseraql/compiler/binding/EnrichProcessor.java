@@ -247,9 +247,9 @@ public final class EnrichProcessor implements Processor {
     /** One outbound call through the gateway, shaped into rows the way an http: source is. */
     private List<Map<String, Object>> call(Exchange exchange, Map<String, Object> context,
             String url) {
-        io.tesseraql.yaml.http.HttpSourceGateway gateway = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
-                        io.tesseraql.yaml.http.HttpSourceGateway.class);
+        io.tesseraql.yaml.http.OutboundGateway gateway = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                        io.tesseraql.yaml.http.OutboundGateway.class);
         if (gateway == null) {
             throw new IllegalStateException("enrich '" + name
                     + "' declares an http: reference but no outbound gateway is bound");

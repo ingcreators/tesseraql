@@ -37,6 +37,17 @@ tesseraql:
       channel: audit-webhook                         # operations alerts go here
 ```
 
+A **webhook channel delivers through the one outbound gateway** every other call in the
+framework uses, so its host must be in `tesseraql.http.outbound.allowedHosts` — deny by default,
+like any other egress. A channel may also name a `credential:` and its own `connectTimeout:` /
+`requestTimeout:`; unset, the app-wide outbound defaults apply. The HMAC signature is still
+computed here, over the exact bytes sent.
+
+> **Upgrading**: a webhook whose host is not allow-listed stops being delivered (its outbox rows
+> fail and dead-letter with the reason). Add the host to `allowedHosts`. Deliveries used to
+> bypass the allow-list entirely, which contradicted the deny-by-default posture the rest of
+> this documentation states.
+
 Channel settings resolve their `${...}` placeholders **at send time**, so credentials
 declared through the SecretResolver SPI are fetched per delivery — never at startup, never
 into logs or generated artifacts. A missing secret fails that delivery (retried and

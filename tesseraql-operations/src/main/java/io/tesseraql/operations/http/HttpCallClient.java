@@ -84,6 +84,23 @@ public final class HttpCallClient {
     /** Issues the call and returns the {@code status}/{@code body}/{@code headers} step result. */
     public Map<String, Object> call(HttpCallSpec spec, Map<String, Object> context,
             SpanContext parent) {
+        return call(spec, context, parent, null, Map.of());
+    }
+
+    /**
+     * The same call with the body bytes and some headers supplied by the caller — a signed
+     * delivery, whose HMAC covers the exact bytes on the wire, cannot let a second
+     * serialization here decide them (docs/lookups.md, decision 20). Everything else the
+     * gateway is for — the allow-list, the credential, the timeouts, the circuit breaker, the
+     * span and the meters — applies unchanged.
+     */
+    public Map<String, Object> call(HttpCallSpec spec, byte[] body,
+            Map<String, String> headers) {
+        return call(spec, Map.of(), null, body, headers);
+    }
+
+    private Map<String, Object> call(HttpCallSpec spec, Map<String, Object> context,
+            SpanContext parent, byte[] rawBody, Map<String, String> extraHeaders) {
         String url = buildUrl(spec, context);
         URI uri = URI.create(url);
         String host = uri.getHost();
@@ -112,7 +129,7 @@ public final class HttpCallClient {
                 .attribute("method", spec.effectiveMethod())
                 .attribute("host", host);
         try {
-            HttpResponse<byte[]> response = send(spec, uri, context);
+            HttpResponse<byte[]> response = send(spec, uri, context, rawBody, extraHeaders);
             int status = response.statusCode();
             span.attribute("status", status);
             boolean success = spec.expectStatus() != null
@@ -147,7 +164,8 @@ public final class HttpCallClient {
         }
     }
 
-    private HttpResponse<byte[]> send(HttpCallSpec spec, URI uri, Map<String, Object> context)
+    private HttpResponse<byte[]> send(HttpCallSpec spec, URI uri, Map<String, Object> context,
+            byte[] rawBody, Map<String, String> extraHeaders)
             throws IOException, InterruptedException {
         Duration requestTimeout = spec.requestTimeout() != null
                 ? io.tesseraql.core.util.Durations.parse(spec.requestTimeout())
@@ -157,8 +175,11 @@ public final class HttpCallClient {
         spec.headers().forEach((name, value) -> request.header(name, config.resolve(value)));
         applyCredential(spec, request);
 
+        extraHeaders.forEach(request::header);
         String method = spec.effectiveMethod();
-        HttpRequest.BodyPublisher publisher = bodyPublisher(spec, context, request);
+        HttpRequest.BodyPublisher publisher = rawBody != null
+                ? HttpRequest.BodyPublishers.ofByteArray(rawBody)
+                : bodyPublisher(spec, context, request);
         request.method(method, publisher);
 
         Duration connectTimeout = spec.connectTimeout() != null

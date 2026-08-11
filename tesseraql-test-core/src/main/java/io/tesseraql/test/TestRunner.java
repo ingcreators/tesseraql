@@ -780,8 +780,8 @@ public final class TestRunner {
                 notification.channel(), notification.source(), payload);
         if (io.tesseraql.yaml.notify.NotificationChannels.WEBHOOK.equals(channel.type())) {
             try {
-                new io.tesseraql.yaml.notify.WebhookNotifier().send(channel, envelope, event,
-                        capture.url());
+                new io.tesseraql.yaml.notify.WebhookNotifier(captureGateway())
+                        .send(channel, envelope, event, capture.url());
                 CaptureServer.Captured captured = capture.last();
                 row.put("delivered", true);
                 row.put("signature", captured.headers().get("x-tesseraql-signature"));
@@ -793,6 +793,37 @@ public final class TestRunner {
         } else if (io.tesseraql.yaml.notify.NotificationChannels.MAIL.equals(channel.type())) {
             deliverMail(channel, envelope, event, row);
         }
+    }
+
+    /**
+     * The gateway a real-send case delivers through. The production path builds and signs the
+     * request; only the policy is the harness's, because the destination is the runner's own
+     * capture server rather than the app's declared host — applying the app's allow-list to a
+     * loopback address would refuse a delivery the app never makes.
+     */
+    private io.tesseraql.yaml.http.OutboundGateway captureGateway() {
+        io.tesseraql.yaml.config.AppConfig harness = new io.tesseraql.yaml.config.AppConfig(
+                java.util.Map.of("tesseraql", java.util.Map.of("http", java.util.Map.of(
+                        "outbound", java.util.Map.of("allowedHosts",
+                                java.util.List.of("localhost", "127.0.0.1"))))),
+                name -> null);
+        io.tesseraql.operations.http.HttpCallClient client = new io.tesseraql.operations.http.HttpCallClient(
+                io.tesseraql.yaml.http.HttpOutbound.load(harness), harness,
+                io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE);
+        return new io.tesseraql.yaml.http.OutboundGateway() {
+            @Override
+            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
+                    java.util.Map<String, Object> context) {
+                return client.call(spec, context, null);
+            }
+
+            @Override
+            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
+                    byte[] body, java.util.Map<String, String> headers) {
+                return client.call(spec, body, headers);
+            }
+        };
     }
 
     /** Mail real-send: the production sender delivers to an in-process SMTP capture. */

@@ -19,19 +19,24 @@ final class NotificationSink implements OutboxEventSink {
 
     private final NotificationChannels channels;
     private final MailNotifier mail;
-    private final WebhookNotifier webhook = new WebhookNotifier();
+    private final WebhookNotifier webhook;
     private final InboxNotifier inboxNotifier = new InboxNotifier();
     private final io.tesseraql.core.inbox.InboxStore inbox;
 
     NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
-            io.tesseraql.core.inbox.InboxStore inbox) {
-        this(channels, appHome, camelContext, inbox, null);
+            io.tesseraql.core.inbox.InboxStore inbox,
+            io.tesseraql.yaml.http.OutboundGateway gateway) {
+        this(channels, appHome, camelContext, inbox, null, gateway);
     }
 
     NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
             io.tesseraql.core.inbox.InboxStore inbox,
-            io.tesseraql.core.files.FileTransferService transfers) {
+            io.tesseraql.core.files.FileTransferService transfers,
+            io.tesseraql.yaml.http.OutboundGateway gateway) {
         this.channels = channels;
+        // Delivery rides the one outbound gateway, so a webhook faces the same allow-list every
+        // other call does (docs/lookups.md, decision 20).
+        this.webhook = new WebhookNotifier(gateway);
         // An envelope's attach transfer id (docs/analytics-experience.md) opens through the
         // transfer store at delivery time; without the wire, attaching fails with a plain
         // message instead of a NullPointerException.

@@ -758,9 +758,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if (routeShaped(manifest).anyMatch(definition -> !definition.http().isEmpty()
                 || definition.enrich().values().stream()
                         .anyMatch(enrich -> enrich.http() != null))) {
-            context.getRegistry().bind(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
-                    (io.tesseraql.yaml.http.HttpSourceGateway) (spec,
-                            callContext) -> httpCallClient.call(spec, callContext, null));
+            context.getRegistry().bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                    outboundGateway(httpCallClient));
         }
         // Notification channels and operations alerts (roadmap Phase 20).
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels = io.tesseraql.yaml.notify.NotificationChannels
@@ -1685,7 +1684,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .isEmpty()
                             ? null
                             : new NotificationSink(notificationChannels, appHome, context,
-                                    inboxStore, fileTransfers);
+                                    inboxStore, fileTransfers,
+                                    outboundGateway(httpCallClient));
             // The channel-publish sink relays publish: EVENT events onto messaging channels
             // (roadmap Phase 27), composed alongside the notification sink on the same outbox.
             io.tesseraql.core.outbox.OutboxEventSink channelSink = messagingChannels.isEmpty()
@@ -4035,6 +4035,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return !manifest.attachments().isEmpty()
                 && io.tesseraql.yaml.attachment.AttachmentSettings.from(manifest.config())
                         .managed();
+    }
+
+    /** The one gateway, over the job pipeline's client (docs/lookups.md, decision 15). */
+    private static io.tesseraql.yaml.http.OutboundGateway outboundGateway(
+            io.tesseraql.operations.http.HttpCallClient client) {
+        return new io.tesseraql.yaml.http.OutboundGateway() {
+            @Override
+            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
+                    java.util.Map<String, Object> context) {
+                return client.call(spec, context, null);
+            }
+
+            @Override
+            public java.util.Map<String, Object> call(io.tesseraql.yaml.model.HttpCallSpec spec,
+                    byte[] body, java.util.Map<String, String> headers) {
+                return client.call(spec, body, headers);
+            }
+        };
     }
 
     /**

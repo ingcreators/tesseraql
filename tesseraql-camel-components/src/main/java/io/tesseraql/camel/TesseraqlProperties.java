@@ -126,8 +126,8 @@ public final class TesseraqlProperties {
 
     /** The shared lease ledger behind cluster-scoped rate limits (docs/deployment.md). */
     public static final String RATE_BUDGET_BEAN = "tesseraqlRateBudget";
-    /** The outbound gateway query routes' http: sources execute through (docs/connectors.md). */
-    public static final String HTTP_SOURCE_GATEWAY_BEAN = "tesseraqlHttpSourceGateway";
+    /** The one gateway every outbound HTTP call leaves through (docs/lookups.md, decision 15). */
+    public static final String OUTBOUND_GATEWAY_BEAN = "tesseraqlOutboundGateway";
     /** The live-view topic bus commands emit to after commit (docs/realtime.md). */
     public static final String TOPIC_BUS_BEAN = "tesseraqlTopicBus";
     /** Registry bean name for the TOTP enrollment store (roadmap Phase 50), with identity. */

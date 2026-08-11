@@ -1,7 +1,7 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
-import io.tesseraql.yaml.http.HttpSourceGateway;
+import io.tesseraql.yaml.http.OutboundGateway;
 import io.tesseraql.yaml.model.HttpSourceSpec;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,9 +41,9 @@ public final class HttpSourceProcessor implements Processor {
         @SuppressWarnings("unchecked")
         Map<String, Object> context = exchange.getProperty(
                 TesseraqlProperties.CONTEXT, Map.of(), Map.class);
-        HttpSourceGateway gateway = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
-                        HttpSourceGateway.class);
+        OutboundGateway gateway = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                        OutboundGateway.class);
         if (gateway == null) {
             throw new IllegalStateException("http: source '" + name
                     + "' declared but no outbound gateway is bound");
