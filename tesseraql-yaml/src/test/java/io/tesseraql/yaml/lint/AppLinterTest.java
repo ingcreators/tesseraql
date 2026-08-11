@@ -94,6 +94,10 @@ class AppLinterTest {
                   app:
                     name: t
                   security:
+                    # The tools below declare auth: bearer, so the app needs a verifier
+                    # (TQL-SEC-4047).
+                    jwt:
+                      secret: dev-only-secret-change-me-in-production
                     policies:
                       catalog.read:
                         anyOf:

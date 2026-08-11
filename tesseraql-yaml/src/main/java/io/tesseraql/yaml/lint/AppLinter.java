@@ -952,6 +952,7 @@ public final class AppLinter {
             lintJwtConfig(config, findings);
         }
         lintApiKeyConfig(appHome, manifest, config, findings);
+        lintBearerConfig(appHome, manifest, config, findings);
         lintMtlsConfig(appHome, manifest, config, findings);
         lintOidcConfig(config, findings);
         lintSamlConfig(config, findings);
@@ -1952,17 +1953,62 @@ public final class AppLinter {
         }
     }
 
+    /**
+     * A bearer caller with nothing to verify its token (TQL-SEC-4047).
+     *
+     * <p>{@code lintJwtConfig} runs only when {@code tesseraql.security.jwt} is present, so an
+     * app that declares no JWT block at all was checked by nothing. That app still mounts the
+     * operations API, which authenticates every read with {@code auth: bearer} — and with no
+     * authenticator bound, no credential can succeed. The runtime answers 500 and says so in
+     * its message, deliberately (a 401 would invite a client into refresh retries against a
+     * server where nothing could work), but nobody sees that until they call it.
+     *
+     * <p>Scoped to what the author <em>declared</em>. The always-mounted operations API is
+     * deliberately <b>not</b> reported: it is framework-mounted rather than authored, it would
+     * fire on every application that has not configured bearer auth, and a finding that appears
+     * everywhere is one everybody learns to scroll past. The operator who actually calls that
+     * API gets {@code TQL-SEC-4001}, which names the unbound authenticator.
+     *
+     * <p>A <b>warning</b>, where the api-key ({@code TQL-SEC-4044}) and mTLS
+     * ({@code TQL-SEC-4060}) versions of this check are errors. The difference is real rather
+     * than convenient: those blocks <em>are</em> the client registry, so a route without one is
+     * definitionally unusable and the author forgot. A JWT block is verification material —
+     * usually a secret, and the scaffolded form is {@code secret: ${JWT_SECRET:...}} — so it is
+     * the one auth configuration that legitimately lives in a {@code config/env/} overlay. The
+     * lint runs with no profile, so an error here would fail the build of an application that
+     * is correctly configured for every environment it actually runs in.
+     */
+    private void lintBearerConfig(Path appHome, AppManifest manifest, AppConfig config,
+            List<LintFinding> findings) {
+        if (config.navigate("tesseraql.security.jwt") != null) {
+            return;
+        }
+        for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
+            io.tesseraql.yaml.model.SecuritySpec security = document.getValue().security();
+            if (security == null || !"bearer".equals(security.auth())) {
+                continue;
+            }
+            String source = appHome.relativize(document.getKey()).toString().replace('\\', '/');
+            findings.add(new LintFinding("TQL-SEC-4047", "warning", source,
+                    "'" + document.getValue().id() + "' declares auth: bearer but no"
+                            + " tesseraql.security.jwt is configured — no token can be verified,"
+                            + " so every call fails as a server fault"));
+        }
+    }
+
     private void lintApiKeyConfig(Path appHome, AppManifest manifest, AppConfig config,
             List<LintFinding> findings) {
         boolean apiKeysConfigured = config.navigate("tesseraql.security.apiKeys") != null;
         if (!apiKeysConfigured) {
-            for (RouteFile route : manifest.routes()) {
-                io.tesseraql.yaml.model.SecuritySpec security = route.definition().security();
+            // Every route-shaped surface, not just routes: a queue consumer and an MCP tool
+            // declare security: the same way, and this check reached neither.
+            for (Map.Entry<Path, RouteDefinition> document : authoringDocuments(manifest)) {
+                io.tesseraql.yaml.model.SecuritySpec security = document.getValue().security();
                 if (security != null && "api-key".equals(security.auth())) {
-                    String source = appHome.relativize(route.source()).toString().replace('\\',
-                            '/');
+                    String source = appHome.relativize(document.getKey()).toString()
+                            .replace('\\', '/');
                     findings.add(new LintFinding("TQL-SEC-4044", "error", source,
-                            "Route '" + route.definition().id() + "' declares auth: api-key but no"
+                            "'" + document.getValue().id() + "' declares auth: api-key but no"
                                     + " tesseraql.security.apiKeys is configured (deny by default)"));
                 }
             }

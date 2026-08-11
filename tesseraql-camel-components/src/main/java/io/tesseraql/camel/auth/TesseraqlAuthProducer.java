@@ -24,6 +24,9 @@ public class TesseraqlAuthProducer extends DefaultProducer {
 
     private static final TqlErrorCode UNSUPPORTED = new TqlErrorCode(TqlDomain.SEC, 4000);
 
+    /** TQL-SEC-4001: the authenticator this route needs is not configured, so nothing can pass. */
+    private static final TqlErrorCode NOT_CONFIGURED = new TqlErrorCode(TqlDomain.SEC, 4001);
+
     private final TesseraqlAuthEndpoint endpoint;
 
     public TesseraqlAuthProducer(TesseraqlAuthEndpoint endpoint) {
@@ -187,11 +190,21 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         return exchange.getMessage().getHeader(name, String.class);
     }
 
+    /**
+     * A security bean the route's {@code auth:} mode needs, or a refusal that names it.
+     *
+     * <p>Its own code rather than sharing 4000 with the unsupported-operation and
+     * unsupported-auth-type refusals. All three answer 500 and withhold their message from the
+     * caller, which is right — none is the caller's fault, and a 401 would invite a client into
+     * token-refresh retries against a server where no credential could ever succeed. That
+     * leaves the code as the operator's only signal, and one code covering three unrelated
+     * conditions cannot be acted on. The build-time counterpart is {@code TQL-SEC-4047}.
+     */
     private <T> T bean(Class<T> type, String name) {
         T bean = endpoint.getCamelContext().getRegistry().lookupByNameAndType(name, type);
         if (bean == null) {
-            throw new TqlException(UNSUPPORTED,
-                    "Security bean '" + name + "' is not bound; security is not configured");
+            throw new TqlException(NOT_CONFIGURED, "Security bean '" + name + "' is not bound;"
+                    + " security is not configured for auth: " + endpoint.getAuth());
         }
         return bean;
     }

@@ -380,6 +380,7 @@ Returned at request time (distinct from the lint codes below, which are static c
 | --- | --- | --- |
 | `TQL-SEC-4011` | 401 | **Unauthorized** — the route needs authentication and the request carried no valid credential (missing/expired session cookie, or missing/invalid/expired bearer token). For the admin console, sign in at `/_tesseraql/login`; for a bearer route, present a valid `Authorization: Bearer <jwt>`. A browser navigation (`Accept: text/html`) is redirected to the login page automatically. |
 | `TQL-SEC-4031` | 403 | **Forbidden** — authenticated, but the principal does not satisfy the route's `policy` (missing role/permission), or the policy is undefined (deny by default). Grant the role/permission, or define the policy. |
+| `TQL-SEC-4001` | 500 | **The authenticator is not configured** — the route's `auth:` mode needs a bean the application never bound, usually because its `tesseraql.security.<mode>` block is missing. No credential can succeed, which is why this is a server fault and not a 401: a 401 would send clients into token-refresh retries against a server where nothing could work. The build-time counterpart is `TQL-SEC-4047`. |
 | `TQL-SEC-4032` | 403 | **CSRF check failed** — a state-changing `auth: browser` request arrived without a valid CSRF token. Send the page's `X-CSRF-Token` header (htmx does this automatically) or the `_csrf` form field from a live session. |
 
 ## Lint rules
@@ -390,9 +391,10 @@ Returned at request time (distinct from the lint codes below, which are static c
 | `TQL-SEC-4041` | error | RS256 JWT config declares both key sources; set exactly one. |
 | `TQL-SEC-4042` | error | Algorithm and key material disagree (HS256 `secret` with RS256 key material, or vice versa) — an algorithm-confusion risk. |
 | `TQL-SEC-4043` | error | Unsupported JWT algorithm (use `HS256` or `RS256`; `none` is rejected). |
-| `TQL-SEC-4044` | error | A route declares `auth: api-key` but no `tesseraql.security.apiKeys` is configured. |
+| `TQL-SEC-4044` | error | A route, queue consumer, or MCP tool declares `auth: api-key` but no `tesseraql.security.apiKeys` is configured. |
 | `TQL-SEC-4045` | error | An API-key client declares no `secretHash`. |
 | `TQL-SEC-4046` | warning | An API-key client grants no roles or permissions (least-privilege hint). |
+| `TQL-SEC-4047` | warning | A route, queue consumer, or MCP tool declares `auth: bearer` but no `tesseraql.security.jwt` is configured, so no token can be verified. |
 | `TQL-SEC-4050` | error | OIDC is enabled but no `discoveryUri` is configured. |
 | `TQL-SEC-4051` | error | The OIDC `discoveryUri` is not https (loopback http is allowed for dev). |
 | `TQL-SEC-4052` | error | OIDC is enabled but no `clientId` is configured. |
