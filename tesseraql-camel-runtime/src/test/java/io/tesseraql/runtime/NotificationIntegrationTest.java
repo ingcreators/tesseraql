@@ -276,6 +276,10 @@ class NotificationIntegrationTest {
                   outbox:
                     dispatch:
                       maxAttempts: 2
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - localhost
                 """;
         Files.writeString(config, yaml);
 
