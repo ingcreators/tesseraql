@@ -478,7 +478,7 @@ public final class RouteCompiler {
                     "command-json", java.util.Map.of(), null, security, null, null, null, null,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                     java.util.Map.of(), java.util.Map.of(), null, null, null, null, null, null,
-                    dispatchResponse(), null, null, null, null, null);
+                    dispatchResponse(), null, null, null, null, null, null);
             String direct = "direct:" + routeId;
             if (mountRest) {
                 restEndpoint(builder, "POST", urlPath).to(direct);
@@ -557,7 +557,7 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, security, null, null, null, command,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 transition.decide(), java.util.Map.of(), null, null, null, null, null, null,
-                workflowResponse(), null, null, null, null, null);
+                workflowResponse(), null, null, null, null, null, null);
     }
 
     /** The compiled task-assignment reminder (Phase 20 channels), or {@code null} when undeclared. */
@@ -597,7 +597,7 @@ public final class RouteCompiler {
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 java.util.Map.of(), null,
                 null, null, null, null, null, workflowResponse(), null, null, null, null,
-                null);
+                null, null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
         route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
@@ -1009,10 +1009,43 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
                     entry.getKey(), entry.getValue()));
         }
+        // enrich: runs last of the data stage: it reads a result set the earlier steps
+        // published and writes it back enriched (docs/lookups.md).
+        step = enrichments(step, routeFile.source().getParent(), definition);
         if (definition.pagination() != null) {
             step = step.process(new io.tesseraql.compiler.binding.PageHeaders());
         }
         return step;
+    }
+
+    /**
+     * The enrichment stage: each {@code enrich:} entry folds a keyed reference into the rows of
+     * the result it names (docs/lookups.md). Entries run in authored order, so one may enrich a
+     * result an earlier one already enriched.
+     */
+    private ProcessorDefinition<?> enrichments(ProcessorDefinition<?> step, Path routeDir,
+            RouteDefinition definition) {
+        ProcessorDefinition<?> enriched = step;
+        for (var entry : definition.enrich().entrySet()) {
+            io.tesseraql.yaml.model.EnrichSpec spec = entry.getValue();
+            String datasource = bindingDatasource(spec.sql(), definition.effectiveDatasource());
+            String dialect = datasourceDialect(datasource);
+            Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                    routeDir.resolve(spec.sql().file()).normalize(), dialect);
+            enriched = enriched.process(new io.tesseraql.compiler.binding.EnrichProcessor(
+                    entry.getKey(), spec, parseSql(file), file.toString(), datasource, dialect,
+                    commandBounds()));
+        }
+        return enriched;
+    }
+
+    /** Parses a 2-way SQL file at build time, so a broken reference query never reaches a request. */
+    private static java.util.List<io.tesseraql.core.sql.SqlNode> parseSql(Path file) {
+        try {
+            return io.tesseraql.core.sql.Sql2WayParser.parse(java.nio.file.Files.readString(file));
+        } catch (java.io.IOException ex) {
+            throw new java.io.UncheckedIOException(ex);
+        }
     }
 
     /**
@@ -1062,6 +1095,7 @@ public final class RouteCompiler {
                     .to(executionUri(toolDir, entry.getValue(), entry.getKey(),
                             definition.effectiveDatasource()));
         }
+        step = enrichments(step, toolDir, definition);
         step.process(mcpToolRenderer(definition));
         applyIdempotencyComplete(step, definition);
     }
@@ -1102,6 +1136,7 @@ public final class RouteCompiler {
                     .to(executionUri(resourceDir, entry.getValue(), entry.getKey(),
                             definition.effectiveDatasource()));
         }
+        step = enrichments(step, resourceDir, definition);
         step.process(mcpToolRenderer(definition));
     }
 
@@ -1141,6 +1176,7 @@ public final class RouteCompiler {
                     .to(executionUri(uiDir, entry.getValue(), entry.getKey(),
                             definition.effectiveDatasource()));
         }
+        step = enrichments(step, uiDir, definition);
         step.process(new HtmlResponseRenderer(withDefaultHeaders(definition.response().html()),
                 appHome, uiDir, i18n.defaultTag()).basePath(basePath()));
     }

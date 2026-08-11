@@ -19,6 +19,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
 | `admission` | [object](#admission) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
 | `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
+| `enrich` | map of [object](#enrich) | Reference lookups folded into a result set's rows (docs/lookups.md): the rows of `into` carry a key, the reference behind that key is fetched in batches of distinct keys, and the match is composed into each row. One statement per `batchSize` keys rather than one per row. |
 | `http` | map of [object](#http) | Named HTTP sources on a query route (docs/connectors.md, "HTTP sources"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022). |
 | `cache` | [object](#cache) | Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025). |
 | `emit` | any | Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
@@ -110,6 +111,18 @@ Token-bucket rate limit for this route.
 | `requestsPerSecond` | integer | Sustained requests per second allowed; excess is refused with 429. |
 | `burst` | integer | Burst capacity (default: requestsPerSecond). |
 | `scope` | enum: `node` \| `cluster` | node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023). |
+
+### enrich
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `into` | string | The result set to enrich: `sql` (the default) or one of the route's `queries:` (TQL-YAML-1045). |
+| `on` | map of string | The join, one entry per key column: each row column to the reference column it matches. The row side is the key that is looked up; the reference side names the columns bound as `keys`. |
+| `sql` | [sqlBinding](#sqlbinding) | The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). |
+| `as` | string | Attach the matching reference rows as a list under this field; exactly one of `as` or `merge` composes the match (TQL-YAML-1047). |
+| `merge` | array of string | Copy these columns of the single matching reference row onto each row, for a many-to-one reference; the alternative to `as`. |
+| `batchSize` | integer ≥ 1 | Distinct keys per statement. Defaults from the dialect and the key arity, under Oracle's 1000-expression IN limit and SQL Server's 2100 parameters. |
+| `maxKeys` | integer ≥ 1 | The ceiling on distinct keys, beyond which the enrichment fails (TQL-SQL-2114) rather than issuing an unbounded number of round trips. Defaults to 10000. |
 
 ### http
 

@@ -100,6 +100,67 @@ parent that matches more than one row fails with `TQL-CAMEL-3113` rather than pi
 
 Every column must match for the rows to compose.
 
+## Enrichment (`enrich:`)
+
+`nest:` composes the response *body*, so it can only serve a JSON response and only from
+results the route already fetched with the request's own inputs. A reference keyed by the rows
+themselves — the partner name behind each order's partner code, where the partner master is
+another system's table — needs the keys to reach the query. That is `enrich:`, and because it
+composes the *result set* rather than the body, an HTML list's `columns:` sees the merged
+column too:
+
+```yaml
+sql:
+  file: orders.sql
+enrich:
+  partner:
+    on: { partner_code: code }        # rowColumn: referenceColumn
+    sql: { file: partners.sql, datasource: crm }
+    merge: [partner_name]             # or as: partners, to attach a list
+```
+
+```sql
+-- partners.sql — the distinct keys arrive as `keys`
+select code, name as partner_name
+from partners
+where code in /* keys */('P1', 'P2')
+```
+
+**By key, not by row.** The distinct keys of the rows being enriched are collected and the
+reference is fetched in batches — one statement per `batchSize` keys, not one per row. A
+hundred-row page over sixty distinct partners costs one round trip.
+
+- **`into:`** names the result set to enrich: `sql` by default, or one of the route's
+  `queries:` (`TQL-YAML-1045`), so a detail page's history list is enriched the same way.
+- **`batchSize:`** is how many keys ride one statement. The default comes from the dialect and
+  the key's arity — under Oracle's 1000-expression `IN` limit and SQL Server's 2100
+  parameters — so a large key set becomes several statements whose results merge by key.
+- **`maxKeys:`** (default 10000) bounds the whole fan-out: past it the request fails
+  (`TQL-SQL-2114`) rather than quietly issuing an unbounded number of round trips.
+- The reference SQL must bind `keys`, or the build fails (`TQL-YAML-1048`) — a query that
+  ignores them returns the right answer while reading the whole table once per batch.
+
+A **composite key** takes one `on:` entry per column. The keys then arrive as rows named by
+the *reference's* columns, so the file reads in its own vocabulary:
+
+```yaml
+    on: { buyer_code: buyer, partner_code: supplier }
+```
+
+```sql
+where
+/*%for k : keys separator ' or ' */
+  (buyer = /* k.buyer */'B1' and supplier = /* k.supplier */'P1')
+/*%end*/
+```
+
+A row-value `IN` is deliberately not generated: SQL Server does not accept one, and the same
+2-way SQL file has to run on every dialect and in a plain SQL tool.
+
+`merge:`/`as:` mean exactly what they mean on `nest:`, including the many-to-one rule. What
+enrichment does **not** buy is sorting, searching, or paginating by the merged column: only
+SQL can order a result set, so a screen that must sort by partner name still joins.
+
 ## Conditional statuses (`statusWhen:`)
 
 Business conditions map to HTTP statuses declaratively — the generalization of
