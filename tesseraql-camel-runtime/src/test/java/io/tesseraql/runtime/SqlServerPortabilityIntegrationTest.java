@@ -100,6 +100,11 @@ class SqlServerPortabilityIntegrationTest {
                 "nvarchar(%d)");
     }
 
+    @Test
+    void theCatalogVersionTableAppliesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.catalogVersionTableApplies(dataSource());
+    }
+
     private static javax.sql.DataSource dataSource() {
         com.microsoft.sqlserver.jdbc.SQLServerDataSource dataSource = new com.microsoft.sqlserver.jdbc.SQLServerDataSource();
         dataSource.setURL(SQLSERVER.getJdbcUrl());

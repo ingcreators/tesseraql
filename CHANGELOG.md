@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A catalog invalidation reaches the runtimes that did not serve the command**
+  (docs/lookups.md, decision 14). `invalidates:` now also raises a per-source-table version in
+  `tql_catalog_version`, and every runtime re-reads that table at most once every five seconds —
+  one small query for all catalogs at once, so a per-request staleness check never becomes a
+  per-request query. The stamp is written **after the commit**, not inside the transaction: the
+  guarantee is still the hold's expiry and the validation path's re-read, so a crash between the
+  two leaves the other runtimes on the old names for the length of the hold, exactly as a master
+  written by another system does. A database user that cannot create the table disables the
+  stamp, never the catalogs.
 - **The operations API reports what each code catalog holds, and refreshes one on request**
   (docs/lookups.md, decision 14). `GET /_tesseraql/ops/catalogs` lists every declared catalog
   with its source tables, how many codes the load carried, the languages it carried, when it

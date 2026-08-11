@@ -51,10 +51,10 @@ public final class JdbcCatalogStore implements CatalogStore {
      * next one, and a page resolving twenty coded columns should cost twenty map lookups.
      */
     private record Held(CodeCatalog catalog, long loadedAt, Map<String, CodeCatalog> views,
-            String lastError) {
+            String lastError, long stampAtLoad) {
 
-        Held(CodeCatalog catalog, long loadedAt) {
-            this(catalog, loadedAt, new ConcurrentHashMap<>(), null);
+        Held(CodeCatalog catalog, long loadedAt, long stampAtLoad) {
+            this(catalog, loadedAt, new ConcurrentHashMap<>(), null, stampAtLoad);
         }
 
         CodeCatalog view(String tag, String defaultTag) {
@@ -73,6 +73,11 @@ public final class JdbcCatalogStore implements CatalogStore {
     private final LongSupplier clock;
     private final Map<String, Held> held = new ConcurrentHashMap<>();
     private final Map<String, Object> loadLocks = new ConcurrentHashMap<>();
+    private final Map<String, Long> stamps = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong stampsReadAt = new java.util.concurrent.atomic.AtomicLong(
+            Long.MIN_VALUE);
+    private final java.util.Set<String> stampedTables;
+    private volatile boolean stamped;
 
     public JdbcCatalogStore(Map<String, CatalogSpec> specs,
             Function<String, DataSource> datasources, String dialect,
@@ -89,7 +94,12 @@ public final class JdbcCatalogStore implements CatalogStore {
         this.appHome = appHome;
         this.i18n = i18n;
         this.clock = clock;
+        this.stampedTables = specs.values().stream().flatMap(spec -> spec.sourceTables().stream())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
+
+    /** How often a runtime re-reads the version table: often enough to feel immediate. */
+    private static final long STAMP_INTERVAL_MILLIS = 5_000L;
 
     @Override
     public Map<String, CodeCatalog> catalogs(String tag) {
@@ -130,6 +140,138 @@ public final class JdbcCatalogStore implements CatalogStore {
                 held.remove(name);
             }
         });
+        bumpStamps(changed);
+    }
+
+    /**
+     * Raises the version of each written table so the other runtimes reload (decision 14).
+     *
+     * <p>After the commit, like the local drop, and deliberately not inside the command's
+     * transaction: the stamp is an <em>optimization</em> — the hold's expiry and the validation
+     * path's re-read are the guarantee — so putting a write into every maintenance transaction
+     * to make a cache hint atomic would buy nothing the TTL does not already bound. A crash
+     * between the commit and the bump leaves the other runtimes on the old names until the hold
+     * expires, which is the same bounded display delay a master written by another system gives.
+     *
+     * <p>A failure here is logged and swallowed for the same reason: an operator's save must not
+     * fail because a cache hint could not be written.
+     */
+    private void bumpStamps(java.util.Set<String> tables) {
+        DataSource main = datasources.apply("main");
+        if (main == null || !stamped) {
+            return;
+        }
+        try (Connection connection = main.getConnection()) {
+            for (String table : tables) {
+                if (!stampedTables.contains(table)) {
+                    // Only tables a catalog actually reads: the row set stays the declared
+                    // ones rather than growing a row for every table any command names.
+                    continue;
+                }
+                try (PreparedStatement update = connection.prepareStatement(
+                        "update tql_catalog_version set version = version + 1,"
+                                + " updated_at = ? where table_name = ?")) {
+                    update.setTimestamp(1, new java.sql.Timestamp(clock.getAsLong()));
+                    update.setString(2, table);
+                    if (update.executeUpdate() == 0) {
+                        insertStamp(connection, table);
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.log(System.Logger.Level.WARNING, "Could not raise the catalog version for {0};"
+                    + " other runtimes will reload when their hold expires", tables, ex);
+        }
+    }
+
+    private void insertStamp(Connection connection, String table) throws SQLException {
+        try (PreparedStatement insert = connection.prepareStatement(
+                "insert into tql_catalog_version (table_name, version, updated_at)"
+                        + " values (?, 1, ?)")) {
+            insert.setString(1, table);
+            insert.setTimestamp(2, new java.sql.Timestamp(clock.getAsLong()));
+            insert.executeUpdate();
+        } catch (SQLException ex) {
+            // Another runtime inserted the same row first, which is the outcome either way.
+            LOG.log(System.Logger.Level.DEBUG, "Catalog version row for {0} already exists",
+                    table);
+        }
+    }
+
+    /**
+     * The highest version among a catalog's source tables, from a snapshot re-read at most once
+     * per {@link #STAMP_INTERVAL_MILLIS}.
+     *
+     * <p>One query for every catalog at once. The interval is what keeps a per-request staleness
+     * check from becoming a per-request query — the point of a catalog is that resolving a name
+     * costs none.
+     */
+    private long stampOf(CatalogSpec spec) {
+        if (!stamped) {
+            return 0L;
+        }
+        refreshStamps();
+        long highest = 0L;
+        for (String table : spec.sourceTables()) {
+            highest = Math.max(highest, stamps.getOrDefault(table, 0L));
+        }
+        return highest;
+    }
+
+    private void refreshStamps() {
+        long now = clock.getAsLong();
+        if (now - stampsReadAt.get() < STAMP_INTERVAL_MILLIS) {
+            return;
+        }
+        synchronized (stamps) {
+            if (clock.getAsLong() - stampsReadAt.get() < STAMP_INTERVAL_MILLIS) {
+                return;
+            }
+            DataSource main = datasources.apply("main");
+            if (main == null) {
+                return;
+            }
+            try (Connection connection = main.getConnection();
+                    PreparedStatement select = connection.prepareStatement(
+                            "select table_name, version from tql_catalog_version");
+                    ResultSet rows = select.executeQuery()) {
+                Map<String, Long> read = new java.util.HashMap<>();
+                while (rows.next()) {
+                    read.put(rows.getString(1), rows.getLong(2));
+                }
+                stamps.clear();
+                stamps.putAll(read);
+                stampsReadAt.set(now);
+            } catch (SQLException ex) {
+                // Falling back to the TTL alone: a stamp that cannot be read must not make a
+                // catalog unreadable, and the hold still expires.
+                LOG.log(System.Logger.Level.WARNING,
+                        "Could not read the catalog version table; holds expire on TTL only", ex);
+                stampsReadAt.set(now);
+            }
+        }
+    }
+
+    /**
+     * Creates {@code tql_catalog_version} on the main connector if it is not there.
+     *
+     * <p>A failure disables stamping rather than the catalogs: an app whose database user cannot
+     * create the table still resolves every name, and its holds expire on the TTL — the
+     * guarantee the stamp was only ever an optimization over.
+     */
+    public void ensureSchema() {
+        DataSource main = datasources.apply("main");
+        if (main == null) {
+            return;
+        }
+        try {
+            io.tesseraql.core.util.SqlScripts.applyForVendor(main, JdbcCatalogStore.class,
+                    "/tesseraql/db/migration/catalog/V1__catalog_version.sql");
+            stamped = true;
+        } catch (SQLException | RuntimeException ex) {
+            LOG.log(System.Logger.Level.WARNING, "Could not create tql_catalog_version;"
+                    + " catalog holds will expire on TTL only", ex);
+        }
     }
 
     @Override
@@ -169,7 +311,8 @@ public final class JdbcCatalogStore implements CatalogStore {
                 return rechecked;
             }
             try {
-                Held loaded = new Held(load(name, specs.get(name)), clock.getAsLong());
+                Held loaded = new Held(load(name, specs.get(name)), clock.getAsLong(),
+                        stampOf(specs.get(name)));
                 held.put(name, loaded);
                 return loaded;
             } catch (SQLException | RuntimeException ex) {
@@ -182,7 +325,8 @@ public final class JdbcCatalogStore implements CatalogStore {
                     // The error rides the hold: a catalog serving yesterday's names while its
                     // refresh keeps failing must not read as healthy on the ops surface.
                     Held renewed = new Held(rechecked.catalog(), clock.getAsLong(),
-                            rechecked.views(), String.valueOf(ex.getMessage()));
+                            rechecked.views(), String.valueOf(ex.getMessage()),
+                            rechecked.stampAtLoad());
                     held.put(name, renewed);
                     return renewed;
                 }
@@ -193,8 +337,15 @@ public final class JdbcCatalogStore implements CatalogStore {
     }
 
     private boolean isStale(String name, Held current) {
-        Duration ttl = Durations.parse(specs.get(name).effectiveTtl());
-        return clock.getAsLong() - current.loadedAt() >= ttl.toMillis();
+        CatalogSpec spec = specs.get(name);
+        Duration ttl = Durations.parse(spec.effectiveTtl());
+        if (clock.getAsLong() - current.loadedAt() >= ttl.toMillis()) {
+            return true;
+        }
+        // The stamp is what carries an invalidation to the runtimes that did not serve the
+        // command (decision 14). Read at most once per interval for every catalog at once, so
+        // twenty catalogs cost one small query however many requests arrive between reads.
+        return stampOf(spec) > current.stampAtLoad();
     }
 
     private CodeCatalog load(String name, CatalogSpec spec) throws SQLException {

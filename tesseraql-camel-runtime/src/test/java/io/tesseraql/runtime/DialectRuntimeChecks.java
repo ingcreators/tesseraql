@@ -106,6 +106,47 @@ final class DialectRuntimeChecks {
         assertThat(store.claim("events", "orders.created", 10)).isEmpty();
     }
 
+    /**
+     * The code-catalog version table (docs/lookups.md, decision 14) on this vendor's DDL.
+     *
+     * <p>Its own check because the table is created only by an app that declares
+     * {@code catalogs/}, so no other dialect test would ever apply it — which is exactly how a
+     * vendor variant stays broken until someone runs that app on that database.
+     */
+    static void catalogVersionTableApplies(javax.sql.DataSource dataSource) throws Exception {
+        io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                io.tesseraql.operations.catalog.JdbcCatalogStore.class,
+                "/tesseraql/db/migration/catalog/V1__catalog_version.sql");
+        try (java.sql.Connection connection = dataSource.getConnection()) {
+            try (java.sql.PreparedStatement insert = connection.prepareStatement(
+                    "insert into tql_catalog_version (table_name, version, updated_at)"
+                            + " values (?, 1, ?)")) {
+                insert.setString(1, "区分マスタ");
+                // A current instant, not the epoch: MySQL's TIMESTAMP range starts at
+                // 1970-01-01 00:00:01 UTC and rejects the boundary value outright.
+                insert.setTimestamp(2, new java.sql.Timestamp(System.currentTimeMillis()));
+                insert.executeUpdate();
+            }
+            try (java.sql.PreparedStatement update = connection.prepareStatement(
+                    "update tql_catalog_version set version = version + 1 where table_name = ?")) {
+                update.setString(1, "区分マスタ");
+                assertThat(update.executeUpdate()).isEqualTo(1);
+            }
+            try (java.sql.PreparedStatement select = connection.prepareStatement(
+                    "select version from tql_catalog_version where table_name = ?")) {
+                select.setString(1, "区分マスタ");
+                try (java.sql.ResultSet rows = select.executeQuery()) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getLong(1)).isEqualTo(2L);
+                }
+            }
+        }
+        // Applying it twice is what a second boot does.
+        io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                io.tesseraql.operations.catalog.JdbcCatalogStore.class,
+                "/tesseraql/db/migration/catalog/V1__catalog_version.sql");
+    }
+
     /** Typed CSV import + export + download: exercises transfers on the vendor schema. */
     static void fileTransferRoundTrip(TesseraqlRuntime runtime, String appName) throws Exception {
         String importId = startTransfer(runtime, "/api/items/import",
