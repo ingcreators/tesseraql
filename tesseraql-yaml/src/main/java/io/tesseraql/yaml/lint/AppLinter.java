@@ -148,6 +148,7 @@ public final class AppLinter {
         lintMailChannels(appHome, manifest.config(), findings);
         lintCatalogLanguages(appHome, manifest.config(), findings);
         lintCatalogFiles(appHome, findings);
+        lintExportLocale(appHome, manifest, findings);
         lintObjectStorageEgress(appHome, manifest, findings);
         lintViews(appHome, manifest, findings);
         lintBasePathLinks(appHome, manifest.config(), findings);
@@ -5207,6 +5208,39 @@ public final class AppLinter {
     /** Expression roots that are always fine: the mail model plus literal keywords. */
     private static final Set<String> MAIL_ROOTS = Set.of("payload", "event", "true", "false",
             "null");
+
+    /**
+     * An export that can render a code but cannot name a locale (docs/lookups.md, decision 12).
+     *
+     * <p>The per-surface locale table exists because "the report came out in English because
+     * the server's locale was" is this feature's characteristic failure. A request negotiates
+     * its locale; an export does not have one to negotiate — it is generated for a file, often
+     * on a schedule, and read by someone who never made the request. So the export declares its
+     * locale, and an app whose catalogs carry more than one language must not leave that
+     * declaration to a default.
+     *
+     * <p>Scoped to apps with a multilingual catalog: a single-language app has one answer
+     * whatever the locale, and demanding a declaration there would be ceremony.
+     */
+    private void lintExportLocale(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        boolean multilingual = io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values()
+                .stream().anyMatch(spec -> spec.language() != null && !spec.language().isBlank());
+        if (!multilingual
+                || manifest.config().getString("tesseraql.files.locale").isPresent()) {
+            return;
+        }
+        for (RouteFile route : manifest.routes()) {
+            io.tesseraql.yaml.model.ExportSpec spec = route.definition().fileExport();
+            if (spec == null || (spec.locale() != null && !spec.locale().isBlank())) {
+                continue;
+            }
+            findings.add(new LintFinding("TQL-FIELD-4622", "error", route.source().toString(),
+                    "Export '" + route.definition().id() + "' declares no locale:, and the app"
+                            + " has catalogs with per-language names — declare the export's"
+                            + " locale: or tesseraql.files.locale; an export has no request to"
+                            + " negotiate one from"));
+        }
+    }
 
     /**
      * A {@code file:} catalog whose SQL is not there (docs/lookups.md, decision 13).

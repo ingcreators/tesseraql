@@ -830,7 +830,9 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
                         compiledAppHome))
-                .process(new io.tesseraql.compiler.binding.CatalogBinder());
+                .process(new io.tesseraql.compiler.binding.CatalogBinder(
+                        formatDeclaration(spec == null ? null : spec.locale(),
+                                "tesseraql.files.locale")));
         step = exportHttpSources(step, definition);
         step.process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
                 formatDeclaration(spec == null ? null : spec.locale(),
@@ -893,7 +895,11 @@ public final class RouteCompiler {
         ProcessorDefinition<?> exportStep = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
                         compiledAppHome))
-                .process(new io.tesseraql.compiler.binding.CatalogBinder());
+                // The export's own locale, not the requesting browser's (docs/lookups.md,
+                // decision 12): a document must not carry names in one language and its
+                // numbers and dates in another.
+                .process(new io.tesseraql.compiler.binding.CatalogBinder(
+                        formatDeclaration(spec.locale(), "tesseraql.files.locale")));
         exportStep = exportHttpSources(exportStep, definition);
         exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),

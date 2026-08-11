@@ -20,6 +20,25 @@ import org.apache.camel.Processor;
  */
 public final class CatalogBinder implements Processor {
 
+    private final String fixedLocale;
+
+    /** A request surface: the catalogs answer in the request's resolved locale. */
+    public CatalogBinder() {
+        this(null);
+    }
+
+    /**
+     * A surface whose locale is declared rather than negotiated (docs/lookups.md, decision 12):
+     * an export answers in <em>its</em> {@code locale:}, not the requesting browser's.
+     *
+     * <p>Otherwise one document would carry names in the reader's language and numbers and
+     * dates in the export's — a mismatch nobody declares and nobody can explain from the
+     * document.
+     */
+    public CatalogBinder(String fixedLocale) {
+        this.fixedLocale = fixedLocale;
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) {
@@ -42,7 +61,9 @@ public final class CatalogBinder implements Processor {
      * against declares its locale, and one that declares none is refused at build time rather
      * than quietly answering in whatever language the server was started in.
      */
-    private static String locale(Exchange exchange) {
-        return exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
+    private String locale(Exchange exchange) {
+        return fixedLocale != null
+                ? fixedLocale
+                : exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
     }
 }
