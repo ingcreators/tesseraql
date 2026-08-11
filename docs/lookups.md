@@ -1,6 +1,7 @@
 # Lookups and enrichment
 
-Status: **designed 2026-08-11** — not implemented. Waves and slices below.
+Status: **designed 2026-08-11**. **Slice 1 complete** (composition: `nest:` gains `merge:` and
+composite `on:`); slices 2-9 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
@@ -431,8 +432,13 @@ serves another's data nor invalidates it.
    anything depends on them, and already answers "the master is small, fetch it whole".
 2. **`enrich:` on read routes, SQL source, batched.** Key extraction, distinct, `batchSize`
    splitting, `maxKeys`, tuple matching, `merge:`/`as:`, request-scoped memoization,
-   `into:` targeting `sql` or a named query. Applies to HTML and JSON alike, which also closes
-   the JSON-only asymmetry of `nest:`.
+   `into:` targeting `sql` or a named query.
+
+   Slice 1 settled a boundary this depends on: `nest:` composes the *response body*, so
+   `into:` names a body key and JSON is the only surface that has one. `enrich:` composes
+   *result sets* — `sql` or a named query, in the execution context — which is why it reaches
+   an HTML list's `columns:` and an export's, and why it is a second block rather than a
+   fifth key on `nest:`.
 3. **HTTP source, `perRow`.** Reuses the existing outbound gateway, its egress allowlist and
    its degradation metric; adds `onError:` and decision 6's all-or-nothing rule.
 
@@ -495,7 +501,7 @@ Proposed; exact numbers are reserved against `ErrorIndex` when each slice lands.
 | `TQL-FIELD-4615` | error | a catalog declares `language:` without `label:` |
 | `TQL-SEC-4142` | error | a cached child query reads `/*%scope … */` or ambient `principal.*` without those in the cache key |
 | `TQL-SQL-2114` | runtime | an enrichment exceeded `maxKeys:` |
-| `TQL-LD-2860` | runtime | `merge:` found more than one row for a key |
+| `TQL-CAMEL-3113` | runtime | `merge:` found more than one row for a key (**taken, slice 1**) |
 | `TQL-APP-4206` | runtime | a catalog refresh failed; the previous data is still serving |
 
 ## Risks

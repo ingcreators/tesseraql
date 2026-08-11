@@ -529,14 +529,21 @@
                   },
                   "as": {
                     "type": "string",
-                    "description": "The property name the children appear under on each parent row."
+                    "description": "The property name the children appear under on each parent row; one of `as` or `merge` composes the match."
+                  },
+                  "merge": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`."
                   },
                   "on": {
                     "type": "object",
                     "additionalProperties": {
                       "type": "string"
                     },
-                    "description": "The join: each parent property to the child property it matches."
+                    "description": "The join: each parent property to the child property it matches, one entry per key column."
                   }
                 },
                 "additionalProperties": true

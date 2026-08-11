@@ -62,6 +62,44 @@ where o.customer_id = /* customerId */1
 Join keys compare canonically (INTEGER 1 matches BIGINT 1); parents are copied, so shared
 context rows are never mutated. `TQL-YAML-1019` keeps the references honest.
 
+### Merging a reference (`merge:`)
+
+`as:` attaches the matching rows as a list, which is the shape of a one-to-many child. A
+many-to-one reference — the partner name behind an order's partner code — wants the opposite:
+columns on the parent row itself. `merge:` names the columns to copy:
+
+```yaml
+queries:
+  partners:
+    file: partners.sql
+response:
+  json:
+    body:
+      orders: sql.rows
+    nest:
+      - into: orders
+        children: partners
+        on: { partner_code: code }
+        merge: [partner_name]     # instead of as:
+```
+
+Each entry declares exactly one of `as:` or `merge:`. A parent that matches nothing still
+carries the merged columns, as nulls, so a client reads one row shape rather than two; a
+parent that matches more than one row fails with `TQL-CAMEL-3113` rather than picking one.
+
+### Composite join keys
+
+`on:` takes one entry per key column, so a reference keyed by a pair joins on the pair:
+
+```yaml
+      - into: orders
+        children: partners
+        on: { buyer_code: buyer, supplier_code: supplier }
+        merge: [partner_name]
+```
+
+Every column must match for the rows to compose.
+
 ## Conditional statuses (`statusWhen:`)
 
 Business conditions map to HTTP statuses declaratively — the generalization of

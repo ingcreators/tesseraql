@@ -109,6 +109,61 @@ class AppLinterInputTest {
     }
 
     @Test
+    void anAttachingNestIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+                on: { id: order_id }
+                        as: lines""")))).isEmpty();
+    }
+
+    @Test
+    void aMergingNestOverACompositeKeyIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+                on: { buyer_code: buyer, supplier_code: supplier }
+                        merge: [partner_name]""")))).isEmpty();
+    }
+
+    @Test
+    void aNestDeclaringBothAsAndMergeIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+                on: { id: order_id }
+                        as: lines
+                        merge: [partner_name]""")))).contains("TQL-YAML-1019");
+    }
+
+    @Test
+    void aNestComposingNothingIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(nestRoute(dir, "on: { id: order_id }"))))
+                .contains("TQL-YAML-1019");
+    }
+
+    /** A route whose one nest entry joins and composes as {@code composition} declares. */
+    private static Path nestRoute(Path dir, String composition) throws Exception {
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
+        Files.writeString(dir.resolve("web/items/lines.sql"), "select 1 as one\n");
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.probe
+                kind: route
+                recipe: query-json
+                sql:
+                  file: list.sql
+                queries:
+                  lines:
+                    file: lines.sql
+                response:
+                  json:
+                    body:
+                      orders: sql.rows
+                    nest:
+                      - into: orders
+                        children: lines
+                        %s
+                """.formatted(composition));
+        return dir;
+    }
+
+    @Test
     void aBrokenStatusWhenIsAnError(@TempDir Path dir) throws Exception {
         writeRoute(dir, "get", "");
         Files.writeString(dir.resolve("web/items/get.yml"), """

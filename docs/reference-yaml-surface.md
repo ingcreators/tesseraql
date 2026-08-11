@@ -230,8 +230,9 @@ The JSON response: status, body, per-field policy, and nested composition.
 | --- | --- | --- |
 | `into` | string | The parent collection the children are nested into. |
 | `children` | string | The named query under `queries:` supplying the child rows. |
-| `as` | string | The property name the children appear under on each parent row. |
-| `on` | map of string | The join: each parent property to the child property it matches. |
+| `as` | string | The property name the children appear under on each parent row; one of `as` or `merge` composes the match. |
+| `merge` | array of string | Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`. |
+| `on` | map of string | The join: each parent property to the child property it matches, one entry per key column. |
 
 #### response.html
 
