@@ -105,6 +105,61 @@ class SplitExportTest {
         return SpooledRows.drain(new FileTempStore(dir.resolve("spool")), rows.iterator());
     }
 
+    /** A codec that prints the document's named values, so narrowing is visible in the entry. */
+    private static final FileCodec HEADER_CODEC = new FileCodec() {
+
+        @Override
+        public String format() {
+            return "header-text";
+        }
+
+        @Override
+        public String contentType() {
+            return "text/plain";
+        }
+
+        @Override
+        public String extension() {
+            return ".txt";
+        }
+
+        @Override
+        public void read(InputStream in, FileReadSpec spec, RowHandler handler) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean streams(FileWriteSpec spec) {
+            return false;
+        }
+
+        @Override
+        public void write(OutputStream out, FileWriteSpec spec, ExportModel model)
+                throws IOException {
+            for (Map.Entry<String, Object> value : model.values().entrySet()) {
+                Object result = value.getValue();
+                Object first = result instanceof Map<?, ?> map ? map.get("first") : null;
+                out.write((value.getKey() + "=" + first + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+            for (Map<String, Object> row : model.repeatableRows()) {
+                out.write((row.get("name") + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+        }
+    };
+
+    private static Map<String, Object> headerRow(String dept, String customer) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("dept", dept);
+        row.put("customer", customer);
+        return row;
+    }
+
+    private static Map<String, Object> companyRow(String name) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("company", name);
+        return row;
+    }
+
     private static Map<String, Object> row(String dept, String name) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("dept", dept);
@@ -165,6 +220,49 @@ class SplitExportTest {
         assertThat(entries(none.toByteArray())).isEmpty();
         // Still a readable archive, not an empty file.
         assertThat(none.toByteArray()).isNotEmpty();
+    }
+
+    @Test
+    void eachDocumentReadsItsOwnNamedResultAndSharesTheRest() throws Exception {
+        // The flagship case: five hundred invoices split by customer printed the same customer,
+        // and the only way out was denormalizing the header onto every line — the pattern named
+        // queries exist to end (docs/export-pipeline.md, decision 16).
+        SpooledRows customers = spool(List.of(
+                headerRow("sales", "Acme"), headerRow("ops", "Globex")));
+        SpooledRows company = spool(List.of(companyRow("TesseraQL KK")));
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("customer", ExportModel.result(customers, 2));
+        values.put("company", ExportModel.result(company, 1));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        SplitExport.write(HEADER_CODEC, spec(),
+                spool(List.of(row("sales", "ann"), row("ops", "cat"))), values, "dept",
+                "team-{key}.txt", out);
+
+        Map<String, String> entries = entries(out.toByteArray());
+        // The customer query selects the split column, so each document reads its own row.
+        assertThat(entries.get("team-sales.txt")).contains("Acme").doesNotContain("Globex");
+        assertThat(entries.get("team-ops.txt")).contains("Globex").doesNotContain("Acme");
+        // The company query does not, so every document reads the same one.
+        assertThat(entries.get("team-sales.txt")).contains("TesseraQL KK");
+        assertThat(entries.get("team-ops.txt")).contains("TesseraQL KK");
+    }
+
+    @Test
+    void anUnorderedNarrowableResultFailsNamingTheQuery() {
+        SpooledRows customers = spool(List.of(
+                headerRow("sales", "Acme"), headerRow("ops", "Globex"),
+                headerRow("sales", "Acme again")));
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("customer", ExportModel.result(customers, 3));
+
+        assertThatThrownBy(() -> SplitExport.write(HEADER_CODEC, spec(),
+                spool(List.of(row("sales", "ann"), row("ops", "cat"))), values, "dept",
+                "team-{key}.txt", new ByteArrayOutputStream()))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Named query 'customer'")
+                .extracting(error -> ((TqlException) error).code().toString())
+                .isEqualTo("TQL-LD-2851");
     }
 
     @Test

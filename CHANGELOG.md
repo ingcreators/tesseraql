@@ -15,6 +15,11 @@ All notable changes to TesseraQL are documented here. The format follows
   why. Every result now also carries `first`, because a named result is spooled and read in
   sequence: `${header.first.customer}` replaces `${header.rows[0].customer}`. Report and print
   templates move with it; the framework's own bundled PDF grid has.
+- **Each document of a `splitBy:` export reads its own named results.** A named query whose rows
+  carry the split column is narrowed to that document and one that does not is shared, so five
+  hundred invoices split by customer stop printing the same customer — the case that previously
+  forced the denormalization named queries exist to end. One query runs for the whole export
+  rather than one per document.
 - **An export's named queries are spooled and capped** like its extraction. A workbook whose
   second sheet is a large named query cost a heap; it costs a spool, and `maxRows:` counts it —
   a ceiling that bounds the extraction and lets a named query run unbounded bounds nothing.

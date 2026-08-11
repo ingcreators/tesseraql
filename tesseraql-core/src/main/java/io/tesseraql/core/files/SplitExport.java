@@ -6,6 +6,7 @@ import io.tesseraql.core.error.TqlException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -54,6 +55,7 @@ public final class SplitExport {
                     + " to the same name and only the last would survive");
         }
         ExportGroups groups = ExportGroups.of(rows, splitBy);
+        Map<String, Map<Object, Object>> perDocument = perDocumentValues(values, splitBy);
         Map<String, Object> entries = new LinkedHashMap<>();
         long written = 0;
         // finish() rather than close(): the caller owns the stream it handed over.
@@ -67,18 +69,80 @@ public final class SplitExport {
                         + " filesystem - one document would overwrite the other");
             }
             zip.putNextEntry(new ZipEntry(entry));
+            Map<String, Object> documentValues = narrow(values, perDocument, group.key());
             // Each document is written by the codec exactly as an unsplit one would be, so the
             // model still follows its streaming declaration: the group's rows are re-readable in
             // their own right, and a streaming codec takes them once. Either way it never sees
             // more than one group.
             codec.write(new NonClosing(zip), spec, codec.streams(spec)
-                    ? ExportModel.streaming(group.rows().iterator(), values)
-                    : ExportModel.repeatable(group.rows(), values));
+                    ? ExportModel.streaming(group.rows().iterator(), documentValues)
+                    : ExportModel.repeatable(group.rows(), documentValues));
             zip.closeEntry();
             written++;
         }
         zip.finish();
         return written;
+    }
+
+    /**
+     * The values one document sees (docs/export-pipeline.md, decision 16): a named result whose
+     * rows carry the split column is narrowed to this group's rows, and one that does not is
+     * shared whole.
+     *
+     * <p>That rule reads from what the query selected, so an author states the relationship by
+     * selecting the column rather than by declaring anything: a customer query that selects
+     * {@code customer_id} belongs to its invoice, and a company query that does not belongs to
+     * all of them. Five hundred invoices cost one customer query, not five hundred — the same
+     * ordered grouping the extraction already uses does the narrowing.
+     */
+    static Map<String, Object> narrow(Map<String, Object> values,
+            Map<String, Map<Object, Object>> perDocument, Object key) {
+        if (perDocument.isEmpty()) {
+            return values;
+        }
+        Map<String, Object> narrowed = new LinkedHashMap<>(values);
+        perDocument.forEach((name, byKey) -> narrowed.put(name,
+                byKey.getOrDefault(key, ExportModel.result(List.of(), 0))));
+        return Map.copyOf(narrowed);
+    }
+
+    /**
+     * Indexes the narrowable results once, before any document is written: one pass over each,
+     * yielding that result's rows per key. A named result that does not carry the split column is
+     * absent from the index and is shared whole.
+     *
+     * <p>The grouping is the extraction's, so a narrowable result inherits its ordering contract —
+     * unordered rows fail with the query named, rather than each document silently receiving the
+     * first run of its key and none of the rest.
+     */
+    private static Map<String, Map<Object, Object>> perDocumentValues(Map<String, Object> values,
+            String splitBy) {
+        Map<String, Map<Object, Object>> perDocument = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> value : values.entrySet()) {
+            Object rows = value.getValue() instanceof Map<?, ?> result ? result.get("rows") : null;
+            if (!(rows instanceof SpooledRows spooled) || !spooled.columns().contains(splitBy)) {
+                continue;
+            }
+            ExportGroups groups;
+            try {
+                groups = ExportGroups.of(spooled, splitBy);
+            } catch (TqlException ex) {
+                throw new TqlException(ExportGroups.UNORDERED, "Named query '" + value.getKey()
+                        + "' selects " + splitBy + ", so each document reads its own rows from it"
+                        + " - order it by " + splitBy + " as the extraction is ordered ("
+                        + ex.getMessage() + ")");
+            }
+            Map<Object, Object> byKey = new LinkedHashMap<>();
+            for (ExportGroups.Group group : groups) {
+                long count = 0;
+                for (Map<String, Object> ignored : group.rows()) {
+                    count++;
+                }
+                byKey.put(group.key(), ExportModel.result(group.rows(), count));
+            }
+            perDocument.put(value.getKey(), byKey);
+        }
+        return perDocument;
     }
 
     /**
