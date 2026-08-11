@@ -772,7 +772,11 @@ public final class StudioService {
      */
     private CrudScaffolder crudScaffolder() {
         return new CrudScaffolder(SecurityDefaults.from(manifest.config()),
-                ResponseHeaderDefaults.from(manifest.config()));
+                ResponseHeaderDefaults.from(manifest.config()),
+                io.tesseraql.yaml.catalog.Catalogs.load(manifest.appHome()).all().values()
+                        .stream().map(io.tesseraql.yaml.model.CatalogSpec::table)
+                        .filter(java.util.Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
     /**

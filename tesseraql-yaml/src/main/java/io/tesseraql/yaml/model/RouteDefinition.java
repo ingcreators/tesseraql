@@ -81,7 +81,10 @@ public record RouteDefinition(
         CacheSpec cache,
         // Topics broadcast to live views after a successful command commit (docs/realtime.md);
         // a single string or a list in YAML.
-        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> emit) {
+        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> emit,
+        // Source tables whose code catalogs this command's write makes stale
+        // (docs/lookups.md, decision 13); a single string or a list in YAML.
+        @com.fasterxml.jackson.annotation.JsonFormat(with = com.fasterxml.jackson.annotation.JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> invalidates) {
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
@@ -103,6 +106,7 @@ public record RouteDefinition(
                 : java.util.Collections
                         .unmodifiableMap(new java.util.LinkedHashMap<>(notifications));
         emit = emit == null ? List.of() : List.copyOf(emit);
+        invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
         http = http == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(http));
@@ -124,7 +128,7 @@ public record RouteDefinition(
                 idempotency, admission, outbox, sql, steps, queries, validate, decide,
                 notifications,
                 errors, fileImport, fileExport, webhook, publish, consume, response, pagination,
-                datasource, http, enrich, cache, emit);
+                datasource, http, enrich, cache, emit, invalidates);
     }
 
     /**
@@ -140,7 +144,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
                 security, idempotency, admission, outbox, sql, steps, queries, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, enrich, cache, emit);
+                response, pagination, datasource, http, enrich, cache, emit, invalidates);
     }
 
     /**
@@ -154,7 +158,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, sql, steps, queries, effective, decide,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, enrich, cache, emit);
+                response, pagination, datasource, http, enrich, cache, emit, invalidates);
     }
 
     /**
@@ -169,7 +173,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, sql, steps, queries, validate, effective,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, enrich, cache, emit);
+                response, pagination, datasource, http, enrich, cache, emit, invalidates);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

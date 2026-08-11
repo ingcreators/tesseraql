@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`invalidates:` drops the code catalogs a command's write made stale** (docs/lookups.md,
+  decision 13). The declaration names **source tables**, not catalog names, because a
+  maintenance screen for a shared code master writes a row whose kind is request data — which of
+  the twenty catalogs sharing that table is affected is not known until the row is written. It
+  fires exactly where `emit:` fires, after the command processor, so a rollback invalidates
+  nothing. Over-invalidating is free by construction: a catalog is chosen for being small enough
+  to hold whole. `TQL-FIELD-4620` refuses it on a recipe with no commit and warns when it names
+  a table no catalog reads — a typo in a verbatim identifier looks exactly like a correct
+  declaration, and the symptom is a screen showing yesterday's names. The scaffolder emits it
+  itself for a table a catalog reads, and only for those.
 - **A code catalog may carry its names in more than one language.** `language: 言語コード` on a
   catalog makes language a *dimension* of the catalog rather than part of its key, so the call
   is the same in every language — `${codes.取引区分.of(row.取引区分)}` — and only the labels

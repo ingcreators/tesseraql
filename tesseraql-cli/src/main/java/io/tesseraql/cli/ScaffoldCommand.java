@@ -54,12 +54,20 @@ final class ScaffoldCommand implements Runnable {
         @Option(names = {"--force"}, description = "Overwrite edited and user-owned files.")
         boolean force;
 
+        /** The tables the app's code catalogs read, so a maintenance screen invalidates them. */
+        private static java.util.Set<String> catalogTables(java.nio.file.Path appHome) {
+            return io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values().stream()
+                    .map(io.tesseraql.yaml.model.CatalogSpec::table)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+
         @Override
         public Integer call() throws Exception {
             AppConfig config = new ManifestLoader().load(app).config();
             TableSchema schema = introspect(config);
             List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config),
-                    ResponseHeaderDefaults.from(config))
+                    ResponseHeaderDefaults.from(config), catalogTables(app))
                     .scaffold(schema);
             ScaffoldWriter.Report report = new ScaffoldWriter().apply(app, files, force);
 

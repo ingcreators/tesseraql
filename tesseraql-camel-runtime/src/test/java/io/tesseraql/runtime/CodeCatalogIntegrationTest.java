@@ -183,6 +183,17 @@ class CodeCatalogIntegrationTest {
         assertThat(post("/api/受注", "{\"取引区分\":\"2\"}").statusCode()).isEqualTo(201);
     }
 
+    /** A maintenance write drops the catalogs its table feeds, so the next page is current. */
+    @Test
+    void aWriteThatDeclaresItsTableRefreshesTheNames() throws Exception {
+        // The hold is an hour by declaration, so without the invalidation the form would keep
+        // offering yesterday's codes until the TTL expired.
+        assertThat(get("/受注/新規").body()).doesNotContain("小切手");
+        assertThat(post("/api/区分", "{\"区分コード\":\"6\",\"区分名称\":\"小切手\"}")
+                .statusCode()).isEqualTo(201);
+        assertThat(get("/受注/新規").body()).contains("小切手");
+    }
+
     private static HttpResponse<String> post(String path, String body) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -376,6 +387,37 @@ class CodeCatalogIntegrationTest {
                       - name: 受注番号
                       - name: 取引区分
                         domain: 取引区分
+                """);
+
+        // The maintenance screen (docs/lookups.md, decision 13): the write names the TABLE it
+        // touched, because which of the kinds sharing it is affected is request data.
+        Path maintain = target.resolve("web/api/区分");
+        Files.createDirectories(maintain);
+        Files.writeString(maintain.resolve("insert.sql"),
+                "insert into 区分マスタ (区分種別, 区分コード, 言語コード, 区分名称, 表示順,"
+                        + " 有効フラグ) values ('01', /* 区分コード */'X', 'ja',"
+                        + " /* 区分名称 */'X', 9, '1')\n");
+        Files.writeString(maintain.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: 区分.create
+                kind: route
+                recipe: command-json
+                security: { auth: public }
+                input:
+                  区分コード: { type: string, required: true }
+                  区分名称: { type: string, required: true }
+                steps:
+                  row:
+                    file: insert.sql
+                    params:
+                      区分コード: params.区分コード
+                      区分名称: params.区分名称
+                invalidates: [区分マスタ]
+                response:
+                  json:
+                    status: 201
+                    body:
+                      ok: true
                 """);
 
         Path form = target.resolve("web/受注/新規");

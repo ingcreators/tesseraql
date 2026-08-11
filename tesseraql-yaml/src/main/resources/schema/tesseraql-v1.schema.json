@@ -345,6 +345,20 @@
         }
       ]
     },
+    "invalidates": {
+      "description": "Source table(s) whose code catalogs this command's write makes stale (docs/lookups.md). Named by table, not by catalog: a maintenance screen for a shared code master writes a row whose kind is request data, so which catalog is affected is not known until the write happens. Dropped after the commit, so a rollback invalidates nothing.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "refreshOn": {
       "type": "string",
       "description": "List, detail, and dashboard views (not forms): refetch this view's refresh region whenever a command emits this topic (docs/realtime.md)."

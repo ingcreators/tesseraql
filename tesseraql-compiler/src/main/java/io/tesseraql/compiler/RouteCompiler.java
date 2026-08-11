@@ -383,10 +383,16 @@ public final class RouteCompiler {
         step = commandHttpSources(step, definition);
         step = step.process(commandProcessor(routeFile, workflow));
         // Live-view topics broadcast only after a successful commit: an exception in the
-        // command processor (rollback) bypasses this step (docs/realtime.md).
+        // command processor (rollback) bypasses this step (docs/realtime.md). The catalog
+        // invalidation rides the same placement for the same reason — a rollback must not
+        // send every reader to reload names that never changed.
         if (!definition.emit().isEmpty()) {
             step = step.process(new io.tesseraql.compiler.binding.TopicEmitProcessor(
                     definition.emit()));
+        }
+        if (!definition.invalidates().isEmpty()) {
+            step = step.process(new io.tesseraql.compiler.binding.CatalogInvalidateProcessor(
+                    definition.invalidates()));
         }
         // Named queries still run after the command (outside its transaction), in authored order.
         for (var entry : definition.queries().entrySet()) {
@@ -500,7 +506,7 @@ public final class RouteCompiler {
                     "command-json", java.util.Map.of(), null, security, null, null, null, null,
                     java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                     java.util.Map.of(), java.util.Map.of(), null, null, null, null, null, null,
-                    dispatchResponse(), null, null, null, null, null, null);
+                    dispatchResponse(), null, null, null, null, null, null, null);
             String direct = "direct:" + routeId;
             if (mountRest) {
                 restEndpoint(builder, "POST", urlPath).to(direct);
@@ -580,7 +586,7 @@ public final class RouteCompiler {
                 "command-json", java.util.Map.of(), null, security, null, null, null, command,
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 transition.decide(), java.util.Map.of(), null, null, null, null, null, null,
-                workflowResponse(), null, null, null, null, null, null);
+                workflowResponse(), null, null, null, null, null, null, null);
     }
 
     /** The compiled task-assignment reminder (Phase 20 channels), or {@code null} when undeclared. */
@@ -620,7 +626,7 @@ public final class RouteCompiler {
                 java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
                 java.util.Map.of(), null,
                 null, null, null, null, null, workflowResponse(), null, null, null, null,
-                null, null);
+                null, null, null);
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
         route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
@@ -1128,6 +1134,10 @@ public final class RouteCompiler {
         if (!definition.emit().isEmpty()) {
             step = step.process(new io.tesseraql.compiler.binding.TopicEmitProcessor(
                     definition.emit()));
+        }
+        if (!definition.invalidates().isEmpty()) {
+            step = step.process(new io.tesseraql.compiler.binding.CatalogInvalidateProcessor(
+                    definition.invalidates()));
         }
         for (var entry : definition.queries().entrySet()) {
             step = step

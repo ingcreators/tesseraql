@@ -111,6 +111,10 @@ public final class AppLinter {
         appHome = appHome.toAbsolutePath().normalize();
         AppManifest manifest = new ManifestLoader().load(appHome);
         List<LintFinding> findings = new ArrayList<>();
+        catalogTables = io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values().stream()
+                .map(io.tesseraql.yaml.model.CatalogSpec::table)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
         for (RouteFile route : manifest.routes()) {
             lintRoute(appHome, manifest.config(), route, findings);
         }
@@ -247,6 +251,14 @@ public final class AppLinter {
             WorkflowDefinition.class, Map.of("notify", "reminders"));
 
     private final Map<Class<?>, Set<String>> acceptedKeyCache = new java.util.HashMap<>();
+
+    /**
+     * The source tables the app's code catalogs read, for the {@code invalidates:} check.
+     * Held for the run rather than threaded through every route-shaped surface: the check
+     * belongs beside {@code lintEmit}, which those surfaces already share, and this campaign
+     * has already paid once for a capability that reached routes and nothing else.
+     */
+    private Set<String> catalogTables = Set.of();
 
     /**
      * The YAML keys a document-family root record accepts, derived from its record components and
@@ -441,6 +453,47 @@ public final class AppLinter {
             arms.addAll(response.html().statusWhen());
         }
         return arms;
+    }
+
+    /**
+     * {@code invalidates:} lints (docs/lookups.md, decision 13).
+     *
+     * <p>The declaration names source tables, and dropping a catalog is what a maintenance
+     * screen's write is for. Two ways it silently does nothing: on a recipe that never commits
+     * (there is no write to invalidate after), and naming a table no catalog reads — a typo in
+     * a verbatim identifier looks exactly like a correct declaration, and the symptom is a
+     * screen showing yesterday's names with nothing to explain it.
+     *
+     * <p>The unread-table case is a warning, not an error: a table may feed a catalog in
+     * another environment's configuration, and the cost of an unnecessary invalidation is a
+     * handful of small queries.
+     */
+    private void lintInvalidates(RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        if (definition.invalidates().isEmpty()) {
+            return;
+        }
+        if (!"command-json".equals(definition.recipe())) {
+            findings.add(new LintFinding("TQL-FIELD-4620", "error", source,
+                    "invalidates: is only supported on command-json routes, not '"
+                            + definition.recipe() + "' — there is no commit to invalidate"
+                            + " catalogs after"));
+            return;
+        }
+        for (String table : definition.invalidates()) {
+            if (table == null || table.isBlank()) {
+                findings.add(new LintFinding("TQL-FIELD-4620", "error", source,
+                        "invalidates: carries an empty table name"));
+            } else if (!catalogTables.contains(table)) {
+                findings.add(new LintFinding("TQL-FIELD-4620", "warning", source,
+                        "invalidates: names table '" + table + "', which no catalog reads —"
+                                + " the declaration drops nothing"
+                                + (catalogTables.isEmpty()
+                                        ? " (the app declares no catalogs)"
+                                        : " (catalogs read " + String.join(", ", catalogTables)
+                                                + ")")));
+            }
+        }
     }
 
     /** A live-view topic name: lowercase dot/dash-separated segments (docs/realtime.md). */
@@ -2229,6 +2282,7 @@ public final class AppLinter {
         // A tool's validate: runs through the same transactional pipeline a route's does.
         lintValidation(tool.source(), definition, source, findings);
         lintEmit(definition, source, findings);
+        lintInvalidates(definition, source, findings);
         // emit: is a command-json route key. A tool may legally carry that recipe, so the route
         // check would pass it while the compiled tool pipeline broadcasts nothing — say so.
         if (!definition.emit().isEmpty()) {
@@ -2412,6 +2466,7 @@ public final class AppLinter {
         }
         lintValidation(route.source(), definition, source, findings);
         lintEmit(definition, source, findings);
+        lintInvalidates(definition, source, findings);
         lintHttpSources(config, definition, source, findings);
         lintEnrich(config, route.source(), definition, source, findings);
         lintRateLimitScope(definition, source, findings);
@@ -3680,6 +3735,7 @@ public final class AppLinter {
         // the same static checks — a typo'd validation SQL filename used to reach startup.
         lintValidation(consumer.source(), definition, source, findings);
         lintEmit(definition, source, findings);
+        lintInvalidates(definition, source, findings);
         lintPublish(config, definition, source, findings);
         lintNotify(config, definition, source, findings);
         lintDatasource(config, consumer.source(), definition, source, findings);
