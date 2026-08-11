@@ -140,6 +140,7 @@ Token-bucket rate limit for this route.
 | `connectTimeout` | string | How long to wait for the connection (duration string such as `2s`). |
 | `requestTimeout` | string | How long to wait for the complete response (duration string such as `10s`). |
 | `select` | string | Dotted path into the response JSON naming the rows array or object the source exposes. |
+| `readOnly` | boolean | The author's assertion that the call has no side effect. Required on a transactional recipe (TQL-YAML-1050): the call is made before the transaction and a rollback cannot un-make it. |
 | `onError` | enum: `fail` \| `empty` | fail (default) or empty: the source degrades to zero rows and the page still renders. |
 
 ### cache

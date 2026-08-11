@@ -1,7 +1,7 @@
 # Lookups and enrichment
 
-Status: **designed 2026-08-11**. **Slices 1-3 complete** (composition, `enrich:` with a SQL reference,
-and one outbound-call vocabulary); decisions 15-21 and slices 4-12 below.
+Status: **designed 2026-08-11**. **Slices 1-5 complete** (composition, `enrich:` over SQL and HTTP,
+one outbound-call vocabulary, and a command's pre-transaction fetch); decisions 15-21 and slices 4-12 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
