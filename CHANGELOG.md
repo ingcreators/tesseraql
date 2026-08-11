@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **An export's code names answer in the export's locale**, not in the requesting browser's
+  (docs/lookups.md, decision 12). Otherwise one document carried names in the reader's language
+  and its numbers and dates in the export's — a mismatch nobody declared and nobody could
+  explain from the document. An export in an app whose catalogs carry per-language names must
+  declare `locale:` (or `tesseraql.files.locale`): `TQL-FIELD-4622` refuses the undeclared case
+  at build, because an export has no request to negotiate a locale from and "the report came out
+  in English because the server's locale was" is this feature's characteristic failure.
 - **A catalog invalidation reaches the runtimes that did not serve the command**
   (docs/lookups.md, decision 14). `invalidates:` now also raises a per-source-table version in
   `tql_catalog_version`, and every runtime re-reads that table at most once every five seconds —

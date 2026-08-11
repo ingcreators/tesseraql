@@ -344,11 +344,13 @@ Labels may also come from the message catalog instead of a table
 Studio message editor already serves, and adds no per-language table.
 
 **When each part of this decision lands.** The language dimension itself is a property of the
-catalog and ships with it. The per-surface locale rule, though, can only be enforced on a
-surface that *has* the catalogs: `codes` is published into a route's execution context, and an
-export or a mail template does not receive it until its own slice gives it one. So the refusal
-travels with each surface — slice 13 for export, and the mail slice for mail — rather than
-being written now against surfaces that cannot yet render a code. What ships with the language
+catalog and ships with it. The per-surface locale rule travels with each surface, because a
+refusal cannot be written against a surface that cannot yet render a code. Export's arrived
+with slice 13a: an export's `codes` answer in the export's declared `locale:` rather than in the
+requesting browser's, since otherwise one document carries names in the reader's language and
+its numbers and dates in the export's — a mismatch nobody declared. And an export in an app
+whose catalogs carry per-language names must declare that locale (`TQL-FIELD-4622`), because an
+export has no request to negotiate one from. Mail follows with the mail slice. What ships with the language
 dimension is the rule for the surface that does have it (the request's resolved locale) and a
 build-time warning for the configuration that makes the whole dimension unreachable: a
 `language:` column in an app whose `tesseraql.i18n.locales` holds a single tag
@@ -756,9 +758,16 @@ join, the same answer enrichment gives.
 
 **Wave 3 — the remaining surfaces**
 
-13. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
-   the enrichment becomes a sliding window over `batchSize` rows and the request-scoped cache
-   stops being an optimization and starts being load-bearing.
+13a. **Export's locale.** The export's `codes` answer in the export's declared locale, and an
+   export that cannot name one in an app with per-language names is refused
+   (`TQL-FIELD-4622`) — decision 12's rule for the first surface that can render a code
+   without a request behind it.
+13b. **`enrich:` on an export.** Repeatable models first (one pass for keys, then batches);
+   then streaming, where the enrichment becomes a sliding window over `batchSize` rows and the
+   request-scoped cache stops being an optimization and starts being load-bearing. Today an
+   `enrich:` on an export route is refused by `TQL-YAML-1045` — its `into:` names a result the
+   route does not publish under that name — so the gap is a missing capability, not a silent
+   one.
 14. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.

@@ -544,6 +544,29 @@ class CodeCatalogIntegrationTest {
                         domain: 取引区分
                 """);
 
+        // An export renders through a template like any other surface, and answers in ITS
+        // locale rather than the requesting browser's (docs/lookups.md, decision 12).
+        Path report = target.resolve("web/受注/レポート");
+        Files.createDirectories(report);
+        Files.writeString(report.resolve("rows.sql"),
+                "select 受注番号, 取引区分 from 受注 order by 受注番号\n");
+        Files.writeString(report.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 受注.report
+                kind: route
+                recipe: query-export
+                security: { auth: public }
+                sql:
+                  file: rows.sql
+                export:
+                  format: csv
+                  locale: en
+                  filename: orders.csv
+                  columns:
+                    - name: 受注番号
+                    - name: 取引区分
+                """);
+
         // The maintenance screen (docs/lookups.md, decision 13): the write names the TABLE it
         // touched, because which of the kinds sharing it is affected is request data.
         Path maintain = target.resolve("web/api/区分");
