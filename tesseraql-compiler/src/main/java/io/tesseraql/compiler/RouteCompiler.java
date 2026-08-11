@@ -375,8 +375,12 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
-                        compiledAppHome))
-                .process(commandProcessor(routeFile, workflow));
+                        compiledAppHome));
+        // http: sources run before the command, which is the whole point of allowing them here:
+        // the connection is not taken until the fetch is done, so the transaction never waits on
+        // a third party (docs/lookups.md, decision 19).
+        step = commandHttpSources(step, definition);
+        step = step.process(commandProcessor(routeFile, workflow));
         // Live-view topics broadcast only after a successful commit: an exception in the
         // command processor (rollback) bypasses this step (docs/realtime.md).
         if (!definition.emit().isEmpty()) {
@@ -391,6 +395,23 @@ public final class RouteCompiler {
         }
         applySessionRotation(step, definition).process(responseRenderer(definition));
         applyIdempotencyComplete(step, definition);
+    }
+
+    /**
+     * A command's {@code http:} sources, ordered before its transaction. The same ordering the
+     * export pipeline uses for the same reason: a network call inside the window where a
+     * connection and a transaction are held pins them for however long the partner takes. A
+     * failure here fails the command before a row is written, which is the semantics a value
+     * the write depends on should have.
+     */
+    private static ProcessorDefinition<?> commandHttpSources(ProcessorDefinition<?> step,
+            RouteDefinition definition) {
+        ProcessorDefinition<?> fetched = step;
+        for (var entry : definition.http().entrySet()) {
+            fetched = fetched.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                    entry.getKey(), entry.getValue()));
+        }
+        return fetched;
     }
 
     /**
@@ -1076,6 +1097,7 @@ public final class RouteCompiler {
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
 
         if (usesTransactionalCommand(definition)) {
+            step = commandHttpSources(step, definition);
             String datasource = definition.effectiveDatasource();
             requirePlainSqlOffMain(definition);
             String dialect = datasourceDialect(datasource);

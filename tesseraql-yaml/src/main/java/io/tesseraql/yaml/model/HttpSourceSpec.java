@@ -24,14 +24,17 @@ import java.util.Map;
  * is unavailable on command routes, so no outbound call is made inside the framework's own
  * write transaction.
  *
- * @param call    the outbound call, in the vocabulary every call site shares
- * @param select  optional dotted path into the response JSON naming the rows array or object
- *                the source exposes (default: the whole body)
- * @param onError {@code fail} (default: the request fails) or {@code empty} (the source
- *                degrades to zero rows and the page still renders)
+ * @param call     the outbound call, in the vocabulary every call site shares
+ * @param select   optional dotted path into the response JSON naming the rows array or object
+ *                 the source exposes (default: the whole body)
+ * @param onError  {@code fail} (default: the request fails) or {@code empty} (the source
+ *                 degrades to zero rows and the page still renders)
+ * @param readOnly the author's assertion that the call has no side effect, required on a
+ *                 command route: the write can roll back and the request cannot
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record HttpSourceSpec(HttpCallSpec call, String select, String onError) {
+public record HttpSourceSpec(HttpCallSpec call, String select, String onError,
+        Boolean readOnly) {
 
     /**
      * The flat authoring form: a source's YAML is the call's keys and the source's own, on one
@@ -50,9 +53,20 @@ public record HttpSourceSpec(HttpCallSpec call, String select, String onError) {
             @JsonProperty("connectTimeout") String connectTimeout,
             @JsonProperty("requestTimeout") String requestTimeout,
             @JsonProperty("select") String select,
-            @JsonProperty("onError") String onError) {
+            @JsonProperty("onError") String onError,
+            @JsonProperty("readOnly") Boolean readOnly) {
         return new HttpSourceSpec(new HttpCallSpec(method, url, headers, query, credential, body,
-                expectStatus, connectTimeout, requestTimeout), select, onError);
+                expectStatus, connectTimeout, requestTimeout), select, onError, readOnly);
+    }
+
+    /**
+     * Whether the author asserted the call has no side effect. A command route requires it: the
+     * call happens before the transaction and a rollback cannot un-make it, so the framework
+     * guarantees the declaration exists rather than that it is true (docs/lookups.md,
+     * decision 19).
+     */
+    public boolean isReadOnly() {
+        return Boolean.TRUE.equals(readOnly);
     }
 
     /** Whether a failed call degrades to an empty source instead of failing the request. */

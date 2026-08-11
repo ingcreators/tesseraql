@@ -118,13 +118,45 @@ response:
   timeouts, and the per-host circuit breaker. Lint enforces the surface: query recipes only
   and no shadowing of SQL result keys (`TQL-YAML-1022`), plus the same host/url/credential
   checks as a job step (`TQL-SEC-4070/4071/4072`).
-- **Reads stay reads**: `http:` is not available on command routes — a transactional write
-  never blocks on a third party (the outbox is the write-side integration, above). That, not
-  the HTTP method, is what holds the line: a source declares `method:` and `body:` like any
-  other call, because a reference API is as often `POST …/search` with a list of keys as it
-  is a `GET`. A non-GET method is written out rather than inferred from `body:`, and a `body:`
+- **The method is not the guarantee**: a source declares `method:` and `body:` like any other
+  call, because a reference API is as often `POST …/search` with a list of keys as it is a
+  `GET`. A non-GET method is written out rather than inferred from `body:`, and a `body:`
   beside a method that carries none is a build error (`TQL-YAML-1049`), not a body silently
   dropped.
+### A command's sources run before its transaction
+
+A write often needs a value only the partner has — the name behind a code, as of this
+transaction. `http:` is available on the transactional recipes (`command-json`, `webhook`,
+`queue-consume`) and its sources run **before the connection is acquired**, so the transaction
+never waits on a third party:
+
+```yaml
+recipe: command-json
+http:
+  partner:
+    url: https://crm.example.com/partners/{...}
+    readOnly: true              # required here — see below
+steps:
+  header:
+    file: insert-order.sql
+    params:
+      partnerName: partner.body.name
+```
+
+- **Fail-closed.** A failed fetch fails the command before a row is written. `onError: empty`
+  is still available and says the value is optional.
+- **`readOnly: true` is required** (`TQL-YAML-1050`). The call happens before the transaction
+  and **a rollback cannot un-make it**, so the author states that the call is a reference. The
+  framework guarantees the declaration exists, not that it is true — a call with a side effect
+  belongs *after* the commit, on the [outbox](notifications.md).
+- **Declare short timeouts.** Unlike a page, the caller waits and the write queues behind the
+  call; `connectTimeout:`/`requestTimeout:` and the circuit breaker apply as everywhere else.
+
+Calling a partner **after** the write is the outbox's job, not this one: a `notify:` webhook is
+written in the same transaction and delivered at-least-once afterwards. Its response decides
+success, never data — a command that must *store* the partner's answer writes a pending row and
+lets a job's `httpCall:` step complete it.
+
 - An `httpCall` **test case** plans a route's sources like a job's steps, without a network
   request: `httpCall: {route: orders.list}` rows carry the resolved url, host, allow-list
   verdict, and credential — and `send: true` performs the call for real against the runner's

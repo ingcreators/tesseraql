@@ -288,6 +288,10 @@
             "type": "string",
             "description": "Dotted path into the response JSON naming the rows array or object the source exposes."
           },
+          "readOnly": {
+            "type": "boolean",
+            "description": "The author's assertion that the call has no side effect. Required on a transactional recipe (TQL-YAML-1050): the call is made before the transaction and a rollback cannot un-make it."
+          },
           "onError": {
             "type": "string",
             "enum": [

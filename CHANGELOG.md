@@ -21,6 +21,11 @@ All notable changes to TesseraQL are documented here. The format follows
   one-element array.
 - **An `http:` source may declare `method:` and `body:`.** A reference API is as often
   `POST …/search` with a list of keys as it is a `GET`.
+- **A command may declare `http:` sources**, run before its transaction opens
+  (docs/lookups.md, decision 19), so a write that needs a value only the partner has — the name
+  behind a code, as of this transaction — no longer has to trust the caller to supply it or
+  settle for filling it in eventually. A failed fetch fails the command before a row is written,
+  and `readOnly: true` is required (`TQL-YAML-1050`) because a rollback cannot un-make a call.
 - **An enrichment's reference may be an HTTP call** instead of a query, in either of two modes:
   `perRow` (the default — one request per distinct key, with `{key.<column>}` placeholders taking
   that key's values, percent-encoded per path segment) or `batch` (one request per `batchSize`

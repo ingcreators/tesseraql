@@ -5026,16 +5026,34 @@ public final class AppLinter {
             return;
         }
         String recipe = definition.recipe();
-        if (!"query-json".equals(recipe) && !"query-html".equals(recipe)
-                && !"page".equals(recipe)) {
+        boolean read = "query-json".equals(recipe) || "query-html".equals(recipe)
+                || "page".equals(recipe);
+        // A command's sources run before its transaction, so the write never waits on a
+        // partner (docs/lookups.md, decision 19). Every other recipe still has no place for one.
+        boolean write = TRANSACTIONAL_DATASOURCE_RECIPES.contains(recipe);
+        if (!read && !write) {
             findings.add(new LintFinding("TQL-YAML-1022", "error", source,
-                    "http: sources are only supported on query recipes"
-                            + " (query-json, query-html, page), not '" + recipe + "'"));
+                    "http: sources are supported on query recipes (query-json, query-html,"
+                            + " page) and on transactional ones ("
+                            + String.join(", ",
+                                    new java.util.TreeSet<>(TRANSACTIONAL_DATASOURCE_RECIPES))
+                            + "), not '"
+                            + recipe + "'"));
         }
         definition.http().forEach((name, spec) -> {
             if ("sql".equals(name) || definition.queries().containsKey(name)) {
                 findings.add(new LintFinding("TQL-YAML-1022", "error", source,
                         "http: source '" + name + "' shadows a SQL result key"));
+            }
+            // The call happens before the transaction and a rollback cannot un-make it, so on a
+            // write the author states that it is a reference. The framework can guarantee the
+            // declaration exists, never that it is true.
+            if (write && !spec.isReadOnly()) {
+                findings.add(new LintFinding("TQL-YAML-1050", "error", source,
+                        "http: source '" + name + "' on a '" + recipe + "' route needs"
+                                + " readOnly: true — the call is made before the transaction and"
+                                + " a rollback cannot un-make it, so a call with a side effect"
+                                + " belongs after the commit, on the outbox"));
             }
             lintHttpCall(config, name, spec.call(), source, findings);
         });

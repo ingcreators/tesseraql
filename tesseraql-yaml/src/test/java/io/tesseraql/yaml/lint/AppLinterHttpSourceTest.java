@@ -67,12 +67,29 @@ class AppLinterHttpSourceTest {
     }
 
     @Test
-    void httpSourcesAreAQueryRecipeKey(@TempDir Path dir) throws Exception {
-        writeApp(dir, "command-json", "fx.example.com", "");
+    void httpSourcesAreNotAFileImportKey(@TempDir Path dir) throws Exception {
+        writeApp(dir, "file-import", "fx.example.com", "");
         List<LintFinding> findings = new AppLinter().lint(dir);
         assertThat(findings).anyMatch(finding -> finding.isError()
                 && "TQL-YAML-1022".equals(finding.code())
-                && finding.message().contains("query recipes"));
+                && finding.message().contains("http: sources are supported"));
+    }
+
+    @Test
+    void aCommandSourceMustAssertItIsAReference(@TempDir Path dir) throws Exception {
+        // The call runs before the transaction and a rollback cannot un-make it, so the author
+        // states that it is a read (docs/lookups.md, decision 19).
+        writeApp(dir, "command-json", "fx.example.com", "");
+        assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
+                && "TQL-YAML-1050".equals(finding.code()));
+    }
+
+    @Test
+    void aCommandSourceAssertedReadOnlyLintsClean(@TempDir Path dir) throws Exception {
+        writeApp(dir, "command-json", "fx.example.com", """
+                    readOnly: true
+                """);
+        assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
     }
 
     @Test
