@@ -31,7 +31,9 @@ class AppLinterInputTest {
 
     private static List<String> codes(List<LintFinding> findings) {
         return findings.stream().map(LintFinding::code)
-                .filter(c -> c.startsWith("TQL-YAML-101") || c.startsWith("TQL-YAML-102")).toList();
+                .filter(c -> c.startsWith("TQL-YAML-101") || c.startsWith("TQL-YAML-102")
+                        || c.startsWith("TQL-YAML-104"))
+                .toList();
     }
 
     @Test
@@ -160,6 +162,69 @@ class AppLinterInputTest {
                         children: lines
                         %s
                 """.formatted(composition));
+        return dir;
+    }
+
+    @Test
+    void anEnrichmentOverADeclaredResultIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
+                on: { partner_code: code }
+                    sql: { file: partners.sql }
+                    merge: [partner_name]""", KEYED_REFERENCE)))).isEmpty();
+    }
+
+    @Test
+    void anEnrichmentIntoAnUndeclaredResultIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
+                into: ghost
+                    on: { partner_code: code }
+                    sql: { file: partners.sql }
+                    merge: [partner_name]""", KEYED_REFERENCE)))).contains("TQL-YAML-1045");
+    }
+
+    @Test
+    void anEnrichmentComposingNothingIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
+                on: { partner_code: code }
+                    sql: { file: partners.sql }""", KEYED_REFERENCE))))
+                .contains("TQL-YAML-1047");
+    }
+
+    @Test
+    void aReferenceThatNeverBindsTheKeysIsAnError(@TempDir Path dir) throws Exception {
+        // It returns the right answer and reads the whole table once per batch, so only the
+        // build can see the mistake.
+        assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
+                on: { partner_code: code }
+                    sql: { file: partners.sql }
+                    merge: [partner_name]""",
+                "select code, name as partner_name from partners\n"))))
+                .contains("TQL-YAML-1048");
+    }
+
+    private static final String KEYED_REFERENCE = "select code, name as partner_name from partners where code in /* keys */('P1')\n";
+
+    /** A route whose one enrichment is declared as {@code enrichment} over {@code reference}. */
+    private static Path enrichRoute(Path dir, String enrichment, String reference)
+            throws Exception {
+        Files.createDirectories(dir.resolve("web/items"));
+        Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
+        Files.writeString(dir.resolve("web/items/partners.sql"), reference);
+        Files.writeString(dir.resolve("web/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.probe
+                kind: route
+                recipe: query-json
+                sql:
+                  file: list.sql
+                enrich:
+                  partner:
+                    %s
+                response:
+                  json:
+                    body:
+                      rows: sql.rows
+                """.formatted(enrichment));
         return dir;
     }
 

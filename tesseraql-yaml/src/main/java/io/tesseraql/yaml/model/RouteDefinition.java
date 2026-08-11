@@ -74,6 +74,9 @@ public record RouteDefinition(
         String datasource,
         // Named http: sources composed with SQL results on query routes (docs/connectors.md).
         Map<String, HttpSourceSpec> http,
+        // Reference lookups folded into a result set's rows, keyed by the rows themselves
+        // (docs/lookups.md).
+        Map<String, EnrichSpec> enrich,
         // Declarative HTTP caching for query responses (docs/response-shaping.md).
         CacheSpec cache,
         // Topics broadcast to live views after a successful command commit (docs/realtime.md);
@@ -103,6 +106,9 @@ public record RouteDefinition(
         http = http == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(http));
+        enrich = enrich == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(enrich));
     }
 
     /**
@@ -118,7 +124,7 @@ public record RouteDefinition(
                 idempotency, admission, outbox, sql, steps, queries, validate, decide,
                 notifications,
                 errors, fileImport, fileExport, webhook, publish, consume, response, pagination,
-                datasource, http, cache, emit);
+                datasource, http, enrich, cache, emit);
     }
 
     /**
@@ -134,7 +140,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
                 security, idempotency, admission, outbox, sql, steps, queries, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, cache, emit);
+                response, pagination, datasource, http, enrich, cache, emit);
     }
 
     /**
@@ -148,7 +154,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, sql, steps, queries, effective, decide,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, cache, emit);
+                response, pagination, datasource, http, enrich, cache, emit);
     }
 
     /**
@@ -163,7 +169,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, sql, steps, queries, validate, effective,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, cache, emit);
+                response, pagination, datasource, http, enrich, cache, emit);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */

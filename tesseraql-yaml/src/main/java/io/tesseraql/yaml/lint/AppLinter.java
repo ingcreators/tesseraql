@@ -2412,6 +2412,7 @@ public final class AppLinter {
         lintValidation(route.source(), definition, source, findings);
         lintEmit(definition, source, findings);
         lintHttpSources(config, definition, source, findings);
+        lintEnrich(route.source(), definition, source, findings);
         lintRateLimitScope(definition, source, findings);
         lintHttpCache(definition, source, findings);
         lintNotify(config, definition, source, findings);
@@ -4892,6 +4893,90 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1023", "error", source,
                     "rateLimit.scope must be 'node' or 'cluster', got '" + scope + "'"));
         }
+    }
+
+    /**
+     * Statically checks the {@code enrich:} block (docs/lookups.md): the target must be a result
+     * set the route publishes ({@code TQL-YAML-1045}), the reference must be a SQL file
+     * ({@code TQL-YAML-1046}), the join and the composition must be sayable
+     * ({@code TQL-YAML-1047}), and the reference SQL must actually bind the key set
+     * ({@code TQL-YAML-1048}) — a reference query that never mentions {@code keys} reads the
+     * whole table once per batch and still returns the right answer, which is why only the build
+     * can catch it.
+     */
+    private void lintEnrich(Path file, RouteDefinition definition, String source,
+            List<LintFinding> findings) {
+        definition.enrich().forEach((name, spec) -> {
+            String into = spec.effectiveInto();
+            boolean targetExists = "sql".equals(into)
+                    ? definition.sql() != null
+                    : definition.queries().containsKey(into);
+            if (!targetExists) {
+                findings.add(new LintFinding("TQL-YAML-1045", "error", source,
+                        "enrich '" + name + "': into: '" + into + "' is neither the route's"
+                                + " sql: result nor one of its queries:",
+                        lineOf(file, "enrich:"), null));
+            }
+            if (spec.sql() == null || spec.sql().file() == null || spec.sql().file().isBlank()) {
+                findings.add(new LintFinding("TQL-YAML-1046", "error", source,
+                        "enrich '" + name + "': needs sql: with a file: — the reference is"
+                                + " fetched by key, which a service or contract binding cannot do",
+                        lineOf(file, "enrich:"), null));
+                return;
+            }
+            boolean attaches = spec.as() != null && !spec.as().isBlank();
+            boolean merges = spec.merges()
+                    && spec.merge().stream().noneMatch(c -> c == null || c.isBlank());
+            if (spec.on().isEmpty() || attaches == merges) {
+                findings.add(new LintFinding("TQL-YAML-1047", "error", source,
+                        "enrich '" + name + "': needs a non-empty on: parentColumn: childColumn"
+                                + " map and exactly one of as: (attach a list) or merge: (copy"
+                                + " columns onto each row)",
+                        lineOf(file, "enrich:"), null));
+            }
+            Path sqlFile = file.getParent().resolve(spec.sql().file()).normalize();
+            if (Files.isRegularFile(sqlFile) && !bindsKeys(sqlFile)) {
+                findings.add(new LintFinding("TQL-YAML-1048", "error", source,
+                        "enrich '" + name + "': " + spec.sql().file() + " never binds 'keys' —"
+                                + " the reference would be read whole once per batch instead of"
+                                + " by the keys being looked up",
+                        lineOf(file, "enrich:"), null));
+            }
+        });
+    }
+
+    /** Whether a reference query mentions the {@code keys} bind, as a value list or a loop. */
+    private static boolean bindsKeys(Path sqlFile) {
+        try {
+            return mentionsKeys(Sql2WayParser.parse(Files.readString(sqlFile)));
+        } catch (Exception ignored) {
+            // Unparseable SQL is its own lint's concern; do not double-report it here.
+            return true;
+        }
+    }
+
+    private static boolean mentionsKeys(List<SqlNode> nodes) {
+        for (SqlNode node : nodes) {
+            boolean found = switch (node) {
+                case SqlNode.Bind bind -> isKeys(bind.expressionSource());
+                case SqlNode.ListBind bind -> isKeys(bind.expressionSource());
+                case SqlNode.For loop -> isKeys(loop.listExpressionSource())
+                        || mentionsKeys(loop.body());
+                case SqlNode.If cond -> cond.branches().stream()
+                        .anyMatch(branch -> mentionsKeys(branch.body()));
+                default -> false;
+            };
+            if (found) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code keys} itself, or a path rooted at it. */
+    private static boolean isKeys(String expressionSource) {
+        String expression = expressionSource == null ? "" : expressionSource.trim();
+        return expression.equals("keys") || expression.startsWith("keys.");
     }
 
     /**
