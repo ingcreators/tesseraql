@@ -436,6 +436,12 @@ Four properties, each of which is a defect if omitted:
 Per-tenant catalogs key the cache and the stamp by tenant, so one tenant's refresh neither
 serves another's data nor invalidates it.
 
+**The operations surface reports the hold; it never takes one.** A catalog nothing has asked
+for yet reads as never loaded, which is the state worth seeing — a status page that populated
+the cache by being opened would hide exactly the case an operator is looking for. And a catalog
+serving a previous load while its refresh keeps failing carries both facts at once, because
+either alone reads as healthy.
+
 ### 15. One outbound call, one vocabulary
 
 `method`, `url`, `headers`, `query`, `body`, `credential`, `expectStatus`, `connectTimeout`
@@ -738,12 +744,14 @@ join, the same answer enrichment gives.
    declaration silently does nothing (`TQL-FIELD-4620`), and the scaffolder emitting it for a
    table a catalog reads — and only for those, because a generator must not emit what its own
    linter would flag.
-12b. **Refresh, and the other instances.** The operations surface — what each catalog holds,
-   when it last loaded, what its last load failed with, and a manual refresh — and the
-   per-table version stamp, which is what makes an invalidation reach the instances that did
-   not serve the command. In-process invalidation is correct for one runtime and is a *display*
-   delay on the others, bounded by the hold; the stamp turns that delay into a bounded read of
-   one row however many catalogs derive from the table.
+12b. **The operations surface.** What each catalog holds, when it last loaded, the languages
+   it carried, and the message of its last failed refresh — plus a manual refresh, policy-gated
+   like every other ops write. Reports the hold, never takes one.
+12c. **The other instances.** The per-table version stamp, which is what makes an
+   invalidation reach the runtimes that did not serve the command. In-process invalidation is
+   correct for one runtime and a bounded *display* delay on the others; the stamp turns that
+   into a read of one row however many catalogs derive from the table. It needs a framework
+   migration across the five supported dialects, which is why it is its own slice.
 
 **Wave 3 — the remaining surfaces**
 

@@ -59,4 +59,29 @@ public interface CatalogStore {
      * stale catalog is a display delay, never a wrong rejection.
      */
     void invalidate(java.util.Collection<String> tables);
+
+    /**
+     * What each declared catalog currently holds, for the operations surface.
+     *
+     * <p>Reports the hold; it never takes one. A catalog nothing has asked for yet reads as
+     * never loaded, which is the truth an operator needs — forcing a load here would make the
+     * status page the thing that populated the cache, and hide exactly the case worth seeing.
+     */
+    java.util.List<Status> status();
+
+    /**
+     * One catalog's hold as the operations surface sees it.
+     *
+     * @param name      the catalog's declared name
+     * @param tables    the source tables it reads, which is what {@code invalidates:} names
+     * @param codes     how many distinct codes the load carried, or {@code -1} if never loaded
+     * @param languages the languages the load carried, empty for a catalog with no language
+     * @param loadedAt  epoch millis of the load being served, or {@code null} if never loaded
+     * @param lastError the message of the most recent failed refresh, or {@code null}; a
+     *                  catalog can be serving a previous load and carrying an error at once,
+     *                  which is precisely the state that must not look healthy
+     */
+    record Status(String name, java.util.List<String> tables, int codes,
+            java.util.List<String> languages, Long loadedAt, String lastError) {
+    }
 }
