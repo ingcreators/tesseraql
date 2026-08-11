@@ -50,6 +50,9 @@ tesseraql:
     outbound:
       allowedHosts:
         - api.directory.example
+        # The audit webhook channel above delivers through this same gateway, so its host is
+        # allow-listed here too — egress is deny-by-default for the framework's own calls.
+        - localhost
       credentials:
         directory:
           type: header

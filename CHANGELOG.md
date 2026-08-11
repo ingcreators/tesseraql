@@ -34,6 +34,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: a webhook notification is delivered through the outbound gateway**
+  (docs/lookups.md, decision 20). `WebhookNotifier` built its own `HttpClient`, so the one path
+  where the framework itself calls out was the one path with no allow-list, no named credential,
+  a hard-coded connect timeout and no share in the per-host circuit breaker. A webhook channel's
+  host must now be in `tesseraql.http.outbound.allowedHosts`, and a channel may name a
+  `credential:` and its own timeouts. The signing, payload, retry and dead-letter policy are
+  unchanged — the HMAC is still computed over the exact bytes sent, which is why the body and the
+  signature stay with the notifier rather than moving into the gateway.
+- **BREAKING: `HttpSourceGateway` is `OutboundGateway`** (registry bean
+  `tesseraqlHttpSourceGateway` → `tesseraqlOutboundGateway`). One seam for every outbound call —
+  a job step, a query route's source, a command's pre-transaction fetch, an enrichment's
+  reference, and a webhook delivery — rather than a name that described only the first consumer.
 - **BREAKING: `http:` sources are no longer GET-only and body-less** (docs/lookups.md, decision
   16). That restriction stood for "a read route performs no write", which it neither achieved —
   nothing stops a partner's `GET` from mutating — nor came free: it refused JSON-RPC, GraphQL, and
