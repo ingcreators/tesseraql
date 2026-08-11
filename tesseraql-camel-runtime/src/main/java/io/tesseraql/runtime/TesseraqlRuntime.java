@@ -744,15 +744,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 : io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
         // Cluster-scoped rate limits (docs/deployment.md): the lease ledger exists exactly
         // when a route declares rateLimit.scope: cluster; limiters reach it via the registry.
-        if (manifest.routes().stream().anyMatch(route -> route.definition().admission() != null
-                && route.definition().admission().rateLimit() != null
-                && route.definition().admission().rateLimit().isCluster())) {
+        if (routeShaped(manifest).anyMatch(definition -> definition.admission() != null
+                && definition.admission().rateLimit() != null
+                && definition.admission().rateLimit().isCluster())) {
             io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
                     frameworkDataSource);
             rateLeases.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
         }
-        if (manifest.routes().stream().anyMatch(route -> !route.definition().http().isEmpty())) {
+        // An enrichment's http: reference calls through the same gateway, so it counts toward
+        // binding it — otherwise the reference fails at request time with no route-level http:
+        // anywhere in the app (docs/lookups.md).
+        if (routeShaped(manifest).anyMatch(definition -> !definition.http().isEmpty()
+                || definition.enrich().values().stream()
+                        .anyMatch(enrich -> enrich.http() != null))) {
             context.getRegistry().bind(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
                     (io.tesseraql.yaml.http.HttpSourceGateway) (spec,
                             callContext) -> httpCallClient.call(spec, callContext, null));
@@ -4030,6 +4035,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return !manifest.attachments().isEmpty()
                 && io.tesseraql.yaml.attachment.AttachmentSettings.from(manifest.config())
                         .managed();
+    }
+
+    /**
+     * Every route-shaped definition an application declares — HTTP routes, queue consumers, and
+     * the three MCP surfaces. A capability is bound when <em>any</em> of them needs it: a
+     * predicate that reads {@code manifest.routes()} alone leaves the same declaration on an MCP
+     * tool or a consumer with an unbound bean and an uncoded failure at request time.
+     */
+    private static java.util.stream.Stream<io.tesseraql.yaml.model.RouteDefinition> routeShaped(
+            io.tesseraql.yaml.manifest.AppManifest manifest) {
+        return java.util.stream.Stream.of(
+                manifest.routes().stream().map(
+                        io.tesseraql.yaml.manifest.RouteFile::definition),
+                manifest.consumers().stream().map(
+                        io.tesseraql.yaml.manifest.RouteFile::definition),
+                manifest.tools().stream().map(
+                        io.tesseraql.yaml.manifest.ToolFile::definition),
+                manifest.resources().stream().map(
+                        io.tesseraql.yaml.manifest.ResourceFile::definition),
+                manifest.uiResources().stream().map(
+                        io.tesseraql.yaml.manifest.UiResourceFile::definition))
+                .flatMap(java.util.function.Function.identity());
     }
 
     /** Whether any declared workflow has a transition that assigns a task (roadmap Phase 28 slice 2). */

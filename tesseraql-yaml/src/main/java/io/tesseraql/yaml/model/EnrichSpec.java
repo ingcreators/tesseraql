@@ -23,17 +23,27 @@ import java.util.Map;
  * @param into      the result set to enrich: {@code sql} or a named query
  * @param on        {@code parentColumn: childColumn}, one entry per key column
  * @param sql       the reference query; {@code keys} is bound into it
+ * @param http      the reference call; see {@code mode} for what the keys bind to
+ * @param mode      {@code batch} (one request for the whole key set) or {@code perRow} (one
+ *                  request per distinct key); SQL is always batched, HTTP defaults to perRow
  * @param as        attach the matching rows as a list under this field (one-to-many)
  * @param merge     copy these columns of the single matching row onto each parent (many-to-one)
  * @param batchSize distinct keys per statement; defaulted from the dialect and the key arity
  * @param maxKeys   the ceiling on distinct keys, beyond which the enrichment fails
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record EnrichSpec(String into, Map<String, String> on, SqlBinding sql, String as,
-        List<String> merge, Integer batchSize, Integer maxKeys) {
+public record EnrichSpec(String into, Map<String, String> on, SqlBinding sql,
+        HttpSourceSpec http, String mode, String as, List<String> merge, Integer batchSize,
+        Integer maxKeys) {
 
     /** The result set an enrichment enriches when it names none: the route's own SQL. */
     public static final String DEFAULT_INTO = "sql";
+
+    /** One request for the whole key set. */
+    public static final String BATCH = "batch";
+
+    /** One request per distinct key. */
+    public static final String PER_ROW = "perRow";
 
     public EnrichSpec {
         on = on == null ? Map.of() : Map.copyOf(on);
@@ -43,6 +53,24 @@ public record EnrichSpec(String into, Map<String, String> on, SqlBinding sql, St
     /** The result set to enrich, defaulting to the route's own {@code sql:} result. */
     public String effectiveInto() {
         return into == null || into.isBlank() ? DEFAULT_INTO : into;
+    }
+
+    /**
+     * How the reference is fetched. SQL is always batched — a statement takes a key list by
+     * construction. An HTTP reference defaults to {@code perRow}, because most partner APIs are
+     * keyed per resource; one that accepts a list declares {@code batch} and gets the same
+     * one-round-trip property SQL has (docs/lookups.md, decision 17).
+     */
+    public String effectiveMode() {
+        if (sql != null) {
+            return BATCH;
+        }
+        return mode == null || mode.isBlank() ? PER_ROW : mode;
+    }
+
+    /** Whether the whole key set rides one request. */
+    public boolean batches() {
+        return BATCH.equals(effectiveMode());
     }
 
     /** Whether this entry merges columns onto the parent rather than attaching a list. */

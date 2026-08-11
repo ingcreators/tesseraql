@@ -2412,7 +2412,7 @@ public final class AppLinter {
         lintValidation(route.source(), definition, source, findings);
         lintEmit(definition, source, findings);
         lintHttpSources(config, definition, source, findings);
-        lintEnrich(route.source(), definition, source, findings);
+        lintEnrich(config, route.source(), definition, source, findings);
         lintRateLimitScope(definition, source, findings);
         lintHttpCache(definition, source, findings);
         lintNotify(config, definition, source, findings);
@@ -4904,8 +4904,8 @@ public final class AppLinter {
      * whole table once per batch and still returns the right answer, which is why only the build
      * can catch it.
      */
-    private void lintEnrich(Path file, RouteDefinition definition, String source,
-            List<LintFinding> findings) {
+    private void lintEnrich(AppConfig config, Path file, RouteDefinition definition,
+            String source, List<LintFinding> findings) {
         definition.enrich().forEach((name, spec) -> {
             String into = spec.effectiveInto();
             boolean targetExists = "sql".equals(into)
@@ -4917,10 +4917,14 @@ public final class AppLinter {
                                 + " sql: result nor one of its queries:",
                         lineOf(file, "enrich:"), null));
             }
-            if (spec.sql() == null || spec.sql().file() == null || spec.sql().file().isBlank()) {
+            boolean hasSql = spec.sql() != null && spec.sql().file() != null
+                    && !spec.sql().file().isBlank();
+            boolean hasHttp = spec.http() != null && spec.http().url() != null
+                    && !spec.http().url().isBlank();
+            if (hasSql == hasHttp) {
                 findings.add(new LintFinding("TQL-YAML-1046", "error", source,
-                        "enrich '" + name + "': needs sql: with a file: — the reference is"
-                                + " fetched by key, which a service or contract binding cannot do",
+                        "enrich '" + name + "': needs exactly one reference — sql: with a"
+                                + " file:, or http: with a url:",
                         lineOf(file, "enrich:"), null));
                 return;
             }
@@ -4934,15 +4938,45 @@ public final class AppLinter {
                                 + " columns onto each row)",
                         lineOf(file, "enrich:"), null));
             }
-            Path sqlFile = file.getParent().resolve(spec.sql().file()).normalize();
-            if (Files.isRegularFile(sqlFile) && !bindsKeys(sqlFile)) {
+            if (hasSql) {
+                Path sqlFile = file.getParent().resolve(spec.sql().file()).normalize();
+                if (Files.isRegularFile(sqlFile) && !bindsKeys(sqlFile)) {
+                    findings.add(new LintFinding("TQL-YAML-1048", "error", source,
+                            "enrich '" + name + "': " + spec.sql().file() + " never binds"
+                                    + " 'keys' — the reference would be read whole once per"
+                                    + " batch instead of by the keys being looked up",
+                            lineOf(file, "enrich:"), null));
+                }
+            } else if (!usesKeys(spec)) {
+                // The HTTP twin of the same defect: a call that mentions neither the key set
+                // nor the key sends the identical request every time and answers plausibly.
                 findings.add(new LintFinding("TQL-YAML-1048", "error", source,
-                        "enrich '" + name + "': " + spec.sql().file() + " never binds 'keys' —"
-                                + " the reference would be read whole once per batch instead of"
-                                + " by the keys being looked up",
+                        "enrich '" + name + "': the " + spec.effectiveMode() + " reference never"
+                                + " uses " + (spec.batches() ? "'keys'" : "'key.<column>'")
+                                + " — every request would be identical",
                         lineOf(file, "enrich:"), null));
             }
+            if (hasHttp) {
+                lintHttpCall(config, "enrich '" + name + "'", spec.http().call(), source,
+                        findings);
+            }
         });
+    }
+
+    /**
+     * Whether an HTTP reference actually varies with the keys: a batch call must carry the key
+     * set ({@code keys}), a per-row call one key ({@code key.<column>}). The url, the query
+     * bindings, the body and the headers are all places it can appear.
+     */
+    private static boolean usesKeys(io.tesseraql.yaml.model.EnrichSpec spec) {
+        String needle = spec.batches() ? "keys" : "key.";
+        io.tesseraql.yaml.model.HttpCallSpec call = spec.http().call();
+        java.util.List<String> declarations = new ArrayList<>();
+        declarations.add(call.url() == null ? "" : call.url());
+        declarations.add(call.body() == null ? "" : call.body());
+        declarations.addAll(call.query().values());
+        declarations.addAll(call.headers().values());
+        return declarations.stream().anyMatch(declared -> declared.contains(needle));
     }
 
     /** Whether a reference query mentions the {@code keys} bind, as a value list or a loop. */

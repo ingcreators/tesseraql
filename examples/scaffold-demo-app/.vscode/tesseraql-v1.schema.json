@@ -199,7 +199,17 @@
           },
           "sql": {
             "$ref": "#/$defs/sqlBinding",
-            "description": "The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048)."
+            "description": "The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). Exactly one of `sql` or `http` is the reference."
+          },
+          "http": {
+            "type": "object",
+            "description": "The reference call, in the vocabulary every outbound call shares, plus `select` and `onError`. Exactly one of `sql` or `http` is the reference. A `perRow` call may key its url with `{key.<column>}` placeholders, percent-encoded per path segment; a `batch` call carries the whole key set as `keys`.",
+            "additionalProperties": true
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["perRow", "batch"],
+            "description": "How an HTTP reference is fetched: `perRow` (the default — one request per distinct key, for a resource keyed per URL) or `batch` (one request per `batchSize` keys, for an endpoint that accepts a key list). A SQL reference is always batched."
           },
           "as": {
             "type": "string",
