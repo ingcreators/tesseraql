@@ -42,6 +42,8 @@ import org.apache.camel.Processor;
  */
 public final class EnrichProcessor implements Processor {
 
+    private static final System.Logger LOG = System.getLogger(EnrichProcessor.class.getName());
+
     /** TQL-SQL-2114: an enrichment's distinct key set exceeded maxKeys. */
     static final TqlErrorCode TOO_MANY_KEYS = new TqlErrorCode(TqlDomain.SQL, 2114);
 
@@ -148,8 +150,37 @@ public final class EnrichProcessor implements Processor {
                     .build();
         }
 
-        Map<Object, List<Map<String, Object>>> reference = new LinkedHashMap<>();
         List<List<Object>> keys = List.copyOf(distinct.values());
+        Map<Object, List<Map<String, Object>>> reference;
+        try {
+            reference = spec.sql() != null
+                    ? fetchSql(exchange, context, keys, matchColumns)
+                    : fetchHttp(exchange, context, keys, matchColumns);
+        } catch (RuntimeException ex) {
+            // Degrading means no key is merged, never the batches that happened to succeed: a
+            // list where some rows carry a name and some do not reads as a data problem and
+            // gets reported as one (docs/lookups.md, decision 6).
+            if (!degradesToEmpty()) {
+                throw ex;
+            }
+            LOG.log(System.Logger.Level.WARNING, "enrich ''{0}'' failed; degrading to no"
+                    + " enrichment (onError: empty)", name, ex);
+            meter(exchange).counter("tesseraql.enrich.degraded").increment(Map.of("enrich", name));
+            reference = Map.of();
+        }
+        compose(context, into, (Map<String, Object>) target, rows, reference);
+    }
+
+    /** Whether the reference declares that a failure degrades instead of failing the request. */
+    private boolean degradesToEmpty() {
+        return spec.http() != null && spec.http().degradesToEmpty();
+    }
+
+    /** The SQL reference: batches of distinct keys on one connection, grouped by the match. */
+    private Map<Object, List<Map<String, Object>>> fetchSql(Exchange exchange,
+            Map<String, Object> context, List<List<Object>> keys, List<String> matchColumns)
+            throws SQLException {
+        Map<Object, List<Map<String, Object>>> reference = new LinkedHashMap<>();
         DataSource dataSource = TenantRouting.dataSource(exchange, datasource);
         try (Connection connection = dataSource.getConnection()) {
             for (int from = 0; from < keys.size(); from += batchSize) {
@@ -162,7 +193,83 @@ public final class EnrichProcessor implements Processor {
                 }
             }
         }
-        compose(context, into, (Map<String, Object>) target, rows, reference);
+        return reference;
+    }
+
+    /**
+     * The HTTP reference. A {@code batch} call carries the whole key set as {@code keys} and
+     * its rows are matched like a SQL reference's, so they must carry the match columns. A
+     * {@code perRow} call is made once per distinct key and its rows need no key at all: the
+     * answer belongs to the key that was asked for, so the match is implicit.
+     */
+    private Map<Object, List<Map<String, Object>>> fetchHttp(Exchange exchange,
+            Map<String, Object> context, List<List<Object>> keys, List<String> matchColumns) {
+        Map<Object, List<Map<String, Object>>> reference = new LinkedHashMap<>();
+        if (spec.batches()) {
+            for (int from = 0; from < keys.size(); from += batchSize) {
+                List<List<Object>> batch = keys.subList(from,
+                        Math.min(from + batchSize, keys.size()));
+                Map<String, Object> scoped = new LinkedHashMap<>(context);
+                scoped.put("keys", keysBind(batch, matchColumns));
+                for (Map<String, Object> row : call(exchange, scoped, spec.http().call().url())) {
+                    reference.computeIfAbsent(JoinKeys.of(row, matchColumns),
+                            ignored -> new ArrayList<>()).add(row);
+                }
+            }
+            return reference;
+        }
+        for (List<Object> key : keys) {
+            Map<String, Object> values = new LinkedHashMap<>();
+            for (int i = 0; i < matchColumns.size(); i++) {
+                values.put(matchColumns.get(i), key.get(i));
+            }
+            Map<String, Object> scoped = new LinkedHashMap<>(context);
+            scoped.put("key", values);
+            List<Map<String, Object>> rows = call(exchange, scoped,
+                    KeyedUrls.fill(spec.http().call().url(), values));
+            if (!rows.isEmpty()) {
+                reference.put(canonical(key), new ArrayList<>(rows));
+            }
+        }
+        return reference;
+    }
+
+    /** The canonical form of one raw key, so it lands under the same key the rows join on. */
+    private static Object canonical(List<Object> key) {
+        if (key.size() == 1) {
+            return JoinKeys.value(key.get(0));
+        }
+        List<Object> canonical = new ArrayList<>(key.size());
+        key.forEach(value -> canonical.add(JoinKeys.value(value)));
+        return java.util.Collections.unmodifiableList(canonical);
+    }
+
+    /** One outbound call through the gateway, shaped into rows the way an http: source is. */
+    private List<Map<String, Object>> call(Exchange exchange, Map<String, Object> context,
+            String url) {
+        io.tesseraql.yaml.http.HttpSourceGateway gateway = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
+                        io.tesseraql.yaml.http.HttpSourceGateway.class);
+        if (gateway == null) {
+            throw new IllegalStateException("enrich '" + name
+                    + "' declares an http: reference but no outbound gateway is bound");
+        }
+        io.tesseraql.yaml.model.HttpCallSpec declared = spec.http().call();
+        io.tesseraql.yaml.model.HttpCallSpec resolved = url.equals(declared.url())
+                ? declared
+                : new io.tesseraql.yaml.model.HttpCallSpec(declared.method(), url,
+                        declared.headers(), declared.query(), declared.credential(),
+                        declared.body(), declared.expectStatus(), declared.connectTimeout(),
+                        declared.requestTimeout());
+        Map<String, Object> result = gateway.call(resolved, context);
+        return HttpSourceProcessor.rowsOf(result.get("body"), spec.http().select());
+    }
+
+    private static io.tesseraql.core.telemetry.Meter meter(Exchange exchange) {
+        io.tesseraql.core.telemetry.Meter meter = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.METER_BEAN,
+                        io.tesseraql.core.telemetry.Meter.class);
+        return meter != null ? meter : io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
     }
 
     /** One batch: the distinct keys bind as {@code keys}, beside the binding's own params. */

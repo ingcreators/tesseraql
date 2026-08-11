@@ -1,7 +1,7 @@
 # Lookups and enrichment
 
-Status: **designed 2026-08-11**. **Slices 1-2 complete** (composition, and `enrich:` with a SQL
-reference); decisions 15-20 and slices 3-12 below.
+Status: **designed 2026-08-11**. **Slices 1-3 complete** (composition, `enrich:` with a SQL reference,
+and one outbound-call vocabulary); decisions 15-21 and slices 4-12 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
@@ -544,6 +544,26 @@ the partner's answer *stored* writes a pending row and lets a job's `httpCall:` 
 it. That is the saga the framework supports — atomicity and a synchronous external answer
 cannot both be had — and the guide should say so rather than leave it to be discovered.
 
+### 21. A per-row reference keys its URL, and the key is encoded
+
+`GET /partners/{code}` is the ordinary shape of a reference API, and nothing in the framework
+could express it: every other call is made once, with a URL known at build time. A `perRow`
+enrichment's url therefore takes `{key.<column>}` placeholders, filled per key before the call
+is handed to the gateway — so the client keeps receiving a finished URL and the host faces the
+same allow-list check it always did.
+
+Values are **percent-encoded for a path segment**, not with `URLEncoder`, which encodes for a
+query string: it renders a space as `+` and passes `/` through untouched. A key carrying either
+would otherwise address a different resource than the one asked for. Everything outside RFC
+3986's unreserved set is escaped.
+
+A `batch` reference needs none of this — its keys ride the body — and a `perRow` reference that
+mentions neither `{key.…}` nor `key.` in its query, body or headers sends the identical request
+for every key, which is `TQL-YAML-1048`'s HTTP twin.
+
+Out of scope, still: a body *template*. Decision 18 stands — keying a url is substitution into
+a string the author already wrote, while an envelope is a new authoring surface.
+
 ## Waves and slices
 
 **Wave 1 — composition and enrichment**
@@ -565,7 +585,7 @@ cannot both be had — and the guide should say so rather than leave it to be di
    `HttpCallSpec`'s fields; `http:` sources gain `method:` and `body:` and lose the GET-only
    restriction; `body:` on a bodyless method becomes a build error. Breaking, and no new
    feature of its own — the vocabulary has to be one before an enrichment can borrow it.
-4. **`enrich:` with an `http:` reference** (decision 17). `mode: perRow` (default) and
+4. **`enrich:` with an `http:` reference** (decisions 17, 21). `mode: perRow` (default) and
    `mode: batch` over the same key set, the same `batchSize`/`maxKeys`, the existing gateway's
    egress allow-list, credentials and degradation metric, plus `onError:` under decision 6's
    all-or-nothing rule.

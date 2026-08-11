@@ -752,7 +752,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             rateLeases.ensureSchema();
             context.getRegistry().bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
         }
-        if (manifest.routes().stream().anyMatch(route -> !route.definition().http().isEmpty())) {
+        // An enrichment's http: reference calls through the same gateway, so it counts toward
+        // binding it — otherwise the reference fails at request time with no route-level http:
+        // anywhere in the app (docs/lookups.md).
+        if (manifest.routes().stream().anyMatch(route -> !route.definition().http().isEmpty()
+                || route.definition().enrich().values().stream()
+                        .anyMatch(enrich -> enrich.http() != null))) {
             context.getRegistry().bind(TesseraqlProperties.HTTP_SOURCE_GATEWAY_BEAN,
                     (io.tesseraql.yaml.http.HttpSourceGateway) (spec,
                             callContext) -> httpCallClient.call(spec, callContext, null));

@@ -95,6 +95,14 @@ public final class HttpSourceProcessor implements Processor {
         return shaped;
     }
 
+    /**
+     * The rows a response body yields under an optional {@code select:} path — the one shaping
+     * an {@code http:} source and an enrichment's HTTP reference share.
+     */
+    static List<Map<String, Object>> rowsOf(Object body, String select) {
+        return rows(select(body, select));
+    }
+
     /** Walks the optional dotted {@code select:} path into the parsed JSON; null on a miss. */
     private static Object select(Object body, String select) {
         if (select == null || select.isBlank()) {

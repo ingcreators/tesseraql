@@ -161,6 +161,44 @@ A row-value `IN` is deliberately not generated: SQL Server does not accept one, 
 enrichment does **not** buy is sorting, searching, or paginating by the merged column: only
 SQL can order a result set, so a screen that must sort by partner name still joins.
 
+### An HTTP reference
+
+The reference may be a call instead of a query — the same call vocabulary
+[connectors](connectors.md) documents, plus `select:` and `onError:`. How the keys reach it is
+`mode:`:
+
+```yaml
+enrich:
+  partner:                              # perRow (the default): one request per distinct key
+    on: { partner_code: code }
+    http: { url: https://crm/partners/{key.code}, credential: crm }
+    merge: [name]
+
+  rating:                               # batch: one request per batchSize keys
+    on: { partner_code: code }
+    mode: batch
+    http:
+      method: POST
+      url: https://crm/ratings/search
+      body: keys                        # the distinct key set, as JSON
+      select: matches
+    merge: [rating]
+```
+
+- **`perRow`** suits a resource keyed per URL. `{key.<column>}` placeholders in the url take
+  that key's values, **percent-encoded per path segment**, so a key carrying `/` or a space
+  cannot address a different resource. The response needs no key of its own: the answer belongs
+  to the key that was asked for.
+- **`batch`** suits an endpoint that accepts a list. The keys bind as `keys` exactly as they do
+  for a SQL reference, `batchSize` splits the set, and — because one response answers many keys
+  — its rows **must carry the reference columns**, which `on:` matches on.
+- A reference that mentions neither `keys` nor `key.<column>` anywhere sends the identical
+  request every time and is refused at build (`TQL-YAML-1048`).
+- **`onError: empty`** degrades the *whole* enrichment: no key is merged, never the batches that
+  happened to succeed. A list where some rows carry a name and some do not reads as a data
+  problem and gets reported as one. Degrading is logged and counted
+  (`tesseraql.enrich.degraded`).
+
 ## Conditional statuses (`statusWhen:`)
 
 Business conditions map to HTTP statuses declaratively — the generalization of

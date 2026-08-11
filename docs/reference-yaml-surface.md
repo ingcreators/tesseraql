@@ -118,7 +118,9 @@ Token-bucket rate limit for this route.
 | --- | --- | --- |
 | `into` | string | The result set to enrich: `sql` (the default) or one of the route's `queries:` (TQL-YAML-1045). |
 | `on` | map of string | The join, one entry per key column: each row column to the reference column it matches. The row side is the key that is looked up; the reference side names the columns bound as `keys`. |
-| `sql` | [sqlBinding](#sqlbinding) | The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). |
+| `sql` | [sqlBinding](#sqlbinding) | The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). Exactly one of `sql` or `http` is the reference. |
+| `http` | object | The reference call, in the vocabulary every outbound call shares, plus `select` and `onError`. Exactly one of `sql` or `http` is the reference. A `perRow` call may key its url with `{key.<column>}` placeholders, percent-encoded per path segment; a `batch` call carries the whole key set as `keys`. |
+| `mode` | enum: `perRow` \| `batch` | How an HTTP reference is fetched: `perRow` (the default — one request per distinct key, for a resource keyed per URL) or `batch` (one request per `batchSize` keys, for an endpoint that accepts a key list). A SQL reference is always batched. |
 | `as` | string | Attach the matching reference rows as a list under this field; exactly one of `as` or `merge` composes the match (TQL-YAML-1047). |
 | `merge` | array of string | Copy these columns of the single matching reference row onto each row, for a many-to-one reference; the alternative to `as`. |
 | `batchSize` | integer ≥ 1 | Distinct keys per statement. Defaults from the dialect and the key arity, under Oracle's 1000-expression IN limit and SQL Server's 2100 parameters. |

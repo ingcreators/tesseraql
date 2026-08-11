@@ -1028,6 +1028,14 @@ public final class RouteCompiler {
         ProcessorDefinition<?> enriched = step;
         for (var entry : definition.enrich().entrySet()) {
             io.tesseraql.yaml.model.EnrichSpec spec = entry.getValue();
+            if (spec.sql() == null) {
+                // An HTTP reference has no file, no datasource and no dialect: it rides the
+                // outbound gateway, which the processor looks up per request.
+                enriched = enriched.process(new io.tesseraql.compiler.binding.EnrichProcessor(
+                        entry.getKey(), spec, java.util.List.of(), null, null, null,
+                        commandBounds()));
+                continue;
+            }
             String datasource = bindingDatasource(spec.sql(), definition.effectiveDatasource());
             String dialect = datasourceDialect(datasource);
             Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(

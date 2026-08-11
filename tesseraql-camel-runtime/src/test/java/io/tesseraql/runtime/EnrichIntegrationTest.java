@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.AfterAll;
@@ -34,6 +37,9 @@ class EnrichIntegrationTest {
 
     static TesseraqlRuntime runtime;
     static Path appHome;
+    static HttpServer upstream;
+    static final java.util.List<String> seenRequests = java.util.Collections
+            .synchronizedList(new java.util.ArrayList<>());
 
     @BeforeAll
     static void start() throws Exception {
@@ -60,7 +66,40 @@ class EnrichIntegrationTest {
             statement.execute("insert into history (order_id, partner_code, note) values"
                     + " (1, 'P1', 'created'), (1, 'P2', 'reassigned')");
         }
-        appHome = prepareAppHome();
+        upstream = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        // One resource per key: GET /partners/{code}. The path is what the enrichment keys.
+        upstream.createContext("/partners/", exchange -> {
+            seenRequests.add(exchange.getRequestURI().getRawPath());
+            String code = exchange.getRequestURI().getPath()
+                    .substring("/partners/".length());
+            byte[] body = ("{\"name\":\"http-" + code + "\"}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        // One request for the whole key set: POST /search with the keys as the body.
+        upstream.createContext("/search", exchange -> {
+            String posted = new String(exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8);
+            seenRequests.add("POST /search " + posted);
+            StringBuilder matches = new StringBuilder("{\"matches\":[");
+            for (String code : new String[]{"P1", "P2"}) {
+                if (posted.contains(code)) {
+                    matches.append(matches.length() > 13 ? "," : "")
+                            .append("{\"code\":\"").append(code)
+                            .append("\",\"name\":\"batch-").append(code).append("\"}");
+                }
+            }
+            byte[] body = matches.append("]}").toString().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        upstream.start();
+        appHome = prepareAppHome(upstream.getAddress().getPort());
         runtime = TesseraqlRuntime.start(appHome, freePort());
     }
 
@@ -68,6 +107,9 @@ class EnrichIntegrationTest {
     static void stop() throws IOException {
         if (runtime != null) {
             runtime.close();
+        }
+        if (upstream != null) {
+            upstream.stop(0);
         }
         if (appHome != null) {
             try (var files = Files.walk(appHome)) {
@@ -139,7 +181,39 @@ class EnrichIntegrationTest {
         }
     }
 
-    private static Path prepareAppHome() throws IOException {
+    /** perRow: one request per distinct key, keyed in the path. */
+    @Test
+    void aPerRowHttpReferenceCallsOncePerDistinctKey() throws Exception {
+        seenRequests.clear();
+        JsonNode rows = MAPPER.readTree(get("/api/orders/via-http").body()).get("rows");
+        assertThat(rows).hasSize(4);
+        assertThat(rows.get(0).get("name").asText()).isEqualTo("http-P1");
+        assertThat(rows.get(1).get("name").asText()).isEqualTo("http-P2");
+        // Row 2 repeats P1 and costs no second call; three distinct keys, three requests.
+        assertThat(rows.get(2).get("name").asText()).isEqualTo("http-P1");
+        assertThat(seenRequests.stream().filter(r -> r.startsWith("/partners/"))).hasSize(3);
+    }
+
+    /** batch: one request carries the whole key set. */
+    @Test
+    void aBatchHttpReferenceCallsOnceForTheWholeKeySet() throws Exception {
+        seenRequests.clear();
+        JsonNode rows = MAPPER.readTree(get("/api/orders/via-search").body()).get("rows");
+        assertThat(rows.get(0).get("name").asText()).isEqualTo("batch-P1");
+        assertThat(rows.get(1).get("name").asText()).isEqualTo("batch-P2");
+        assertThat(rows.get(3).get("name").isNull()).isTrue();
+        assertThat(seenRequests.stream().filter(r -> r.startsWith("POST /search"))).hasSize(1);
+    }
+
+    /** onError: empty degrades the whole enrichment, never a subset of the rows. */
+    @Test
+    void aDeadReferenceLeavesEveryRowUnenriched() throws Exception {
+        JsonNode rows = MAPPER.readTree(get("/api/orders/degraded").body()).get("rows");
+        assertThat(rows).hasSize(4);
+        assertThat(rows).allMatch(row -> row.get("name").isNull());
+    }
+
+    private static Path prepareAppHome(int upstreamPort) throws IOException {
         Path target = Files.createTempDirectory("tesseraql-enrich-it");
         Files.createDirectories(target.resolve("config"));
         Files.writeString(target.resolve("config/application.yml"), """
@@ -154,6 +228,10 @@ class EnrichIntegrationTest {
                       jdbcUrl: %s
                       username: %s
                       password: %s
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - localhost
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
 
@@ -242,7 +320,52 @@ class EnrichIntegrationTest {
 
         writeVariant(target, "batched", "batchSize: 1");
         writeVariant(target, "capped", "maxKeys: 1");
+        writeHttpVariant(target, "via-http", """
+                http:
+                      url: http://localhost:%d/partners/{key.code}
+                    merge: [name]""".formatted(upstreamPort), "name");
+        writeHttpVariant(target, "via-search", """
+                http:
+                      method: POST
+                      url: http://localhost:%d/search
+                      body: keys
+                      select: matches
+                    mode: batch
+                    merge: [name]""".formatted(upstreamPort), "name");
+        writeHttpVariant(target, "degraded", """
+                http:
+                      url: http://localhost:1/partners/{key.code}
+                      connectTimeout: 1s
+                      requestTimeout: 1s
+                      onError: empty
+                    merge: [name]""", "name");
         return target;
+    }
+
+    /** The orders list enriched over HTTP; {@code reference} is the whole difference. */
+    private static void writeHttpVariant(Path target, String name, String reference,
+            String merged) throws IOException {
+        Path dir = target.resolve("web/api/orders/" + name);
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("orders.sql"),
+                "select id, partner_code from orders order by id\n");
+        Files.writeString(dir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.%s
+                kind: route
+                recipe: query-json
+                sql:
+                  file: orders.sql
+                enrich:
+                  partner:
+                    on: { partner_code: code }
+                    %s
+                response:
+                  json:
+                    status: 200
+                    body:
+                      rows: sql.rows
+                """.formatted(name.replace('-', '.'), reference));
     }
 
     /** The orders list again, with one bound overridden — the whole difference under test. */

@@ -21,6 +21,11 @@ All notable changes to TesseraQL are documented here. The format follows
   one-element array.
 - **An `http:` source may declare `method:` and `body:`.** A reference API is as often
   `POST …/search` with a list of keys as it is a `GET`.
+- **An enrichment's reference may be an HTTP call** instead of a query, in either of two modes:
+  `perRow` (the default — one request per distinct key, with `{key.<column>}` placeholders taking
+  that key's values, percent-encoded per path segment) or `batch` (one request per `batchSize`
+  keys, the set bound as `keys`). `onError: empty` degrades the whole enrichment rather than
+  leaving some rows enriched and some not.
 
 ### Changed
 
