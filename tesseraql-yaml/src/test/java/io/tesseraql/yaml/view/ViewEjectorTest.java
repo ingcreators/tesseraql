@@ -69,6 +69,42 @@ class ViewEjectorTest {
     }
 
     @Test
+    void ejectsACatalogResolutionForACodedColumn(@TempDir Path dir) throws Exception {
+        // docs/lookups.md decision 8: ejecting pins the layout, never the data — the ejected
+        // page calls the catalog rather than carrying today's names as literals, on a list
+        // column, on a detail field, and inside a child table alike.
+        Files.createDirectories(dir.resolve("domains"));
+        Files.writeString(dir.resolve("domains/codes.yml"), """
+                version: tesseraql/v1
+                domains:
+                  取引区分:
+                    type: string
+                    codes: 取引区分
+                """);
+        ViewSpec spec = parse(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: detail
+                fields:
+                  - name: 取引区分
+                    domain: 取引区分
+                children:
+                  - source: 履歴
+                    columns:
+                      - name: 取引区分
+                        domain: 取引区分
+                      - name: 金額
+                """);
+        ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
+                "web/受注/page.html");
+        assertThat(file.content())
+                .contains("${row == null ? '' : codes['取引区分'].of(row['取引区分'])}")
+                .contains("${codes['取引区分'].of(child['取引区分'])}")
+                // A column with no domain: keeps reading the row directly.
+                .contains("${child['金額']}");
+    }
+
+    @Test
     void aListWithoutExplicitColumnsRefusesToEject(@TempDir Path dir) throws Exception {
         ViewSpec spec = parse(dir, "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         assertThatThrownBy(() -> ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),

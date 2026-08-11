@@ -619,6 +619,43 @@ Two as-of dates follow, and they are not the same date:
 
 Conflating them is how yesterday's order changes its tax when someone edits it today.
 
+### 24. A name resolves once, and a missing name renders the code
+
+A `domain:` on a `columns:` or `fields:` entry is a *read-side* declaration as much as a
+write-side one. Where that domain's legal values are a catalog's codes, every surface that
+renders the column renders the name: a list, a detail's field, a detail's history child, a
+dashboard's table panel, and the template a page was ejected into. The alternative — a `label:`
+or `codes:` key on the column — would let one screen say 現金 while another says 1 for the same
+declaration, and neither would be wrong.
+
+Two consequences worth naming.
+
+**The read side is where masking was already missing.** Column-level `domain:` carried
+classification and mask only for a list's own `columns:`; a child's and a panel's were never
+collected, so a masked domain named on a detail view's history table rendered raw. Resolving
+names required walking those columns anyway, and the mask travels the same walk.
+
+**`of()` falls back to the code.** A code the catalog does not carry now renders as itself
+rather than as nothing. A missing name is a gap in the master data — not a reason to blank a
+cell in a document a person is reading — and returning `null` put that judgement in every
+template, where forgetting it produced an empty column. Existence stays a separate question
+(`has()`), which is the one validation asks and the only one whose answer may depend on the key
+set alone.
+
+Ejection follows the ladder's rule exactly: the emitted template calls the catalog, so it pins
+the layout and not the names. A code renamed next month renames on the ejected page too — the
+same promise decision 9's ejected `<select>` makes about its options.
+
+A JSON response is deliberately not on the list. There the code *is* the datum — a client that
+wants the name asks for it, and the way to put one in a body is `enrich:` or `nest:`, which say
+so in the contract and reach OpenAPI. Resolving silently would make the same route's payload
+depend on which master rows happened to load.
+
+One surprise stays, and it is the one this document already declared out of scope: a `sortable:`
+coded column orders by the **code**, because the ordering is the SQL's and the name never
+reaches it. A screen that must order by name orders by the catalog's `order:` column through a
+join, the same answer enrichment gives.
+
 ## Waves and slices
 
 **Wave 1 — composition and enrichment**

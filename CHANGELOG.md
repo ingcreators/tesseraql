@@ -8,6 +8,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A coded column renders its name on every surface.** A `domain:` whose legal values are a
+  catalog's codes now resolves the name wherever the column is rendered — a list's `columns:`,
+  a detail's `fields:`, a detail's history child, a dashboard's table panel, and the template
+  the page was ejected into, which calls the catalog rather than carrying today's names as
+  literals. One declaration, one answer: no screen can say 現金 while another says 1.
 - **A catalog-backed field renders as a `<select>`** offering the catalog's active codes in its
   declared order, and an ejected form keeps reading them rather than freezing today's codes into
   markup — ejection freezes the layout, not the behaviour.
@@ -51,6 +56,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: `CodeCatalog.of(...)` falls back to the code itself** when the catalog carries no
+  name for it, instead of returning `null`. A missing name is a gap in the master data, not a
+  reason to blank a cell; returning `null` put that judgement in every template, and a template
+  that forgot it rendered an empty column. Existence is still `has(...)`, the question
+  validation asks.
 - **BREAKING: a form field's `options` are `{value, label}` pairs** in the `v` model, for every
   field rather than only catalog-backed ones. An `enum` value is its own label, so one shape
   serves both sources; a template reading `${o}` reads `${o.value}` / `${o.label}` now. The
@@ -102,6 +112,14 @@ All notable changes to TesseraQL are documented here. The format follows
   spool to one that holds them. Asking for the other one fails (`TQL-LD-2856`), so a codec's
   declaration and its behaviour cannot drift apart. Third-party codecs must migrate; the bundled
   CSV, Excel and PDF codecs have.
+
+### Fixed
+
+- **A masked domain named on a detail view's child table, or on a dashboard's table panel,
+  rendered raw.** The HTML output policies were collected from a view's own `columns:` and
+  `fields:` only, so a `domain:` carrying `classification:`/`mask:` on a child's or a panel's
+  column reached the applier under no key at all. Every column that can name a domain now
+  contributes its policy.
 
 ### Added
 
