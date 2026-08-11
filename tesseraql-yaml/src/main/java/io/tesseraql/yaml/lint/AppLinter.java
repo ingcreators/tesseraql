@@ -112,8 +112,7 @@ public final class AppLinter {
         AppManifest manifest = new ManifestLoader().load(appHome);
         List<LintFinding> findings = new ArrayList<>();
         catalogTables = io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values().stream()
-                .map(io.tesseraql.yaml.model.CatalogSpec::table)
-                .filter(java.util.Objects::nonNull)
+                .flatMap(spec -> spec.sourceTables().stream())
                 .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
         for (RouteFile route : manifest.routes()) {
             lintRoute(appHome, manifest.config(), route, findings);
@@ -148,6 +147,7 @@ public final class AppLinter {
         lintAttachments(appHome, manifest, findings);
         lintMailChannels(appHome, manifest.config(), findings);
         lintCatalogLanguages(appHome, manifest.config(), findings);
+        lintCatalogFiles(appHome, findings);
         lintObjectStorageEgress(appHome, manifest, findings);
         lintViews(appHome, manifest, findings);
         lintBasePathLinks(appHome, manifest.config(), findings);
@@ -5207,6 +5207,28 @@ public final class AppLinter {
     /** Expression roots that are always fine: the mail model plus literal keywords. */
     private static final Set<String> MAIL_ROOTS = Set.of("payload", "event", "true", "false",
             "null");
+
+    /**
+     * A {@code file:} catalog whose SQL is not there (docs/lookups.md, decision 13).
+     *
+     * <p>The file is read at the first load, which is the first request that renders a code —
+     * so without this the failure surfaces as a page that lost its names, at runtime, on
+     * whichever screen happened to ask first.
+     */
+    private void lintCatalogFiles(Path appHome, List<LintFinding> findings) {
+        io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().forEach((name, spec) -> {
+            if (spec.file() == null || spec.file().isBlank()) {
+                return;
+            }
+            Path dir = appHome.resolve("catalogs");
+            Path file = dir.resolve(spec.file()).normalize();
+            if (!file.startsWith(dir) || !Files.isRegularFile(file)) {
+                findings.add(new LintFinding("TQL-FIELD-4621", "error", "catalogs/",
+                        "Catalog '" + name + "': file '" + spec.file() + "' is not a SQL file"
+                                + " under catalogs/"));
+            }
+        });
+    }
 
     /**
      * A catalog that carries per-language names in an app that negotiates one locale

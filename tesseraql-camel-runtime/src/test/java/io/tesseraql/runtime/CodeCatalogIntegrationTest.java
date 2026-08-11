@@ -51,6 +51,20 @@ class CodeCatalogIntegrationTest {
                     // whichever language asked.
                     + " ('01', '9', 'ja', '手形', 3, '0'),"
                     + " ('02', '1', 'ja', '国内', 1, '1')");
+            // The shape a table: and equality filters cannot express: codes in one table, their
+            // names per language in another (docs/lookups.md, decision 13).
+            statement.execute("create table 通貨マスタ (通貨コード varchar(3) primary key,"
+                    + " 有効フラグ varchar(1) not null)");
+            statement.execute("create table 通貨名称 (通貨コード varchar(3) not null,"
+                    + " 言語コード varchar(5) not null, 名称 varchar(32) not null,"
+                    + " primary key (通貨コード, 言語コード))");
+            statement.execute("insert into 通貨マスタ values ('JPY', '1'), ('USD', '1')");
+            statement.execute("insert into 通貨名称 values ('JPY', 'ja', '日本円'),"
+                    + " ('JPY', 'en', 'Japanese yen'), ('USD', 'ja', '米ドル')");
+            // A code table whose names live in the message catalog, not beside the codes.
+            statement.execute("create table 優先度マスタ (優先度 varchar(1) primary key,"
+                    + " 表示順 integer not null)");
+            statement.execute("insert into 優先度マスタ values ('H', 1), ('L', 2)");
             statement.execute("create table 受注 (受注番号 varchar(8) primary key,"
                     + " 取引区分 varchar(2) not null)");
             // '8' is in no catalog: the master is incomplete, which a screen has to survive.
@@ -194,6 +208,30 @@ class CodeCatalogIntegrationTest {
         assertThat(get("/受注/新規").body()).contains("小切手");
     }
 
+    /** A catalog whose shape needs a join declares file:, and reads like any other. */
+    @Test
+    void aFileCatalogResolvesAJoinedMaster() throws Exception {
+        assertThat(get("/受注").body()).contains("日本円");
+        assertThat(get("/受注", "en").body()).contains("Japanese yen");
+    }
+
+    /** Its language dimension behaves the same: an untranslated name falls back to ja. */
+    @Test
+    void aFileCatalogFallsBackLikeAnyOther() throws Exception {
+        // 米ドル has no English name in the master.
+        assertThat(get("/受注", "en").body()).contains("米ドル");
+    }
+
+    /** Names may live in the message catalog rather than in a table beside the codes. */
+    @Test
+    void aMessageSourcedLabelResolvesThroughTheTranslationWorkflow() throws Exception {
+        assertThat(get("/受注").body()).contains("高").contains("低");
+        String english = get("/受注", "en").body();
+        assertThat(english).contains("High");
+        // 'L' has no English message: the fallback is the default language, not the key.
+        assertThat(english).contains("低");
+    }
+
     private static HttpResponse<String> post(String path, String body) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -264,6 +302,36 @@ class CodeCatalogIntegrationTest {
                     where: { 区分種別: '02' }
                     key: 区分コード
                     label: 区分名称
+                  通貨:
+                    file: 通貨.sql
+                    tables: [通貨マスタ, 通貨名称]
+                    key: 通貨コード
+                    label: 名称
+                    language: 言語コード
+                    active: 有効フラグ
+                  優先度:
+                    table: 優先度マスタ
+                    key: 優先度
+                    label: { message: "code.優先度.{key}" }
+                    order: 表示順
+                """);
+        Files.writeString(target.resolve("catalogs/通貨.sql"), """
+                select m.通貨コード, n.言語コード, n.名称, m.有効フラグ
+                  from 通貨マスタ m
+                  join 通貨名称 n on n.通貨コード = m.通貨コード
+                 order by m.通貨コード
+                """);
+        Files.createDirectories(target.resolve("messages"));
+        Files.writeString(target.resolve("messages/ja.yml"), """
+                code:
+                  優先度:
+                    H: 高
+                    L: 低
+                """);
+        Files.writeString(target.resolve("messages/en.yml"), """
+                code:
+                  優先度:
+                    H: High
                 """);
 
         Path orders = target.resolve("web/受注");
@@ -455,6 +523,10 @@ class CodeCatalogIntegrationTest {
                   </tr>
                 </table>
                 <p th:text="${codes.取引形態.of('1')}">form</p>
+                <p th:text="${codes.通貨.of('JPY')}">currency</p>
+                <p th:text="${codes.通貨.of('USD')}">currency2</p>
+                <p th:text="${codes.優先度.of('H')}">priority</p>
+                <p th:text="${codes.優先度.of('L')}">priority2</p>
                 </body>
                 </html>
                 """);

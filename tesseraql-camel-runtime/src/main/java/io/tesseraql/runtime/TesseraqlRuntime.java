@@ -321,8 +321,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.CATALOG_STORE_BEAN,
                     new io.tesseraql.operations.catalog.JdbcCatalogStore(codeCatalogs.all(),
                             dataSources::get, datasourceDialect(manifest.config()),
-                            io.tesseraql.yaml.i18n.I18nSettings
-                                    .from(manifest.config(), manifest.appHome()).defaultTag()));
+                            manifest.appHome(), io.tesseraql.yaml.i18n.I18nSettings
+                                    .from(manifest.config(), manifest.appHome())));
         }
 
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());

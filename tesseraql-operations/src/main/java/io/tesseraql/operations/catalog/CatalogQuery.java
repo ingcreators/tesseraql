@@ -34,8 +34,12 @@ final class CatalogQuery {
                 .map(known -> known.capabilities().identifierQuote())
                 .orElse("\"");
         StringBuilder sql = new StringBuilder("select ")
-                .append(quoted(spec.key(), quote))
-                .append(", ").append(quoted(spec.label(), quote));
+                .append(quoted(spec.key(), quote));
+        // A message-sourced label selects no label column: the name lives in the message
+        // catalog, and the load's job is to say which codes exist (decision 12).
+        if (spec.label().column() != null) {
+            sql.append(", ").append(quoted(spec.label().column(), quote));
+        }
         if (present(spec.active())) {
             sql.append(", ").append(quoted(spec.active(), quote));
         }

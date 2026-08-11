@@ -1,6 +1,11 @@
 package io.tesseraql.yaml.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.tesseraql.core.error.TqlDomain;
+import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.core.error.TqlException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,13 +22,17 @@ import java.util.Map;
  * a field domain can reference it (decision 9).
  *
  * <p>A shape a table and equality filters cannot express — a join to a table of per-language
- * names — needs a SQL file instead. That form lands with the slice that needs it rather than
- * being accepted here and read by nothing.
+ * names — declares {@code file:} instead, and then lists the {@code tables:} it reads, because
+ * invalidation must not require anything to parse SQL (decision 13).
  *
- * @param table      the table the codes live in
+ * @param table      the table the codes live in ({@code file:}'s alternative)
+ * @param file       a SQL file whose result set is the catalog, for a shape {@code table:} and
+ *                   equality filters cannot express; resolved under the app's {@code catalogs/}
+ * @param tables     with {@code file:}, the source tables the SQL reads, so a maintenance
+ *                   command's {@code invalidates:} can reach this catalog
  * @param where      equality filters pinning this catalog's slice of a shared table
  * @param key        the column carrying the code
- * @param label      the column carrying the name
+ * @param label      where the name comes from: a result column, or a message-catalog key
  * @param language   an optional column carrying the BCP-47 tag a row's name is written in;
  *                   language is a dimension of the catalog, not part of its key, so the call
  *                   site is the same in every language and only the labels differ
@@ -34,14 +43,85 @@ import java.util.Map;
  * @param cache      how long a load is held before it is read again
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record CatalogSpec(String table, Map<String, String> where, String key, String label,
-        String language, String order, String active, String datasource, CacheSpec cache) {
+public record CatalogSpec(String table, String file, List<String> tables,
+        Map<String, String> where, String key, LabelSource label, String language, String order,
+        String active, String datasource, CacheSpec cache) {
+
+    /** TQL-FIELD-4621: a catalog's source declaration is contradictory or incomplete. */
+    public static final TqlErrorCode INVALID_SOURCE = new TqlErrorCode(TqlDomain.FIELD, 4621);
 
     /** How long a catalog is held when it does not say: long enough that a request never loads. */
     public static final String DEFAULT_TTL = "1h";
 
+    /**
+     * Where a code's name comes from (docs/lookups.md, decision 12). Either a column of the
+     * load's result set — {@code label: 区分名称} — or a message-catalog key with the code
+     * interpolated — {@code label: { message: "code.取引区分.{key}" }}.
+     *
+     * <p>The message form exists because a name is often already a translated string, and
+     * putting it in the message catalog puts it in the translation workflow the Studio message
+     * editor already serves instead of inventing a per-language table beside it. It is the same
+     * key either way, because the label is the label however it is sourced.
+     */
+    public record LabelSource(String column, String message) {
+
+        @JsonCreator
+        static LabelSource of(Object raw) {
+            if (raw instanceof String column) {
+                return new LabelSource(column, null);
+            }
+            if (raw instanceof Map<?, ?> map && map.get("message") != null) {
+                return new LabelSource(null, String.valueOf(map.get("message")));
+            }
+            throw new TqlException(INVALID_SOURCE, "A catalog's label: is a column name or"
+                    + " { message: <key with {key}> }, not " + raw);
+        }
+
+        /** The message key for one code, or {@code null} when the label is a column. */
+        public String messageFor(Object code) {
+            return message == null ? null : message.replace("{key}", String.valueOf(code));
+        }
+    }
+
     public CatalogSpec {
         where = where == null ? Map.of() : Map.copyOf(where);
+        tables = tables == null ? List.of() : List.copyOf(tables);
+    }
+
+    /**
+     * Fails a contradictory or incomplete source declaration at load, where the message can
+     * name the catalog, rather than at first use behind a half-built SELECT.
+     */
+    public void validate(String name) {
+        boolean hasTable = present(table);
+        boolean hasFile = present(file);
+        if (hasTable == hasFile) {
+            throw new TqlException(INVALID_SOURCE, "Catalog '" + name + "' declares "
+                    + (hasTable ? "both table: and file:" : "neither table: nor file:")
+                    + " — a catalog reads one source");
+        }
+        if (!present(key) || label == null) {
+            throw new TqlException(INVALID_SOURCE, "Catalog '" + name
+                    + "' needs key: and label:");
+        }
+        if (hasFile) {
+            // The SQL owns its filtering and its ordering. Accepting where:/order: beside it
+            // would leave two places to look for either, one of which does nothing.
+            if (!where.isEmpty() || present(order)) {
+                throw new TqlException(INVALID_SOURCE, "Catalog '" + name + "' declares file:"
+                        + " with where:/order: — the SQL owns both");
+            }
+            if (tables.isEmpty()) {
+                throw new TqlException(INVALID_SOURCE, "Catalog '" + name + "' declares file:"
+                        + " but no tables: — invalidation cannot find it, and nothing parses"
+                        + " SQL to work it out");
+            }
+        }
+    }
+
+    /** The source tables this catalog reads: the declared list, or the single {@code table:}. */
+    public List<String> sourceTables() {
+        return present(table) ? List.of(table) : tables;
     }
 
     /** The connector this catalog loads from. */
@@ -54,5 +134,9 @@ public record CatalogSpec(String table, Map<String, String> where, String key, S
         return cache == null || cache.maxAge() == null || cache.maxAge().isBlank()
                 ? DEFAULT_TTL
                 : cache.maxAge();
+    }
+
+    private static boolean present(String value) {
+        return value != null && !value.isBlank();
     }
 }

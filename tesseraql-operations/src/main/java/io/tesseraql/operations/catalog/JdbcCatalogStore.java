@@ -67,22 +67,26 @@ public final class JdbcCatalogStore implements CatalogStore {
     private final Map<String, CatalogSpec> specs;
     private final Function<String, DataSource> datasources;
     private final String dialect;
-    private final String defaultLanguage;
+    private final java.nio.file.Path appHome;
+    private final io.tesseraql.yaml.i18n.I18nSettings i18n;
     private final LongSupplier clock;
     private final Map<String, Held> held = new ConcurrentHashMap<>();
     private final Map<String, Object> loadLocks = new ConcurrentHashMap<>();
 
     public JdbcCatalogStore(Map<String, CatalogSpec> specs,
-            Function<String, DataSource> datasources, String dialect, String defaultLanguage) {
-        this(specs, datasources, dialect, defaultLanguage, System::currentTimeMillis);
+            Function<String, DataSource> datasources, String dialect,
+            java.nio.file.Path appHome, io.tesseraql.yaml.i18n.I18nSettings i18n) {
+        this(specs, datasources, dialect, appHome, i18n, System::currentTimeMillis);
     }
 
     JdbcCatalogStore(Map<String, CatalogSpec> specs, Function<String, DataSource> datasources,
-            String dialect, String defaultLanguage, LongSupplier clock) {
+            String dialect, java.nio.file.Path appHome,
+            io.tesseraql.yaml.i18n.I18nSettings i18n, LongSupplier clock) {
         this.specs = Map.copyOf(specs);
         this.datasources = datasources;
         this.dialect = dialect;
-        this.defaultLanguage = defaultLanguage;
+        this.appHome = appHome;
+        this.i18n = i18n;
         this.clock = clock;
     }
 
@@ -93,7 +97,7 @@ public final class JdbcCatalogStore implements CatalogStore {
         // columns must not rebuild twenty catalogs to render, and the languages a load carries
         // are fixed until the next one.
         specs.keySet().forEach(name -> current.put(name,
-                held(name).view(tag, defaultLanguage)));
+                held(name).view(tag, i18n.defaultTag())));
         return current;
     }
 
@@ -117,7 +121,9 @@ public final class JdbcCatalogStore implements CatalogStore {
         }
         java.util.Set<String> changed = new java.util.LinkedHashSet<>(tables);
         specs.forEach((name, spec) -> {
-            if (spec.table() != null && changed.contains(spec.table())) {
+            // sourceTables() is the single table: or the file: form's declared tables:, so a
+            // joined catalog is reachable from a maintenance command exactly like a plain one.
+            if (spec.sourceTables().stream().anyMatch(changed::contains)) {
                 // Dropping the hold, not reloading it here: the write path must not pay for a
                 // load, and the next reader takes it under the same one-load-at-a-time lock.
                 held.remove(name);
@@ -169,8 +175,10 @@ public final class JdbcCatalogStore implements CatalogStore {
             throw new IllegalStateException("catalog '" + name + "' names datasource '"
                     + spec.effectiveDatasource() + "', which is not configured");
         }
-        String sql = CatalogQuery.select(spec, dialect);
-        List<Object> binds = List.copyOf(spec.where().values());
+        String sql = spec.file() != null ? fileSql(name, spec) : CatalogQuery.select(spec, dialect);
+        // A file: catalog takes no binds — it has no where: to bind, because its SQL owns its
+        // own filtering. The table: form binds its where: values, never interpolates them.
+        List<Object> binds = spec.file() != null ? List.of() : List.copyOf(spec.where().values());
         List<CodeCatalog.Entry> rows = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -181,21 +189,67 @@ public final class JdbcCatalogStore implements CatalogStore {
             boolean hasLanguage = spec.language() != null && !spec.language().isBlank();
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    Object key = resultSet.getObject(1);
-                    String label = resultSet.getString(2);
+                    // By name, not by position: a file: catalog's SELECT is the author's, and
+                    // the declared key:/label:/active:/language: name its result columns just
+                    // as they name a table's.
+                    Object key = resultSet.getObject(spec.key());
                     // No active column means every code is offered; a column decides per row.
-                    boolean active = !hasActive || truthy(resultSet.getObject(3));
+                    boolean active = !hasActive || truthy(resultSet.getObject(spec.active()));
                     // No language column means the name answers in every language, which is
                     // what a single-language app has and must keep working as.
-                    String language = hasLanguage
-                            ? resultSet.getString(hasActive ? 4 : 3)
-                            : null;
-                    rows.add(new CodeCatalog.Entry(key, label, active, language));
+                    String language = hasLanguage ? resultSet.getString(spec.language()) : null;
+                    if (spec.label().column() != null) {
+                        rows.add(new CodeCatalog.Entry(key,
+                                resultSet.getString(spec.label().column()), active, language));
+                    } else {
+                        messageRows(spec, key, active, rows);
+                    }
                 }
             }
         }
         reportMissingTranslations(name, rows);
         return CodeCatalog.of(name, rows);
+    }
+
+    /**
+     * One code's names taken from the message catalog (docs/lookups.md, decision 12).
+     *
+     * <p>The load says which codes exist; the names are already in the translation workflow the
+     * Studio message editor serves, so a code becomes one row per locale the app supports and
+     * the language dimension falls out of the message catalog instead of a table beside it. A
+     * locale with no message for a code contributes no row, which is exactly what makes the
+     * narrowing fall back to the default language rather than to a key string.
+     */
+    private void messageRows(CatalogSpec spec, Object key, boolean active,
+            List<CodeCatalog.Entry> rows) {
+        String messageKey = spec.label().messageFor(key);
+        for (String tag : i18n.supportedTags()) {
+            String label = i18n.catalog().resolve(tag, messageKey);
+            if (label != null) {
+                rows.add(new CodeCatalog.Entry(key, label, active, tag));
+            }
+        }
+    }
+
+    /**
+     * The SQL behind a {@code file:} catalog, read from the app's {@code catalogs/} directory.
+     *
+     * <p>Resolved under {@code catalogs/} and refused if it escapes — the file name comes from a
+     * document, and a catalog is not a way to read an arbitrary path off the host.
+     */
+    private String fileSql(String name, CatalogSpec spec) {
+        java.nio.file.Path home = appHome.toAbsolutePath().normalize();
+        java.nio.file.Path file = home.resolve("catalogs").resolve(spec.file()).normalize();
+        if (!file.startsWith(home.resolve("catalogs"))
+                || !java.nio.file.Files.isRegularFile(file)) {
+            throw new TqlException(CatalogSpec.INVALID_SOURCE, "Catalog '" + name + "': file '"
+                    + spec.file() + "' does not resolve to a SQL file under catalogs/");
+        }
+        try {
+            return java.nio.file.Files.readString(file);
+        } catch (java.io.IOException ex) {
+            throw new java.io.UncheckedIOException(ex);
+        }
     }
 
     /**

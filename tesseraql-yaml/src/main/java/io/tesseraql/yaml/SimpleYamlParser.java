@@ -140,7 +140,8 @@ public final class SimpleYamlParser {
 
     /** The keys a catalog may carry (docs/lookups.md): where the codes are, and which columns. */
     private static final java.util.Set<String> CATALOG_KEYS = java.util.Set.of("table", "where",
-            "key", "label", "language", "order", "active", "datasource", "cache");
+            "file", "tables", "key", "label", "language", "order", "active", "datasource",
+            "cache");
 
     /** Parses a {@code catalogs/*.yml} document (docs/lookups.md, decision 9). */
     public java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> parseCatalogs(Path file) {
@@ -169,8 +170,10 @@ public final class SimpleYamlParser {
                             + String.join(", ", new java.util.TreeSet<>(CATALOG_KEYS)));
                 }
             }
-            catalogs.put(entry.getKey(), mapper.convertValue(entry.getValue(),
-                    io.tesseraql.yaml.model.CatalogSpec.class));
+            io.tesseraql.yaml.model.CatalogSpec spec = mapper.convertValue(entry.getValue(),
+                    io.tesseraql.yaml.model.CatalogSpec.class);
+            spec.validate(entry.getKey());
+            catalogs.put(entry.getKey(), spec);
         }
         return catalogs;
     }
