@@ -399,11 +399,23 @@ public final class ViewEjector {
                 html.append("        <select class=\"hc-select\" id=\"").append(id)
                         .append("\" name=\"").append(field.name()).append("\"")
                         .append(field.required() ? " required" : "").append(">\n");
-                for (String option : field.options()) {
-                    html.append("          <option value=\"").append(escape(option))
-                            .append("\" th:selected=\"${").append(prefill(field))
-                            .append(" == '").append(escape(option)).append("'}\">")
-                            .append(escape(option)).append("</option>\n");
+                if (field.codes() != null && !field.codes().isBlank()) {
+                    // A catalog's options are runtime data, so the ejected template keeps
+                    // reading them rather than freezing today's codes into the markup
+                    // (docs/lookups.md, decision 8: ejection freezes the layout, not the
+                    // behaviour).
+                    html.append("          <option th:each=\"o : ${codes.")
+                            .append(field.codes()).append(".options()}\"")
+                            .append(" th:value=\"${o.key}\" th:text=\"${o.label}\"")
+                            .append(" th:selected=\"${").append(prefill(field))
+                            .append(" == o.key}\"></option>\n");
+                } else {
+                    for (String option : field.options()) {
+                        html.append("          <option value=\"").append(escape(option))
+                                .append("\" th:selected=\"${").append(prefill(field))
+                                .append(" == '").append(escape(option)).append("'}\">")
+                                .append(escape(option)).append("</option>\n");
+                    }
                 }
                 html.append("        </select>\n");
             }

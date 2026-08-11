@@ -112,6 +112,16 @@ class CodeCatalogIntegrationTest {
         assertThat(post("/api/受注", "{\"取引区分\":\"5\"}").statusCode()).isEqualTo(201);
     }
 
+    /** A form's select offers the catalog's active codes, in the catalog's order. */
+    @Test
+    void aFormOffersTheCatalogsActiveCodesInOrder() throws Exception {
+        String html = get("/受注/新規").body();
+        // 表示順 puts 振込 (2) before 現金 (1); 手形 (9) is retired and is not offered.
+        assertThat(html).contains("<option value=\"2\"").contains("振込");
+        assertThat(html.indexOf("振込")).isLessThan(html.indexOf("現金"));
+        assertThat(html).doesNotContain("手形");
+    }
+
     private static HttpResponse<String> post(String path, String body) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -224,6 +234,29 @@ class CodeCatalogIntegrationTest {
                     status: 201
                     body:
                       ok: true
+                """);
+
+        Path form = target.resolve("web/受注/新規");
+        Files.createDirectories(form);
+        Files.writeString(form.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: 受注.form
+                kind: route
+                recipe: page
+                security: { auth: public }
+                input:
+                  取引区分: { domain: 取引区分 }
+                response:
+                  html:
+                    view: 受注.form.view
+                """);
+        Files.writeString(form.resolve("page.view.yml"), """
+                version: tesseraql/v1
+                id: 受注.form.view
+                kind: view
+                recipe: form
+                title: 受注.form.title
+                action: /api/受注
                 """);
 
         Files.createDirectories(target.resolve("templates"));

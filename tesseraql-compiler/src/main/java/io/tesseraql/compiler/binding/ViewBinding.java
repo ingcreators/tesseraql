@@ -363,7 +363,7 @@ public final class ViewBinding {
                 f.put("maxLength", field.maxLength());
                 f.put("min", field.min());
                 f.put("max", field.max());
-                f.put("options", field.options());
+                f.put("options", options(field, context));
                 f.put("step", field.step());
                 Object value = field.valueFrom(row);
                 f.put("value", value == null ? "" : String.valueOf(value));
@@ -723,6 +723,39 @@ public final class ViewBinding {
             }
         }
         return rows;
+    }
+
+    /**
+     * A field's options as {@code {value, label}} pairs (docs/lookups.md, decision 9).
+     *
+     * <p>One shape whatever the source: an {@code enum:} value is its own label, and a
+     * {@code codes:} field takes the catalog's <em>active</em> entries in the order the catalog
+     * declares — so a form offers what may still be chosen while a retired code keeps rendering
+     * on the rows that already carry it.
+     */
+    private static List<Map<String, Object>> options(ViewFields.FieldDef field,
+            Map<String, Object> context) {
+        List<Map<String, Object>> options = new ArrayList<>();
+        if (field.codes() != null && !field.codes().isBlank()) {
+            Object catalogs = context.get(io.tesseraql.camel.TesseraqlProperties.CODES);
+            Object catalog = catalogs instanceof Map<?, ?> map ? map.get(field.codes()) : null;
+            if (catalog instanceof io.tesseraql.core.catalog.CodeCatalog codes) {
+                codes.options().forEach(entry -> {
+                    Map<String, Object> option = new LinkedHashMap<>();
+                    option.put("value", String.valueOf(entry.key()));
+                    option.put("label", entry.label());
+                    options.add(option);
+                });
+            }
+            return options;
+        }
+        field.options().forEach(value -> {
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("value", value);
+            option.put("label", value);
+            options.add(option);
+        });
+        return options;
     }
 
     private static Map<String, Object> firstRow(Map<String, Object> data) {
