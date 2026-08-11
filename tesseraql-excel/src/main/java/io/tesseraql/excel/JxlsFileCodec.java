@@ -335,7 +335,7 @@ public final class JxlsFileCodec implements FileCodec {
         // jxls adds its loop variables to the context, so the map must be mutable. The export's
         // other declared sources go in under their own names (docs/export-pipeline.md, dec. 2).
         Map<String, Object> context = new LinkedHashMap<>(model.values());
-        context.put("rows", model.repeatableRows());
+        context.put("sql", model.subject());
         org.jxls.builder.JxlsStreaming streaming = org.jxls.builder.JxlsStreaming.STREAMING_ON;
         if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
             // Grouping is the framework's, not the template's: jxls's own groupBy materializes

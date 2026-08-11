@@ -120,7 +120,8 @@ public final class PdfFileCodec implements FileCodec {
             List<Map<String, Object>> data, List<PdfSource.PdfFont> fonts,
             Map<String, Object> values) {
         Map<String, Object> model = new LinkedHashMap<>(values);
-        model.put("rows", data);
+        model.put("sql", io.tesseraql.core.files.ExportModel.result(data, data.size()));
+
         model.put("columns", columns.stream()
                 .map(column -> Map.of("name", column.name(), "header", column.effectiveHeader()))
                 .toList());

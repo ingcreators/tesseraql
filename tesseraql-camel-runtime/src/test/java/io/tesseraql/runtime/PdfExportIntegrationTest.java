@@ -162,7 +162,7 @@ class PdfExportIntegrationTest {
                       <tr><th th:each="column : ${columns}" th:text="${column.header}">h</th></tr>
                     </thead>
                     <tbody>
-                      <tr th:each="row : ${rows}">
+                      <tr th:each="row : ${sql.rows}">
                         <td th:text="${row.name}">name</td>
                         <td th:text="${row.status}">status</td>
                       </tr>

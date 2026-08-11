@@ -133,10 +133,10 @@ class ExportDataSourcesIntegrationTest {
                 <html xmlns:th="http://www.thymeleaf.org">
                 <head><title>Order</title></head>
                 <body>
-                  <h1 th:text="'Order ' + ${header.rows[0].order_no}">Order</h1>
-                  <p th:text="${header.rows[0].customer}">Customer</p>
+                  <h1 th:text="'Order ' + ${header.first.order_no}">Order</h1>
+                  <p th:text="${header.first.customer}">Customer</p>
                   <table>
-                    <tr th:each="row : ${rows}">
+                    <tr th:each="row : ${sql.rows}">
                       <td th:text="${row.item}">item</td>
                       <td th:text="${row.qty}">qty</td>
                     </tr>

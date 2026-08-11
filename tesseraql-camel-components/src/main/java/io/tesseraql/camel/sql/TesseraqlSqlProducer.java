@@ -228,6 +228,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     "query-export requires the compiled export binding (codec and write spec)");
         }
         TempStore tempStore = tempStore();
+        // The named results outlive the codec's write and nothing else.
+        List<SpooledRows> spools = new java.util.ArrayList<>();
         SpoolRef ref;
         // Stream large exports per the dialect's profile so the driver uses a cursor instead of
         // buffering the whole result set in memory (design ch. 42, 28).
@@ -247,9 +249,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 SpoolWriter writer = tempStore.createWriter(kind);
                 // The writer closes first (listed first); toRef() is only valid after close.
                 try (writer; ResultSet resultSet = statement.executeQuery()) {
-                    Map<String, Object> values = composedValues(exchange, connection);
-                    ResultRows rows = new ResultRows(resultSet, writer,
-                            rowCap(exchange, codec, spec));
+                    io.tesseraql.core.files.ExportRowCap cap = rowCap(exchange, codec, spec);
+                    Map<String, Object> values = composedValues(exchange, connection, tempStore,
+                            cap, spools);
+                    ResultRows rows = new ResultRows(resultSet, writer, cap);
                     // A codec that holds its rows is handed a re-readable set instead of the
                     // cursor, so a template may walk it more than once without the result set
                     // living in memory (docs/export-pipeline.md, decision 1). The row cap still
@@ -284,6 +287,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             throw ex;
         } catch (Exception ex) {
             throw executionError(ex);
+        } finally {
+            spools.forEach(SpooledRows::close);
         }
 
         try {
@@ -320,7 +325,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
      * {@code rows} plus {@code rowCount}, so one template reads the same as the other.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> composedValues(Exchange exchange, Connection connection) {
+    private Map<String, Object> composedValues(Exchange exchange, Connection connection,
+            TempStore tempStore, io.tesseraql.core.files.ExportRowCap cap,
+            List<SpooledRows> spools) {
         Map<String, Object> resolved = exchange.getProperty(TesseraqlProperties.EXPORT_VALUES,
                 Map.of(), Map.class);
         List<io.tesseraql.core.files.ExportQuery> queries = exchange.getProperty(
@@ -337,17 +344,71 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 applyTimeout(statement);
                 bindParameters(statement, bound.parameters());
                 try (ResultSet resultSet = statement.executeQuery()) {
-                    List<Map<String, Object>> rows = readRows(resultSet);
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("rows", rows);
-                    result.put("rowCount", rows.size());
-                    values.put(query.name(), result);
+                    // Spooled like the extraction, and counted by the same ceiling: a cap that
+                    // bounds the subject and lets a named query run unbounded bounds nothing
+                    // (docs/export-pipeline.md, decision 15).
+                    SpooledRows spooled = SpooledRows.drain(tempStore,
+                            new NamedRows(resultSet, cap));
+                    spools.add(spooled);
+                    values.put(query.name(),
+                            ExportModel.result(spooled, spooled.size()));
                 }
             } catch (java.sql.SQLException ex) {
                 throw executionError(ex);
             }
         }
         return Map.copyOf(values);
+    }
+
+    /** A named query's rows, label-normalized and counted against the export's ceiling. */
+    private final class NamedRows implements java.util.Iterator<Map<String, Object>> {
+
+        private final ResultSet resultSet;
+        private final io.tesseraql.core.files.ExportRowCap cap;
+        private final List<String> labels = new ArrayList<>();
+        private Boolean pending;
+        private long read;
+
+        NamedRows(ResultSet resultSet, io.tesseraql.core.files.ExportRowCap cap)
+                throws java.sql.SQLException {
+            this.resultSet = resultSet;
+            this.cap = cap;
+            ResultSetMetaData metaData = resultSet.getMetaData();
+            for (int col = 1; col <= metaData.getColumnCount(); col++) {
+                labels.add(io.tesseraql.core.dialect.Labels.normalize(
+                        endpoint.getDialect(), metaData.getColumnLabel(col)));
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            try {
+                if (pending == null) {
+                    pending = resultSet.next();
+                }
+                return pending && cap.admits(read);
+            } catch (java.sql.SQLException ex) {
+                throw executionError(ex);
+            }
+        }
+
+        @Override
+        public Map<String, Object> next() {
+            if (!hasNext()) {
+                throw new java.util.NoSuchElementException();
+            }
+            pending = null;
+            try {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int col = 1; col <= labels.size(); col++) {
+                    row.put(labels.get(col - 1), resultSet.getObject(col));
+                }
+                read++;
+                return row;
+            } catch (java.sql.SQLException ex) {
+                throw executionError(ex);
+            }
+        }
     }
 
     /** An export query's parsed SQL, read once per file and kept for the endpoint's lifetime. */

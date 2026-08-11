@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: an export's template reads `${sql.rows}`, not `${rows}`**
+  (docs/export-pipeline.md, decision 14). A route publishes its default result under `sql` and a
+  named one under its name, both carrying `rows` and `rowCount`; an export made its extraction a
+  bare `rows`, so one template read `${rows}` and `${header.rows}` side by side and had to know
+  why. Every result now also carries `first`, because a named result is spooled and read in
+  sequence: `${header.first.customer}` replaces `${header.rows[0].customer}`. Report and print
+  templates move with it; the framework's own bundled PDF grid has.
+- **An export's named queries are spooled and capped** like its extraction. A workbook whose
+  second sheet is a large named query cost a heap; it costs a spool, and `maxRows:` counts it —
+  a ceiling that bounds the extraction and lets a named query run unbounded bounds nothing.
 - **BREAKING: `FileCodec.write` takes an `ExportModel`** (docs/export-pipeline.md) in place of a
   bare `Iterator<Map<String, Object>>`. A codec received the rows and nothing else, and three
   unrelated-looking problems followed from that one signature: a header-and-lines document had to

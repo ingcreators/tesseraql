@@ -70,6 +70,49 @@ public final class ExportModel {
         return repeatable;
     }
 
+    /**
+     * The extraction as a template sees it (docs/export-pipeline.md, decision 14): {@code rows}
+     * and {@code rowCount}, under the key {@code sql}, exactly as a route publishes its default
+     * result and exactly as a named query publishes its own. The only difference left between the
+     * extraction and a named query is the one that is real — which result the export is about.
+     *
+     * <p>The count is answerable because a template mode is a buffering mode: its rows are
+     * spooled, and a spool knows its size. A streaming codec has no template and reads neither.
+     */
+    public Map<String, Object> subject() {
+        Iterable<Map<String, Object>> rows = repeatableRows();
+        return result(rows, rows instanceof SpooledRows spooled
+                ? spooled.size()
+                : count(rows));
+    }
+
+    /**
+     * A result as every consumer of one is shaped: the rows, how many there are, and the first of
+     * them.
+     *
+     * <p>{@code first} is not a convenience. A spooled result is read in sequence and cannot be
+     * indexed, so the {@code rows[0]} a single-row header query used to be read with no longer
+     * resolves — {@code ${header.first.customer}} replaces {@code ${header.rows[0].customer}}, and
+     * says what it means besides. Indexing further into a result is not available; a template that
+     * wants the third row wants a query that returns it.
+     */
+    public static Map<String, Object> result(Iterable<Map<String, Object>> rows, long rowCount) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("rowCount", rowCount);
+        Iterator<Map<String, Object>> first = rows.iterator();
+        result.put("first", first.hasNext() ? first.next() : null);
+        return result;
+    }
+
+    private static long count(Iterable<Map<String, Object>> rows) {
+        long count = 0;
+        for (Map<String, Object> ignored : rows) {
+            count++;
+        }
+        return count;
+    }
+
     /** The named query and HTTP source results, keyed as the export declared them. */
     public Map<String, Object> values() {
         return values;
