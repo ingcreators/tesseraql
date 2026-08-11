@@ -98,6 +98,11 @@ class OraclePortabilityIntegrationTest {
                 "varchar2(%d char)");
     }
 
+    @Test
+    void theCatalogVersionTableAppliesOnThisDialect() throws Exception {
+        DialectRuntimeChecks.catalogVersionTableApplies(dataSource());
+    }
+
     private static javax.sql.DataSource dataSource() throws Exception {
         oracle.jdbc.datasource.impl.OracleDataSource dataSource = new oracle.jdbc.datasource.impl.OracleDataSource();
         dataSource.setURL(ORACLE.getJdbcUrl());

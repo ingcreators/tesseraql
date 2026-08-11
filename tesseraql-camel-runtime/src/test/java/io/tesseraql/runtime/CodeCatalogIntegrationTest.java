@@ -254,6 +254,31 @@ class CodeCatalogIntegrationTest {
                 .isEqualTo(404);
     }
 
+    /** The version stamp is what carries an invalidation to a runtime that did not serve it. */
+    @Test
+    void aWriteRaisesTheVersionOfTheTableItTouched() throws Exception {
+        long before = catalogVersion("区分マスタ");
+        assertThat(post("/api/区分", "{\"区分コード\":\"7\",\"区分名称\":\"手渡し\"}")
+                .statusCode()).isEqualTo(201);
+        // A second runtime never saw the command; the row is how it learns to reload.
+        assertThat(catalogVersion("区分マスタ")).isGreaterThan(before);
+        // A table no catalog reads gets no row: the version table holds the declared sources,
+        // not every table any command happens to name.
+        assertThat(catalogVersion("受注")).isEqualTo(0L);
+    }
+
+    private static long catalogVersion(String table) throws Exception {
+        try (var connection = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                var statement = connection.prepareStatement(
+                        "select version from tql_catalog_version where table_name = ?")) {
+            statement.setString(1, table);
+            try (var rows = statement.executeQuery()) {
+                return rows.next() ? rows.getLong(1) : 0L;
+            }
+        }
+    }
+
     /** An authenticated ops call: bearer principal with the ADMIN role. */
     private static HttpResponse<String> ops(String method, String path) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(

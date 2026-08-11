@@ -318,11 +318,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         "catalogs/ and per-tenant datasources are declared together; a catalog is"
                                 + " held app-wide and is not yet keyed by tenant");
             }
-            context.getRegistry().bind(TesseraqlProperties.CATALOG_STORE_BEAN,
-                    new io.tesseraql.operations.catalog.JdbcCatalogStore(codeCatalogs.all(),
-                            dataSources::get, datasourceDialect(manifest.config()),
-                            manifest.appHome(), io.tesseraql.yaml.i18n.I18nSettings
-                                    .from(manifest.config(), manifest.appHome())));
+            io.tesseraql.operations.catalog.JdbcCatalogStore catalogStore = new io.tesseraql.operations.catalog.JdbcCatalogStore(
+                    codeCatalogs.all(),
+                    dataSources::get, datasourceDialect(manifest.config()),
+                    manifest.appHome(), io.tesseraql.yaml.i18n.I18nSettings
+                            .from(manifest.config(), manifest.appHome()));
+            // The version table carries an invalidation to the runtimes that did not serve the
+            // command; failing to create it disables the stamp, never the catalogs.
+            catalogStore.ensureSchema();
+            context.getRegistry().bind(TesseraqlProperties.CATALOG_STORE_BEAN, catalogStore);
         }
 
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());

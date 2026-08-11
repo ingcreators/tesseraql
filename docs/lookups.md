@@ -747,11 +747,12 @@ join, the same answer enrichment gives.
 12b. **The operations surface.** What each catalog holds, when it last loaded, the languages
    it carried, and the message of its last failed refresh — plus a manual refresh, policy-gated
    like every other ops write. Reports the hold, never takes one.
-12c. **The other instances.** The per-table version stamp, which is what makes an
-   invalidation reach the runtimes that did not serve the command. In-process invalidation is
-   correct for one runtime and a bounded *display* delay on the others; the stamp turns that
-   into a read of one row however many catalogs derive from the table. It needs a framework
-   migration across the five supported dialects, which is why it is its own slice.
+12c. **The other instances.** The per-table version stamp (`tql_catalog_version`), read on an
+   interval so a per-request staleness check never becomes a per-request query, and bumped
+   after the commit for the same reason the local drop is: the stamp is the optimization, and
+   the hold's expiry plus the validation re-read are the guarantee. Its DDL gets a shared
+   dialect check, because a table created only by an app that declares `catalogs/` is a table
+   no other dialect test would ever apply.
 
 **Wave 3 — the remaining surfaces**
 
