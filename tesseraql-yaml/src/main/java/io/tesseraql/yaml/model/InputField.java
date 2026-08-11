@@ -41,6 +41,11 @@ public record InputField(
         // renders as, declared once on its domain ("an SKU is a code input"). Never part of the
         // HTTP contract — OpenAPI emission excludes it — and a per-view fields: override wins.
         String widget,
+        // The code catalog this field's values come from (docs/lookups.md, decision 9): the
+        // legal values are that catalog's active codes, so "a 取引区分 is one of the codes in
+        // the 区分マスタ" is declared once instead of restated as an enum that drifts from the
+        // table it describes.
+        String codes,
         // Write authorization (docs/view-composition.md wave 4): a policy the principal must
         // satisfy to supply this field. Operational like required/writable — never accepted
         // inside a domain — enforced at the binder (a failing principal's value follows the
@@ -87,6 +92,7 @@ public record InputField(
                 requiredWhen,
                 domain,
                 widget != null ? widget : d.widget(),
+                codes != null ? codes : d.codes(),
                 policy);
     }
 

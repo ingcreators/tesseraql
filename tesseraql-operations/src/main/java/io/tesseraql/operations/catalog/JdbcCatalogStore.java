@@ -75,7 +75,7 @@ public final class JdbcCatalogStore implements CatalogStore {
         return current;
     }
 
-    /** Re-reads one catalog from its source, whatever the hold says. */
+    @Override
     public CodeCatalog reload(String name) {
         held.remove(name);
         return catalog(name);

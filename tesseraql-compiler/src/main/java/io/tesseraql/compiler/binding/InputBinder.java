@@ -66,6 +66,16 @@ public final class InputBinder {
     public static Map<String, Object> bind(Map<String, InputField> inputs,
             Function<String, String> rawLookup, Function<String, Object> structuredLookup,
             Locale locale) {
+        return bind(inputs, rawLookup, structuredLookup, locale, null);
+    }
+
+    /**
+     * The same binding with the app's code catalogs available, so a field declaring
+     * {@code codes:} is checked against the catalog it names (docs/lookups.md, decision 11).
+     */
+    public static Map<String, Object> bind(Map<String, InputField> inputs,
+            Function<String, String> rawLookup, Function<String, Object> structuredLookup,
+            Locale locale, io.tesseraql.core.catalog.CatalogStore catalogs) {
         Map<String, Object> effective = new LinkedHashMap<>();
         for (Map.Entry<String, InputField> entry : inputs.entrySet()) {
             String name = entry.getKey();
@@ -100,7 +110,8 @@ public final class InputBinder {
                 }
                 continue;
             }
-            effective.put(name, validate(name, field, coerce(name, field, raw, locale)));
+            effective.put(name, validate(name, field, coerce(name, field, raw, locale),
+                    catalogs));
         }
         return effective;
     }
@@ -159,7 +170,8 @@ public final class InputBinder {
         };
     }
 
-    private static Object validate(String name, InputField field, Object value) {
+    private static Object validate(String name, InputField field, Object value,
+            io.tesseraql.core.catalog.CatalogStore catalogs) {
         if (value instanceof Number number) {
             // Decimal-exact bounds (roadmap Phase 40): 5.9 violates max: 5, and fractional
             // bounds like min: 0.5 are declarable — no long truncation.
@@ -196,8 +208,43 @@ public final class InputBinder {
                         Map.of("options", String.join(", ", field.enumValues())),
                         "Input '" + name + "' is not one of " + field.enumValues());
             }
+            validateAgainstCatalog(name, field, string, catalogs);
         }
         return value;
+    }
+
+    /**
+     * The {@code codes:} check (docs/lookups.md, decision 11). A catalog is a dynamic enum, so
+     * the violation reuses the enum field error rather than teaching clients and suites a
+     * second shape.
+     *
+     * <p>A miss is not an answer. The held copy may simply be older than a code an operator
+     * added a minute ago, so a value it does not carry is re-read from the source before it is
+     * refused — the cost lands only on the rejection path. Only <em>active</em> codes are
+     * accepted, because a retired code must still render on old data and must not be written to
+     * new.
+     */
+    private static void validateAgainstCatalog(String name, InputField field, String value,
+            io.tesseraql.core.catalog.CatalogStore catalogs) {
+        if (field.codes() == null || field.codes().isBlank() || catalogs == null) {
+            return;
+        }
+        io.tesseraql.core.catalog.CodeCatalog catalog = catalogs.catalogs().get(field.codes());
+        if (catalog != null && offers(catalog, value)) {
+            return;
+        }
+        io.tesseraql.core.catalog.CodeCatalog fresh = catalogs.reload(field.codes());
+        if (fresh != null && offers(fresh, value)) {
+            return;
+        }
+        throw reject(name, "enum", Map.of("catalog", field.codes()),
+                "Input '" + name + "' is not an active code of '" + field.codes() + "'");
+    }
+
+    /** Whether the catalog offers this code — present, and not retired. */
+    private static boolean offers(io.tesseraql.core.catalog.CodeCatalog catalog, String value) {
+        return catalog.options().stream()
+                .anyMatch(entry -> value.equals(String.valueOf(entry.key())));
     }
 
     private static long parseLong(String name, String raw) {
