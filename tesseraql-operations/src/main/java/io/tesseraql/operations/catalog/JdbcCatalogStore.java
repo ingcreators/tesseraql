@@ -44,66 +44,98 @@ public final class JdbcCatalogStore implements CatalogStore {
 
     private static final System.Logger LOG = System.getLogger(JdbcCatalogStore.class.getName());
 
-    /** One held catalog and when it was loaded. */
-    private record Held(CodeCatalog catalog, long loadedAt) {
+    /**
+     * One held catalog, when it was loaded, and the per-language views taken off it.
+     *
+     * <p>The views are memoized rather than rebuilt: a load's languages are fixed until the
+     * next one, and a page resolving twenty coded columns should cost twenty map lookups.
+     */
+    private record Held(CodeCatalog catalog, long loadedAt, Map<String, CodeCatalog> views) {
+
+        Held(CodeCatalog catalog, long loadedAt) {
+            this(catalog, loadedAt, new ConcurrentHashMap<>());
+        }
+
+        CodeCatalog view(String tag, String defaultTag) {
+            // A catalog with no language column narrows to itself, so the key is never null.
+            return views.computeIfAbsent(tag == null ? "" : tag,
+                    requested -> catalog.inLanguage(requested.isEmpty() ? null : requested,
+                            defaultTag));
+        }
     }
 
     private final Map<String, CatalogSpec> specs;
     private final Function<String, DataSource> datasources;
     private final String dialect;
+    private final String defaultLanguage;
     private final LongSupplier clock;
     private final Map<String, Held> held = new ConcurrentHashMap<>();
     private final Map<String, Object> loadLocks = new ConcurrentHashMap<>();
 
     public JdbcCatalogStore(Map<String, CatalogSpec> specs,
-            Function<String, DataSource> datasources, String dialect) {
-        this(specs, datasources, dialect, System::currentTimeMillis);
+            Function<String, DataSource> datasources, String dialect, String defaultLanguage) {
+        this(specs, datasources, dialect, defaultLanguage, System::currentTimeMillis);
     }
 
     JdbcCatalogStore(Map<String, CatalogSpec> specs, Function<String, DataSource> datasources,
-            String dialect, LongSupplier clock) {
+            String dialect, String defaultLanguage, LongSupplier clock) {
         this.specs = Map.copyOf(specs);
         this.datasources = datasources;
         this.dialect = dialect;
+        this.defaultLanguage = defaultLanguage;
         this.clock = clock;
     }
 
     @Override
-    public Map<String, CodeCatalog> catalogs() {
+    public Map<String, CodeCatalog> catalogs(String tag) {
         Map<String, CodeCatalog> current = new LinkedHashMap<>();
-        specs.keySet().forEach(name -> current.put(name, catalog(name)));
+        // The narrowing is memoized per language on the held load: a page showing twenty coded
+        // columns must not rebuild twenty catalogs to render, and the languages a load carries
+        // are fixed until the next one.
+        specs.keySet().forEach(name -> current.put(name,
+                held(name).view(tag, defaultLanguage)));
         return current;
+    }
+
+    @Override
+    public CodeCatalog catalog(String name) {
+        return held(name).catalog();
     }
 
     @Override
     public CodeCatalog reload(String name) {
         held.remove(name);
-        return catalog(name);
+        // Unnarrowed on purpose: the validation path asks whether a code exists, which is a
+        // question about the key set and not about any language.
+        return held(name).catalog();
     }
 
-    private CodeCatalog catalog(String name) {
+    private Held held(String name) {
         Held current = held.get(name);
         if (current != null && !isStale(name, current)) {
-            return current.catalog();
+            return current;
         }
         // One load per catalog: a stale entry must not send every in-flight request at once.
         synchronized (loadLocks.computeIfAbsent(name, ignored -> new Object())) {
             Held rechecked = held.get(name);
             if (rechecked != null && !isStale(name, rechecked)) {
-                return rechecked.catalog();
+                return rechecked;
             }
             try {
-                CodeCatalog loaded = load(name, specs.get(name));
-                held.put(name, new Held(loaded, clock.getAsLong()));
+                Held loaded = new Held(load(name, specs.get(name)), clock.getAsLong());
+                held.put(name, loaded);
                 return loaded;
             } catch (SQLException | RuntimeException ex) {
                 if (rechecked != null) {
                     // Serving yesterday's names beats serving none; the failure is loud, and a
                     // hold that keeps failing is what an operator needs to see, not a blank page.
+                    // The previous load's language views ride along, so the retry costs nothing.
                     LOG.log(System.Logger.Level.WARNING, "Catalog ''{0}'' refresh failed;"
                             + " serving the previous load", name, ex);
-                    held.put(name, new Held(rechecked.catalog(), clock.getAsLong()));
-                    return rechecked.catalog();
+                    Held renewed = new Held(rechecked.catalog(), clock.getAsLong(),
+                            rechecked.views());
+                    held.put(name, renewed);
+                    return renewed;
                 }
                 throw new TqlException(REFRESH_FAILED, "Catalog '" + name
                         + "' could not be loaded and has never loaded: " + ex.getMessage(), ex);
@@ -130,18 +162,62 @@ public final class JdbcCatalogStore implements CatalogStore {
             for (int i = 0; i < binds.size(); i++) {
                 statement.setObject(i + 1, binds.get(i));
             }
+            boolean hasActive = spec.active() != null && !spec.active().isBlank();
+            boolean hasLanguage = spec.language() != null && !spec.language().isBlank();
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     Object key = resultSet.getObject(1);
                     String label = resultSet.getString(2);
                     // No active column means every code is offered; a column decides per row.
-                    boolean active = spec.active() == null || spec.active().isBlank()
-                            || truthy(resultSet.getObject(3));
-                    rows.add(new CodeCatalog.Entry(key, label, active));
+                    boolean active = !hasActive || truthy(resultSet.getObject(3));
+                    // No language column means the name answers in every language, which is
+                    // what a single-language app has and must keep working as.
+                    String language = hasLanguage
+                            ? resultSet.getString(hasActive ? 4 : 3)
+                            : null;
+                    rows.add(new CodeCatalog.Entry(key, label, active, language));
                 }
             }
         }
+        reportMissingTranslations(name, rows);
         return CodeCatalog.of(name, rows);
+    }
+
+    /**
+     * Reports which languages a load is short of, once per load (docs/lookups.md, decision 12).
+     *
+     * <p>Once per load, not once per request: a missing translation is a content gap someone
+     * has to fill, and a per-request log turns it into noise that hides the next real failure.
+     * A load is rare by construction, so this line is a report an operator can act on.
+     */
+    private static void reportMissingTranslations(String name, List<CodeCatalog.Entry> rows) {
+        java.util.Set<String> languages = new java.util.LinkedHashSet<>();
+        java.util.Set<Object> keys = new java.util.LinkedHashSet<>();
+        java.util.Set<String> present = new java.util.LinkedHashSet<>();
+        for (CodeCatalog.Entry row : rows) {
+            if (row.language() == null) {
+                return;
+            }
+            languages.add(row.language());
+            keys.add(String.valueOf(row.key()));
+            present.add(row.language() + " " + row.key());
+        }
+        Map<String, Integer> missing = new LinkedHashMap<>();
+        languages.forEach(language -> {
+            int absent = 0;
+            for (Object key : keys) {
+                if (!present.contains(language + " " + key)) {
+                    absent++;
+                }
+            }
+            if (absent > 0) {
+                missing.put(language, absent);
+            }
+        });
+        if (!missing.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "Catalog ''{0}'' is missing translations: {1}"
+                    + " (untranslated codes fall back to the default language)", name, missing);
+        }
     }
 
     /** An active flag is a boolean, a number, or the text a legacy column stores it as. */

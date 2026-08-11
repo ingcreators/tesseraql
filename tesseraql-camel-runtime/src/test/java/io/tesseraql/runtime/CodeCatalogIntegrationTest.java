@@ -37,13 +37,20 @@ class CodeCatalogIntegrationTest {
                 POSTGRES.getUsername(), POSTGRES.getPassword());
                 var statement = connection.createStatement()) {
             // The general code master: many kinds in one table, keyed by a type column.
+            // The name is per language, so it joins the key rather than replacing it: one code,
+            // one row per language it is written in (docs/lookups.md, decision 12).
             statement.execute("create table 区分マスタ (区分種別 varchar(2) not null,"
-                    + " 区分コード varchar(2) not null, 区分名称 varchar(32) not null,"
+                    + " 区分コード varchar(2) not null, 言語コード varchar(5) not null,"
+                    + " 区分名称 varchar(32) not null,"
                     + " 表示順 integer not null, 有効フラグ varchar(1) not null,"
-                    + " primary key (区分種別, 区分コード))");
+                    + " primary key (区分種別, 区分コード, 言語コード))");
             statement.execute("insert into 区分マスタ values"
-                    + " ('01', '1', '現金', 2, '1'), ('01', '2', '振込', 1, '1'),"
-                    + " ('01', '9', '手形', 3, '0'), ('02', '1', '国内', 1, '1')");
+                    + " ('01', '1', 'ja', '現金', 2, '1'), ('01', '1', 'en', 'Cash', 2, '1'),"
+                    + " ('01', '2', 'ja', '振込', 1, '1'), ('01', '2', 'en', 'Transfer', 1, '1'),"
+                    // 手形 is retired AND untranslated: it renders on old data, in Japanese,
+                    // whichever language asked.
+                    + " ('01', '9', 'ja', '手形', 3, '0'),"
+                    + " ('02', '1', 'ja', '国内', 1, '1')");
             statement.execute("create table 受注 (受注番号 varchar(8) primary key,"
                     + " 取引区分 varchar(2) not null)");
             // '8' is in no catalog: the master is incomplete, which a screen has to survive.
@@ -108,7 +115,8 @@ class CodeCatalogIntegrationTest {
         try (var connection = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
                 POSTGRES.getUsername(), POSTGRES.getPassword());
                 var statement = connection.createStatement()) {
-            statement.execute("insert into 区分マスタ values ('01', '5', '電子マネー', 4, '1')");
+            statement.execute(
+                    "insert into 区分マスタ values ('01', '5', 'ja', '電子マネー', 4, '1')");
         }
         // The hold is an hour old by declaration; without the recheck this would be a 400.
         assertThat(post("/api/受注", "{\"取引区分\":\"5\"}").statusCode()).isEqualTo(201);
@@ -147,6 +155,34 @@ class CodeCatalogIntegrationTest {
         assertThat(html).contains("<span>現金</span>").contains("<span>手形</span>");
     }
 
+    /** The same page in another language: the call site is unchanged, the labels are not. */
+    @Test
+    void aRequestsLanguageDecidesWhichNamesRender() throws Exception {
+        String japanese = get("/受注一覧").body();
+        assertThat(japanese).contains("<span>現金</span>").doesNotContain("<span>Cash</span>");
+        String english = get("/受注一覧", "en").body();
+        assertThat(english).contains("<span>Cash</span>").contains("<span>Transfer</span>");
+    }
+
+    /** An untranslated code falls back to the default language, not to the raw code. */
+    @Test
+    void anUntranslatedCodeFallsBackToTheDefaultLanguage() throws Exception {
+        // 手形 has no English name. Rendering '9' would print a number where a name belongs.
+        assertThat(get("/受注一覧", "en").body()).contains("<span>手形</span>");
+    }
+
+    /** A regional tag matches the language the master stores: ja-JP finds ja. */
+    @Test
+    void aRegionalTagMatchesTheStoredLanguage() throws Exception {
+        assertThat(get("/受注一覧", "ja-JP,ja;q=0.9").body()).contains("<span>現金</span>");
+    }
+
+    /** Validation does not narrow by language: a code with no English name is still a code. */
+    @Test
+    void aCodeIsValidWhateverLanguageAsked() throws Exception {
+        assertThat(post("/api/受注", "{\"取引区分\":\"2\"}").statusCode()).isEqualTo(201);
+    }
+
     private static HttpResponse<String> post(String path, String body) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -158,11 +194,18 @@ class CodeCatalogIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path) throws Exception {
-        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+        return get(path, null);
+    }
+
+    private static HttpResponse<String> get(String path, String acceptLanguage) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
                         + java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8)
-                                .replace("%2F", "/")))
-                .build(),
+                                .replace("%2F", "/")));
+        if (acceptLanguage != null) {
+            request.header("Accept-Language", acceptLanguage);
+        }
+        return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
@@ -180,6 +223,9 @@ class CodeCatalogIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  i18n:
+                    defaultLocale: ja
+                    locales: [ja, en]
                   app:
                     name: catalog-it
                   datasources:
@@ -199,6 +245,7 @@ class CodeCatalogIntegrationTest {
                     where: { 区分種別: '01' }
                     key: 区分コード
                     label: 区分名称
+                    language: 言語コード
                     order: 表示順
                     active: 有効フラグ
                   取引形態:

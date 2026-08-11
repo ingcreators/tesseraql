@@ -343,6 +343,18 @@ Labels may also come from the message catalog instead of a table
 (`label: { message: "code.取引区分.{key}" }`), which puts them in the translation workflow the
 Studio message editor already serves, and adds no per-language table.
 
+**When each part of this decision lands.** The language dimension itself is a property of the
+catalog and ships with it. The per-surface locale rule, though, can only be enforced on a
+surface that *has* the catalogs: `codes` is published into a route's execution context, and an
+export or a mail template does not receive it until its own slice gives it one. So the refusal
+travels with each surface — slice 13 for export, and the mail slice for mail — rather than
+being written now against surfaces that cannot yet render a code. What ships with the language
+dimension is the rule for the surface that does have it (the request's resolved locale) and a
+build-time warning for the configuration that makes the whole dimension unreachable: a
+`language:` column in an app whose `tesseraql.i18n.locales` holds a single tag
+(`TQL-FIELD-4619`), where every request resolves to the default and the other languages look
+broken rather than unreachable.
+
 ### 13. Invalidation is keyed by source table, not by catalog name
 
 When twenty code kinds share one table, the maintenance command upserts a row whose kind is
@@ -707,11 +719,17 @@ join, the same answer enrichment gives.
    for every field, so one shape serves both sources (breaking, pre-1.0).
 10. **A list column's label.** A `columns:` entry with `domain:` rendering the name through the
    same `codes` object a hand-owned template uses.
-11. **Multi-language.** The `file:` escape hatch (a catalog whose shape a table and equality
-   filters cannot express — a join to a table of per-language names — which is why it lands
-   here rather than earlier, accepted and read by nothing). The language dimension, i18n's locale resolution and fallback, the
-   per-surface locale table of decision 12 and the build-time refusal of an undeclared one,
-   message-sourced labels.
+11a. **The language dimension.** A catalog's `language:` column, the narrowing of a load into
+   the surface's locale, i18n's resolution and the fallback to the default language rather than
+   to the raw code, the key set staying language-independent so validation cannot reject a code
+   for a missing translation, and the once-per-load report of what is untranslated.
+11b. **The remaining label sources.** The `file:` escape hatch (a catalog whose shape a table
+   and equality filters cannot express — a join to a table of per-language names — which is why
+   it lands here rather than earlier, accepted and read by nothing), and message-sourced labels
+   (`label: { message: ... }`), which put the names in the translation workflow the Studio
+   message editor already serves and add no per-language table. Decision 12's per-surface
+   locale rule ships with each surface as it gains `codes` (slice 13 for export, and mail),
+   because a refusal cannot be written against a surface that cannot render a code.
 12. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
    atomic swap and its failure behavior, the operations surface, the scaffolder emitting
    `invalidates:` for generated maintenance screens.

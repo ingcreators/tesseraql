@@ -24,18 +24,30 @@ import java.util.Map;
  */
 public final class CodeCatalog {
 
-    /** One row of the catalog, in the order a form should offer it. */
-    public record Entry(Object key, String label, boolean active) {
+    /**
+     * One row of the catalog, in the order a form should offer it. {@code language} is the
+     * BCP-47 tag the label is written in, or {@code null} for a catalog with no language column
+     * — the row then answers in every language, which is what a single-language app has.
+     */
+    public record Entry(Object key, String label, boolean active, String language) {
+
+        /** A row with no language dimension. */
+        public Entry(Object key, String label, boolean active) {
+            this(key, label, active, null);
+        }
     }
 
     private final String name;
     private final Map<Object, String> labels;
     private final List<Entry> entries;
+    private final String language;
 
-    private CodeCatalog(String name, Map<Object, String> labels, List<Entry> entries) {
+    private CodeCatalog(String name, Map<Object, String> labels, List<Entry> entries,
+            String language) {
         this.name = name;
         this.labels = Collections.unmodifiableMap(labels);
         this.entries = List.copyOf(entries);
+        this.language = language;
     }
 
     /**
@@ -48,7 +60,90 @@ public final class CodeCatalog {
         for (Entry row : rows) {
             labels.putIfAbsent(canonical(row.key()), row.label());
         }
-        return new CodeCatalog(name, labels, rows);
+        return new CodeCatalog(name, labels, rows, null);
+    }
+
+    /**
+     * The view of this catalog written in one language (docs/lookups.md, decision 12).
+     *
+     * <p>Language is a dimension of the catalog, not part of the key, so this returns the same
+     * type the call site already holds: {@code codes.取引区分.of(row.取引区分)} is the call in
+     * every language. What changes is which rows carry the labels.
+     *
+     * <p>Three properties the narrowing has to keep:
+     *
+     * <ul>
+     * <li><b>The key set does not narrow.</b> A code exists whether or not it is translated, so
+     * {@link #has} still answers over every language — validation must never reject a code for
+     * a missing translation (decision 11).</li>
+     * <li><b>A missing label falls back to the default language</b>, not to the raw code. A
+     * half-translated master reads as the untranslated name, which a person can act on.</li>
+     * <li><b>Rows with no language at all belong to every language.</b> A catalog that has not
+     * grown a language column keeps working unchanged.</li>
+     * </ul>
+     */
+    public CodeCatalog inLanguage(String tag, String defaultTag) {
+        if (entries.stream().allMatch(entry -> entry.language() == null)) {
+            return this;
+        }
+        // One entry per code, in the source's order, carrying the label of the language that
+        // wins: the requested one, else the default, else a row that declares no language.
+        Map<Object, Entry> chosen = new LinkedHashMap<>();
+        Map<Object, Integer> rank = new LinkedHashMap<>();
+        for (Entry row : entries) {
+            Object key = canonical(row.key());
+            int candidate = rankOf(row.language(), tag, defaultTag);
+            Integer held = rank.get(key);
+            if (held == null) {
+                // The first row for a code fixes its identity and its active flag, whatever
+                // language it happens to be written in.
+                chosen.put(key, new Entry(row.key(), candidate < 3 ? row.label() : null,
+                        row.active(), tag));
+                rank.put(key, candidate);
+            } else if (candidate < held) {
+                chosen.put(key, new Entry(chosen.get(key).key(), row.label(),
+                        chosen.get(key).active(), tag));
+                rank.put(key, candidate);
+            }
+        }
+        Map<Object, String> narrowed = new LinkedHashMap<>();
+        List<Entry> offered = new ArrayList<>();
+        chosen.forEach((key, entry) -> {
+            // A code with no label in any resolvable language keeps its place in the key set —
+            // it exists, so has() says so and of() renders the code itself.
+            narrowed.put(key, entry.label());
+            offered.add(entry);
+        });
+        return new CodeCatalog(name, narrowed, offered, tag);
+    }
+
+    /** The language this view is written in, or {@code null} when the catalog has no language. */
+    public String language() {
+        return language;
+    }
+
+    /** How well a row's language answers the request: 0 requested, 1 default, 2 unlabelled. */
+    private static int rankOf(String rowLanguage, String tag, String defaultTag) {
+        if (rowLanguage == null) {
+            return 2;
+        }
+        if (tag != null && matches(rowLanguage, tag)) {
+            return 0;
+        }
+        if (defaultTag != null && matches(rowLanguage, defaultTag)) {
+            return 1;
+        }
+        return 3;
+    }
+
+    /** RFC 4647-style: {@code ja} matches a requested {@code ja-JP} and the other way round. */
+    private static boolean matches(String rowLanguage, String requested) {
+        if (rowLanguage.equalsIgnoreCase(requested)) {
+            return true;
+        }
+        String row = rowLanguage.toLowerCase(java.util.Locale.ROOT);
+        String want = requested.toLowerCase(java.util.Locale.ROOT);
+        return want.startsWith(row + "-") || row.startsWith(want + "-");
     }
 
     /** The catalog's name, for a message that has to say which one. */
