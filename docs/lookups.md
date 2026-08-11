@@ -1,7 +1,7 @@
 # Lookups and enrichment
 
 Status: **designed 2026-08-11**. **Slices 1-2 complete** (composition, and `enrich:` with a SQL
-reference); decisions 15-18 and slices 3-10 below.
+reference); decisions 15-20 and slices 3-12 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
@@ -491,6 +491,59 @@ it is worth deciding on its own evidence.
 Until then, an envelope-shaped API is reachable the way it always was — a job step or a
 service — and a plain `POST … {"codes": […]}` endpoint is reachable directly.
 
+### 19. A command fetches before it opens its transaction
+
+The rule was "`http:` is unavailable on command routes". The invariant behind it is narrower,
+and the export pipeline already states it (decision 2 there): a network call inside the window
+where a connection, a transaction and a cursor are held pins all three for however long the
+partner takes, so an export runs its `http:` sources *before* the extraction.
+
+A command has the same window and takes the same fix. `http:` becomes legal on the
+transactional recipes, executed **before the connection is acquired** — the steps bind the
+fetched value like any other context entry (`partner.body.name`), and the transaction never
+waits on a third party. It answers the requirement the current rule refuses outright: *fetch a
+name over HTTP and write it, as of this transaction*, without trusting the caller to supply it.
+
+- **Fail-closed.** A failed fetch fails the command before a row is written. `onError: empty`
+  remains available and means the author declared the value optional.
+- **No retry.** The call is made once; the layer that makes a retried *request* safe is the
+  command's own `idempotency:`, which already exists.
+- **A rollback does not un-call.** This is the residue no design removes: the write can roll
+  back, the request cannot. With a non-GET method now legal (decision 16), the author states
+  that the call is a reference with `readOnly: true`. The framework guarantees the declaration
+  exists, not that it is true — anything with a side effect belongs after the commit, in the
+  outbox.
+- **What is fetched is a snapshot** taken shortly before the commit. For "store the name as of
+  this transaction" that is the requirement, not a defect.
+- **Timeouts matter more here than on a page**: the caller waits, and the write queues behind
+  the call. The per-source `connectTimeout`/`requestTimeout` and the circuit breaker apply, and
+  the guide says to declare them short.
+
+`enrich:` stays unavailable on commands, unchanged: there are no rows to fold into before the
+write. The value lands in the context and a step binds it.
+
+### 20. Webhook delivery rides the one outbound gateway
+
+`WebhookNotifier` builds its own `HttpClient`: no allow-list, no named credentials, a
+hard-coded ten-second connect timeout, no request timeout, and no share in the per-host circuit
+breaker. The framework's stated egress posture — deny by default — therefore has a hole exactly
+where the framework itself calls out, and decisions 15-16 leave it as the one remaining path
+with its own rules.
+
+Delivery moves onto the gateway every other call uses. The HMAC signing, the payload shape, the
+retry and dead-letter policy and the operations surface are untouched; only the transport
+changes.
+
+Breaking: a webhook whose host is not in `allowedHosts` stops being delivered until the host is
+listed. That is a one-line configuration migration, and it is the correction of a claim the
+documentation already makes.
+
+**A note that belongs with it.** A webhook delivery reads its response only to decide success
+or failure (`TQL-BATCH-5303`); nothing flows back into the application. A command that needs
+the partner's answer *stored* writes a pending row and lets a job's `httpCall:` step complete
+it. That is the saga the framework supports — atomicity and a synchronous external answer
+cannot both be had — and the guide should say so rather than leave it to be discovered.
+
 ## Waves and slices
 
 **Wave 1 — composition and enrichment**
@@ -517,27 +570,34 @@ service — and a plain `POST … {"codes": […]}` endpoint is reachable direct
    egress allow-list, credentials and degradation metric, plus `onError:` under decision 6's
    all-or-nothing rule.
 
+5. **A command fetches before its transaction** (decision 19). `http:` becomes legal on the
+   transactional recipes, ordered before the connection is acquired; `readOnly:` and its lint;
+   the guide's timeout advice and the rollback-does-not-un-call sentence.
+6. **Webhook delivery on the gateway** (decision 20). The allow-list, named credentials,
+   configured timeouts and the shared circuit breaker; the migration note; the saga documented
+   where a reader looks for it.
+
 **Wave 2 — catalogs**
 
-5. **`catalogs:` and `domains.codes:` (single language).** Whole-table load, the `codes` context
+7. **`catalogs:` and `domains.codes:` (single language).** Whole-table load, the `codes` context
    object, `of(...)`, render-time resolution in declarative views and in ejected templates,
    `active:`, `order:`, `<select>` options, validation with miss-rechecks.
-6. **Multi-language.** The language dimension, i18n's locale resolution and fallback, the
+8. **Multi-language.** The language dimension, i18n's locale resolution and fallback, the
    per-surface locale table of decision 12 and the build-time refusal of an undeclared one,
    message-sourced labels.
-7. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
+9. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
    atomic swap and its failure behavior, the operations surface, the scaffolder emitting
    `invalidates:` for generated maintenance screens.
 
 **Wave 3 — the remaining surfaces**
 
-8. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
+10. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
    the enrichment becomes a sliding window over `batchSize` rows and the request-scoped cache
    stops being an optimization and starts being load-bearing.
-9. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
+11. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.
-10. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
+12. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
    and `from:`, a catalogs page listing rows, last load, last error, and refresh.
 
 ## Out of scope (documented, not implied)
