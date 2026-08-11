@@ -8,6 +8,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A field domain may be backed by a code catalog** — `codes: 取引区分` on a domain, and the
+  input binder accepts only that catalog's active codes. The violation is the `enum` field
+  error, because a catalog is a dynamic enum; a value the held copy does not carry is re-read
+  from the source before it is refused, so a code added a minute ago is never rejected for the
+  length of the hold.
 - **Code catalogs** (docs/lookups.md): a `catalogs/` document declares a small, nearly static
   table of codes and the names they stand for, and every template resolves it from memory —
   `${codes.取引区分.of(row.取引区分)}` — with no query per request and no per-route declaration.

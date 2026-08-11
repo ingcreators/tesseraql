@@ -73,6 +73,33 @@ input:
   note:  { type: string, maxLength: 200 }   # route-local fields remain exactly as today
 ```
 
+### A domain backed by a code catalog
+
+A field whose legal values are a code master's rows says so once:
+
+```yaml
+domains:
+  取引区分:
+    type: string
+    maxLength: 2
+    codes: 取引区分        # a single-key catalog (docs/lookups.md)
+```
+
+The route's `input:` then references the domain as usual, and the binder accepts only that
+catalog's **active** codes — a retired one renders on last year's rows and is refused on new
+ones. The violation is the `enum` field error, because a catalog is a dynamic enum and clients
+should not have to learn a second shape.
+
+**A miss is re-checked before it is refused.** The catalog is held for its TTL, so a code an
+operator added a minute ago would otherwise be rejected for the rest of the hold; a value the
+held copy does not carry is re-read from the source first. The cost lands only on the
+rejection path.
+
+The line against `enum:` is the one [lookups.md](lookups.md) draws: an `enum` is *contract* —
+it rides into OpenAPI and gates the embedded-variable allow-list (`TQL-SQL-2109`) — so it
+cannot change without a deploy. A catalog is *data*, maintained by whoever owns the master.
+Use `enum:` when code branches on the values; use `codes:` when the business adds them.
+
 ## What belongs to the domain, what belongs to the route
 
 The line is a design invariant, not a convention:

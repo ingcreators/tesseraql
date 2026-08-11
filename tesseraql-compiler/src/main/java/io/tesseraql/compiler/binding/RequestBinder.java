@@ -93,7 +93,10 @@ public final class RequestBinder implements Processor {
         Map<String, Object> effective = InputBinder.bind(route.input(),
                 name -> rawValue(name, body, exchange),
                 name -> body.get(name),
-                java.util.Locale.forLanguageTag(localeTag));
+                java.util.Locale.forLanguageTag(localeTag),
+                exchange.getContext().getRegistry().lookupByNameAndType(
+                        TesseraqlProperties.CATALOG_STORE_BEAN,
+                        io.tesseraql.core.catalog.CatalogStore.class));
 
         // A path parameter declared under input: publishes its coerced, validated value in the
         // path.* namespace too (roadmap Phase 40 typed path params); undeclared ones stay raw.

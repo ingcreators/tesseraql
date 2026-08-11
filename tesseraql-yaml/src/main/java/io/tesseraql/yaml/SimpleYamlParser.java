@@ -73,7 +73,7 @@ public final class SimpleYamlParser {
      * operation's use of it. */
     private static final java.util.Set<String> DOMAIN_KEYS = java.util.Set.of("type", "min",
             "max", "minLength", "maxLength", "pattern", "format", "enum", "items",
-            "classification", "mask", "widget");
+            "classification", "mask", "widget", "codes");
     private static final java.util.Set<String> CONSTRAINT_KEYS = java.util.Set.of("field", "code",
             "message");
 

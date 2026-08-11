@@ -87,6 +87,41 @@ class CodeCatalogIntegrationTest {
         assertThat(body).contains("国内");
     }
 
+    /** A domain's codes: reference accepts an active code and refuses anything else. */
+    @Test
+    void aFieldDeclaringCodesAcceptsOnlyActiveCodes() throws Exception {
+        assertThat(post("/api/受注", "{\"取引区分\":\"1\"}").statusCode()).isEqualTo(201);
+        // '9' exists but is retired: it renders on old rows and is refused on new ones. The
+        // refusal is an input-contract violation (400), the same shape an enum violation takes.
+        HttpResponse<String> retired = post("/api/受注", "{\"取引区分\":\"9\"}");
+        assertThat(retired.statusCode()).isEqualTo(400);
+        assertThat(retired.body()).contains("取引区分");
+        // '7' is not a code at all.
+        assertThat(post("/api/受注", "{\"取引区分\":\"7\"}").statusCode()).isEqualTo(400);
+    }
+
+    /** A code added after the hold is accepted: a miss re-reads the source before refusing. */
+    @Test
+    void aCodeAddedAfterTheLoadIsNotRefused() throws Exception {
+        try (var connection = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+                var statement = connection.createStatement()) {
+            statement.execute("insert into 区分マスタ values ('01', '5', '電子マネー', 4, '1')");
+        }
+        // The hold is an hour old by declaration; without the recheck this would be a 400.
+        assertThat(post("/api/受注", "{\"取引区分\":\"5\"}").statusCode()).isEqualTo(201);
+    }
+
+    private static HttpResponse<String> post(String path, String body) throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port()
+                        + java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8)
+                                .replace("%2F", "/")))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private static HttpResponse<String> get(String path) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -156,6 +191,41 @@ class CodeCatalogIntegrationTest {
                     model:
                       rows: sql.rows
                 """);
+        Files.createDirectories(target.resolve("domains"));
+        Files.writeString(target.resolve("domains/codes.yml"), """
+                version: tesseraql/v1
+                domains:
+                  取引区分:
+                    type: string
+                    maxLength: 2
+                    codes: 取引区分
+                """);
+        Path create = target.resolve("web/api/受注");
+        Files.createDirectories(create);
+        Files.writeString(create.resolve("insert.sql"),
+                "insert into 受注 (受注番号, 取引区分)"
+                        + " values (/* 受注番号 */'X', /* 取引区分 */'1')\n");
+        Files.writeString(create.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: 受注.create
+                kind: route
+                recipe: command-json
+                security: { auth: public }
+                input:
+                  取引区分: { domain: 取引区分, required: true }
+                steps:
+                  row:
+                    file: insert.sql
+                    params:
+                      受注番号: params.取引区分
+                      取引区分: params.取引区分
+                response:
+                  json:
+                    status: 201
+                    body:
+                      ok: true
+                """);
+
         Files.createDirectories(target.resolve("templates"));
         Files.writeString(target.resolve("templates/orders.html"), """
                 <!doctype html>

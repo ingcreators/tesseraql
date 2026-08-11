@@ -17,4 +17,14 @@ public interface CatalogStore {
      * a failed refresh keeps the previous one rather than emptying a screen.
      */
     Map<String, CodeCatalog> catalogs();
+
+    /**
+     * Re-reads one catalog from its source, whatever the hold says, and returns it.
+     *
+     * <p>This is the validation path's (docs/lookups.md, decision 11): a cache miss is not an
+     * answer. A code added a minute ago must not be refused for the length of the hold, so a
+     * value the held copy does not carry is re-checked against the source before it is
+     * rejected. The cost lands only on the rejection path.
+     */
+    CodeCatalog reload(String name);
 }
