@@ -499,6 +499,7 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | `classification` | string | Data classification label carried into masking and audit. Documented in data-scoping.md. |
 | `mask` | string | The masking rule applied when the principal may not see the value. |
 | `widget` | enum: `text` \| `textarea` \| `number` \| `date` \| `datetime-local` \| `checkbox` \| `select` \| `hidden` | Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract. |
+| `codes` | string | The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master. |
 | `policy` | string | Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain. |
 | `items` | [object](#inputfielditems) | Element constraints for `type: array`. |
 
