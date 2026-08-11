@@ -128,7 +128,9 @@ Token-bucket rate limit for this route.
 
 | Property | Type | Description |
 | --- | --- | --- |
+| `method` | string | The HTTP method, defaulting to GET. A reference API that takes a key list or a query document (POST .../search, JSON-RPC, GraphQL) declares its own; a non-GET method is written out, never inferred from `body`. |
 | `url` | string | Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070). |
+| `body` | string | A source expression resolving to the JSON request body. Declaring it beside a method that carries no body (GET, HEAD) is a build error (TQL-YAML-1049). |
 | `headers` | map of string | Static request headers sent with the call. Credential material belongs in a named credential, never here. |
 | `query` | map of string | Query-string bindings, each an expression over the execution context. |
 | `credential` | string | A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072). |

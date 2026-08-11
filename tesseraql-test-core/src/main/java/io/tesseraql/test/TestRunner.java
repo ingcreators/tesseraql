@@ -859,7 +859,7 @@ public final class TestRunner {
             RouteFile route = route(target.route());
             route.definition().http().forEach((name, source) -> {
                 if (target.id() == null || target.id().equals(name)) {
-                    calls.add(Map.entry(name, source.toCall()));
+                    calls.add(Map.entry(name, source.call()));
                 }
             });
         }

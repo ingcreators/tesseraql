@@ -102,4 +102,25 @@ class AppLinterHttpSourceTest {
                 && "TQL-YAML-1022".equals(finding.code())
                 && finding.message().contains("shadows"));
     }
+
+    @Test
+    void aPostSourceWithABodyLintsClean(@TempDir Path dir) throws Exception {
+        // A reference API that takes a list of keys is a POST; the read side is no longer
+        // GET-only (docs/lookups.md, decision 16).
+        writeApp(dir, "query-json", "fx.example.com", """
+                    method: POST
+                    body: params.codes
+                """);
+        assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
+    }
+
+    @Test
+    void aBodyOnAMethodThatCarriesNoneIsAnError(@TempDir Path dir) throws Exception {
+        writeApp(dir, "query-json", "fx.example.com", """
+                    body: params.codes
+                """);
+        assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
+                && "TQL-YAML-1049".equals(finding.code())
+                && finding.message().contains("GET"));
+    }
 }
