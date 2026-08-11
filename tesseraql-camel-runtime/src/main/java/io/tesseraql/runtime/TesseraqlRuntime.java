@@ -303,6 +303,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN, tenantDataSources);
         }
 
+        // Code catalogs (docs/lookups.md, decision 8): small, nearly static tables of codes and
+        // names, loaded whole and resolved from memory wherever a code is rendered.
+        io.tesseraql.yaml.catalog.Catalogs codeCatalogs = io.tesseraql.yaml.catalog.Catalogs
+                .load(appHome);
+        if (!codeCatalogs.isEmpty()) {
+            if (!tenantDataSources.isEmpty()) {
+                // A held catalog is app-wide; serving one tenant's codes to another is a data
+                // leak, so the combination is refused until catalogs key by tenant rather than
+                // being discovered in production (docs/lookups.md, decision 14).
+                throw new io.tesseraql.core.error.TqlException(
+                        new io.tesseraql.core.error.TqlErrorCode(
+                                io.tesseraql.core.error.TqlDomain.APP, 4207),
+                        "catalogs/ and per-tenant datasources are declared together; a catalog is"
+                                + " held app-wide and is not yet keyed by tenant");
+            }
+            context.getRegistry().bind(TesseraqlProperties.CATALOG_STORE_BEAN,
+                    new io.tesseraql.operations.catalog.JdbcCatalogStore(codeCatalogs.all(),
+                            dataSources::get, datasourceDialect(manifest.config())));
+        }
+
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
         context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
                 new PolicyEngine(security));

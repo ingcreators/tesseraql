@@ -115,9 +115,10 @@ public final class HtmlResponseRenderer implements Processor {
                     "response.html.views binds declarative parts to a template: route — a view:"
                             + " route embeds through its own document instead");
         }
-        if (response.model().containsKey("v") || response.model().containsKey("views")) {
-            throw new TqlException(RESERVED_MODEL, "response.html.model must not declare 'v' or"
-                    + " 'views' — they are the reserved view-model names");
+        if (response.model().containsKey("v") || response.model().containsKey("views")
+                || response.model().containsKey(TesseraqlProperties.CODES)) {
+            throw new TqlException(RESERVED_MODEL, "response.html.model must not declare 'v',"
+                    + " 'views' or 'codes' — they are the reserved model names");
         }
         this.templateName = viewBinding != null
                 ? viewBinding.entryTemplate()
@@ -185,6 +186,13 @@ public final class HtmlResponseRenderer implements Processor {
                 String.class);
 
         Map<String, Object> model = new LinkedHashMap<>();
+        // The app's code catalogs, so a template resolves the name behind a code with no query
+        // and no per-route declaration (docs/lookups.md, decision 8). Reserved like `v`, and put
+        // in first so a route model can never shadow it.
+        Object codes = context.get(TesseraqlProperties.CODES);
+        if (codes != null) {
+            model.put(TesseraqlProperties.CODES, codes);
+        }
         // Route model: entries always evaluate (docs/view-composition.md wave 2b — they used
         // to be discarded on view: routes); `v` and `views` are reserved names the constructor
         // refuses, so the view models below can never be shadowed.

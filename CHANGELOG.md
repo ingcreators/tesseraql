@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Code catalogs** (docs/lookups.md): a `catalogs/` document declares a small, nearly static
+  table of codes and the names they stand for, and every template resolves it from memory —
+  `${codes.取引区分.of(row.取引区分)}` — with no query per request and no per-route declaration.
+  `where:` pins one kind's slice of a shared code master, so the twenty kinds a general master
+  holds are twenty single-keyed catalogs over one table. Labels resolve over every row while
+  `active:` marks what a form still offers, because a retired code must render on last year's
+  orders and must not be offered on today's. A load swaps atomically and a failed refresh keeps
+  the previous one, so a blinking database does not blank a screen.
+
 - **`enrich:` folds a keyed reference into a result set's rows** (docs/lookups.md). The rows of
   `into:` (the route's `sql:` result, or one of its `queries:`) carry a key; the reference behind
   it is fetched by the *distinct* keys, in batches, and each match is merged onto the row it

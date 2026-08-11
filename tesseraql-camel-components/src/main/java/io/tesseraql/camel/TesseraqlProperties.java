@@ -128,6 +128,12 @@ public final class TesseraqlProperties {
     public static final String RATE_BUDGET_BEAN = "tesseraqlRateBudget";
     /** The one gateway every outbound HTTP call leaves through (docs/lookups.md, decision 15). */
     public static final String OUTBOUND_GATEWAY_BEAN = "tesseraqlOutboundGateway";
+
+    /** Registry bean name for the app's loaded code catalogs (docs/lookups.md, decision 8). */
+    public static final String CATALOG_STORE_BEAN = "tesseraqlCatalogStore";
+
+    /** The reserved context key the code catalogs are published under. */
+    public static final String CODES = "codes";
     /** The live-view topic bus commands emit to after commit (docs/realtime.md). */
     public static final String TOPIC_BUS_BEAN = "tesseraqlTopicBus";
     /** Registry bean name for the TOTP enrollment store (roadmap Phase 50), with identity. */
