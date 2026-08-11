@@ -126,6 +126,10 @@ from partners
 where code in /* keys */('P1', 'P2')
 ```
 
+**A small master that barely changes is not this.** Twenty payment methods are held whole and
+resolved from memory by a [code catalog](code-catalogs.md), with no query per request at all.
+`enrich:` is for the reference too large to hold — the choice is size, not key arity.
+
 **By key, not by row.** The distinct keys of the rows being enriched are collected and the
 reference is fetched in batches — one statement per `batchSize` keys, not one per row. A
 hundred-row page over sixty distinct partners costs one round trip.

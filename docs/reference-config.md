@@ -111,7 +111,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.files.locale` | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) | [file-transfers](file-transfers.md) |
+| `tesseraql.files.locale` | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) | [code-catalogs](code-catalogs.md), [file-transfers](file-transfers.md) |
 
 ## tesseraql.framework
 

@@ -87,6 +87,21 @@ A route may restate a domain key to specialize it; tightening is silent, looseni
 files fail the load (`TQL-FIELD-4600`), and a domain nothing references is flagged
 (`TQL-FIELD-4611`).
 
+A domain may also say that its legal values are the codes of a
+[code catalog](code-catalogs.md) rather than a fixed `enum`:
+
+```yaml
+  取引区分:
+    type: string
+    maxLength: 2
+    codes: 取引区分
+```
+
+The binder then accepts only that catalog's active codes, and the violation is the `enum` field
+error — a catalog is a dynamic enum, so nothing downstream learns a second shape. The same
+reference gives a form its `<select>` options and renders the name behind the code wherever the
+column appears.
+
 Resolution happens when the app manifest loads: routes carry fully-populated fields afterwards,
 so binding, this page's error model, OpenAPI emission, and validation coverage are unchanged.
 

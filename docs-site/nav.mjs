@@ -36,6 +36,7 @@ export const SECTIONS = [
       'transactional-writes',
       'declarative-validation',
       'declarative-views',
+      'code-catalogs',
       'realtime',
       'pagination',
       'response-shaping',
