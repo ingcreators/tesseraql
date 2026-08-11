@@ -232,6 +232,57 @@ class CodeCatalogIntegrationTest {
         assertThat(english).contains("低");
     }
 
+    /** The operations surface reports the hold, is gated, and refreshes on request. */
+    @Test
+    void theOperationsSurfaceReportsWhatEachCatalogHolds() throws Exception {
+        // Gated like every other ops read: no bearer, no answer.
+        assertThat(get("/_tesseraql/ops/catalogs").statusCode()).isEqualTo(401);
+
+        String body = ops("GET", "/_tesseraql/ops/catalogs").body();
+        assertThat(body).contains("取引区分").contains("区分マスタ")
+                // The file: catalog reports both tables its SQL reads.
+                .contains("通貨マスタ").contains("通貨名称");
+
+        // A manual refresh answers with that catalog's hold, now loaded.
+        HttpResponse<String> refreshed = ops("POST",
+                "/_tesseraql/ops/catalogs/取引区分/refresh");
+        assertThat(refreshed.statusCode()).isEqualTo(200);
+        assertThat(refreshed.body()).contains("\"loaded\":true").contains("\"ja\"");
+
+        // An undeclared catalog is a 404, not a silent no-op.
+        assertThat(ops("POST", "/_tesseraql/ops/catalogs/存在しない/refresh").statusCode())
+                .isEqualTo(404);
+    }
+
+    /** An authenticated ops call: bearer principal with the ADMIN role. */
+    private static HttpResponse<String> ops(String method, String path) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port()
+                        + java.net.URLEncoder.encode(path, java.nio.charset.StandardCharsets.UTF_8)
+                                .replace("%2F", "/")))
+                .header("Authorization", "Bearer " + opsToken());
+        request.method(method, HttpRequest.BodyPublishers.noBody());
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String opsToken() throws Exception {
+        java.util.Base64.Encoder encoder = java.util.Base64.getUrlEncoder().withoutPadding();
+        String header = encoder.encodeToString(
+                "{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String payload = encoder.encodeToString(
+                "{\"sub\":\"ops-user\",\"roles\":[\"ADMIN\"]}"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                "dev-only-secret-change-me-in-production"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "HmacSHA256"));
+        String signature = encoder.encodeToString(mac.doFinal(
+                (header + "." + payload).getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
+        return header + "." + payload + "." + signature;
+    }
+
     private static HttpResponse<String> post(String path, String body) throws Exception {
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -275,6 +326,17 @@ class CodeCatalogIntegrationTest {
                   i18n:
                     defaultLocale: ja
                     locales: [ja, en]
+                  security:
+                    jwt:
+                      secret: dev-only-secret-change-me-in-production
+                      rolesClaim: roles
+                    policies:
+                      ops.batch.view:
+                        anyOf:
+                          - role: ADMIN
+                      ops.batch.run:
+                        anyOf:
+                          - role: ADMIN
                   app:
                     name: catalog-it
                   datasources:

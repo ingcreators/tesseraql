@@ -50,10 +50,11 @@ public final class JdbcCatalogStore implements CatalogStore {
      * <p>The views are memoized rather than rebuilt: a load's languages are fixed until the
      * next one, and a page resolving twenty coded columns should cost twenty map lookups.
      */
-    private record Held(CodeCatalog catalog, long loadedAt, Map<String, CodeCatalog> views) {
+    private record Held(CodeCatalog catalog, long loadedAt, Map<String, CodeCatalog> views,
+            String lastError) {
 
         Held(CodeCatalog catalog, long loadedAt) {
-            this(catalog, loadedAt, new ConcurrentHashMap<>());
+            this(catalog, loadedAt, new ConcurrentHashMap<>(), null);
         }
 
         CodeCatalog view(String tag, String defaultTag) {
@@ -131,6 +132,31 @@ public final class JdbcCatalogStore implements CatalogStore {
         });
     }
 
+    @Override
+    public java.util.List<CatalogStore.Status> status() {
+        java.util.List<CatalogStore.Status> statuses = new ArrayList<>();
+        specs.forEach((name, spec) -> {
+            Held current = held.get(name);
+            statuses.add(new CatalogStore.Status(name, spec.sourceTables(),
+                    current == null ? -1 : current.catalog().size(),
+                    current == null ? List.of() : languages(current.catalog()),
+                    current == null ? null : current.loadedAt(),
+                    current == null ? null : current.lastError()));
+        });
+        return statuses;
+    }
+
+    /** The languages a load carried, in first-seen order; empty for a single-language catalog. */
+    private static List<String> languages(CodeCatalog catalog) {
+        java.util.Set<String> tags = new java.util.LinkedHashSet<>();
+        catalog.all().forEach(entry -> {
+            if (entry.language() != null) {
+                tags.add(entry.language());
+            }
+        });
+        return List.copyOf(tags);
+    }
+
     private Held held(String name) {
         Held current = held.get(name);
         if (current != null && !isStale(name, current)) {
@@ -153,8 +179,10 @@ public final class JdbcCatalogStore implements CatalogStore {
                     // The previous load's language views ride along, so the retry costs nothing.
                     LOG.log(System.Logger.Level.WARNING, "Catalog ''{0}'' refresh failed;"
                             + " serving the previous load", name, ex);
+                    // The error rides the hold: a catalog serving yesterday's names while its
+                    // refresh keeps failing must not read as healthy on the ops surface.
                     Held renewed = new Held(rechecked.catalog(), clock.getAsLong(),
-                            rechecked.views());
+                            rechecked.views(), String.valueOf(ex.getMessage()));
                     held.put(name, renewed);
                     return renewed;
                 }

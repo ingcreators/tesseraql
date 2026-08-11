@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The operations API reports what each code catalog holds, and refreshes one on request**
+  (docs/lookups.md, decision 14). `GET /_tesseraql/ops/catalogs` lists every declared catalog
+  with its source tables, how many codes the load carried, the languages it carried, when it
+  loaded, and the message of its last failed refresh — a catalog serving a previous load while
+  its refresh keeps failing carries both facts, because either alone reads as healthy. It
+  reports the hold and never takes one, so "never loaded" stays visible instead of being caused
+  by looking. `POST /_tesseraql/ops/catalogs/{name}/refresh` re-reads one whatever the hold
+  says, gated by `ops.batch.run` like every other ops write; an undeclared name is a 404, not a
+  silent no-op.
 - **A catalog may be declared by a SQL file, and its names may come from the message catalog**
   (docs/lookups.md, decisions 12-13). `file: 通貨.sql` covers the shape `table:` and equality
   filters cannot express — codes in one table, their names per language in another — and then

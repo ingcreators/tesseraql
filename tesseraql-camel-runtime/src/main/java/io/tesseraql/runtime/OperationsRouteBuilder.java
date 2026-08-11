@@ -37,6 +37,34 @@ final class OperationsRouteBuilder extends RouteBuilder {
     private static final io.tesseraql.core.error.TqlErrorCode UNKNOWN = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.BATCH, 4040);
 
+    /** The app's code catalogs, or null when it declares none (docs/lookups.md, decision 14). */
+    private static io.tesseraql.core.catalog.CatalogStore catalogStore(
+            org.apache.camel.Exchange exchange) {
+        return exchange.getContext().getRegistry().lookupByNameAndType(
+                io.tesseraql.camel.TesseraqlProperties.CATALOG_STORE_BEAN,
+                io.tesseraql.core.catalog.CatalogStore.class);
+    }
+
+    /**
+     * One catalog's hold as JSON. {@code loadedAt} is null and {@code codes} is -1 for a
+     * catalog nothing has asked for yet — the status surface reports the hold, it never takes
+     * one, so "never loaded" stays visible instead of being caused by looking.
+     */
+    private static Map<String, Object> catalogStatusMap(
+            io.tesseraql.core.catalog.CatalogStore.Status status) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("name", status.name());
+        row.put("tables", status.tables());
+        row.put("loaded", status.loadedAt() != null);
+        row.put("codes", status.codes() < 0 ? null : status.codes());
+        row.put("languages", status.languages());
+        row.put("loadedAt", status.loadedAt() == null
+                ? null
+                : java.time.Instant.ofEpochMilli(status.loadedAt()).toString());
+        row.put("lastError", status.lastError());
+        return row;
+    }
+
     /** The 404 refusal for an unknown — or out-of-scope, which reads the same — resource. */
     private static TqlException notFound(String what) {
         return TqlException.builder(UNKNOWN)
@@ -137,6 +165,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
                             exchange -> routeAudit.recent(200, scope(exchange))));
         }
 
+        // What each code catalog holds and a manual refresh (docs/lookups.md, decision 14).
+        // The store is looked up per request rather than injected: an app with no catalogs/
+        // simply answers an empty list, and the endpoints do not depend on start-up order.
+        rest().get("/_tesseraql/ops/catalogs").to("direct:ops.catalogs");
+        rest().post("/_tesseraql/ops/catalogs/{name}/refresh").to("direct:ops.catalogs.refresh");
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
         rest().get("/_tesseraql/ops/outbox").to("direct:ops.outbox");
         rest().post("/_tesseraql/ops/outbox/{id}/redeliver").to("direct:ops.outbox.redeliver");
@@ -272,6 +305,35 @@ final class OperationsRouteBuilder extends RouteBuilder {
         from("direct:ops.pinning").routeId("ops.pinning")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
                 .process(jsonProcessor(exchange -> pinningWire(dashboard.pinning())));
+
+        from("direct:ops.catalogs").routeId("ops.catalogs")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .process(jsonProcessor(exchange -> {
+                    io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
+                    return store == null
+                            ? List.of()
+                            : store.status().stream()
+                                    .map(OperationsRouteBuilder::catalogStatusMap).toList();
+                }));
+
+        from("direct:ops.catalogs.refresh").routeId("ops.catalogs.refresh")
+                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .process(jsonProcessor(exchange -> {
+                    io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
+                    String name = exchange.getMessage().getHeader("name", String.class);
+                    if (store == null || store.status().stream()
+                            .noneMatch(status -> status.name().equals(name))) {
+                        throw notFound("Catalog '" + name + "'");
+                    }
+                    // reload() re-reads whatever the hold says, which is the whole point of a
+                    // manual refresh: an operator presses it because the source changed
+                    // somewhere the app could not see.
+                    store.reload(name);
+                    return store.status().stream()
+                            .filter(status -> status.name().equals(name))
+                            .map(OperationsRouteBuilder::catalogStatusMap).findFirst()
+                            .orElseThrow();
+                }));
 
         from("direct:ops.outbox").routeId("ops.outbox")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
