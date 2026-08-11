@@ -123,7 +123,7 @@
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
     <commonmark.version>0.24.0</commonmark.version>
     <hypermedia-components.version>0.1.15</hypermedia-components.version>
-    <hypermedia-editor-kit.version>0.1.0</hypermedia-editor-kit.version>
+    <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.4</webjars-locator.version>
     <flyway.version>13.0.0</flyway.version>
