@@ -16,8 +16,11 @@ import java.util.Map;
  * why {@code where:} exists: it fixes the type here, so the catalog itself is single-keyed and
  * a field domain can reference it (decision 9).
  *
- * @param table      the table the codes live in; exactly one of {@code table} or {@code file}
- * @param file       a 2-way SQL file, for a shape {@code table}/{@code where} cannot express
+ * <p>A shape a table and equality filters cannot express — a join to a table of per-language
+ * names — needs a SQL file instead. That form lands with the slice that needs it rather than
+ * being accepted here and read by nothing.
+ *
+ * @param table      the table the codes live in
  * @param where      equality filters pinning this catalog's slice of a shared table
  * @param key        the column carrying the code
  * @param label      the column carrying the name
@@ -28,8 +31,8 @@ import java.util.Map;
  * @param cache      how long a load is held before it is read again
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record CatalogSpec(String table, String file, Map<String, String> where, String key,
-        String label, String order, String active, String datasource, CacheSpec cache) {
+public record CatalogSpec(String table, Map<String, String> where, String key, String label,
+        String order, String active, String datasource, CacheSpec cache) {
 
     /** How long a catalog is held when it does not say: long enough that a request never loads. */
     public static final String DEFAULT_TTL = "1h";

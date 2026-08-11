@@ -380,8 +380,10 @@ domains:
       active:   有効フラグ
 ```
 
-`file:` remains for shapes a `table:`/`where:` pair cannot express — a join across a code table
-and its per-language names — and then the declaration lists the tables it reads. Because the
+A shape a `table:`/`where:` pair cannot express — a join across a code table and its
+per-language names — needs a SQL file instead, and then the declaration lists the tables it
+reads. That form arrives with the multi-language slice, which is the first thing that needs
+it. Because the
 scaffolder knows the table it generates a maintenance screen for, it emits `invalidates:`
 itself.
 
@@ -609,7 +611,9 @@ a string the author already wrote, while an envelope is a new authoring surface.
 8. **`domains.codes:` — the field-level half.** A single-key catalog reference on a domain,
    which brings a form's `<select>` options and value validation with the miss-recheck rule
    (decision 11), plus a list view's `domain:` resolving through the same object.
-9. **Multi-language.** The language dimension, i18n's locale resolution and fallback, the
+9. **Multi-language.** The `file:` escape hatch (a catalog whose shape a table and equality
+   filters cannot express — a join to a table of per-language names — which is why it lands
+   here rather than earlier, accepted and read by nothing). The language dimension, i18n's locale resolution and fallback, the
    per-surface locale table of decision 12 and the build-time refusal of an undeclared one,
    message-sourced labels.
 10. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
