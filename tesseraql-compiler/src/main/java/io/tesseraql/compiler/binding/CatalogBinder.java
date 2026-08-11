@@ -30,6 +30,19 @@ public final class CatalogBinder implements Processor {
         }
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
                 Map.class);
-        context.put(TesseraqlProperties.CODES, store.catalogs());
+        context.put(TesseraqlProperties.CODES, store.catalogs(locale(exchange)));
+    }
+
+    /**
+     * The locale the catalogs answer in (docs/lookups.md, decision 12).
+     *
+     * <p>On a route this is the request's resolved locale, which {@code LocaleResolution} has
+     * already published — user preference, then {@code Accept-Language}, then the app default.
+     * It is read here rather than defaulted here: a surface that has no request to resolve
+     * against declares its locale, and one that declares none is refused at build time rather
+     * than quietly answering in whatever language the server was started in.
+     */
+    private static String locale(Exchange exchange) {
+        return exchange.getProperty(TesseraqlProperties.LOCALE, String.class);
     }
 }

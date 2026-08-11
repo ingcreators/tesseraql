@@ -229,7 +229,7 @@ public final class InputBinder {
         if (field.codes() == null || field.codes().isBlank() || catalogs == null) {
             return;
         }
-        io.tesseraql.core.catalog.CodeCatalog catalog = catalogs.catalogs().get(field.codes());
+        io.tesseraql.core.catalog.CodeCatalog catalog = catalogs.catalog(field.codes());
         if (catalog != null && offers(catalog, value)) {
             return;
         }

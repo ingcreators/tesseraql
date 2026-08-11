@@ -143,6 +143,7 @@ public final class AppLinter {
         lintWorkflowConfig(manifest.config(), findings);
         lintAttachments(appHome, manifest, findings);
         lintMailChannels(appHome, manifest.config(), findings);
+        lintCatalogLanguages(appHome, manifest.config(), findings);
         lintObjectStorageEgress(appHome, manifest, findings);
         lintViews(appHome, manifest, findings);
         lintBasePathLinks(appHome, manifest.config(), findings);
@@ -5150,6 +5151,40 @@ public final class AppLinter {
     /** Expression roots that are always fine: the mail model plus literal keywords. */
     private static final Set<String> MAIL_ROOTS = Set.of("payload", "event", "true", "false",
             "null");
+
+    /**
+     * A catalog that carries per-language names in an app that negotiates one locale
+     * (docs/lookups.md, decision 12).
+     *
+     * <p>The language a catalog answers in is the surface's resolved locale, and a request can
+     * only resolve to a locale the app supports. So a {@code language:} column in an app whose
+     * {@code tesseraql.i18n.locales} is a single entry has rows nothing can ever ask for: every
+     * request falls back to the default language, and the translations look broken rather than
+     * unreachable. A warning, not an error — the master may be shared with a system that does
+     * serve the other languages.
+     */
+    private void lintCatalogLanguages(Path appHome, AppConfig config, List<LintFinding> findings) {
+        io.tesseraql.yaml.catalog.Catalogs catalogs = io.tesseraql.yaml.catalog.Catalogs
+                .load(appHome);
+        if (catalogs.isEmpty()) {
+            return;
+        }
+        io.tesseraql.yaml.i18n.I18nSettings i18n = io.tesseraql.yaml.i18n.I18nSettings
+                .from(config, appHome);
+        if (i18n.supportedTags().size() > 1) {
+            return;
+        }
+        catalogs.all().forEach((name, spec) -> {
+            if (spec.language() == null || spec.language().isBlank()) {
+                return;
+            }
+            findings.add(new LintFinding("TQL-FIELD-4619", "warning", "catalogs/",
+                    "Catalog '" + name + "' declares language: " + spec.language()
+                            + " but the app supports one locale (" + i18n.defaultTag()
+                            + ") — every request resolves to it, so the other languages"
+                            + " never render; declare tesseraql.i18n.locales"));
+        });
+    }
 
     /**
      * The mail wiring lints (docs/pages-and-mail-lints.md D2): a mail channel's template is

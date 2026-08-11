@@ -28,7 +28,7 @@ final class CatalogQuery {
     private CatalogQuery() {
     }
 
-    /** The load statement: key, label, and the active flag when one is declared. */
+    /** The load statement: key, label, and the active and language columns when declared. */
     static String select(CatalogSpec spec, String dialect) {
         String quote = Dialect.fromId(dialect)
                 .map(known -> known.capabilities().identifierQuote())
@@ -39,12 +39,17 @@ final class CatalogQuery {
         if (present(spec.active())) {
             sql.append(", ").append(quoted(spec.active(), quote));
         }
+        if (present(spec.language())) {
+            sql.append(", ").append(quoted(spec.language(), quote));
+        }
         sql.append(" from ").append(quoted(spec.table(), quote));
         List<String> conditions = new ArrayList<>();
         spec.where().keySet().forEach(column -> conditions.add(quoted(column, quote) + " = ?"));
         if (!conditions.isEmpty()) {
             sql.append(" where ").append(String.join(" and ", conditions));
         }
+        // Order decides which codes a form offers first, so it must not be language-dependent:
+        // label collation differs per locale, which is why a display-order column exists.
         if (present(spec.order())) {
             sql.append(" order by ").append(quoted(spec.order(), quote));
         } else {

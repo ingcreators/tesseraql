@@ -24,6 +24,9 @@ import java.util.Map;
  * @param where      equality filters pinning this catalog's slice of a shared table
  * @param key        the column carrying the code
  * @param label      the column carrying the name
+ * @param language   an optional column carrying the BCP-47 tag a row's name is written in;
+ *                   language is a dimension of the catalog, not part of its key, so the call
+ *                   site is the same in every language and only the labels differ
  * @param order      an optional display-order column for a form's options
  * @param active     an optional column whose truth marks a code still offered and accepted;
  *                   labels resolve over every row, so a retired code still renders on old data
@@ -32,7 +35,7 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record CatalogSpec(String table, Map<String, String> where, String key, String label,
-        String order, String active, String datasource, CacheSpec cache) {
+        String language, String order, String active, String datasource, CacheSpec cache) {
 
     /** How long a catalog is held when it does not say: long enough that a request never loads. */
     public static final String DEFAULT_TTL = "1h";

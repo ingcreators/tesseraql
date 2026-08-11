@@ -140,7 +140,7 @@ public final class SimpleYamlParser {
 
     /** The keys a catalog may carry (docs/lookups.md): where the codes are, and which columns. */
     private static final java.util.Set<String> CATALOG_KEYS = java.util.Set.of("table", "where",
-            "key", "label", "order", "active", "datasource", "cache");
+            "key", "label", "language", "order", "active", "datasource", "cache");
 
     /** Parses a {@code catalogs/*.yml} document (docs/lookups.md, decision 9). */
     public java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> parseCatalogs(Path file) {

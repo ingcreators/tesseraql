@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A code catalog may carry its names in more than one language.** `language: 言語コード` on a
+  catalog makes language a *dimension* of the catalog rather than part of its key, so the call
+  is the same in every language — `${codes.取引区分.of(row.取引区分)}` — and only the labels
+  differ. The language is the surface's resolved locale (on a route: the request's), a code with
+  no translation falls back to the **default language** rather than to the raw code, and the key
+  set never narrows — validation asks whether a code exists, which is not a question about
+  language, so a missing translation can never turn into a failed transaction. What a load is
+  short of is reported once per load, not once per request. `TQL-FIELD-4619` warns when a
+  `language:` catalog lives in an app whose `tesseraql.i18n.locales` holds a single tag, where
+  no request could ever ask for the other languages.
 - **A coded column renders its name on every surface.** A `domain:` whose legal values are a
   catalog's codes now resolves the name wherever the column is rendered — a list's `columns:`,
   a detail's `fields:`, a detail's history child, a dashboard's table panel, and the template
@@ -56,6 +66,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: `CatalogStore` asks two questions instead of one.** `catalogs()` becomes
+  `catalogs(String localeTag)` — the rendering view, with labels in the surface's language — and
+  the new `catalog(String name)` returns the load itself for the validation path. They were one
+  method while a catalog had one language; keeping them one would have made "may this code be
+  written" depend on which names happened to be translated.
 - **BREAKING: `CodeCatalog.of(...)` falls back to the code itself** when the catalog carries no
   name for it, instead of returning `null`. A missing name is a gap in the master data, not a
   reason to blank a cell; returning `null` put that judgement in every template, and a template
