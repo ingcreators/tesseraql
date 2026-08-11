@@ -284,7 +284,12 @@ public final class McpDevTools {
                         schema = new TableIntrospector().introspect(connection, table);
                     }
                     List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config()),
-                            ResponseHeaderDefaults.from(config())).scaffold(schema);
+                            ResponseHeaderDefaults.from(config()),
+                            io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values()
+                                    .stream().map(io.tesseraql.yaml.model.CatalogSpec::table)
+                                    .filter(java.util.Objects::nonNull)
+                                    .collect(java.util.stream.Collectors.toUnmodifiableSet()))
+                            .scaffold(schema);
                     ScaffoldWriter.Report report = new ScaffoldWriter().apply(appHome, files,
                             force);
                     Object payload = obj(

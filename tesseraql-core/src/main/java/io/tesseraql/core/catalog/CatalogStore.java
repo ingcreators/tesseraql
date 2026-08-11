@@ -43,4 +43,20 @@ public interface CatalogStore {
      * rejected. The cost lands only on the rejection path.
      */
     CodeCatalog reload(String name);
+
+    /**
+     * Drops every catalog that reads one of these source tables, so the next request loads it
+     * again (docs/lookups.md, decision 13).
+     *
+     * <p>Keyed by <b>table</b>, not by catalog name, because a maintenance screen writes a row
+     * whose kind is request data: which of the twenty catalogs sharing that table is affected
+     * is not known until the row is written. Over-invalidating is free here — a catalog is
+     * chosen for being small enough to hold whole, so reloading all twenty costs twenty small
+     * queries — and it is what makes the declaration something an author can write correctly.
+     *
+     * <p>This is an optimization, never the guarantee. A master written by another system bumps
+     * nothing, and underneath it sit the hold's expiry and the validation path's re-read: a
+     * stale catalog is a display delay, never a wrong rejection.
+     */
+    void invalidate(java.util.Collection<String> tables);
 }

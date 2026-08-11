@@ -110,6 +110,21 @@ public final class JdbcCatalogStore implements CatalogStore {
         return held(name).catalog();
     }
 
+    @Override
+    public void invalidate(java.util.Collection<String> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> changed = new java.util.LinkedHashSet<>(tables);
+        specs.forEach((name, spec) -> {
+            if (spec.table() != null && changed.contains(spec.table())) {
+                // Dropping the hold, not reloading it here: the write path must not pay for a
+                // load, and the next reader takes it under the same one-load-at-a-time lock.
+                held.remove(name);
+            }
+        });
+    }
+
     private Held held(String name) {
         Held current = held.get(name);
         if (current != null && !isStale(name, current)) {

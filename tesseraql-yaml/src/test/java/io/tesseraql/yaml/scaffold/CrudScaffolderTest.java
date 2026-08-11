@@ -444,4 +444,21 @@ class CrudScaffolderTest {
         return files.stream().filter(file -> file.path().equals(path)).findFirst()
                 .orElseThrow().content();
     }
+
+    @Test
+    void aMaintenanceScreenForACatalogTableInvalidatesIt() {
+        // docs/lookups.md decision 13: the scaffolder knows the table it is generating for, so
+        // it declares the invalidation rather than leaving a screen that saves a code and then
+        // shows the old names until the hold expires.
+        List<ScaffoldedFile> files = new CrudScaffolder(null, null, java.util.Set.of("items"))
+                .scaffold(items());
+        assertThat(content(files, "web/items/create/post.yml"))
+                .contains("invalidates: [items]");
+        assertThat(content(files, "web/items/{id}/update/post.yml"))
+                .contains("invalidates: [items]");
+        // A table no catalog reads gets nothing: emitting a declaration the linter would warn
+        // about (TQL-FIELD-4620) is worse than emitting none.
+        List<ScaffoldedFile> plain = new CrudScaffolder().scaffold(items());
+        assertThat(content(plain, "web/items/create/post.yml")).doesNotContain("invalidates:");
+    }
 }

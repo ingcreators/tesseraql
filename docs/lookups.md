@@ -730,9 +730,17 @@ join, the same answer enrichment gives.
    message editor already serves and add no per-language table. Decision 12's per-surface
    locale rule ships with each surface as it gains `codes` (slice 13 for export, and mail),
    because a refusal cannot be written against a surface that cannot render a code.
-12. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
-   atomic swap and its failure behavior, the operations surface, the scaffolder emitting
-   `invalidates:` for generated maintenance screens.
+12a. **`invalidates:` on a command.** The declaration, the post-commit placement it shares with
+   `emit:`, the store dropping every catalog that reads the named table, the two ways the
+   declaration silently does nothing (`TQL-FIELD-4620`), and the scaffolder emitting it for a
+   table a catalog reads — and only for those, because a generator must not emit what its own
+   linter would flag.
+12b. **Refresh, and the other instances.** The operations surface — what each catalog holds,
+   when it last loaded, what its last load failed with, and a manual refresh — and the
+   per-table version stamp, which is what makes an invalidation reach the instances that did
+   not serve the command. In-process invalidation is correct for one runtime and is a *display*
+   delay on the others, bounded by the hold; the stamp turns that delay into a bounded read of
+   one row however many catalogs derive from the table.
 
 **Wave 3 — the remaining surfaces**
 
