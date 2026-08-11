@@ -8,6 +8,9 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A catalog-backed field renders as a `<select>`** offering the catalog's active codes in its
+  declared order, and an ejected form keeps reading them rather than freezing today's codes into
+  markup — ejection freezes the layout, not the behaviour.
 - **A field domain may be backed by a code catalog** — `codes: 取引区分` on a domain, and the
   input binder accepts only that catalog's active codes. The violation is the `enum` field
   error, because a catalog is a dynamic enum; a value the held copy does not carry is re-read
@@ -48,6 +51,10 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: a form field's `options` are `{value, label}` pairs** in the `v` model, for every
+  field rather than only catalog-backed ones. An `enum` value is its own label, so one shape
+  serves both sources; a template reading `${o}` reads `${o.value}` / `${o.label}` now. The
+  bundled field fragment moves with it.
 - **BREAKING: a webhook notification is delivered through the outbound gateway**
   (docs/lookups.md, decision 20). `WebhookNotifier` built its own `HttpClient`, so the one path
   where the framework itself calls out was the one path with no allow-list, no named credential,

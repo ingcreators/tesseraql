@@ -29,7 +29,7 @@ public final class ViewFields {
     /** A form field ready to render: the derived input constraints plus presentation. */
     public record FieldDef(String name, String labelKey, String labelFallback, String widget,
             boolean required, Integer maxLength, java.math.BigDecimal min,
-            java.math.BigDecimal max, List<String> options,
+            java.math.BigDecimal max, List<String> options, String codes,
             String column, String step, String policy) {
 
         /**
@@ -87,14 +87,19 @@ public final class ViewFields {
                 ? List.of()
                 : List.copyOf(input.enumValues());
         return new FieldDef(name, labelKey, fallback, widget, input.required(),
-                input.maxLength(), input.min(), input.max(), options,
+                input.maxLength(), input.min(), input.max(), options, input.codes(),
                 override == null ? null : override.column(),
                 "number".equals(input.type()) ? "any" : null, input.policy());
     }
 
     /** The widget an input renders as when the view does not say otherwise. */
     private static String defaultWidget(InputField input) {
+        // A fixed value set renders as a select whether the set is declared (enum:) or held in
+        // a code catalog (codes:) — the source differs, the control does not.
         if (input.enumValues() != null && !input.enumValues().isEmpty()) {
+            return "select";
+        }
+        if (input.codes() != null && !input.codes().isBlank()) {
             return "select";
         }
         String type = input.type() == null ? "string" : input.type();

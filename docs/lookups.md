@@ -1,7 +1,7 @@
 # Lookups and enrichment
 
-Status: **designed 2026-08-11**. **Wave 1 complete** (slices 1-6) and **slices 7-8** (the code
-catalog, and validating a field against one); decisions 15-21 and slices 9-14 below.
+Status: **designed 2026-08-11**. **Wave 1 complete** (slices 1-6) and **slices 7-9** (the code catalog, validating a
+field against one, and offering its codes in a form); decisions 15-23 and slices 10-15 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
@@ -566,6 +566,59 @@ for every key, which is `TQL-YAML-1048`'s HTTP twin.
 Out of scope, still: a body *template*. Decision 18 stands — keying a url is substitution into
 a string the author already wrote, while an envelope is a new authoring surface.
 
+### 22. Where a value set lives: table, YAML, or message catalog
+
+Three questions decide it, in order.
+
+**Does any code, SQL, or route branch on a specific value?** Then it is a *contract* and it
+lives in YAML. The framework already treats `enum:` that way — it rides into OpenAPI and gates
+the embedded-variable allow-list (`TQL-SQL-2109`) — so a value set that logic depends on cannot
+be something a row deletion changes at three in the morning.
+
+**Can a business user add or retire one without a deploy?** Then it is *data* and it lives in a
+table. The alternative ends with someone editing production YAML by hand.
+
+**Is the text UI chrome rather than a business datum?** Then it belongs to the message catalog,
+whose owner is a translator. A code's name belongs to the business and is printed on documents;
+a button's caption is not.
+
+Where these disagree, prefer YAML: it is versioned, reviewed, linted and diffable, and a table
+is the escape hatch taken when the change cadence demands it.
+
+A second, sharper test settles the awkward cases — **what is the text keyed by?** A business
+code other rows point at → the code table. A screen location → the message catalog. An
+editorial identity with a publication period → its own content table. UI wording put into the
+code table means inventing codes like `SCREEN.ORDER.TITLE`, which is a second message catalog
+without the fallback chain, the placeholder interpolation, or the layering over the
+framework's own `tql.*` texts.
+
+### 23. A code's attributes: merged when displayed, snapshotted when computed with
+
+A tax category carries a rate; a code master's rows often carry more than a name. The catalog
+does not grow an `attributes:` key, because the question splits.
+
+**Displayed** — a short label, a grouping — is composition: `enrich:` merges the columns onto
+the rows that need them, from the table or from a catalog.
+
+**Computed with** — a tax rate — has two properties a catalog cannot serve. It is needed *in
+SQL*, which catalogs are deliberately unreachable from; and it is an attribute of
+**(code, period)** rather than of the code, because rates change. A rate column on the code row
+cannot answer "what was the rate on 2024-09-30", so the rate belongs in its own table keyed by
+`(code, valid_from)`, joined at entry time.
+
+And the result is **stored on the document**. An invoice reprinted three years later must show
+the rate it was raised under, which a lookup against today's master cannot give — the same
+principle decision 19 states for a name, applied to a number.
+
+Two as-of dates follow, and they are not the same date:
+
+| Question | As of |
+| --- | --- |
+| may this code be offered and accepted? | today (the business date when there is one) |
+| which rate applies? | the document's own date |
+
+Conflating them is how yesterday's order changes its tax when someone edits it today.
+
 ## Waves and slices
 
 **Wave 1 — composition and enrichment**
@@ -611,27 +664,30 @@ a string the author already wrote, while an envelope is a new authoring surface.
 8. **`domains.codes:` — validation.** A single-key catalog reference on a domain, checked by
    the input binder against the catalog's active codes, with decision 11's miss-recheck. The
    violation is the `enum` field error, so nothing downstream learns a second shape.
-9. **The read side of `domains.codes:`.** A form's `<select>` options from the catalog's active
-   entries in `order:`, and a list view's `domain:` column rendering the label through the same
-   `codes` object a hand-owned template uses.
-10. **Multi-language.** The `file:` escape hatch (a catalog whose shape a table and equality
+9. **A catalog-backed `<select>`.** A `codes:` field renders as a select whatever its source,
+   its options are the catalog's active entries in `order:`, and an ejected form keeps reading
+   them rather than freezing today's codes into markup. Options become `{value, label}` pairs
+   for every field, so one shape serves both sources (breaking, pre-1.0).
+10. **A list column's label.** A `columns:` entry with `domain:` rendering the name through the
+   same `codes` object a hand-owned template uses.
+11. **Multi-language.** The `file:` escape hatch (a catalog whose shape a table and equality
    filters cannot express — a join to a table of per-language names — which is why it lands
    here rather than earlier, accepted and read by nothing). The language dimension, i18n's locale resolution and fallback, the
    per-surface locale table of decision 12 and the build-time refusal of an undeclared one,
    message-sourced labels.
-11. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
+12. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
    atomic swap and its failure behavior, the operations surface, the scaffolder emitting
    `invalidates:` for generated maintenance screens.
 
 **Wave 3 — the remaining surfaces**
 
-12. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
+13. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
    the enrichment becomes a sliding window over `batchSize` rows and the request-scoped cache
    stops being an optimization and starts being load-bearing.
-13. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
+14. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.
-14. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
+15. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
    and `from:`, a catalogs page listing rows, last load, last error, and refresh.
 
 ## Out of scope (documented, not implied)

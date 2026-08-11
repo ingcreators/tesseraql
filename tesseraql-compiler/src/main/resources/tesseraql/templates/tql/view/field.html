@@ -17,7 +17,7 @@
     <th:block th:case="'select'">
       <select class="hc-select" th:id="|field-${f.name}|" th:name="${f.name}"
               th:required="${f.required}">
-        <option th:each="o : ${f.options}" th:value="${o}" th:text="${o}"
+        <option th:each="o : ${f.options}" th:value="${o.value}" th:text="${o.label}"
                 th:selected="${o == f.value}">option</option>
       </select>
     </th:block>
