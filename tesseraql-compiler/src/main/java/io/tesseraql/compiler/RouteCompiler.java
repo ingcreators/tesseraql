@@ -375,7 +375,8 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
-                        compiledAppHome));
+                        compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         // http: sources run before the command, which is the whole point of allowing them here:
         // the connection is not taken until the fetch is done, so the transaction never waits on
         // a third party (docs/lookups.md, decision 19).
@@ -508,6 +509,7 @@ public final class RouteCompiler {
             ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
             applyCommonGovernance(route, routeId, "POST", urlPath, definition);
             route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
+                    .process(new io.tesseraql.compiler.binding.CatalogBinder())
                     .process(new io.tesseraql.compiler.binding.WorkflowDispatchProcessor(
                             def.id(), dispatch.id(), members,
                             io.tesseraql.yaml.decision.DecisionSets.compileUses(
@@ -622,6 +624,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
         route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder())
                 .process(new io.tesseraql.compiler.binding.WorkflowDelegateProcessor(def.id(),
                         def.document().type(), DEFAULT_DATASOURCE))
                 .process(responseRenderer(definition));
@@ -752,7 +755,8 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
                 definition);
-        route.process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
+        route.process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         route.process(new io.tesseraql.compiler.binding.QueueDedupProcessor(
                 consume.channel(), consume.topic(), consume.idempotencyKey()));
         // A deduplicated redelivery stops here, before the pipeline writes a row; the consumer
@@ -817,8 +821,10 @@ public final class RouteCompiler {
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
-        ProcessorDefinition<?> step = route.process(
-                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome));
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                        compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         step = exportHttpSources(step, definition);
         step.process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
                 formatDeclaration(spec == null ? null : spec.locale(),
@@ -878,8 +884,10 @@ public final class RouteCompiler {
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
-        ProcessorDefinition<?> exportStep = route.process(
-                new RequestBinder(definition, pathParams(routeFile.urlPath()), compiledAppHome));
+        ProcessorDefinition<?> exportStep = route
+                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                        compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         exportStep = exportHttpSources(exportStep, definition);
         exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
@@ -1007,7 +1015,8 @@ public final class RouteCompiler {
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
-                        compiledAppHome));
+                        compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         // Declarative pagination (roadmap Phase 41): compute the page window before the main
         // query executes; the producer appends the dialect clause and publishes `page`.
         if (definition.pagination() != null) {
@@ -1094,7 +1103,8 @@ public final class RouteCompiler {
         applyCommonGovernance(route, definition.id(), "MCP", "/" + definition.id(), definition);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
 
         if (usesTransactionalCommand(definition)) {
             step = commandHttpSources(step, definition);
@@ -1155,7 +1165,8 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         if (definition.sql() != null) {
             step = step.to(executionUri(resourceDir, definition.sql(), "sql",
                     definition.effectiveDatasource()));
@@ -1195,7 +1206,8 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome));
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
         if (definition.sql() != null) {
             step = step.to(executionUri(uiDir, definition.sql(), "sql",
                     definition.effectiveDatasource()));

@@ -1,8 +1,7 @@
 # Lookups and enrichment
 
-Status: **designed 2026-08-11**. **Wave 1 complete** (slices 1-6: composition, `enrich:` over SQL and
-HTTP, one outbound call with one gateway, a command's pre-transaction fetch, and webhook
-delivery on that gateway); decisions 15-21 and slices 4-12 below.
+Status: **designed 2026-08-11**. **Wave 1 complete** (slices 1-6) and **slice 7** (the code catalog
+itself); decisions 15-21 and slices 8-13 below.
 
 A row holds a code; the name that code stands for lives somewhere else. That is the whole
 subject. It looks like a small gap and it is not: the master may be in another database, the
@@ -381,8 +380,10 @@ domains:
       active:   有効フラグ
 ```
 
-`file:` remains for shapes a `table:`/`where:` pair cannot express — a join across a code table
-and its per-language names — and then the declaration lists the tables it reads. Because the
+A shape a `table:`/`where:` pair cannot express — a join across a code table and its
+per-language names — needs a SQL file instead, and then the declaration lists the tables it
+reads. That form arrives with the multi-language slice, which is the first thing that needs
+it. Because the
 scaffolder knows the table it generates a maintenance screen for, it emits `invalidates:`
 itself.
 
@@ -600,25 +601,34 @@ a string the author already wrote, while an envelope is a new authoring surface.
 
 **Wave 2 — catalogs**
 
-7. **`catalogs:` and `domains.codes:` (single language).** Whole-table load, the `codes` context
-   object, `of(...)`, render-time resolution in declarative views and in ejected templates,
-   `active:`, `order:`, `<select>` options, validation with miss-rechecks.
-8. **Multi-language.** The language dimension, i18n's locale resolution and fallback, the
+7. **`catalogs:` — the catalog itself.** The `catalogs/` documents, whole-table load with an
+   atomic swap and a hold that survives a failed refresh, the `codes` context object and
+   `of(...)`, `active:`/`order:`, and the reserved model name. Enough for a template — hand
+   written or ejected — to resolve a name with no query per request.
+
+   Per-tenant datasources are refused alongside catalogs (`TQL-APP-4207`) rather than serving
+   one tenant's codes to another; keying a hold by tenant lands with the invalidation slice.
+8. **`domains.codes:` — the field-level half.** A single-key catalog reference on a domain,
+   which brings a form's `<select>` options and value validation with the miss-recheck rule
+   (decision 11), plus a list view's `domain:` resolving through the same object.
+9. **Multi-language.** The `file:` escape hatch (a catalog whose shape a table and equality
+   filters cannot express — a join to a table of per-language names — which is why it lands
+   here rather than earlier, accepted and read by nothing). The language dimension, i18n's locale resolution and fallback, the
    per-surface locale table of decision 12 and the build-time refusal of an undeclared one,
    message-sourced labels.
-9. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
+10. **Invalidation and refresh.** Per-table version stamps, `invalidates:` on commands, the
    atomic swap and its failure behavior, the operations surface, the scaffolder emitting
    `invalidates:` for generated maintenance screens.
 
 **Wave 3 — the remaining surfaces**
 
-10. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
+11. **Export.** Repeatable models first (one pass for keys, then batches); then streaming, where
    the enrichment becomes a sliding window over `batchSize` rows and the request-scoped cache
    stops being an optimization and starts being load-bearing.
-11. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
+12. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.
-12. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
+13. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
    and `from:`, a catalogs page listing rows, last load, last error, and refresh.
 
 ## Out of scope (documented, not implied)

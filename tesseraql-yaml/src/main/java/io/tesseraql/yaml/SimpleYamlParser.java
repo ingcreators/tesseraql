@@ -134,6 +134,47 @@ public final class SimpleYamlParser {
         return new io.tesseraql.yaml.model.DomainsDocument(domains, constraints);
     }
 
+    /** TQL-FIELD-4616: a catalogs document is malformed or declares an unknown key. */
+    private static final TqlErrorCode CATALOG_MALFORMED = new TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.FIELD, 4616);
+
+    /** The keys a catalog may carry (docs/lookups.md): where the codes are, and which columns. */
+    private static final java.util.Set<String> CATALOG_KEYS = java.util.Set.of("table", "where",
+            "key", "label", "order", "active", "datasource", "cache");
+
+    /** Parses a {@code catalogs/*.yml} document (docs/lookups.md, decision 9). */
+    public java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> parseCatalogs(Path file) {
+        com.fasterxml.jackson.databind.JsonNode tree;
+        try {
+            tree = mapper.readTree(readFile(file));
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("catalogs", file.toString(), ex);
+        }
+        if (tree == null || !tree.isObject()) {
+            throw new TqlException(CATALOG_MALFORMED,
+                    "Catalogs document " + file + " must be a map");
+        }
+        if (!EXPECTED_VERSION.equals(tree.path("version").asText(null))) {
+            throw new TqlException(CATALOG_MALFORMED, "Catalogs document " + file
+                    + " must declare version: " + EXPECTED_VERSION);
+        }
+        java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> catalogs = new java.util.LinkedHashMap<>();
+        for (var entry : tree.path("catalogs").properties()) {
+            for (String key : (Iterable<String>) () -> entry.getValue().fieldNames()) {
+                if (!CATALOG_KEYS.contains(key)) {
+                    // Strict like domains: a `lable:` typo would otherwise leave every code
+                    // rendering as its raw value with nothing to explain why.
+                    throw new TqlException(CATALOG_MALFORMED, "Catalog '" + entry.getKey()
+                            + "' (" + file + ") declares '" + key + "' — a catalog accepts only "
+                            + String.join(", ", new java.util.TreeSet<>(CATALOG_KEYS)));
+                }
+            }
+            catalogs.put(entry.getKey(), mapper.convertValue(entry.getValue(),
+                    io.tesseraql.yaml.model.CatalogSpec.class));
+        }
+        return catalogs;
+    }
+
     private static final TqlErrorCode RULESET_MALFORMED = new TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.FIELD, 4604);
 
