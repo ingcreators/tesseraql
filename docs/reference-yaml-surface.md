@@ -12,7 +12,7 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `version` \* | const `tesseraql/v1` | The document format version. Always `tesseraql/v1`. |
 | `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
 | `kind` \* | enum: `route` \| `job` \| `view` \| `workflow` \| `scope` \| `attachment` \| `tool` \| `resource` \| `ui` \| `prompt` | route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model. |
-| `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline. |
+| `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `batch-tasklet` \| `batch-pipeline` \| `list` \| `form` \| `detail` \| `dashboard` | What the document does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), the job recipes batch-tasklet/batch-pipeline, and the view recipes list/form/detail/dashboard (kind: view). |
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md. |
 | `inputPolicy` | [object](#inputpolicy) | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
 | `security` | [object](#security) | How this document authenticates and authorizes. Routes are deny-by-default: one that declares no security is unreachable. Documented in authentication.md. |
@@ -40,8 +40,8 @@ Schema for TesseraQL Simple YAML documents: routes (web/**/<method>.yml), jobs (
 | `consume` | [object](#consume) | What a `consume/**` document subscribes to. Documented in messaging.md. |
 | `pagination` | [object](#pagination) | Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH. |
 | `response` | [object](#response) | How the result becomes an HTTP response: JSON, HTML, a redirect, a stream, or a rendered file. Documented in response-shaping.md. |
-| `view` | enum: `list` \| `form` \| `detail` \| `dashboard` | Declarative view documents (kind: view): list \| form \| detail \| dashboard. |
 | `title` | string | The heading a view document renders (`kind: view`). |
+| `template` | string | The pattern override a view document renders through instead of its bundled `tql/view/*` pattern (`kind: view`, customization ladder L2). Resolved beside the view document, then under the app template root. Documented in declarative-views.md. |
 | `search` | string | The input field a list view binds its search box to. |
 | `source` | string | The id of the route a view reads its rows from. |
 | `action` | string | The id of the route a form view submits to. |
