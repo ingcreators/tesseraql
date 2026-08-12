@@ -80,7 +80,8 @@ public final class HttpSourceProcessor implements Processor {
 
     /** The context entry: the gateway's {status} plus the selected body and its row form. */
     private Map<String, Object> shape(Map<String, Object> result) {
-        Object body = select(result.get("body"), spec.select());
+        Object body = io.tesseraql.yaml.http.HttpRows.select(result.get("body"),
+                spec.select());
         if (body == null && spec.select() != null && !spec.select().isBlank()
                 && result.get("body") != null) {
             // A select: path that misses yields zero rows indistinguishable from an empty
@@ -89,52 +90,14 @@ public final class HttpSourceProcessor implements Processor {
                     + " nothing in the response body", name, spec.select());
         }
         Map<String, Object> shaped = new LinkedHashMap<>();
-        shaped.put("rows", rows(body));
+        shaped.put("rows", io.tesseraql.yaml.http.HttpRows.rows(body));
         shaped.put("body", body);
         shaped.put("status", result.get("status"));
         return shaped;
     }
 
-    /**
-     * The rows a response body yields under an optional {@code select:} path — the one shaping
-     * an {@code http:} source and an enrichment's HTTP reference share.
-     */
+    /** The rows a response body yields; the shaping rule lives with the gateway. */
     static List<Map<String, Object>> rowsOf(Object body, String select) {
-        return rows(select(body, select));
-    }
-
-    /** Walks the optional dotted {@code select:} path into the parsed JSON; null on a miss. */
-    private static Object select(Object body, String select) {
-        if (select == null || select.isBlank()) {
-            return body;
-        }
-        Object current = body;
-        for (String segment : select.split("\\.")) {
-            if (!(current instanceof Map<?, ?> map)) {
-                return null;
-            }
-            current = map.get(segment);
-        }
-        return current;
-    }
-
-    private static List<Map<String, Object>> rows(Object body) {
-        if (body instanceof List<?> list) {
-            return list.stream().map(HttpSourceProcessor::row).toList();
-        }
-        if (body instanceof Map<?, ?> map) {
-            return List.of(row(map));
-        }
-        return List.of();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> row(Object element) {
-        if (element instanceof Map<?, ?> map) {
-            return new LinkedHashMap<>((Map<String, Object>) map);
-        }
-        Map<String, Object> wrapped = new LinkedHashMap<>();
-        wrapped.put("value", element);
-        return wrapped;
+        return io.tesseraql.yaml.http.HttpRows.of(body, select);
     }
 }

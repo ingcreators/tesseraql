@@ -8,6 +8,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A `chunk:` step enriches each window before its writer sees it** (docs/lookups.md, slice
+  14), so a writer may bind a column the reader's query never selected. The reader is read a
+  window at a time — the enrichment's `batchSize`, or one row when nothing enriches, so a step
+  without an enrichment reads exactly as it did. A reference failure fails the **window** and
+  the step with it: it is not one row's fault, so it never reaches `tql_job_skips`, which is the
+  record of rows the *writer* rejected. `into:` is refused, because a chunk enriches the
+  reader's rows and that is the only result it has.
 - **An export folds a keyed reference into the rows it writes** (docs/lookups.md, slice 13b).
   `enrich:` on a `query-export` or `file-export` route was refused; it now applies a window at a
   time — `batchSize` rows read, the reference fetched once for their distinct keys, the enriched
@@ -120,6 +127,12 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The enrichment algorithm has one home.** `KeyedReference` in `tesseraql-yaml` now owns the
+  key collection, the batching, the degrade rule and the many-to-one refusal for all three
+  enriching surfaces — a route's result set, an export's row window, and a chunk step's window.
+  They sit in modules that cannot see each other, so the alternative was three copies drifting
+  apart. `KeyedUrls` and the `http:` body-to-rows shaping move with it, since an enrichment and
+  an `http:` source have always had to agree on both.
 - **BREAKING: `CatalogStore` asks two questions instead of one.** `catalogs()` becomes
   `catalogs(String localeTag)` — the rendering view, with labels in the surface's language — and
   the new `catalog(String name)` returns the load itself for the validation path. They were one

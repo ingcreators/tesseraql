@@ -316,6 +316,32 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void chunkStepEnrichesEachWindowBeforeTheWriterSeesIt() throws Exception {
+        // The writer binds row.label, which the reader's query never selected — it arrives
+        // because the enrichment folded the master into the window first.
+        JobExecution execution = runtime.runJob("user.chunkEnriched",
+                Map.of("businessDate", "2026-08-01"));
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(labelOf("d01")).isEqualTo("first");
+        assertThat(labelOf("d02")).isEqualTo("second");
+        assertThat(labelOf("d03")).isEqualTo("first");
+        // K9 is in no master row: the column is null, and the row is still written.
+        assertThat(labelOf("d04")).isNull();
+    }
+
+    private static String labelOf(String key) throws Exception {
+        try (java.sql.Connection connection = java.sql.DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                java.sql.PreparedStatement statement = connection.prepareStatement(
+                        "select label from chunk_results_d where item_key = ?")) {
+            statement.setString(1, key);
+            try (java.sql.ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? rows.getString(1) : "MISSING";
+            }
+        }
+    }
+
+    @Test
     void chunkStepResumesFromTheCheckpointAfterAFailure() throws Exception {
         // skipLimit 0 (the default): the poison row at b08 fails the step after the first
         // committed chunk (b01..b05); the uncommitted b06/b07 roll back with the chunk.
@@ -846,6 +872,42 @@ class BatchJobIntegrationTest {
                       key: item_key
                       commitEvery: 5
                 """);
+        Files.writeString(target.resolve("batch/chunk/enriched.yml"), """
+                version: tesseraql/v1
+                id: user.chunkEnriched
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader: { file: reader-d.sql }
+                      writer: { file: writer-d.sql }
+                      key: item_key
+                      commitEvery: 10
+                      enrich:
+                        kind:
+                          on: { kind: code }
+                          sql: { file: kinds.sql }
+                          batchSize: 2
+                          merge: [label]
+                """);
+        Files.writeString(target.resolve("batch/chunk/reader-d.sql"), """
+                select item_key, kind
+                from chunk_items_d
+                /*%if chunk.after != null */
+                where item_key > /* chunk.after */ 'x00'
+                /*%end*/
+                order by item_key
+                """);
+        Files.writeString(target.resolve("batch/chunk/kinds.sql"), """
+                select code, label
+                from chunk_kinds
+                where code in /* keys */('K1', 'K2')
+                """);
+        Files.writeString(target.resolve("batch/chunk/writer-d.sql"), """
+                insert into chunk_results_d (item_key, label)
+                values (/* row.item_key */ 'x01', /* row.label */ 'x')
+                """);
         for (String set : List.of("a", "b")) {
             Files.writeString(target.resolve("batch/chunk/reader-" + set + ".sql"), """
                     select item_key, payload
@@ -941,6 +1003,20 @@ class BatchJobIntegrationTest {
         for (int i = 1; i <= 15; i++) {
             chunkFixtures.append("insert into chunk_items_b values ('b%02d', '%s');%n"
                     .formatted(i, i == 8 ? "oops" : "1"));
+        }
+        // The enriched chunk (docs/lookups.md, slice 14): the reader's rows carry a code, the
+        // name behind it lives in a master, and the writer binds a column the reader never
+        // selected. Four rows against batchSize 2, so the window turns over twice.
+        chunkFixtures.append("create table chunk_items_d"
+                + " (item_key varchar(32) primary key, kind varchar(8) not null);\n")
+                .append("create table chunk_kinds"
+                        + " (code varchar(8) primary key, label varchar(32) not null);\n")
+                .append("create table chunk_results_d (item_key varchar(32) primary key,"
+                        + " label varchar(32));\n")
+                .append("insert into chunk_kinds values ('K1', 'first'), ('K2', 'second');\n");
+        for (int i = 1; i <= 4; i++) {
+            chunkFixtures.append("insert into chunk_items_d values ('d%02d', '%s');%n"
+                    .formatted(i, i == 4 ? "K9" : (i % 2 == 1 ? "K1" : "K2")));
         }
         // The cooperative-stop chunk (docs/jobs.md "Stopping a run"): each row sleeps a
         // little, so the test can request the cancel while the chunk is mid-stream.
