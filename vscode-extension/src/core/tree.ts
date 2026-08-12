@@ -70,6 +70,18 @@ export function buildAppTree(home: string): AppNode[] {
     });
   }
 
+  // Code catalogs (docs/code-catalogs.md): the .sql beside them belongs to a file: catalog,
+  // whose shape a table: and equality filters cannot express.
+  const catalogs = collectFiles(path.join(home, 'catalogs'),
+      (name) => name.endsWith('.yml') || name.endsWith('.sql'));
+  if (catalogs.length > 0) {
+    sections.push({
+      label: 'Catalogs',
+      kind: 'section',
+      children: catalogs.map((file) => fileNode(path.join(home, 'catalogs'), file)),
+    });
+  }
+
   // Approval workflows and the command/guard/assign SQL beside them.
   const workflows = collectFiles(path.join(home, 'workflow'),
       (name) => name.endsWith('.yml') || name.endsWith('.sql'));

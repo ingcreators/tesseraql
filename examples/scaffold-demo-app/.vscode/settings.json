@@ -21,6 +21,9 @@
     ".vscode/tesseraql-calendars-v1.schema.json": [
       "calendars/**/*.yml"
     ],
+    ".vscode/tesseraql-catalogs-v1.schema.json": [
+      "catalogs/**/*.yml"
+    ],
     ".vscode/tesseraql-config-v1.schema.json": [
       "config/tesseraql.yml"
     ],

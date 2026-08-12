@@ -48,9 +48,28 @@ test('a pre-shared-definitions document degrades to empty domains, rules, and de
   assert.deepEqual(symbols.rules, []);
   assert.deepEqual(symbols.decisions, []);
   assert.deepEqual(symbols.calendars, []);
+  assert.deepEqual(symbols.catalogs, []);
   assert.deepEqual(symbols.routes, []);
   assert.deepEqual(symbols.workflows, []);
   assert.deepEqual(symbols.jobs, []);
+});
+
+test('codes: navigates and completes against the declared catalogs', () => {
+  const reference = symbolReferenceAt('    codes: 取引区分', 12);
+  assert.equal(reference?.kind, 'catalog');
+  assert.equal(reference?.value, '取引区分');
+  assert.equal(completionKindAt('    codes: ', 11), 'catalog');
+  // A flow-map domain completes the same way its policy: and domain: siblings do.
+  assert.equal(completionKindAt('  取引区分: { type: string, codes: ', 34), 'catalog');
+});
+
+test('parses the code catalogs a domain may reference', () => {
+  const symbols = parseAppSymbols(JSON.stringify({
+    policies: [], messages: [],
+    catalogs: [{ name: '取引区分', source: 'catalogs/codes.yml', line: 3 }],
+  }));
+  assert.deepEqual(symbols.catalogs,
+      [{ name: '取引区分', source: 'catalogs/codes.yml', line: 3 }]);
 });
 
 test('parses calendars and jobs with their trigger stories', () => {

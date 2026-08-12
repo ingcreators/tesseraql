@@ -86,6 +86,8 @@ final class SymbolsCommand implements Callable<Integer> {
                 file -> parser.parseDecisions(file).decisions().keySet(), broken);
         sharedDefinitions(document.putArray("calendars"), home, "calendars",
                 file -> parser.parseCalendars(file).calendars().keySet(), broken);
+        sharedDefinitions(document.putArray("catalogs"), home, "catalogs",
+                file -> parser.parseCatalogs(file).keySet(), broken);
         ArrayNode routes = document.putArray("routes");
         ArrayNode workflows = document.putArray("workflows");
         ArrayNode jobs = document.putArray("jobs");

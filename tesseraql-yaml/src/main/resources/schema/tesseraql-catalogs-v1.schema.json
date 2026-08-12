@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-catalogs-v1.schema.json",
+  "title": "TesseraQL code catalogs v1",
+  "description": "Schema for TesseraQL catalog documents (catalogs/*.yml): small, nearly static tables of codes and the names they stand for, loaded whole and resolved from memory. Documented in code-catalogs.md.",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "tesseraql/v1",
+      "description": "The DSL version. Always tesseraql/v1."
+    },
+    "catalogs": {
+      "type": "object",
+      "description": "Named catalogs. Files merge into one app-wide namespace, and a name declared twice is a build error.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["key", "label"],
+        "properties": {
+          "table": {
+            "type": "string",
+            "description": "The table the codes live in. Exactly one of table: or file: — a catalog reads one source."
+          },
+          "file": {
+            "type": "string",
+            "description": "A SQL file under catalogs/ whose result set is the catalog, for a shape table:/where: cannot express — codes in one table and their per-language names in another. The SQL owns its own filtering and ordering, so where:/order: are refused beside it."
+          },
+          "tables": {
+            "type": "array",
+            "description": "With file:, the source tables the SQL reads. This is what lets a maintenance command's invalidates: reach the catalog without anything having to parse SQL, so it is required with file:.",
+            "items": { "type": "string" }
+          },
+          "where": {
+            "type": "object",
+            "description": "Equality filters pinning this catalog's slice of a shared code master. A general master holds every kind of code keyed by a type column; fixing the type here is what makes the catalog itself single-keyed, so a field domain can reference it. The values are bound, never interpolated.",
+            "additionalProperties": { "type": "string" }
+          },
+          "key": {
+            "type": "string",
+            "description": "The column carrying the code. With file:, it names a result column of that SELECT."
+          },
+          "label": {
+            "description": "Where the name comes from: a result column, or a message-catalog key with the code interpolated. The message form puts the names in the translation workflow the Studio message editor already serves and adds no per-language table.",
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The column carrying the name."
+              },
+              {
+                "type": "object",
+                "required": ["message"],
+                "description": "A message-catalog key per code.",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "The key, with {key} replaced by the code — for example code.priority.{key}. The load then says only which codes exist, and each becomes one entry per locale the app supports."
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "language": {
+            "type": "string",
+            "description": "An optional column carrying the BCP-47 tag a row's name is written in. Language is a dimension of the catalog rather than part of its key, so the call site is the same in every language and only the labels differ; an untranslated code falls back to the default language, never to the raw code."
+          },
+          "order": {
+            "type": "string",
+            "description": "An optional display-order column deciding the order a form offers the codes in. A column rather than a sort by label, because label collation is locale-dependent and code masters already carry one."
+          },
+          "active": {
+            "type": "string",
+            "description": "An optional column whose truth marks a code still offered and accepted. It does not affect resolution: names resolve over every row, so a retired code still renders on last year's data and is simply not offered on today's form."
+          },
+          "datasource": {
+            "type": "string",
+            "description": "The named connector the catalog loads from, defaulting to main."
+          },
+          "cache": {
+            "type": "object",
+            "description": "How long a load is held before the source is read again.",
+            "properties": {
+              "maxAge": {
+                "type": "string",
+                "description": "A duration such as 1h (the default) or 15m. Underneath it sit a maintenance command's invalidates: and the validation path's re-read, so the hold is a display delay and never a wrong rejection."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

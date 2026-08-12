@@ -49,6 +49,7 @@ export interface AppSymbols {
   rules: DeclaredSymbol[];
   decisions: DeclaredSymbol[];
   calendars: DeclaredSymbol[];
+  catalogs: DeclaredSymbol[];
   routes: RouteSymbol[];
   workflows: WorkflowSymbol[];
   jobs: JobSymbol[];
@@ -70,7 +71,8 @@ export function parseAppSymbols(stdout: string): AppSymbols {
   }
   const document = parsed as {
     policies: unknown[]; messages: unknown[]; domains?: unknown; rules?: unknown;
-    decisions?: unknown; calendars?: unknown; routes?: unknown; workflows?: unknown;
+    decisions?: unknown; calendars?: unknown; catalogs?: unknown; routes?: unknown;
+    workflows?: unknown;
     jobs?: unknown; broken?: unknown;
   };
   return {
@@ -84,6 +86,8 @@ export function parseAppSymbols(stdout: string): AppSymbols {
     decisions: optionalSymbols(document.decisions),
     // Absent on a pre-0.10 CLI (batch-platform track B): degrades to empty, same rule.
     calendars: optionalSymbols(document.calendars),
+    // Absent on a pre-0.14 CLI (code catalogs): degrades to empty, same rule.
+    catalogs: optionalSymbols(document.catalogs),
     routes: optionalRoutes(document.routes),
     // Absent on a pre-0.10 CLI: workflows degrade to empty, same rule.
     workflows: optionalWorkflows(document.workflows),
@@ -211,14 +215,14 @@ function toSymbol(value: unknown, nameField: string): DeclaredSymbol {
  */
 export interface SymbolReference {
   kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
-      | 'workflow' | 'calendar' | 'job';
+      | 'workflow' | 'calendar' | 'job' | 'catalog';
   value: string;
   /** 0-based columns of the value span. */
   start: number;
   end: number;
 }
 
-const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision|workflow|calendar|after):\s*)(["']?)([^\s#"']+)\3/;
+const REFERENCE = /^(\s*(?:-\s+)?(policy|message|title|label|domain|use|decision|workflow|calendar|after|codes):\s*)(["']?)([^\s#"']+)\3/;
 
 const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   policy: 'policy',
@@ -235,6 +239,9 @@ const KIND_BY_KEY: Record<string, SymbolReference['kind']> = {
   calendar: 'calendar',
   // trigger: after: chains to a declared job (docs/jobs.md).
   after: 'job',
+  // A domain's legal values may be a code catalog's codes (docs/code-catalogs.md); a
+  // mistyped name resolves nothing and every value is refused at runtime.
+  codes: 'catalog',
 };
 
 export function symbolReferenceAt(lineText: string, character: number): SymbolReference | undefined {
@@ -259,12 +266,12 @@ export function symbolReferenceAt(lineText: string, character: number): SymbolRe
  */
 export function completionKindAt(lineText: string, character: number):
     'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow' | 'calendar'
-    | 'job' | undefined {
+    | 'job' | 'catalog' | undefined {
   const head = lineText.slice(0, character);
-  const match = /(?:^\s*(?:-\s+)?|[{,]\s*)(policy|message|domain|use|decision|workflow|calendar|after):\s*(["']?)[^\s#"',}]*$/.exec(head);
+  const match = /(?:^\s*(?:-\s+)?|[{,]\s*)(policy|message|domain|use|decision|workflow|calendar|after|codes):\s*(["']?)[^\s#"',}]*$/.exec(head);
   return match === null
       ? undefined
       : KIND_BY_KEY[match[1]] as
           'policy' | 'message' | 'domain' | 'shared' | 'decision' | 'workflow'
-          | 'calendar' | 'job';
+          | 'calendar' | 'job' | 'catalog';
 }
