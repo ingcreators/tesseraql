@@ -168,17 +168,6 @@ The JSON response: status, body, per-field policy, and nested composition.
 | `body` | any | What the response body is: a bindable path such as `rows` or `steps.<name>`, or a literal shape composing several. |
 | `fields` | map of [fieldPolicy](#fieldpolicy) | Per-field visibility, masking, and classification applied to the body. Documented in data-scoping.md. |
 | `statusWhen` | [statusWhen](#statuswhen) | Conditional statuses: the first entry whose expression matches decides the status. |
-| `nest` | array of [object](#responsejsonnest) | Compose the rows of a named query into the parent rows, so one request answers a parent-and-children shape without a second endpoint. |
-
-##### response.json.nest
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `into` | string | The parent collection the children are nested into. |
-| `children` | string | The named query under `queries:` supplying the child rows. |
-| `as` | string | The property name the children appear under on each parent row; one of `as` or `merge` composes the match. |
-| `merge` | array of string | Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`. |
-| `on` | map of string | The join: each parent property to the child property it matches, one entry per key column. |
 
 #### response.html
 
@@ -536,7 +525,7 @@ One acquisition or one statement. Exactly one mechanism arm says by what means -
 | `datasource` | string | The named connector this read binding runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
 | `when` | string | Guard expression on a command step: a falsy guard skips the step, recording steps.<id>.skipped. The declared branch point for decision.* outputs (docs decision-tables). |
 | `spool` | string | A context path resolving to an earlier step's spool reference (steps.<id>.spool), read as this binding's rows. A chunk reader declares it instead of sql: to load what another step extracted, possibly from another connector; both halves stream, and the spool is the snapshot a rerun re-reads. Documented in jobs.md. |
-| `enrich` | map of object | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. |
+| `enrich` | map of object | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a sibling source, already fetched) — plus the on: join and one of as:/merge:. |
 | `params` | map of string | Arguments for a `service:` or `contract:` call: each name to the bindable path supplying its value. |
 | `sequence` | string | Allocate the next value of a managed document-number sequence instead of running SQL; it binds as `steps.<name>.value`. Documented in transactional-writes.md. |
 | `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<name>.keys.<column>`. |

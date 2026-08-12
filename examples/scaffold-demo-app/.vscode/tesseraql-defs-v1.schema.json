@@ -263,7 +263,7 @@
         },
         "enrich": {
           "type": "object",
-          "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched.",
+          "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a sibling source, already fetched) — plus the on: join and one of as:/merge:.",
           "additionalProperties": {
             "type": "object",
             "additionalProperties": true

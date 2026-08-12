@@ -398,30 +398,6 @@ public final class AppLinter {
             }
         }
         var response = route.definition().response();
-        var json = response == null ? null : response.json();
-        if (json != null) {
-            for (io.tesseraql.yaml.model.ResponseSpec.NestSpec nestSpec : json.nest()) {
-                boolean bodyHasKey = json.body() instanceof java.util.Map<?, ?> bodyMap
-                        && bodyMap.containsKey(nestSpec.into());
-                var queries = route.definition().sources();
-                boolean childDeclared = queries != null
-                        && queries.containsKey(nestSpec.children());
-                // as: attaches a list, merge: copies columns onto the parent; exactly one of
-                // them composes, and declaring both leaves the shape undecided.
-                boolean attaches = nestSpec.as() != null && !nestSpec.as().isBlank();
-                boolean merges = nestSpec.merges()
-                        && nestSpec.merge().stream().noneMatch(c -> c == null || c.isBlank());
-                if (!bodyHasKey || !childDeclared || nestSpec.on().isEmpty()
-                        || attaches == merges) {
-                    findings.add(new LintFinding("TQL-YAML-1019", "error", source,
-                            "nest: needs into: (a body key), children: (a named query),"
-                                    + " a non-empty on: parentColumn: childColumn map, and"
-                                    + " exactly one of as: (attach a list) or merge:"
-                                    + " (copy columns onto each parent)",
-                            lineOf(route.source(), "nest:"), null));
-                }
-            }
-        }
         for (io.tesseraql.yaml.model.ResponseSpec.StatusWhen arm : statusArms(response)) {
             try {
                 io.tesseraql.core.expr.ExpressionParser.parse(arm.when());
@@ -5120,21 +5096,34 @@ public final class AppLinter {
     private void lintEnrich(AppConfig config, Path file, RouteDefinition definition,
             String source, List<LintFinding> findings) {
         definition.sources().forEach((sourceName, binding) -> binding.enrich()
-                .forEach((name, spec) -> lintEnrichEntry(config, file, sourceName, name, spec,
-                        source, findings)));
+                .forEach((name, spec) -> lintEnrichEntry(config, file, definition, sourceName,
+                        name, spec, source, findings)));
     }
 
-    private void lintEnrichEntry(AppConfig config, Path file, String sourceName, String name,
+    private void lintEnrichEntry(AppConfig config, Path file, RouteDefinition definition,
+            String sourceName, String name,
             io.tesseraql.yaml.model.EnrichSpec spec, String source, List<LintFinding> findings) {
         {
+            // A composition names a sibling the document actually declares — and never itself,
+            // which would be a source composing its own rows into themselves.
+            if (spec.composesSource()
+                    && (!definition.sources().containsKey(spec.source())
+                            || spec.source().equals(sourceName))) {
+                findings.add(new LintFinding("TQL-YAML-1046", "error", source,
+                        "enrich '" + name + "': source: '" + spec.source()
+                                + "' is not another source of this document",
+                        lineOf(file, "enrich:"), null));
+                return;
+            }
             boolean hasSql = spec.sql() != null && spec.sql().file() != null
                     && !spec.sql().file().isBlank();
             boolean hasHttp = spec.http() != null && spec.http().url() != null
                     && !spec.http().url().isBlank();
-            if (hasSql == hasHttp) {
+            int arms = (hasSql ? 1 : 0) + (hasHttp ? 1 : 0) + (spec.composesSource() ? 1 : 0);
+            if (arms != 1) {
                 findings.add(new LintFinding("TQL-YAML-1046", "error", source,
                         "enrich '" + name + "': needs exactly one reference — sql: with a"
-                                + " file:, or http: with a url:",
+                                + " file:, http: with a url:, or source: naming a sibling",
                         lineOf(file, "enrich:"), null));
                 return;
             }
@@ -5147,6 +5136,10 @@ public final class AppLinter {
                                 + " map and exactly one of as: (attach a list) or merge: (copy"
                                 + " columns onto each row)",
                         lineOf(file, "enrich:"), null));
+            }
+            if (spec.composesSource()) {
+                // Nothing is fetched, so there is no key set to bind and no call to check.
+                return;
             }
             if (hasSql) {
                 Path sqlFile = file.getParent().resolve(spec.sql().file()).normalize();

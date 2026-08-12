@@ -111,14 +111,13 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record JsonResponse(Integer status, Object body,
             java.util.Map<String, FieldPolicy> fields,
-            java.util.List<StatusWhen> statusWhen, java.util.List<NestSpec> nest) {
+            java.util.List<StatusWhen> statusWhen) {
 
         public JsonResponse {
             fields = fields == null ? java.util.Map.of() : java.util.Map.copyOf(fields);
             statusWhen = statusWhen == null
                     ? java.util.List.of()
                     : java.util.List.copyOf(statusWhen);
-            nest = nest == null ? java.util.List.of() : java.util.List.copyOf(nest);
         }
 
         public int effectiveStatus() {
@@ -132,33 +131,6 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record StatusWhen(String when, int status) {
-    }
-
-    /**
-     * Composition of one named query into a body key's rows (roadmap Phase 41,
-     * docs/lookups.md): {@code into} names the body key holding the parent rows,
-     * {@code children} the context result whose rows compose, and {@code on} the
-     * {@code parentColumn: childColumn} join — one entry, or several for a composite key.
-     *
-     * <p>The composition is one of two shapes, and exactly one may be declared:
-     * {@code as} attaches the matching rows as a list under that field (one-to-many), while
-     * {@code merge} copies the named columns of the single matching row onto the parent
-     * (many-to-one). A merge with no match leaves the columns present and null, so every row
-     * keeps the same shape; a merge matching more than one row is an error.
-     */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record NestSpec(String into, String children, String as,
-            java.util.List<String> merge, java.util.Map<String, String> on) {
-
-        public NestSpec {
-            on = on == null ? java.util.Map.of() : java.util.Map.copyOf(on);
-            merge = merge == null ? java.util.List.of() : java.util.List.copyOf(merge);
-        }
-
-        /** Whether this entry merges columns onto the parent rather than attaching a list. */
-        public boolean merges() {
-            return !merge.isEmpty();
-        }
     }
 
     /**

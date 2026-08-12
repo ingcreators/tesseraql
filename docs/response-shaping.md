@@ -22,7 +22,7 @@ response:
 Expressions compile at build time; a leaf the grammar rejects is treated as a plain
 dotted path, so existing bodies keep their behavior byte for byte.
 
-## Nested composition (`nest:`)
+## Composing two results
 
 A parent row set with a named child query composes into one document — grouped, not joined
 by hand:
@@ -31,21 +31,21 @@ by hand:
 sources:
   main:
     sql:
-      file: orders.sql          # parents
+      file: orders.sql              # parents
       params: { customerId: query.customerId }
+    enrich:
+      lines:
+        source: lines               # the sibling source whose rows attach
+        as: lines                   # the field added to each parent row
+        on: { id: order_id }        # parentColumn: childColumn
   lines:
     sql:
-      file: lines.sql         # children
+      file: lines.sql               # children
       params: { customerId: query.customerId }
 response:
   json:
     body:
       orders: main.rows
-    nest:
-      - into: orders        # the body key holding the parent rows
-        children: lines     # the named query whose rows attach
-        as: lines           # the field added to each parent
-        on: { id: order_id }  # parentColumn: childColumn
 ```
 
 The child is an ordinary named query: it runs with the route's own inputs — nothing binds
@@ -61,8 +61,15 @@ join orders o on o.id = l.order_id
 where o.customer_id = /* customerId */1
 ```
 
-Join keys compare canonically (INTEGER 1 matches BIGINT 1); parents are copied, so shared
-context rows are never mutated. `TQL-YAML-1019` keeps the references honest.
+Join keys compare canonically (INTEGER 1 matches BIGINT 1); rows are copied, so shared context
+rows are never mutated. `TQL-YAML-1046` keeps the references honest.
+
+This is [enrichment](#enrichment-enrich) with a `source:` reference instead of a `sql:` one —
+same join, same composition, one implementation. Composing two results the document already
+fetched used to be a separate block (`nest:`) with its own `into:`/`children:` vocabulary, which
+could serve only a JSON body: `into:` named a body key, and JSON is the only surface that has
+one. Written under the source it composes into, the same join reaches an HTML list's `columns:`
+and an export's.
 
 ### Merging a reference (`merge:`)
 
@@ -72,18 +79,17 @@ columns on the parent row itself. `merge:` names the columns to copy:
 
 ```yaml
 sources:
+  main:
+    sql:
+      file: orders.sql
+    enrich:
+      partner:
+        source: partners
+        on: { partner_code: code }
+        merge: [partner_name]     # instead of as:
   partners:
     sql:
       file: partners.sql
-response:
-  json:
-    body:
-      orders: main.rows
-    nest:
-      - into: orders
-        children: partners
-        on: { partner_code: code }
-        merge: [partner_name]     # instead of as:
 ```
 
 Each entry declares exactly one of `as:` or `merge:`. A parent that matches nothing still
@@ -95,22 +101,20 @@ parent that matches more than one row fails with `TQL-CAMEL-3113` rather than pi
 `on:` takes one entry per key column, so a reference keyed by a pair joins on the pair:
 
 ```yaml
-      - into: orders
-        children: partners
+      partner:
+        source: partners
         on: { buyer_code: buyer, supplier_code: supplier }
         merge: [partner_name]
 ```
 
 Every column must match for the rows to compose.
 
-## Enrichment (`enrich:`)
+### Fetching a reference by key
 
-`nest:` composes the response *body*, so it can only serve a JSON response and only from
-results the route already fetched with the request's own inputs. A reference keyed by the rows
-themselves — the partner name behind each order's partner code, where the partner master is
-another system's table — needs the keys to reach the query. That is `enrich:`, and because it
-composes the *result set* rather than the body, an HTML list's `columns:` sees the merged
-column too:
+A `source:` reference composes results the route already fetched with the request's own inputs.
+A reference keyed by the rows *themselves* — the partner name behind each order's partner code,
+where the partner master is another system's table — needs the keys to reach the query. That is
+the same `enrich:` block with a `sql:` reference instead of a `source:` one:
 
 ```yaml
 sources:
@@ -167,7 +171,8 @@ where
 A row-value `IN` is deliberately not generated: SQL Server does not accept one, and the same
 2-way SQL file has to run on every dialect and in a plain SQL tool.
 
-`merge:`/`as:` mean exactly what they mean on `nest:`, including the many-to-one rule. What
+`merge:`/`as:` mean the same for a fetched reference as for a composed one, including the
+many-to-one rule. What
 enrichment does **not** buy is sorting, searching, or paginating by the merged column: only
 SQL can order a result set, so a screen that must sort by partner name still joins.
 

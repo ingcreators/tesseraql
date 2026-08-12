@@ -89,7 +89,7 @@ class AppLinterInputTest {
     }
 
     @Test
-    void aDanglingNestIsAnError(@TempDir Path dir) throws Exception {
+    void aCompositionNamingNoSiblingSourceIsAnError(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("web/items"));
         Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
         Files.writeString(dir.resolve("web/items/get.yml"), """
@@ -101,49 +101,49 @@ class AppLinterInputTest {
                   main:
                     sql:
                       file: list.sql
+                    enrich:
+                      lines:
+                        on: { id: order_id }
+                        source: ghost
+                        as: lines
                 response:
                   json:
                     body:
                       orders: main.rows
-                    nest:
-                      - into: orders
-                        children: ghost
-                        as: lines
-                        on: { id: order_id }
                 """);
-        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1019");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1046");
     }
 
     @Test
-    void anAttachingNestIsAccepted(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+    void anAttachingCompositionIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, """
                 on: { id: order_id }
                         as: lines""")))).isEmpty();
     }
 
     @Test
-    void aMergingNestOverACompositeKeyIsAccepted(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+    void aMergingCompositionOverACompositeKeyIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, """
                 on: { buyer_code: buyer, supplier_code: supplier }
                         merge: [partner_name]""")))).isEmpty();
     }
 
     @Test
-    void aNestDeclaringBothAsAndMergeIsAnError(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+    void aCompositionDeclaringBothAsAndMergeIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, """
                 on: { id: order_id }
                         as: lines
-                        merge: [partner_name]""")))).contains("TQL-YAML-1019");
+                        merge: [partner_name]""")))).contains("TQL-YAML-1047");
     }
 
     @Test
-    void aNestComposingNothingIsAnError(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, "on: { id: order_id }"))))
-                .contains("TQL-YAML-1019");
+    void aCompositionComposingNothingIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, "on: { id: order_id }"))))
+                .contains("TQL-YAML-1047");
     }
 
-    /** A route whose one nest entry joins and composes as {@code composition} declares. */
-    private static Path nestRoute(Path dir, String composition) throws Exception {
+    /** A route composing a sibling source into main, as {@code composition} declares. */
+    private static Path compositionRoute(Path dir, String composition) throws Exception {
         Files.createDirectories(dir.resolve("web/items"));
         Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
         Files.writeString(dir.resolve("web/items/lines.sql"), "select 1 as one\n");
@@ -156,6 +156,10 @@ class AppLinterInputTest {
                   main:
                     sql:
                       file: list.sql
+                    enrich:
+                      lines:
+                        source: lines
+                        %s
                   lines:
                     sql:
                       file: lines.sql
@@ -163,10 +167,6 @@ class AppLinterInputTest {
                   json:
                     body:
                       orders: main.rows
-                    nest:
-                      - into: orders
-                        children: lines
-                        %s
                 """.formatted(composition));
         return dir;
     }

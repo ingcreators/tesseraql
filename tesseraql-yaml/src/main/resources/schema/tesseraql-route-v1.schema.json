@@ -170,7 +170,9 @@
       "type": "array",
       "items": {
         "allOf": [
-          { "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding" },
+          {
+            "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding"
+          },
           {
             "type": "object",
             "properties": {
@@ -179,7 +181,9 @@
                 "description": "The step's name: what later steps and the response bind against (`steps.<id>`)."
               }
             },
-            "required": ["id"]
+            "required": [
+              "id"
+            ]
           }
         ]
       },
@@ -366,42 +370,6 @@
             "statusWhen": {
               "$ref": "tesseraql-defs-v1.schema.json#/$defs/statusWhen",
               "description": "Conditional statuses: the first entry whose expression matches decides the status."
-            },
-            "nest": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "into": {
-                    "type": "string",
-                    "description": "The parent collection the children are nested into."
-                  },
-                  "children": {
-                    "type": "string",
-                    "description": "The named query under `queries:` supplying the child rows."
-                  },
-                  "as": {
-                    "type": "string",
-                    "description": "The property name the children appear under on each parent row; one of `as` or `merge` composes the match."
-                  },
-                  "merge": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`."
-                  },
-                  "on": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "description": "The join: each parent property to the child property it matches, one entry per key column."
-                  }
-                },
-                "additionalProperties": true
-              },
-              "description": "Compose the rows of a named query into the parent rows, so one request answers a parent-and-children shape without a second endpoint."
             }
           },
           "additionalProperties": true,

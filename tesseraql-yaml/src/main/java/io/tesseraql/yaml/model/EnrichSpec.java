@@ -27,6 +27,12 @@ import java.util.Map;
  *
  * @param on        {@code parentColumn: childColumn}, one entry per key column
  * @param sql       the reference query; {@code keys} is bound into it
+ * @param source    a sibling source, already fetched: its rows compose into these without a
+ *                  second read. This is what {@code response.json.nest} was — the same join,
+ *                  the same composition, one runtime — said in the one composition vocabulary
+ *                  and placed under the result it composes into (docs/unified-sources.md
+ *                  decision 6). {@code nest:} could only serve a JSON body, because {@code into:}
+ *                  named a body key and JSON is the only surface that has one
  * @param http      the reference call; see {@code mode} for what the keys bind to
  * @param mode      {@code batch} (one request for the whole key set) or {@code perRow} (one
  *                  request per distinct key); SQL is always batched, HTTP defaults to perRow
@@ -37,8 +43,14 @@ import java.util.Map;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record EnrichSpec(Map<String, String> on, Binding.SqlArm sql,
-        HttpSourceSpec http, String mode, String as, List<String> merge, Integer batchSize,
-        Integer maxKeys) {
+        HttpSourceSpec http, String source, String mode, String as, List<String> merge,
+        Integer batchSize, Integer maxKeys) {
+
+    /** The shape before a sibling source could be the reference. */
+    public EnrichSpec(Map<String, String> on, Binding.SqlArm sql, HttpSourceSpec http,
+            String mode, String as, List<String> merge, Integer batchSize, Integer maxKeys) {
+        this(on, sql, http, null, mode, as, merge, batchSize, maxKeys);
+    }
 
     /** One request for the whole key set. */
     public static final String BATCH = "batch";
@@ -58,10 +70,15 @@ public record EnrichSpec(Map<String, String> on, Binding.SqlArm sql,
      * one-round-trip property SQL has (docs/lookups.md, decision 17).
      */
     public String effectiveMode() {
-        if (sql != null) {
+        if (sql != null || composesSource()) {
             return BATCH;
         }
         return mode == null || mode.isBlank() ? PER_ROW : mode;
+    }
+
+    /** Whether the reference is a sibling source rather than something to fetch. */
+    public boolean composesSource() {
+        return source != null && !source.isBlank();
     }
 
     /** Whether the whole key set rides one request. */

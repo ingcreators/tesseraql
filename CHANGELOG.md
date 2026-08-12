@@ -82,6 +82,15 @@ All notable changes to TesseraQL are documented here. The format follows
   from the statement they bound — and becomes `command: { file: submit.sql, params: … }`, the one
   spelling every role-typed SQL reference shares (docs/unified-sources.md decisions 14 and 16).
 
+- **BREAKING: `response.json.nest` is retired; `enrich:` gains a `source:` arm**
+  (docs/unified-sources.md decision 6). `nest` joined two already-fetched results, `enrich`
+  fetched a reference by key: the same join (`on:`), the same composition (`as:` | `merge:`),
+  one runtime (`KeyedReference`) — and two vocabularies. The reference arms are now
+  `sql | http | source`, where `source: <name>` composes a sibling's rows without a fetch. The
+  gain is not tidiness: `nest:` could serve only a JSON body, because `into:` named a body key
+  and JSON is the only surface that has one. Written under the source it composes into, the same
+  join reaches an HTML list's `columns:` and an export's. `TQL-YAML-1019` retires with the block.
+
 ### Fixed
 
 - **`query-spool` stopped promising a result nothing could reach.** The mode published a spool

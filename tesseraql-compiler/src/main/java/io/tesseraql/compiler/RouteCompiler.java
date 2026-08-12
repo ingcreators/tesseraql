@@ -572,7 +572,7 @@ public final class RouteCompiler {
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
                         java.util.Map.of("ok", Boolean.TRUE, "transition",
                                 "dispatch.transition"),
-                        null, null, null),
+                        null, null),
                 null, null, null, null, null, null);
     }
 
@@ -664,7 +664,7 @@ public final class RouteCompiler {
     private static io.tesseraql.yaml.model.ResponseSpec workflowResponse() {
         return new io.tesseraql.yaml.model.ResponseSpec(
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
-                        java.util.Map.of("ok", Boolean.TRUE), null, null, null),
+                        java.util.Map.of("ok", Boolean.TRUE), null, null),
                 null, null, null, null, null, null);
     }
 
@@ -1126,8 +1126,9 @@ public final class RouteCompiler {
         // decision 5), so the target is where it is written, not a name it carries.
         definition.sources().forEach((into, binding) -> binding.enrich().forEach((name, spec) -> {
             if (spec.sql() == null) {
-                // An HTTP reference has no file, no datasource and no dialect: it rides the
-                // outbound gateway, which the processor looks up per request.
+                // A sibling source is already in the context and an HTTP reference has no file,
+                // no datasource and no dialect — it rides the outbound gateway, which the
+                // processor looks up per request. Neither needs anything compiled here.
                 processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
                         into, name, spec, java.util.List.of(), null, null, null,
                         commandBounds()));
