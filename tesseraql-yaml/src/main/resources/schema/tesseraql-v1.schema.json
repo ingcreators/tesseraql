@@ -36,7 +36,7 @@
       "description": "route/job/view (this schema's shapes), workflow/scope/attachment (their own trees), and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model."
     },
     "recipe": {
-      "description": "What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and the job recipes batch-tasklet/batch-pipeline.",
+      "description": "What the document does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), the job recipes batch-tasklet/batch-pipeline, and the view recipes list/form/detail/dashboard (kind: view).",
       "enum": [
         "query-json",
         "command-json",
@@ -48,7 +48,11 @@
         "webhook",
         "queue-consume",
         "batch-tasklet",
-        "batch-pipeline"
+        "batch-pipeline",
+        "list",
+        "form",
+        "detail",
+        "dashboard"
       ]
     },
     "input": {
@@ -785,18 +789,13 @@
       "additionalProperties": true,
       "description": "How the result becomes an HTTP response: JSON, HTML, a redirect, a stream, or a rendered file. Documented in response-shaping.md."
     },
-    "view": {
-      "description": "Declarative view documents (kind: view): list | form | detail | dashboard.",
-      "enum": [
-        "list",
-        "form",
-        "detail",
-        "dashboard"
-      ]
-    },
     "title": {
       "type": "string",
       "description": "The heading a view document renders (`kind: view`)."
+    },
+    "template": {
+      "type": "string",
+      "description": "The pattern override a view document renders through instead of its bundled `tql/view/*` pattern (`kind: view`, customization ladder L2). Resolved beside the view document, then under the app template root. Documented in declarative-views.md."
     },
     "search": {
       "type": "string",

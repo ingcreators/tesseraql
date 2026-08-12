@@ -199,6 +199,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The shipped JSON Schema described view documents nobody could write.** It declared a
+  top-level `view: list | form | detail | dashboard` property the view loader never reads,
+  while the `recipe:` key the loader *does* read carried an enum admitting no view recipe — so
+  an editor flagged every valid `*.view.yml` and the published reference documented a key the
+  loader rejects. The phantom property is gone, the recipe enum carries the four view recipes,
+  and the per-view `template:` override (customization ladder L2) is documented where it was
+  missing entirely. The schema tests only ever reflected over the route and job models, which
+  is why neither direction of the drift was visible; a new guard reads the view loader's own
+  key and recipe vocabulary, and was proven able to fail before being trusted.
 - **A masked domain named on a detail view's child table, or on a dashboard's table panel,
   rendered raw.** The HTML output policies were collected from a view's own `columns:` and
   `fields:` only, so a `domain:` carrying `classification:`/`mask:` on a child's or a panel's

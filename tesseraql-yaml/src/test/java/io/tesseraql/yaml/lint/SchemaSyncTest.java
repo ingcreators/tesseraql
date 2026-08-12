@@ -234,6 +234,39 @@ class SchemaSyncTest {
                 "scope", "attachment", "tool", "resource", "ui", "prompt");
     }
 
+    /**
+     * The schema describes view documents the way the view loader reads them.
+     *
+     * <p>The gap this closes: the schema declared a top-level {@code view:} property carrying
+     * {@code list | form | detail | dashboard} that {@link io.tesseraql.yaml.view.ViewSpec}
+     * never read — it reads {@code recipe:}, whose enum did not admit those values — so every
+     * shipped view document failed validation in an editor while the published reference
+     * documented a key the loader rejects. Two directions of the same drift, neither of which
+     * any guard could see, because the schema tests only ever reflected over the route and job
+     * models.
+     */
+    @Test
+    void schemaDescribesViewDocumentsTheWayTheLoaderReadsThem() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+
+        List<String> documented = new ArrayList<>();
+        schema.path("properties").fieldNames().forEachRemaining(documented::add);
+        assertThat(documented)
+                .as("every key a view document may declare is documented in the shipped schema")
+                .containsAll(io.tesseraql.yaml.view.ViewSpec.documentKeys());
+
+        List<String> recipes = new ArrayList<>();
+        schema.path("properties").path("recipe").path("enum")
+                .forEach(node -> recipes.add(node.asText()));
+        assertThat(recipes)
+                .as("a view's recipe: values are recipe values, not a separate property")
+                .containsAll(io.tesseraql.yaml.view.ViewSpec.recipes());
+        assertThat(documented)
+                .as("the phantom view: property is gone — the loader reads recipe:")
+                .doesNotContain("view");
+    }
+
     @Test
     void schemaAuthEnumMatchesTheFrameworkAuthModes() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(

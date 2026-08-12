@@ -90,6 +90,22 @@ public record ViewSpec(String id, String view, String title, String action, Stri
             "mark");
 
     /**
+     * The keys a view document may declare, for the guard that keeps the shipped JSON Schema
+     * equal to what this loader accepts. The schema documented a {@code view:} property this
+     * parser never read while rejecting the {@code recipe:} it does read, so every shipped view
+     * document was schema-invalid; reading the loader's own vocabulary is what makes the next
+     * such divergence fail the build.
+     */
+    public static java.util.Set<String> documentKeys() {
+        return DOCUMENT_KEYS;
+    }
+
+    /** The recipe values a view document may declare. */
+    public static java.util.Set<String> recipes() {
+        return java.util.Set.of(LIST, FORM, DETAIL, DASHBOARD);
+    }
+
+    /**
      * The slot names each view kind offers (customization ladder L1, TQL-VIEW-3306): list and
      * detail pages take {@code header}/{@code footer}; a form additionally takes {@code actions}
      * beside its submit button.
