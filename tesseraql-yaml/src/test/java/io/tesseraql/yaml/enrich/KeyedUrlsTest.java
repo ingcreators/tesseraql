@@ -1,4 +1,4 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.yaml.enrich;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

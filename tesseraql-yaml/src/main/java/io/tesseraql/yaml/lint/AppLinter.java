@@ -4614,6 +4614,25 @@ public final class AppLinter {
                     + "': chunk skipLimit must not be negative (was " + chunk.skipLimit()
                     + ")"));
         }
+        chunk.enrich().forEach((name, enrich) -> {
+            // The chunk's reference is the reader's rows, not a named result the step
+            // publishes, so into: has nothing to name here.
+            if (enrich.into() != null && !enrich.into().isBlank()) {
+                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
+                        + step.id() + "': chunk enrich '" + name + "' declares into: — a chunk"
+                        + " enriches the reader's rows, which is the only result it has"));
+            }
+            if (enrich.sql() == null || enrich.sql().file() == null
+                    || enrich.sql().file().isBlank()) {
+                return;
+            }
+            Path file = job.source().getParent().resolve(enrich.sql().file()).normalize();
+            if (!java.nio.file.Files.isRegularFile(file)) {
+                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
+                        + step.id() + "': chunk enrich '" + name + "' references a missing SQL"
+                        + " file: " + enrich.sql().file()));
+            }
+        });
         Path readerPath = job.source().getParent().resolve(chunk.reader().file()).normalize();
         if (!java.nio.file.Files.isRegularFile(readerPath)) {
             return; // the missing file is its own finding where SQL files are checked

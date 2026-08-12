@@ -20,10 +20,25 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * @param onError {@code fail} (default) or {@code skip} (docs/vocabulary-cleanup.md slice 1)
  * @param skipLimit tolerated writer failures when {@code onError: skip}; absent means unlimited
  *                  within the run
+ * @param enrich    keyed references folded into each window of reader rows before the writer
+ *                  sees them (docs/lookups.md), so a writer may bind a column the reader's
+ *                  query never selected
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ChunkSpec(SqlBinding reader, SqlBinding writer, String key, Integer commitEvery,
-        String onError, Integer skipLimit) {
+        String onError, Integer skipLimit, java.util.Map<String, EnrichSpec> enrich) {
+
+    /** The shape before a chunk could enrich between its reader and its writer. */
+    public ChunkSpec(SqlBinding reader, SqlBinding writer, String key, Integer commitEvery,
+            String onError, Integer skipLimit) {
+        this(reader, writer, key, commitEvery, onError, skipLimit, java.util.Map.of());
+    }
+
+    public ChunkSpec {
+        enrich = enrich == null
+                ? java.util.Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(enrich));
+    }
 
     /** The reader column checkpoints track. */
     public String effectiveKey() {

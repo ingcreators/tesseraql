@@ -1,4 +1,4 @@
-package io.tesseraql.compiler.binding;
+package io.tesseraql.yaml.enrich;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  * encodes for a query string, where a space is {@code +} and {@code /} passes through. A key
  * carrying either would otherwise reach a different resource than the one asked for.
  */
-final class KeyedUrls {
+public final class KeyedUrls {
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{key\\.([^}]+)}");
 
@@ -38,7 +38,7 @@ final class KeyedUrls {
      * A placeholder naming a column the key does not carry resolves to the empty string, which
      * a keyed URL's own lint (the reference must use its keys) is what prevents.
      */
-    static String fill(String url, Map<String, Object> key) {
+    public static String fill(String url, Map<String, Object> key) {
         Matcher matcher = PLACEHOLDER.matcher(url);
         StringBuilder filled = new StringBuilder();
         while (matcher.find()) {

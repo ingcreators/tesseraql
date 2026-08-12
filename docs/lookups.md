@@ -771,41 +771,31 @@ join, the same answer enrichment gives.
    other. `EnrichProcessor` splits so both paths run one implementation.
 14. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
-   must not be recorded as one row's skip. **The only slice still open** — its design is
-   settled below.
+   must not be recorded as one row's skip.
 15. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
    and `from:`, a catalogs page listing rows, last load, last error, and refresh.
 
-## Slice 14, in enough detail to execute
+## What the three enriching surfaces share
 
-The remaining slice touches the most delicate code in the framework — a restartable chunk step
-with checkpoints, savepoints, a skip limit and a cooperative stop — so what has been decided is
-written here rather than rediscovered.
+A route's result set, an export's row window, and a chunk step's window between reader and
+writer all enrich, and they sit in modules that cannot see each other. `KeyedReference` in
+`tesseraql-yaml` — the module that owns `EnrichSpec` — is the one implementation of the key
+collection, the batching, the degrade rule and the many-to-one refusal, so the three surfaces
+cannot start disagreeing about what a merge means.
 
-**Where the shared code goes.** `JobExecutor` lives in `tesseraql-operations` and
-`EnrichProcessor` in `tesseraql-compiler`; neither module sees the other. `tesseraql-yaml` is
-the one they both depend on, and it already owns `EnrichSpec`. The enrichment algorithm moves
-there and `EnrichProcessor` delegates — one implementation, for the reason slice 13b gives.
+What differs per surface is only where a connection and a gateway come from, which is the
+`Environment` a caller supplies. It turned out to be two lookups, not an architecture.
 
-**How much has to move.** Less than it looks. `EnrichProcessor` reaches for the exchange in
-exactly two places: `TenantRouting.dataSource(...)` for the connection, and `scopeResolver(...)`
-for the scope predicate. Everything else — collecting the distinct keys, splitting them into
-batches, rendering and running the reference, composing the match onto each row — needs only
-the spec, the parsed SQL nodes and the context. Those two become parameters.
+The chunk's own rules:
 
-**What must not change.** `TQL-SQL-2114` (maxKeys), `TQL-CAMEL-3113` (a many-to-one merge that
-matched more than one row), `TQL-CAMEL-3114` (the target is not a result set) and `TQL-LD-1`
-(the reference overflowed the row cap) are the enrichment's contract; the move keeps them.
-
-**The loop.** Read a window of reader rows (the enrichment's `batchSize`), enrich it, then write
-each row through the existing savepoint/skip path. A reference failure fails the window — it is
-not one row's fault and must never land in `tql_job_skips`, which is the record of rows the
-writer rejected.
-
-**SQL references only.** An HTTP reference inside a chunk would put a network call between a
-streaming reader cursor and a writer transaction that commits every N rows, and its failure
-semantics — retry, fail the window, skip the window — are a decision this document has not
-taken. Refuse it with a code and say why, rather than picking one silently.
+- **A reference failure fails the window**, and the step with it. It is not one row's fault, so
+  it never reaches `tql_job_skips` — that table is the record of rows the *writer* rejected, and
+  an operator reading it has to be able to trust that.
+- **The window is the smallest declared `batchSize`**, and one row when nothing enriches, so a
+  step without an enrichment reads exactly as it did.
+- **`into:` is refused.** A chunk enriches the reader's rows, which is the only result it has.
+- **The reference reads on the step's own datasource.** A job runs on one connector; a reference
+  naming another would need a pool the executor does not own.
 
 ## Out of scope (documented, not implied)
 
