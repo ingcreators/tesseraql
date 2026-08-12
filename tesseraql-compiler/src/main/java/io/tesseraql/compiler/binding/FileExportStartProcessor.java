@@ -34,12 +34,27 @@ public final class FileExportStartProcessor implements Processor {
     private final java.util.List<io.tesseraql.core.files.ExportQuery> queries;
     private final java.util.Set<String> httpSources;
 
+    private final java.util.List<EnrichProcessor> enrichments;
+
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
             FileWriteSpec writeSpec, String localeDeclaration, String timezoneDeclaration,
             String filename, Path querySqlFile, String afterTiming, Path afterSqlFile,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
             java.util.Set<String> httpSources) {
+        this(routeId, urlPath, appName, format, writeSpec, localeDeclaration, timezoneDeclaration,
+                filename, querySqlFile, afterTiming, afterSqlFile, rowCap, queries, httpSources,
+                java.util.List.of());
+    }
+
+    public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
+            io.tesseraql.core.files.FileWriteSpec writeSpec, String localeDeclaration,
+            String timezoneDeclaration, String filename, java.nio.file.Path querySqlFile,
+            String afterTiming, java.nio.file.Path afterSqlFile,
+            io.tesseraql.core.files.ExportRowCap rowCap,
+            java.util.List<io.tesseraql.core.files.ExportQuery> queries,
+            java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
+        this.enrichments = java.util.List.copyOf(enrichments);
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -73,7 +88,9 @@ public final class FileExportStartProcessor implements Processor {
                         FormatSources.resolve(exchange, localeDeclaration),
                         FormatSources.resolve(exchange, timezoneDeclaration)),
                 filename, querySqlFile, Map.copyOf(params), afterTiming, afterSqlFile,
-                rowCap, queries, ExportSources.values(exchange, httpSources)));
+                rowCap, queries, ExportSources.values(exchange, httpSources),
+                ExportEnrichment.enricher(exchange, enrichments),
+                ExportEnrichment.window(enrichments)));
         FileImportProcessor.respondAccepted(exchange, urlPath, transferId, true);
     }
 }

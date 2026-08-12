@@ -41,7 +41,17 @@ public interface FileTransferService {
     record ExportRequest(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, Path querySqlFile, Map<String, Object> params,
             String afterTiming, Path afterSqlFile, ExportRowCap rowCap,
-            List<ExportQuery> queries, Map<String, Object> values) {
+            List<ExportQuery> queries, Map<String, Object> values,
+            RowEnricher enricher, int enrichWindow) {
+
+        /** The shape before an export could enrich its rows (docs/lookups.md, slice 13b). */
+        public ExportRequest(String routeId, String appName, String format,
+                FileWriteSpec writeSpec, String filename, Path querySqlFile,
+                Map<String, Object> params, String afterTiming, Path afterSqlFile,
+                ExportRowCap rowCap, List<ExportQuery> queries, Map<String, Object> values) {
+            this(routeId, appName, format, writeSpec, filename, querySqlFile, params, afterTiming,
+                    afterSqlFile, rowCap, queries, values, null, 0);
+        }
 
         public ExportRequest {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
@@ -93,7 +103,17 @@ public interface FileTransferService {
     record InlineExport(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, io.tesseraql.core.sql.BoundSql query,
             io.tesseraql.core.sql.BoundSql afterExtract, ExportRowCap rowCap,
-            Map<String, io.tesseraql.core.sql.BoundSql> queries) {
+            Map<String, io.tesseraql.core.sql.BoundSql> queries,
+            RowEnricher enricher, int enrichWindow) {
+
+        /** The shape before an export could enrich its rows (docs/lookups.md, slice 13b). */
+        public InlineExport(String routeId, String appName, String format,
+                FileWriteSpec writeSpec, String filename, io.tesseraql.core.sql.BoundSql query,
+                io.tesseraql.core.sql.BoundSql afterExtract, ExportRowCap rowCap,
+                Map<String, io.tesseraql.core.sql.BoundSql> queries) {
+            this(routeId, appName, format, writeSpec, filename, query, afterExtract, rowCap,
+                    queries, null, 0);
+        }
 
         public InlineExport {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;

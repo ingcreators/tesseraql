@@ -762,12 +762,13 @@ join, the same answer enrichment gives.
    export that cannot name one in an app with per-language names is refused
    (`TQL-FIELD-4622`) — decision 12's rule for the first surface that can render a code
    without a request behind it.
-13b. **`enrich:` on an export.** Repeatable models first (one pass for keys, then batches);
-   then streaming, where the enrichment becomes a sliding window over `batchSize` rows and the
-   request-scoped cache stops being an optimization and starts being load-bearing. Today an
-   `enrich:` on an export route is refused by `TQL-YAML-1045` — its `into:` names a result the
-   route does not publish under that name — so the gap is a missing capability, not a silent
-   one.
+13b. **`enrich:` on an export.** The enrichment wraps the row *iterator*, which turned out to
+   make the repeatable and streaming cases one case rather than two: a streaming codec reads
+   through it and sees a sliding window, a buffering codec spools what comes out, and a
+   `splitBy:` bundle spools it too. `RowEnricher` in core is the seam — the rows are read by the
+   file-transfer service and the SQL producer, the enrichment knows about 2-way SQL and the
+   outbound gateway and lives with the compiler, and the two halves' modules do not see each
+   other. `EnrichProcessor` splits so both paths run one implementation.
 14. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
    must not be recorded as one row's skip.

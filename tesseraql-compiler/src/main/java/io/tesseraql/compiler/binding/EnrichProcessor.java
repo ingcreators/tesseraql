@@ -121,6 +121,29 @@ public final class EnrichProcessor implements Processor {
         if (rows.isEmpty()) {
             return;
         }
+        Map<String, Object> result = new LinkedHashMap<>((Map<String, Object>) target);
+        result.put("rows", enrich(exchange, context, rows));
+        context.put(into, result);
+    }
+
+    /** The window an export enriches at a time: the keys one reference statement already binds. */
+    public int window() {
+        return batchSize;
+    }
+
+    /**
+     * The enrichment itself, over a list of rows: distinct keys, the reference fetched in
+     * batches, the match composed onto each row.
+     *
+     * <p>Separate from {@link #process} because an export enriches a window at a time rather
+     * than a result set held in the execution context (docs/lookups.md, slice 13b). One
+     * implementation either way — the alternative was a second copy of the key collection, the
+     * batching, the degrade rule and the many-to-one refusal, which is how two paths start
+     * disagreeing about what a merge means.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> enrich(Exchange exchange, Map<String, Object> context,
+            List<Map<String, Object>> rows) throws java.sql.SQLException {
         List<String> keyColumns = spec.keyColumns();
         List<String> matchColumns = spec.matchColumns();
 
@@ -138,8 +161,7 @@ public final class EnrichProcessor implements Processor {
         // A key set that is entirely null has nothing to look up.
         distinct.keySet().removeIf(java.util.Objects::isNull);
         if (distinct.isEmpty()) {
-            compose(context, into, (Map<String, Object>) target, rows, Map.of());
-            return;
+            return compose(rows, Map.of());
         }
         if (distinct.size() > maxKeys) {
             throw TqlException.builder(TOO_MANY_KEYS)
@@ -168,7 +190,7 @@ public final class EnrichProcessor implements Processor {
             meter(exchange).counter("tesseraql.enrich.degraded").increment(Map.of("enrich", name));
             reference = Map.of();
         }
-        compose(context, into, (Map<String, Object>) target, rows, reference);
+        return compose(rows, reference);
     }
 
     /** Whether the reference declares that a failure degrades instead of failing the request. */
@@ -347,8 +369,8 @@ public final class EnrichProcessor implements Processor {
      * mutated, so a result shared with another consumer is never changed underneath it, and
      * the whole result is replaced so {@code rowCount} and anything else it carries survive.
      */
-    private void compose(Map<String, Object> context, String into, Map<String, Object> target,
-            List<Map<String, Object>> rows, Map<Object, List<Map<String, Object>>> reference) {
+    private List<Map<String, Object>> compose(List<Map<String, Object>> rows,
+            Map<Object, List<Map<String, Object>>> reference) {
         List<String> keyColumns = spec.keyColumns();
         List<Map<String, Object>> enriched = new ArrayList<>(rows.size());
         for (Map<String, Object> row : rows) {
@@ -369,9 +391,7 @@ public final class EnrichProcessor implements Processor {
             }
             enriched.add(copy);
         }
-        Map<String, Object> result = new LinkedHashMap<>(target);
-        result.put("rows", enriched);
-        context.put(into, result);
+        return enriched;
     }
 
     /** The data-scope resolver the runtime bound, or the reject-any default. */

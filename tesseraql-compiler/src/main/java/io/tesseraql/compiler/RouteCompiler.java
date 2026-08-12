@@ -840,7 +840,7 @@ public final class RouteCompiler {
                 formatDeclaration(spec == null ? null : spec.timezone(),
                         "tesseraql.files.timezone"),
                 declaredExportRowCap(spec, format), exportQueries(spec, routeDir),
-                definition.http().keySet()))
+                definition.http().keySet(), enrichProcessors(routeDir, definition)))
                 .to(sqlUri);
     }
 
@@ -908,7 +908,8 @@ public final class RouteCompiler {
                 formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
                 spec.filename(), querySql, afterTiming, afterSql,
                 declaredExportRowCap(spec, spec.format()),
-                exportQueries(spec, routeDir), definition.http().keySet()));
+                exportQueries(spec, routeDir), definition.http().keySet(),
+                enrichProcessors(routeDir, definition)));
         mountTransferStatus(builder, routeFile, routeId);
 
         String fileDirect = "direct:" + routeId + ".file";
@@ -1068,12 +1069,29 @@ public final class RouteCompiler {
     private ProcessorDefinition<?> enrichments(ProcessorDefinition<?> step, Path routeDir,
             RouteDefinition definition) {
         ProcessorDefinition<?> enriched = step;
+        for (var processor : enrichProcessors(routeDir, definition)) {
+            enriched = enriched.process(processor);
+        }
+        return enriched;
+    }
+
+    /**
+     * One {@link io.tesseraql.compiler.binding.EnrichProcessor} per {@code enrich:} entry, in
+     * authored order — so a later entry may enrich a result an earlier one already enriched.
+     *
+     * <p>Built rather than mounted here because an export does not run them as pipeline steps:
+     * it folds them into the rows it is writing, a window at a time (docs/lookups.md, slice
+     * 13b). One construction either way, so the two paths cannot drift on what a reference is.
+     */
+    private java.util.List<io.tesseraql.compiler.binding.EnrichProcessor> enrichProcessors(
+            Path routeDir, RouteDefinition definition) {
+        java.util.List<io.tesseraql.compiler.binding.EnrichProcessor> processors = new java.util.ArrayList<>();
         for (var entry : definition.enrich().entrySet()) {
             io.tesseraql.yaml.model.EnrichSpec spec = entry.getValue();
             if (spec.sql() == null) {
                 // An HTTP reference has no file, no datasource and no dialect: it rides the
                 // outbound gateway, which the processor looks up per request.
-                enriched = enriched.process(new io.tesseraql.compiler.binding.EnrichProcessor(
+                processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
                         entry.getKey(), spec, java.util.List.of(), null, null, null,
                         commandBounds()));
                 continue;
@@ -1082,11 +1100,11 @@ public final class RouteCompiler {
             String dialect = datasourceDialect(datasource);
             Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
                     routeDir.resolve(spec.sql().file()).normalize(), dialect);
-            enriched = enriched.process(new io.tesseraql.compiler.binding.EnrichProcessor(
+            processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
                     entry.getKey(), spec, parseSql(file), file.toString(), datasource, dialect,
                     commandBounds()));
         }
-        return enriched;
+        return processors;
     }
 
     /** Parses a 2-way SQL file at build time, so a broken reference query never reaches a request. */

@@ -5012,8 +5012,11 @@ public final class AppLinter {
             String source, List<LintFinding> findings) {
         definition.enrich().forEach((name, spec) -> {
             String into = spec.effectiveInto();
+            // An export's extraction is its own `sql:` under export:, not the route's — and it
+            // is the only result an export publishes rows for (docs/lookups.md, slice 13b).
+            boolean exportsRows = definition.fileExport() != null;
             boolean targetExists = "sql".equals(into)
-                    ? definition.sql() != null
+                    ? definition.sql() != null || exportsRows
                     : definition.queries().containsKey(into);
             if (!targetExists) {
                 findings.add(new LintFinding("TQL-YAML-1045", "error", source,

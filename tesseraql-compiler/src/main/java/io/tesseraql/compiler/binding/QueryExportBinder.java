@@ -21,12 +21,22 @@ public final class QueryExportBinder implements Processor {
     private final io.tesseraql.core.files.ExportRowCap rowCap;
     private final java.util.List<io.tesseraql.core.files.ExportQuery> queries;
     private final java.util.Set<String> httpSources;
+    private final java.util.List<EnrichProcessor> enrichments;
 
     public QueryExportBinder(FileCodec codec, FileWriteSpec writeSpec,
             String localeDeclaration, String timezoneDeclaration,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
             java.util.Set<String> httpSources) {
+        this(codec, writeSpec, localeDeclaration, timezoneDeclaration, rowCap, queries,
+                httpSources, java.util.List.of());
+    }
+
+    public QueryExportBinder(FileCodec codec, FileWriteSpec writeSpec,
+            String localeDeclaration, String timezoneDeclaration,
+            io.tesseraql.core.files.ExportRowCap rowCap,
+            java.util.List<io.tesseraql.core.files.ExportQuery> queries,
+            java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
         this.codec = codec;
         this.writeSpec = writeSpec;
         this.localeDeclaration = localeDeclaration;
@@ -34,6 +44,7 @@ public final class QueryExportBinder implements Processor {
         this.rowCap = rowCap;
         this.queries = java.util.List.copyOf(queries);
         this.httpSources = java.util.Set.copyOf(httpSources);
+        this.enrichments = java.util.List.copyOf(enrichments);
     }
 
     @Override
@@ -46,5 +57,6 @@ public final class QueryExportBinder implements Processor {
         exchange.setProperty(TesseraqlProperties.EXPORT_QUERIES, queries);
         exchange.setProperty(TesseraqlProperties.EXPORT_VALUES,
                 ExportSources.values(exchange, httpSources));
+        ExportEnrichment.bind(exchange, enrichments);
     }
 }

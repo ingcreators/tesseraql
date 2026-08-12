@@ -165,6 +165,11 @@ A row-value `IN` is deliberately not generated: SQL Server does not accept one, 
 enrichment does **not** buy is sorting, searching, or paginating by the merged column: only
 SQL can order a result set, so a screen that must sort by partner name still joins.
 
+An **export** enriches too, and it does so a window at a time: `batchSize` rows are read, the
+reference is fetched once for their distinct keys, and the enriched window is written. So a
+million-row extract makes one reference query per window and never holds more rows than it
+already did — including a streaming format, which reads straight through.
+
 ### An HTTP reference
 
 The reference may be a call instead of a query — the same call vocabulary

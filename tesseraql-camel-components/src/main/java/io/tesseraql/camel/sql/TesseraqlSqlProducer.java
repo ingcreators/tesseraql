@@ -252,7 +252,16 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     io.tesseraql.core.files.ExportRowCap cap = rowCap(exchange, codec, spec);
                     Map<String, Object> values = composedValues(exchange, connection, tempStore,
                             cap, spools);
-                    ResultRows rows = new ResultRows(resultSet, writer, cap);
+                    // The enrichment wraps the cursor, so every branch below sees enriched
+                    // rows and none of them holds more than it already did (slice 13b).
+                    java.util.Iterator<Map<String, Object>> rows = io.tesseraql.core.files.EnrichingRows
+                            .of(
+                                    new ResultRows(resultSet, writer, cap),
+                                    exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
+                                            io.tesseraql.core.files.RowEnricher.class),
+                                    exchange.getProperty(TesseraqlProperties.EXPORT_ENRICH_WINDOW,
+                                            0,
+                                            Integer.class));
                     // A codec that holds its rows is handed a re-readable set instead of the
                     // cursor, so a template may walk it more than once without the result set
                     // living in memory (docs/export-pipeline.md, decision 1). The row cap still
