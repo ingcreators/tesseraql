@@ -26,7 +26,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *                     transfer sent to a local or SFTP/FTPS drop under the push policy block
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record PipelineStep(String id, SqlBinding sql,
+public record PipelineStep(String id, Binding sql,
         @JsonProperty("notify") NotifySpec notification,
         HttpCallSpec httpCall,
         ChunkSpec chunk,
@@ -34,29 +34,29 @@ public record PipelineStep(String id, SqlBinding sql,
         PushSpec push) {
 
     /** Convenience constructor for a SQL step (the pre-Phase-20 shape). */
-    public PipelineStep(String id, SqlBinding sql) {
+    public PipelineStep(String id, Binding sql) {
         this(id, sql, null, null, null, null, null);
     }
 
     /** Convenience constructor for a SQL or notification step (the pre-Phase-26 shape). */
-    public PipelineStep(String id, SqlBinding sql, NotifySpec notification) {
+    public PipelineStep(String id, Binding sql, NotifySpec notification) {
         this(id, sql, notification, null, null, null, null);
     }
 
     /** Convenience constructor for a step without a {@code chunk:} body (the pre-chunk shape). */
-    public PipelineStep(String id, SqlBinding sql, NotifySpec notification,
+    public PipelineStep(String id, Binding sql, NotifySpec notification,
             HttpCallSpec httpCall) {
         this(id, sql, notification, httpCall, null, null, null);
     }
 
     /** Convenience constructor for a step without an {@code export:} body (the pre-export shape). */
-    public PipelineStep(String id, SqlBinding sql, NotifySpec notification,
+    public PipelineStep(String id, Binding sql, NotifySpec notification,
             HttpCallSpec httpCall, ChunkSpec chunk) {
         this(id, sql, notification, httpCall, chunk, null, null);
     }
 
     /** Convenience constructor for a step without a {@code push:} body (the pre-push shape). */
-    public PipelineStep(String id, SqlBinding sql, NotifySpec notification,
+    public PipelineStep(String id, Binding sql, NotifySpec notification,
             HttpCallSpec httpCall, ChunkSpec chunk, ExportSpec export) {
         this(id, sql, notification, httpCall, chunk, export, null);
     }

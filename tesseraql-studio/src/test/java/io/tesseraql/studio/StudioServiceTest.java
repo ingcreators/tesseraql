@@ -138,8 +138,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -172,8 +174,10 @@ class StudioServiceTest {
                     mask: last4
                 security:
                   auth: bearer
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -219,8 +223,10 @@ class StudioServiceTest {
                 input:
                   gone:
                     type: string
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -329,12 +335,14 @@ class StudioServiceTest {
                 id: things.search
                 kind: route
                 recipe: query-json
-                sql:
-                  file: search.sql
-                  mode: query
-                  params:
-                    q: query.q
-                    owner: params.owner
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                        q: query.q
+                        owner: params.owner
                 response:
                   json:
                     body:
@@ -345,9 +353,11 @@ class StudioServiceTest {
                 id: things.create
                 kind: route
                 recipe: command-json
-                sql:
-                  file: create.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: create.sql
+                      mode: update
                 response:
                   json:
                     body:
@@ -390,8 +400,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -693,8 +705,10 @@ class StudioServiceTest {
                 id: x.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: print.sql
+                sources:
+                  main:
+                    sql:
+                      file: print.sql
                 export:
                   format: pdf
                   filename: x.pdf
@@ -752,11 +766,14 @@ class StudioServiceTest {
                 id: report.get
                 kind: route
                 recipe: query-json
-                sql:
-                  file: main.sql
+                sources:
+                  main:
+                    sql:
+                      file: main.sql
                 queries:
                   totals:
-                    file: totals.sql
+                    sql:
+                      file: totals.sql
                 response:
                   json:
                     status: 200
@@ -944,8 +961,10 @@ class StudioServiceTest {
                 id: go.redirect
                 kind: route
                 recipe: command
-                sql:
-                  file: go.sql
+                sources:
+                  main:
+                    sql:
+                      file: go.sql
                 response:
                   redirect:
                     location: /done
@@ -991,8 +1010,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -1005,8 +1026,10 @@ class StudioServiceTest {
                 id: x.renamed
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -1030,8 +1053,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -1070,8 +1095,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -1102,8 +1129,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
@@ -1203,8 +1232,10 @@ class StudioServiceTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:

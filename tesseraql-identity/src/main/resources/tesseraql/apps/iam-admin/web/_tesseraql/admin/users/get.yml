@@ -20,21 +20,22 @@ input:
     type: string
     required: false
 
-sql:
-  contract: identity.list-users
-  params:
-    q: params.q
-
-queries:
+sources:
+  main:
+    sql:
+      contract:
+        name: identity.list-users
+        params:
+          q: params.q
   total:
-    contract: identity.count-users
-
+    contract:
+      name: identity.count-users
 response:
   html:
     status: 200
     template: list.html
     model:
-      users: sql.rows
+      users: main.rows
       total: total.rows
       invited: params.invited
       bulk: params.bulk

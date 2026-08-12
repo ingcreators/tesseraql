@@ -356,9 +356,11 @@ class StudioIntegrationTest {
                 id: extra.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: extra.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: extra.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -1297,9 +1299,11 @@ class StudioIntegrationTest {
                 id: formtest.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: formtest.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: formtest.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -2186,9 +2190,11 @@ class StudioIntegrationTest {
                 id: formed.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: formed.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: formed.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -3737,12 +3743,13 @@ class StudioIntegrationTest {
                   auth: bearer
                   policy: users.write
 
-                sql:
-                  file: probe.sql
-                  mode: update
-                  params:
-                    name: body.name
-
+                steps:
+                  main:
+                    sql:
+                      file: probe.sql
+                      mode: update
+                      params:
+                        name: body.name
                 response:
                   json:
                     status: 200
@@ -3756,8 +3763,10 @@ class StudioIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: the probe update returns the affected row
-                    sql:
-                      file: web/api/probe/probe.sql
+                    sources:
+                      main:
+                        sql:
+                          file: web/api/probe/probe.sql
                     params:
                       name: sato
                     expect:
@@ -3772,7 +3781,8 @@ class StudioIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: the list-users contract runs under the sandbox
-                    contract: identity.list-users
+                    contract:
+                      name: identity.list-users
                 """);
         // A route whose SQL reads `customers` — a table the schema.json overlay above introspects —
         // so the docs route page's inferred data dependency cross-links to that table page (the
@@ -3788,10 +3798,11 @@ class StudioIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: deps.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: deps.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -3813,13 +3824,14 @@ class StudioIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: main.sql
-
+                sources:
+                  main:
+                    sql:
+                      file: main.sql
                 queries:
                   active:
-                    file: active.sql
-
+                    sql:
+                      file: active.sql
                 response:
                   json:
                     status: 200

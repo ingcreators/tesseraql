@@ -8,11 +8,12 @@ input:
     type: string
     required: false
 
-sql:
-  service: docs.search
-  params:
-    q: query.q
-
+sources:
+  main:
+    service:
+      name: docs.search
+      params:
+        q: query.q
 response:
   html:
     status: 200

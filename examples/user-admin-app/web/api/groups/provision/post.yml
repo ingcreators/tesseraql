@@ -32,15 +32,16 @@ outbox:
     externalId: body.externalId
     members[].value: body.memberIds
 
-sql:
-  file: provision.sql
-  mode: update
-  params:
-    displayName: body.displayName
-
+steps:
+  main:
+    sql:
+      file: provision.sql
+      mode: update
+      params:
+        displayName: body.displayName
 response:
   json:
     status: 200
     body:
-      affected: sql.affectedRows
+      affected: steps.main.affectedRows
       eventId: sql.eventId

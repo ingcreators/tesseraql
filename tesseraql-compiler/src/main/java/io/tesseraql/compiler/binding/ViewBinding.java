@@ -282,8 +282,8 @@ public final class ViewBinding {
      * model assembly reads.
      */
     private static boolean declaresSource(RouteDefinition route, String source) {
-        return "sql".equals(source) || (route != null && (route.queries().containsKey(source)
-                || route.http().containsKey(source)));
+        return io.tesseraql.yaml.model.RouteDefinition.MAIN.equals(source)
+                || (route != null && route.sources().containsKey(source));
     }
 
     /** The template name the renderer feeds to the engine (pattern or per-view retarget). */
@@ -556,7 +556,9 @@ public final class ViewBinding {
 
     /** A panel's context source: its {@code source:} or the main {@code sql} result. */
     private static String panelSource(ViewSpec.Panel panel) {
-        return panel.source() == null || panel.source().isBlank() ? "sql" : panel.source();
+        return panel.source() == null || panel.source().isBlank()
+                ? io.tesseraql.yaml.model.RouteDefinition.MAIN
+                : panel.source();
     }
 
     /** A numeric series: the column's values over the rows (non-numbers parse or drop to 0). */

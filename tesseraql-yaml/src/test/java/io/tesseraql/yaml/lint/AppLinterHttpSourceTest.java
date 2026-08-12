@@ -1,7 +1,9 @@
 package io.tesseraql.yaml.lint;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.tesseraql.core.error.TqlException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -37,18 +39,20 @@ class AppLinterHttpSourceTest {
                 id: orders.list
                 kind: route
                 recipe: %s
-                sql:
-                  file: orders.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                   rates:
-                    url: https://fx.example.com/v1/rates
-                    credential: fx-api
+                    http:
+                      url: https://fx.example.com/v1/rates
+                      credential: fx-api
                 %s
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                       fx: rates.body
                 """.formatted(recipe, extra));
     }
@@ -72,7 +76,7 @@ class AppLinterHttpSourceTest {
         List<LintFinding> findings = new AppLinter().lint(dir);
         assertThat(findings).anyMatch(finding -> finding.isError()
                 && "TQL-YAML-1022".equals(finding.code())
-                && finding.message().contains("http: sources are supported"));
+                && finding.message().contains("an http: source is supported"));
     }
 
     @Test
@@ -87,13 +91,13 @@ class AppLinterHttpSourceTest {
     @Test
     void aCommandSourceAssertedReadOnlyLintsClean(@TempDir Path dir) throws Exception {
         writeApp(dir, "command-json", "fx.example.com", """
-                    readOnly: true
+                      readOnly: true
                 """);
         assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
     }
 
     @Test
-    void aSourceNameMustNotShadowANamedQuery(@TempDir Path dir) throws Exception {
+    void twoSourcesCannotShareAName(@TempDir Path dir) throws Exception {
         writeApp(dir, "query-json", "fx.example.com", "");
         Files.writeString(dir.resolve("web/orders/count.sql"), "select 1 as n\n");
         Files.writeString(dir.resolve("web/orders/get.yml"), """
@@ -101,23 +105,26 @@ class AppLinterHttpSourceTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
-                queries:
+                sources:
                   rates:
-                    file: count.sql
-                http:
+                    sql:
+                      file: count.sql
                   rates:
-                    url: https://fx.example.com/v1/rates
+                    http:
+                      url: https://fx.example.com/v1/rates
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      fx: rates.rows
                 """);
-        assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
-                && "TQL-YAML-1022".equals(finding.code())
-                && finding.message().contains("shadows"));
+
+        // One namespace makes the collision a duplicate key rather than a cross-map shadow,
+        // so the lint that compared http: names against queries: names retires — and the
+        // parser refuses the document outright instead of keeping the second silently.
+        assertThatThrownBy(() -> new AppLinter().lint(dir))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Duplicate field 'rates'");
     }
 
     @Test
@@ -125,7 +132,7 @@ class AppLinterHttpSourceTest {
         // A reference API that takes a list of keys is a POST; the read side is no longer
         // GET-only (docs/lookups.md, decision 16).
         writeApp(dir, "query-json", "fx.example.com", """
-                    method: POST
+                      method: POST
                     body: params.codes
                 """);
         assertThat(new AppLinter().lint(dir)).noneMatch(LintFinding::isError);
@@ -134,7 +141,7 @@ class AppLinterHttpSourceTest {
     @Test
     void aBodyOnAMethodThatCarriesNoneIsAnError(@TempDir Path dir) throws Exception {
         writeApp(dir, "query-json", "fx.example.com", """
-                    body: params.codes
+                      body: params.codes
                 """);
         assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
                 && "TQL-YAML-1049".equals(finding.code())

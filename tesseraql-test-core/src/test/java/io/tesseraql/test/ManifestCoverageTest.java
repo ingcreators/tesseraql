@@ -83,8 +83,10 @@ class ManifestCoverageTest {
             security:
               auth: bearer
               policy: users.read
-            sql:
-              file: search.sql
+            sources:
+              main:
+                sql:
+                  file: search.sql
             """;
 
     private static final String PUBLIC_ROUTE = """
@@ -92,8 +94,10 @@ class ManifestCoverageTest {
             id: health.echo
             kind: route
             recipe: query-json
-            sql:
-              file: echo.sql
+            sources:
+              main:
+                sql:
+                  file: echo.sql
             """;
 
     @Test
@@ -116,8 +120,10 @@ class ManifestCoverageTest {
             kind: resource
             recipe: query-json
             uri: tesseraql://catalog
-            sql:
-              file: catalog.sql
+            sources:
+              main:
+                sql:
+                  file: catalog.sql
             """;
 
     private static final String ORDERS_RESOURCE = """
@@ -126,8 +132,10 @@ class ManifestCoverageTest {
             kind: resource
             recipe: query-json
             uri: tesseraql://orders
-            sql:
-              file: orders.sql
+            sources:
+              main:
+                sql:
+                  file: orders.sql
             """;
 
     @Test
@@ -150,8 +158,10 @@ class ManifestCoverageTest {
             kind: ui
             recipe: query-html
             uri: ui://users/board
-            sql:
-              file: board.sql
+            sources:
+              main:
+                sql:
+                  file: board.sql
             response:
               html:
                 template: board.html
@@ -163,8 +173,10 @@ class ManifestCoverageTest {
             kind: ui
             recipe: query-html
             uri: ui://users/grid
-            sql:
-              file: grid.sql
+            sources:
+              main:
+                sql:
+                  file: grid.sql
             response:
               html:
                 template: grid.html
@@ -204,8 +216,10 @@ class ManifestCoverageTest {
             security:
               auth: api-key
               policy: invoices.write
-            sql:
-              file: post.sql
+            steps:
+              main:
+                sql:
+                  file: post.sql
             """;
 
     @Test
@@ -229,8 +243,10 @@ class ManifestCoverageTest {
             security:
               auth: mtls
               policy: ledger.write
-            sql:
-              file: post.sql
+            steps:
+              main:
+                sql:
+                  file: post.sql
             """;
 
     @Test
@@ -253,9 +269,11 @@ class ManifestCoverageTest {
             recipe: webhook
             webhook:
               provider: partner
-            sql:
-              file: insert.sql
-              mode: update
+            steps:
+              main:
+                sql:
+                  file: insert.sql
+                  mode: update
             """;
 
     @Test
@@ -278,8 +296,10 @@ class ManifestCoverageTest {
                 id: admin.create
                 kind: route
                 recipe: command-json
-                sql:
-                  contract: identity.create-user
+                steps:
+                  main:
+                    contract:
+                      name: identity.create-user
                 """));
         ItemCoverage covered = ManifestCoverage.routes(manifest,
                 List.of(contractSuite("identity.create-user")));
@@ -302,9 +322,11 @@ class ManifestCoverageTest {
               uniqueEmail:
                 file: check-email.sql
                 field: email
-            sql:
-              file: insert-member.sql
-              mode: update
+            steps:
+              main:
+                sql:
+                  file: insert-member.sql
+                  mode: update
             """;
 
     private static TestSuite validateSuite(String route, String rule) {
@@ -357,9 +379,11 @@ class ManifestCoverageTest {
                   email: body.email
               audit:
                 channel: audit-webhook
-            sql:
-              file: insert-member.sql
-              mode: update
+            steps:
+              main:
+                sql:
+                  file: insert-member.sql
+                  mode: update
             """;
 
     private static io.tesseraql.yaml.manifest.JobFile notifyingJob() {
@@ -368,8 +392,8 @@ class ManifestCoverageTest {
                         "job", "batch-pipeline", null, Map.of(), null,
                         List.of(
                                 new io.tesseraql.yaml.model.PipelineStep("purge",
-                                        new io.tesseraql.yaml.model.SqlBinding("purge.sql", null,
-                                                "update", Map.of(), null, null, null, null, null)),
+                                        io.tesseraql.yaml.model.Binding.sql("purge.sql", "update",
+                                                Map.of())),
                                 new io.tesseraql.yaml.model.PipelineStep("report", null,
                                         new io.tesseraql.yaml.model.NotifySpec("ops-mail", null,
                                                 Map.of()))),
@@ -389,8 +413,10 @@ class ManifestCoverageTest {
             security:
               auth: browser
               policy: app.read
-            sql:
-              file: list.sql
+            sources:
+              main:
+                sql:
+                  file: list.sql
             response:
               html:
                 view: items
@@ -461,8 +487,8 @@ class ManifestCoverageTest {
                         "batch-pipeline", null, Map.of(), null,
                         List.of(
                                 new io.tesseraql.yaml.model.PipelineStep("pending",
-                                        new io.tesseraql.yaml.model.SqlBinding("pending.sql", null,
-                                                "query", Map.of(), null, null, null, null, null)),
+                                        io.tesseraql.yaml.model.Binding.sql("pending.sql", "query",
+                                                Map.of())),
                                 new io.tesseraql.yaml.model.PipelineStep("push", null, null,
                                         new io.tesseraql.yaml.model.HttpCallSpec("POST",
                                                 "https://api.partner.example/v1/orders", Map.of(),
@@ -504,8 +530,8 @@ class ManifestCoverageTest {
                         Map.of(), null, List.of(), false,
                         new io.tesseraql.yaml.model.ImportSpec("csv", List.of(), null, null, null,
                                 null, null,
-                                new io.tesseraql.yaml.model.SqlBinding("upsert.sql", null, "update",
-                                        Map.of(), null, null, null, null, null))));
+                                io.tesseraql.yaml.model.Binding.sql("upsert.sql", "update",
+                                        Map.of()))));
     }
 
     @Test
@@ -537,11 +563,13 @@ class ManifestCoverageTest {
                   channel: events
                   topic: orders.created
                   idempotencyKey: body.orderId
-                sql:
-                  file: project-order.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
+                steps:
+                  main:
+                    sql:
+                      file: project-order.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
                 """);
         AppManifest manifest = new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(consumer),
@@ -583,8 +611,10 @@ class ManifestCoverageTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 """);
         AppManifest manifest = new io.tesseraql.yaml.manifest.ManifestLoader().load(home);
 
@@ -676,8 +706,10 @@ class ManifestCoverageTest {
             id: users.print
             kind: route
             recipe: query-export
-            sql:
-              file: print.sql
+            sources:
+              main:
+                sql:
+                  file: print.sql
             export:
               format: pdf
               template: print.html

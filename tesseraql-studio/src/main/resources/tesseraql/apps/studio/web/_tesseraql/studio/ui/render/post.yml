@@ -20,14 +20,15 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.render
-  params:
-    path: params.path
-    content: params.content
-    sampleModel: params.sampleModel
-    live: params.live
-
+sources:
+  main:
+    service:
+      name: studio.render
+      params:
+        path: params.path
+        content: params.content
+        sampleModel: params.sampleModel
+        live: params.live
 response:
   html:
     status: 200

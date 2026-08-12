@@ -36,13 +36,15 @@ class AdmissionProfileTest {
                 security:
                   auth: bearer
                   policy: app.read
-                sql:
-                  file: items.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         return dir;
     }
@@ -70,13 +72,15 @@ class AdmissionProfileTest {
                 security:
                   auth: bearer
                   policy: nowhere.defined
-                sql:
-                  file: loose.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: loose.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         // A service binding -> mode extended -> declarative-only failure.
         Path svc = dir.resolve("web/api/svc");
@@ -89,8 +93,10 @@ class AdmissionProfileTest {
                 security:
                   auth: bearer
                   policy: app.read
-                sql:
-                  service: some.provider
+                sources:
+                  main:
+                    service:
+                      name: some.provider
                 response:
                   json:
                     body:
@@ -108,15 +114,17 @@ class AdmissionProfileTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: page.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: page.sql
+                      mode: query
                 response:
                   html:
                     status: 200
                     template: page.html
                     model:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         // Unbounded egress.
         Files.writeString(dir.resolve("config/overlay.yml"), """

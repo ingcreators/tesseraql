@@ -26,7 +26,6 @@ tests:
       rows:
         - title: Conference tickets (2x)
 
-
   - name: refiling an identical request violates the shared duplicateRequest rule
     validate:
       route: requests.create

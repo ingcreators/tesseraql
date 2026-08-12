@@ -31,7 +31,9 @@ class AppLinterCalendarsTest {
                 trigger:
                   schedule:
                 %s
-                sql: { file: close.sql, mode: update }
+                sql:
+                  file: close.sql
+                  mode: update
                 """.formatted(schedule));
         Files.writeString(dir.resolve("batch/nightly/close.sql"), "select 1\n");
         return dir;

@@ -19,9 +19,9 @@ import io.tesseraql.core.validation.ValidationRules;
 import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.security.Principal;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ErrorsSpec;
 import io.tesseraql.yaml.model.OutboxSpec;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.model.ValidationRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -147,7 +147,7 @@ public final class TransactionalCommandProcessor implements Processor {
      *                   form, the step name (under {@code steps.}) otherwise
      */
     private record Step(String name, String contextKey, List<SqlNode> nodes, String sourcePath,
-            String mode, Map<String, String> params, List<String> keys, SqlBinding.Expect expect,
+            String mode, Map<String, String> params, List<String> keys, Binding.Expect expect,
             String sequence, Bounds bounds, io.tesseraql.core.expr.Expr when) {
 
         boolean isSequence() {
@@ -166,8 +166,8 @@ public final class TransactionalCommandProcessor implements Processor {
      * @param stepFile resolves a step's or rule's SQL file reference to its (dialect-resolved)
      *                 path
      */
-    public TransactionalCommandProcessor(String routeId, SqlBinding sql,
-            Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
+    public TransactionalCommandProcessor(String routeId, Binding sql,
+            Map<String, Binding> declaredSteps, Map<String, ValidationRule> validate,
             Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
             java.util.function.Function<String, Path> stepFile,
@@ -183,8 +183,8 @@ public final class TransactionalCommandProcessor implements Processor {
      * {@code workflow} binding makes the processor advance the document's state, check the
      * transition's guard, and append history in the command's transaction.
      */
-    public TransactionalCommandProcessor(String routeId, SqlBinding sql,
-            Map<String, SqlBinding> declaredSteps, Map<String, ValidationRule> validate,
+    public TransactionalCommandProcessor(String routeId, Binding sql,
+            Map<String, Binding> declaredSteps, Map<String, ValidationRule> validate,
             Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
             java.util.function.Function<String, Path> stepFile,
@@ -250,16 +250,16 @@ public final class TransactionalCommandProcessor implements Processor {
         return new ValidationRules(compiled);
     }
 
-    private List<Step> compile(SqlBinding sql, Map<String, SqlBinding> declaredSteps,
+    private List<Step> compile(Binding sql, Map<String, Binding> declaredSteps,
             java.util.function.Function<String, Path> stepFile) {
-        Map<String, SqlBinding> bindings = singleSql
+        Map<String, Binding> bindings = singleSql
                 ? Map.of("sql", sql)
                 : declaredSteps;
         List<Step> compiled = new ArrayList<>();
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
-        for (Map.Entry<String, SqlBinding> entry : bindings.entrySet()) {
+        for (Map.Entry<String, Binding> entry : bindings.entrySet()) {
             String name = entry.getKey();
-            SqlBinding binding = entry.getValue();
+            Binding binding = entry.getValue();
             validate(name, binding, seen);
             String contextKey = singleSql ? "sql" : name;
             // A guard belongs to a step of a pipeline: the single-statement form IS the
@@ -306,7 +306,7 @@ public final class TransactionalCommandProcessor implements Processor {
      * declared, otherwise the app-wide defaults the compiler resolved — the same precedence the
      * route-level SQL path applies.
      */
-    private Bounds boundsFor(SqlBinding binding) {
+    private Bounds boundsFor(Binding binding) {
         if (defaultBounds == null) {
             return new Bounds(0, -1, "fail");
         }
@@ -324,7 +324,7 @@ public final class TransactionalCommandProcessor implements Processor {
     }
 
     /** Fail-fast validation of one step declaration (runs at route build time). */
-    private void validate(String name, SqlBinding binding, java.util.Set<String> earlier) {
+    private void validate(String name, Binding binding, java.util.Set<String> earlier) {
         if (binding.isContract() || binding.isService()) {
             throw invalid("step '" + name + "': contract/service bindings are not supported in"
                     + " command steps - use a SQL file or a sequence");

@@ -22,15 +22,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: ops.audit
-  params:
-    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-    permissions: principal.permissions
-    route: params.route
-    actor: params.actor
-    status: params.status
-
+sources:
+  main:
+    sql:
+      service:
+        name: ops.audit
+        params:
+          # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+          permissions: principal.permissions
+          route: params.route
+          actor: params.actor
+          status: params.status
 response:
   html:
     status: 200

@@ -46,16 +46,18 @@ class NotifyBlockParsingTest {
                     payload:
                       email: body.email
                       actor: principal.loginId
-                sql:
-                  file: insert-member.sql
-                  mode: update
-                  params:
-                    email: body.email
+                steps:
+                  main:
+                    sql:
+                      file: insert-member.sql
+                      mode: update
+                      params:
+                        email: body.email
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -88,9 +90,11 @@ class NotifyBlockParsingTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: purge
-                    sql:
-                      file: purge.sql
-                      mode: update
+                    sources:
+                      main:
+                        sql:
+                          file: purge.sql
+                          mode: update
                   - id: report
                     notify:
                       channel: ops-mail
@@ -121,14 +125,16 @@ class NotifyBlockParsingTest {
                 id: members.register
                 kind: route
                 recipe: command-json
-                sql:
-                  file: insert-member.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: insert-member.sql
+                      mode: update
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);

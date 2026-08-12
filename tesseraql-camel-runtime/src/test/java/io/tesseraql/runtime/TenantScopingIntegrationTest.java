@@ -139,12 +139,13 @@ class TenantScopingIntegrationTest {
                 security:
                   auth: public
 
-                sql:
-                  file: list.sql
-                  mode: query
-                  params:
-                    tenant_id: tenant.id
-
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
+                      params:
+                        tenant_id: tenant.id
                 response:
                   json:
                     status: 200

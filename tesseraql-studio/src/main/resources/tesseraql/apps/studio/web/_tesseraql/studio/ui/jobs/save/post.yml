@@ -21,23 +21,24 @@ input:
   slaCompleteBy: { type: string, required: false }
   slaRunningLongerThan: { type: string, required: false }
 
-sql:
-  service: studio.jobs.save
-  params:
-    name: params.name
-    cron: params.cron
-    fixedDelay: params.fixedDelay
-    calendar: params.calendar
-    runOn: params.runOn
-    dayOfMonth: params.dayOfMonth
-    shift: params.shift
-    after: params.after
-    overlap: params.overlap
-    slaCompleteBy: params.slaCompleteBy
-    slaRunningLongerThan: params.slaRunningLongerThan
-    roles: principal.roles
-    actor: principal.loginId
-
+steps:
+  main:
+    service:
+      name: studio.jobs.save
+      params:
+        name: params.name
+        cron: params.cron
+        fixedDelay: params.fixedDelay
+        calendar: params.calendar
+        runOn: params.runOn
+        dayOfMonth: params.dayOfMonth
+        shift: params.shift
+        after: params.after
+        overlap: params.overlap
+        slaCompleteBy: params.slaCompleteBy
+        slaRunningLongerThan: params.slaRunningLongerThan
+        roles: principal.roles
+        actor: principal.loginId
 response:
   redirect:
     status: 303

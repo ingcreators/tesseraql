@@ -26,19 +26,20 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.wizard.oidc.apply
-  params:
-    discoveryUri: params.discoveryUri
-    clientId: params.clientId
-    redirectUri: params.redirectUri
-    scopes: params.scopes
-    postLoginUrl: params.postLoginUrl
-    provision: params.provision
-    clientSecret: params.clientSecret
-    roles: principal.roles
-    actor: principal.loginId
-
+sources:
+  main:
+    service:
+      name: studio.wizard.oidc.apply
+      params:
+        discoveryUri: params.discoveryUri
+        clientId: params.clientId
+        redirectUri: params.redirectUri
+        scopes: params.scopes
+        postLoginUrl: params.postLoginUrl
+        provision: params.provision
+        clientSecret: params.clientSecret
+        roles: principal.roles
+        actor: principal.loginId
 response:
   html:
     status: 200

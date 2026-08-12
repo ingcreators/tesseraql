@@ -13,14 +13,15 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.menu.move
-  params:
-    index: params.index
-    dir: params.dir
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  main:
+    service:
+      name: studio.menu.move
+      params:
+        index: params.index
+        dir: params.dir
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/menu?moved=1

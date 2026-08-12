@@ -5,12 +5,13 @@ recipe: command-json
 
 # Clears the caller's own out-of-office rule (roadmap Phase 52). Idempotent.
 
-sql:
-  service: account.delegation.clear
-  params:
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  main:
+    service:
+      name: account.delegation.clear
+      params:
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

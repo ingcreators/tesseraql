@@ -248,9 +248,11 @@ class SlowSqlIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -269,9 +271,11 @@ class SlowSqlIntegrationTest {
                 security:
                   auth: bearer
                   policy: users.read
-                sql:
-                  file: secure.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: secure.sql
+                      mode: query
                 response:
                   json:
                     status: 200

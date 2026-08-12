@@ -25,14 +25,16 @@ input:
 security:
   policy: iam.admin.write
 
-sql:
-  service: identity.invite
-  params:
-    loginId: params.loginId
-    displayName: params.displayName
-    email: params.email
-    tenantId: principal.tenantId
-
+steps:
+  main:
+    sql:
+      service:
+        name: identity.invite
+        params:
+          loginId: params.loginId
+          displayName: params.displayName
+          email: params.email
+          tenantId: principal.tenantId
 response:
   redirect:
     status: 303

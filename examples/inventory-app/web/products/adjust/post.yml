@@ -23,15 +23,16 @@ validate:
     code: insufficient-stock
     message: inventory.adjust.insufficient
 
-sql:
-  file: adjust.sql
-  mode: update
-  params:
-    sku: params.sku
-    delta: params.delta
-
+steps:
+  main:
+    sql:
+      file: adjust.sql
+      mode: update
+      params:
+        sku: params.sku
+        delta: params.delta
 response:
   json:
     status: 200
     body:
-      adjusted: sql.affectedRows
+      adjusted: steps.main.affectedRows

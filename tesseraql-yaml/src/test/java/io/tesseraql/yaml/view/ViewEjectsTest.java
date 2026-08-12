@@ -120,8 +120,10 @@ class ViewEjectsTest {
                 kind: route
                 recipe: query-html
                 security: { auth: browser, policy: help.agent }
-                sql:
-                  file: ../tickets/list.sql
+                sources:
+                  main:
+                    sql:
+                      file: ../tickets/list.sql
                 response:
                   html:
                     view: tickets.overview

@@ -20,12 +20,14 @@ class AppLinterInputTest {
                 kind: route
                 recipe: query-json
                 %s
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(inputBlock));
     }
 
@@ -95,12 +97,14 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      orders: sql.rows
+                      orders: main.rows
                     nest:
                       - into: orders
                         children: ghost
@@ -148,15 +152,17 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                   lines:
-                    file: lines.sql
+                    sql:
+                      file: lines.sql
                 response:
                   json:
                     body:
-                      orders: sql.rows
+                      orders: main.rows
                     nest:
                       - into: orders
                         children: lines
@@ -169,7 +175,8 @@ class AppLinterInputTest {
     void anEnrichmentOverADeclaredResultIsAccepted(@TempDir Path dir) throws Exception {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     merge: [partner_name]""", KEYED_REFERENCE)))).isEmpty();
     }
 
@@ -178,7 +185,8 @@ class AppLinterInputTest {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 into: ghost
                     on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     merge: [partner_name]""", KEYED_REFERENCE)))).contains("TQL-YAML-1045");
     }
 
@@ -186,7 +194,7 @@ class AppLinterInputTest {
     void anEnrichmentComposingNothingIsAnError(@TempDir Path dir) throws Exception {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql: { file: partners.sql }""", KEYED_REFERENCE))))
+                    sql:\n                      file: partners.sql""", KEYED_REFERENCE))))
                 .contains("TQL-YAML-1047");
     }
 
@@ -196,7 +204,8 @@ class AppLinterInputTest {
         // build can see the mistake.
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     merge: [partner_name]""",
                 "select code, name as partner_name from partners\n"))))
                 .contains("TQL-YAML-1048");
@@ -215,15 +224,17 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
                 enrich:
                   partner:
                     %s
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """.formatted(enrichment));
         return dir;
     }
@@ -236,14 +247,16 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                     statusWhen:
-                      - when: "sql.rowCount =="
+                      - when: "main.rowCount =="
                         status: 404
                 """);
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1020");

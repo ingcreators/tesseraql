@@ -28,7 +28,10 @@ class AppLinterPushStepTest {
                   - id: extract
                     export:
                       format: csv
-                      sql: { file: report.sql, mode: query }
+                    sources:
+                      main:
+                      file: report.sql
+                      mode: query
                   - id: deliver
                     push:
                 %s

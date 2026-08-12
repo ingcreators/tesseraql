@@ -6,10 +6,11 @@ recipe: query-html
 security:
   policy: inv.write
 
-sql:
-  file: none.sql
-  mode: query
-
+sources:
+  main:
+    sql:
+      file: none.sql
+      mode: query
 response:
   html:
     status: 200

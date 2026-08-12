@@ -241,9 +241,11 @@ class RouteRecipeIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -266,15 +268,18 @@ class RouteRecipeIntegrationTest {
                   n:
                     type: integer
                     default: 7
-                sql:
-                  file: one.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: one.sql
+                      mode: query
                 queries:
                   second:
-                    file: two.sql
-                    mode: query
-                    params:
-                      n: query.n
+                    sql:
+                      file: two.sql
+                      mode: query
+                      params:
+                        n: query.n
                 response:
                   json:
                     body:
@@ -299,11 +304,13 @@ class RouteRecipeIntegrationTest {
                   n:
                     type: integer
                     default: 5
-                sql:
-                  file: touch.sql
-                  mode: update
-                  params:
-                    n: query.n
+                steps:
+                  main:
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        n: query.n
                 response:
                   redirect:
                     location: /sysapp/multi?n={params.n}

@@ -177,11 +177,13 @@ class DuckDbDatasetIntegrationTest {
                   policy: data.read
                 input:
                   id: { type: string, required: true }
-                sql:
-                  file: report.sql
-                  mode: query
-                  params:
-                    report: query.id
+                sources:
+                  main:
+                    sql:
+                      file: report.sql
+                      mode: query
+                      params:
+                        report: query.id
                 response:
                   json:
                     body:

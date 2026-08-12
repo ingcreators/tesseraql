@@ -17,6 +17,7 @@ fields:
   - name: note
   - name: version
     widget: hidden
+
 slots:
   header: ../frags.html::back-link
   footer: ../frags.html::confirm-delete

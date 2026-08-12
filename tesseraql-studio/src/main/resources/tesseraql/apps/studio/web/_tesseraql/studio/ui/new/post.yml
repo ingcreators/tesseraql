@@ -11,13 +11,14 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.newRoute
-  params:
-    path: params.path
-    recipe: params.recipe
-    roles: principal.roles
-
+steps:
+  main:
+    service:
+      name: studio.newRoute
+      params:
+        path: params.path
+        recipe: params.recipe
+        roles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/source?path={params.path}

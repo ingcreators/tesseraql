@@ -162,11 +162,13 @@ class CrossNodeLiveViewIntegrationTest {
                 security:
                   auth: browser
                   csrf: true
-                sql:
-                  file: approve.sql
-                  mode: update
-                  params:
-                    status: body.status
+                steps:
+                  main:
+                    sql:
+                      file: approve.sql
+                      mode: update
+                      params:
+                        status: body.status
                 response:
                   json:
                     status: 200

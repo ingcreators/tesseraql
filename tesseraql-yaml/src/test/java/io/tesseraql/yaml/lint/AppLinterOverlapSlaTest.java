@@ -25,7 +25,9 @@ class AppLinterOverlapSlaTest {
                 kind: job
                 recipe: batch-tasklet
                 %s
-                sql: { file: close.sql, mode: query }
+                sql:
+                  file: close.sql
+                  mode: query
                 """.formatted(declarations));
         Files.writeString(dir.resolve("batch/nightly/close.sql"), "select 1\n");
         return dir;

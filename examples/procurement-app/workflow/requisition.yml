@@ -6,7 +6,8 @@ kind: workflow
 # submit evaluates it from the document and stamps it, the two approve paths guard on the
 # stamped column, so every lane the decision can produce has exactly one path out.
 document: { type: requisition, table: purchase_requisitions, key: id }
-http: { basePath: /api/requisitions }
+http:
+  basePath: /api/requisitions
 security: { auth: bearer, policy: req.act }
 initial: draft
 states:
@@ -16,6 +17,7 @@ states:
   - { id: approved, type: terminal }
   # Not terminal: a rejected requisition returns to its author for rework.
   - { id: rejected }
+
 transitions:
   - id: submit
     from: draft

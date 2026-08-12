@@ -10,13 +10,6 @@ input:
 security:
   policy: help.read
 
-sql:
-  file: create.sql
-  mode: update
-  params:
-    subject: params.subject
-    priority: params.priority
-
 # The assignment notice rides the command's own transaction via the outbox: at-least-once,
 # asserted by the declarative suite without any SMTP (docs/notifications.md).
 notify:
@@ -26,8 +19,16 @@ notify:
       ticket: body.subject
       priority: body.priority
 
+steps:
+  main:
+    sql:
+      file: create.sql
+      mode: update
+      params:
+        subject: params.subject
+        priority: params.priority
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      created: steps.main.affectedRows

@@ -22,14 +22,16 @@ class AppLinterAmbientPrincipalTest {
                 kind: route
                 recipe: query-json
                 %s
-                sql:
-                  file: search.sql
-                  mode: query
                 %s
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(security, params));
         Files.writeString(dir.resolve("web/api/items/search.sql"), sql);
         return dir;
@@ -77,10 +79,12 @@ class AppLinterAmbientPrincipalTest {
                 recipe: command-json
                 security:
                   auth: bearer
-                sql:
-                  service: account.app.save
-                  params:
-                    subject: principal.subject
+                steps:
+                  main:
+                    service:
+                        name: account.app.save
+                        params:
+                          subject: principal.subject
                 response:
                   json:
                     body:

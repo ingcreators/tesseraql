@@ -2,7 +2,7 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
-import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.Binding;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,9 +17,9 @@ import org.apache.camel.Processor;
  */
 public final class NamedQueryBinder implements Processor {
 
-    private final SqlBinding binding;
+    private final Binding binding;
 
-    public NamedQueryBinder(SqlBinding binding) {
+    public NamedQueryBinder(Binding binding) {
         this.binding = binding;
     }
 

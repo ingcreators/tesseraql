@@ -146,9 +146,11 @@ class DuckDbReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -168,14 +170,17 @@ class DuckDbReadIntegrationTest {
                 id: dashboard.view
                 kind: route
                 recipe: query-json
-                sql:
-                  file: open.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: open.sql
+                      mode: query
                 queries:
                   drops:
-                    file: drops.sql
-                    mode: query
-                    datasource: analytics
+                    sql:
+                      file: drops.sql
+                      mode: query
+                      datasource: analytics
                 response:
                   json:
                     body:
@@ -198,9 +203,11 @@ class DuckDbReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: outside.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: outside.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -217,9 +224,11 @@ class DuckDbReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: ghost.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ghost.sql
+                      mode: query
                 response:
                   json:
                     body:

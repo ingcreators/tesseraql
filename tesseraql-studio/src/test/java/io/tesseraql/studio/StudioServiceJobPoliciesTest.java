@@ -40,7 +40,7 @@ class StudioServiceJobPoliciesTest {
                     dayOfMonth: 5
                 overlap: skip
                 sla: { completeBy: "06:00" }
-                sql: { file: close.sql, mode: update }
+                sql:\n                  file: close.sql\n                  mode: update
                 """);
         Files.writeString(dir.resolve("batch/close/close.sql"), "select 1\n");
         Files.createDirectories(dir.resolve("batch/send"));
@@ -49,7 +49,7 @@ class StudioServiceJobPoliciesTest {
                 id: nightly.send
                 kind: job
                 recipe: batch-tasklet
-                sql: { file: send.sql, mode: update }
+                sql:\n                  file: send.sql\n                  mode: update
                 """);
         Files.writeString(dir.resolve("batch/send/send.sql"), "select 1\n");
         return new StudioService(new ManifestLoader().load(dir), false);

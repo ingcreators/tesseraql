@@ -239,10 +239,11 @@ class TenantDataSourceRoutingIntegrationTest {
                 security:
                   auth: public
 
-                sql:
-                  file: list.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -263,10 +264,11 @@ class TenantDataSourceRoutingIntegrationTest {
                 security:
                   auth: public
 
-                sql:
-                  file: report.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: report.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -292,12 +294,13 @@ class TenantDataSourceRoutingIntegrationTest {
                 input:
                   name: { type: string, required: true, maxLength: 200 }
 
-                sql:
-                  file: insert.sql
-                  mode: update
-                  params:
-                    name: params.name
-
+                steps:
+                  main:
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      params:
+                        name: params.name
                 response:
                   json:
                     status: 201

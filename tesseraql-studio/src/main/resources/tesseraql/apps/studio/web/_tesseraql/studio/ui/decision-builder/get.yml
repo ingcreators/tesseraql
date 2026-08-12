@@ -3,8 +3,10 @@ id: tql.studio.decisionBuilder
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.decisionBuilder
+sources:
+  main:
+    service:
+      name: studio.decisionBuilder
 
 response:
   html:

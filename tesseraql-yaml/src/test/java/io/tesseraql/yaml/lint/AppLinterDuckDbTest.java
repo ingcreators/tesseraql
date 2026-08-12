@@ -35,9 +35,11 @@ class AppLinterDuckDbTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 """);
     }
 
@@ -93,9 +95,11 @@ class AppLinterDuckDbTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                      mode: query
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -257,9 +261,11 @@ class AppLinterDuckDbTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: h.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: h.sql
+                      mode: query
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -307,9 +313,11 @@ class AppLinterDuckDbTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: ok.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ok.sql
+                      mode: query
                 """);
         Path ghost = dir.resolve("web/api/g");
         Files.createDirectories(ghost);
@@ -321,9 +329,11 @@ class AppLinterDuckDbTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: g.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: g.sql
+                      mode: query
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -347,9 +357,11 @@ class AppLinterDuckDbTest {
                 trigger:
                   schedule:
                     cron: "0 0 4 * * ?"
-                sql:
-                  file: load.sql
-                  mode: update
+                sources:
+                  main:
+                    sql:
+                      file: load.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("load.sql"),
                 "insert into t select * from read_parquet(/* ${scope.ghost}/m.parquet */ 'd')\n");
@@ -372,9 +384,11 @@ class AppLinterDuckDbTest {
                 kind: route
                 recipe: command-json
                 datasource: analytics
-                sql:
-                  file: load.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: load.sql
+                      mode: update
                 response:
                   json:
                     status: 201

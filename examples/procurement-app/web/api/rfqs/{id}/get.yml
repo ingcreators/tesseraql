@@ -12,17 +12,18 @@ input:
 security:
   policy: rfq.read
 
-sql:
-  file: rfq.sql
-  mode: query
-  params:
-    id: path.id
-
+sources:
+  main:
+    sql:
+      file: rfq.sql
+      mode: query
+      params:
+        id: path.id
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows
     statusWhen:
-      - when: sql.rowCount == 0
+      - when: main.rowCount == 0
         status: 404

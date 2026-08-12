@@ -20,17 +20,18 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.tryRecord
-  params:
-    method: params.method
-    path: params.path
-    query: params.query
-    body: params.body
-    name: params.name
-    roles: principal.roles
-    actor: principal.loginId
-
+steps:
+  main:
+    service:
+      name: studio.tryRecord
+      params:
+        method: params.method
+        path: params.path
+        query: params.query
+        body: params.body
+        name: params.name
+        roles: principal.roles
+        actor: principal.loginId
 response:
   redirect:
     status: 303

@@ -13,18 +13,19 @@ input:
 security:
   policy: inv.write
 
-sql:
-  file: create.sql
-  mode: update
-  params:
-    sku: params.sku
-    name: params.name
-    category: params.category
-    stock: params.stock
-    reorder_level: params.reorder_level
-
+steps:
+  main:
+    sql:
+      file: create.sql
+      mode: update
+      params:
+        sku: params.sku
+        name: params.name
+        category: params.category
+        stock: params.stock
+        reorder_level: params.reorder_level
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      created: steps.main.affectedRows

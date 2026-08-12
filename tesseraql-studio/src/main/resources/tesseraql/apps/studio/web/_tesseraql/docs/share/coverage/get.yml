@@ -17,12 +17,13 @@ input:
 security:
   auth: public
 
-sql:
-  service: docs.shareCoverage
-  params:
-    exp: query.exp
-    sig: query.sig
-
+sources:
+  main:
+    service:
+      name: docs.shareCoverage
+      params:
+        exp: query.exp
+        sig: query.sig
 response:
   html:
     status: 200

@@ -149,9 +149,11 @@ class SqlServerPortabilityIntegrationTest {
                 id: users.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     body:

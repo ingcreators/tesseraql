@@ -42,22 +42,23 @@ validate:
       excludeId: params.id
     field: name
 
-sql:
-  file: update.sql
-  mode: update
-  expect:
-    rowCount: 1
-    onMismatch: conflict
-  params:
-    id: params.id
-    name: params.name
-    quantity: params.quantity
-    unit_price: params.unit_price
-    due_date: params.due_date
-    active: params.active
-    note: params.note
-    version: params.version
-
+steps:
+  main:
+    sql:
+      file: update.sql
+      mode: update
+      expect:
+        rowCount: 1
+        onMismatch: conflict
+      params:
+        id: params.id
+        name: params.name
+        quantity: params.quantity
+        unit_price: params.unit_price
+        due_date: params.due_date
+        active: params.active
+        note: params.note
+        version: params.version
 response:
   redirect:
     location: /items/{path.id}

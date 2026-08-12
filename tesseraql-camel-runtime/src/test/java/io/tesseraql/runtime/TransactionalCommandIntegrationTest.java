@@ -339,21 +339,24 @@ class TransactionalCommandIntegrationTest {
                   orderNo:
                     sequence: order-number
                   header:
-                    file: insert-order.sql
-                    keys: [id]
-                    params:
-                      orderNo: steps.orderNo.value
-                      customerId: body.customerId
+                    sql:
+                      file: insert-order.sql
+                      keys: [id]
+                      params:
+                        orderNo: steps.orderNo.value
+                        customerId: body.customerId
                   lines:
-                    file: insert-lines.sql
-                    params:
-                      orderId: steps.header.keys.id
-                      lines: body.lines
+                    sql:
+                      file: insert-lines.sql
+                      params:
+                        orderId: steps.header.keys.id
+                        lines: body.lines
                   placed:
-                    file: select-placed.sql
-                    mode: query
-                    params:
-                      orderId: steps.header.keys.id
+                    sql:
+                      file: select-placed.sql
+                      mode: query
+                      params:
+                        orderId: steps.header.keys.id
                 errors:
                   constraints:
                     order_lines_product_fk:
@@ -410,16 +413,18 @@ class TransactionalCommandIntegrationTest {
                 security:
                   auth: bearer
                   policy: users.write
-                sql:
-                  file: update-status.sql
-                  mode: update
-                  expect:
-                    rowCount: 1
-                    onMismatch: conflict
-                  params:
-                    id: body.id
-                    status: body.status
-                    version: body.version
+                sources:
+                  main:
+                    sql:
+                      file: update-status.sql
+                      mode: update
+                      expect:
+                        rowCount: 1
+                        onMismatch: conflict
+                      params:
+                        id: body.id
+                        status: body.status
+                        version: body.version
                 response:
                   json:
                     status: 200

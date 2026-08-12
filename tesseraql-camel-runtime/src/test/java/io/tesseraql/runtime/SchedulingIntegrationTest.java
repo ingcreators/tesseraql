@@ -120,9 +120,11 @@ class SchedulingIntegrationTest {
                     fixedDelay: 1s
                 pipeline:
                   - id: ping
-                    sql:
-                      file: ping.sql
-                      mode: query
+                    sources:
+                      main:
+                        sql:
+                          file: ping.sql
+                          mode: query
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 1\n");
 
@@ -139,9 +141,11 @@ class SchedulingIntegrationTest {
                     cron: "0/1 * * * * ?"
                 pipeline:
                   - id: ping
-                    sql:
-                      file: ping.sql
-                      mode: query
+                    sources:
+                      main:
+                        sql:
+                          file: ping.sql
+                          mode: query
                 """);
         Files.writeString(cronDir.resolve("ping.sql"), "select 1\n");
         return target;

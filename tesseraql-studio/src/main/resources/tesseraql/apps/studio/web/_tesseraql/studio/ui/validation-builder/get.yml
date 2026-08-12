@@ -3,11 +3,12 @@ id: tql.studio.validationBuilder
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.validationBuilder
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.validationBuilder
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200

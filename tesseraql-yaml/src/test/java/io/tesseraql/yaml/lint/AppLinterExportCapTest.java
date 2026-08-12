@@ -31,11 +31,13 @@ class AppLinterExportCapTest {
                 path: /api/items/dump
                 security:
                   auth: public
-                sql:
-                  file: dump.sql
-                  mode: query-export
                 export:
                 %s
+                sources:
+                  main:
+                    sql:
+                      file: dump.sql
+                      mode: query-export
                 """.formatted(exportBody));
         return dir;
     }

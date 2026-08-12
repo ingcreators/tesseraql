@@ -68,8 +68,8 @@ class ManifestLoaderTest {
                 .orElseThrow();
 
         assertThat(search.input()).containsKey("q");
-        assertThat(search.sql().file()).isEqualTo("search.sql");
-        assertThat(search.sql().params()).containsEntry("q", "query.q");
+        assertThat(search.main().file()).isEqualTo("search.sql");
+        assertThat(search.main().params()).containsEntry("q", "query.q");
         assertThat(search.security().auth()).isEqualTo("bearer");
     }
 
@@ -91,9 +91,11 @@ class ManifestLoaderTest {
                 recipe: query-html
                 uri: ui://users/board
                 description: A board of users.
-                sql:
-                  file: board.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: board.sql
+                      mode: query
                 response:
                   html:
                     template: board.html
@@ -111,9 +113,11 @@ class ManifestLoaderTest {
                 recipe: query-json
                 description: Find users.
                 ui: ui://users/board
-                sql:
-                  file: find.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: find.sql
+                      mode: query
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -145,9 +149,11 @@ class ManifestLoaderTest {
                 recipe: query-json
                 description: Find users.
                 uri: data://users
-                sql:
-                  file: find.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: find.sql
+                      mode: query
                 """);
 
         org.assertj.core.api.Assertions

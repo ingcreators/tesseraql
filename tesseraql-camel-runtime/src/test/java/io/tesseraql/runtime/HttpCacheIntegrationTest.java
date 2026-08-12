@@ -139,8 +139,10 @@ class HttpCacheIntegrationTest {
                   maxAge: 30s
                   visibility: public
                   staleWhileRevalidate: 60s
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   json:
                     status: 200

@@ -14,14 +14,15 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.ejectView
-  params:
-    roles: principal.roles
-    path: params.path
-    confirm: params.confirm
-    force: params.force
-
+sources:
+  main:
+    service:
+      name: studio.ejectView
+      params:
+        roles: principal.roles
+        path: params.path
+        confirm: params.confirm
+        force: params.force
 response:
   html:
     status: 200

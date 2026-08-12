@@ -39,17 +39,17 @@ validate:
 
 steps:
   record:
-    file: insert.sql
-    mode: update
-    keys: [id]
-    params:
-      name: params.name
-      quantity: params.quantity
-      unit_price: params.unit_price
-      due_date: params.due_date
-      active: params.active
-      note: params.note
-
+    sql:
+      file: insert.sql
+      mode: update
+      keys: [id]
+      params:
+        name: params.name
+        quantity: params.quantity
+        unit_price: params.unit_price
+        due_date: params.due_date
+        active: params.active
+        note: params.note
 response:
   redirect:
     location: /items/{steps.record.keys.id}

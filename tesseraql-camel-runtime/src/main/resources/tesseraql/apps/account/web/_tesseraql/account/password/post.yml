@@ -19,18 +19,20 @@ input:
     minLength: 8
     maxLength: 256
 
-sql:
-  service: account.password.change
-  params:
-    current: params.current
-    next: params.next
-    loginId: principal.loginId
-    tenantId: principal.tenantId
-    subject: principal.subject
-
 # A password change ends every session of the subject (an attacker's parallel session is
 # evicted; the same posture a password reset takes), so the caller signs in again with the
 # new password rather than staying on a session created under the old one.
+
+steps:
+  main:
+    service:
+      name: account.password.change
+      params:
+        current: params.current
+        next: params.next
+        loginId: principal.loginId
+        tenantId: principal.tenantId
+        subject: principal.subject
 response:
   redirect:
     status: 303

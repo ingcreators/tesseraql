@@ -18,14 +18,15 @@ security:
 # invitation row's scope keeps an uninvited partner from starting anything.
 steps:
   quote:
-    file: start-quote.sql
-    params:
-      rfqId: params.rfqId
+    sql:
+      file: start-quote.sql
+      params:
+        rfqId: params.rfqId
   lines:
-    file: copy-lines.sql
-    params:
-      rfqId: params.rfqId
-
+    sql:
+      file: copy-lines.sql
+      params:
+        rfqId: params.rfqId
 response:
   json:
     status: 201

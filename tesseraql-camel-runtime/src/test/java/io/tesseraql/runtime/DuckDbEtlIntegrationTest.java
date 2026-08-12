@@ -179,13 +179,17 @@ class DuckDbEtlIntegrationTest {
                     cron: "0 0 4 1 1 ? 2099"
                 pipeline:
                   - id: clear
-                    sql:
-                      file: clear-summary.sql
-                      mode: update
+                    sources:
+                      main:
+                        sql:
+                          file: clear-summary.sql
+                          mode: update
                   - id: load
-                    sql:
-                      file: load-summary.sql
-                      mode: update
+                    sources:
+                      main:
+                        sql:
+                          file: load-summary.sql
+                          mode: update
                 """);
         Files.writeString(job.resolve("clear-summary.sql"),
                 "delete from app.sales_summary\n");
@@ -204,9 +208,11 @@ class DuckDbEtlIntegrationTest {
                 trigger:
                   schedule:
                     cron: "0 0 4 1 1 ? 2099"
-                sql:
-                  file: read-only-probe.sql
-                  mode: update
+                sources:
+                  main:
+                    sql:
+                      file: read-only-probe.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("read-only-probe.sql"),
                 "insert into app.sales_summary (category, total) values ('ghost', 1)\n");
@@ -219,9 +225,11 @@ class DuckDbEtlIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: install.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: install.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -237,9 +245,11 @@ class DuckDbEtlIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: joined.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: joined.sql
+                      mode: query
                 response:
                   json:
                     body:

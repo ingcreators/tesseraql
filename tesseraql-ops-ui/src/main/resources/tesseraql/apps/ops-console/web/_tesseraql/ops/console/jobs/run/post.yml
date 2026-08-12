@@ -22,15 +22,17 @@ input:
 inputPolicy:
   unknownFields: ignore
 
-sql:
-  service: ops.jobRun
-  params:
-    id: params.id
-    values: body
-    actor: principal.loginId
-    # Narrows to the caller's ops.app.<name> grants (deny by default).
-    permissions: principal.permissions
-
+steps:
+  main:
+    sql:
+      service:
+        name: ops.jobRun
+        params:
+          id: params.id
+          values: body
+          actor: principal.loginId
+          # Narrows to the caller's ops.app.<name> grants (deny by default).
+          permissions: principal.permissions
 response:
   redirect:
     status: 303

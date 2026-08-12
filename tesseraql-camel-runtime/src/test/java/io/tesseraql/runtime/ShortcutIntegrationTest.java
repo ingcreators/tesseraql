@@ -247,11 +247,13 @@ class ShortcutIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: thing.sql
-                  mode: query
-                  params:
-                    id: path.id
+                sources:
+                  main:
+                    sql:
+                      file: thing.sql
+                      mode: query
+                      params:
+                        id: path.id
                 response:
                   html:
                     status: 200

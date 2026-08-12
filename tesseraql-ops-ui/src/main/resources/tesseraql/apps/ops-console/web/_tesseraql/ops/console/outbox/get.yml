@@ -11,12 +11,14 @@ input:
     type: string
     required: false
 
-sql:
-  service: ops.outbox
-  params:
-    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-    permissions: principal.permissions
-
+sources:
+  main:
+    sql:
+      service:
+        name: ops.outbox
+        params:
+          # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+          permissions: principal.permissions
 response:
   html:
     status: 200

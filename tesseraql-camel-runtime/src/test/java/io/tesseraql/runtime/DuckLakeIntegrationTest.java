@@ -169,9 +169,13 @@ class DuckLakeIntegrationTest {
                     cron: "0 0 4 1 1 ? 2099"
                 pipeline:
                   - id: ensure
-                    sql: { file: ensure-history.sql, mode: update }
+                    sql:
+                      file: ensure-history.sql
+                      mode: update
                   - id: append
-                    sql: { file: append-history.sql, mode: update }
+                    sql:
+                      file: append-history.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("ensure-history.sql"),
                 "create table if not exists lake.price_history"
@@ -193,9 +197,11 @@ class DuckLakeIntegrationTest {
                 trigger:
                   schedule:
                     cron: "0 0 4 1 1 ? 2099"
-                sql:
-                  file: read-only-probe.sql
-                  mode: update
+                sources:
+                  main:
+                    sql:
+                      file: read-only-probe.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("read-only-probe.sql"),
                 "insert into lake.price_history values ('X-0', 1.0, now())\n");
@@ -208,12 +214,15 @@ class DuckLakeIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: current.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: current.sql
+                      mode: query
                 queries:
                   firstRun:
-                    file: first-run.sql
+                    sql:
+                      file: first-run.sql
                 response:
                   json:
                     body:
@@ -235,9 +244,11 @@ class DuckLakeIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: outside.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: outside.sql
+                      mode: query
                 response:
                   json:
                     body:

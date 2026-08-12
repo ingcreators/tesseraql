@@ -6,12 +6,14 @@ recipe: query-html
 security:
   policy: ops.batch.view
 
-sql:
-  service: ops.overview
-  params:
-    # Narrows batch visibility to the caller's ops.app.<name> grants (deny by default).
-    permissions: principal.permissions
-
+sources:
+  main:
+    sql:
+      service:
+        name: ops.overview
+        params:
+          # Narrows batch visibility to the caller's ops.app.<name> grants (deny by default).
+          permissions: principal.permissions
 response:
   html:
     status: 200

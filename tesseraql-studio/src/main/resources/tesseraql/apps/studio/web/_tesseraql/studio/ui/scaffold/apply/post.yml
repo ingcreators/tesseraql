@@ -11,14 +11,15 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.scaffold.apply
-  params:
-    table: params.table
-    force: params.force
-    actor: principal.loginId
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.scaffold.apply
+      params:
+        table: params.table
+        force: params.force
+        actor: principal.loginId
+        roles: principal.roles
 response:
   html:
     status: 200

@@ -37,7 +37,7 @@ class AppLinterExportStepTest {
     @Test
     void aWellFormedExportStepIsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      format: csv\n      sql: { file: report.sql, mode: query }"));
+                "      format: csv\n      sql:\n        file: report.sql\n        mode: query"));
 
         assertThat(findings).noneMatch(finding -> "TQL-YAML-1041".equals(finding.code())
                 || "TQL-FIELD-2004".equals(finding.code()));
@@ -52,7 +52,7 @@ class AppLinterExportStepTest {
         });
 
         findings = new AppLinter().lint(app(dir,
-                "      sql: { file: report.sql, mode: query }"));
+                "      sql:\n        file: report.sql\n        mode: query"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
             assertThat(finding.message()).contains("format:");
@@ -63,7 +63,7 @@ class AppLinterExportStepTest {
     void anExportStepCannotPickItsOwnDatasource(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      format: csv\n"
-                        + "      sql: { file: report.sql, mode: query, datasource: reporting }"));
+                        + "      sql:\n        file: report.sql\n        mode: query\n        datasource: reporting"));
 
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1037");
@@ -74,9 +74,9 @@ class AppLinterExportStepTest {
     @Test
     void aDownloadTimedFollowUpIsRouteVocabulary(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      format: csv\n      sql: { file: report.sql, mode: query }\n"
+                "      format: csv\n      sql:\n        file: report.sql\n        mode: query\n"
                         + "      after:\n        timing: download\n"
-                        + "        sql: { file: report.sql, mode: update }"));
+                        + "        sql:\n          file: report.sql\n          mode: update"));
 
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
@@ -96,10 +96,15 @@ class AppLinterExportStepTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: report
-                    sql: { file: report.sql, mode: query }
+                    sql:
+                      file: report.sql
+                      mode: query
                     export:
                       format: csv
-                      sql: { file: report.sql, mode: query }
+                    sources:
+                      main:
+                      file: report.sql
+                      mode: query
                 """);
         Files.writeString(dir.resolve("batch/report/report.sql"), "select 1 as one\n");
 

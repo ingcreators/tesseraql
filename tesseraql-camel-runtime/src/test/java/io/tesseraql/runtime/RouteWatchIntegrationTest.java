@@ -186,9 +186,11 @@ class RouteWatchIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: %s.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: %s.sql
+                      mode: query
                 response:
                   json:
                     body:

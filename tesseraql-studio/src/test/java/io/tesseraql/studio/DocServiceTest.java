@@ -421,8 +421,10 @@ class DocServiceTest {
                 id: 受注管理.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 """);
         DocService service = new DocService(new ManifestLoader().load(dir));
 

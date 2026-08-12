@@ -14,5 +14,6 @@ columns:
     link: /users/board/{name}
   - name: status
     label: Status
+
 slots:
   header: board-frags.html::backLink

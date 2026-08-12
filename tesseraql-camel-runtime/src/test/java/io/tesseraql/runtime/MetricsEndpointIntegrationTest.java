@@ -186,9 +186,11 @@ class MetricsEndpointIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -228,7 +230,9 @@ class MetricsEndpointIntegrationTest {
                 id: metrics.tick
                 kind: job
                 recipe: batch-tasklet
-                sql: { file: tick.sql, mode: query }
+                sql:
+                  file: tick.sql
+                  mode: query
                 """);
         Files.writeString(tickDir.resolve("tick.sql"), "select 1 as one\n");
         return target;

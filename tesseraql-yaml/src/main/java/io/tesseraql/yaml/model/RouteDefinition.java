@@ -16,11 +16,11 @@ import java.util.Map;
  * @param recipe  the recipe driving compilation, e.g. {@code query-json} (design ch. 6.2)
  * @param input   declared, whitelisted inputs keyed by name
  * @param security authentication and authorization declaration
- * @param sql     SQL execution binding
  * @param steps   ordered SQL steps of a {@code command-json} route, executed in one transaction;
  *                later steps can bind values produced by earlier ones (roadmap Phase 18)
- * @param queries additional named queries executed after {@code sql}, each bound into the
- *                execution context under its own name so one page can render several result sets
+ * @param sources every named read acquisition, in authored order, each bound into the
+ *                execution context under its own name so one page can compose several results;
+ *                an entry names its own mechanism (docs/unified-sources.md)
  * @param validate declarative validation rules of a command, keyed by rule id and evaluated in
  *                their authored order before the command's steps (roadmap Phase 19)
  * @param decide  decision-table references of a command (docs/decision-tables.md), keyed by
@@ -54,9 +54,11 @@ public record RouteDefinition(
         IdempotencySpec idempotency,
         AdmissionSpec admission,
         OutboxSpec outbox,
-        SqlBinding sql,
-        Map<String, SqlBinding> steps,
-        Map<String, SqlBinding> queries,
+        Map<String, Binding> steps,
+        // Every named read acquisition: one map, whatever mechanism each entry names
+        // (docs/unified-sources.md). Replaced queries: plus a parallel http: map, which made
+        // the map the discriminator instead of the entry's own arm.
+        Map<String, Binding> sources,
         Map<String, ValidationRule> validate,
         // Named decision-table references evaluated once per operation before validate: rules,
         // published under decision.* (docs/decision-tables.md).
@@ -72,8 +74,6 @@ public record RouteDefinition(
         ResponseSpec response,
         PageSpec pagination,
         String datasource,
-        // Named http: sources composed with SQL results on query routes (docs/connectors.md).
-        Map<String, HttpSourceSpec> http,
         // Reference lookups folded into a result set's rows, keyed by the rows themselves
         // (docs/lookups.md).
         Map<String, EnrichSpec> enrich,
@@ -88,13 +88,13 @@ public record RouteDefinition(
 
     public RouteDefinition {
         input = input == null ? Map.of() : Map.copyOf(input);
-        // Insertion-ordered so command steps and named queries execute in their authored order.
+        // Insertion-ordered so command steps and named sources run in their authored order.
         steps = steps == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(steps));
-        queries = queries == null
+        sources = sources == null
                 ? Map.of()
-                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(queries));
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(sources));
         validate = validate == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(validate));
@@ -107,12 +107,25 @@ public record RouteDefinition(
                         .unmodifiableMap(new java.util.LinkedHashMap<>(notifications));
         emit = emit == null ? List.of() : List.copyOf(emit);
         invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
-        http = http == null
-                ? Map.of()
-                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(http));
         enrich = enrich == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(enrich));
+    }
+
+    /**
+     * A route the framework synthesizes rather than an author writing it: a workflow
+     * transition, a dispatch selector, a delegate. Named because the alternative is a
+     * positional call listing two dozen nulls, which says nothing about which of them matter
+     * and breaks on every model change — this one names the five that do.
+     */
+    public static RouteDefinition synthesizedCommand(String id, SecuritySpec security,
+            Binding command, Map<String, DecisionUse> decide, ResponseSpec response) {
+        return new RouteDefinition("tesseraql/v1", id, "route", "command-json", Map.of(), null,
+                security, null, null, null,
+                command == null ? Map.of() : Map.of("command", command),
+                Map.of(), Map.of(), decide, Map.of(),
+                null, null, null, null, null, null, response, null, null, null, null, null,
+                null);
     }
 
     /**
@@ -125,10 +138,10 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, effective,
-                idempotency, admission, outbox, sql, steps, queries, validate, decide,
+                idempotency, admission, outbox, steps, sources, validate, decide,
                 notifications,
                 errors, fileImport, fileExport, webhook, publish, consume, response, pagination,
-                datasource, http, enrich, cache, emit, invalidates);
+                datasource, enrich, cache, emit, invalidates);
     }
 
     /**
@@ -142,9 +155,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
-                security, idempotency, admission, outbox, sql, steps, queries, validate, decide,
+                security, idempotency, admission, outbox, steps, sources, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, enrich, cache, emit, invalidates);
+                response, pagination, datasource, enrich, cache, emit, invalidates);
     }
 
     /**
@@ -156,9 +169,9 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
-                idempotency, admission, outbox, sql, steps, queries, effective, decide,
+                idempotency, admission, outbox, steps, sources, effective, decide,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, enrich, cache, emit, invalidates);
+                response, pagination, datasource, enrich, cache, emit, invalidates);
     }
 
     /**
@@ -171,14 +184,31 @@ public record RouteDefinition(
             return this;
         }
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
-                idempotency, admission, outbox, sql, steps, queries, validate, effective,
+                idempotency, admission, outbox, steps, sources, validate, effective,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, http, enrich, cache, emit, invalidates);
+                response, pagination, datasource, enrich, cache, emit, invalidates);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
     public InputPolicy effectiveInputPolicy() {
         return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;
+    }
+
+    /** The reserved source name every default resolves to (docs/unified-sources.md). */
+    public static final String MAIN = "main";
+
+    /**
+     * The primary source, or {@code null} when the document declares none.
+     *
+     * <p>A naming convention, not a slot: {@code main} is the source an omitted
+     * {@code response.json.body}, a list view's omitted {@code source:}, a {@code pagination:}
+     * target and an export's extraction resolve to. A document that uses none of those
+     * defaults needs no {@code main} — a form page, a command, a dashboard naming three equal
+     * sources — and the features that do require one say so themselves, each with a lint that
+     * names the feature rather than the slot.
+     */
+    public Binding main() {
+        return sources.get(MAIN);
     }
 
     /** The connector the route's SQL runs on: the declared {@code datasource:}, else {@code main}. */

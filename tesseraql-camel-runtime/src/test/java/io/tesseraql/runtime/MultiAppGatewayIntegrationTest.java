@@ -427,9 +427,11 @@ class MultiAppGatewayIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200

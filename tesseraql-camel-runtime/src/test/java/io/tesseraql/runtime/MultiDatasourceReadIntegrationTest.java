@@ -144,9 +144,11 @@ class MultiDatasourceReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: reporting
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -162,14 +164,17 @@ class MultiDatasourceReadIntegrationTest {
                 id: dashboard.view
                 kind: route
                 recipe: query-json
-                sql:
-                  file: open.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: open.sql
+                      mode: query
                 queries:
                   turnover:
-                    file: turnover.sql
-                    mode: query
-                    datasource: reporting
+                    sql:
+                      file: turnover.sql
+                      mode: query
+                      datasource: reporting
                 response:
                   json:
                     body:

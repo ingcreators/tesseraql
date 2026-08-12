@@ -33,24 +33,27 @@ class CommandStepsParsingTest {
                   orderNo:
                     sequence: order-number
                   header:
-                    file: insert-order.sql
-                    mode: update
-                    keys: [id]
-                    params:
-                      orderNo: steps.orderNo.value
-                      customerId: body.customerId
+                    sql:
+                      file: insert-order.sql
+                      mode: update
+                      keys: [id]
+                      params:
+                        orderNo: steps.orderNo.value
+                        customerId: body.customerId
                   lines:
-                    file: insert-lines.sql
-                    mode: update
-                    params:
-                      orderId: steps.header.keys.id
-                      lines: body.lines
+                    sql:
+                      file: insert-lines.sql
+                      mode: update
+                      params:
+                        orderId: steps.header.keys.id
+                        lines: body.lines
                   bump:
-                    file: bump-version.sql
-                    mode: update
-                    expect:
-                      rowCount: 1
-                      onMismatch: conflict
+                    sql:
+                      file: bump-version.sql
+                      mode: update
+                      expect:
+                        rowCount: 1
+                        onMismatch: conflict
                 errors:
                   constraints:
                     orders_customer_fk:
@@ -98,23 +101,28 @@ class CommandStepsParsingTest {
                 id: orders.update
                 kind: route
                 recipe: command-json
-                sql:
-                  file: update-order.sql
-                  mode: update
-                  expect:
-                    rowCount: 1
+                steps:
+                  main:
+                    sql:
+                      file: update-order.sql
+                      mode: update
+                      expect:
+                        rowCount: 1
                 response:
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
         RouteDefinition route = manifest.routes().get(0).definition();
 
-        assertThat(route.steps()).isEmpty();
-        assertThat(route.sql().expect().rowCount()).isEqualTo(1);
-        assertThat(route.sql().expect().effectiveOnMismatch()).isEqualTo("conflict");
+        // A single-statement command is a one-entry pipeline (docs/unified-sources.md,
+        // decision 8): one spelling for the write side, whatever the statement count.
+        assertThat(route.steps()).containsOnlyKeys("main");
+        assertThat(route.steps().get("main").expect().rowCount()).isEqualTo(1);
+        assertThat(route.steps().get("main").expect().effectiveOnMismatch())
+                .isEqualTo("conflict");
     }
 }

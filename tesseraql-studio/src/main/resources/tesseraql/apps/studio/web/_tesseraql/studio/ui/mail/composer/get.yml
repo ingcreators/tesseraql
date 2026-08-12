@@ -14,12 +14,13 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.mailComposer
-  params:
-    roles: principal.roles
-    path: query.path
-
+sources:
+  main:
+    service:
+      name: studio.mailComposer
+      params:
+        roles: principal.roles
+        path: query.path
 response:
   html:
     status: 200

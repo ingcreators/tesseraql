@@ -885,12 +885,12 @@ public final class TestRunner {
                 calls.add(Map.entry(step.id(), spec));
             }
         } else {
-            // A query route's http: sources plan the same way a job's steps do
+            // A route source whose arm is an outbound call plans the same way a job's step does
             // (docs/connectors.md, "HTTP sources") — url, host, and the allow-list verdict.
             RouteFile route = route(target.route());
-            route.definition().http().forEach((name, source) -> {
-                if (target.id() == null || target.id().equals(name)) {
-                    calls.add(Map.entry(name, source.call()));
+            route.definition().sources().forEach((name, binding) -> {
+                if (binding.isHttp() && (target.id() == null || target.id().equals(name))) {
+                    calls.add(Map.entry(name, binding.http().call()));
                 }
             });
         }

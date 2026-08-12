@@ -6,12 +6,14 @@ recipe: command-json
 # Captures both diff baselines in one action (docs/studio-schema-lifecycle.md):
 # schema.baseline.json copies the schema sidecar, openapi.baseline.json persists the
 # live OpenAPI document. Replaces the hand-copy instructions this page used to print.
-sql:
-  service: studio.baselineCapture
-  params:
-    actor: principal.loginId
-    roles: principal.roles
 
+steps:
+  main:
+    service:
+      name: studio.baselineCapture
+      params:
+        actor: principal.loginId
+        roles: principal.roles
 response:
   redirect:
     status: 303

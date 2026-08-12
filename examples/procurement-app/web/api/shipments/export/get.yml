@@ -6,11 +6,13 @@ recipe: query-export
 security:
   policy: rfq.read
 
-sql:
-  file: export.sql
-
 # Synchronous CSV download through the shared file codec (docs/file-transfers.md);
 # the optional EDI slice moves exactly this shape over SFTP instead.
 export:
   format: csv
   filename: shipments.csv
+
+sources:
+  main:
+    sql:
+      file: export.sql

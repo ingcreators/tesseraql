@@ -44,8 +44,10 @@ class OpenApiGeneratorTest {
                         id: orders.detail
                         kind: route
                         recipe: query-json
-                        sql:
-                          file: detail.sql
+                        sources:
+                          main:
+                            sql:
+                              file: detail.sql
                         """, "detail"));
         AppManifest manifest = new AppManifest(home,
                 new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
@@ -88,8 +90,10 @@ class OpenApiGeneratorTest {
                         id: orders.list
                         kind: route
                         recipe: query-json
-                        sql:
-                          file: list.sql
+                        sources:
+                          main:
+                            sql:
+                              file: list.sql
                         """, "list"));
         java.util.Map<String, Object> config = basePath == null
                 ? java.util.Map.of()
@@ -161,8 +165,9 @@ class OpenApiGeneratorTest {
                         export:
                           format: excel
                           filename: items.xlsx
-                          sql:
-                            file: select.sql
+                        sources:
+                          main:
+                          file: select.sql
                         """, "export"));
         var commandRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items",
                 home.resolve("web/api/items/post.yml"), parser.parseRoute("""
@@ -174,9 +179,11 @@ class OpenApiGeneratorTest {
                           name:
                             type: string
                             required: true
-                        sql:
-                          file: insert.sql
-                          mode: update
+                        steps:
+                          main:
+                            sql:
+                              file: insert.sql
+                              mode: update
                         """, "command"));
         AppManifest manifest = new AppManifest(home,
                 new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),

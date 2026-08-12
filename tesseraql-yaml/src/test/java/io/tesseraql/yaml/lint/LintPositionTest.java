@@ -30,12 +30,14 @@ class LintPositionTest {
                   q:
                     type: string
                     pattern: "["
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -55,13 +57,15 @@ class LintPositionTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
-                  timeoutSeconds: -1
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
+                      timeoutSeconds: -1
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         assertThat(new AppLinter().lint(dir))
                 .anySatisfy(f -> {

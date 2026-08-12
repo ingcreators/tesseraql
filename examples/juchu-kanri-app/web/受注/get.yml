@@ -12,16 +12,17 @@ input:
 security:
   policy: juchu.read
 
-sql:
-  file: 受注一覧.sql
-  mode: query
-  params:
-    顧客名: query.顧客名
-
+sources:
+  main:
+    sql:
+      file: 受注一覧.sql
+      mode: query
+      params:
+        顧客名: query.顧客名
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows
       meta:
-        count: sql.rowCount
+        count: main.rowCount

@@ -38,21 +38,22 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.migration.build
-  params:
-    operation: params.operation
-    table: params.table
-    column: params.column
-    type: params.type
-    default: params.default
-    notNull: params.notNull
-    columns: params.columns
-    name: params.name
-    unique: params.unique
-    columnLines: params.columnLines
-    primaryKey: params.primaryKey
-
+sources:
+  main:
+    service:
+      name: studio.migration.build
+      params:
+        operation: params.operation
+        table: params.table
+        column: params.column
+        type: params.type
+        default: params.default
+        notNull: params.notNull
+        columns: params.columns
+        name: params.name
+        unique: params.unique
+        columnLines: params.columnLines
+        primaryKey: params.primaryKey
 response:
   html:
     status: 200

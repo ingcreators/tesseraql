@@ -31,11 +31,13 @@ class WebhookRouteParsingTest {
                   eventId:
                     type: string
                     required: true
-                sql:
-                  file: insert-event.sql
-                  mode: update
-                  params:
-                    eventId: body.eventId
+                steps:
+                  main:
+                    sql:
+                      file: insert-event.sql
+                      mode: update
+                      params:
+                        eventId: body.eventId
                 response:
                   json:
                     status: 202
@@ -47,6 +49,6 @@ class WebhookRouteParsingTest {
         assertThat(route.recipe()).isEqualTo("webhook");
         assertThat(route.webhook()).isNotNull();
         assertThat(route.webhook().provider()).isEqualTo("partner");
-        assertThat(route.sql().file()).isEqualTo("insert-event.sql");
+        assertThat(route.steps().get("main").file()).isEqualTo("insert-event.sql");
     }
 }

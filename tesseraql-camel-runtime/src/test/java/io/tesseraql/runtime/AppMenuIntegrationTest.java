@@ -277,7 +277,6 @@ class AppMenuIntegrationTest {
                     sql:
                       file: flag-gate.sql
                       mode: update
-
                     response:
                       json:
                         body:

@@ -13,13 +13,14 @@ input:
     required: true
     maxLength: 6
 
-sql:
-  service: account.totp.confirm
-  params:
-    code: params.code
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  main:
+    service:
+      name: account.totp.confirm
+      params:
+        code: params.code
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   # Confirming enrollment elevates the session (a stronger factor), so the session id
   # rotates in place - the pre-elevation id stops working the moment this succeeds

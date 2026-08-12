@@ -276,10 +276,11 @@ class NotificationIntegrationTest {
                   outbox:
                     dispatch:
                       maxAttempts: 2
-                  http:
+                  sources:
                     outbound:
-                      allowedHosts:
-                        - localhost
+                      http:
+                        allowedHosts:
+                          - localhost
                 """;
         Files.writeString(config, yaml);
 
@@ -298,9 +299,11 @@ class NotificationIntegrationTest {
                 id: user.broken
                 kind: job
                 recipe: batch-tasklet
-                sql:
-                  file: broken.sql
-                  mode: update
+                sources:
+                  main:
+                    sql:
+                      file: broken.sql
+                      mode: update
                 """);
         Files.writeString(broken.resolve("broken.sql"),
                 "update no_such_table set x = 1\n");

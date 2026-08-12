@@ -7,7 +7,8 @@ kind: workflow
 # else waits for the procurement head. Both lanes leave through `issued`, so the
 # enum lint proves nothing the decision can produce is unhandled.
 document: { type: order, table: orders, key: id }
-http: { basePath: /api/orders }
+http:
+  basePath: /api/orders
 security: { auth: bearer, policy: rfq.act }
 initial: draft
 states:
@@ -19,6 +20,7 @@ states:
   - { id: shipped }
   - { id: received, type: terminal }
   - { id: rejected }
+
 transitions:
   - id: submit
     from: draft

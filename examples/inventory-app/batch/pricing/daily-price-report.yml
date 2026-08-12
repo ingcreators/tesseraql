@@ -12,10 +12,14 @@ trigger:
 
 pipeline:
   - id: report
+    # The step's own arm reads; export: only says how the rows are written
+    # (docs/unified-sources.md, decision 7).
+    sql:
+      file: price-report.sql
+      mode: query
     export:
       format: csv
       filename: price-summary-{batch.businessDate}.csv
-      sql: { file: price-report.sql, mode: query }
       columns:
         - { name: sku, label: SKU }
         - { name: best_price, label: Best price }

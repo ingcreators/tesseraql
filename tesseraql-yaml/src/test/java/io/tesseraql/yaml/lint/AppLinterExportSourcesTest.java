@@ -32,9 +32,11 @@ class AppLinterExportSourcesTest {
                 path: /api/orders/print
                 security:
                   auth: public
-                sql:
-                  file: lines.sql
-                  mode: query-export
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
+                      mode: query-export
                 %s
                 """.formatted(routeBody));
         return dir;
@@ -45,8 +47,8 @@ class AppLinterExportSourcesTest {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """
                 export:
                   format: csv
-                  queries:
-                    header:
+                  header:
+                    sql:
                       file: header.sql
                 """));
 
@@ -64,8 +66,8 @@ class AppLinterExportSourcesTest {
                   format: pdf
                   template: order.html
                   maxRows: 100
-                  queries:
-                    header:
+                  header:
+                    sql:
                       file: header.sql
                 """)))
                 .noneMatch(finding -> "TQL-LD-5312".equals(finding.code()));
@@ -107,10 +109,10 @@ class AppLinterExportSourcesTest {
     @Test
     void anHttpSourceDegradingToEmptyIsRefusedOnAnExport(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """
-                http:
                   rates:
-                    url: https://partner.example/rates
-                    onError: empty
+                    http:
+                      url: https://partner.example/rates
+                      onError: empty
                 export:
                   format: pdf
                   template: order.html
@@ -127,9 +129,9 @@ class AppLinterExportSourcesTest {
     @Test
     void anHttpSourceThatFailsLoudlyIsAccepted(@TempDir Path dir) throws Exception {
         assertThat(new AppLinter().lint(app(dir, """
-                http:
                   rates:
-                    url: https://partner.example/rates
+                    http:
+                      url: https://partner.example/rates
                 export:
                   format: pdf
                   template: order.html

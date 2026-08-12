@@ -35,12 +35,14 @@ class AppLinterFieldDomainsTest {
                 input:
                   sku:
                 %s
-                sql:
-                  file: search.sql
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(skuInput));
         Files.writeString(dir.resolve("web/api/items/search.sql"), "select 1\n");
         return dir;

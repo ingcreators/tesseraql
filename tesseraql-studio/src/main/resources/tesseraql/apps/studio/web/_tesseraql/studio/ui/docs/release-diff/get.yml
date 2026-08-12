@@ -8,11 +8,12 @@ input:
     type: string
     required: false
 
-sql:
-  service: docs.releaseDiff
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: docs.releaseDiff
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200

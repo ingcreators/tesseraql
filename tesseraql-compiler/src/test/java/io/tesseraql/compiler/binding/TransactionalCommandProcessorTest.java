@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ValidationRule;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,7 +26,7 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsStepReferencingALaterStep() throws Exception {
-        Map<String, SqlBinding> steps = new LinkedHashMap<>();
+        Map<String, Binding> steps = new LinkedHashMap<>();
         steps.put("lines", step(sql("lines.sql"), Map.of("orderId", "steps.header.keys.id")));
         steps.put("header", step(sql("header.sql"), Map.of()));
 
@@ -38,8 +38,9 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsStepWithBothFileAndSequence() {
-        Map<String, SqlBinding> steps = Map.of("orderNo",
-                new SqlBinding("a.sql", null, null, null, null, null, "order-number", null, null));
+        Map<String, Binding> steps = Map.of("orderNo",
+                new Binding("a.sql", null, null, null, null, null, null, "order-number", null,
+                        null, null, null, null));
 
         assertThatThrownBy(() -> processor(null, steps))
                 .isInstanceOf(TqlException.class)
@@ -48,7 +49,7 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsReservedAuditBindName() throws Exception {
-        Map<String, SqlBinding> steps = Map.of("header",
+        Map<String, Binding> steps = Map.of("header",
                 step(sql("header.sql"), Map.of("audit", "body.user")));
 
         assertThatThrownBy(() -> processor(null, steps))
@@ -58,8 +59,9 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsInvalidOnMismatch() throws Exception {
-        Map<String, SqlBinding> steps = Map.of("header", new SqlBinding(sql("header.sql"), null,
-                "update", null, null, null, null, null, new SqlBinding.Expect(1, "explode")));
+        Map<String, Binding> steps = Map.of("header", new Binding(sql("header.sql"), null,
+                "update", null, null, null, null, null, null, new Binding.Expect(1, "explode"),
+                null, null, null));
 
         assertThatThrownBy(() -> processor(null, steps))
                 .isInstanceOf(TqlException.class)
@@ -68,8 +70,9 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsExpectWithoutRows() throws Exception {
-        Map<String, SqlBinding> steps = Map.of("header", new SqlBinding(sql("header.sql"), null,
-                "update", null, null, null, null, null, new SqlBinding.Expect(null, "conflict")));
+        Map<String, Binding> steps = Map.of("header", new Binding(sql("header.sql"), null,
+                "update", null, null, null, null, null, null,
+                new Binding.Expect(null, "conflict"), null, null, null));
 
         assertThatThrownBy(() -> processor(null, steps))
                 .isInstanceOf(TqlException.class)
@@ -78,8 +81,9 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsContractBindingInsideSteps() {
-        Map<String, SqlBinding> steps = Map.of("header", new SqlBinding(null,
-                "identity.create-user", null, null, null, null, null, null, null));
+        Map<String, Binding> steps = Map.of("header", new Binding(null,
+                "identity.create-user", null, null, null, null, null, null, null, null, null,
+                null, null));
 
         assertThatThrownBy(() -> processor(null, steps))
                 .isInstanceOf(TqlException.class)
@@ -88,8 +92,8 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsKeysOnASequenceStep() {
-        Map<String, SqlBinding> steps = Map.of("orderNo", new SqlBinding(null, null, null, null,
-                null, null, "order-number", List.of("id"), null));
+        Map<String, Binding> steps = Map.of("orderNo", new Binding(null, null, null, null,
+                null, null, null, "order-number", List.of("id"), null, null, null, null));
 
         assertThatThrownBy(() -> processor(null, steps))
                 .isInstanceOf(TqlException.class)
@@ -98,8 +102,9 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsExpectOnAQueryModeStep() throws Exception {
-        Map<String, SqlBinding> steps = Map.of("check", new SqlBinding(sql("check.sql"), null,
-                "query", null, null, null, null, null, new SqlBinding.Expect(1, null)));
+        Map<String, Binding> steps = Map.of("check", new Binding(sql("check.sql"), null,
+                "query", null, null, null, null, null, null, new Binding.Expect(1, null), null,
+                null, null));
 
         assertThatThrownBy(() -> processor(null, steps))
                 .isInstanceOf(TqlException.class)
@@ -108,8 +113,8 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void rejectsBothSqlAndSteps() throws Exception {
-        SqlBinding sql = step(sql("single.sql"), Map.of());
-        Map<String, SqlBinding> steps = Map.of("header", step(sql("header.sql"), Map.of()));
+        Binding sql = step(sql("single.sql"), Map.of());
+        Map<String, Binding> steps = Map.of("header", step(sql("header.sql"), Map.of()));
 
         assertThatThrownBy(() -> processor(sql, steps))
                 .isInstanceOf(TqlException.class)
@@ -165,9 +170,8 @@ class TransactionalCommandProcessorTest {
 
     @Test
     void acceptsOrderedStepsBindingEarlierResults() throws Exception {
-        Map<String, SqlBinding> steps = new LinkedHashMap<>();
-        steps.put("orderNo", new SqlBinding(null, null, null, null, null, null,
-                "order-number", null, null));
+        Map<String, Binding> steps = new LinkedHashMap<>();
+        steps.put("orderNo", Binding.sequence("order-number"));
         steps.put("header", step(sql("header.sql"), Map.of("no", "steps.orderNo.value")));
         steps.put("lines", step(sql("lines.sql"), Map.of("orderId", "steps.header.keys.id")));
 
@@ -201,14 +205,14 @@ class TransactionalCommandProcessorTest {
      */
     @Test
     void aStepAcceptsAWhenGuardAndTheSingleStatementFormRejectsIt() throws Exception {
-        Map<String, SqlBinding> steps = new java.util.LinkedHashMap<>();
-        steps.put("approve", new SqlBinding(sql("approve.sql"), null, "update", Map.of(), null,
-                null, null, java.util.List.of(), null, null, null,
+        Map<String, Binding> steps = new java.util.LinkedHashMap<>();
+        steps.put("approve", new Binding(sql("approve.sql"), null, "update", Map.of(), null,
+                null, null, null, java.util.List.of(), null, null, null,
                 "decision.approvalRoute.level == 1"));
         assertThat(processor(null, steps)).isNotNull();
 
-        SqlBinding guarded = new SqlBinding(sql("single.sql"), null, "update", Map.of(), null,
-                null, null, java.util.List.of(), null, null, null, "params.qty > 0");
+        Binding guarded = new Binding(sql("single.sql"), null, "update", Map.of(), null,
+                null, null, null, java.util.List.of(), null, null, null, "params.qty > 0");
         assertThatThrownBy(() -> processor(guarded, Map.of()))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("when:");
@@ -218,19 +222,19 @@ class TransactionalCommandProcessorTest {
     private static final TransactionalCommandProcessor.Bounds UNBOUNDED = new TransactionalCommandProcessor.Bounds(
             0, -1, "fail");
 
-    private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps) {
+    private TransactionalCommandProcessor processor(Binding sql, Map<String, Binding> steps) {
         return processor(sql, steps, Map.of());
     }
 
-    private TransactionalCommandProcessor processor(SqlBinding sql, Map<String, SqlBinding> steps,
+    private TransactionalCommandProcessor processor(Binding sql, Map<String, Binding> steps,
             Map<String, ValidationRule> validate) {
         return new TransactionalCommandProcessor("orders.create", sql, steps, validate, Map.of(),
                 Map.of(), file -> dir.resolve(file), "main", "postgres", null, null, null,
                 "orders", UNBOUNDED);
     }
 
-    private static SqlBinding step(String file, Map<String, String> params) {
-        return new SqlBinding(file, null, "update", params, null, null, null, null, null);
+    private static Binding step(String file, Map<String, String> params) {
+        return Binding.sql(file, "update", params);
     }
 
     private String sql(String name) throws Exception {

@@ -8,13 +8,14 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.migration.migrate
-  params:
-    confirm: params.confirm
-    actor: principal.loginId
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.migration.migrate
+      params:
+        confirm: params.confirm
+        actor: principal.loginId
+        roles: principal.roles
 response:
   html:
     status: 200

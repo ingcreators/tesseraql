@@ -6,14 +6,15 @@ recipe: query-json
 security:
   policy: juchu.read
 
-sql:
-  file: 明細.sql
-  mode: query
-  params:
-    受注番号: path.受注番号
-
+sources:
+  main:
+    sql:
+      file: 明細.sql
+      mode: query
+      params:
+        受注番号: path.受注番号
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows

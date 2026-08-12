@@ -46,21 +46,22 @@ validate:
 
 steps:
   header:
-    file: create.sql
-    keys: [id]
-    params:
-      title: params.title
-      department: params.department
-      category: params.category
-      amount: params.amount
-      budgetLabel: params.budgetLabel
-      internalEstimate: params.internalEstimate
+    sql:
+      file: create.sql
+      keys: [id]
+      params:
+        title: params.title
+        department: params.department
+        category: params.category
+        amount: params.amount
+        budgetLabel: params.budgetLabel
+        internalEstimate: params.internalEstimate
   lines:
-    file: create-lines.sql
-    params:
-      requisitionId: steps.header.keys.id
-      lines: params.lines
-
+    sql:
+      file: create-lines.sql
+      params:
+        requisitionId: steps.header.keys.id
+        lines: params.lines
 response:
   json:
     status: 201

@@ -16,14 +16,15 @@ input:
     type: boolean
     required: false
 
-sql:
-  service: account.notify.save
-  params:
-    channel: params.channel
-    optOut: params.optOut
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  main:
+    service:
+      name: account.notify.save
+      params:
+        channel: params.channel
+        optOut: params.optOut
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

@@ -28,5 +28,6 @@ panels:
         label: Name
       - name: status
         label: Status
+
 slots:
   header: board-frags.html::backLink

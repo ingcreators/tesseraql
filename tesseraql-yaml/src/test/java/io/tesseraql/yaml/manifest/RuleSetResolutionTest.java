@@ -51,7 +51,8 @@ class RuleSetResolutionTest {
                 %s
                 steps:
                   adjust:
-                    file: adjust.sql
+                    sql:
+                      file: adjust.sql
                 response:
                   json:
                     body:
@@ -201,8 +202,10 @@ class RuleSetResolutionTest {
                 input:
                   sku: { type: string, required: true }
                 %s
-                sql:
-                  file: apply.sql
+                steps:
+                  main:
+                    sql:
+                      file: apply.sql
                 """.formatted(validate));
         Files.writeString(home.resolve("consume/products/apply.sql"), "select 1\n");
         Files.createDirectories(home.resolve("mcp"));
@@ -217,8 +220,10 @@ class RuleSetResolutionTest {
                 input:
                   sku: { type: string, required: true }
                 %s
-                sql:
-                  file: apply.sql
+                steps:
+                  main:
+                    sql:
+                      file: apply.sql
                 response:
                   json:
                     body:

@@ -33,6 +33,13 @@ final class YamlMappers {
                 .maxStringLength(20_000_000)
                 .maxNameLength(65_536)
                 .build());
+        // A repeated key is an error, not a last-one-wins merge. Every authored map is a
+        // namespace an author names things in — sources, steps, inputs, validation rules — and
+        // silently keeping the second `main:` is the shape of bug this codebase keeps finding:
+        // the document says one thing and the runtime holds another. It matters more now that
+        // reads share one `sources:` map (docs/unified-sources.md): the collision a lint used
+        // to catch across two maps is a duplicate key inside one.
+        factory.enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
         return new ObjectMapper(factory);
     }
 }

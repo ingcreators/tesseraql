@@ -40,14 +40,16 @@ class RouteGovernanceTest {
             security:
               auth: bearer
               policy: users.read
-            sql:
-              file: search.sql
-              params:
-                q: query.q
+            sources:
+              main:
+                sql:
+                  file: search.sql
+                  params:
+                    q: query.q
             response:
               json:
                 body:
-                  data: sql.rows
+                  data: main.rows
             """;
 
     private static final String UNAUTHENTICATED_WRITE = """
@@ -55,15 +57,17 @@ class RouteGovernanceTest {
             id: users.deactivate
             kind: route
             recipe: command-json
-            sql:
-              file: deactivate.sql
-              mode: update
-              params:
-                id: body.id
+            steps:
+              main:
+                sql:
+                  file: deactivate.sql
+                  mode: update
+                  params:
+                    id: body.id
             response:
               json:
                 body:
-                  affected: sql.affectedRows
+                  affected: steps.main.affectedRows
             """;
 
     private static final String SERVICE_PAGE = """
@@ -74,8 +78,10 @@ class RouteGovernanceTest {
             security:
               auth: bearer
               policy: ops.batch.view
-            sql:
-              service: ops.overview
+            sources:
+              main:
+                service:
+                  name: ops.overview
             response:
               html:
                 template: page.html
@@ -119,8 +125,10 @@ class RouteGovernanceTest {
             security:
               auth: bearer
               policy: catalog.read
-            sql:
-              file: catalog.sql
+            sources:
+              main:
+                sql:
+                  file: catalog.sql
             """;
 
     private static final String PUBLIC_RESOURCE = """
@@ -132,8 +140,10 @@ class RouteGovernanceTest {
             description: Public catalog.
             security:
               auth: public
-            sql:
-              file: catalog.sql
+            sources:
+              main:
+                sql:
+                  file: catalog.sql
             """;
 
     @Test
@@ -167,8 +177,10 @@ class RouteGovernanceTest {
             security:
               auth: bearer
               policy: catalog.read
-            sql:
-              file: catalog.sql
+            sources:
+              main:
+                sql:
+                  file: catalog.sql
             response:
               html:
                 template: board.html
@@ -183,8 +195,10 @@ class RouteGovernanceTest {
             description: A public board.
             security:
               auth: public
-            sql:
-              file: catalog.sql
+            sources:
+              main:
+                sql:
+                  file: catalog.sql
             response:
               html:
                 template: board.html

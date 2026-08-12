@@ -182,12 +182,14 @@ class MessagingRecipeIntegrationTest {
                     required: true
                   total:
                     type: number
-                sql:
-                  file: insert-order.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
-                    total: body.total
+                steps:
+                  main:
+                    sql:
+                      file: insert-order.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
+                        total: body.total
                 publish:
                   channel: events
                   topic: orders.created
@@ -220,12 +222,14 @@ class MessagingRecipeIntegrationTest {
                     required: true
                   total:
                     type: number
-                sql:
-                  file: project-order.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
-                    total: body.total
+                steps:
+                  main:
+                    sql:
+                      file: project-order.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
+                        total: body.total
                 """);
         Files.writeString(consumeDir.resolve("project-order.sql"),
                 "insert into order_projection (id, total)"

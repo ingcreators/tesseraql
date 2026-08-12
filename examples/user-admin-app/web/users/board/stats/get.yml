@@ -6,15 +6,16 @@ recipe: query-html
 security:
   policy: users.read
 
-sql:
-  file: totals.sql
-
-queries:
+sources:
+  main:
+    sql:
+      file: totals.sql
   byStatus:
-    file: by-status.sql
+    sql:
+      file: by-status.sql
   recent:
-    file: recent.sql
-
+    sql:
+      file: recent.sql
 response:
   html:
     view: users.board.stats

@@ -9,13 +9,14 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.flagsRemove
-  params:
-    name: params.name
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  main:
+    service:
+      name: studio.flagsRemove
+      params:
+        name: params.name
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/flags?removed=1

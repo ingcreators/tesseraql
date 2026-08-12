@@ -6,11 +6,12 @@ recipe: command-json
 # Discards every pending draft at once (Studio Drafts bulk actions). Edit-gated in the provider;
 # the UI guards it behind an hc-confirm modal. Redirects back to the (now empty) Drafts list.
 
-sql:
-  service: studio.draftsDiscardAll
-  params:
-    roles: principal.roles
-
+steps:
+  main:
+    service:
+      name: studio.draftsDiscardAll
+      params:
+        roles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/drafts?discarded=1

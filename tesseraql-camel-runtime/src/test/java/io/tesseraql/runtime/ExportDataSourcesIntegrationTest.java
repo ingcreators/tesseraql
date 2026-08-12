@@ -141,19 +141,21 @@ class ExportDataSourcesIntegrationTest {
                 id: orders.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: lines.sql
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
                 export:
                   format: pdf
                   filename: order.pdf
                   template: order.html
                   maxRows: 100
-                  queries:
-                    header:
-                      file: header.sql
                   columns:
                     - { name: item, label: Item }
                     - { name: qty,  label: Qty }
+                  header:
+                    sql:
+                      file: header.sql
                 """);
         // The line query carries no customer column: that is the point of the header query.
         Files.writeString(print.resolve("lines.sql"),
@@ -166,22 +168,25 @@ class ExportDataSourcesIntegrationTest {
                 id: orders.bill
                 kind: route
                 recipe: query-export
-                sql:
-                  file: all-lines.sql
+                sources:
+                  main:
+                    sql:
+                      file: all-lines.sql
                 export:
                   format: pdf
                   filename: invoice-{key}.pdf
                   template: invoice.html
                   maxRows: 100
                   splitBy: order_no
-                  queries:
-                    customer:
-                      file: customers.sql
-                    company:
-                      file: company.sql
                   columns:
                     - { name: item, label: Item }
                     - { name: qty,  label: Qty }
+                  customer:
+                    sql:
+                      file: customers.sql
+                  company:
+                    sql:
+                      file: company.sql
                 """);
         Files.writeString(bill.resolve("all-lines.sql"),
                 "select order_no, item, qty from order_lines order by order_no, item\n;\n");

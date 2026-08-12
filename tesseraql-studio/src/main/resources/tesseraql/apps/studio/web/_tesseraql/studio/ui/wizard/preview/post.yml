@@ -84,35 +84,36 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.wizard.preview
-  params:
-    kind: params.kind
-    discoveryUri: params.discoveryUri
-    clientId: params.clientId
-    redirectUri: params.redirectUri
-    scopes: params.scopes
-    postLoginUrl: params.postLoginUrl
-    provision: params.provision
-    spAudience: params.spAudience
-    acsUrl: params.acsUrl
-    ssoUrl: params.ssoUrl
-    sloUrl: params.sloUrl
-    idpMetadataPath: params.idpMetadataPath
-    publicKeyPath: params.publicKeyPath
-    loginIdAttribute: params.loginIdAttribute
-    emailAttribute: params.emailAttribute
-    nameIdFormat: params.nameIdFormat
-    groups: params.groups
-    outbound: params.outbound
-    outboundUrl: params.outboundUrl
-    tokenRef: params.tokenRef
-    realmId: params.realmId
-    type: params.type
-    datasource: params.datasource
-    sqlRoot: params.sqlRoot
-    userManagement: params.userManagement
-
+sources:
+  main:
+    service:
+      name: studio.wizard.preview
+      params:
+        kind: params.kind
+        discoveryUri: params.discoveryUri
+        clientId: params.clientId
+        redirectUri: params.redirectUri
+        scopes: params.scopes
+        postLoginUrl: params.postLoginUrl
+        provision: params.provision
+        spAudience: params.spAudience
+        acsUrl: params.acsUrl
+        ssoUrl: params.ssoUrl
+        sloUrl: params.sloUrl
+        idpMetadataPath: params.idpMetadataPath
+        publicKeyPath: params.publicKeyPath
+        loginIdAttribute: params.loginIdAttribute
+        emailAttribute: params.emailAttribute
+        nameIdFormat: params.nameIdFormat
+        groups: params.groups
+        outbound: params.outbound
+        outboundUrl: params.outboundUrl
+        tokenRef: params.tokenRef
+        realmId: params.realmId
+        type: params.type
+        datasource: params.datasource
+        sqlRoot: params.sqlRoot
+        userManagement: params.userManagement
 response:
   html:
     status: 200

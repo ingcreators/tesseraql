@@ -47,9 +47,11 @@ class AppLinterTest {
                     rule: isKatakana(body.kana)
                     field: kana
                     code: not-kana
-                sql:
-                  file: register.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: register.sql
+                      mode: update
                 response:
                   json:
                     status: 201
@@ -115,8 +117,10 @@ class AppLinterTest {
                 security:
                   auth: bearer
                   policy: catalog.read
-                sql:
-                  file: find.sql
+                sources:
+                  main:
+                    sql:
+                      file: find.sql
                 """);
         // A write tool with no policy (deny-by-default violation) and no description.
         Files.writeString(dir.resolve("mcp/delete.sql"), "delete from products where id = 1\n");
@@ -127,9 +131,11 @@ class AppLinterTest {
                 recipe: command-json
                 security:
                   auth: bearer
-                sql:
-                  file: delete.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: delete.sql
+                      mode: update
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -171,15 +177,17 @@ class AppLinterTest {
                 security:
                   auth: browser
                   policy: app.read
-                sql:
-                  file: search.sql
-                  mode: query
-                  params:
-                    sort: query.sort
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                        sort: query.sort
                 response:
                   json:
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """;
 
         // No enum on the interpolated input: the embedded variable is an injection vector.
@@ -220,8 +228,10 @@ class AppLinterTest {
                 security:
                   auth: bearer
                   policy: catalog.read
-                sql:
-                  file: catalog.sql
+                sources:
+                  main:
+                    sql:
+                      file: catalog.sql
                 """);
         // A broken resource: a write recipe, no uri, declares input, and no description.
         Files.writeString(dir.resolve("mcp/bad.sql"), "delete from products\n");
@@ -233,9 +243,11 @@ class AppLinterTest {
                 input:
                   q:
                     type: string
-                sql:
-                  file: bad.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bad.sql
+                      mode: update
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -266,8 +278,10 @@ class AppLinterTest {
                     recipe: query-json
                     uri: tesseraql://shared
                     description: dup.
-                    sql:
-                      file: a.sql
+                    sources:
+                      main:
+                        sql:
+                          file: a.sql
                     """.formatted(id));
         }
 
@@ -290,8 +304,10 @@ class AppLinterTest {
                 recipe: query-html
                 uri: ui://users/board
                 description: A board of users.
-                sql:
-                  file: board.sql
+                sources:
+                  main:
+                    sql:
+                      file: board.sql
                 response:
                   html:
                     template: board.html
@@ -305,8 +321,10 @@ class AppLinterTest {
                 recipe: query-json
                 description: Find users.
                 ui: ui://users/board
-                sql:
-                  file: find.sql
+                sources:
+                  main:
+                    sql:
+                      file: find.sql
                 """);
         // A broken UI resource: a JSON recipe (renders no HTML), no ui:// uri, declares input,
         // and no description.
@@ -318,8 +336,10 @@ class AppLinterTest {
                 input:
                   q:
                     type: string
-                sql:
-                  file: board.sql
+                sources:
+                  main:
+                    sql:
+                      file: board.sql
                 """);
         // A tool linking a ui:// uri no resource declares (a dangling link).
         Files.writeString(dir.resolve("mcp/dangling.yml"), """
@@ -329,8 +349,10 @@ class AppLinterTest {
                 recipe: query-json
                 description: Dangling link.
                 ui: ui://users/missing
-                sql:
-                  file: find.sql
+                sources:
+                  main:
+                    sql:
+                      file: find.sql
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -364,12 +386,14 @@ class AppLinterTest {
                 security:
                   auth: bearer
                   policy: items.read
-                sql:
-                  file: missing.sql
+                sources:
+                  main:
+                    sql:
+                      file: missing.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -392,8 +416,9 @@ class AppLinterTest {
                 security:
                   auth: bearer
                   csrf: requred
-                sql:
-                  text: insert into items(name) values (:name)
+                steps:
+                  main:
+                    text: insert into items(name) values (:name)
                 response:
                   json:
                     body:
@@ -421,8 +446,9 @@ class AppLinterTest {
                   auth: bearer
                 inputPolicy:
                   unknownFields: Reject
-                sql:
-                  text: insert into items(name) values (:name)
+                steps:
+                  main:
+                    text: insert into items(name) values (:name)
                 response:
                   json:
                     body:
@@ -510,8 +536,9 @@ class AppLinterTest {
                 recipe: query-json
                 securty:
                   auth: bearer
-                sql:
-                  text: select 1
+                sources:
+                  main:
+                    text: select 1
                 response:
                   json:
                     body:
@@ -538,8 +565,9 @@ class AppLinterTest {
                 recipe: query-json
                 page:
                   size: 20
-                sql:
-                  text: select 1
+                sources:
+                  main:
+                    text: select 1
                 response:
                   json:
                     body:
@@ -595,12 +623,14 @@ class AppLinterTest {
                 id: items.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: main.sql
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: main.sql
                   detail:
-                    file: recnt.sql
-                    timeoutSeconds: -1
+                    sql:
+                      file: recnt.sql
+                      timeoutSeconds: -1
                 response:
                   json:
                     body:
@@ -635,9 +665,11 @@ class AppLinterTest {
                     field: qty
                     code: too-small
                     message: items.qty.tooSmall
-                sql:
-                  file: main.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: main.sql
+                      mode: update
                 response:
                   json:
                     body:
@@ -680,11 +712,13 @@ class AppLinterTest {
                 security:
                   auth: bearer
                   policy: catalog.read
-                sql:
-                  file: search.sql
-                  mode: query
-                  params:
-                    sort: query.sort
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                        sort: query.sort
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -716,12 +750,14 @@ class AppLinterTest {
                 security:
                   auth: bearer
                   policy: items.read
-                sql:
-                  file: search.sql
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -757,12 +793,14 @@ class AppLinterTest {
                       email: body.email
                   unknownChannel:
                     channel: missing-channel
-                sql:
-                  file: search.sql
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/members/search.sql"), "select 1 as one\n");
         Files.createDirectories(dir.resolve("batch/cleanup"));
@@ -773,8 +811,10 @@ class AppLinterTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: broken
-                    sql:
-                      file: purge.sql
+                    sources:
+                      main:
+                        sql:
+                          file: purge.sql
                     notify:
                       channel: member-mail
                 """);
@@ -816,15 +856,17 @@ class AppLinterTest {
                 recipe: command-json
                 security:
                   auth: bearer
-                sql:
-                  file: decide.sql
-                  mode: update
                 notify:
                   addressed:
                     channel: approvals
                     recipient: principal.subject
                   unaddressed:
                     channel: approvals
+                steps:
+                  main:
+                    sql:
+                      file: decide.sql
+                      mode: update
                 response:
                   json:
                     body:
@@ -870,7 +912,10 @@ class AppLinterTest {
                   - id: extract
                     export:
                       format: csv
-                      sql: { file: report.sql, mode: query }
+                    sources:
+                      main:
+                      file: report.sql
+                      mode: query
                   - id: hooked
                     notify:
                       channel: audit
@@ -985,9 +1030,11 @@ class AppLinterTest {
                 recipe: webhook
                 webhook:
                   provider: partner
-                sql:
-                  file: insert.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: insert.sql
+                      mode: update
                 """);
         // A broken webhook route: an unconfigured verifier and no SQL pipeline.
         Files.createDirectories(dir.resolve("web/hooks/bad"));
@@ -1009,12 +1056,14 @@ class AppLinterTest {
                 recipe: query-json
                 webhook:
                   provider: partner
-                sql:
-                  file: get.sql
+                sources:
+                  main:
+                    sql:
+                      file: get.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -1239,10 +1288,11 @@ class AppLinterTest {
         writeCommandRoute(dir, """
                 steps:
                   bump:
-                    file: bump.sql
-                    mode: update
-                    expect:
-                      rows: 1
+                    sql:
+                      file: bump.sql
+                      mode: update
+                      expect:
+                        rows: 1
                 """, "update orders set status = /* s */'X' where id = /* id */1\n");
 
         assertThat(new AppLinter().lint(dir))
@@ -1252,9 +1302,11 @@ class AppLinterTest {
     @Test
     void nudgesExpectOnVersionPredicateUpdates(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
-                sql:
-                  file: bump.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
                 """, "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n");
 
         assertThat(new AppLinter().lint(dir))
@@ -1264,11 +1316,13 @@ class AppLinterTest {
     @Test
     void quietWhenUpdateDeclaresExpectAndVersionPredicate(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
-                sql:
-                  file: bump.sql
-                  mode: update
-                  expect:
-                    rows: 1
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
+                      expect:
+                        rows: 1
                 """, "update orders set v = v + 1 where id = /* id */1 and version = /* v */1\n");
 
         assertThat(new AppLinter().lint(dir))
@@ -1296,9 +1350,11 @@ class AppLinterTest {
                 description: Bump an order.
                 security:
                   policy: orders.write
-                sql:
-                  file: bump.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
                 """);
 
         Files.createDirectories(dir.resolve("consume/orders"));
@@ -1311,9 +1367,11 @@ class AppLinterTest {
                 consume:
                   channel: events
                   topic: orders.changed
-                sql:
-                  file: bump.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -1329,7 +1387,8 @@ class AppLinterTest {
         writeCommandRoute(dir, """
                 steps:
                   header:
-                    file: nope.sql
+                    sql:
+                      file: nope.sql
                 """, null);
 
         assertThat(new AppLinter().lint(dir))
@@ -1348,9 +1407,11 @@ class AppLinterTest {
                     field: name
                   fieldless:
                     rule: body.endDate >= body.startDate
-                sql:
-                  file: bump.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
                 """, "insert into t (a) values (/* a */1)\n");
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -1374,9 +1435,11 @@ class AppLinterTest {
                   broken:
                     rule: 'body.endDate >='
                     field: endDate
-                sql:
-                  file: bump.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
                 """, "update t set a = /* a */1\n");
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -1401,12 +1464,14 @@ class AppLinterTest {
                   positive:
                     rule: query.limit > 0
                     field: limit
-                sql:
-                  file: search.sql
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/api/items/search.sql"),
                 "select * from t where a = /* limit */1\n");
@@ -1432,8 +1497,10 @@ class AppLinterTest {
                   positive:
                     rule: query.limit > 0
                     field: limit
-                sql:
-                  file: search.sql
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                 response:
                   html:
                     template: items.html
@@ -1461,9 +1528,11 @@ class AppLinterTest {
                     when: body.endDate != null
                     rule: body.endDate >= body.startDate
                     field: endDate
-                sql:
-                  file: bump.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: bump.sql
+                      mode: update
                 """, "insert into t (a) values (/* a */1)\n");
         Files.writeString(dir.resolve("web/api/orders/check-name.sql"),
                 "-- uniqueness check\nselect 'name' as field from t where a = /* name */'x'\n");
@@ -1502,12 +1571,14 @@ class AppLinterTest {
                 id: x
                 kind: route
                 recipe: bogus-recipe
-                sql:
-                  contract: identity.list-users
+                sources:
+                  main:
+                    contract:
+                      name: identity.list-users
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         assertThat(new AppLinter().lint(dir))
@@ -1534,12 +1605,14 @@ class AppLinterTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/api/leaky/list.sql"), "select id, name from items\n");
 
@@ -1551,14 +1624,16 @@ class AppLinterTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: list.sql
-                  params:
-                    tenant_id: tenant.id
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      params:
+                        tenant_id: tenant.id
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/api/scoped/list.sql"),
                 "select id, name from items where tenant_id = /* tenant_id */ 'x'\n");
@@ -1584,12 +1659,14 @@ class AppLinterTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/api/leaky/list.sql"), "select id, name from items\n");
 
@@ -1608,12 +1685,14 @@ class AppLinterTest {
                 id: users.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: print.sql
                 export:
                   format: pdf
                   sheet: data
                   template: print.xlsx
+                sources:
+                  main:
+                    sql:
+                      file: print.sql
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -1634,11 +1713,13 @@ class AppLinterTest {
                 id: users.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: print.sql
                 export:
                   format: pdf
                   template: print.html
+                sources:
+                  main:
+                    sql:
+                      file: print.sql
                 """);
 
         assertThat(new AppLinter().lint(dir))
@@ -1848,9 +1929,11 @@ class AppLinterTest {
                 recipe: query-json
                 security:
                   auth: api-key
-                sql:
-                  file: search.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
                 """);
 
         assertThat(new AppLinter().lint(dir))
@@ -1997,9 +2080,11 @@ class AppLinterTest {
                 recipe: query-json
                 security:
                   auth: mtls
-                sql:
-                  file: search.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
                 """);
 
         assertThat(new AppLinter().lint(dir))

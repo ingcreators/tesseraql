@@ -19,16 +19,17 @@ inputPolicy:
 security:
   policy: app.write
 
-sql:
-  file: delete.sql
-  mode: update
-  expect:
-    rowCount: 1
-    onMismatch: conflict
-  params:
-    id: params.id
-    version: params.version
-
+steps:
+  main:
+    sql:
+      file: delete.sql
+      mode: update
+      expect:
+        rowCount: 1
+        onMismatch: conflict
+      params:
+        id: params.id
+        version: params.version
 response:
   redirect:
     location: /items

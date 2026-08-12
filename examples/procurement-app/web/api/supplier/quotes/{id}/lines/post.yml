@@ -26,17 +26,19 @@ security:
 
 # One statement again: the submit guard asks the database directly
 # (workflow/quote-priced.sql), so pricing no longer maintains counters on the side.
-sql:
-  file: price-line.sql
-  mode: update
-  params:
-    id: path.id
-    lineNo: params.lineNo
-    unitPrice: params.unitPrice
-    promisedDate: params.promisedDate
 
+steps:
+  main:
+    sql:
+      file: price-line.sql
+      mode: update
+      params:
+        id: path.id
+        lineNo: params.lineNo
+        unitPrice: params.unitPrice
+        promisedDate: params.promisedDate
 response:
   json:
     status: 200
     body:
-      priced: sql.affectedRows
+      priced: steps.main.affectedRows

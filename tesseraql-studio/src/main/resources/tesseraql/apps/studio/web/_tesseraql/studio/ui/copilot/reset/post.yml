@@ -3,12 +3,13 @@ id: tql.studio.copilot.reset
 kind: route
 recipe: command-json
 
-sql:
-  service: studio.copilot.reset
-  params:
-    roles: principal.roles
-    actor: principal.loginId
-
+steps:
+  main:
+    service:
+      name: studio.copilot.reset
+      params:
+        roles: principal.roles
+        actor: principal.loginId
 response:
   redirect:
     status: 303

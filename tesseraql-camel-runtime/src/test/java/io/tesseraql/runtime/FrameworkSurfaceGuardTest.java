@@ -70,8 +70,10 @@ class FrameworkSurfaceGuardTest {
                 description: a tool, so the MCP endpoint mounts
                 security:
                   policy: scim.manage
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:

@@ -30,8 +30,10 @@ class AppLinterResponseHeadersTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: home.sql
+                sources:
+                  main:
+                    sql:
+                      file: home.sql
                 response:
                   html:
                     template: home.html

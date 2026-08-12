@@ -6,13 +6,15 @@ recipe: query-html
 security:
   policy: users.read
 
-sql:
-  contract: identity.list-users
+sources:
+  main:
+    contract:
+      name: identity.list-users
 
 response:
   html:
     status: 200
     template: index.html
     model:
-      users: sql.rows
-      count: sql.rowCount
+      users: main.rows
+      count: main.rowCount

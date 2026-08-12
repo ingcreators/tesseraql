@@ -166,12 +166,14 @@ class HttpCallJobIntegrationTest {
                       method: GET
                       url: http://localhost:%d/rates
                   - id: record
-                    sql:
-                      file: record.sql
-                      mode: update
-                      params:
-                        status: step.fetch.status
-                        rate: step.fetch.body.rate
+                    sources:
+                      main:
+                        sql:
+                          file: record.sql
+                          mode: update
+                          params:
+                            status: step.fetch.status
+                            rate: step.fetch.body.rate
                 """.formatted(endpointPort));
         Files.writeString(jobDir.resolve("record.sql"),
                 "insert into rate_log (status, rate) values (/* status */ 200, /* rate */ 0)\n");

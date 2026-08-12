@@ -15,14 +15,15 @@ input:
     required: true
     maxLength: 1000
 
-sql:
-  service: account.shortcuts.remove
-  params:
-    kind: params.kind
-    href: params.href
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  main:
+    service:
+      name: account.shortcuts.remove
+      params:
+        kind: params.kind
+        href: params.href
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

@@ -43,7 +43,9 @@ class AppLinterRouteExportTest {
                   format: excel
                   template: styled.xlsx
                   startCell: B5
-                  sql: { file: dump.sql, mode: query-export }
+                  sql:
+                    file: dump.sql
+                    mode: query-export
                 """));
 
         assertThat(findings).anySatisfy(finding -> {
@@ -59,7 +61,9 @@ class AppLinterRouteExportTest {
                   format: excel
                   template: styled.xlsx
                   startCell: B5
-                  sql: { file: dump.sql, mode: query-export }
+                  sql:
+                    file: dump.sql
+                    mode: query-export
                 """);
         Files.write(app.resolve("web/items/styled.xlsx"), new byte[]{1});
 
@@ -73,7 +77,9 @@ class AppLinterRouteExportTest {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """
                   format: excel
                   startCell: B5
-                  sql: { file: dump.sql, mode: query-export }
+                  sql:
+                    file: dump.sql
+                    mode: query-export
                 """));
 
         assertThat(findings).anySatisfy(finding -> {
@@ -87,7 +93,9 @@ class AppLinterRouteExportTest {
     void aPlainGridIsStillClean(@TempDir Path dir) throws Exception {
         assertThat(new AppLinter().lint(app(dir, """
                   format: excel
-                  sql: { file: dump.sql, mode: query-export }
+                  sql:
+                    file: dump.sql
+                    mode: query-export
                 """)))
                 .noneMatch(finding -> "TQL-YAML-1006".equals(finding.code())
                         || "TQL-YAML-1005".equals(finding.code()));

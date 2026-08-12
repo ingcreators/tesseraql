@@ -120,10 +120,11 @@ class LaneBackpressureIntegrationTest {
                 admission:
                   lane: io
 
-                sql:
-                  file: slow.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: slow.sql
+                      mode: query
                 response:
                   json:
                     status: 200

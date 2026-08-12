@@ -15,16 +15,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: account.settings.view
-  params:
-    subject: principal.subject
-    loginId: principal.loginId
-    displayName: principal.displayName
-    tenantId: principal.tenantId
-    roles: principal.roles
-    permissions: principal.permissions
-
+sources:
+  main:
+    service:
+      name: account.settings.view
+      params:
+        subject: principal.subject
+        loginId: principal.loginId
+        displayName: principal.displayName
+        tenantId: principal.tenantId
+        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

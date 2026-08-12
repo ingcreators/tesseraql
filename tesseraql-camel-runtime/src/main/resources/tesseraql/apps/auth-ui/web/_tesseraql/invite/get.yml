@@ -22,8 +22,10 @@ input:
 security:
   auth: public
 
-sql:
-  service: auth.loginMethods
+sources:
+  main:
+    service:
+      name: auth.loginMethods
 
 response:
   html:

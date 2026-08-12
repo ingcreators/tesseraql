@@ -8,8 +8,8 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.model.TransitionSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -239,7 +239,7 @@ public final class ManifestCoverage {
     private static Set<String> referencedScopes(RouteFile route) {
         Set<String> names = new LinkedHashSet<>();
         Path dir = route.source().getParent();
-        for (SqlBinding binding : CrossReferenceIndex.bindings(route.definition())) {
+        for (Binding binding : CrossReferenceIndex.bindings(route.definition())) {
             if (binding.file() == null) {
                 continue;
             }

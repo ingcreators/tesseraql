@@ -36,7 +36,7 @@ public record JobDefinition(
         String datasource,
         TriggerSpec trigger,
         Map<String, InputField> input,
-        SqlBinding sql,
+        Binding sql,
         List<PipelineStep> pipeline,
         boolean perTenant,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
@@ -50,7 +50,7 @@ public record JobDefinition(
 
     /** Convenience constructor without overlap/SLA declarations (the pre-track-E shape). */
     public JobDefinition(String version, String id, String kind, String recipe, String datasource,
-            TriggerSpec trigger, Map<String, InputField> input, SqlBinding sql,
+            TriggerSpec trigger, Map<String, InputField> input, Binding sql,
             List<PipelineStep> pipeline, boolean perTenant, ImportSpec fileImport) {
         this(version, id, kind, recipe, datasource, trigger, input, sql, pipeline, perTenant,
                 fileImport, null, null);
@@ -58,7 +58,7 @@ public record JobDefinition(
 
     /** Convenience constructor for a job on the main datasource (the pre-duckdb shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
-            Map<String, InputField> input, SqlBinding sql, List<PipelineStep> pipeline,
+            Map<String, InputField> input, Binding sql, List<PipelineStep> pipeline,
             boolean perTenant, ImportSpec fileImport) {
         this(version, id, kind, recipe, null, trigger, input, sql, pipeline, perTenant,
                 fileImport, null, null);
@@ -66,7 +66,7 @@ public record JobDefinition(
 
     /** Convenience constructor for a job without an {@code import:} block (the pre-Phase-26 shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
-            Map<String, InputField> input, SqlBinding sql, List<PipelineStep> pipeline,
+            Map<String, InputField> input, Binding sql, List<PipelineStep> pipeline,
             boolean perTenant) {
         this(version, id, kind, recipe, null, trigger, input, sql, pipeline, perTenant, null,
                 null, null);

@@ -13,13 +13,14 @@ input:
     required: true
     maxLength: 64
 
-sql:
-  service: account.inbox.read
-  params:
-    eventId: params.eventId
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  main:
+    service:
+      name: account.inbox.read
+      params:
+        eventId: params.eventId
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

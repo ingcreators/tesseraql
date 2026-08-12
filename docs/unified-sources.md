@@ -80,25 +80,28 @@ recipe: query-html
 
 sources:                      # every read acquisition, one map
   main:                       # reserved name: the default referent
-    sql: order.sql            # string shorthand for { file: order.sql }
+    sql:                      # the mechanism; its keys are the SQL arm's
+      file: order.sql
+      mode: query
+      params: { id: path.id }
     enrich:                   # enrichment belongs to the result it transforms
       partner:
         on: { partner_code: code }
-        sql: partners.sql
+        sql: { file: partners.sql }
         merge: [partner_name]
   history:
-    sql: history.sql
+    sql: { file: history.sql }
   rates:
-    http:                     # http is the fourth arm of the binding union
+    http:                     # the fourth arm; its keys are the call's
       url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
       credential: fx-api
       select: rates
 
 steps:                        # write side, commands only: ordered, id-carrying
   - id: order
-    sql: create-order.sql
+    sql: { file: create-order.sql, mode: update, keys: [id] }
   - id: lines
-    sql: copy-order-lines.sql
+    sql: { file: copy-order-lines.sql, mode: update }
 
 response:
   html:
@@ -113,22 +116,54 @@ name the defaults resolve to.
 
 ## Decisions — the acquisition vocabulary
 
-### 1. The binding union gains an `http` arm
+### 1. The binding union gains an `http` arm, and every arm carries its own vocabulary
 
-`file | contract | service | http` (plus the step-only `sequence`). The arm's body is today's
-HTTP-source vocabulary unchanged — `url`, `method`, `headers`, `query`, `body`, `credential`,
-`expectStatus`, timeouts, `select`, `onError`, `readOnly` — and rides the same outbound gateway
-under the same deny-by-default `allowedHosts`. This is not an invention: `enrich:` entries already
-discriminate `sql:` | `http:` by exclusive key; the union promotion makes that the one spelling.
-The mechanism-specific keys keep their homes: `datasource` / `mode` / `materialize` are `file`-arm
-vocabulary, `select` / `onError` are `http`-arm vocabulary, and declaring one on the other arm is
-an unknown-key error, not a silent drop.
+The arms are `sql | contract | service | http`, plus the write-side `sequence`. Each names a
+**mechanism** and nests **that mechanism's own keys**:
 
-Two spellings confirmed at design close: a scalar value on the `sql` arm is shorthand for
-`{ file: <value> }` — one lossless normalization, not a second shape, and the only scalar
-shorthand the union defines. And `sequence` stays step-only: allocation is a write-side act, so
-the read-side arms are exactly `file | contract | service | http` (resolves former open
-question 1).
+```yaml
+sources:
+  main:
+    sql:                                  # the mechanism
+      file: order.sql                     # what to run
+      mode: query                         # how to run it
+      params: { id: path.id }
+  rates:
+    http:
+      url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
+      credential: fx-api
+      select: rates
+```
+
+Two properties fall out of that shape, and both are the point of it. **The arms read as one
+list** — `sql`, `contract`, `service`, `http` are all mechanisms, where the old spelling put
+`file` (a kind of value) in a list of mechanisms and let it stand for SQL. And **a key's arm is
+structural rather than policed**: `mode`/`params` are the SQL arm's, `select`/`onError` are the
+HTTP arm's, and neither can be written on the other because there is nowhere to write it. The
+flat alternative — arm and modifiers as siblings — could not hold that line, and it forced an
+asymmetry besides: `http` has a dozen keys, so it would have nested while its peers did not.
+
+Every arm has the same internal shape: one key naming **what** to acquire — `file` for SQL,
+`url` for HTTP, the name for a contract or a service — and the rest saying **how**. So the two
+validations that look mechanism-specific are one rule: the acquisition target is checked by the
+mechanism that owns it (a SQL file must exist, `TQL-SQL-2103`; an HTTP host must be allow-listed,
+`TQL-SEC-4070`).
+
+This is not an invention: `enrich:` entries already discriminate `sql:` | `http:` by exclusive
+key. The union promotion makes that the one spelling everywhere.
+
+**No scalar shorthand.** `sql: order.sql` as sugar for `sql: { file: order.sql }` was proposed
+and rejected. Half the gallery's bindings (73 of 150) declare a file and nothing else, so the
+shorthand would not be an occasional convenience — both spellings would appear constantly, and
+every reader, every editor, every lint message and every doc example would carry both. The
+scaffolder settles it: its output is where an author starts editing, and a generated
+`sql: order.sql` makes adding `params:` a restructuring rather than a new line. Compactness is
+already available without a second schema rule, because YAML flow style is formatting rather
+than grammar: `main: { sql: { file: order.sql } }`. One idea, one shape — the rule that put
+`export.queries:` inside `export:`, applied to itself.
+
+`sequence` stays step-only: allocation is a write-side act, so the read-side arms are exactly
+`sql | contract | service | http` (resolves former open question 1).
 
 ### 2. One `sources:` map absorbs `queries:` and top-level `http:`
 
@@ -197,13 +232,89 @@ sources:
     sql: order-lines.sql
 ```
 
-### 7. The export extraction is always `export.sources.main`
+### 7. Acquisition and output are separate blocks — `export:` says how to write, never what to read
 
-`export.sql:` and route-level extraction both fold into an `export.sources:` map of the decision-2
-shape — the batch `export:` step has no route level, so inside `export:` is the only home that
-exists on every surface (the argument that already placed `export.queries:`). `TQL-CAMEL-3101`
-retires. `export.queries:` becomes `export.sources:`; the template context keeps the envelope
-(`main.rows`, `header.first`, …); the splitBy narrowing rule is unchanged.
+A document's rows come from its `sources:`. What is done with them — a JSON body, an HTML page,
+a spreadsheet, a partner drop — is a different block, and never carries an acquisition of its own.
+
+```yaml
+# route
+recipe: query-export
+sources:
+  main:
+    sql: { file: print.sql, mode: query }   # what to read
+export:
+  format: pdf                               # how to write it
+  template: print.html
+
+# pipeline step: the step's own arm reads, export: writes
+- id: report
+  sql: { file: report.sql, mode: query }
+  export:
+    format: csv
+    filename: price-summary-{batch.businessDate}.csv
+```
+
+The first draft of this decision put the extraction *inside* `export:` — `export.sources.main` —
+on the argument that a batch step has no route level to put it at. Implementing it showed the
+argument backwards: a step has an arm of its own, which is exactly the route level's equivalent,
+and folding the acquisition into the output block left a `query-export` route whose `sources:`
+was empty while its data hid under `export:`. Output blocks do not read; `response:` never did.
+
+What this replaces: `export.sql:` (the file-export and step extraction) and `export.queries:`
+(the template's other data) both become ordinary entries of the document's or step's `sources:`.
+The `main` source is the rows the codec writes; the rest are what a template composes around
+them, addressed by the same envelope (`main.rows`, `header.first`). `TQL-CAMEL-3101` — the lint
+that policed which of the two homes a recipe used — retires with the second home. `splitBy`
+narrowing is unchanged.
+
+**An extraction is an acquisition, so it takes any arm**: writing API rows into a spreadsheet,
+or a service provider's rows into a PDF, is an ordinary thing to want, and a codec never learns
+where its rows came from.
+
+### 7b. The same separation, everywhere it was blurred
+
+Auditing the model for the same confusion found three more places, all now on the same rule —
+**a block is either an acquisition or an output, never both**:
+
+| Block | Was | Is |
+| --- | --- | --- |
+| `export:` | carried the extraction (`sql:`) and the template's queries | output only; rows come from `sources:` |
+| `import:` | carried the per-row write (`sql:`) | output only — the *write* is the step, the file is the source |
+| `push:` | names the transfer it delivers by id | unchanged; it was already delivery-only |
+| `chunk:` | `reader:`/`writer:` | unchanged; these are role slots on a *processing* block, which is neither |
+
+`import:` is the mirror of `export:` and moves the same way: the polled file is the acquisition
+(the `poll:` trigger names it), the `import:` block says how to parse it, and the per-row
+statement is a `steps:` entry like any other write. That also ends a small lie — an `import.sql:`
+looked like a query and was a write.
+
+### 7a. Where a binding sits, and which arms it admits
+
+Two questions kept being answered together and are not the same one.
+
+**Shape** — how many bindings does the record need?
+
+| Bindings | Shape | Examples |
+| --- | --- | --- |
+| Exactly one | The arms sit **directly on the record**; no slot | a pipeline step, `enrich.<name>`, `export.after:` |
+| Several, referred to by name | A **map of bindings** | `sources:` |
+| Several, in sequence | An **array**, each item carrying `id:` | `steps:`, `pipeline:` |
+| Two, by role | **Role-named slots**, each holding a binding | `chunk: { reader:, writer: }` |
+
+Map or array follows from what the collection *is*, and the two questions have different
+answers. A route's `sources:` is a namespace: the response and the views name its entries, and
+nothing in the gallery has one source read another. A pipeline is a sequence: its steps
+reference each other constantly (`steps.headcount.body.total`) and the order is the meaning. So
+an acquisition is always named — the name is a map key in a namespace and an `id:` in a
+sequence — and that is the whole of the difference between a route source and a step.
+
+A slot is never named for a mechanism, so a slot named `sql:` holding a `sql:` arm cannot arise.
+
+**Arms** — what may the position mean? Not a matter of type but of what the position *is*: an
+acquisition admits every arm; a write admits the arms that write. `contract:` writes today
+(`mode: update` on an identity contract), so "write" does not mean "SQL only" either — the
+narrow arm set belongs to `sequence` (allocation, write-side only) and nothing else.
 
 ## Decisions — the write side
 
@@ -245,13 +356,38 @@ route, a job, an export template, and a test.
 
 ## Decisions — the alignment sweep
 
-### 12. The pipeline's `httpCall:` step becomes `http:`
+### 12. A step is a binding with an `id`, plus its output blocks
 
 The job-side HTTP step is the `http` arm of the binding union wearing a pre-union name;
-`HttpCallSpec` and `HttpSourceSpec` merge into the one arm record. Step variants read
-`sql | http | notify | chunk | export | push` — the binding arms and the step kinds sharing one
-exclusive-key choice. `contract` / `service` stay out of jobs: they are route-plane concepts, and
-nothing in a batch pipeline has asked for them.
+`HttpCallSpec` and `HttpSourceSpec` merge into the one arm record. `contract` / `service` stay
+out of jobs: they are route-plane concepts, and nothing in a batch pipeline has asked for them.
+
+**A step's keys are not one exclusive choice.** The first draft of this decision said the
+variants were `sql | http | notify | chunk | export | push`, picked one at a time — which is the
+acquisition/output confusion of decision 7, restated at step level. They are three different
+axes, and a step declares at least one:
+
+| Axis | Keys | How many |
+| --- | --- | --- |
+| Acquisition or statement | `sql:`, `http:` | at most one — the binding arm |
+| Output | `export:`, `push:`, `notify:` | any, beside the arm |
+| Processing | `chunk:` | at most one; carries its own `reader:`/`writer:` |
+
+```yaml
+- id: report
+  sql: { file: report.sql, mode: query }     # the step is a binding; id names it
+  export: { format: csv, filename: … }       # an output block beside it
+- id: deliver
+  push: { transport: local, path: outbox }   # output only: no acquisition
+```
+
+**Why a step's arm is not wrapped, while a route's sources are.** The two look inconsistent and
+are not: a route's reads are a *namespace* — several results the response and the views refer to
+by name, which is a map — while a step is one unit of work in a *sequence*, whose name is its
+`id`. Rule 7a decides the container, and it decides this the same way it decides everywhere
+else. Wrapping the arm in a `source:` was considered and rejected for a second reason too: a
+step's arm is often a write (`mode: update`), and calling that a source would repeat exactly the
+mistake this campaign is removing — a role named after one of the things it can be.
 
 ### 13. The two `notify:` shapes are examined and kept — recorded as principled
 
@@ -367,6 +503,38 @@ pipeline:
 - The second consumer — an `http` step body streaming spooled rows to a partner API — is deferred
   to the open questions until a real integration asks for it.
 
+### 19a. Any acquisition can spool, so a chunk can load what an API returned
+
+Spooling is not a SQL feature; it is what a large result does on its way to a consumer that
+reads it once. So `mode: query-spool` belongs to the binding rather than to the `sql` arm: an
+`http` acquisition spools the same way, and the same `reader: { spool: … }` loads it.
+
+```yaml
+pipeline:
+  - id: fetch
+    http:
+      url: https://directory.example/companies
+      select: companies
+    mode: query-spool                # the rows land in the spool, not in memory
+  - id: load
+    chunk:
+      reader: { spool: steps.fetch.spool }
+      writer: { sql: { file: upsert-company.sql } }
+      key: code
+```
+
+This closes a gap the campaign would otherwise have left: fetching a large result from an API
+and writing it into the database had no expressible shape — a single statement bound to an
+`httpCall` result holds every row in memory, and the only alternative was a file round trip
+through `push:` and a poll trigger. Routing it through the spool rather than teaching the chunk
+reader an `http:` arm keeps paging and retries on the acquisition side, where the mechanism's
+own vocabulary already lives, and leaves the reader with one thing to understand: a spool is a
+spool, whoever filled it.
+
+The rest follows from decision 19 unchanged — checkpoint restart, the skip policy, the
+per-window commit, and the JSONL type-fidelity caveat, which bites harder here because a JSON
+number reaching a numeric column is the common case rather than the exception.
+
 ## Delivery
 
 Confirmed alongside the decisions:
@@ -424,7 +592,8 @@ Each lands green on its own; boundaries may re-cut at implementation.
    batch read-step `datasource:` (decision 19), spool-ref persistence for rerun.
 7. **Enrichment placement** — nesting under sources, `into:` deleted, `chunk.reader.enrich:`,
    `nest` retired for the `source` arm.
-8. **Export sources** — `export.sources:` with `main` extraction on all three export surfaces.
+8. **Acquisition/output separation** — `export:` and `import:` stop carrying statements;
+   the extraction is the document's or step's own source, the per-row import write is a step.
 9. **Alignment sweep** — `httpCall:` → `http:`, workflow `command:`/`basePath:`, vocabulary
    notes.
 10. **Tooling catch-up** — extension, Studio, portal, scaffolder, docs regen; one slice so the

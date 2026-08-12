@@ -28,13 +28,15 @@ class AppLinterRateLimitTest {
                   rateLimit:
                     requestsPerSecond: 5
                     scope: %s
-                sql:
-                  file: limited.sql
+                sources:
+                  main:
+                    sql:
+                      file: limited.sql
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """.formatted(scope));
     }
 

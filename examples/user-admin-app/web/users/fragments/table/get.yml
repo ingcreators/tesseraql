@@ -11,20 +11,21 @@ input:
 security:
   policy: users.read
 
-sql:
-  file: search-table.sql
-  mode: query
-  params:
-    q: query.q
-
+sources:
+  main:
+    sql:
+      file: search-table.sql
+      mode: query
+      params:
+        q: query.q
 response:
   html:
     status: 200
     template: table.html
     model:
-      users: sql.rows
+      users: main.rows
       criteria: params
-      count: sql.rowCount
+      count: main.rowCount
     headers:
       HX-Trigger:
         hc:toast:

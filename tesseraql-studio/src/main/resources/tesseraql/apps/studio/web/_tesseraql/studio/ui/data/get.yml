@@ -29,33 +29,34 @@ input:
   fo4: { type: string, required: false }
   fv4: { type: string, required: false }
 
-sql:
-  service: studio.data
-  params:
-    roles: principal.roles
-    updated: params.updated
-    ds: params.ds
-    table: params.table
-    page: params.page
-    sort: params.sort
-    dir: params.dir
-    combinator: params.combinator
-    fc0: params.fc0
-    fo0: params.fo0
-    fv0: params.fv0
-    fc1: params.fc1
-    fo1: params.fo1
-    fv1: params.fv1
-    fc2: params.fc2
-    fo2: params.fo2
-    fv2: params.fv2
-    fc3: params.fc3
-    fo3: params.fo3
-    fv3: params.fv3
-    fc4: params.fc4
-    fo4: params.fo4
-    fv4: params.fv4
-
+sources:
+  main:
+    service:
+      name: studio.data
+      params:
+        roles: principal.roles
+        updated: params.updated
+        ds: params.ds
+        table: params.table
+        page: params.page
+        sort: params.sort
+        dir: params.dir
+        combinator: params.combinator
+        fc0: params.fc0
+        fo0: params.fo0
+        fv0: params.fv0
+        fc1: params.fc1
+        fo1: params.fo1
+        fv1: params.fv1
+        fc2: params.fc2
+        fo2: params.fo2
+        fv2: params.fv2
+        fc3: params.fc3
+        fo3: params.fo3
+        fv3: params.fv3
+        fc4: params.fc4
+        fo4: params.fo4
+        fv4: params.fv4
 response:
   html:
     status: 200

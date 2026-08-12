@@ -190,11 +190,13 @@ final class DialectRuntimeChecks {
                   aggregateId: body.name
                   payload:
                     name: body.name
-                sql:
-                  file: touch.sql
-                  mode: update
-                  params:
-                    name: body.name
+                steps:
+                  main:
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        name: body.name
                 response:
                   json:
                     status: 200
@@ -235,8 +237,9 @@ final class DialectRuntimeChecks {
                 export:
                   format: csv
                   filename: items.csv
-                  sql:
-                    file: select-items.sql
+                sources:
+                  main:
+                  file: select-items.sql
                 """);
         Files.writeString(exportRoute.resolve("select-items.sql"),
                 "select name, qty from items order by name\n;\n");

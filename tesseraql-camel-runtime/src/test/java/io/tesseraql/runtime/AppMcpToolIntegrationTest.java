@@ -396,9 +396,11 @@ class AppMcpToolIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: active-users.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: active-users.sql
+                      mode: query
                 """);
         Files.writeString(mcp.resolve("active-users.sql"), """
                 select u.id, u.name
@@ -422,10 +424,11 @@ class AppMcpToolIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: users-board.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: users-board.sql
+                      mode: query
                 response:
                   html:
                     template: users-board.html

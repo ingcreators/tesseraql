@@ -262,11 +262,13 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 security:
                   auth: bearer
                   policy: things.read
-                sql:
-                  file: things.sql
-                  mode: query
-                  params:
-                    q: query.q
+                sources:
+                  main:
+                    sql:
+                      file: things.sql
+                      mode: query
+                      params:
+                        q: query.q
                 response:
                   json:
                     body:
@@ -284,9 +286,11 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: broken.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: broken.sql
+                      mode: query
                 response:
                   json:
                     body:

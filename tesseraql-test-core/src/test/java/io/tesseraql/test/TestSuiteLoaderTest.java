@@ -17,7 +17,8 @@ class TestSuiteLoaderTest {
                 version: tesseraql/v1
                 tests:
                   - name: search returns rows
-                    sql: { file: search.sql }
+                    sql:
+                      file: search.sql
                     expect:
                       rowcount: 3
                 """)).isInstanceOf(TqlException.class).hasMessageContaining("asserts nothing");
@@ -30,7 +31,8 @@ class TestSuiteLoaderTest {
                 version: tesseraql/v1
                 tests:
                   - name: runs without error
-                    sql: { file: search.sql }
+                    sql:
+                      file: search.sql
                 """);
         assertThat(suite.tests()).hasSize(1);
     }
@@ -41,7 +43,8 @@ class TestSuiteLoaderTest {
                 version: tesseraql/v1
                 tests:
                   - name: search returns rows
-                    sql: { file: search.sql }
+                    sql:
+                      file: search.sql
                     expect:
                       rowCount: 3
                 """);

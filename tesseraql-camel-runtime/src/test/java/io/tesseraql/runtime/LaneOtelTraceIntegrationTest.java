@@ -136,9 +136,11 @@ class LaneOtelTraceIntegrationTest {
                   auth: public
                 admission:
                   lane: io
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     status: 200

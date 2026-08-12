@@ -148,8 +148,10 @@ class FieldDomainsTest {
                   topic: products.adjusted
                 input:
                   sku: { domain: sku, required: true }
-                sql:
-                  file: apply.sql
+                steps:
+                  main:
+                    sql:
+                      file: apply.sql
                 """);
         Files.writeString(dir.resolve("consume/products/apply.sql"), "select 1\n");
         Files.createDirectories(dir.resolve("mcp"));
@@ -163,12 +165,14 @@ class FieldDomainsTest {
                   policy: inv.read
                 input:
                   sku: { domain: sku, required: true }
-                sql:
-                  file: lookup.sql
+                sources:
+                  main:
+                    sql:
+                      file: lookup.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("mcp/lookup.sql"), "select 1\n");
 

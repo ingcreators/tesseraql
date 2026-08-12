@@ -41,13 +41,15 @@ class AppLinterCatalogLocaleTest {
                 path: /api/items/dump
                 security:
                   auth: public
-                sql:
-                  file: dump.sql
-                  mode: query-export
                 export:
                   format: csv
                   filename: items.csv
                 %s
+                sources:
+                  main:
+                    sql:
+                      file: dump.sql
+                      mode: query-export
                 """.formatted(exportBody));
         return dir;
     }

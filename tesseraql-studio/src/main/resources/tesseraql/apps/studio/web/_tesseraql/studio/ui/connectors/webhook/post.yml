@@ -23,18 +23,19 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.connectors.webhook
-  params:
-    name: params.name
-    secret: params.secret
-    signatureHeader: params.signatureHeader
-    timestampHeader: params.timestampHeader
-    idHeader: params.idHeader
-    tolerance: params.tolerance
-    roles: principal.roles
-    actor: principal.loginId
-
+steps:
+  main:
+    service:
+      name: studio.connectors.webhook
+      params:
+        name: params.name
+        secret: params.secret
+        signatureHeader: params.signatureHeader
+        timestampHeader: params.timestampHeader
+        idHeader: params.idHeader
+        tolerance: params.tolerance
+        roles: principal.roles
+        actor: principal.loginId
 response:
   redirect:
     status: 303

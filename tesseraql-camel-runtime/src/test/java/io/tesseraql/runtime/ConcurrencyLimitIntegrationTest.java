@@ -135,9 +135,10 @@ class ConcurrencyLimitIntegrationTest {
                         admission:
                           concurrency:
                             maxInFlight: 1
-                        sql:
-                          file: slow.sql
-                          mode: query
+                        sources:
+                          main:
+                            file: slow.sql
+                            mode: query
                         response:
                           json:
                             status: 200
@@ -163,9 +164,11 @@ class ConcurrencyLimitIntegrationTest {
                   rateLimit:
                     requestsPerSecond: 1
                     burst: 1
-                sql:
-                  file: rated.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: rated.sql
+                      mode: query
                 response:
                   json:
                     status: 200

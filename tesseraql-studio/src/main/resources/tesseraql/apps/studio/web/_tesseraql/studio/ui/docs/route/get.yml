@@ -8,11 +8,12 @@ input:
     type: string
     required: true
 
-sql:
-  service: docs.route
-  params:
-    id: query.id
-
+sources:
+  main:
+    service:
+      name: docs.route
+      params:
+        id: query.id
 response:
   html:
     status: 200

@@ -431,8 +431,10 @@ class CodeCatalogIntegrationTest {
                 kind: route
                 recipe: query-html
                 security: { auth: public }
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   html:
                     template: orders.html
@@ -463,10 +465,11 @@ class CodeCatalogIntegrationTest {
                   取引区分: { domain: 取引区分, required: true }
                 steps:
                   row:
-                    file: insert.sql
-                    params:
-                      受注番号: params.取引区分
-                      取引区分: params.取引区分
+                    sql:
+                      file: insert.sql
+                      params:
+                        受注番号: params.取引区分
+                        取引区分: params.取引区分
                 response:
                   json:
                     status: 201
@@ -486,8 +489,10 @@ class CodeCatalogIntegrationTest {
                 kind: route
                 recipe: query-html
                 security: { auth: public }
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   html:
                     view: 受注.grid.view
@@ -516,11 +521,14 @@ class CodeCatalogIntegrationTest {
                 kind: route
                 recipe: query-html
                 security: { auth: public }
-                sql:
-                  file: head.sql
+                sources:
+                  main:
+                    sql:
+                      file: head.sql
                 queries:
                   履歴:
-                    file: history.sql
+                    sql:
+                      file: history.sql
                 response:
                   html:
                     view: 受注.detail.view
@@ -556,8 +564,10 @@ class CodeCatalogIntegrationTest {
                 kind: route
                 recipe: query-export
                 security: { auth: public }
-                sql:
-                  file: rows.sql
+                sources:
+                  main:
+                    sql:
+                      file: rows.sql
                 export:
                   format: csv
                   locale: en
@@ -586,10 +596,11 @@ class CodeCatalogIntegrationTest {
                   区分名称: { type: string, required: true }
                 steps:
                   row:
-                    file: insert.sql
-                    params:
-                      区分コード: params.区分コード
-                      区分名称: params.区分名称
+                    sql:
+                      file: insert.sql
+                      params:
+                        区分コード: params.区分コード
+                        区分名称: params.区分名称
                 invalidates: [区分マスタ]
                 response:
                   json:

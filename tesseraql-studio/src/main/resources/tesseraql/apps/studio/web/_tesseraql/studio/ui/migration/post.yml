@@ -20,17 +20,18 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.migration.create
-  params:
-    datasource: params.datasource
-    vendor: params.vendor
-    kind: params.kind
-    description: params.description
-    ddl: params.ddl
-    actor: principal.loginId
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.migration.create
+      params:
+        datasource: params.datasource
+        vendor: params.vendor
+        kind: params.kind
+        description: params.description
+        ddl: params.ddl
+        actor: principal.loginId
+        roles: principal.roles
 response:
   html:
     status: 200

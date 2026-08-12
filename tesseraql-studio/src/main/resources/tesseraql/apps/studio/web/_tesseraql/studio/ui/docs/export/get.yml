@@ -3,8 +3,10 @@ id: tql.studio.docs.export
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.export
+sources:
+  main:
+    service:
+      name: docs.export
 
 response:
   html:

@@ -21,15 +21,16 @@ security:
 # transitions then let the table-backed tolerance judge the slip.
 steps:
   stamp:
-    file: stamp-proposal.sql
-    params:
-      id: path.id
-      proposedDate: params.proposedDate
+    sql:
+      file: stamp-proposal.sql
+      params:
+        id: path.id
+        proposedDate: params.proposedDate
   history:
-    file: record-request.sql
-    params:
-      id: path.id
-
+    sql:
+      file: record-request.sql
+      params:
+        id: path.id
 response:
   json:
     status: 200

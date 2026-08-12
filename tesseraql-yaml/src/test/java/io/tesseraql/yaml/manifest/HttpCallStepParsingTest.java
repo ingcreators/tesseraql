@@ -29,9 +29,11 @@ class HttpCallStepParsingTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: pending
-                    sql:
-                      file: select-pending.sql
-                      mode: query-spool
+                    sources:
+                      main:
+                        sql:
+                          file: select-pending.sql
+                          mode: query-spool
                   - id: push
                     httpCall:
                       method: POST

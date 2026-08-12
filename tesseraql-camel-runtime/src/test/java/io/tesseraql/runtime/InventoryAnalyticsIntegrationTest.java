@@ -186,13 +186,16 @@ class InventoryAnalyticsIntegrationTest {
                 # require a session here.
                 security:
                   auth: public
-                sql:
-                  file: totals.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: totals.sql
+                      mode: query
                 queries:
                   drop:
-                    file: drop.sql
-                    datasource: analytics
+                    sql:
+                      file: drop.sql
+                      datasource: analytics
                 response:
                   html:
                     status: 200

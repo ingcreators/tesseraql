@@ -181,9 +181,11 @@ class AppMigrationIntegrationTest {
                 id: items.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     body:
@@ -199,9 +201,11 @@ class AppMigrationIntegrationTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: touch
-                    sql:
-                      file: touch.sql
-                      mode: update
+                    sources:
+                      main:
+                        sql:
+                          file: touch.sql
+                          mode: update
                 """);
         Files.writeString(job.resolve("touch.sql"), "update items set name = name\n;\n");
         return home;

@@ -16,11 +16,13 @@ input:
     type: string
     required: false
 
-sql:
-  service: iam.sessions
-  params:
-    q: params.q
-
+sources:
+  main:
+    sql:
+      service:
+        name: iam.sessions
+        params:
+          q: params.q
 response:
   html:
     status: 200

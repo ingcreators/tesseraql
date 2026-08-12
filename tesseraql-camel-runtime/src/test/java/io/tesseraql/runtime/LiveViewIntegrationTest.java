@@ -294,8 +294,10 @@ class LiveViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   html:
                     view: orders
@@ -325,8 +327,10 @@ class LiveViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: ../order.sql
+                sources:
+                  main:
+                    sql:
+                      file: ../order.sql
                 response:
                   html:
                     view: order
@@ -357,8 +361,10 @@ class LiveViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: ../stats.sql
+                sources:
+                  main:
+                    sql:
+                      file: ../stats.sql
                 response:
                   html:
                     view: stats
@@ -387,11 +393,13 @@ class LiveViewIntegrationTest {
                 security:
                   auth: browser
                   csrf: true
-                sql:
-                  file: approve.sql
-                  mode: update
-                  params:
-                    status: body.status
+                steps:
+                  main:
+                    sql:
+                      file: approve.sql
+                      mode: update
+                      params:
+                        status: body.status
                 response:
                   json:
                     status: 200

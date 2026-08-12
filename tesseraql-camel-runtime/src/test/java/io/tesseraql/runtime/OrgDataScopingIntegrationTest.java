@@ -239,9 +239,11 @@ class OrgDataScopingIntegrationTest {
                 recipe: query-json
                 security:
                   auth: bearer
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -269,12 +271,14 @@ class OrgDataScopingIntegrationTest {
                 input:
                   id: { type: integer, required: true }
                   name: { type: string, required: true }
-                sql:
-                  file: rename.sql
-                  mode: update
-                  params:
-                    id: params.id
-                    name: params.name
+                steps:
+                  main:
+                    sql:
+                      file: rename.sql
+                      mode: update
+                      params:
+                        id: params.id
+                        name: params.name
                 response:
                   json:
                     status: 200

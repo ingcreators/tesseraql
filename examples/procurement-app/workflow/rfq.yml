@@ -7,7 +7,8 @@ kind: workflow
 # reminder machinery is the workflow's own (docs/approval-workflow.md "deadlines"), not a
 # hand-rolled batch job.
 document: { type: rfq, table: rfqs, key: id }
-http: { basePath: /api/rfqs }
+http:
+  basePath: /api/rfqs
 security: { auth: bearer, policy: rfq.act }
 initial: draft
 states:
@@ -15,6 +16,7 @@ states:
   - { id: submitted }
   - { id: issued }
   - { id: closed, type: terminal }
+
 transitions:
   # Submitting asks the procurement head to approve the issue.
   - id: submit

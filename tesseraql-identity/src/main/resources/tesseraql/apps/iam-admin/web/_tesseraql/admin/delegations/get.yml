@@ -9,11 +9,13 @@ recipe: query-html
 security:
   policy: iam.admin.view
 
-sql:
-  service: identity.delegations
-  params:
-    tenantId: principal.tenantId
-
+sources:
+  main:
+    sql:
+      service:
+        name: identity.delegations
+        params:
+          tenantId: principal.tenantId
 response:
   html:
     status: 200

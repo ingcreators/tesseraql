@@ -35,22 +35,23 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.wizard.saml.apply
-  params:
-    spAudience: params.spAudience
-    acsUrl: params.acsUrl
-    nameIdFormat: params.nameIdFormat
-    ssoUrl: params.ssoUrl
-    sloUrl: params.sloUrl
-    idpMetadataPath: params.idpMetadataPath
-    publicKeyPath: params.publicKeyPath
-    loginIdAttribute: params.loginIdAttribute
-    emailAttribute: params.emailAttribute
-    provision: params.provision
-    roles: principal.roles
-    actor: principal.loginId
-
+sources:
+  main:
+    service:
+      name: studio.wizard.saml.apply
+      params:
+        spAudience: params.spAudience
+        acsUrl: params.acsUrl
+        nameIdFormat: params.nameIdFormat
+        ssoUrl: params.ssoUrl
+        sloUrl: params.sloUrl
+        idpMetadataPath: params.idpMetadataPath
+        publicKeyPath: params.publicKeyPath
+        loginIdAttribute: params.loginIdAttribute
+        emailAttribute: params.emailAttribute
+        provision: params.provision
+        roles: principal.roles
+        actor: principal.loginId
 response:
   html:
     status: 200

@@ -13,12 +13,13 @@ input:
 security:
   policy: app.read
 
-sql:
-  file: select.sql
-  mode: query
-  params:
-    id: params.id
-
+sources:
+  main:
+    sql:
+      file: select.sql
+      mode: query
+      params:
+        id: params.id
 response:
   html:
     view: items.edit

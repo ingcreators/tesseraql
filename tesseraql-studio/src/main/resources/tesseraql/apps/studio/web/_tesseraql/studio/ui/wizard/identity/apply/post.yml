@@ -20,17 +20,18 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.wizard.identity.apply
-  params:
-    realmId: params.realmId
-    type: params.type
-    datasource: params.datasource
-    sqlRoot: params.sqlRoot
-    userManagement: params.userManagement
-    roles: principal.roles
-    actor: principal.loginId
-
+sources:
+  main:
+    service:
+      name: studio.wizard.identity.apply
+      params:
+        realmId: params.realmId
+        type: params.type
+        datasource: params.datasource
+        sqlRoot: params.sqlRoot
+        userManagement: params.userManagement
+        roles: principal.roles
+        actor: principal.loginId
 response:
   html:
     status: 200

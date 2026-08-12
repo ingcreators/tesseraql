@@ -9,12 +9,14 @@ kind: workflow
 # caller's own partner rows.
 mode: app
 document: { type: quote, table: quotes, key: id, stateColumn: status }
-http: { basePath: /api/supplier/quotes }
+http:
+  basePath: /api/supplier/quotes
 security: { auth: bearer, policy: sup.act }
 initial: draft
 states:
   - { id: draft, type: initial }
   - { id: submitted, type: terminal }
+
 transitions:
   - id: submit
     from: draft

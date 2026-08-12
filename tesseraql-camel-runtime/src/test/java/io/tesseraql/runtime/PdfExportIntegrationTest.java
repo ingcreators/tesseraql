@@ -125,8 +125,10 @@ class PdfExportIntegrationTest {
                 id: users.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: print.sql
+                sources:
+                  main:
+                    sql:
+                      file: print.sql
                 export:
                   format: pdf
                   filename: users.pdf

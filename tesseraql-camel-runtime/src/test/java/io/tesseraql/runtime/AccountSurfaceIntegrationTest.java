@@ -590,9 +590,11 @@ class AccountSurfaceIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: home.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: home.sql
+                      mode: query
                 response:
                   html:
                     status: 200
@@ -612,9 +614,11 @@ class AccountSurfaceIntegrationTest {
                 security:
                   auth: browser
                   csrf: true
-                sql:
-                  file: notify-me.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: notify-me.sql
+                      mode: update
                 notify:
                   ping:
                     channel: user-mail
@@ -650,11 +654,13 @@ class AccountSurfaceIntegrationTest {
                 recipe: query-json
                 security:
                   auth: browser
-                sql:
-                  file: page-size.sql
-                  mode: query
-                  params:
-                    size: preference.pageSize
+                sources:
+                  main:
+                    sql:
+                      file: page-size.sql
+                      mode: query
+                      params:
+                        size: preference.pageSize
                 response:
                   json:
                     body:

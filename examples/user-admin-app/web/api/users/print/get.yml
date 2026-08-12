@@ -6,9 +6,6 @@ recipe: query-export
 security:
   policy: users.read
 
-sql:
-  file: print.sql
-
 # Printable user list (roadmap Phase 21): the colocated XHTML template renders through the
 # standard template engine and converts to PDF with page-oriented CSS; the app home's fonts/
 # directory embeds the CJK font the template names.
@@ -19,3 +16,8 @@ export:
   columns:
     - { name: name,   label: 氏名 }
     - { name: status, label: 状態 }
+
+sources:
+  main:
+    sql:
+      file: print.sql

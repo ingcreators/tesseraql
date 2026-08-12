@@ -6,15 +6,15 @@ recipe: query-html
 security:
   policy: users.read
 
-sql:
-  file: detail.sql
-  params:
-    name: path.name
-
-queries:
+sources:
+  main:
+    sql:
+      file: detail.sql
+      params:
+        name: path.name
   groups:
-    file: groups.sql
-
+    sql:
+      file: groups.sql
 response:
   html:
     view: users.board.detail

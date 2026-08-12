@@ -3,11 +3,12 @@ id: tql.studio.sqlBuilder
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.sqlBuilder.new
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.sqlBuilder.new
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200

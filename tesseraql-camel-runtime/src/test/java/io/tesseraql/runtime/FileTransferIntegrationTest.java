@@ -199,7 +199,7 @@ class FileTransferIntegrationTest {
     /**
      * A file-export's {@code params:} reach its query.
      *
-     * <p>They did not. {@code resolveSqlParams} read {@code route.sql()}, which is null for a
+     * <p>They did not. {@code resolveSqlParams} read {@code route.main()}, which is null for a
      * file-export — its binding lives at {@code export.sql} — so every declared param resolved
      * to a silent null bind and the export returned whatever "column >= null" returns. The
      * confusing part was that a *route-level* {@code sql: {params:}} on the same route did
@@ -440,8 +440,9 @@ class FileTransferIntegrationTest {
                     - name
                     - { name: held_on, type: date, format: yyyy/MM/dd }
                     - { name: fee, type: number, format: "#,##0.00" }
-                  sql:
-                    file: select-events.sql
+                sources:
+                  main:
+                  file: select-events.sql
                 """);
         Files.writeString(exportRoute.resolve("select-events.sql"),
                 "select name, held_on, fee from events order by name\n;\n");
@@ -460,8 +461,9 @@ class FileTransferIntegrationTest {
                 export:
                   format: csv
                   filename: variant.csv
-                  sql:
-                    file: pick.sql
+                sources:
+                  main:
+                  file: pick.sql
                 """);
         // The generic file names a column that does not exist; the variant is valid. Which one
         // ran is the transfer's outcome rather than something the test has to introspect.
@@ -484,10 +486,11 @@ class FileTransferIntegrationTest {
                 export:
                   format: csv
                   filename: expensive.csv
-                  sql:
-                    file: select-expensive.sql
-                    params:
-                      minFee: params.min
+                sources:
+                  main:
+                  file: select-expensive.sql
+                  params:
+                    minFee: params.min
                 """);
         Files.writeString(filtered.resolve("select-expensive.sql"),
                 "select name, fee from events where fee >= /* minFee */0 order by name\n;\n");
@@ -500,8 +503,10 @@ class FileTransferIntegrationTest {
                 id: events.download
                 kind: route
                 recipe: query-export
-                sql:
-                  file: select-events.sql
+                sources:
+                  main:
+                    sql:
+                      file: select-events.sql
                 export:
                   format: csv
                   filename: events-sync.csv
@@ -557,12 +562,15 @@ class FileTransferIntegrationTest {
                 export:
                   format: csv
                   filename: orders.csv
-                  sql:
-                    file: select-orders.sql
                   after:
                     timing: %s
-                    sql:
-                      file: mark-extracted.sql
+                    sources:
+                      main:
+                        sql:
+                          file: mark-extracted.sql
+                sources:
+                  main:
+                  file: select-orders.sql
                 """.formatted(id, timing));
         Files.writeString(route.resolve("select-orders.sql"),
                 "select order_no, extracted from orders " + scope + " order by order_no\n;\n");

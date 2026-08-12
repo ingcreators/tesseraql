@@ -455,7 +455,9 @@ class BatchJobIntegrationTest {
                 kind: job
                 recipe: batch-tasklet
                 sla: { completeBy: "00:00", runningLongerThan: 1s }
-                sql: { file: noop.sql, mode: update }
+                sql:
+                  file: noop.sql
+                  mode: update
                 """);
         Files.writeString(slaDir.resolve("noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -748,7 +750,9 @@ class BatchJobIntegrationTest {
                 id: user.stampBusinessDate
                 kind: job
                 recipe: batch-tasklet
-                sql: { file: stamp.sql, mode: update }
+                sql:
+                  file: stamp.sql
+                  mode: update
                 """);
         Files.writeString(target.resolve("batch/stamp/stamp.sql"),
                 "update users set status = 'ASOF-' || cast(cast(/* batch.businessDate */"
@@ -766,16 +770,21 @@ class BatchJobIntegrationTest {
                     export:
                       format: csv
                       filename: users-{batch.businessDate}.csv
-                      sql: { file: report.sql, mode: query }
                       columns:
                         - { name: name, label: Name }
                         - { name: status, label: Status }
+                    sources:
+                      main:
+                      file: report.sql
+                      mode: query
                   - id: stamp
-                    sql:
-                      file: stamp-transfer.sql
-                      mode: update
-                      params:
-                        exported: step.extract.rows
+                    sources:
+                      main:
+                        sql:
+                          file: stamp-transfer.sql
+                          mode: update
+                          params:
+                            exported: step.extract.rows
                 """);
         Files.writeString(target.resolve("batch/report/report.sql"),
                 "select name, status from users order by name\n");
@@ -794,7 +803,10 @@ class BatchJobIntegrationTest {
                   - id: extract
                     export:
                       format: csv
-                      sql: { file: report.sql, mode: query }
+                    sources:
+                      main:
+                      file: report.sql
+                      mode: query
                   - id: drop
                     push:
                       transport: local
@@ -835,7 +847,9 @@ class BatchJobIntegrationTest {
                             recipe: batch-tasklet
                             trigger:
                               schedule: { fixedDelay: 1s, calendar: %s }
-                            sql: { file: noop.sql, mode: update }
+                            sql:
+                              file: noop.sql
+                              mode: update
                             """.formatted(job.getKey(), job.getValue()));
         }
         Files.writeString(target.resolve("batch/calendar/noop.sql"),
@@ -852,8 +866,12 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-a.sql }
-                      writer: { file: writer-a.sql }
+                      reader:\n
+                        sql:\n
+                          file: reader-a.sql
+                      writer:\n
+                        sql:\n
+                          file: writer-a.sql
                       key: item_key
                       commitEvery: 5
                       onError: skip
@@ -867,8 +885,12 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-b.sql }
-                      writer: { file: writer-b.sql }
+                      reader:\n
+                        sql:\n
+                          file: reader-b.sql
+                      writer:\n
+                        sql:\n
+                          file: writer-b.sql
                       key: item_key
                       commitEvery: 5
                 """);
@@ -880,14 +902,19 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-d.sql }
-                      writer: { file: writer-d.sql }
+                      reader:\n
+                        sql:\n
+                          file: reader-d.sql
+                      writer:\n
+                        sql:\n
+                          file: writer-d.sql
                       key: item_key
                       commitEvery: 10
                       enrich:
                         kind:
                           on: { kind: code }
-                          sql: { file: kinds.sql }
+                          sql:
+                            file: kinds.sql
                           batchSize: 2
                           merge: [label]
                 """);
@@ -942,7 +969,9 @@ class BatchJobIntegrationTest {
                 recipe: batch-tasklet
                 trigger:
                   schedule: { fixedDelay: 1s, calendar: shift-cal, dayOfMonth: %d }
-                sql: { file: noop.sql, mode: update }
+                sql:
+                  file: noop.sql
+                  mode: update
                 """.formatted(nominal.getDayOfMonth()));
         Files.writeString(target.resolve("batch/shifted/gated.yml"), """
                 version: tesseraql/v1
@@ -951,7 +980,9 @@ class BatchJobIntegrationTest {
                 recipe: batch-tasklet
                 trigger:
                   schedule: { fixedDelay: 1s, calendar: shift-cal, dayOfMonth: %d }
-                sql: { file: noop.sql, mode: update }
+                sql:
+                  file: noop.sql
+                  mode: update
                 """.formatted(java.time.LocalDate.now().plusDays(1).getDayOfMonth()));
         Files.writeString(target.resolve("batch/shifted/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -963,7 +994,9 @@ class BatchJobIntegrationTest {
                 id: user.chainExtract
                 kind: job
                 recipe: batch-tasklet
-                sql: { file: noop.sql, mode: update }
+                sql:
+                  file: noop.sql
+                  mode: update
                 """);
         Files.writeString(target.resolve("batch/chain/send.yml"), """
                 version: tesseraql/v1
@@ -972,7 +1005,9 @@ class BatchJobIntegrationTest {
                 recipe: batch-tasklet
                 trigger:
                   after: user.chainExtract
-                sql: { file: noop.sql, mode: update }
+                sql:
+                  file: noop.sql
+                  mode: update
                 """);
         Files.writeString(target.resolve("batch/chain/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -985,7 +1020,9 @@ class BatchJobIntegrationTest {
                 kind: job
                 recipe: batch-tasklet
                 overlap: skip
-                sql: { file: noop.sql, mode: update }
+                sql:
+                  file: noop.sql
+                  mode: update
                 """);
         Files.writeString(target.resolve("batch/overlap/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -1038,8 +1075,12 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-c.sql }
-                      writer: { file: writer-c.sql }
+                      reader:\n
+                        sql:\n
+                          file: reader-c.sql
+                      writer:\n
+                        sql:\n
+                          file: writer-c.sql
                       key: item_key
                       commitEvery: 5
                 """);
@@ -1064,9 +1105,13 @@ class BatchJobIntegrationTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: selfCancel
-                    sql: { file: self-cancel.sql, mode: update }
+                    sql:
+                      file: self-cancel.sql
+                      mode: update
                   - id: never
-                    sql: { file: never.sql, mode: update }
+                    sql:
+                      file: never.sql
+                      mode: update
                 """);
         Files.writeString(target.resolve("batch/stop/self-cancel.sql"),
                 "update tql_job_execution set cancel_requested = now()"

@@ -24,9 +24,9 @@ import io.tesseraql.yaml.manifest.MigrationFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.menu.MenuSpec;
 import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
 import io.tesseraql.yaml.scaffold.ScaffoldChecksum;
 import io.tesseraql.yaml.scaffold.ScaffoldWriter;
@@ -1904,7 +1904,7 @@ public final class StudioService {
             return out;
         }
         out.put("routeId", match.definition().id());
-        SqlBinding sql = match.definition().sql();
+        Binding sql = match.definition().main();
         if (sql == null || sql.file() == null
                 || (sql.mode() != null && !"query".equals(sql.mode()))) {
             out.put("recordable", false);
@@ -1935,12 +1935,12 @@ public final class StudioService {
     /** The matched route's main SQL file as an app-relative path (Track J3), else null. */
     public String recordedSqlFile(String method, String path) {
         RouteFile match = routeFor(method, path);
-        if (match == null || match.definition().sql() == null
-                || match.definition().sql().file() == null) {
+        if (match == null || match.definition().main() == null
+                || match.definition().main().file() == null) {
             return null;
         }
         Path routeDir = match.source().getParent();
-        return appHome.relativize(routeDir.resolve(match.definition().sql().file()))
+        return appHome.relativize(routeDir.resolve(match.definition().main().file()))
                 .toString().replace('\\', '/');
     }
 
@@ -1953,11 +1953,11 @@ public final class StudioService {
     public Map<String, Object> recordedCaseParams(String method, String path,
             Map<String, String> query, Map<String, Object> body) {
         RouteFile match = routeFor(method, path);
-        if (match == null || match.definition().sql() == null) {
+        if (match == null || match.definition().main() == null) {
             return Map.of();
         }
         Map<String, Object> out = new LinkedHashMap<>();
-        Map<String, String> mapping = match.definition().sql().params();
+        Map<String, String> mapping = match.definition().main().params();
         if (mapping == null) {
             return out;
         }

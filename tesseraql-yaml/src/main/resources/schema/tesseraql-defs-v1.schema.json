@@ -27,7 +27,7 @@
         "description": "The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036)."
       },
       "sql": {
-        "$ref": "#/$defs/sqlBinding",
+        "$ref": "#/$defs/binding",
         "description": "The document's single statement: a colocated 2-way SQL file, a named IAM contract, or a service call. Its result binds as `rows`."
       },
       "import": {
@@ -165,12 +165,61 @@
       },
       "additionalProperties": true
     },
-    "sqlBinding": {
+    "fieldPolicy": {
+      "type": "object",
+      "properties": {
+        "visible": {
+          "type": "boolean",
+          "description": "`false` removes the field from the response entirely, for every caller."
+        },
+        "policy": {
+          "type": "string",
+          "description": "The security policy a principal must satisfy to see the value unmasked."
+        },
+        "mask": {
+          "type": "string",
+          "description": "The masking rule applied when the policy is not satisfied, such as showing only the last four characters."
+        },
+        "classification": {
+          "type": "string",
+          "description": "Data classification label carried into audit. Documented in data-scoping.md."
+        },
+        "unmaskWhen": {
+          "type": "string",
+          "description": "An expression that, when it matches, reveals the value despite the mask."
+        }
+      },
+      "additionalProperties": true
+    },
+    "statusWhen": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "when",
+          "status"
+        ],
+        "properties": {
+          "when": {
+            "type": "string",
+            "description": "A whitelist-only expression over the execution context; the first matching entry wins."
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599,
+            "description": "The HTTP status to answer when the expression is truthy."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "binding": {
       "type": "object",
       "properties": {
         "file": {
           "type": "string",
-          "description": "A colocated 2-way SQL file (must exist; TQL-SQL-2103)."
+          "description": "A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). One of the mechanism arms: file | contract | service | http, plus the write-side sequence."
         },
         "contract": {
           "type": "string",
@@ -179,6 +228,11 @@
         "service": {
           "type": "string",
           "description": "A named runtime service provider to call instead of running SQL (docs/extending.md). Legal on sql: and queries:, and refused inside a command step — a transactional step must be a SQL file or a sequence."
+        },
+        "http": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "An outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares (method, url, headers, query, body, credential, expectStatus, timeouts) plus `select` and `onError`. Rides the outbound gateway: the host must be allow-listed (TQL-SEC-4070) and credentials are named, never inline."
         },
         "mode": {
           "type": "string",
@@ -252,56 +306,8 @@
           "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
         }
       },
-      "additionalProperties": true
-    },
-    "fieldPolicy": {
-      "type": "object",
-      "properties": {
-        "visible": {
-          "type": "boolean",
-          "description": "`false` removes the field from the response entirely, for every caller."
-        },
-        "policy": {
-          "type": "string",
-          "description": "The security policy a principal must satisfy to see the value unmasked."
-        },
-        "mask": {
-          "type": "string",
-          "description": "The masking rule applied when the policy is not satisfied, such as showing only the last four characters."
-        },
-        "classification": {
-          "type": "string",
-          "description": "Data classification label carried into audit. Documented in data-scoping.md."
-        },
-        "unmaskWhen": {
-          "type": "string",
-          "description": "An expression that, when it matches, reveals the value despite the mask."
-        }
-      },
-      "additionalProperties": true
-    },
-    "statusWhen": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "when",
-          "status"
-        ],
-        "properties": {
-          "when": {
-            "type": "string",
-            "description": "A whitelist-only expression over the execution context; the first matching entry wins."
-          },
-          "status": {
-            "type": "integer",
-            "minimum": 100,
-            "maximum": 599,
-            "description": "The HTTP status to answer when the expression is truthy."
-          }
-        },
-        "additionalProperties": true
-      }
+      "additionalProperties": true,
+      "description": "One acquisition or one statement. Exactly one mechanism arm says by what means - file (a 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call), or the write-side sequence - and the remaining keys say how it is invoked, which is the same question whichever arm answered. Documented in unified-sources.md."
     }
   }
 }

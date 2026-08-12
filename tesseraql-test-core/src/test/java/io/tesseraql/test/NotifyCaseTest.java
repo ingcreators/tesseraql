@@ -63,9 +63,11 @@ class NotifyCaseTest {
                       email: body.email
                   audit:
                     channel: audit-webhook
-                sql:
-                  file: insert-member.sql
-                  mode: update
+                steps:
+                  main:
+                    sql:
+                      file: insert-member.sql
+                      mode: update
                 response:
                   json:
                     status: 201
@@ -80,9 +82,11 @@ class NotifyCaseTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: purge
-                    sql:
-                      file: purge.sql
-                      mode: update
+                    sources:
+                      main:
+                        sql:
+                          file: purge.sql
+                          mode: update
                   - id: report
                     notify:
                       channel: ops-mail

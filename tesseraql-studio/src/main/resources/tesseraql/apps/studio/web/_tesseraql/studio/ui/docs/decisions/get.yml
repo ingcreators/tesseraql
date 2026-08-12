@@ -3,8 +3,10 @@ id: tql.studio.docs.decisions
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.decisions
+sources:
+  main:
+    service:
+      name: docs.decisions
 
 response:
   html:

@@ -9,8 +9,8 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestIndex;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -61,8 +61,10 @@ class CrossReferenceIndexTest {
             id: users.search
             kind: route
             recipe: query-json
-            sql:
-              file: search.sql
+            sources:
+              main:
+                sql:
+                  file: search.sql
             """;
 
     @Test
@@ -86,8 +88,10 @@ class CrossReferenceIndexTest {
                 id: admin.create
                 kind: route
                 recipe: command-json
-                sql:
-                  contract: identity.create-user
+                steps:
+                  main:
+                    contract:
+                      name: identity.create-user
                 """);
 
         // A contract case omits the identity. prefix the binding carries; both sides strip it.
@@ -105,11 +109,14 @@ class CrossReferenceIndexTest {
                 id: users.list
                 kind: route
                 recipe: query-html
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 queries:
                   total:
-                    file: count.sql
+                    sql:
+                      file: count.sql
                 response:
                   html:
                     template: list.html
@@ -164,18 +171,21 @@ class CrossReferenceIndexTest {
                 id: users.list
                 kind: route
                 recipe: query-html
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 queries:
                   total:
-                    file: count.sql
+                    sql:
+                      file: count.sql
                 response:
                   html:
                     template: list.html
                 """, "web/api/users/get.yml");
 
         assertThat(CrossReferenceIndex.bindings(definition))
-                .extracting(SqlBinding::file)
+                .extracting(Binding::sql)
                 .containsExactlyInAnyOrder("list.sql", "count.sql");
     }
 

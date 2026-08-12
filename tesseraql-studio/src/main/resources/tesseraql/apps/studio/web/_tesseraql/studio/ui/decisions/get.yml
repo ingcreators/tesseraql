@@ -11,13 +11,14 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.decisions.view
-  params:
-    name: params.name
-    saved: params.saved
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.decisions.view
+      params:
+        name: params.name
+        saved: params.saved
+        roles: principal.roles
 response:
   html:
     status: 200

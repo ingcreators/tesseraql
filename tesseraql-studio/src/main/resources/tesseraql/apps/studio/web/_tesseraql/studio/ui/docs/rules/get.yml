@@ -3,8 +3,10 @@ id: tql.studio.docs.rules
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.rules
+sources:
+  main:
+    service:
+      name: docs.rules
 
 response:
   html:

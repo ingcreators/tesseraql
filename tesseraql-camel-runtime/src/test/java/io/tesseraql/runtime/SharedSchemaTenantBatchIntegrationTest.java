@@ -124,11 +124,13 @@ class SharedSchemaTenantBatchIntegrationTest {
                 kind: job
                 recipe: batch-tasklet
                 perTenant: true
-                sql:
-                  file: seed.sql
-                  mode: update
-                  params:
-                    tenant_id: tenant.id
+                sources:
+                  main:
+                    sql:
+                      file: seed.sql
+                      mode: update
+                      params:
+                        tenant_id: tenant.id
                 """);
         Files.writeString(jobDir.resolve("seed.sql"),
                 "insert into items (tenant_id, name) values (/* tenant_id */ 'x', 'seeded')\n");

@@ -6,14 +6,15 @@ recipe: command-json
 security:
   policy: users.write
 
-sql:
-  contract: identity.disable-user
-  mode: update
-  params:
-    userId: path.id
-
+steps:
+  main:
+    contract:
+      name: identity.disable-user
+      mode: update
+      params:
+        userId: path.id
 response:
   json:
     status: 200
     body:
-      affected: sql.affectedRows
+      affected: steps.main.affectedRows

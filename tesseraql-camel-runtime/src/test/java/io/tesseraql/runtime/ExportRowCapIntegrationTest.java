@@ -140,8 +140,10 @@ class ExportRowCapIntegrationTest {
                 id: items.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: items.sql
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
                 export:
                   format: pdf
                   filename: items.pdf
@@ -158,8 +160,10 @@ class ExportRowCapIntegrationTest {
                 id: items.dump
                 kind: route
                 recipe: query-export
-                sql:
-                  file: items.sql
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
                 export:
                   format: csv
                   filename: items.csv
@@ -175,8 +179,10 @@ class ExportRowCapIntegrationTest {
                 id: items.bundle
                 kind: route
                 recipe: query-export
-                sql:
-                  file: regions.sql
+                sources:
+                  main:
+                    sql:
+                      file: regions.sql
                 export:
                   format: csv
                   filename: items-{key}.csv

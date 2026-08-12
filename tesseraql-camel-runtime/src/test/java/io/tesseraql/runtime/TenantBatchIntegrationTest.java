@@ -132,9 +132,11 @@ class TenantBatchIntegrationTest {
                 kind: job
                 recipe: batch-tasklet
                 perTenant: true
-                sql:
-                  file: seed.sql
-                  mode: update
+                sources:
+                  main:
+                    sql:
+                      file: seed.sql
+                      mode: update
                 """);
         Files.writeString(jobDir.resolve("seed.sql"),
                 "insert into items (name) values ('seeded')\n");

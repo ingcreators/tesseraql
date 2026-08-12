@@ -142,13 +142,9 @@ public final class JobExecutor {
             io.tesseraql.yaml.manifest.JobFile jobFile, io.tesseraql.yaml.model.ExportSpec export,
             javax.sql.DataSource dataSource, Map<String, Object> context,
             io.tesseraql.core.sql.FilePathResolver filePathResolver) {
-        if (export.queries().isEmpty()) {
-            return Map.of();
-        }
-        Map<String, io.tesseraql.core.sql.BoundSql> rendered = new LinkedHashMap<>();
-        export.queries().forEach((name, binding) -> rendered.put(name,
-                renderStepSql(jobFile, binding, dataSource, context, filePathResolver)));
-        return Map.copyOf(rendered);
+        // A step has one arm and it is the rows; a template's other data belongs to a job that
+        // declares it, which no pipeline step does yet (docs/unified-sources.md, decision 7).
+        return Map.of();
     }
 
     /** The ceiling a step's export declares; whether it applies is the codec's answer. */
@@ -616,11 +612,12 @@ public final class JobExecutor {
         io.tesseraql.core.sql.FilePathResolver filePathResolver = filePathResolvers == null
                 ? io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED
                 : filePathResolvers.apply(jobFile.definition().datasource());
-        BoundSql query = renderStepSql(jobFile, export.sql(), dataSource, context,
+        BoundSql query = renderStepSql(jobFile, step.sql(), dataSource, context,
                 filePathResolver);
         BoundSql afterExtract = export.after() == null || export.after().sql() == null
                 ? null
-                : renderStepSql(jobFile, export.after().sql(), dataSource, context,
+                : renderStepSql(jobFile, io.tesseraql.yaml.model.Binding.sql(export.after().sql()),
+                        dataSource, context,
                         filePathResolver);
         Path template = export.template() == null
                 ? null
@@ -689,7 +686,7 @@ public final class JobExecutor {
     }
 
     /** Renders one step-owned 2-way SQL file the way {@link #runStep} does. */
-    private BoundSql renderStepSql(JobFile jobFile, io.tesseraql.yaml.model.SqlBinding binding,
+    private BoundSql renderStepSql(JobFile jobFile, io.tesseraql.yaml.model.Binding binding,
             DataSource dataSource, Map<String, Object> context,
             io.tesseraql.core.sql.FilePathResolver filePathResolver) {
         Path sqlPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
@@ -1079,7 +1076,7 @@ public final class JobExecutor {
         return result;
     }
 
-    private static Map<String, Object> resolveParams(io.tesseraql.yaml.model.SqlBinding binding,
+    private static Map<String, Object> resolveParams(io.tesseraql.yaml.model.Binding binding,
             Map<String, Object> context) {
         EvaluationContext evaluation = new EvaluationContext(context);
         Map<String, Object> params = new LinkedHashMap<>();

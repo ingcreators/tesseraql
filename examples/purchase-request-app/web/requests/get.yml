@@ -18,12 +18,13 @@ pagination:
   size: 20
   count: true
 
-sql:
-  file: requests.sql
-  mode: query
-  params:
-    q: query.q
-
+sources:
+  main:
+    sql:
+      file: requests.sql
+      mode: query
+      params:
+        q: query.q
 response:
   html:
     status: 200

@@ -3,8 +3,10 @@ id: tql.studio.migration.diff
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.migration.diff
+sources:
+  main:
+    service:
+      name: studio.migration.diff
 
 response:
   html:

@@ -38,7 +38,8 @@ class OpenApiDomainComponentsTest {
                 %s
                 steps:
                   record:
-                    file: insert.sql
+                    sql:
+                      file: insert.sql
                 response:
                   json:
                     body:

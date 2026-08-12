@@ -17,9 +17,9 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.PipelineStep;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -155,7 +155,7 @@ final class StudioTestService {
         return cases;
     }
 
-    private void bindings(SqlBinding binding, Path jobDir, Set<Path> sqlFiles,
+    private void bindings(Binding binding, Path jobDir, Set<Path> sqlFiles,
             Set<String> contracts) {
         if (binding == null) {
             return;
@@ -274,8 +274,8 @@ final class StudioTestService {
         // A working context the named queries resolve their binds against, accreting earlier results
         // in authored order — mirroring how the runtime publishes each result under its own key.
         Map<String, Object> working = new LinkedHashMap<>(context);
-        runInto(results, working, "sql", route.sql(), routeDir);
-        for (Map.Entry<String, SqlBinding> query : route.queries().entrySet()) {
+        runInto(results, working, "sql", route.main(), routeDir);
+        for (Map.Entry<String, Binding> query : route.sources().entrySet()) {
             runInto(results, working, query.getKey(), query.getValue(), routeDir);
         }
         return results.isEmpty() ? null : results;
@@ -289,7 +289,7 @@ final class StudioTestService {
     Integer sandboxRowCount(io.tesseraql.yaml.model.RouteDefinition route,
             java.nio.file.Path routeDir, Map<String, Object> context) {
         try {
-            Map<String, Object> result = runQuery(route.sql(), routeDir,
+            Map<String, Object> result = runQuery(route.main(), routeDir,
                     new LinkedHashMap<>(context));
             return result == null ? null : (Integer) result.get("rowCount");
         } catch (RuntimeException ex) {
@@ -299,7 +299,7 @@ final class StudioTestService {
 
     /** Runs one read binding and, on success, records its {@code {rows,rowCount}} under {@code key}. */
     private void runInto(Map<String, Object> results, Map<String, Object> working, String key,
-            SqlBinding binding, Path routeDir) {
+            Binding binding, Path routeDir) {
         Map<String, Object> result = runQuery(binding, routeDir, working);
         if (result != null) {
             results.put(key, result);
@@ -333,7 +333,7 @@ final class StudioTestService {
     }
 
     /** Runs one read query through the sandbox, or null when the binding is not a runnable read. */
-    private Map<String, Object> runQuery(SqlBinding binding, Path routeDir,
+    private Map<String, Object> runQuery(Binding binding, Path routeDir,
             Map<String, Object> context) {
         if (binding == null || binding.file() == null || binding.isService() || binding.isContract()
                 || binding.isSequence() || !binding.effectiveMode().startsWith("query")) {

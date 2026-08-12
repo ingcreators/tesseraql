@@ -26,7 +26,9 @@ class AppLinterChainingTest {
                     kind: job
                     recipe: batch-tasklet
                     %s
-                    sql: { file: noop.sql, mode: query }
+                    sql:
+                      file: noop.sql
+                      mode: query
                     """.formatted(i, triggers[i]));
         }
         Files.writeString(dir.resolve("batch/chain/noop.sql"), "select 1\n");

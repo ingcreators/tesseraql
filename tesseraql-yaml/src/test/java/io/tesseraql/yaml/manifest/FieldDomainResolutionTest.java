@@ -51,7 +51,8 @@ class FieldDomainResolutionTest {
                     maxLength: 20
                 steps:
                   adjust:
-                    file: adjust.sql
+                    sql:
+                      file: adjust.sql
                 response:
                   json:
                     body:
@@ -159,9 +160,11 @@ class FieldDomainResolutionTest {
                     use: neverDeclared
                     params: { q: params.q }
                     field: q
-                sql:
-                  file: search.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
                 """);
 
         assertThatThrownBy(() -> new ManifestLoader().load(home))

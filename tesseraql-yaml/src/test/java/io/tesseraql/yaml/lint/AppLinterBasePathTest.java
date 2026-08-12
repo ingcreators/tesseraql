@@ -37,8 +37,10 @@ class AppLinterBasePathTest {
                 recipe: query-html
                 security:
                   auth: public
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   html:
                     template: page.html

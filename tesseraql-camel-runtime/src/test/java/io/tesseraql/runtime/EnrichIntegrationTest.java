@@ -267,16 +267,20 @@ class EnrichIntegrationTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 enrich:
                   partner:
                     on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     merge: [partner_name]
                   contract:
                     on: { buyer_code: buyer, partner_code: supplier }
-                    sql: { file: contracts.sql }
+                    sql:
+                      file: contracts.sql
                     merge: [terms]
                 response:
                   json:
@@ -301,13 +305,16 @@ class EnrichIntegrationTest {
                 id: orders.report
                 kind: route
                 recipe: query-export
-                sql:
-                  file: rows.sql
-                  mode: query-export
+                sources:
+                  main:
+                    sql:
+                      file: rows.sql
+                      mode: query-export
                 enrich:
                   partner:
                     on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     batchSize: 2
                     merge: [partner_name]
                 export:
@@ -341,18 +348,22 @@ class EnrichIntegrationTest {
                 recipe: query-json
                 input:
                   id: { type: integer, required: true }
-                sql:
-                  file: order.sql
-                  params: { id: path.id }
+                sources:
+                  main:
+                    sql:
+                      file: order.sql
+                      params: { id: path.id }
                 queries:
                   history:
-                    file: history.sql
-                    params: { id: path.id }
+                    sql:
+                      file: history.sql
+                      params: { id: path.id }
                 enrich:
                   historyPartner:
                     into: history
                     on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     merge: [partner_name]
                 response:
                   json:
@@ -365,23 +376,23 @@ class EnrichIntegrationTest {
         writeVariant(target, "batched", "batchSize: 1");
         writeVariant(target, "capped", "maxKeys: 1");
         writeHttpVariant(target, "via-http", """
-                http:
-                      url: http://localhost:%d/partners/{key.code}
+                sources:
+                        url: http://localhost:%d/partners/{key.code}
                     merge: [name]""".formatted(upstreamPort), "name");
         writeHttpVariant(target, "via-search", """
-                http:
-                      method: POST
-                      url: http://localhost:%d/search
-                      body: keys
-                      select: matches
-                    mode: batch
+                sources:
+                        method: POST
+                        url: http://localhost:%d/search
+                        body: keys
+                        select: matches
+                      mode: batch
                     merge: [name]""".formatted(upstreamPort), "name");
         writeHttpVariant(target, "degraded", """
-                http:
-                      url: http://localhost:1/partners/{key.code}
-                      connectTimeout: 1s
-                      requestTimeout: 1s
-                      onError: empty
+                sources:
+                        url: http://localhost:1/partners/{key.code}
+                        connectTimeout: 1s
+                        requestTimeout: 1s
+                        onError: empty
                     merge: [name]""", "name");
         return target;
     }
@@ -398,8 +409,10 @@ class EnrichIntegrationTest {
                 id: orders.%s
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 enrich:
                   partner:
                     on: { partner_code: code }
@@ -428,12 +441,15 @@ class EnrichIntegrationTest {
                 id: orders.%s
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 enrich:
                   partner:
                     on: { partner_code: code }
-                    sql: { file: partners.sql }
+                    sql:
+                      file: partners.sql
                     merge: [partner_name]
                     %s
                 response:

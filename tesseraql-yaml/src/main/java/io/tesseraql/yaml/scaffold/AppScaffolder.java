@@ -449,21 +449,21 @@ public final class AppScaffolder {
             security:
               policy: app.read
 
-            sql:
-              file: search.sql
-              mode: query
-              params:
-                q: query.q
-                limit: query.limit
-                offset: query.offset
-
+            sources:
+              main:
+                file: search.sql
+                mode: query
+                params:
+                  q: query.q
+                  limit: query.limit
+                  offset: query.offset
             response:
               json:
                 status: 200
                 body:
-                  data: sql.rows
+                  data: main.rows
                   meta:
-                    count: sql.rowCount
+                    count: main.rowCount
                     limit: params.limit
                     offset: params.offset
             """;
@@ -496,8 +496,9 @@ public final class AppScaffolder {
             version: tesseraql/v1
             tests:
               - name: the items search returns the seeded row
-                sql:
-                  file: web/api/items/search.sql
+                sources:
+                  main:
+                    file: web/api/items/search.sql
                 params:
                   q: ""
                   limit: 50
@@ -508,8 +509,9 @@ public final class AppScaffolder {
                     - name: First item
 
               - name: the items search filters by exact name
-                sql:
-                  file: web/api/items/search.sql
+                sources:
+                  main:
+                    file: web/api/items/search.sql
                 params:
                   q: First item
                   limit: 50

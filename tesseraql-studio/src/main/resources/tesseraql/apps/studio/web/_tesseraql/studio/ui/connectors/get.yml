@@ -8,12 +8,13 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.connectors.view
-  params:
-    saved: params.saved
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.connectors.view
+      params:
+        saved: params.saved
+        roles: principal.roles
 response:
   html:
     status: 200

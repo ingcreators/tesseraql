@@ -14,12 +14,14 @@ input:
     type: string
     required: true
 
-sql:
-  service: iam.revokeSession
-  params:
-    userId: path.id
-    handle: params.handle
-
+steps:
+  main:
+    sql:
+      service:
+        name: iam.revokeSession
+        params:
+          userId: path.id
+          handle: params.handle
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?signedout=one

@@ -32,12 +32,12 @@ import java.util.Map;
  * @param maxKeys   the ceiling on distinct keys, beyond which the enrichment fails
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record EnrichSpec(String into, Map<String, String> on, SqlBinding sql,
+public record EnrichSpec(String into, Map<String, String> on, Binding.SqlArm sql,
         HttpSourceSpec http, String mode, String as, List<String> merge, Integer batchSize,
         Integer maxKeys) {
 
-    /** The result set an enrichment enriches when it names none: the route's own SQL. */
-    public static final String DEFAULT_INTO = "sql";
+    /** The result set an enrichment enriches when it names none: the primary source. */
+    public static final String DEFAULT_INTO = "main";
 
     /** One request for the whole key set. */
     public static final String BATCH = "batch";

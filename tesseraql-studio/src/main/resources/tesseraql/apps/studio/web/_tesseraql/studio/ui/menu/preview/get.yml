@@ -13,12 +13,13 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.menu.preview
-  params:
-    role: params.role
-    permission: params.permission
-
+sources:
+  main:
+    service:
+      name: studio.menu.preview
+      params:
+        role: params.role
+        permission: params.permission
 response:
   html:
     status: 200

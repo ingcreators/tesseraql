@@ -12,6 +12,7 @@ import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.DeadlineSpec;
 import io.tesseraql.yaml.model.ImportSpec;
 import io.tesseraql.yaml.model.InputField;
@@ -20,7 +21,6 @@ import io.tesseraql.yaml.model.JobDefinition;
 import io.tesseraql.yaml.model.MatchArm;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.ScopeDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.model.StateSpec;
 import io.tesseraql.yaml.model.TransitionSpec;
 import io.tesseraql.yaml.model.WhenCondition;
@@ -270,14 +270,36 @@ public final class AppLinter {
         return acceptedKeyCache.computeIfAbsent(recordClass, cls -> {
             Set<String> keys = new java.util.TreeSet<>();
             for (java.lang.reflect.RecordComponent component : cls.getRecordComponents()) {
-                com.fasterxml.jackson.annotation.JsonProperty json = component
-                        .getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
-                keys.add(json != null && !json.value().isEmpty()
-                        ? json.value()
-                        : component.getName());
+                keys.add(yamlName(cls, component));
             }
             return keys;
         });
+    }
+
+    /**
+     * A record component's YAML name, honoring a {@code @JsonProperty} rename.
+     *
+     * <p>Read from the backing <em>field</em>, not the component mirror: {@code @JsonProperty}
+     * cannot target a record component, so javac puts it on the field and
+     * {@code RecordComponent.getAnnotation} answers null. Asking the mirror listed the three
+     * renamed components under their Java names — so this lint told an author that
+     * {@code export:}, {@code import:} and {@code notify:} were unknown keys "silently
+     * ignored", naming {@code fileExport}, {@code fileImport} and {@code notifications} as the
+     * accepted spellings, none of which the loader accepts. Every application declaring any of
+     * the three carried the warning.
+     */
+    private static String yamlName(Class<?> recordClass,
+            java.lang.reflect.RecordComponent component) {
+        try {
+            var renamed = recordClass.getDeclaredField(component.getName())
+                    .getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
+            if (renamed != null && !renamed.value().isEmpty()) {
+                return renamed.value();
+            }
+        } catch (NoSuchFieldException impossibleForARecord) {
+            throw new IllegalStateException(impossibleForARecord);
+        }
+        return component.getName();
     }
 
     /**
@@ -358,9 +380,9 @@ public final class AppLinter {
                         "page: size must be >= 1 and maxSize >= size",
                         lineOf(route.source(), "page:"), null));
             }
-            if (route.definition().sql() != null && route.definition().sql().file() != null) {
+            if (route.definition().main() != null && route.definition().main().file() != null) {
                 Path sqlFile = route.source().getParent()
-                        .resolve(route.definition().sql().file()).normalize();
+                        .resolve(route.definition().main().file()).normalize();
                 try {
                     if (java.nio.file.Files.isRegularFile(sqlFile) && java.nio.file.Files
                             .readString(sqlFile).toLowerCase(java.util.Locale.ROOT)
@@ -381,7 +403,7 @@ public final class AppLinter {
             for (io.tesseraql.yaml.model.ResponseSpec.NestSpec nestSpec : json.nest()) {
                 boolean bodyHasKey = json.body() instanceof java.util.Map<?, ?> bodyMap
                         && bodyMap.containsKey(nestSpec.into());
-                var queries = route.definition().queries();
+                var queries = route.definition().sources();
                 boolean childDeclared = queries != null
                         && queries.containsKey(nestSpec.children());
                 // as: attaches a list, merge: copies columns onto the parent; exactly one of
@@ -629,7 +651,7 @@ public final class AppLinter {
             }
             for (io.tesseraql.yaml.view.ViewSpec.Panel panel : spec.panels()) {
                 String panelSource = panel.source() == null || panel.source().isBlank()
-                        ? "sql"
+                        ? RouteDefinition.MAIN
                         : panel.source();
                 if (!declaresViewSource(route.definition(), panelSource)) {
                     findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
@@ -774,13 +796,11 @@ public final class AppLinter {
      * view model reads.
      */
     private static boolean declaresViewSource(RouteDefinition definition, String source) {
-        if ("sql".equals(source)) {
+        if (RouteDefinition.MAIN.equals(source)) {
             return true;
         }
-        var queries = definition.queries();
-        var http = definition.http();
-        return (queries != null && queries.containsKey(source))
-                || (http != null && http.containsKey(source));
+        var sources = definition.sources();
+        return sources != null && sources.containsKey(source);
     }
 
     /** A form view's action route exists, declares inputs, and covers every fields: entry. */
@@ -1408,15 +1428,12 @@ public final class AppLinter {
         Set<String> found = new LinkedHashSet<>();
         Path dir = source.getParent();
         List<String> files = new ArrayList<>();
-        if (def.sql() != null && def.sql().file() != null) {
-            files.add(def.sql().file());
-        }
         def.steps().values().forEach(step -> {
             if (step.file() != null) {
                 files.add(step.file());
             }
         });
-        def.queries().values().forEach(query -> {
+        def.sources().values().forEach(query -> {
             if (query.file() != null) {
                 files.add(query.file());
             }
@@ -1595,15 +1612,12 @@ public final class AppLinter {
      */
     private static Map<String, Map<String, String>> sqlParamMaps(RouteDefinition def) {
         Map<String, Map<String, String>> maps = new LinkedHashMap<>();
-        if (def.sql() != null && def.sql().file() != null && def.sql().params() != null) {
-            maps.put("sql.params", def.sql().params());
-        }
         def.steps().forEach((name, step) -> {
             if (step.file() != null && step.params() != null) {
                 maps.put("step '" + name + "'", step.params());
             }
         });
-        def.queries().forEach((name, query) -> {
+        def.sources().forEach((name, query) -> {
             if (query.file() != null && query.params() != null) {
                 maps.put("query '" + name + "'", query.params());
             }
@@ -1621,15 +1635,12 @@ public final class AppLinter {
         Set<String> found = new LinkedHashSet<>();
         Path dir = source.getParent();
         List<String> files = new ArrayList<>();
-        if (def.sql() != null && def.sql().file() != null) {
-            files.add(def.sql().file());
-        }
         def.steps().values().forEach(step -> {
             if (step.file() != null) {
                 files.add(step.file());
             }
         });
-        def.queries().values().forEach(query -> {
+        def.sources().values().forEach(query -> {
             if (query.file() != null) {
                 files.add(query.file());
             }
@@ -2154,11 +2165,12 @@ public final class AppLinter {
                     "MCP UI resource '" + definition.id() + "' has no description; it is the hint"
                             + " the model uses to decide whether to surface the UI"));
         }
-        if (definition.sql() != null && !definition.sql().isContract()
-                && definition.sql().file() != null
-                && !Files.isRegularFile(ui.source().getParent().resolve(definition.sql().file()))) {
+        if (definition.main() != null && !definition.main().isContract()
+                && definition.main().file() != null
+                && !Files
+                        .isRegularFile(ui.source().getParent().resolve(definition.main().file()))) {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                    "Referenced SQL file is missing: " + definition.sql().file()));
+                    "Referenced SQL file is missing: " + definition.main().file()));
         }
         String policy = definition.security() == null ? null : definition.security().policy();
         if (policy != null && !policy.isBlank() && !policyDefined(config, policy)) {
@@ -2205,7 +2217,8 @@ public final class AppLinter {
         String source = appHome.relativize(resource.source()).toString().replace('\\', '/');
 
         boolean write = !"query-json".equals(definition.recipe())
-                || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
+                || (definition.main() != null
+                        && "update".equals(definition.main().effectiveMode()));
         if (write) {
             findings.add(new LintFinding("TQL-MCP-1003", "error", source,
                     "MCP resource '" + definition.id() + "' must be read-only: use the query-json"
@@ -2226,12 +2239,12 @@ public final class AppLinter {
                     "MCP resource '" + definition.id() + "' has no description; it is the hint the"
                             + " model uses to decide whether to attach the resource"));
         }
-        if (definition.sql() != null && !definition.sql().isContract()
-                && definition.sql().file() != null
+        if (definition.main() != null && !definition.main().isContract()
+                && definition.main().file() != null
                 && !Files.isRegularFile(
-                        resource.source().getParent().resolve(definition.sql().file()))) {
+                        resource.source().getParent().resolve(definition.main().file()))) {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                    "Referenced SQL file is missing: " + definition.sql().file()));
+                    "Referenced SQL file is missing: " + definition.main().file()));
         }
         String policy = definition.security() == null ? null : definition.security().policy();
         if (policy != null && !policy.isBlank() && !policyDefined(config, policy)) {
@@ -2292,12 +2305,12 @@ public final class AppLinter {
                     "MCP tool '" + definition.id() + "' has no description; it is the hint the"
                             + " model uses to decide when to call the tool"));
         }
-        if (definition.sql() != null && !definition.sql().isContract()
-                && definition.sql().file() != null
+        if (definition.main() != null && !definition.main().isContract()
+                && definition.main().file() != null
                 && !Files.isRegularFile(
-                        tool.source().getParent().resolve(definition.sql().file()))) {
+                        tool.source().getParent().resolve(definition.main().file()))) {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                    "Referenced SQL file is missing: " + definition.sql().file()));
+                    "Referenced SQL file is missing: " + definition.main().file()));
         }
         definition.steps().forEach((name, step) -> {
             if (step.file() != null
@@ -2306,7 +2319,7 @@ public final class AppLinter {
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
             }
         });
-        definition.queries().forEach((name, query) -> {
+        definition.sources().forEach((name, query) -> {
             if (query.file() != null
                     && !Files.isRegularFile(tool.source().getParent().resolve(query.file()))) {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
@@ -2315,7 +2328,8 @@ public final class AppLinter {
         });
 
         boolean write = "command-json".equals(definition.recipe())
-                || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
+                || (definition.main() != null
+                        && "update".equals(definition.main().effectiveMode()));
         String policy = definition.security() == null ? null : definition.security().policy();
         if (write && (policy == null || policy.isBlank())) {
             findings.add(new LintFinding("TQL-MCP-4030", "error", source,
@@ -2459,8 +2473,8 @@ public final class AppLinter {
                     "Unknown route recipe '" + definition.recipe() + "'",
                     lineOf(route.source(), "recipe:"), null));
         }
-        if (definition.sql() != null && definition.sql().timeoutSeconds() != null
-                && definition.sql().timeoutSeconds() < 0) {
+        if (definition.main() != null && definition.main().timeoutSeconds() != null
+                && definition.main().timeoutSeconds() < 0) {
             findings.add(new LintFinding("TQL-YAML-1021", "error", source,
                     "sql.timeoutSeconds must be >= 0 (0 disables the statement timeout)",
                     lineOf(route.source(), "timeoutSeconds:"), null));
@@ -2473,18 +2487,18 @@ public final class AppLinter {
                         "Step '" + name + "' timeoutSeconds must be >= 0"));
             }
         });
-        definition.queries().forEach((name, query) -> {
+        definition.sources().forEach((name, query) -> {
             if (query.timeoutSeconds() != null && query.timeoutSeconds() < 0) {
                 findings.add(new LintFinding("TQL-YAML-1021", "error", source,
                         "Query '" + name + "' timeoutSeconds must be >= 0"));
             }
         });
-        if (definition.sql() != null && !definition.sql().isContract()
-                && definition.sql().file() != null) {
-            Path sqlFile = route.source().getParent().resolve(definition.sql().file());
+        if (definition.main() != null && !definition.main().isContract()
+                && definition.main().file() != null) {
+            Path sqlFile = route.source().getParent().resolve(definition.main().file());
             if (!Files.isRegularFile(sqlFile)) {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                        "Referenced SQL file is missing: " + definition.sql().file()));
+                        "Referenced SQL file is missing: " + definition.main().file()));
             }
         }
         definition.steps().forEach((name, step) -> {
@@ -2494,7 +2508,7 @@ public final class AppLinter {
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
             }
         });
-        definition.queries().forEach((name, query) -> {
+        definition.sources().forEach((name, query) -> {
             if (query.file() != null
                     && !Files.isRegularFile(route.source().getParent().resolve(query.file()))) {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
@@ -2528,7 +2542,7 @@ public final class AppLinter {
         }
         lintRouteExport(route, definition, source, findings);
         lintExportRowCap(definition.fileExport(), "", source, findings);
-        lintExportSources(definition.fileExport(), definition.http(),
+        lintExportSources(definition.fileExport(), definition.sources(),
                 extractionSqlFile(route, definition), "", source, findings);
         lintDatasource(config, route.source(), definition, source, findings);
         lintEmbeddedVariables(route.source(), definition, source, findings);
@@ -2594,7 +2608,7 @@ public final class AppLinter {
      */
     private void lintEmbeddedVariables(Path documentSource, RouteDefinition definition,
             String source, List<LintFinding> findings) {
-        SqlBinding sql = definition.sql();
+        Binding sql = definition.main();
         if (sql == null || sql.isContract() || sql.file() == null) {
             return;
         }
@@ -2683,16 +2697,16 @@ public final class AppLinter {
         if (!enabled || !"shared-schema".equals(mode)) {
             return;
         }
-        if (definition.sql() == null || definition.sql().isContract()
-                || definition.sql().file() == null) {
+        if (definition.main() == null || definition.main().isContract()
+                || definition.main().file() == null) {
             return;
         }
-        boolean boundToTenant = definition.sql().params().values().stream()
+        boolean boundToTenant = definition.main().params().values().stream()
                 .anyMatch(expr -> expr != null && expr.startsWith("tenant."));
         if (boundToTenant) {
             return;
         }
-        Path sqlFile = documentSource.getParent().resolve(definition.sql().file());
+        Path sqlFile = documentSource.getParent().resolve(definition.main().file());
         if (Files.isRegularFile(sqlFile) && readQuietly(sqlFile).toLowerCase().contains("tenant")) {
             return;
         }
@@ -2824,7 +2838,7 @@ public final class AppLinter {
         for (RouteFile route : allScopeRoutes(manifest)) {
             String source = relative(appHome, route.source());
             String id = route.definition().id();
-            for (Map.Entry<String, SqlBinding> entry : writeBindings(route.definition())) {
+            for (Map.Entry<String, Binding> entry : writeBindings(route.definition())) {
                 Path sqlFile = route.source().getParent().resolve(entry.getValue().file());
                 if (!Files.isRegularFile(sqlFile)) {
                     continue;
@@ -2884,15 +2898,15 @@ public final class AppLinter {
     }
 
     /** The {@code (name, binding)} pairs of a route whose SQL runs in write ({@code update}) mode. */
-    private static List<Map.Entry<String, SqlBinding>> writeBindings(RouteDefinition definition) {
-        Map<String, SqlBinding> bindings = new LinkedHashMap<>();
-        if (definition.sql() != null) {
-            bindings.put("sql", definition.sql());
+    private static List<Map.Entry<String, Binding>> writeBindings(RouteDefinition definition) {
+        Map<String, Binding> bindings = new LinkedHashMap<>();
+        if (definition.main() != null) {
+            bindings.put(RouteDefinition.MAIN, definition.main());
         }
         bindings.putAll(definition.steps());
-        List<Map.Entry<String, SqlBinding>> writes = new ArrayList<>();
-        for (Map.Entry<String, SqlBinding> entry : bindings.entrySet()) {
-            SqlBinding binding = entry.getValue();
+        List<Map.Entry<String, Binding>> writes = new ArrayList<>();
+        for (Map.Entry<String, Binding> entry : bindings.entrySet()) {
+            Binding binding = entry.getValue();
             if (binding != null && !binding.isContract() && binding.file() != null
                     && "update".equals(binding.effectiveMode())) {
                 writes.add(entry);
@@ -3556,14 +3570,14 @@ public final class AppLinter {
     /** The non-contract SQL files a document references ({@code sql}, {@code steps}, {@code queries}). */
     private static List<Path> routeSqlFiles(Path source, RouteDefinition definition) {
         Path dir = source.getParent();
-        Map<String, SqlBinding> bindings = new LinkedHashMap<>();
-        if (definition.sql() != null) {
-            bindings.put("sql", definition.sql());
+        Map<String, Binding> bindings = new LinkedHashMap<>();
+        if (definition.main() != null) {
+            bindings.put(RouteDefinition.MAIN, definition.main());
         }
         bindings.putAll(definition.steps());
-        bindings.putAll(definition.queries());
+        bindings.putAll(definition.sources());
         List<Path> files = new ArrayList<>();
-        for (SqlBinding binding : bindings.values()) {
+        for (Binding binding : bindings.values()) {
             if (binding != null && !binding.isContract() && binding.file() != null) {
                 files.add(dir.resolve(binding.file()));
             }
@@ -3600,10 +3614,10 @@ public final class AppLinter {
         if (!WRITE_RECIPES.contains(definition.recipe())) {
             return;
         }
-        java.util.Map<String, io.tesseraql.yaml.model.SqlBinding> bindings = new java.util.LinkedHashMap<>(
+        java.util.Map<String, io.tesseraql.yaml.model.Binding> bindings = new java.util.LinkedHashMap<>(
                 definition.steps());
-        if (definition.sql() != null) {
-            bindings.put("sql", definition.sql());
+        if (definition.main() != null) {
+            bindings.put(RouteDefinition.MAIN, definition.main());
         }
         bindings.forEach((name, binding) -> {
             if (binding.file() == null) {
@@ -3700,7 +3714,7 @@ public final class AppLinter {
                     + definition.id() + "' references verifier '" + provider
                     + "' not configured under tesseraql.connectors.webhooks"));
         }
-        if (definition.sql() == null && definition.steps().isEmpty()) {
+        if (definition.main() == null && definition.steps().isEmpty()) {
             findings.add(new LintFinding("TQL-YAML-1008", "error", source, "webhook route '"
                     + definition.id() + "' needs a sql: or steps: pipeline"));
         }
@@ -3762,14 +3776,14 @@ public final class AppLinter {
                     + definition.id() + "' references channel '" + consume.channel()
                     + "' not configured under tesseraql.messaging.channels"));
         }
-        if (definition.sql() == null && definition.steps().isEmpty()) {
+        if (definition.main() == null && definition.steps().isEmpty()) {
             findings.add(new LintFinding("TQL-YAML-1009", "error", source, "queue-consume route '"
                     + definition.id() + "' needs a sql: or steps: pipeline"));
         }
-        if (definition.sql() != null && definition.sql().file() != null && !Files.isRegularFile(
-                consumer.source().getParent().resolve(definition.sql().file()))) {
+        if (definition.main() != null && definition.main().file() != null && !Files.isRegularFile(
+                consumer.source().getParent().resolve(definition.main().file()))) {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                    "Referenced SQL file is missing: " + definition.sql().file()));
+                    "Referenced SQL file is missing: " + definition.main().file()));
         }
         definition.steps().forEach((name, step) -> {
             if (step.file() != null && !Files.isRegularFile(
@@ -3829,7 +3843,7 @@ public final class AppLinter {
                         lineOf(sourceFile, "datasource:"), null));
             }
         }
-        SqlBinding sql = definition.sql();
+        Binding sql = definition.main();
         if (sql != null && declaredDatasource(sql.datasource())) {
             if (read) {
                 lintDatasourceName(config, sourceFile, sql.datasource(), source, findings);
@@ -3848,7 +3862,7 @@ public final class AppLinter {
                                 + " per step"));
             }
         });
-        definition.queries().forEach((name, query) -> {
+        definition.sources().forEach((name, query) -> {
             if (declaredDatasource(query.datasource())) {
                 lintDatasourceName(config, sourceFile, query.datasource(), source, findings);
             }
@@ -3858,10 +3872,11 @@ public final class AppLinter {
             findings.add(new LintFinding("TQL-YAML-1037", "error", source,
                     "import.sql cannot declare datasource: - the import pipeline runs on main"));
         }
-        if (definition.fileExport() != null && definition.fileExport().sql() != null
-                && declaredDatasource(definition.fileExport().sql().datasource())) {
+        if (definition.fileExport() != null && definition.main() != null
+                && declaredDatasource(definition.main().datasource())) {
             findings.add(new LintFinding("TQL-YAML-1037", "error", source,
-                    "export.sql cannot declare datasource: - the export pipeline runs on main"));
+                    "an exporting route's main source cannot declare datasource: - the export"
+                            + " pipeline runs on main"));
         }
     }
 
@@ -3874,8 +3889,8 @@ public final class AppLinter {
     private static boolean mainAnchored(RouteDefinition definition) {
         return !definition.notifications().isEmpty() || definition.publish() != null
                 || definition.outbox() != null
-                || (definition.sql() != null && definition.sql().isSequence())
-                || definition.steps().values().stream().anyMatch(SqlBinding::isSequence);
+                || (definition.main() != null && definition.main().isSequence())
+                || definition.steps().values().stream().anyMatch(Binding::isSequence);
     }
 
     /** {@code TQL-YAML-1035}: a non-main connector must exist under {@code tesseraql.datasources}
@@ -4003,9 +4018,7 @@ public final class AppLinter {
                             + "' recipe carries durable state and belongs on a server"
                             + " datasource"));
         }
-        lintDuckDbSql(config, route.source().getParent(), definition.sql(), routeDatasource,
-                source, findings);
-        definition.queries().forEach((name, query) -> lintDuckDbSql(config,
+        definition.sources().forEach((name, query) -> lintDuckDbSql(config,
                 route.source().getParent(), query,
                 declaredDatasource(query.datasource()) ? query.datasource() : routeDatasource,
                 source, findings));
@@ -4203,7 +4216,7 @@ public final class AppLinter {
                     + "|read_blob|parquet_scan|glob)\\s*\\(\\s*([^\\s])");
 
     /** The SQL-content file rules for one binding, against its effective datasource. */
-    private void lintDuckDbSql(AppConfig config, Path sourceDir, SqlBinding sql,
+    private void lintDuckDbSql(AppConfig config, Path sourceDir, Binding sql,
             String datasource, String source, List<LintFinding> findings) {
         if (sql == null || sql.isContract() || sql.file() == null) {
             return;
@@ -4526,16 +4539,17 @@ public final class AppLinter {
             io.tesseraql.yaml.model.PipelineStep step, String source,
             List<LintFinding> findings) {
         io.tesseraql.yaml.model.ExportSpec export = step.export();
-        if (export.sql() == null || export.sql().file() == null
-                || export.sql().file().isBlank()) {
+        // The rows come from the step's own arm, never from inside export: — an output block
+        // says how to write, not what to read (docs/unified-sources.md, decision 7).
+        if (step.sql() == null || step.sql().file() == null || step.sql().file().isBlank()) {
             findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
-                    + "': export needs sql: { file: … } (the extraction query)"));
+                    + "': an export step needs the rows to write — declare the step's own"
+                    + " sql: { file: … }"));
             return;
         }
-        if (export.sql().datasource() != null) {
+        if (step.sql().datasource() != null) {
             findings.add(new LintFinding("TQL-YAML-1037", "error", source, "Step '" + step.id()
-                    + "': export.sql cannot declare datasource: — a pipeline step runs on the"
-                    + " job's datasource"));
+                    + "': a pipeline step cannot declare datasource: — it runs on the job's"));
         }
         if (export.format() == null || export.format().isBlank()) {
             findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
@@ -4575,9 +4589,9 @@ public final class AppLinter {
         }
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
         lintExportSources(export, java.util.Map.of(),
-                export.sql() == null || export.sql().file() == null
+                step.sql() == null || step.sql().file() == null
                         ? null
-                        : job.source().getParent().resolve(export.sql().file()),
+                        : job.source().getParent().resolve(step.sql().file()),
                 "Step '" + step.id() + "': ", source, findings);
     }
 
@@ -4597,7 +4611,8 @@ public final class AppLinter {
                 || chunk.writer() == null || chunk.writer().file() == null
                 || chunk.writer().file().isBlank()) {
             findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk needs reader: { file: … } and writer: { file: … }"));
+                    + "': chunk needs reader: { sql: { file: … } } and writer:"
+                    + " { sql: { file: … } }"));
             return;
         }
         if (chunk.commitEvery() != null && chunk.commitEvery() < 1) {
@@ -5034,9 +5049,9 @@ public final class AppLinter {
             // An export's extraction is its own `sql:` under export:, not the route's — and it
             // is the only result an export publishes rows for (docs/lookups.md, slice 13b).
             boolean exportsRows = definition.fileExport() != null;
-            boolean targetExists = "sql".equals(into)
-                    ? definition.sql() != null || exportsRows
-                    : definition.queries().containsKey(into);
+            boolean targetExists = RouteDefinition.MAIN.equals(into)
+                    ? definition.main() != null || exportsRows
+                    : definition.sources().containsKey(into);
             if (!targetExists) {
                 findings.add(new LintFinding("TQL-YAML-1045", "error", source,
                         "enrich '" + name + "': into: '" + into + "' is neither the route's"
@@ -5139,16 +5154,31 @@ public final class AppLinter {
         return expression.equals("keys") || expression.startsWith("keys.");
     }
 
+    /** The sources whose arm is an outbound call, in authored order. */
+    private static java.util.Map<String, io.tesseraql.yaml.model.HttpSourceSpec> httpArms(
+            RouteDefinition definition) {
+        var calls = new java.util.LinkedHashMap<String, io.tesseraql.yaml.model.HttpSourceSpec>();
+        definition.sources().forEach((name, binding) -> {
+            if (binding != null && binding.isHttp()) {
+                calls.put(name, binding.http());
+            }
+        });
+        return calls;
+    }
+
     /**
-     * http: source lints (docs/connectors.md, "HTTP sources"): sources belong to query
-     * recipes only — a command must stay a pure transactional write (TQL-YAML-1022); a
-     * source name must not shadow the {@code sql} result or a named query (the response
-     * composes them side by side); and each source clears the same egress checks as a job's
-     * httpCall step (TQL-SEC-4070/4071/4072 via {@link #lintHttpCall}).
+     * Egress lints for the {@code http} arm of a source (docs/connectors.md, "HTTP sources"):
+     * an outbound acquisition belongs to a read recipe or a transactional one — never, say, a
+     * file-import (TQL-YAML-1022) — and each clears the same egress checks a job's outbound
+     * step does (TQL-SEC-4070/4071/4072 via {@link #lintHttpCall}).
+     *
+     * <p>The shadowing check the http map needed is gone with the map: a source cannot collide
+     * with another source when they share one namespace, which is the point of sharing it.
      */
     private void lintHttpSources(AppConfig config, RouteDefinition definition, String source,
             List<LintFinding> findings) {
-        if (definition.http().isEmpty()) {
+        var calls = httpArms(definition);
+        if (calls.isEmpty()) {
             return;
         }
         String recipe = definition.recipe();
@@ -5159,18 +5189,14 @@ public final class AppLinter {
         boolean write = TRANSACTIONAL_DATASOURCE_RECIPES.contains(recipe);
         if (!read && !write) {
             findings.add(new LintFinding("TQL-YAML-1022", "error", source,
-                    "http: sources are supported on query recipes (query-json, query-html,"
-                            + " page) and on transactional ones ("
+                    "an http: source is supported on query recipes (query-json,"
+                            + " query-html, page) and on transactional ones ("
                             + String.join(", ",
                                     new java.util.TreeSet<>(TRANSACTIONAL_DATASOURCE_RECIPES))
                             + "), not '"
                             + recipe + "'"));
         }
-        definition.http().forEach((name, spec) -> {
-            if ("sql".equals(name) || definition.queries().containsKey(name)) {
-                findings.add(new LintFinding("TQL-YAML-1022", "error", source,
-                        "http: source '" + name + "' shadows a SQL result key"));
-            }
+        calls.forEach((name, spec) -> {
             // The call happens before the transaction and a rollback cannot un-make it, so on a
             // write the author states that it is a reference. The framework can guarantee the
             // declaration exists, never that it is true.
@@ -5583,12 +5609,21 @@ public final class AppLinter {
      * produces something that looks complete and is not.
      */
     private void lintExportSources(io.tesseraql.yaml.model.ExportSpec spec,
-            java.util.Map<String, io.tesseraql.yaml.model.HttpSourceSpec> httpSources,
+            java.util.Map<String, io.tesseraql.yaml.model.Binding> sources,
             java.nio.file.Path extractionSql, String label, String source,
             List<LintFinding> findings) {
         if (spec == null) {
             return;
         }
+        java.util.Map<String, io.tesseraql.yaml.model.HttpSourceSpec> httpSources = new java.util.LinkedHashMap<>();
+        java.util.Map<String, io.tesseraql.yaml.model.Binding> composed = new java.util.LinkedHashMap<>(
+                sources);
+        composed.remove(RouteDefinition.MAIN);
+        composed.forEach((name, binding) -> {
+            if (binding != null && binding.isHttp()) {
+                httpSources.put(name, binding.http());
+            }
+        });
         httpSources.forEach((name, http) -> {
             if (http != null && http.degradesToEmpty()) {
                 findings.add(new LintFinding("TQL-YAML-1006", "error", source, label
@@ -5616,13 +5651,13 @@ public final class AppLinter {
             lintGroupOrdering(spec, extractionSql, spec.groupBy(), label, source, findings);
         }
         boolean templated = spec.template() != null;
-        if (templated || (spec.queries().isEmpty() && httpSources.isEmpty())) {
+        if (templated || composed.isEmpty()) {
             return;
         }
         findings.add(new LintFinding("TQL-LD-5312", "warning", source, label
-                + "export declares " + (spec.queries().isEmpty() ? "http: sources" : "queries:")
-                + " but no template: - a " + spec.format() + " export writes rows and nothing"
-                + " else, so they would run to be discarded"));
+                + "the document declares sources beside main: but the export has no template: -"
+                + " a " + spec.format() + " export writes the main rows and nothing else, so"
+                + " they would run to be discarded"));
     }
 
     /**
@@ -5631,12 +5666,10 @@ public final class AppLinter {
      */
     private static java.nio.file.Path extractionSqlFile(RouteFile route,
             RouteDefinition definition) {
-        io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
-        if (spec != null && spec.sql() != null && spec.sql().file() != null) {
-            return route.source().getParent().resolve(spec.sql().file());
-        }
-        if (definition.sql() != null && definition.sql().file() != null) {
-            return route.source().getParent().resolve(definition.sql().file());
+        // One home: the rows an export writes are the document's main source, on every recipe
+        // (docs/unified-sources.md, decision 7).
+        if (definition.main() != null && definition.main().file() != null) {
+            return route.source().getParent().resolve(definition.main().file());
         }
         return null;
     }

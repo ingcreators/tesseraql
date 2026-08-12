@@ -24,17 +24,18 @@ input:
 security:
   policy: req.write
 
-sql:
-  file: add-line.sql
-  mode: update
-  params:
-    id: path.id
-    itemId: params.itemId
-    qty: params.qty
-    desiredDate: params.desiredDate
-
+steps:
+  main:
+    sql:
+      file: add-line.sql
+      mode: update
+      params:
+        id: path.id
+        itemId: params.itemId
+        qty: params.qty
+        desiredDate: params.desiredDate
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      created: steps.main.affectedRows

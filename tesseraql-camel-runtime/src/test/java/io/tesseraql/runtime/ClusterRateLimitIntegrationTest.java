@@ -143,8 +143,10 @@ class ClusterRateLimitIntegrationTest {
                   rateLimit:
                     requestsPerSecond: 5
                     scope: cluster
-                sql:
-                  file: limited.sql
+                sources:
+                  main:
+                    sql:
+                      file: limited.sql
                 response:
                   json:
                     status: 200
