@@ -91,10 +91,10 @@ A domain may also say that its legal values are the codes of a
 [code catalog](code-catalogs.md) rather than a fixed `enum`:
 
 ```yaml
-  取引区分:
+  payment_method:
     type: string
-    maxLength: 2
-    codes: 取引区分
+    maxLength: 8
+    codes: payment_method
 ```
 
 The binder then accepts only that catalog's active codes, and the violation is the `enum` field
