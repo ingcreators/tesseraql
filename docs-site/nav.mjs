@@ -221,4 +221,6 @@ export const EXCLUDED = [
   'export-pipeline.md',
   // Lookups and enrichment (keyed row enrichment + code catalogs), 2026-08-11.
   'lookups.md',
+  // The unified source model (sources:/main, binding http arm, enrich placement), 2026-08-12.
+  'unified-sources.md',
 ];
