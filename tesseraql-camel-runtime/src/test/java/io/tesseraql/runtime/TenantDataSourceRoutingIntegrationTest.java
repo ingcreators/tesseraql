@@ -305,7 +305,7 @@ class TenantDataSourceRoutingIntegrationTest {
                   json:
                     status: 201
                     body:
-                      created: sql.affectedRows
+                      created: steps.main.affectedRows
                 """);
         Files.writeString(notesDir.resolve("insert.sql"),
                 "insert into notes (name) values (/* name */ 'sample')\n");

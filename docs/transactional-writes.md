@@ -60,9 +60,9 @@ transaction rolls back. Each step publishes its result into the execution contex
 | `outbox.eventId` | the outbox event id, when the route declares `outbox:` |
 
 Steps default to `mode: update`. A step references only request sources and *earlier* steps;
-forward references fail at route build time (`TQL-CAMEL-3102`). The single-statement `sql:`
-form is unchanged and still publishes `sql.affectedRows`; with an outbox it also exposes the
-same event id as `main.eventId` — a compatibility alias for `outbox.eventId`.
+forward references fail at route build time (`TQL-CAMEL-3102`). A command with one statement is
+a one-step pipeline like any other — there is no second spelling — so it publishes
+`steps.<id>.affectedRows` under whatever id it was given.
 
 ### Generated keys
 

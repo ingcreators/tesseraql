@@ -278,20 +278,22 @@ class DeclarativeValidationIntegrationTest {
                     field: endDate
                     code: end-before-start
                     message: members.dates.end-before-start
-                sql:
-                  file: insert-member.sql
-                  mode: update
-                  keys: [id]
-                  params:
-                    email: body.email
-                    name: body.name
-                    startDate: body.startDate
-                    endDate: body.endDate
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
+                      keys: [id]
+                      params:
+                        email: body.email
+                        name: body.name
+                        startDate: body.startDate
+                        endDate: body.endDate
                 response:
                   json:
                     status: 201
                     body:
-                      memberId: sql.keys.id
+                      memberId: steps.main.keys.id
                 """);
         Files.writeString(route.resolve("check-email.sql"), """
                 select

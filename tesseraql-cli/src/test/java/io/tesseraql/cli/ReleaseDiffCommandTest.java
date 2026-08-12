@@ -28,9 +28,11 @@ class ReleaseDiffCommandTest {
                 recipe: query-json
                 security:
                   auth: bearer
-                sql:
-                  file: %s.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: %s.sql
+                      mode: query
                 response:
                   json:
                     body:

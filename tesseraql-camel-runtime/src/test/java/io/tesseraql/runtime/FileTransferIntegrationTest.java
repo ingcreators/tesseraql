@@ -442,7 +442,8 @@ class FileTransferIntegrationTest {
                     - { name: fee, type: number, format: "#,##0.00" }
                 sources:
                   main:
-                  file: select-events.sql
+                    sql:
+                      file: select-events.sql
                 """);
         Files.writeString(exportRoute.resolve("select-events.sql"),
                 "select name, held_on, fee from events order by name\n;\n");
@@ -463,7 +464,8 @@ class FileTransferIntegrationTest {
                   filename: variant.csv
                 sources:
                   main:
-                  file: pick.sql
+                    sql:
+                      file: pick.sql
                 """);
         // The generic file names a column that does not exist; the variant is valid. Which one
         // ran is the transfer's outcome rather than something the test has to introspect.
@@ -488,9 +490,10 @@ class FileTransferIntegrationTest {
                   filename: expensive.csv
                 sources:
                   main:
-                  file: select-expensive.sql
-                  params:
-                    minFee: params.min
+                    sql:
+                      file: select-expensive.sql
+                      params:
+                        minFee: params.min
                 """);
         Files.writeString(filtered.resolve("select-expensive.sql"),
                 "select name, fee from events where fee >= /* minFee */0 order by name\n;\n");
@@ -564,13 +567,12 @@ class FileTransferIntegrationTest {
                   filename: orders.csv
                   after:
                     timing: %s
-                    sources:
-                      main:
-                        sql:
-                          file: mark-extracted.sql
+                    sql:
+                      file: mark-extracted.sql
                 sources:
                   main:
-                  file: select-orders.sql
+                    sql:
+                      file: select-orders.sql
                 """.formatted(id, timing));
         Files.writeString(route.resolve("select-orders.sql"),
                 "select order_no, extracted from orders " + scope + " order by order_no\n;\n");

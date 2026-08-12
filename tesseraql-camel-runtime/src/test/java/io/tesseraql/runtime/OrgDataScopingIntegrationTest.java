@@ -283,7 +283,7 @@ class OrgDataScopingIntegrationTest {
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(renameDir.resolve("rename.sql"), """
                 update orders o

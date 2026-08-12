@@ -88,7 +88,7 @@ response:
   json:
     status: 200
     body:
-      affected: sql.affectedRows
+      affected: steps.main.affectedRows
       auditEventId: notify.audit.eventId   # each fired notification publishes its event id
 ```
 

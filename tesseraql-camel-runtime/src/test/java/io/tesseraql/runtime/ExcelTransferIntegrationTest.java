@@ -264,7 +264,8 @@ class ExcelTransferIntegrationTest {
                   filename: people.xlsx
                 sources:
                   main:
-                  file: select-people.sql
+                    sql:
+                      file: select-people.sql
                 """);
         Files.writeString(exportRoute.resolve("select-people.sql"),
                 "select full_name, age from people order by full_name\n;\n");
@@ -307,7 +308,8 @@ class ExcelTransferIntegrationTest {
                     - { name: age,       column: D }
                 sources:
                   main:
-                  file: select-people.sql
+                    sql:
+                      file: select-people.sql
                 """);
         Files.writeString(reportRoute.resolve("select-people.sql"),
                 "select full_name, age from people order by full_name\n;\n");

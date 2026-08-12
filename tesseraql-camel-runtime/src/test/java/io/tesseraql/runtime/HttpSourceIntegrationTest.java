@@ -198,7 +198,6 @@ class HttpSourceIntegrationTest {
                   main:
                     sql:
                       file: orders.sql
-                sources:
                   rates:
                     http:
                       url: http://localhost:%d/v1/rates
@@ -227,7 +226,6 @@ class HttpSourceIntegrationTest {
                   main:
                     sql:
                       file: search.sql
-                sources:
                   matches:
                     http:
                       method: POST
@@ -252,7 +250,6 @@ class HttpSourceIntegrationTest {
                   main:
                     sql:
                       file: degraded.sql
-                sources:
                   fx:
                     http:
                       url: http://localhost:1/v1/rates

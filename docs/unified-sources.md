@@ -1,8 +1,16 @@
 # The unified source model
 
-Status: **designed 2026-08-12; all pre-implementation decisions confirmed 2026-08-12. Not yet
-implemented.** Pre-1.0 breaking change (rule 10): the replaced spellings are deleted, not
+Status: **designed 2026-08-12; slices 1-5, 7 (enrichment placement) and 11 implemented
+2026-08-12.** Pre-1.0 breaking change (rule 10): the replaced spellings are deleted, not
 aliased; the CHANGELOG records what changed and why.
+
+Still open: slice 6 (the job query-step envelope, the chunk `spool:` reader arm, per-step
+`datasource:`), decision 6's half of slice 7 (`response.json.nest` retiring for an
+`enrich.source` arm), decision 7b's `import:` half (the per-row write becoming a `steps:`
+entry), slice 9 (`httpCall:` folding into the `http:` arm, the workflow `command:`/`basePath:`
+spellings), and the Studio/portal half of slice 10 — the editor extension and the generated
+references are caught up. `export:` is output-only as decided; `import:` still carries its
+per-row `sql:`, so the separation is half applied and the doc says which half.
 
 How a document acquires data is spelled five different ways: a privileged top-level `sql:`, a
 `queries:` map, a parallel `http:` map, a `sql:`/`http:` pair inside every `enrich:` entry, and an

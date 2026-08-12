@@ -20,7 +20,7 @@ import java.util.Map;
  *                  enqueue path honors that subject's per-channel opt-out preference. A
  *                  notification without a recipient is channel-level and always delivered.
  * @param attach    optional expression resolving to a transfer id — an export step's
- *                  {@code step.<id>.transferId} — whose produced file rides the mail as an
+ *                  {@code steps.<id>.transferId} — whose produced file rides the mail as an
  *                  attachment (docs/analytics-experience.md; mail channels only, the bytes
  *                  are read from the transfer store at delivery time)
  * @param payload   map of payload key to source expression, resolved against the execution

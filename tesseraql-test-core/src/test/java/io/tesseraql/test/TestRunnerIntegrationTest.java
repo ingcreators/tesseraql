@@ -328,16 +328,18 @@ class TestRunnerIntegrationTest {
                     rule: body.endDate >= body.startDate
                     field: endDate
                     code: end-before-start
-                sql:
-                  file: insert-member.sql
-                  mode: update
-                  params:
-                    name: body.name
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
+                      params:
+                        name: body.name
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         java.nio.file.Files.writeString(routeDir.resolve("check-name.sql"), """
                 select

@@ -226,9 +226,11 @@ class ShortcutIntegrationTest {
                     required: false
                 security:
                   auth: browser
-                sql:
-                  file: home.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: home.sql
+                      mode: query
                 response:
                   html:
                     status: 200
@@ -264,7 +266,6 @@ class ShortcutIntegrationTest {
         Files.writeString(thing.resolve("thing.view.yml"), """
                 version: tesseraql/v1
                 id: things.detail.view
-                version: tesseraql/v1
                 kind: view
                 recipe: detail
                 title: Thing

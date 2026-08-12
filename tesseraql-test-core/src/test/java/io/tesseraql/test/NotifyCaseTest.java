@@ -72,7 +72,7 @@ class NotifyCaseTest {
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.createDirectories(appHome.resolve("batch/cleanup"));
         Files.writeString(appHome.resolve("batch/cleanup/job.yml"), """

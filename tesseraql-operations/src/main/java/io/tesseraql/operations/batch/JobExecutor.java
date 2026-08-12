@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Runs a batch job's steps sequentially, persisting lifecycle to the {@link JobRepository}
  * (design ch. 6.5, 26). Each step renders and executes its 2-way SQL; step results are exposed
- * to later steps as {@code step.<id>.affectedRows}.
+ * to later steps as {@code steps.<id>.affectedRows}.
  *
  * <p>A {@code notify:} step (roadmap Phase 20) enqueues a notification on the transactional
  * outbox instead of executing SQL, and an optional {@link FailureListener} observes failed
@@ -498,7 +498,7 @@ public final class JobExecutor {
 
     /**
      * Issues the step's outbound REST call (roadmap Phase 26) and publishes the response as
-     * {@code step.<id>.status} / {@code step.<id>.body} for later steps to bind. The call is
+     * {@code steps.<id>.status} / {@code steps.<id>.body} for later steps to bind. The call is
      * synchronous and observable in the trace tree; failures fail the step (and so the job).
      */
     private Map<String, Object> runHttpStep(PipelineStep step, Map<String, Object> context,
@@ -648,7 +648,7 @@ public final class JobExecutor {
 
     /**
      * Runs a push step (docs/analytics-experience.md): the {@code file:} path resolves to a
-     * transfer id — typically an earlier export step's {@code step.<id>.transferId} — whose
+     * transfer id — typically an earlier export step's {@code steps.<id>.transferId} — whose
      * produced file the wired pusher delivers to the target. Reading the transfer counts as
      * its first download (a route-produced transfer's {@code download}-timed follow-up fires),
      * because delivered is downloaded.

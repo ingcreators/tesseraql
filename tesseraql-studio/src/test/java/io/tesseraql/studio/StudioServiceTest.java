@@ -361,7 +361,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
 
@@ -1302,7 +1302,7 @@ class StudioServiceTest {
                 .contains("template: page.html").contains("Content-Security-Policy");
         studio.newRouteDraft("web/api/widgets/post.yml", "command-json");
         assertThat(studio.readDraft("web/api/widgets/post.yml")).contains("recipe: command-json")
-                .contains("affected: sql.affectedRows");
+                .contains("affected: steps.main.affectedRows");
 
         // A non-route path and an already-existing file are rejected.
         assertThatThrownBy(() -> studio.newRouteDraft("web/api/widgets/notes.yml", "query-json"))

@@ -404,7 +404,7 @@ class LiveViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         return target;
     }

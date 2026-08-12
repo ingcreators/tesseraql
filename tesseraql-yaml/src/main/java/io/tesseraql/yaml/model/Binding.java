@@ -126,6 +126,14 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             Materialize materialize, java.util.List<String> keys, Expect expect,
             Integer timeoutSeconds, String datasource) {
 
+        public SqlArm {
+            // The arm is read directly wherever a slot holds one (an enrichment's reference, an
+            // import's row write, an export's follow-up), so its collections normalize here as
+            // the enclosing record's do — an absent params: is an empty map, not a null.
+            params = params == null ? Map.of() : Map.copyOf(params);
+            keys = keys == null ? java.util.List.of() : java.util.List.copyOf(keys);
+        }
+
         /** A plain SQL file arm. */
         public static SqlArm of(String file) {
             return of(file, null, null);
@@ -145,6 +153,10 @@ public record Binding(String file, String contract, String mode, Map<String, Str
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record NamedCall(String name, String mode, Map<String, String> params, Expect expect) {
+
+        public NamedCall {
+            params = params == null ? Map.of() : Map.copyOf(params);
+        }
     }
 
     /** A plain SQL-file binding — the shape most bindings are. */

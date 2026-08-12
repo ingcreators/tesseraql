@@ -909,13 +909,11 @@ class AppLinterTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: extract
+                    sql:
+                      file: report.sql
+                      mode: query
                     export:
                       format: csv
-                      sources:
-                        main:
-                          sql:
-                            file: report.sql
-                            mode: query
                   - id: hooked
                     notify:
                       channel: audit
@@ -1555,7 +1553,7 @@ class AppLinterTest {
                 response:
                   json:
                     body:
-                      ok: sql.affectedRows
+                      ok: steps.main.affectedRows
                 """);
         if (bumpSql != null) {
             Files.writeString(dir.resolve("web/api/orders/bump.sql"), bumpSql);

@@ -271,16 +271,14 @@ class NotificationIntegrationTest {
         // dead-letter ceiling so the retry path is quick to observe.
         yaml = yaml.replace("    # alerts:\n    #   channel: audit-webhook",
                 "    alerts:\n      channel: audit-webhook");
+        // The app already allow-lists localhost for the audit webhook, and appending a second
+        // http: block replaced its credentials rather than adding to them — a duplicate key
+        // the parser used to resolve last-one-wins.
         yaml += """
 
                   outbox:
                     dispatch:
                       maxAttempts: 2
-                  sources:
-                    outbound:
-                      http:
-                        allowedHosts:
-                          - localhost
                 """;
         Files.writeString(config, yaml);
 

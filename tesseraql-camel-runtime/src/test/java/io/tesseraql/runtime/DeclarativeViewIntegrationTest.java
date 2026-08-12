@@ -399,8 +399,8 @@ class DeclarativeViewIntegrationTest {
                     type: string
                     required: false
                     requiredWhen: params.kind == 'noted'
-                sources:
-                  main:
+                steps:
+                  - id: main
                     sql:
                       file: probe.sql
                       mode: query

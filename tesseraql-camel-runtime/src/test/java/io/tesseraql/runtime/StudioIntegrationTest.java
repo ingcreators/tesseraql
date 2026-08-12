@@ -1397,7 +1397,7 @@ class StudioIntegrationTest {
     @Test
     void renderEndpointRendersHtmlRouteAgainstExecutionContext() throws Exception {
         String body = MAPPER.writeValueAsString(Map.of("sampleModel",
-                "sql:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n"));
+                "main:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n"));
         HttpResponse<String> response = post(
                 "/_tesseraql/studio/render?path=" + enc("web/users/fragments/table/get.yml"),
                 body, true);
@@ -1412,7 +1412,7 @@ class StudioIntegrationTest {
     @Test
     void renderEndpointRendersJsonRouteBody() throws Exception {
         String body = MAPPER.writeValueAsString(Map.of("sampleModel",
-                "sql:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
+                "main:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
                         + "params:\n  limit: 50\n  offset: 0\n"));
         HttpResponse<String> response = post(
                 "/_tesseraql/studio/render?path=" + enc("web/api/users/get.yml"), body, true);
@@ -1429,7 +1429,7 @@ class StudioIntegrationTest {
         // The users.search route masks created_at (mask: fixed); the preview shows the redacted
         // value, not the raw one (Studio backlog A1 follow-up).
         String body = MAPPER.writeValueAsString(Map.of("sampleModel",
-                "sql:\n  rows:\n    - id: 7\n      name: Sato\n"
+                "main:\n  rows:\n    - id: 7\n      name: Sato\n"
                         + "      created_at: 2026-06-18T00:00:00Z\n  rowCount: 1\n"
                         + "params:\n  limit: 50\n  offset: 0\n"));
         HttpResponse<String> response = post(
@@ -1447,7 +1447,7 @@ class StudioIntegrationTest {
         // The print route (query-export, format: pdf) renders a real PDF preview through the
         // canonical codec — tesseraql-pdf is on the test classpath (Studio backlog A1 follow-up).
         String body = MAPPER.writeValueAsString(Map.of("sampleModel",
-                "sql:\n  rows:\n    - name: Sato\n      status: ACTIVE\n"));
+                "main:\n  rows:\n    - name: Sato\n      status: ACTIVE\n"));
         HttpResponse<String> response = post(
                 "/_tesseraql/studio/render?path=" + enc("web/api/users/print/get.yml"), body, true);
 
@@ -3754,7 +3754,7 @@ class StudioIntegrationTest {
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(target.resolve("web/api/probe/probe.sql"),
                 "update users set status = 'PROBED' where name = /* name */ 'sato'\n"

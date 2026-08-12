@@ -413,8 +413,8 @@ class TransactionalCommandIntegrationTest {
                 security:
                   auth: bearer
                   policy: users.write
-                sources:
-                  main:
+                steps:
+                  - id: main
                     sql:
                       file: update-status.sql
                       mode: update
@@ -429,7 +429,7 @@ class TransactionalCommandIntegrationTest {
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(update.resolve("update-status.sql"), """
                 update orders

@@ -145,6 +145,9 @@ class ExportDataSourcesIntegrationTest {
                   main:
                     sql:
                       file: lines.sql
+                  header:
+                    sql:
+                      file: header.sql
                 export:
                   format: pdf
                   filename: order.pdf
@@ -153,9 +156,6 @@ class ExportDataSourcesIntegrationTest {
                   columns:
                     - { name: item, label: Item }
                     - { name: qty,  label: Qty }
-                  header:
-                    sql:
-                      file: header.sql
                 """);
         // The line query carries no customer column: that is the point of the header query.
         Files.writeString(print.resolve("lines.sql"),
@@ -172,6 +172,12 @@ class ExportDataSourcesIntegrationTest {
                   main:
                     sql:
                       file: all-lines.sql
+                  customer:
+                    sql:
+                      file: customers.sql
+                  company:
+                    sql:
+                      file: company.sql
                 export:
                   format: pdf
                   filename: invoice-{key}.pdf
@@ -181,12 +187,6 @@ class ExportDataSourcesIntegrationTest {
                   columns:
                     - { name: item, label: Item }
                     - { name: qty,  label: Qty }
-                  customer:
-                    sql:
-                      file: customers.sql
-                  company:
-                    sql:
-                      file: company.sql
                 """);
         Files.writeString(bill.resolve("all-lines.sql"),
                 "select order_no, item, qty from order_lines order by order_no, item\n;\n");

@@ -7,7 +7,9 @@ tests:
       job: directory.sync
       id: headcount
     params:
-      job: { unit: "sales" }
+      # The case supplies the execution context by name, and a job's declared inputs bind
+      # under params.* exactly as a route's do.
+      params: { unit: "sales" }
     expect:
       rowCount: 1
       rows:

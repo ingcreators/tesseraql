@@ -77,8 +77,10 @@ class ScaffoldCommandsTest {
                 recipe: query-html
                 security:
                   auth: public
-                sql:
-                  file: board.sql
+                sources:
+                  main:
+                    sql:
+                      file: board.sql
                 response:
                   html:
                     view: board

@@ -777,11 +777,9 @@ class BatchJobIntegrationTest {
                       columns:
                       - { name: name, label: Name }
                       - { name: status, label: Status }
-                    sources:
-                      main:
-                        sql:
-                          file: report.sql
-                          mode: query
+                    sql:
+                      file: report.sql
+                      mode: query
                   - id: stamp
                     sql:
                       file: stamp-transfer.sql
@@ -804,13 +802,11 @@ class BatchJobIntegrationTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: extract
+                    sql:
+                      file: report.sql
+                      mode: query
                     export:
                       format: csv
-                      sources:
-                        main:
-                          sql:
-                            file: report.sql
-                            mode: query
                   - id: drop
                     push:
                       transport: local
@@ -917,12 +913,12 @@ class BatchJobIntegrationTest {
                       key: item_key
                       commitEvery: 10
                       enrich:
-                      kind:
-                        on: { kind: code }
-                        sql:
-                          file: kinds.sql
-                        batchSize: 2
-                        merge: [label]
+                        kind:
+                          on: { kind: code }
+                          sql:
+                            file: kinds.sql
+                          batchSize: 2
+                          merge: [label]
                 """);
         Files.writeString(target.resolve("batch/chunk/reader-d.sql"), """
                 select item_key, kind

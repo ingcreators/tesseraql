@@ -201,7 +201,7 @@ final class DialectRuntimeChecks {
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(touch.resolve("touch.sql"),
                 "update users set status = status where name = /* name */ 'x'\n");

@@ -50,11 +50,10 @@ class CopilotEgressGateIntegrationTest {
     @Test
     void aCopilotEndpointHostOutsideTheAllowListFailsTheBoot() throws Exception {
         Path appHome = prepareAppHome("""
-                  sources:
+                  http:
                     outbound:
-                      http:
-                        allowedHosts:
-                          - api.partner.example
+                      allowedHosts:
+                        - api.partner.example
                 """);
         try {
             assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, freePort()))
@@ -72,11 +71,10 @@ class CopilotEgressGateIntegrationTest {
     @Test
     void aCopilotWithAnAllowListedEndpointHostBoots() throws Exception {
         Path appHome = prepareAppHome("""
-                  sources:
+                  http:
                     outbound:
-                      http:
-                        allowedHosts:
-                          - api.example.com
+                      allowedHosts:
+                        - api.example.com
                 """);
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort())) {
             assertThat(runtime.camelContext().getStatus().isStarted()).isTrue();

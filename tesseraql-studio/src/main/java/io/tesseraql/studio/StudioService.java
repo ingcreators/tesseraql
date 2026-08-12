@@ -2525,9 +2525,11 @@ public final class StudioService {
                         security:
                           auth: bearer
 
-                        sql:
-                          file: query.sql
-                          mode: query
+                        sources:
+                          main:
+                            sql:
+                              file: query.sql
+                              mode: query
 
                         response:
                           html:
@@ -2551,15 +2553,17 @@ public final class StudioService {
                     security:
                       auth: bearer
 
-                    sql:
-                      file: command.sql
-                      mode: update
+                    steps:
+                      - id: main
+                        sql:
+                          file: command.sql
+                          mode: update
 
                     response:
                       json:
                         status: 200
                         body:
-                          affected: sql.affectedRows
+                          affected: steps.main.affectedRows
                     """.formatted(id);
             default -> """
                     version: tesseraql/v1
@@ -2570,9 +2574,11 @@ public final class StudioService {
                     security:
                       auth: bearer
 
-                    sql:
-                      file: query.sql
-                      mode: query
+                    sources:
+                      main:
+                        sql:
+                          file: query.sql
+                          mode: query
 
                     response:
                       json:

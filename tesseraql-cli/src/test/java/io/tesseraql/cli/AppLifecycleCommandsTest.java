@@ -50,9 +50,11 @@ class AppLifecycleCommandsTest {
                   auth: bearer
                   policy: app.read
 
-                sql:
-                  file: missing.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: missing.sql
+                      mode: query
 
                 response:
                   json:
