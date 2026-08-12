@@ -771,9 +771,41 @@ join, the same answer enrichment gives.
    other. `EnrichProcessor` splits so both paths run one implementation.
 14. **`chunk:`.** Enrichment between reader and writer, merged columns visible to the writer,
    with the window/skip interaction spelled out: a lookup failure is a window-level failure and
-   must not be recorded as one row's skip.
+   must not be recorded as one row's skip. **The only slice still open** — its design is
+   settled below.
 15. **Editor and Studio catch-up.** Symbols for `catalogs:`/`enrich:`, completion for `domain:`
    and `from:`, a catalogs page listing rows, last load, last error, and refresh.
+
+## Slice 14, in enough detail to execute
+
+The remaining slice touches the most delicate code in the framework — a restartable chunk step
+with checkpoints, savepoints, a skip limit and a cooperative stop — so what has been decided is
+written here rather than rediscovered.
+
+**Where the shared code goes.** `JobExecutor` lives in `tesseraql-operations` and
+`EnrichProcessor` in `tesseraql-compiler`; neither module sees the other. `tesseraql-yaml` is
+the one they both depend on, and it already owns `EnrichSpec`. The enrichment algorithm moves
+there and `EnrichProcessor` delegates — one implementation, for the reason slice 13b gives.
+
+**How much has to move.** Less than it looks. `EnrichProcessor` reaches for the exchange in
+exactly two places: `TenantRouting.dataSource(...)` for the connection, and `scopeResolver(...)`
+for the scope predicate. Everything else — collecting the distinct keys, splitting them into
+batches, rendering and running the reference, composing the match onto each row — needs only
+the spec, the parsed SQL nodes and the context. Those two become parameters.
+
+**What must not change.** `TQL-SQL-2114` (maxKeys), `TQL-CAMEL-3113` (a many-to-one merge that
+matched more than one row), `TQL-CAMEL-3114` (the target is not a result set) and `TQL-LD-1`
+(the reference overflowed the row cap) are the enrichment's contract; the move keeps them.
+
+**The loop.** Read a window of reader rows (the enrichment's `batchSize`), enrich it, then write
+each row through the existing savepoint/skip path. A reference failure fails the window — it is
+not one row's fault and must never land in `tql_job_skips`, which is the record of rows the
+writer rejected.
+
+**SQL references only.** An HTTP reference inside a chunk would put a network call between a
+streaming reader cursor and a writer transaction that commits every N rows, and its failure
+semantics — retry, fail the window, skip the window — are a decision this document has not
+taken. Refuse it with a code and say why, rather than picking one silently.
 
 ## Out of scope (documented, not implied)
 
