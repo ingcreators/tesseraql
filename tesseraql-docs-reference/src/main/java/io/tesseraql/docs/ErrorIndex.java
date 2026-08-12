@@ -433,7 +433,7 @@ final class ErrorIndex {
             "pages-and-mail-lints.md", "contract-bugfixes.md", "vocabulary-cleanup.md",
             "unicode-identifiers.md", "view-composition.md", "silent-tolerance.md",
             "documentation-ia.md", "style-guide.md", "app-isolation-model.md", "base-path.md",
-            "export-pipeline.md", "lookups.md");
+            "export-pipeline.md", "lookups.md", "unified-sources.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
