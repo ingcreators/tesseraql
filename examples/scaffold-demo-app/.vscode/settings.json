@@ -1,10 +1,23 @@
 {
   "yaml.schemas": {
-    ".vscode/tesseraql-v1.schema.json": [
-      "web/**/*.yml",
+    ".vscode/tesseraql-route-v1.schema.json": [
+      "web/**/get.yml",
+      "web/**/post.yml",
+      "web/**/put.yml",
+      "web/**/patch.yml",
+      "web/**/delete.yml",
+      "web/**/head.yml",
+      "web/**/options.yml",
       "consume/**/*.yml",
-      "batch/**/*.yml",
-      "mcp/**/*.yml",
+      "mcp/**/*.yml"
+    ],
+    ".vscode/tesseraql-view-v1.schema.json": [
+      "**/*.view.yml"
+    ],
+    ".vscode/tesseraql-job-v1.schema.json": [
+      "batch/**/*.yml"
+    ],
+    ".vscode/tesseraql-document-v1.schema.json": [
       "workflow/**/*.yml",
       "scope/**/*.yml",
       "attachments/**/*.yml"

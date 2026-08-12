@@ -25,7 +25,11 @@ class SchemaDescriptionCoverageTest {
     void everySchemaPropertyIsDescribed() throws Exception {
         List<String> undescribed = new ArrayList<>();
         for (String resource : List.of(
-                "/schema/tesseraql-v1.schema.json",
+                "/schema/tesseraql-defs-v1.schema.json",
+                "/schema/tesseraql-route-v1.schema.json",
+                "/schema/tesseraql-job-v1.schema.json",
+                "/schema/tesseraql-view-v1.schema.json",
+                "/schema/tesseraql-document-v1.schema.json",
                 "/schema/tesseraql-domains-v1.schema.json",
                 "/schema/tesseraql-rules-v1.schema.json",
                 "/schema/tesseraql-decisions-v1.schema.json",
@@ -40,14 +44,20 @@ class SchemaDescriptionCoverageTest {
                 .isEmpty();
     }
 
-    /** Walks every {@code properties} map in the document, wherever it is nested. */
+    /**
+     * Walks every {@code properties} map in the document, wherever it is nested. A property
+     * that is nothing but a {@code $ref} carries its description at the target — demanding one
+     * here would push a second, drifting copy back into each kind's file, which is what the
+     * shared definitions exist to prevent.
+     */
     private static void collectUndescribed(JsonNode node, String path, List<String> out) {
         if (node.isObject()) {
             JsonNode properties = node.get("properties");
             if (properties != null && properties.isObject()) {
                 for (Iterator<String> names = properties.fieldNames(); names.hasNext();) {
                     String name = names.next();
-                    if (!properties.get(name).hasNonNull("description")) {
+                    JsonNode property = properties.get(name);
+                    if (!property.hasNonNull("description") && !property.has("$ref")) {
                         out.add(path + " -> " + name);
                     }
                 }

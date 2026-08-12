@@ -98,9 +98,26 @@ class GeneratedReferenceTest {
         String surface = ReferenceGenerator.yamlSurface(REPO);
 
         assertThat(surface).contains("`kind` \\*");
-        assertThat(surface).contains("enum: `route` \\| `job` \\| `view`");
+        // One section per document kind, since one schema per kind (docs/unified-sources.md).
+        assertThat(surface).contains("## Route documents", "## Job documents",
+                "## View documents");
         assertThat(surface).contains("## Shared definitions");
+        // A value shape shared across kinds is described once and linked to from each.
         assertThat(surface).contains("](#inputfield)");
+    }
+
+    /**
+     * A key several kinds declare identically is stored once, in the shared definitions, and
+     * inlined into each kind's table — a reader of the route section should not have to follow
+     * a link to learn what `version:` is, and a raw `$ref` reaching the page would mean the
+     * renderer stopped resolving across files.
+     */
+    @Test
+    void yamlSurfaceInlinesSharedPropertyDefinitions() throws IOException {
+        String surface = ReferenceGenerator.yamlSurface(REPO);
+
+        assertThat(surface).contains("| `version` \\* | const `tesseraql/v1` |");
+        assertThat(surface).doesNotContain("tesseraql-defs-v1.schema.json");
     }
 
     @Test

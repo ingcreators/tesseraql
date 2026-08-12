@@ -3,7 +3,7 @@
   "$id": "https://tesseraql.io/schema/tesseraql-domains-v1.schema.json",
   "title": "TesseraQL field domains v1",
   "description": "Schema for TesseraQL field domain documents (domains/*.yml): named field knowledge referenced from input fields with 'domain:', plus the app-level constraint catalog. Documented in field-domains.md.",
-  "$comment": "The domains map's value type is an input field, so $defs/inputField below is copied verbatim from tesseraql-v1.schema.json rather than restated by hand, and SchemaSyncTest fails if the two ever differ. A cross-file $ref would avoid the copy but would depend on how each editor's language server resolves a relative reference offline; a guarded copy depends on nothing.",
+  "$comment": "The domain map's value is an input field, referenced from the shared definitions rather than copied here - the copy this file used to carry needed a test to keep it honest.",
   "type": "object",
   "required": [
     "version"
@@ -18,7 +18,7 @@
       "type": "object",
       "description": "Named field domains. A route's input field references one with 'domain: <name>' and may override any individual key locally.",
       "additionalProperties": {
-        "$ref": "#/$defs/inputField"
+        "$ref": "tesseraql-defs-v1.schema.json#/$defs/inputField"
       }
     },
     "constraints": {
@@ -44,131 +44,5 @@
       }
     }
   },
-  "additionalProperties": false,
-  "$defs": {
-    "inputField": {
-      "type": "object",
-      "properties": {
-        "domain": {
-          "type": "string",
-          "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local."
-        },
-        "type": {
-          "enum": [
-            "string",
-            "integer",
-            "number",
-            "boolean",
-            "date",
-            "array"
-          ],
-          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit."
-        },
-        "required": {
-          "type": "boolean",
-          "description": "Refuse the request when this field is absent."
-        },
-        "default": {
-          "description": "The value bound when the request omits the field."
-        },
-        "min": {
-          "type": "number",
-          "description": "Smallest accepted numeric value."
-        },
-        "max": {
-          "type": "number",
-          "description": "Largest accepted numeric value."
-        },
-        "maxLength": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Longest accepted string, in characters."
-        },
-        "minLength": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Shortest accepted string, in characters."
-        },
-        "pattern": {
-          "type": "string",
-          "description": "Anchored regular expression (TQL-YAML-1012 when it does not compile)."
-        },
-        "format": {
-          "type": "string",
-          "description": "string: email|uuid|url; date/number: a parse pattern.",
-          "examples": [
-            "email",
-            "uuid",
-            "url",
-            "yyyy/MM/dd",
-            "#,##0.##"
-          ]
-        },
-        "requiredWhen": {
-          "type": "string",
-          "description": "A core expression over params./path./body. (TQL-YAML-1014)."
-        },
-        "enum": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "The accepted values; anything else is refused."
-        },
-        "writable": {
-          "type": "boolean",
-          "description": "`false` makes the field read-only: it renders in a derived form but is never bound from the request."
-        },
-        "classification": {
-          "type": "string",
-          "description": "Data classification label carried into masking and audit. Documented in data-scoping.md."
-        },
-        "mask": {
-          "type": "string",
-          "description": "The masking rule applied when the principal may not see the value."
-        },
-        "widget": {
-          "type": "string",
-          "enum": [
-            "text",
-            "textarea",
-            "number",
-            "date",
-            "datetime-local",
-            "checkbox",
-            "select",
-            "hidden"
-          ],
-          "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract."
-        },
-        "codes": {
-          "type": "string",
-          "description": "The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master."
-        },
-        "policy": {
-          "type": "string",
-          "description": "Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain."
-        },
-        "items": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "description": "The element type."
-            },
-            "enum": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "The accepted element values; anything else is refused."
-            }
-          },
-          "additionalProperties": true,
-          "description": "Element constraints for `type: array`."
-        }
-      },
-      "additionalProperties": true
-    }
-  }
+  "additionalProperties": false
 }

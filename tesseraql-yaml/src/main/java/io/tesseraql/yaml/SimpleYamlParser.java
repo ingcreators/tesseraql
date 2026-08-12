@@ -16,7 +16,7 @@ import java.util.Map;
  * Parses and validates TesseraQL Simple YAML into the route model (design ch. 6).
  *
  * <p>Validation here is structural and intentionally light; the JSON Schema
- * ({@code schema/tesseraql-v1.schema.json}) documents the full contract, and the lint goal plus
+ * ({@code schema/tesseraql-<kind>-v1.schema.json}) documents the full contract, and the lint goal plus
  * the route compiler enforce the semantic rules. Failures raise {@code TQL-YAML-*} codes.
  */
 public final class SimpleYamlParser {

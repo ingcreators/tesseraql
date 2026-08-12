@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-view-v1.schema.json",
+  "title": "TesseraQL view document v1",
+  "description": "Schema for TesseraQL declarative view documents (*.view.yml): what a route renders through the framework's tql/view/* patterns instead of a hand-written template. Documented in declarative-views.md.",
+  "$comment": "A view document is strict: the loader refuses an unknown key at every nesting level (TQL-VIEW-3314), so this schema declares additionalProperties false to match.",
+  "type": "object",
+  "required": [
+    "version",
+    "id",
+    "kind"
+  ],
+  "properties": {
+    "version": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/version"
+    },
+    "id": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/id"
+    },
+    "kind": {
+      "const": "view",
+      "description": "Declarative view documents (the *.view.yml convention)."
+    },
+    "recipe": {
+      "description": "Which view this document is: list | form | detail | dashboard. A form derives its fields from the action: route's input: block; a dashboard composes panels:.",
+      "enum": [
+        "list",
+        "form",
+        "detail",
+        "dashboard"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "The heading this view renders. A message key resolves through the app bundles; anything else renders literally."
+    },
+    "template": {
+      "type": "string",
+      "description": "The pattern override this view renders through instead of its bundled `tql/view/*` pattern (customization ladder L2). Resolved beside the view document, then under the app template root. Documented in declarative-views.md."
+    },
+    "action": {
+      "type": "string",
+      "description": "The id of the command route a form view submits to; its `input:` block is where the form's fields come from."
+    },
+    "source": {
+      "type": "string",
+      "description": "The model key a view reads its rows from - the route's `sql` result by default, or one of its `queries:`."
+    },
+    "search": {
+      "type": "string",
+      "description": "The route input a list view binds its search box to; it must be declared on the route."
+    },
+    "fields": {
+      "type": "array",
+      "description": "The fields a form or detail view renders, in order. Documented in declarative-views.md."
+    },
+    "columns": {
+      "type": "array",
+      "description": "The columns a list view renders, in order. Documented in declarative-views.md."
+    },
+    "children": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Views embedded inside this one, keyed by the slot each fills. Documented in declarative-views.md."
+    },
+    "panels": {
+      "type": "array",
+      "description": "The panels a dashboard view composes, in order. Documented in declarative-views.md."
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Named regions this view exposes for a composing parent to fill. Documented in declarative-views.md."
+    },
+    "refreshOn": {
+      "type": "string",
+      "description": "Refetch this view's refresh region whenever a command emits this topic (docs/realtime.md). List, detail and dashboard views only - not forms."
+    }
+  },
+  "additionalProperties": false
+}

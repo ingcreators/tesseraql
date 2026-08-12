@@ -27,7 +27,7 @@ class SchemaSyncTest {
     @Test
     void schemaInputFieldCoversEveryModelComponent() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         JsonNode properties = schema.path("$defs").path("inputField").path("properties");
 
         List<String> declared = new ArrayList<>();
@@ -57,27 +57,35 @@ class SchemaSyncTest {
     }
 
     /**
-     * The schema's root properties cover every key the route AND job models accept.
+     * Each kind's schema covers every key its model accepts — and no more.
      *
      * <p>This is the guard whose absence let {@code trigger:}, {@code params:},
      * {@code idempotency:}, and {@code policy:} sit as undocumented stubs for months: the
-     * inputField check above covered one $def while the root went unchecked. One schema file
-     * serves both document kinds, so both records reflect here.
+     * inputField check above covered one $def while the root went unchecked.
+     *
+     * <p>Now that each kind has its own schema (docs/unified-sources.md), the check runs in
+     * both directions. Coverage alone was satisfied by the monolith — which is how a route
+     * schema came to offer a view's {@code columns:} and a job's {@code trigger:} on every
+     * document. Exactness is what makes a key in the wrong kind's file fail.
      */
     @Test
-    void schemaRootCoversEveryRouteAndJobComponent() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
-        JsonNode properties = schema.path("properties");
-        List<String> documented = new ArrayList<>();
-        properties.fieldNames().forEachRemaining(documented::add);
+    void eachKindSchemaMatchesItsModelExactly() throws Exception {
+        assertThat(rootProperties("/schema/tesseraql-route-v1.schema.json"))
+                .as("the route schema documents the route model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.RouteDefinition.class));
+        assertThat(rootProperties("/schema/tesseraql-job-v1.schema.json"))
+                .as("the job schema documents the job model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.JobDefinition.class));
+    }
 
-        assertThat(documented)
-                .as("every route: key the model accepts is documented in the shipped schema")
-                .containsAll(yamlNames(io.tesseraql.yaml.model.RouteDefinition.class));
-        assertThat(documented)
-                .as("every job: key the model accepts is documented in the shipped schema")
-                .containsAll(yamlNames(io.tesseraql.yaml.model.JobDefinition.class));
+    /** The root property names of one shipped schema. */
+    private List<String> rootProperties(String resource) throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));
+        List<String> names = new ArrayList<>();
+        schema.path("properties").fieldNames().forEachRemaining(names::add);
+        return names;
     }
 
     /** Each record component's YAML name (honoring @JsonProperty renames). */
@@ -152,7 +160,7 @@ class SchemaSyncTest {
     @Test
     void theRouteSchemaCoversEveryDecideReferenceKey() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         JsonNode reference = schema.path("properties").path("decide")
                 .path("additionalProperties").path("properties");
 
@@ -174,32 +182,29 @@ class SchemaSyncTest {
     }
 
     /**
-     * A field domain's value type <em>is</em> an input field, so the domains schema carries a
-     * verbatim copy of the route schema's definition and this test is what keeps the copy
-     * honest. A hand-maintained second declaration would drift the moment a field key is added,
-     * which is the exact gap that let {@code domain:} ship undocumented.
+     * A field domain's value type <em>is</em> an input field, and it now says so by reference:
+     * the copy this file used to carry — and the test that kept the copy honest — are both
+     * gone, because a shared definitions file makes the second declaration unnecessary rather
+     * than merely policed.
      */
     @Test
-    void theDomainSchemaCarriesAVerbatimCopyOfTheInputFieldDefinition() throws Exception {
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode route = mapper.readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
-        JsonNode domains = mapper.readTree(
+    void theDomainSchemaRefersToTheSharedInputFieldDefinition() throws Exception {
+        JsonNode domains = new ObjectMapper().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-domains-v1.schema.json"));
 
         assertThat(domains.path("properties").path("domains").path("additionalProperties")
                 .path("$ref").asText())
-                .as("the domains map's value is an input field")
-                .isEqualTo("#/$defs/inputField");
-        assertThat(domains.path("$defs").path("inputField"))
-                .as("copied from tesseraql-v1.schema.json; re-copy it rather than editing here")
-                .isEqualTo(route.path("$defs").path("inputField"));
+                .as("the domains map's value is the one input-field definition, not a copy")
+                .isEqualTo("tesseraql-defs-v1.schema.json#/$defs/inputField");
+        assertThat(domains.has("$defs"))
+                .as("no local copy to drift")
+                .isFalse();
     }
 
     @Test
     void schemaValidateRuleDocumentsSharedRuleReferences() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         JsonNode rule = schema.path("properties").path("validate")
                 .path("additionalProperties").path("properties");
 
@@ -214,24 +219,52 @@ class SchemaSyncTest {
 
     @Test
     void schemaRecipeEnumCoversEveryLinterRecipe() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
-        List<String> schemaRecipes = new ArrayList<>();
-        schema.path("properties").path("recipe").path("enum")
-                .forEach(node -> schemaRecipes.add(node.asText()));
+        assertThat(enumOf("/schema/tesseraql-route-v1.schema.json", "recipe"))
+                .as("a recipe the linter accepts on a route is one an editor accepts")
+                .containsAll(AppLinter.knownRouteRecipes())
+                .contains("queue-consume");
+        assertThat(enumOf("/schema/tesseraql-job-v1.schema.json", "recipe"))
+                .containsExactlyInAnyOrder("batch-tasklet", "batch-pipeline");
+        assertThat(enumOf("/schema/tesseraql-view-v1.schema.json", "recipe"))
+                .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.recipes());
+    }
 
-        assertThat(schemaRecipes).containsAll(AppLinter.knownRouteRecipes());
-        // The non-route document recipes ride the same schema (consume/** and batch jobs).
-        assertThat(schemaRecipes).contains("queue-consume", "batch-tasklet", "batch-pipeline");
-        // kind covers every document family the framework parses (contract-bugfixes track F):
-        // route/job/view take this schema's shapes, workflow/scope/attachment ride it for
-        // version/id/kind (additionalProperties stays true), and the mcp/ kinds reuse the
-        // route model outright.
-        List<String> kinds = new ArrayList<>();
-        schema.path("properties").path("kind").path("enum")
-                .forEach(node -> kinds.add(node.asText()));
-        assertThat(kinds).containsExactlyInAnyOrder("route", "job", "view", "workflow",
+    /**
+     * Every document family the framework parses has exactly one schema that claims its
+     * {@code kind}, and every kind is claimed.
+     *
+     * <p>The monolith listed all ten kinds in one enum, which is what made it the default home
+     * for anything without a schema of its own. Split, each file names the kinds it describes,
+     * and this asserts the ten partition cleanly: an unclaimed kind means a document nobody
+     * validates, and a kind in two files means an editor applying both.
+     */
+    @Test
+    void everyDocumentKindIsClaimedByExactlyOneSchema() throws Exception {
+        List<String> claimed = new ArrayList<>();
+        for (String resource : List.of("/schema/tesseraql-route-v1.schema.json",
+                "/schema/tesseraql-job-v1.schema.json",
+                "/schema/tesseraql-view-v1.schema.json",
+                "/schema/tesseraql-document-v1.schema.json")) {
+            JsonNode kind = new ObjectMapper()
+                    .readTree(getClass().getResourceAsStream(resource))
+                    .path("properties").path("kind");
+            if (kind.has("const")) {
+                claimed.add(kind.get("const").asText());
+            } else {
+                kind.path("enum").forEach(node -> claimed.add(node.asText()));
+            }
+        }
+        assertThat(claimed).containsExactlyInAnyOrder("route", "job", "view", "workflow",
                 "scope", "attachment", "tool", "resource", "ui", "prompt");
+    }
+
+    /** One schema property's enum values. */
+    private List<String> enumOf(String resource, String property) throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));
+        List<String> values = new ArrayList<>();
+        schema.path("properties").path(property).path("enum")
+                .forEach(node -> values.add(node.asText()));
+        return values;
     }
 
     /**
@@ -244,33 +277,32 @@ class SchemaSyncTest {
      * documented a key the loader rejects. Two directions of the same drift, neither of which
      * any guard could see, because the schema tests only ever reflected over the route and job
      * models.
+     *
+     * <p>Exact, not merely covering: the view loader is strict at every nesting level
+     * (TQL-VIEW-3314), so a key the schema offers and the loader refuses is the same lie in the
+     * other direction.
      */
     @Test
     void schemaDescribesViewDocumentsTheWayTheLoaderReadsThem() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
-
-        List<String> documented = new ArrayList<>();
-        schema.path("properties").fieldNames().forEachRemaining(documented::add);
-        assertThat(documented)
-                .as("every key a view document may declare is documented in the shipped schema")
-                .containsAll(io.tesseraql.yaml.view.ViewSpec.documentKeys());
-
-        List<String> recipes = new ArrayList<>();
-        schema.path("properties").path("recipe").path("enum")
-                .forEach(node -> recipes.add(node.asText()));
-        assertThat(recipes)
-                .as("a view's recipe: values are recipe values, not a separate property")
-                .containsAll(io.tesseraql.yaml.view.ViewSpec.recipes());
-        assertThat(documented)
+        assertThat(rootProperties("/schema/tesseraql-view-v1.schema.json"))
+                .as("the view schema documents exactly the keys the view loader accepts")
+                .containsExactlyInAnyOrderElementsOf(
+                        io.tesseraql.yaml.view.ViewSpec.documentKeys());
+        assertThat(rootProperties("/schema/tesseraql-view-v1.schema.json"))
                 .as("the phantom view: property is gone — the loader reads recipe:")
                 .doesNotContain("view");
+        assertThat(new ObjectMapper()
+                .readTree(getClass().getResourceAsStream(
+                        "/schema/tesseraql-view-v1.schema.json"))
+                .path("additionalProperties").asBoolean(true))
+                .as("a strict loader deserves a strict schema")
+                .isFalse();
     }
 
     @Test
     void schemaAuthEnumMatchesTheFrameworkAuthModes() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         List<String> authModes = new ArrayList<>();
         schema.path("properties").path("security").path("properties").path("auth").path("enum")
                 .forEach(node -> authModes.add(node.asText()));
@@ -281,7 +313,7 @@ class SchemaSyncTest {
     @Test
     void schemaInputTypeEnumMatchesTheFrameworkInputTypes() throws Exception {
         JsonNode schema = new ObjectMapper().readTree(
-                getClass().getResourceAsStream("/schema/tesseraql-v1.schema.json"));
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         List<String> types = new ArrayList<>();
         schema.path("$defs").path("inputField").path("properties").path("type").path("enum")
                 .forEach(node -> types.add(node.asText()));

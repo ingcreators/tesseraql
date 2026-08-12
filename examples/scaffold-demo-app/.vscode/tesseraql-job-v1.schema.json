@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-job-v1.schema.json",
+  "title": "TesseraQL job document v1",
+  "description": "Schema for TesseraQL batch job documents (batch/**/job.yml): how the job is triggered, what it runs, and the deadlines it is watched against.",
+  "$comment": "additionalProperties stays true so newer keys never break older editors; the recipe enum is kept in sync with the linter by a build-time test.",
+  "type": "object",
+  "required": [
+    "version",
+    "id",
+    "kind"
+  ],
+  "properties": {
+    "version": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/version"
+    },
+    "id": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/id"
+    },
+    "kind": {
+      "const": "job",
+      "description": "Batch job documents (batch/**/job.yml)."
+    },
+    "recipe": {
+      "description": "What the job does: batch-tasklet (a single statement) or batch-pipeline (an ordered pipeline: of steps).",
+      "enum": [
+        "batch-tasklet",
+        "batch-pipeline"
+      ]
+    },
+    "datasource": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/datasource"
+    },
+    "trigger": {
+      "type": "object",
+      "description": "How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md.",
+      "properties": {
+        "schedule": {
+          "type": "object",
+          "properties": {
+            "cron": {
+              "type": "string",
+              "description": "A Quartz cron expression; firings are claimed cluster-wide so one node runs each."
+            },
+            "fixedDelay": {
+              "type": "string",
+              "description": "A period (duration string, e.g. 5m); mutually exclusive with cron."
+            },
+            "calendar": {
+              "type": "string",
+              "description": "A business-day calendar declared under calendars/ - the cron says when to consider a firing, the calendar says whether it counts. Documented in jobs.md."
+            },
+            "runOn": {
+              "type": "string",
+              "enum": [
+                "business-day",
+                "first-business-day-of-month",
+                "last-business-day-of-month"
+              ],
+              "description": "Which considered firings count under the calendar (default business-day); mutually exclusive with dayOfMonth."
+            },
+            "dayOfMonth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31,
+              "description": "The shifted nominal-day rule: fire on this day of month, or its shifted business day when it is not one - and the run's business date is the nominal date. Rounds down to the month's last day. Documented in jobs.md."
+            },
+            "shift": {
+              "type": "string",
+              "enum": [
+                "next-business-day",
+                "previous-business-day"
+              ],
+              "description": "Where a non-business nominal day moves (default next-business-day); requires dayOfMonth."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Fire the job on a clock: a cron expression or a fixed delay, optionally filtered by a business-day calendar."
+        },
+        "poll": {
+          "type": "object",
+          "properties": {
+            "transport": {
+              "type": "string",
+              "enum": [
+                "local",
+                "sftp",
+                "ftps"
+              ],
+              "description": "local (default) polls a directory under connectors.poll.allowedPaths; sftp/ftps poll a remote host in connectors.poll.allowedHosts."
+            },
+            "host": {
+              "type": "string",
+              "description": "The remote host to poll; required for `sftp` and `ftps`, and it must be listed in `connectors.poll.allowedHosts`."
+            },
+            "port": {
+              "type": "integer",
+              "description": "The remote port; defaults to the transport's standard port."
+            },
+            "path": {
+              "type": "string",
+              "description": "The polled directory. A local path must sit under a declared allowedPaths root. A remote path with a leading slash is absolute on the server; without one it resolves against the credential's login home."
+            },
+            "credential": {
+              "type": "string",
+              "description": "A named credential under tesseraql.connectors.poll.credentials (required for remote sources)."
+            },
+            "include": {
+              "type": "string",
+              "description": "An ant-style filename filter, e.g. *.csv."
+            },
+            "delay": {
+              "type": "string",
+              "description": "Poll interval (duration string)."
+            },
+            "move": {
+              "type": "string",
+              "description": "Relative directory for processed files (default .done). Plain names only - no paths or placeholders."
+            },
+            "moveFailed": {
+              "type": "string",
+              "description": "Relative directory for failed files (default .error). Plain names only."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding the job's import pipeline."
+        },
+        "after": {
+          "type": "string",
+          "description": "Light chaining: fire when the named job's execution completes successfully in the same app, carrying its business date. Documented in jobs.md."
+        }
+      },
+      "additionalProperties": true
+    },
+    "input": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/input"
+    },
+    "sql": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/sql"
+    },
+    "pipeline": {
+      "type": "array",
+      "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, httpCall, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "perTenant": {
+      "type": "boolean",
+      "description": "Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md."
+    },
+    "import": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/import"
+    },
+    "overlap": {
+      "type": "string",
+      "enum": [
+        "skip",
+        "concurrent"
+      ],
+      "description": "What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md."
+    },
+    "sla": {
+      "type": "object",
+      "description": "Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md.",
+      "properties": {
+        "completeBy": {
+          "type": "string",
+          "description": "Wall-clock time (HH:mm) by which a day's run must have completed for that business date."
+        },
+        "runningLongerThan": {
+          "type": "string",
+          "description": "A duration (e.g. 2h) beyond which a still-running execution raises the alert."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

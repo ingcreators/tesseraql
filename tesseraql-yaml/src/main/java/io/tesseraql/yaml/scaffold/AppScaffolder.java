@@ -66,11 +66,24 @@ public final class AppScaffolder {
                 new ScaffoldedFile("compose.yaml", COMPOSE_YAML.replace("__APP_DB__", dbName)),
                 new ScaffoldedFile("README.md",
                         README_MD.replace("__APP_NAME__", appName).replace("__APP_DB__", dbName)),
-                // Authoring feedback outside Studio (roadmap Phase 43): the shipped JSON Schema
-                // lands in the repo and .vscode associates it, so any editor with a YAML
-                // language server validates and completes route/job/view documents offline.
-                new ScaffoldedFile(".vscode/tesseraql-v1.schema.json",
-                        absoluteResource("/schema/tesseraql-v1.schema.json")),
+                // Authoring feedback outside Studio (roadmap Phase 43): the shipped JSON Schemas
+                // land in the repo and .vscode associates them, so any editor with a YAML
+                // language server validates and completes authored documents offline. One
+                // schema per document kind (docs/unified-sources.md), because one file serving
+                // route, job and view meant a key of one kind was offered on the other two —
+                // and a view document, whose keys the route schema never carried, was flagged
+                // wholesale. The kinds share their value shapes through a $ref into the
+                // definitions file, which therefore ships beside them.
+                new ScaffoldedFile(".vscode/tesseraql-defs-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-defs-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-route-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-route-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-job-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-job-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-view-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-view-v1.schema.json")),
+                new ScaffoldedFile(".vscode/tesseraql-document-v1.schema.json",
+                        absoluteResource("/schema/tesseraql-document-v1.schema.json")),
                 // Shared definitions are their own document kind — a domains or rules file has
                 // no id: or kind: and would fail the route schema — so each ships its own.
                 new ScaffoldedFile(".vscode/tesseraql-domains-v1.schema.json",
@@ -99,11 +112,24 @@ public final class AppScaffolder {
     private static final String VSCODE_SETTINGS_JSON = """
             {
               "yaml.schemas": {
-                ".vscode/tesseraql-v1.schema.json": [
-                  "web/**/*.yml",
+                ".vscode/tesseraql-route-v1.schema.json": [
+                  "web/**/get.yml",
+                  "web/**/post.yml",
+                  "web/**/put.yml",
+                  "web/**/patch.yml",
+                  "web/**/delete.yml",
+                  "web/**/head.yml",
+                  "web/**/options.yml",
                   "consume/**/*.yml",
-                  "batch/**/*.yml",
-                  "mcp/**/*.yml",
+                  "mcp/**/*.yml"
+                ],
+                ".vscode/tesseraql-view-v1.schema.json": [
+                  "**/*.view.yml"
+                ],
+                ".vscode/tesseraql-job-v1.schema.json": [
+                  "batch/**/*.yml"
+                ],
+                ".vscode/tesseraql-document-v1.schema.json": [
                   "workflow/**/*.yml",
                   "scope/**/*.yml",
                   "attachments/**/*.yml"

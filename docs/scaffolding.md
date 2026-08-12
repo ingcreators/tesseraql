@@ -193,7 +193,7 @@ full CRUD flow over HTTP, including the stale-edit `409` (`TQL-SQL-4092`).
 ## Editor feedback in scaffolded repos
 
 `tesseraql new` ships the TesseraQL JSON Schema into the app
-(`.vscode/tesseraql-v1.schema.json`) and associates it via `.vscode/settings.json`
+(`.vscode/tesseraql-route-v1.schema.json` and its siblings, one per document kind) and associates them via `.vscode/settings.json`
 (`yaml.schemas` over `web/**`, `consume/**`, `batch/**`, and `mcp/**`), recommending the
 `redhat.vscode-yaml` extension. Any editor with a YAML language server then validates and
 completes route, job, and view documents offline — no Studio required. `tesseraql lint`

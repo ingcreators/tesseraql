@@ -40,7 +40,15 @@ public final class ReferenceGenerator {
     /** The full {@code reference-yaml-surface.md} content. */
     public static String yamlSurface(Path repoRoot) throws IOException {
         Path schemas = repoRoot.resolve("tesseraql-yaml/src/main/resources/schema");
-        return BANNER + SchemaReference.render(schemas.resolve("tesseraql-v1.schema.json"),
+        return BANNER + SchemaReference.render(
+                schemas.resolve("tesseraql-defs-v1.schema.json"),
+                java.util.List.of(
+                        new SchemaReference.DocumentKind("Route documents",
+                                schemas.resolve("tesseraql-route-v1.schema.json")),
+                        new SchemaReference.DocumentKind("Job documents",
+                                schemas.resolve("tesseraql-job-v1.schema.json")),
+                        new SchemaReference.DocumentKind("View documents",
+                                schemas.resolve("tesseraql-view-v1.schema.json"))),
                 java.util.List.of(
                         new SchemaReference.DocumentKind("domains",
                                 schemas.resolve("tesseraql-domains-v1.schema.json")),
