@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-document-v1.schema.json",
+  "title": "TesseraQL document envelope v1",
+  "description": "The envelope every TesseraQL document carries, for the kinds whose own trees no schema describes yet: workflow/*.yml, scope/*.yml, and attachments/*.yml. It validates the discriminators and leaves the rest open, which is honest about what is checked - these documents used to be associated with the route schema, which offered route keys they do not have and knew nothing of the keys they do.",
+  "$comment": "A placeholder, not a destination: each of these kinds deserves its own schema, tracked in docs/unified-sources.md.",
+  "type": "object",
+  "required": [
+    "version",
+    "id",
+    "kind"
+  ],
+  "properties": {
+    "version": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/version"
+    },
+    "id": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/id"
+    },
+    "kind": {
+      "enum": [
+        "workflow",
+        "scope",
+        "attachment"
+      ],
+      "description": "workflow (an approval lifecycle), scope (a row-visibility predicate), or attachment (an uploaded-file surface). Each has its own tree, documented in approval-workflow.md, data-scoping.md and attachments.md."
+    }
+  },
+  "additionalProperties": true
+}

@@ -10,7 +10,7 @@ scripts and CI (its source lives at `vscode-extension/` in the repository).
 
 A JSON Schema can only check *shape*. Every scaffolded app
 ([scaffolding](scaffolding.md)) already associates the committed
-`tesseraql-v1.schema.json` with the route trees through `redhat.vscode-yaml`
+the per-kind schemas with their document trees through `redhat.vscode-yaml`
 (`.vscode/settings.json`), and the linter positions its findings
 (`LintFinding.line`/`column`, the `source:line:column` clickable form). But
 everything the real linter knows — SQL file references, security policies, connector

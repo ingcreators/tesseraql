@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-route-v1.schema.json",
+  "title": "TesseraQL route document v1",
+  "description": "Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under consume/**, and the mcp/ kinds, which reuse the route model.",
+  "$comment": "additionalProperties stays true so newer keys never break older editors; the recipe enum is kept in sync with the linter by a build-time test.",
+  "type": "object",
+  "required": [
+    "version",
+    "id",
+    "kind"
+  ],
+  "properties": {
+    "version": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/version"
+    },
+    "id": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/id"
+    },
+    "kind": {
+      "enum": [
+        "route",
+        "tool",
+        "resource",
+        "ui",
+        "prompt"
+      ],
+      "description": "route (web/**, consume/**) and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model."
+    },
+    "recipe": {
+      "description": "What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), and queue-consume (consume/** documents).",
+      "enum": [
+        "query-json",
+        "command-json",
+        "query-html",
+        "page",
+        "query-export",
+        "file-import",
+        "file-export",
+        "webhook",
+        "queue-consume"
+      ]
+    },
+    "input": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/input"
+    },
+    "inputPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract.",
+      "properties": {
+        "unknownFields": {
+          "enum": [
+            "reject",
+            "ignore"
+          ],
+          "description": "How to treat request fields with no declared input: reject (default) or ignore."
+        },
+        "readOnlyFieldBehavior": {
+          "enum": [
+            "reject",
+            "ignore",
+            "warn"
+          ],
+          "description": "How to treat declared but non-writable fields when present: reject (default), ignore, or warn."
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "auth": {
+          "description": "bearer | browser | api-key | mtls | public (deny-by-default: no auth means no access to protected data).",
+          "type": "string",
+          "enum": [
+            "bearer",
+            "browser",
+            "api-key",
+            "mtls",
+            "public"
+          ]
+        },
+        "policy": {
+          "type": "string",
+          "description": "A policy id under tesseraql.security.policies."
+        },
+        "csrf": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "required",
+            "off"
+          ],
+          "description": "CSRF posture: auto (browser state-changing routes are protected), required, or off - one enum here and in security.defaults rules alike."
+        }
+      },
+      "additionalProperties": true,
+      "description": "How this document authenticates and authorizes. Routes are deny-by-default: one that declares no security is unreachable. Documented in authentication.md."
+    },
+    "idempotency": {
+      "type": "object",
+      "description": "Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md.",
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Whether the Idempotency-Key header is required on this command."
+        },
+        "scope": {
+          "type": "string",
+          "description": "The replay scope key (default: the route id)."
+        },
+        "ttl": {
+          "type": "string",
+          "description": "How long a stored response replays (duration string, default 24h)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "admission": {
+      "type": "object",
+      "description": "Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes).",
+      "properties": {
+        "concurrency": {
+          "type": "object",
+          "properties": {
+            "maxInFlight": {
+              "type": "integer",
+              "description": "Maximum requests of this route in flight at once; excess is rejected."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Bound on how many of this route's requests run at once."
+        },
+        "rateLimit": {
+          "type": "object",
+          "properties": {
+            "requestsPerSecond": {
+              "type": "integer",
+              "description": "Sustained requests per second allowed; excess is refused with 429."
+            },
+            "burst": {
+              "type": "integer",
+              "description": "Burst capacity (default: requestsPerSecond)."
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "node",
+                "cluster"
+              ],
+              "description": "node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023)."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Token-bucket rate limit for this route."
+        },
+        "lane": {
+          "type": "string",
+          "description": "The execution lane this route runs on (tesseraql.lanes)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "outbox": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md."
+    },
+    "sql": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/sql"
+    },
+    "steps": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlBinding"
+      },
+      "description": "Named statements executed in order inside one transaction (command recipes). Each result binds under `steps.<name>`. Documented in transactional-writes.md."
+    },
+    "queries": {
+      "type": "object",
+      "description": "Additional named queries executed after sql, each bound into the execution context under its name.",
+      "additionalProperties": {
+        "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlBinding"
+      }
+    },
+    "validate": {
+      "type": "object",
+      "description": "Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "string",
+            "description": "A cross-field expression that must hold."
+          },
+          "file": {
+            "type": "string",
+            "description": "Validation SQL returning one row per violation; must be a SELECT, and runs inside the command's transaction."
+          },
+          "use": {
+            "type": "string",
+            "description": "Name of a shared rule declared under rules/. The reference supplies params: matching the rule's binds: contract, plus its own field:/when:/code:/message:."
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Binds for a SQL rule, as dotted source expressions."
+          },
+          "field": {
+            "type": "string",
+            "description": "The input the violation is reported against."
+          },
+          "when": {
+            "type": "string",
+            "description": "Guard expression; the rule is skipped when it is falsy."
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable violation code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Message catalog key."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "decide": {
+      "type": "object",
+      "description": "Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "use": {
+            "type": "string",
+            "description": "Name of a decision declared under decisions/."
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, \"principal.role == 'officer'\")."
+          },
+          "effectiveAt": {
+            "type": "string",
+            "description": "Reference instant of a dated table-backed decision's effective: window - audit.now unless wired to a document date (params.postingDate)."
+          }
+        },
+        "required": [
+          "use",
+          "params"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "notify": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md."
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md."
+    },
+    "import": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/import"
+    },
+    "export": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/export"
+    },
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "A verifier under tesseraql.connectors.webhooks (an unknown provider fails the build)."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Inbound webhook verification and payload mapping for a `webhook` route. Documented in connectors.md."
+    },
+    "publish": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The declared messaging channel to publish on."
+        },
+        "topic": {
+          "type": "string",
+          "description": "The topic the event is published under."
+        },
+        "key": {
+          "type": "string",
+          "description": "Ordering key for the event, as a bindable path; messages sharing a key keep their relative order."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The event body: each property name to the bindable path supplying its value."
+        }
+      },
+      "additionalProperties": true,
+      "description": "The domain event this command publishes on a messaging channel after commit, on the same transactional outbox as `notify:`. Documented in messaging.md."
+    },
+    "consume": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The declared messaging channel to consume from."
+        },
+        "topic": {
+          "type": "string",
+          "description": "The topic this consumer subscribes to."
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "A bindable path over the message whose value de-duplicates redeliveries, so an at-least-once channel applies each message once."
+        }
+      },
+      "additionalProperties": true,
+      "description": "What a `consume/**` document subscribes to. Documented in messaging.md."
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "json": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599,
+              "description": "The status answered on success (default 200; a create conventionally declares 201)."
+            },
+            "body": {
+              "description": "What the response body is: a bindable path such as `rows` or `steps.<name>`, or a literal shape composing several."
+            },
+            "fields": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/fieldPolicy"
+              },
+              "description": "Per-field visibility, masking, and classification applied to the body. Documented in data-scoping.md."
+            },
+            "statusWhen": {
+              "$ref": "tesseraql-defs-v1.schema.json#/$defs/statusWhen",
+              "description": "Conditional statuses: the first entry whose expression matches decides the status."
+            },
+            "nest": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "into": {
+                    "type": "string",
+                    "description": "The parent collection the children are nested into."
+                  },
+                  "children": {
+                    "type": "string",
+                    "description": "The named query under `queries:` supplying the child rows."
+                  },
+                  "as": {
+                    "type": "string",
+                    "description": "The property name the children appear under on each parent row; one of `as` or `merge` composes the match."
+                  },
+                  "merge": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`."
+                  },
+                  "on": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "The join: each parent property to the child property it matches, one entry per key column."
+                  }
+                },
+                "additionalProperties": true
+              },
+              "description": "Compose the rows of a named query into the parent rows, so one request answers a parent-and-children shape without a second endpoint."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The JSON response: status, body, per-field policy, and nested composition."
+        },
+        "html": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599,
+              "description": "The status answered on success (default 200)."
+            },
+            "template": {
+              "type": "string",
+              "description": "The Thymeleaf template to render, relative to the app template root (exclusive with `view:`)."
+            },
+            "view": {
+              "type": "string",
+              "description": "The id of a *.view.yml document (exclusive with template:)."
+            },
+            "shell": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "always",
+                "never"
+              ],
+              "description": "Shell negotiation: auto (default) serves the bare #page-content region to htmx requests and the shell-wrapped page to direct navigation; always wraps unconditionally; never declares an htmx-only region endpoint."
+            },
+            "views": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "View ids whose models a template: route binds; each renders into views['<id>'] for the template to insert (illegal alongside view:)."
+            },
+            "model": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Response headers to set, merged over the app-wide `responseHeaders` defaults."
+            },
+            "headersWhen": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Conditional response headers: the first entry whose expression matches decides the headers."
+            },
+            "statusWhen": {
+              "$ref": "tesseraql-defs-v1.schema.json#/$defs/statusWhen",
+              "description": "Conditional statuses: the first entry whose expression matches decides the status."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The HTML response: a template or a view, its model, the status, and headers."
+        },
+        "stream": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "description": "The download filename offered to the client, as a literal or a bindable path."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Stream the generated file back as the response body (`query-export`). Documented in file-transfers.md."
+        },
+        "redirect": {
+          "type": "object",
+          "required": [
+            "location"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 300,
+              "maximum": 399,
+              "description": "The redirect status; declare `303` after a command so the browser follows with GET."
+            },
+            "location": {
+              "type": "string",
+              "description": "Where to redirect, as a literal path or a bindable path."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Answer with a redirect instead of a body — the usual close of a browser form post."
+        },
+        "file": {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer",
+              "description": "The status answered on success (default 200)."
+            },
+            "template": {
+              "type": "string",
+              "description": "The template rendered into the file."
+            },
+            "contentType": {
+              "type": "string",
+              "description": "The Content-Type of the produced file."
+            },
+            "filename": {
+              "type": "string",
+              "description": "The download filename offered to the client, as a literal or a bindable path."
+            },
+            "model": {
+              "type": "object",
+              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Render a template into a file and answer with it as a download."
+        },
+        "onError": {
+          "type": "object",
+          "properties": {
+            "retarget": {
+              "type": "string",
+              "description": "The element an error response replaces, instead of the request target."
+            },
+            "reswap": {
+              "type": "string",
+              "description": "The htmx swap style an error response uses (for example `outerHTML`)."
+            }
+          },
+          "additionalProperties": true,
+          "description": "How an error response reaches htmx, so a failed submit lands in the right place instead of replacing the page. Documented in response-shaping.md."
+        },
+        "session": {
+          "type": "object",
+          "description": "Browser-session handling for the response (docs/authentication.md).",
+          "properties": {
+            "rotate": {
+              "type": "boolean",
+              "description": "Re-issue the caller's session cookie in place on success: a fresh id and CSRF token, the old id invalidated before the response leaves. Declare on routes that elevate the session (confirming an MFA enrollment); bearer or public callers are untouched."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true,
+      "description": "How the result becomes an HTTP response: JSON, HTML, a redirect, a stream, or a rendered file. Documented in response-shaping.md."
+    },
+    "pagination": {
+      "description": "Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH.",
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "enum": [
+            "offset",
+            "keyset"
+          ],
+          "description": "`offset` (the default) pages by row offset; `keyset` pages by the `by:` cursor column and stays stable while rows are inserted."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Page size used when the request does not ask for one."
+        },
+        "maxSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Largest page size a request may ask for; a larger request is clamped."
+        },
+        "count": {
+          "type": "boolean",
+          "description": "Also run a count query so the response carries the total row count."
+        },
+        "by": {
+          "type": "string",
+          "description": "keyset cursor column"
+        }
+      },
+      "additionalProperties": true
+    },
+    "datasource": {
+      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/datasource"
+    },
+    "http": {
+      "type": "object",
+      "description": "Named HTTP sources on a query route (docs/connectors.md, \"HTTP sources\"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022).",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "The HTTP method, defaulting to GET. A reference API that takes a key list or a query document (POST .../search, JSON-RPC, GraphQL) declares its own; a non-GET method is written out, never inferred from `body`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070)."
+          },
+          "body": {
+            "type": "string",
+            "description": "A source expression resolving to the JSON request body. Declaring it beside a method that carries no body (GET, HEAD) is a build error (TQL-YAML-1049)."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Static request headers sent with the call. Credential material belongs in a named credential, never here."
+          },
+          "query": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Query-string bindings, each an expression over the execution context."
+          },
+          "credential": {
+            "type": "string",
+            "description": "A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072)."
+          },
+          "expectStatus": {
+            "type": "integer",
+            "description": "The HTTP status the response must carry; any other status fails the call."
+          },
+          "connectTimeout": {
+            "type": "string",
+            "description": "How long to wait for the connection (duration string such as `2s`)."
+          },
+          "requestTimeout": {
+            "type": "string",
+            "description": "How long to wait for the complete response (duration string such as `10s`)."
+          },
+          "select": {
+            "type": "string",
+            "description": "Dotted path into the response JSON naming the rows array or object the source exposes."
+          },
+          "readOnly": {
+            "type": "boolean",
+            "description": "The author's assertion that the call has no side effect. Required on a transactional recipe (TQL-YAML-1050): the call is made before the transaction and a rollback cannot un-make it."
+          },
+          "onError": {
+            "type": "string",
+            "enum": [
+              "fail",
+              "empty"
+            ],
+            "description": "fail (default) or empty: the source degrades to zero rows and the page still renders."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "enrich": {
+      "type": "object",
+      "description": "Reference lookups folded into a result set's rows (docs/lookups.md): the rows of `into` carry a key, the reference behind that key is fetched in batches of distinct keys, and the match is composed into each row. One statement per `batchSize` keys rather than one per row.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "into": {
+            "type": "string",
+            "description": "The result set to enrich: `sql` (the default) or one of the route's `queries:` (TQL-YAML-1045)."
+          },
+          "on": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The join, one entry per key column: each row column to the reference column it matches. The row side is the key that is looked up; the reference side names the columns bound as `keys`."
+          },
+          "sql": {
+            "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlBinding",
+            "description": "The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). Exactly one of `sql` or `http` is the reference."
+          },
+          "http": {
+            "type": "object",
+            "description": "The reference call, in the vocabulary every outbound call shares, plus `select` and `onError`. Exactly one of `sql` or `http` is the reference. A `perRow` call may key its url with `{key.<column>}` placeholders, percent-encoded per path segment; a `batch` call carries the whole key set as `keys`.",
+            "additionalProperties": true
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "perRow",
+              "batch"
+            ],
+            "description": "How an HTTP reference is fetched: `perRow` (the default — one request per distinct key, for a resource keyed per URL) or `batch` (one request per `batchSize` keys, for an endpoint that accepts a key list). A SQL reference is always batched."
+          },
+          "as": {
+            "type": "string",
+            "description": "Attach the matching reference rows as a list under this field; exactly one of `as` or `merge` composes the match (TQL-YAML-1047)."
+          },
+          "merge": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Copy these columns of the single matching reference row onto each row, for a many-to-one reference; the alternative to `as`."
+          },
+          "batchSize": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Distinct keys per statement. Defaults from the dialect and the key arity, under Oracle's 1000-expression IN limit and SQL Server's 2100 parameters."
+          },
+          "maxKeys": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The ceiling on distinct keys, beyond which the enrichment fails (TQL-SQL-2114) rather than issuing an unbounded number of round trips. Defaults to 10000."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "cache": {
+      "type": "object",
+      "description": "Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025).",
+      "properties": {
+        "maxAge": {
+          "type": "string",
+          "description": "How long a client may reuse the response (duration string such as 30s or 5m)."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "private",
+            "public"
+          ],
+          "description": "`private` (the default) lets only the client cache the response; `public` permits shared caches and lints onto `auth: public` routes only."
+        },
+        "etag": {
+          "type": "boolean",
+          "description": "Hash the rendered body and answer If-None-Match with 304 (default true)."
+        },
+        "staleWhileRevalidate": {
+          "type": "string",
+          "description": "How long a stale response may still be served while it revalidates (duration string)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "emit": {
+      "description": "Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "invalidates": {
+      "description": "Source table(s) whose code catalogs this command's write makes stale (docs/lookups.md). Named by table, not by catalog: a maintenance screen for a shared code master writes a row whose kind is request data, so which catalog is affected is not known until the write happens. Dropped after the commit, so a rollback invalidates nothing.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": true
+}

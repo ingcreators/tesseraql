@@ -48,7 +48,7 @@ The reference pages are **generated as markdown into `docs/` and committed**, no
 rendered at site build time. A build-only Maven module walks the machine-readable
 sources and emits:
 
-- **The YAML surface** from `schema/tesseraql-v1.schema.json` (the same schema the
+- **The YAML surface** from the per-kind `schema/tesseraql-*-v1.schema.json` files (the same schemas the
   editors use, already drift-guarded against the linter by `SchemaSyncTest`): every
   property with its type, constraints, allowed values, and description.
 - **The error-code index**, scanned from the main source trees: every

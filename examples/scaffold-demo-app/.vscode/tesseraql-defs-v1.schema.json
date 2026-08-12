@@ -1,0 +1,307 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tesseraql.io/schema/tesseraql-defs-v1.schema.json",
+  "title": "TesseraQL Simple YAML v1 — shared definitions",
+  "description": "Definitions the per-kind document schemas share. `shared` holds the keys more than one kind declares identically - the envelope (version, id) and the acquisition and file-transfer keys a route and a job author the same way; the rest are the value shapes every kind refers to. Referenced by relative $ref from the sibling schema files, so one declaration serves every kind.",
+  "$comment": "Not a document schema: nothing validates against this file directly.",
+  "$defs": {
+    "shared": {
+      "version": {
+        "const": "tesseraql/v1",
+        "description": "The document format version. Always `tesseraql/v1`."
+      },
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs."
+      },
+      "input": {
+        "type": "object",
+        "description": "Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md.",
+        "additionalProperties": {
+          "$ref": "#/$defs/inputField"
+        }
+      },
+      "datasource": {
+        "type": "string",
+        "description": "The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036)."
+      },
+      "sql": {
+        "$ref": "#/$defs/sqlBinding",
+        "description": "The document's single statement: a colocated 2-way SQL file, a named IAM contract, or a service call. Its result binds as `rows`."
+      },
+      "import": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md."
+      },
+      "export": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md."
+      }
+    },
+    "inputField": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "date",
+            "array"
+          ],
+          "description": "The declared type. A supplied value is coerced to it and refused when it does not fit."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Refuse the request when this field is absent."
+        },
+        "default": {
+          "description": "The value bound when the request omits the field."
+        },
+        "min": {
+          "type": "number",
+          "description": "Smallest accepted numeric value."
+        },
+        "max": {
+          "type": "number",
+          "description": "Largest accepted numeric value."
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Longest accepted string, in characters."
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Shortest accepted string, in characters."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Anchored regular expression (TQL-YAML-1012 when it does not compile)."
+        },
+        "format": {
+          "type": "string",
+          "description": "string: email|uuid|url; date/number: a parse pattern.",
+          "examples": [
+            "email",
+            "uuid",
+            "url",
+            "yyyy/MM/dd",
+            "#,##0.##"
+          ]
+        },
+        "requiredWhen": {
+          "type": "string",
+          "description": "A core expression over params./path./body. (TQL-YAML-1014)."
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The accepted values; anything else is refused."
+        },
+        "writable": {
+          "type": "boolean",
+          "description": "`false` makes the field read-only: it renders in a derived form but is never bound from the request."
+        },
+        "classification": {
+          "type": "string",
+          "description": "Data classification label carried into masking and audit. Documented in data-scoping.md."
+        },
+        "mask": {
+          "type": "string",
+          "description": "The masking rule applied when the principal may not see the value."
+        },
+        "widget": {
+          "type": "string",
+          "enum": [
+            "text",
+            "textarea",
+            "number",
+            "date",
+            "datetime-local",
+            "checkbox",
+            "select",
+            "hidden"
+          ],
+          "description": "Presentation hint (docs/declarative-views.md): the form widget this field renders as, declared once on a domain; a per-view fields: override wins. Never part of the HTTP contract."
+        },
+        "codes": {
+          "type": "string",
+          "description": "The code catalog this field's values come from (docs/lookups.md): the binder accepts only that catalog's active codes, and the violation is the enum field error. Declared on a domain, so the value set has one home instead of an enum that drifts from the master."
+        },
+        "policy": {
+          "type": "string",
+          "description": "Write authorization (docs/declarative-views.md): a security policy the principal must satisfy to supply this field; a failing principal's value follows the route's readOnly behavior, and the derived form omits the field. Operational — never accepted inside a domain."
+        },
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "The element type."
+            },
+            "enum": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The accepted element values; anything else is refused."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Element constraints for `type: array`."
+        }
+      },
+      "additionalProperties": true
+    },
+    "sqlBinding": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "A colocated 2-way SQL file (must exist; TQL-SQL-2103)."
+        },
+        "contract": {
+          "type": "string",
+          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Legal on sql: and queries:, and refused inside a command step. Documented in authentication.md."
+        },
+        "service": {
+          "type": "string",
+          "description": "A named runtime service provider to call instead of running SQL (docs/extending.md). Legal on sql: and queries:, and refused inside a command step — a transactional step must be a SQL file or a sequence."
+        },
+        "mode": {
+          "type": "string",
+          "examples": [
+            "query",
+            "query-one",
+            "update",
+            "query-spool"
+          ],
+          "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (a streamed result)."
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
+        },
+        "datasource": {
+          "type": "string",
+          "description": "The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)."
+        },
+        "when": {
+          "type": "string",
+          "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Arguments for a `service:` or `contract:` call: each name to the bindable path supplying its value."
+        },
+        "sequence": {
+          "type": "string",
+          "description": "Allocate the next value of a managed document-number sequence instead of running SQL; it binds as `steps.<name>.value`. Documented in transactional-writes.md."
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<name>.keys.<column>`."
+        },
+        "materialize": {
+          "type": "object",
+          "properties": {
+            "maxRows": {
+              "type": "integer",
+              "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
+            },
+            "onOverflow": {
+              "type": "string",
+              "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
+            }
+          },
+          "additionalProperties": true,
+          "description": "Bounds on how much of the result is held in memory."
+        },
+        "expect": {
+          "type": "object",
+          "properties": {
+            "rowCount": {
+              "type": "integer",
+              "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
+            },
+            "onMismatch": {
+              "type": "string",
+              "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
+        }
+      },
+      "additionalProperties": true
+    },
+    "fieldPolicy": {
+      "type": "object",
+      "properties": {
+        "visible": {
+          "type": "boolean",
+          "description": "`false` removes the field from the response entirely, for every caller."
+        },
+        "policy": {
+          "type": "string",
+          "description": "The security policy a principal must satisfy to see the value unmasked."
+        },
+        "mask": {
+          "type": "string",
+          "description": "The masking rule applied when the policy is not satisfied, such as showing only the last four characters."
+        },
+        "classification": {
+          "type": "string",
+          "description": "Data classification label carried into audit. Documented in data-scoping.md."
+        },
+        "unmaskWhen": {
+          "type": "string",
+          "description": "An expression that, when it matches, reveals the value despite the mask."
+        }
+      },
+      "additionalProperties": true
+    },
+    "statusWhen": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "when",
+          "status"
+        ],
+        "properties": {
+          "when": {
+            "type": "string",
+            "description": "A whitelist-only expression over the execution context; the first matching entry wins."
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599,
+            "description": "The HTTP status to answer when the expression is truthy."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

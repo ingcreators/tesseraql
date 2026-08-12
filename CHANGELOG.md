@@ -197,6 +197,25 @@ All notable changes to TesseraQL are documented here. The format follows
   declaration and its behaviour cannot drift apart. Third-party codecs must migrate; the bundled
   CSV, Excel and PDF codecs have.
 
+### Changed
+
+- **One JSON Schema per document kind** (docs/unified-sources.md): `tesseraql-v1.schema.json`
+  is replaced by `tesseraql-route-v1`, `tesseraql-job-v1` and `tesseraql-view-v1`, sharing their
+  value shapes through `tesseraql-defs-v1`. One file serving three kinds meant every document
+  was offered every other kind's keys — a route completing `trigger:`, a job completing
+  `response:` — and a view document, whose keys the file never carried, was flagged wholesale.
+  Each kind now claims its own `kind:` and `recipe:` values, and the guard asserts each schema
+  matches its model *exactly* rather than merely covering it, which is what makes a key in the
+  wrong file fail. The exactness check earned itself immediately: it caught `export:` declared
+  as a job root key, where a job's export has only ever been a pipeline step's. `workflow/`,
+  `scope/` and `attachments/` documents move off the route schema onto an envelope schema that
+  validates the discriminators and says plainly that their trees are not described yet — better
+  than being measured against a schema built for something else. The `domains/` schema stops
+  carrying a copy of the input-field definition and refers to the shared one, so the test that
+  kept the copy honest is gone along with the copy. Editors pick up the new associations from
+  the scaffolded `.vscode/settings.json`; a `*.view.yml` is matched by name, so it can never
+  again be validated as a route.
+
 ### Fixed
 
 - **The shipped JSON Schema described view documents nobody could write.** It declared a

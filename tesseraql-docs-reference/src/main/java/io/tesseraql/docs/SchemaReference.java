@@ -9,65 +9,79 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * The YAML-surface reference (docs/docs-site.md): a recursive walk of
- * {@code schema/tesseraql-v1.schema.json} — the same schema the editors ship and the
- * linter's {@code SchemaSyncTest} keeps honest — rendered as one markdown page. The
- * schema only uses {@code const}/{@code enum}/{@code $ref}/{@code items}/
- * {@code additionalProperties} beside plain types, and that is exactly what this
- * renders; nothing here is hand-maintained.
+ * The YAML-surface reference (docs/docs-site.md): a recursive walk of the shipped JSON
+ * Schemas — the same files the editors ship and the linter's {@code SchemaSyncTest} keeps
+ * honest — rendered as one markdown page. The schemas only use {@code const}/{@code enum}/
+ * {@code $ref}/{@code items}/{@code additionalProperties} beside plain types, and that is
+ * exactly what this renders; nothing here is hand-maintained.
+ *
+ * <p>One schema per document kind (docs/unified-sources.md), so the page has a section per
+ * kind rather than one table whose rows apply to whichever kind the reader happens to be
+ * writing. A {@code $ref} into the shared definitions file is followed the same way an
+ * internal one is: the shared node is merged into the resolution root, so a reference to a
+ * value shape still links to the one section describing it.
  */
 final class SchemaReference {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** The path prefix marking a shared *property* definition, inlined rather than linked. */
+    private static final String SHARED_PROPERTY = "/$defs/shared/";
+
     private SchemaReference() {
     }
 
-    /** One non-route document kind: the schema file and the heading its section carries. */
+    /** One document kind: the schema file and the heading its section carries. */
     record DocumentKind(String title, Path schemaFile) {
     }
 
-    /** Renders the whole page from the route schema plus the sibling document schemas. */
-    static String render(Path schemaFile, List<DocumentKind> documentSchemas) throws IOException {
-        JsonNode schema = MAPPER.readTree(schemaFile.toFile());
+    /**
+     * Renders the whole page: a section per document kind, then the shared-definition
+     * documents, then the value shapes every kind refers to.
+     *
+     * @param defsFile      the shared definitions, resolved into every kind's refs
+     * @param documentKinds route, job and view — the kinds with an id: and a kind:
+     * @param otherKinds    the shared-definition documents (domains, rules, decisions)
+     */
+    static String render(Path defsFile, List<DocumentKind> documentKinds,
+            List<DocumentKind> otherKinds) throws IOException {
+        JsonNode defs = MAPPER.readTree(defsFile.toFile());
         StringBuilder md = new StringBuilder();
         md.append("# YAML surface reference\n\n")
-                .append("Generated from [`tesseraql-v1.schema.json`](../tesseraql-yaml/src/"
-                        + "main/resources/schema/tesseraql-v1.schema.json) — the schema the "
-                        + "loader, the editors, and the linter share — on every refresh, so "
-                        + "it cannot drift from what the framework accepts. One document = "
-                        + "one file in the app tree — routes under `web/`, jobs under "
-                        + "`batch/`, consumers under `consume/`, views beside the route "
-                        + "they serve; which root properties apply depends on the "
-                        + "document's `kind`.\n");
-        if (schema.hasNonNull("description")) {
-            md.append('\n').append(schema.get("description").asText()).append('\n');
+                .append("Generated from the [shipped JSON Schemas](../tesseraql-yaml/src/"
+                        + "main/resources/schema) — the ones the loader, the editors, and the "
+                        + "linter share — on every refresh, so this page cannot drift from "
+                        + "what the framework accepts. One document = one file in the app "
+                        + "tree, and each kind has its own schema: routes under `web/` and "
+                        + "`consume/`, jobs under `batch/`, views beside the route they "
+                        + "serve.\n");
+        for (DocumentKind kind : documentKinds) {
+            JsonNode schema = MAPPER.readTree(kind.schemaFile().toFile());
+            renderObject(md, schema, defs, kind.title(), 2);
         }
-        renderObject(md, schema, schema, "The document", 2);
 
         // The shared-definition documents are their own kind — no id:, no kind: — so they have
         // their own schemas, and a page generated from the route schema alone documented
         // neither. A reader had no way to learn the surface existed.
-        if (!documentSchemas.isEmpty()) {
+        if (!otherKinds.isEmpty()) {
             md.append("\n## Other document kinds\n\n")
                     .append("Shared definitions live in their own documents, referenced from "
                             + "routes rather than repeated in them. Each has its own schema and "
                             + "its own file association.\n");
-            for (DocumentKind kind : documentSchemas) {
+            for (DocumentKind kind : otherKinds) {
                 JsonNode document = MAPPER.readTree(kind.schemaFile().toFile());
-                // Rendered against the route schema's root: these documents' shared
-                // definitions are copies of it (SchemaSyncTest enforces that), so a "$ref"
-                // resolves to the same node and links to the same section of this page.
-                renderObject(md, document, schema, kind.title(), 3);
+                renderObject(md, document, defs, kind.title(), 3);
             }
         }
 
-        JsonNode defs = schema.get("$defs");
-        if (defs != null) {
-            md.append("\n## Shared definitions\n");
-            for (Iterator<String> names = defs.fieldNames(); names.hasNext();) {
-                String name = names.next();
-                renderObject(md, defs.get(name), schema, name, 3);
+        md.append("\n## Shared definitions\n");
+        JsonNode shapes = defs.get("$defs");
+        for (Iterator<String> names = shapes.fieldNames(); names.hasNext();) {
+            String name = names.next();
+            // The shared *property* definitions are inlined into each kind's table above;
+            // only the value shapes get a section of their own.
+            if (!"shared".equals(name)) {
+                renderObject(md, shapes.get(name), defs, name, 3);
             }
         }
         return md.toString();
@@ -82,7 +96,7 @@ final class SchemaReference {
             String title, int level) {
         md.append('\n').append("#".repeat(Math.min(level, 6))).append(' ').append(title)
                 .append('\n');
-        if (node.hasNonNull("description") && level > 2) {
+        if (node.hasNonNull("description")) {
             md.append('\n').append(node.get("description").asText()).append('\n');
         }
         JsonNode properties = node.get("properties");
@@ -104,7 +118,7 @@ final class SchemaReference {
         List<String[]> children = new ArrayList<>();
         for (Iterator<String> names = properties.fieldNames(); names.hasNext();) {
             String name = names.next();
-            JsonNode property = properties.get(name);
+            JsonNode property = shared(properties.get(name), root);
             String childTitle = childTitle(title, name);
             String description = property.path("description").asText("");
             md.append("| `").append(name).append('`')
@@ -116,26 +130,45 @@ final class SchemaReference {
                     .append(" |\n");
         }
         for (String[] child : children) {
-            renderObject(md, resolve(properties.get(child[0]), root), root, child[1],
-                    level + 1);
+            renderObject(md, resolve(shared(properties.get(child[0]), root), root), root,
+                    child[1], level + 1);
         }
     }
 
-    /** Subsection titles are dotted paths from the document root, e.g. {@code view.columns}. */
-    private static String childTitle(String parentTitle, String name) {
-        return "The document".equals(parentTitle) ? name : parentTitle + "." + name;
+    /**
+     * A key several kinds declare identically is stored once and referenced; the reader wants
+     * the declaration, not a pointer, so it is inlined into the kind's own table. Value shapes
+     * ({@code inputField}, {@code sqlBinding}) keep their reference and their own section.
+     */
+    private static JsonNode shared(JsonNode property, JsonNode defs) {
+        return property.path("$ref").asText("").contains(SHARED_PROPERTY)
+                ? resolve(property, defs)
+                : property;
     }
 
-    /** Follows the schema's only indirections: {@code $ref}, array items, map values. */
-    private static JsonNode resolve(JsonNode node, JsonNode root) {
+    /**
+     * Subsection titles are dotted paths from the document root, e.g. {@code response.json}.
+     * A kind's own section is the root, so its children carry the key alone.
+     */
+    private static String childTitle(String parentTitle, String name) {
+        return parentTitle.endsWith("documents") ? name : parentTitle + "." + name;
+    }
+
+    /**
+     * Follows the schemas' only indirections: {@code $ref}, array items, map values. A
+     * cross-file {@code $ref} into the shared definitions resolves against that file, which
+     * is the {@code defs} root every render call carries.
+     */
+    private static JsonNode resolve(JsonNode node, JsonNode defs) {
         if (node.has("$ref")) {
-            return root.at(node.get("$ref").asText().substring(1));
+            String ref = node.get("$ref").asText();
+            return defs.at(ref.substring(ref.indexOf('#') + 1));
         }
         if (node.has("items")) {
-            return resolve(node.get("items"), root);
+            return resolve(node.get("items"), defs);
         }
         if (node.has("additionalProperties") && node.get("additionalProperties").isObject()) {
-            return resolve(node.get("additionalProperties"), root);
+            return resolve(node.get("additionalProperties"), defs);
         }
         return node;
     }
