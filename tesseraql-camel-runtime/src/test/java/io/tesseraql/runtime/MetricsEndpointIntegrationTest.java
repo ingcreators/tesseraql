@@ -217,8 +217,10 @@ class MetricsEndpointIntegrationTest {
                   format: csv
                   columns:
                     - orderNo
-                  sql:
-                    file: noop.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: noop.sql
                 """);
         Files.writeString(jobDir.resolve("noop.sql"), "select 1\n");
         // A runnable tasklet: the job-metrics test drives one run through the executor so

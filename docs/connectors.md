@@ -310,8 +310,10 @@ import:                          # the same import: block a file-import route us
     - orderNo
     - { name: qty, type: number }
   onError: skip
-  sql:
-    file: upsert-order.sql       # runs once per row; params are the column names
+pipeline:
+  - id: row
+    sql:
+      file: upsert-order.sql     # runs once per row; params are the column names
 ```
 
 Each file is ingested through the same asynchronous, off-heap path an HTTP upload takes and is

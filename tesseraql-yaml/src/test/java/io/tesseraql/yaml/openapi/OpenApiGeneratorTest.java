@@ -153,8 +153,10 @@ class OpenApiGeneratorTest {
                         import:
                           format: csv
                           columns: [name]
-                          sql:
-                            file: upsert.sql
+                        steps:
+                          - id: row
+                            sql:
+                              file: upsert.sql
                         """, "import"));
         var exportRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items/export",
                 home.resolve("web/api/items/export/post.yml"), parser.parseRoute("""

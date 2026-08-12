@@ -236,8 +236,10 @@ class RecipeGovernanceTest {
                 import:
                   format: csv
                   columns: [name]
-                  sql:
-                    file: insert.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: insert.sql
                 """.formatted(policy), "insert.sql");
 
         route(dir, "web/items/dump", "get.yml", """

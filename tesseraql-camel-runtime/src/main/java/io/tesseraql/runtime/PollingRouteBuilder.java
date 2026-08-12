@@ -72,11 +72,12 @@ final class PollingRouteBuilder extends RouteBuilder {
     private void wire(JobFile job, PollSpec poll) {
         String jobId = job.definition().id();
         ImportSpec importSpec = job.definition().fileImport();
-        if (importSpec == null || importSpec.sql() == null || importSpec.sql().file() == null) {
+        io.tesseraql.yaml.model.Binding rowStep = job.definition().rowStep();
+        if (importSpec == null || rowStep == null || rowStep.file() == null) {
             LOG.log(System.Logger.Level.ERROR,
-                    "Poll job {0} has no import: block with a per-row sql; skipping", jobId);
+                    "Poll job {0} has no import: block and per-row step; skipping", jobId);
             status.skipped(jobId, poll.effectiveTransport(),
-                    "no import: block with a per-row sql");
+                    "no import: block and per-row step");
             return;
         }
         if (poll.isRemote() && !connectors.isHostAllowed(poll.host())) {
@@ -89,7 +90,7 @@ final class PollingRouteBuilder extends RouteBuilder {
         }
 
         String uri = endpointUri(poll);
-        Path rowSqlFile = job.source().getParent().resolve(importSpec.sql().file()).normalize();
+        Path rowSqlFile = job.source().getParent().resolve(rowStep.file()).normalize();
         String owner = jobOwners.getOrDefault(jobId, appName);
         io.tesseraql.core.files.FileReadSpec readSpec = importSpec.toReadSpec()
                 .withLocale(importSpec.locale());

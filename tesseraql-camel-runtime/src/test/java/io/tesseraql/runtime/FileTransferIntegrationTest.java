@@ -414,8 +414,10 @@ class FileTransferIntegrationTest {
                     - name
                     - { name: held_on, type: date, format: yyyy/MM/dd }
                     - { name: fee, type: number, format: "#,##0.00" }
-                  sql:
-                    file: upsert-event.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-event.sql
                 """);
         Files.writeString(importRoute.resolve("upsert-event.sql"), """
                 insert into events (name, held_on, fee)
@@ -542,8 +544,10 @@ class FileTransferIntegrationTest {
                   format: csv
                   columns: [name, qty]
                   onError: %s
-                  sql:
-                    file: upsert-item.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-item.sql
                 """.formatted(id, onError));
         Files.writeString(route.resolve("upsert-item.sql"), """
                 insert into items (name, qty)

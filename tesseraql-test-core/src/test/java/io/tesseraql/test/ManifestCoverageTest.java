@@ -527,11 +527,13 @@ class ManifestCoverageTest {
                         new io.tesseraql.yaml.model.TriggerSpec(null,
                                 new io.tesseraql.yaml.model.PollSpec("local", null, null,
                                         "/data/inbound", null, "*.csv", "60s", null, null)),
-                        Map.of(), List.of(), false,
+                        Map.of(),
+                        List.of(new io.tesseraql.yaml.model.PipelineStep("row",
+                                io.tesseraql.yaml.model.Binding.sql("upsert.sql", "update",
+                                        Map.of()))),
+                        false,
                         new io.tesseraql.yaml.model.ImportSpec("csv", List.of(), null, null, null,
-                                null, null,
-                                io.tesseraql.yaml.model.Binding.SqlArm.of("upsert.sql", "update",
-                                        Map.of()))));
+                                null, null)));
     }
 
     @Test

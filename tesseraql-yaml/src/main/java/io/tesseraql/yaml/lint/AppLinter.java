@@ -14,7 +14,6 @@ import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.DeadlineSpec;
-import io.tesseraql.yaml.model.ImportSpec;
 import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.InputPolicy;
 import io.tesseraql.yaml.model.JobDefinition;
@@ -2766,10 +2765,6 @@ public final class AppLinter {
                 }
             });
         }
-        ImportSpec fileImport = definition.fileImport();
-        if (fileImport != null && fileImport.sql() != null && fileImport.sql().file() != null) {
-            files.add(fileImport.sql().file());
-        }
         return files;
     }
 
@@ -3836,10 +3831,11 @@ public final class AppLinter {
                 lintDatasourceName(config, sourceFile, query.datasource(), source, findings);
             }
         });
-        if (definition.fileImport() != null && definition.fileImport().sql() != null
-                && declaredDatasource(definition.fileImport().sql().datasource())) {
+        if (definition.fileImport() != null && definition.rowStep() != null
+                && declaredDatasource(definition.rowStep().datasource())) {
             findings.add(new LintFinding("TQL-YAML-1037", "error", source,
-                    "import.sql cannot declare datasource: - the import pipeline runs on main"));
+                    "an import's per-row step cannot declare datasource: - the import pipeline"
+                            + " runs on main"));
         }
         if (definition.fileExport() != null && definition.main() != null
                 && declaredDatasource(definition.main().datasource())) {
@@ -5014,13 +5010,15 @@ public final class AppLinter {
             }
         }
         io.tesseraql.yaml.model.ImportSpec importSpec = job.definition().fileImport();
-        if (importSpec == null || importSpec.sql() == null || importSpec.sql().file() == null) {
+        io.tesseraql.yaml.model.Binding rowStep = job.definition().rowStep();
+        if (importSpec == null || rowStep == null || rowStep.file() == null) {
             findings.add(new LintFinding("TQL-YAML-1006", "error", source, "Poll-triggered job '"
-                    + job.definition().id() + "' needs an import: block with a per-row sql.file"));
+                    + job.definition().id() + "' needs an import: block saying how to parse the"
+                    + " file, and a pipeline step saying what to write per row"));
         } else if (!Files.isRegularFile(
-                job.source().getParent().resolve(importSpec.sql().file()))) {
+                job.source().getParent().resolve(rowStep.file()))) {
             findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                    "Referenced SQL file is missing: " + importSpec.sql().file()));
+                    "Referenced SQL file is missing: " + rowStep.file()));
         }
     }
 

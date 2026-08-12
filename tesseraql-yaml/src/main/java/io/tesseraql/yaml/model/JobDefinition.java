@@ -74,6 +74,15 @@ public record JobDefinition(
         return !"concurrent".equals(overlap);
     }
 
+    /**
+     * The per-row statement of a poll-triggered {@code file-import} job: its one pipeline step.
+     * The write used to sit inside {@code import:}, where it looked like a query and was a
+     * write (docs/unified-sources.md decision 7b).
+     */
+    public Binding rowStep() {
+        return pipeline.isEmpty() ? null : pipeline.get(0).sql();
+    }
+
     /** Returns the steps to run — the pipeline, which is all a job's work has ever been. */
     public List<PipelineStep> effectiveSteps() {
         return pipeline;

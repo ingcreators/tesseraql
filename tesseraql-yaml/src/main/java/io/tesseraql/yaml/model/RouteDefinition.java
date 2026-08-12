@@ -199,6 +199,16 @@ public record RouteDefinition(
     public static final String MAIN = io.tesseraql.core.files.ExportModel.SUBJECT;
 
     /**
+     * The per-row statement of a {@code file-import} document: its one {@code steps:} entry.
+     * The write used to sit inside {@code import:}, where it looked like a query and was a
+     * write (docs/unified-sources.md decision 7b) — {@code import:} says how to parse, and a
+     * write is a step like every other write.
+     */
+    public Binding rowStep() {
+        return steps().isEmpty() ? null : steps().values().iterator().next();
+    }
+
+    /**
      * The primary source, or {@code null} when the document declares none.
      *
      * <p>A naming convention, not a slot: {@code main} is the source an omitted

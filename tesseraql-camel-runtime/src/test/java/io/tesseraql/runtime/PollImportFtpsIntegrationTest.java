@@ -327,8 +327,10 @@ class PollImportFtpsIntegrationTest {
                   columns:
                     - orderNo
                     - { name: qty, type: number }
-                  sql:
-                    file: upsert-order.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert-order.sql
                 """.formatted(ftpPort, remoteDir));
         Files.writeString(jobDir.resolve("upsert-order.sql"),
                 "insert into imported_orders (order_no, qty)"

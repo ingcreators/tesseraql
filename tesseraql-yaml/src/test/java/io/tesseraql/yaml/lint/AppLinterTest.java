@@ -1150,8 +1150,10 @@ class AppLinterTest {
                     %s
                 import:
                   format: csv
-                  sql:
-                    file: upsert.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
                 """.formatted(pollKeys));
     }
 
@@ -1186,8 +1188,10 @@ class AppLinterTest {
                     path: /data/inbound
                 import:
                   format: csv
-                  sql:
-                    file: upsert.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
                 """);
         // A clean remote poll job: allow-listed host, declared credential, existing import SQL.
         Files.createDirectories(dir.resolve("batch/partner"));
@@ -1205,8 +1209,10 @@ class AppLinterTest {
                     credential: partner-sftp
                 import:
                   format: csv
-                  sql:
-                    file: upsert.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
                 """);
         // A broken poll job: off-allow-list host, undeclared credential, and no import block.
         Files.createDirectories(dir.resolve("batch/bad"));
@@ -1272,8 +1278,10 @@ class AppLinterTest {
                     credential: partner-sftp
                 import:
                   format: csv
-                  sql:
-                    file: upsert.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
                 """);
 
         // A warning, not an error — existing apps keep shipping while being nudged.

@@ -151,9 +151,6 @@ public final class RouteSpecGenerator {
         definition.sources()
                 .forEach((id, binding) -> out.add(statement("source:" + id, dir, binding)));
         definition.steps().forEach((id, binding) -> out.add(statement("step:" + id, dir, binding)));
-        if (definition.fileImport() != null && definition.fileImport().sql() != null) {
-            out.add(statement("import", dir, Binding.sql(definition.fileImport().sql())));
-        }
         if (definition.fileExport() != null) {
             if (definition.fileExport().after() != null
                     && definition.fileExport().after().sql() != null) {

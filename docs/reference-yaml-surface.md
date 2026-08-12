@@ -25,7 +25,7 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `decide` | map of [object](#decide) | Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md. |
 | `notify` | map of object | Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md. |
 | `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
-| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
+| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
 | `export` | object | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md. |
 | `webhook` | [object](#webhook) | Inbound webhook verification and payload mapping for a `webhook` route. Documented in connectors.md. |
 | `publish` | [object](#publish) | The domain event this command publishes on a messaging channel after commit, on the same transactional outbox as `notify:`. Documented in messaging.md. |
@@ -269,7 +269,7 @@ Schema for TesseraQL batch job documents (batch/**/job.yml): how the job is trig
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md. |
 | `pipeline` | array of object | The job's ordered steps. A step is a binding with an id (sql:) plus its output blocks (export:, push:, notify:) or a chunk:, each publishing its result to the step context. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
-| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
+| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
 | `overlap` | enum: `skip` \| `concurrent` | What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md. |
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 

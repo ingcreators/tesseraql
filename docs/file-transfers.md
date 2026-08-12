@@ -242,8 +242,10 @@ security:
 import:
   format: csv
   columns: [name, qty]
-  sql:
-    file: upsert-item.sql
+steps:
+  - id: row
+    sql:
+      file: upsert-item.sql
 ```
 
 with a colocated per-row statement whose parameter names are the column names:

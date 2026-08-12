@@ -242,8 +242,10 @@ class ExcelTransferIntegrationTest {
                 import:
                   format: excel
                   columns: [fullName, age]
-                  sql:
-                    file: upsert-person.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-person.sql
                 """);
         Files.writeString(importRoute.resolve("upsert-person.sql"), """
                 insert into people (full_name, age)

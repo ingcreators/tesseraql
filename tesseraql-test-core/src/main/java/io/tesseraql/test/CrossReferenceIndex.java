@@ -159,9 +159,6 @@ public final class CrossReferenceIndex {
         // document's primary result twice (docs/unified-sources.md decision 3).
         bindings.addAll(definition.steps().values());
         bindings.addAll(definition.sources().values());
-        if (definition.fileImport() != null && definition.fileImport().sql() != null) {
-            bindings.add(Binding.sql(definition.fileImport().sql()));
-        }
         if (definition.fileExport() != null) {
             if (definition.fileExport().after() != null
                     && definition.fileExport().after().sql() != null) {

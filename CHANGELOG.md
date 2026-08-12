@@ -91,6 +91,12 @@ All notable changes to TesseraQL are documented here. The format follows
   and JSON is the only surface that has one. Written under the source it composes into, the same
   join reaches an HTML list's `columns:` and an export's. `TQL-YAML-1019` retires with the block.
 
+- **BREAKING: `import:` says how to parse, and the per-row write is a step**
+  (docs/unified-sources.md decision 7b). An `import.sql:` looked like a query and was a write,
+  and it was the mirror image of the export block carrying its extraction — one confusion,
+  stated twice. It moves to the document's one `steps:` (route) or `pipeline:` (poll job) entry,
+  so every write on the surface is a step and every parsing declaration is only that.
+
 ### Fixed
 
 - **`query-spool` stopped promising a result nothing could reach.** The mode published a spool

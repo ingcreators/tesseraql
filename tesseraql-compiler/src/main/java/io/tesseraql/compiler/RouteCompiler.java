@@ -844,7 +844,8 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
         String routeId = definition.id();
-        Path rowSql = routeFile.source().getParent().resolve(spec.sql().file()).normalize();
+        Path rowSql = routeFile.source().getParent()
+                .resolve(definition.rowStep().file()).normalize();
 
         String direct = "direct:" + routeId;
         if (mountRest) {

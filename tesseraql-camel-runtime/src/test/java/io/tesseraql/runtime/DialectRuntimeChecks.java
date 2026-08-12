@@ -218,8 +218,10 @@ final class DialectRuntimeChecks {
                   columns:
                     - name
                     - { name: qty, type: number }
-                  sql:
-                    file: insert-item.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: insert-item.sql
                 """);
         Files.writeString(importRoute.resolve("insert-item.sql"), """
                 insert into items (name, qty)

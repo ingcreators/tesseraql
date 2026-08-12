@@ -428,10 +428,10 @@ public final class ManifestCoverage {
                 continue;
             }
             coverage.declare(definition.id());
-            io.tesseraql.yaml.model.ImportSpec importSpec = definition.fileImport();
-            if (importSpec != null && importSpec.sql() != null && importSpec.sql().file() != null
+            io.tesseraql.yaml.model.Binding rowStep = definition.rowStep();
+            if (definition.fileImport() != null && rowStep != null && rowStep.file() != null
                     && testedPaths.contains(job.source().getParent()
-                            .resolve(importSpec.sql().file()).normalize())) {
+                            .resolve(rowStep.file()).normalize())) {
                 coverage.cover(definition.id());
             }
         }

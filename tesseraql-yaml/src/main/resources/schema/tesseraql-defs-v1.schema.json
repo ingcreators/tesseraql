@@ -33,7 +33,7 @@
       "import": {
         "type": "object",
         "additionalProperties": true,
-        "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). Documented in file-transfers.md."
+        "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md."
       },
       "export": {
         "type": "object",
