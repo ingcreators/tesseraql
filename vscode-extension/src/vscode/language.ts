@@ -18,7 +18,7 @@ import {
  */
 function poolFor(symbols: AppSymbols,
     kind: 'policy' | 'message' | 'maybe-message' | 'domain' | 'shared' | 'decision'
-        | 'workflow' | 'calendar' | 'job') {
+        | 'workflow' | 'calendar' | 'job' | 'catalog') {
   switch (kind) {
     case 'policy': return symbols.policies;
     case 'domain': return symbols.domains;
@@ -32,6 +32,8 @@ function poolFor(symbols: AppSymbols,
     case 'calendar': return symbols.calendars;
     // trigger: after: chains to a declared job (docs/jobs.md).
     case 'job': return symbols.jobs;
+    // A domain's codes: names a code catalog (docs/code-catalogs.md).
+    case 'catalog': return symbols.catalogs;
     default: return symbols.messages;
   }
 }

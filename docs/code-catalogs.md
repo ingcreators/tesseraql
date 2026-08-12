@@ -230,6 +230,14 @@ Both resolve composite keys, and both read the same at the call site.
 | `TQL-APP-4206` | a catalog could not be loaded and has never loaded |
 | `TQL-APP-4207` | catalogs declared alongside per-tenant datasources |
 
+## In the editor
+
+`catalogs/*.yml` has its own JSON Schema, scaffolded into `.vscode/` and associated with
+`catalogs/**/*.yml`, so completion and validation work offline like every other authored
+document. The [VS Code extension](vscode-extension.md) lists the catalogs — and the SQL a
+`file:` catalog reads — in its explorer, completes `codes:` from the declared names, and
+navigates from one to its declaration.
+
 ## Next
 
 - [declarative-validation.md](declarative-validation.md) — field domains, where `codes:`

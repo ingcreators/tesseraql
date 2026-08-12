@@ -23,6 +23,8 @@ function makeDemoApp(): string {
   write('rules/validate-stock.sql');
   write('decisions/approval.yml');
   write('calendars/jp.yml');
+  write('catalogs/codes.yml');
+  write('catalogs/currency.sql');
   write('workflow/purchase_request.yml');
   write('workflow/approve.sql');
   write('db/migration/V1__create_items.sql');
@@ -39,8 +41,15 @@ function section(tree: AppNode[], label: string): AppNode {
 test('builds the app layout sections', () => {
   const tree = buildAppTree(makeDemoApp());
   assert.deepEqual(tree.map((node) => node.label),
-      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Calendars', 'Workflows',
-        'Migrations', 'Tests']);
+      ['Routes', 'Views', 'Domains', 'Rules', 'Decisions', 'Calendars', 'Catalogs',
+        'Workflows', 'Migrations', 'Tests']);
+});
+
+test('catalogs list their documents and the SQL a file: catalog reads', () => {
+  // The .sql belongs to a file: catalog, whose shape a table: and equality filters cannot
+  // express — hiding it would leave half the declaration unreachable from the tree.
+  const catalogs = section(buildAppTree(makeDemoApp()), 'Catalogs');
+  assert.deepEqual(catalogs.children.map((node) => node.label), ['codes.yml', 'currency.sql']);
 });
 
 test('routes group by kind and exclude views and SQL', () => {

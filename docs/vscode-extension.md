@@ -71,8 +71,9 @@ A *TesseraQL* tree view over the app layout, built from the documented directory
 
 - routes grouped by kind (`web/`, `consume/`, `batch/`, `mcp/`), and views;
 - the shared definitions — field domains (`domains/`), validation rules with their SQL
-  (`rules/`), and [decision tables](declarative-validation.md#decision-tables)
-  (`decisions/`);
+  (`rules/`), [decision tables](declarative-validation.md#decision-tables)
+  (`decisions/`), and [code catalogs](code-catalogs.md) with the SQL a `file:` catalog
+  reads (`catalogs/`);
 - `db/**/migration` trees and `tests/` suites.
 
 No CLI call is needed to navigate. When the symbols index has answered (see below), each
@@ -104,6 +105,7 @@ contract (see below), per app home and refreshed on save, and adds:
 | `decision:` | a test suite's `decide:` target |
 | `workflow:` | a suite's `transition:`/`dispatch:` targets — the declared workflows, each carrying its transition and dispatch ids |
 | `calendar:` | the business-day calendars under `calendars/` |
+| `codes:` | the code catalogs under `catalogs/` |
 | `after:` | the declared batch jobs, each completion carrying its one-line trigger story |
 
 A mistyped `calendar:` fails open at fire time, so the editor is where it gets caught.
@@ -116,6 +118,8 @@ A mistyped `calendar:` fails open at fire time, so the editor is where it gets c
 - `domain:`, `use:`, `decision:` → the shared definition's line in its `domains/*.yml`,
   `rules/*.yml`, or `decisions/*.yml` document.
 - `calendar:` → its `calendars/*.yml` declaration.
+- `codes:` → the catalog's `catalogs/*.yml` declaration. A mistyped name resolves nothing,
+  and every value of that field is then refused at runtime.
 - `after:` → the chained job's document.
 
 Unknown references stay lint findings — the providers navigate, they do not judge.
@@ -254,13 +258,14 @@ the opt-in regression gate) are identical in both formats.
 Prints what the framework declares:
 
 ```json
-{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
+{"policies": [{"name": "...", "source": "...", "line": 1}], "messages": [{"key": "...", "source": "...", "line": 1}], "domains": [{"name": "...", "source": "...", "line": 1}], "rules": [{"name": "...", "source": "...", "line": 1}], "decisions": [{"name": "...", "source": "...", "line": 1}], "calendars": [{"name": "...", "source": "...", "line": 1}], "catalogs": [{"name": "...", "source": "...", "line": 1}], "routes": [{"id": "...", "source": "...", "path": "...", "recipe": "..."}], "workflows": [{"id": "...", "source": "...", "line": 1, "transitions": ["..."], "dispatches": ["..."]}], "jobs": [{"id": "...", "source": "...", "line": 1, "trigger": "..."}], "broken": [{"source": "...", "error": "..."}]}
 ```
 
 Everything in it is sorted and deterministic. Policies come from the app config, and message
 keys from the default-locale catalog, as flattened dotted keys with their source lines.
-Domains, rules, and calendars come from the shared-definition documents under `domains/`,
-`rules/`, and `calendars/`, each name paired with the file declaring it. Routes, workflows
+Domains, rules, calendars, and catalogs come from the shared-definition documents under
+`domains/`, `rules/`, `calendars/`, and `catalogs/`, each name paired with the file
+declaring it. Routes, workflows
 (each with its transition and dispatch ids), and jobs (each with its one-line trigger story)
 come from the manifest.
 
