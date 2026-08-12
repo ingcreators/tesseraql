@@ -27,5 +27,5 @@ response:
     status: 200
     template: schema.html
     model:
-      sch: sql
+      sch: main
       refreshed: params.refreshed

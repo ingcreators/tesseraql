@@ -31,4 +31,4 @@ pipeline:
     push:
       transport: local
       path: outbox/reports
-      file: step.report.transferId
+      file: steps.report.transferId

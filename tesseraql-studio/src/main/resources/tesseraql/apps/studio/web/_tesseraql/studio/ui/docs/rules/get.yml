@@ -13,4 +13,4 @@ response:
     status: 200
     template: rules.html
     model:
-      dom: sql
+      dom: main

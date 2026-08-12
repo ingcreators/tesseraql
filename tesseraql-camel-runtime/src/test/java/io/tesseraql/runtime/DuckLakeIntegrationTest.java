@@ -192,13 +192,13 @@ class DuckLakeIntegrationTest {
                 version: tesseraql/v1
                 id: pricing.readOnlyProbe
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 datasource: reporting
                 trigger:
                   schedule:
                     cron: "0 0 4 1 1 ? 2099"
-                sources:
-                  main:
+                pipeline:
+                  - id: main
                     sql:
                       file: read-only-probe.sql
                       mode: update
@@ -219,14 +219,13 @@ class DuckLakeIntegrationTest {
                     sql:
                       file: current.sql
                       mode: query
-                queries:
                   firstRun:
                     sql:
                       file: first-run.sql
                 response:
                   json:
                     body:
-                      current: sql.rows
+                      current: main.rows
                       firstRun: firstRun.rows
                 """);
         Files.writeString(route.resolve("current.sql"),
@@ -252,7 +251,7 @@ class DuckLakeIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outside.resolve("outside.sql"),
                 "select * from read_csv('/etc/hostname')\n");

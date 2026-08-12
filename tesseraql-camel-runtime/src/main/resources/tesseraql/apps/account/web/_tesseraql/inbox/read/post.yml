@@ -14,7 +14,7 @@ input:
     maxLength: 64
 
 steps:
-  main:
+  - id: main
     service:
       name: account.inbox.read
       params:

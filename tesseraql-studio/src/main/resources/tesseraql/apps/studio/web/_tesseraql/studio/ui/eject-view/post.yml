@@ -28,4 +28,4 @@ response:
     status: 200
     template: eject-view.html
     model:
-      eject: sql
+      eject: main

@@ -145,7 +145,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
@@ -181,7 +181,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
 
@@ -230,7 +230,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
 
@@ -346,7 +346,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/api/things/post.yml"), """
                 version: tesseraql/v1
@@ -354,7 +354,7 @@ class StudioServiceTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: create.sql
                       mode: update
@@ -407,7 +407,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
@@ -615,10 +615,10 @@ class StudioServiceTest {
     void rendersHtmlRouteAgainstExecutionContext() {
         StudioService studio = new StudioService(exampleManifest(), true);
 
-        // The route maps response.html.model {users: sql.rows, count: sql.rowCount} → table.html.
+        // The route maps response.html.model {users: main.rows, count: main.rowCount} → table.html.
         StudioService.RenderResult result = studio.render(
                 "web/users/fragments/table/get.yml", null,
-                "sql:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n");
+                "main:\n  rows:\n    - id: 1\n      name: Alice\n      status: active\n  rowCount: 1\n");
 
         assertThat(result.ok()).isTrue();
         assertThat(result.kind()).isEqualTo("html");
@@ -631,12 +631,12 @@ class StudioServiceTest {
         StudioService studio = new StudioService(exampleManifest(), true);
 
         StudioService.RenderResult result = studio.render("web/api/users/get.yml", null,
-                "sql:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
+                "main:\n  rows:\n    - id: 7\n      name: Sato\n  rowCount: 1\n"
                         + "params:\n  limit: 50\n  offset: 0\n");
 
         assertThat(result.ok()).isTrue();
         assertThat(result.kind()).isEqualTo("json");
-        // The body template {data: sql.rows, meta: {count: sql.rowCount, limit: params.limit, …}}
+        // The body template {data: main.rows, meta: {count: main.rowCount, limit: params.limit, …}}
         // resolves against the fixture context and pretty-prints.
         assertThat(result.output()).contains("\"data\"").contains("Sato")
                 .contains("\"count\" : 1").contains("\"limit\" : 50");
@@ -722,11 +722,11 @@ class StudioServiceTest {
         byte[] fakePdf = {'%', 'P', 'D', 'F', '-', '1', '.', '4'};
         StudioService.PdfRender pdf = (export, routeDir, rows) -> {
             assertThat(export.format()).isEqualTo("pdf");
-            assertThat(rows).hasSize(1); // from the sample's sql.rows
+            assertThat(rows).hasSize(1); // from the sample's main.rows
             return fakePdf;
         };
         StudioService.RenderResult result = studio.render("web/api/x/get.yml", null,
-                "sql:\n  rows:\n    - name: Sato\n      status: ACTIVE\n", null, null, pdf);
+                "main:\n  rows:\n    - name: Sato\n      status: ACTIVE\n", null, null, pdf);
         assertThat(result.ok()).isTrue();
         assertThat(result.kind()).isEqualTo("pdf");
         assertThat(result.output()).isEqualTo("data:application/pdf;base64,"
@@ -734,7 +734,7 @@ class StudioServiceTest {
 
         // With no renderer (the optional module is absent) the preview reports it unavailable.
         StudioService.RenderResult unavailable = studio.render("web/api/x/get.yml", null,
-                "sql:\n  rows: []\n", null, null, null);
+                "main:\n  rows: []\n", null, null, null);
         assertThat(unavailable.ok()).isFalse();
         assertThat(unavailable.error()).contains("tesseraql-pdf module");
     }
@@ -742,9 +742,9 @@ class StudioServiceTest {
     @Test
     void rendersHtmlRouteWithLiveRowSource() {
         StudioService studio = new StudioService(exampleManifest(), true);
-        // A stub row source stands in for the runtime's sandboxed query: the sample carries no sql.
-        // The source keys each result by its model name — the main query under `sql`.
-        StudioService.RowSource live = (route, dir, context) -> Map.of("sql", Map.of(
+        // A stub row source stands in for the runtime's sandboxed query: the sample carries no rows.
+        // The source keys each result by its own name — the primary under `main`.
+        StudioService.RowSource live = (route, dir, context) -> Map.of("main", Map.of(
                 "rows", List.of(Map.of("id", 9, "name", "Live row", "status", "ACTIVE")),
                 "rowCount", 1));
 
@@ -760,7 +760,7 @@ class StudioServiceTest {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
         Files.createDirectories(dir.resolve("web/report"));
-        // A multi-binding query-json route: the body references the main `sql` and a named query.
+        // A multi-source query-json route: the body references `main` and a named source.
         Files.writeString(dir.resolve("web/report/get.yml"), """
                 version: tesseraql/v1
                 id: report.get
@@ -770,7 +770,6 @@ class StudioServiceTest {
                   main:
                     sql:
                       file: main.sql
-                queries:
                   totals:
                     sql:
                       file: totals.sql
@@ -778,22 +777,22 @@ class StudioServiceTest {
                   json:
                     status: 200
                     body:
-                      items: sql.rows
+                      items: main.rows
                       total: totals.rows
                 """);
         Files.writeString(dir.resolve("web/report/main.sql"), "select 1\n");
         Files.writeString(dir.resolve("web/report/totals.sql"), "select 2\n");
 
         StudioService studio = new StudioService(new ManifestLoader().load(dir), true);
-        // The runtime's RowSource keys the main query under `sql` and the named query under its name.
+        // The runtime's RowSource keys every result under its own source name.
         StudioService.RowSource live = (route, routeDir, context) -> Map.of(
-                "sql", Map.of("rows", List.of(Map.of("id", 1)), "rowCount", 1),
+                "main", Map.of("rows", List.of(Map.of("id", 1)), "rowCount", 1),
                 "totals", Map.of("rows", List.of(Map.of("n", 42)), "rowCount", 1));
 
         StudioService.RenderResult result = studio.render("web/report/get.yml", null, "{}", live);
 
         assertThat(result.ok()).isTrue();
-        // Both the main `sql.rows` and the named query `totals.rows` are injected into the JSON
+        // Both the main `main.rows` and the named query `totals.rows` are injected into the JSON
         // (the value 42 only appears if the named query result reached the body).
         assertThat(result.output()).contains("items").contains("total").contains("42");
     }
@@ -1017,7 +1016,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
@@ -1033,7 +1032,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         studio.applyDraft("web/api/x/get.yml");
@@ -1060,7 +1059,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """;
         Files.writeString(dir.resolve("web/api/x/get.yml"), source);
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
@@ -1102,7 +1101,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """;
         Files.writeString(dir.resolve("web/api/x/get.yml"), source);
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);
@@ -1136,7 +1135,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         StudioService writable = new StudioService(new ManifestLoader().load(dir), false);
@@ -1239,7 +1238,7 @@ class StudioServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """;
         Files.writeString(dir.resolve("web/api/x/get.yml"), source);
         StudioService studio = new StudioService(new ManifestLoader().load(dir), false);

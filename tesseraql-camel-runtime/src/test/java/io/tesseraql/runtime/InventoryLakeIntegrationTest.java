@@ -193,14 +193,13 @@ class InventoryLakeIntegrationTest {
                     sql:
                       file: current.sql
                       mode: query
-                queries:
                   firstRun:
                     sql:
                       file: first-run.sql
                 response:
                   json:
                     body:
-                      current: sql.rows
+                      current: main.rows
                       firstRun: firstRun.rows
                 """);
         Files.writeString(board.resolve("current.sql"),
@@ -258,7 +257,7 @@ class InventoryLakeIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outside.resolve("outside.sql"),
                 "select * from read_csv('/etc/hostname')\n");

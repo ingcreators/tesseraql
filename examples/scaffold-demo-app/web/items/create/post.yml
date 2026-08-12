@@ -38,7 +38,7 @@ validate:
     field: name
 
 steps:
-  record:
+  - id: record
     sql:
       file: insert.sql
       mode: update

@@ -14,7 +14,7 @@ input:
     enum: [light, dark]
 
 steps:
-  main:
+  - id: main
     service:
       name: account.theme.save
       params:

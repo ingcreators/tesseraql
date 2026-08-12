@@ -23,7 +23,7 @@ outbox:
     actor: principal.loginId
 
 steps:
-  main:
+  - id: main
     sql:
       file: deactivate.sql
       mode: update
@@ -34,4 +34,4 @@ response:
     status: 200
     body:
       affected: steps.main.affectedRows
-      eventId: sql.eventId
+      eventId: main.eventId

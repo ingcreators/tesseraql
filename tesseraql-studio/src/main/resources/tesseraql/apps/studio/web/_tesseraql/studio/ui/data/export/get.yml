@@ -56,4 +56,4 @@ response:
     contentType: "text/csv; charset=utf-8"
     filename: data.csv
     model:
-      csv: sql
+      csv: main

@@ -53,7 +53,7 @@ class ValidateBlockParsingTest {
                     code: duplicate
                     message: members.email.duplicate
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-member.sql
                       mode: update
@@ -102,7 +102,7 @@ class ValidateBlockParsingTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-member.sql
                       mode: update

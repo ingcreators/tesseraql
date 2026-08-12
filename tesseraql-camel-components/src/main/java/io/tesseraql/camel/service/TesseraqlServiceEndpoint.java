@@ -10,7 +10,7 @@ public class TesseraqlServiceEndpoint extends DefaultEndpoint {
 
     private final String operation;
     private String name;
-    private String resultKey = "sql";
+    private String resultKey = "main";
 
     public TesseraqlServiceEndpoint(String uri, TesseraqlServiceComponent component,
             String operation) {

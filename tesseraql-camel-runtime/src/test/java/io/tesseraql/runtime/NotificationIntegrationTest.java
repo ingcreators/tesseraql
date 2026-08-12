@@ -288,8 +288,8 @@ class NotificationIntegrationTest {
         // dead-letter test can follow that exact event through the operations API.
         Path provision = target.resolve("web/api/users/provision/post.yml");
         Files.writeString(provision, Files.readString(provision).replace(
-                "      eventId: sql.eventId",
-                "      eventId: sql.eventId\n      auditEventId: notify.audit.eventId"));
+                "      eventId: main.eventId",
+                "      eventId: main.eventId\n      auditEventId: notify.audit.eventId"));
 
         // A job whose SQL fails, to assert the job-failure alert.
         Path broken = target.resolve("batch/broken");
@@ -298,9 +298,9 @@ class NotificationIntegrationTest {
                 version: tesseraql/v1
                 id: user.broken
                 kind: job
-                recipe: batch-tasklet
-                sources:
-                  main:
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
                     sql:
                       file: broken.sql
                       mode: update

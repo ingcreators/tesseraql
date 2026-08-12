@@ -72,7 +72,7 @@ Distinctions are URL conventions, not folder rules:
   [printable-documents.md](printable-documents.md)) via the optional `tesseraql-pdf` module.
 - `query-export` is the synchronous sibling: the response streams the file directly, through
   the same `export:` block (format, columns, headers, locale/timezone formats, templates) and
-  the same codecs. Its query stays in the route's `sql:` block; `after:` follow-up statements
+  the same codecs. Its rows come from the route's `main` source; `after:` follow-up statements
   need `file-export`.
 - `/_tesseraql/...` — reserved for the framework and its system apps
 - `/assets/...` — static assets (`/assets/_tesseraql/*` framework files, `/assets/vendor/*`

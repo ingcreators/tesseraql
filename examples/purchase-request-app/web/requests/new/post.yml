@@ -26,7 +26,7 @@ validate:
     field: title
 
 steps:
-  main:
+  - id: main
     sql:
       file: create.sql
       mode: update

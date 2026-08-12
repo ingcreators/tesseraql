@@ -273,8 +273,11 @@ public final class JobExecutor {
                 triggeredBy, businessDate, paramsJson(jobParams));
         Map<String, Object> stepResults = new LinkedHashMap<>();
         Map<String, Object> context = new HashMap<>();
-        context.put("job", jobParams == null ? Map.of() : jobParams);
-        context.put("step", stepResults);
+        // One vocabulary across routes and jobs (docs/unified-sources.md decision 11): declared
+        // inputs are params.*, step results are steps.<id>.*, so an expression means the same
+        // thing in a route, a job, an export template, and a test.
+        context.put("params", jobParams == null ? Map.of() : jobParams);
+        context.put("steps", stepResults);
         context.put("tenant", tenant);
         // The batch.* ambient binds (docs/batch-platform.md track A): every step's SQL
         // reads the business date the run is FOR — defaulted from the firing's local

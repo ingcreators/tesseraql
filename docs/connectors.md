@@ -33,7 +33,7 @@ pipeline:
       method: GET                                   # defaults to GET
       url: https://api.partner.example/v1/rates     # host must be allow-listed
       query:
-        base: job.base                              # bound from the step context
+        base: params.base                              # bound from the step context
       credential: partner                           # a configured credential, never inline
       expectStatus: 200                             # optional; omitted, any 2xx succeeds
       connectTimeout: 5s                            # optional per-step override
@@ -44,17 +44,17 @@ pipeline:
       file: store-rate.sql
       mode: update
       params:
-        base: job.base
-        rate: step.fetch.body.rate                  # the parsed JSON response feeds the SQL step
+        base: params.base
+        rate: steps.fetch.body.rate                  # the parsed JSON response feeds the SQL step
 ```
 
 The response is published as:
 
 | Context path             | Value                                                         |
 | ------------------------ | ------------------------------------------------------------- |
-| `step.<id>.status`       | the HTTP status code (an integer)                             |
-| `step.<id>.body`         | the parsed JSON (a map/list) when the response is JSON, else the raw text |
-| `step.<id>.headers`      | the response headers (first value per name)                   |
+| `steps.<id>.status`       | the HTTP status code (an integer)                             |
+| `steps.<id>.body`         | the parsed JSON (a map/list) when the response is JSON, else the raw text |
+| `steps.<id>.headers`      | the response headers (first value per name)                   |
 
 A step declares exactly one of `sql:`, `notify:`, or `httpCall:`. The `query:` values and
 `body:` are source expressions bound from the step context exactly like a SQL step's params;
@@ -88,8 +88,10 @@ version: tesseraql/v1
 id: orders.list
 kind: route
 recipe: query-json
-sql:
-  file: orders.sql
+sources:
+  main:
+    sql:
+      file: orders.sql
 http:
   rates:
     url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
@@ -102,7 +104,7 @@ response:
   json:
     status: 200
     body:
-      orders: sql.rows
+      orders: main.rows
       fx: rates.rows
 ```
 
@@ -137,10 +139,11 @@ http:
     url: https://crm.example.com/partners/{...}
     readOnly: true              # required here — see below
 steps:
-  header:
-    file: insert-order.sql
-    params:
-      partnerName: partner.body.name
+  - id: header
+    sql:
+      file: insert-order.sql
+      params:
+        partnerName: partner.body.name
 ```
 
 - **Fail-closed.** A failed fetch fails the command before a row is written. `onError: empty`
@@ -452,12 +455,14 @@ webhook:
 input:
   eventId: { type: string, required: true }
   amount:  { type: number }
-sql:                             # or steps: — the SQL pipeline runs once verified
-  file: insert-event.sql
-  mode: update
-  params:
-    eventId: body.eventId
-    amount: body.amount
+sources:
+  main:
+    sql:                             # or steps: — the SQL pipeline runs once verified
+      file: insert-event.sql
+      mode: update
+      params:
+        eventId: body.eventId
+        amount: body.amount
 response:
   json:
     status: 202

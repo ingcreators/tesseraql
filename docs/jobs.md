@@ -2,38 +2,33 @@
 
 Routes answer requests; **jobs** do the work nobody is waiting on: nightly maintenance,
 data exports, fetch-and-persist integrations. A job is a YAML document under the app's
-`batch/` tree — conventionally `batch/**/job.yml` — with `kind: job`, and its steps are the
+`batch/` tree — conventionally `batch/**/params.yml` — with `kind: job`, and its steps are the
 same plain 2-way SQL files the rest of the framework runs. Jobs fire on a schedule, on a
 polled directory, or on demand through the operations API, and every run is recorded with
 per-step status, timing, and row counts.
 
-## Two recipes
+## One recipe
 
-- **`batch-tasklet`** — the job is a single SQL statement, declared in a top-level `sql:`
-  block. Use it when there is exactly one thing to do.
-- **`batch-pipeline`** — the job is an ordered `pipeline:` of steps that run sequentially
-  and pass results forward. Use it when steps feed each other, or when the job mixes SQL
-  with a notification or an outbound HTTP call.
-
-A tasklet is the smallest possible job:
+A job's work is its `pipeline:` — an ordered list of steps that run sequentially and pass
+results forward. There is one spelling whatever the step count, so the smallest possible job
+is a one-step pipeline:
 
 ```yaml
 version: tesseraql/v1
 id: user.purgeExpired
 kind: job
-recipe: batch-tasklet
+recipe: batch-pipeline
 
 trigger:
   schedule:
     cron: "0 0 3 * * ?"
 
-sql:
-  file: purge-expired.sql
-  mode: update
+pipeline:
+  - id: purge
+    sql:
+      file: purge-expired.sql
+      mode: update
 ```
-
-Internally a tasklet runs as a one-step pipeline, so everything below about steps,
-executions, and failure behavior applies to both recipes.
 
 ## Scheduling
 
@@ -178,8 +173,9 @@ deny-by-default host allow-list. Polling is part of the managed-connector surfac
 (gated by the `ops.batch.run` policy) runs the job immediately and answers with the
 execution id and final status. The JSON request body becomes the job's parameters. Declared
 `input:` on the job document the expected names and types; each value is available to steps
-as `job.<name>`. Scheduled firings run with no parameters, so a scheduled job's SQL must
-work when its `job.*` binds are null.
+as `params.<name>` — the same name a route's declared inputs bind under. Scheduled firings
+run with no parameters, so a scheduled job's SQL must work when its `params.*` binds are
+null.
 
 ## Driving jobs from an external scheduler
 
@@ -212,29 +208,30 @@ $ tesseraql job cancel <executionId> --app .   # the cooperative stop, see below
 
 ## Pipeline steps and the step context
 
-Each pipeline step has an `id` and declares **exactly one** of:
+A step **is a binding with an `id`**, plus the output blocks that act on what it produced.
+Its keys fall on three axes, and a step declares at least one:
 
-- `sql:` — render and execute a 2-way SQL file
-- `notify:` — enqueue a notification on the transactional outbox
-- `httpCall:` — issue one synchronous outbound REST request
-- `chunk:` — restartable per-row processing, committed in slices
-  ([below](#the-chunk-step))
-- `export:` — write a formatted file from an extraction query
-  ([below](#the-export-step))
-- `push:` — deliver a produced file to a partner drop, local or SFTP/FTPS
-  ([below](#the-push-step))
+| Axis | Keys | How many |
+| --- | --- | --- |
+| Acquisition or statement | `sql:` (a 2-way SQL file), `httpCall:` (one synchronous outbound REST request) | at most one |
+| Output | `export:` (write a formatted file, [below](#the-export-step)), `push:` (deliver a produced file, [below](#the-push-step)), `notify:` (enqueue a notification on the transactional outbox) | any, beside the arm |
+| Processing | `chunk:` (restartable per-row processing, committed in slices, [below](#the-chunk-step)) | at most one |
+
+So a step that extracts rows and writes them to a file is one step with two keys — the arm
+reads, the output block writes — and a step that reports what it wrote adds `notify:` beside
+them.
 
 Steps run in order, and each step publishes its result into a shared context that later
 steps bind from:
 
 | Context path               | Value                                                              |
 | -------------------------- | ------------------------------------------------------------------ |
-| `job.<name>`               | a job parameter                                                    |
-| `step.<id>.affectedRows`   | rows affected (update) or returned (query) by an earlier step      |
-| `step.<id>.status` / `step.<id>.body` / `step.<id>.headers` | an earlier `httpCall` step's response |
-| `step.<id>.eventId`        | the outbox event id an earlier `notify:` step enqueued             |
-| `step.<id>.transferId` / `step.<id>.filename` / `step.<id>.rows` | an earlier `export:` step's produced transfer |
-| `step.<id>.target` / `step.<id>.filename` | an earlier `push:` step's delivery |
+| `params.<name>`            | a job parameter                                                    |
+| `steps.<id>.affectedRows`  | rows affected (update) or returned (query) by an earlier step      |
+| `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `httpCall` step's response |
+| `steps.<id>.eventId`       | the outbox event id an earlier `notify:` step enqueued             |
+| `steps.<id>.transferId` / `steps.<id>.filename` / `steps.<id>.rows` | an earlier `export:` step's produced transfer |
+| `steps.<id>.target` / `steps.<id>.filename` | an earlier `push:` step's delivery |
 | `tenant.id`                | the current tenant, on a [per-tenant job](#per-tenant-jobs)        |
 
 A SQL step names its file (relative to the job's directory) and an execution mode:
@@ -250,12 +247,12 @@ pipeline:
       file: deactivate-pending.sql
       mode: update
       params:
-        cutoff: job.businessDate      # bound from the step context
+        cutoff: params.businessDate      # bound from the step context
   - id: report
     notify:
       channel: audit-webhook
       payload:
-        deactivated: step.deactivate.affectedRows
+        deactivated: steps.deactivate.affectedRows
 ```
 
 The `notify:` step is the job-side twin of a command's `notify:` block — same channels, same
@@ -266,7 +263,7 @@ outbound REST call with SQL steps; see [managed connectors](connectors.md).
 ## The chunk step
 
 A per-row rewrite too large for one transaction — revalue a million orders, anonymize
-inactive accounts — needs what a single `sql:` step cannot give: intermediate commits, a
+inactive accounts — needs what a single SQL step cannot give: intermediate commits, a
 restart that does not start over, and a policy for the one bad row
 ([batch platform](batch-platform.md) track C):
 
@@ -285,7 +282,7 @@ pipeline:
 **Two connections.** The reader streams its SELECT on one connection (a fetch-sized
 cursor); the writer runs once per row on a second connection that commits every
 `commitEvery` handled rows. The writer's binds are the reader's row (**`row.<column>`**)
-plus the ambient `batch.*`/`job.*` context.
+plus the ambient `batch.*` context and the job's `params.*`.
 
 **Checkpoint restart.** After each committed chunk, the last handled `key` value lands in
 the managed `tql_job_checkpoint` table (one row per job, step, and business date). A rerun
@@ -341,8 +338,8 @@ pipeline:
     notify:
       channel: reports
       payload:
-        rows: step.report.rows
-        transferId: step.report.transferId
+        rows: steps.report.rows
+        transferId: steps.report.transferId
 ```
 
 - **Same machinery, synchronous shape.** The extraction streams through the format codec
@@ -350,7 +347,7 @@ pipeline:
   `file-export` records — the step just runs it inline, on the job's thread, and fails
   the step on error instead of leaving a status to poll. The transfer's route id is
   `<jobId>#<stepId>`, so the console tells job-produced files from route-produced ones.
-- **The extraction SQL renders like a `sql:` step's**: the dialect variant beside the
+- **The extraction SQL renders like any step's**: the dialect variant beside the
   file, ambient `batch.*` binds, file placeholders against the job's datasource. On a
   `duckdb` datasource this is the analytics report in one step — `report.sql` reads
   Parquet, lake tables, or an attach, and the codec writes CSV, Excel, or PDF.
@@ -365,7 +362,7 @@ pipeline:
   `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under `ops.batch.view`. The
   step publishes `transferId`, `rows`, and `filename` into the step context, so a
   follow-up `notify:` carries the pointer — or, on a mail channel, the file itself:
-  `attach: step.report.transferId` sends the produced file as a mail attachment
+  `attach: steps.report.transferId` sends the produced file as a mail attachment
   ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `httpCall:`
   can tell a partner system the drop is ready.
 
@@ -388,7 +385,7 @@ pipeline:
       host: partner.example.com
       path: /drop/incoming
       credential: partner-sftp         # tesseraql.connectors.push.credentials
-      file: step.report.transferId
+      file: steps.report.transferId
       as: prices-{batch.businessDate}.csv   # optional; default: the transfer's filename
 ```
 
@@ -407,7 +404,7 @@ pipeline:
   locally, a dot-name remotely) and renamed into place, so a partner never reads a
   partial file.
 - **`file:` names the transfer** — typically the export step's
-  `step.<id>.transferId`, but any transfer id the context can supply. Reading it
+  `steps.<id>.transferId`, but any transfer id the context can supply. Reading it
   counts as the transfer's first download. `as:` renames the delivery
   (`{dotted.path}` placeholders resolve against the job context; a bare filename
   only — separators are refused at build time, `TQL-YAML-1042`).
@@ -559,7 +556,7 @@ Lint checks jobs statically:
 
 | Finding | Code |
 | --- | --- |
-| A step not declaring exactly one of `sql:` / `notify:` / `httpCall:` / `chunk:` / `export:` / `push:` | `TQL-FIELD-2004` |
+| A step declaring no work at all, two bindings, or a `chunk:` beside a binding | `TQL-FIELD-2004` |
 | A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
 | A malformed `export:` step: no extraction query, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
 | A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1005` |

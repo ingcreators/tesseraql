@@ -175,26 +175,16 @@ class AppLinterInputTest {
     void anEnrichmentOverADeclaredResultIsAccepted(@TempDir Path dir) throws Exception {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql:
-                      file: partners.sql
-                    merge: [partner_name]""", KEYED_REFERENCE)))).isEmpty();
-    }
-
-    @Test
-    void anEnrichmentIntoAnUndeclaredResultIsAnError(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
-                into: ghost
-                    on: { partner_code: code }
-                    sql:
-                      file: partners.sql
-                    merge: [partner_name]""", KEYED_REFERENCE)))).contains("TQL-YAML-1045");
+                        sql:
+                          file: partners.sql
+                        merge: [partner_name]""", KEYED_REFERENCE)))).isEmpty();
     }
 
     @Test
     void anEnrichmentComposingNothingIsAnError(@TempDir Path dir) throws Exception {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql:\n                      file: partners.sql""", KEYED_REFERENCE))))
+                        sql:\n                          file: partners.sql""", KEYED_REFERENCE))))
                 .contains("TQL-YAML-1047");
     }
 
@@ -204,9 +194,9 @@ class AppLinterInputTest {
         // build can see the mistake.
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql:
-                      file: partners.sql
-                    merge: [partner_name]""",
+                        sql:
+                          file: partners.sql
+                        merge: [partner_name]""",
                 "select code, name as partner_name from partners\n"))))
                 .contains("TQL-YAML-1048");
     }
@@ -224,13 +214,13 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                enrich:
-                  partner:
-                    %s
                 sources:
                   main:
                     sql:
                       file: list.sql
+                    enrich:
+                      partner:
+                        %s
                 response:
                   json:
                     body:

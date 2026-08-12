@@ -23,4 +23,4 @@ response:
     status: 200
     template: table.html
     model:
-      tbl: sql
+      tbl: main

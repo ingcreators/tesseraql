@@ -13,17 +13,16 @@ input:
 
 sources:
   main:
-    sql:
-      service:
-        name: ops.execution
-        params:
-          id: path.id
-          # Executions outside the caller's ops.app.<name> grants render as not found.
-          permissions: principal.permissions
+    service:
+      name: ops.execution
+      params:
+        id: path.id
+        # Executions outside the caller's ops.app.<name> grants render as not found.
+        permissions: principal.permissions
 response:
   html:
     status: 200
     template: execution.html
     model:
-      execution: sql
+      execution: main
       started: params.started

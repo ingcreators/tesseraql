@@ -50,7 +50,7 @@ class FieldDomainResolutionTest {
                     type: string
                     maxLength: 20
                 steps:
-                  adjust:
+                  - id: adjust
                     sql:
                       file: adjust.sql
                 response:

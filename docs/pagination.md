@@ -8,8 +8,10 @@ warns when it does).
 ## Offset strategy (default)
 
 ```yaml
-sql:
-  file: search.sql        # ends in ORDER BY <cols>, <pk> — a stable order, no LIMIT
+sources:
+  main:
+    sql:
+      file: search.sql        # ends in ORDER BY <cols>, <pk> — a stable order, no LIMIT
 pagination:
   size: 50                # rows per page
   maxSize: 200            # opt-in: the caller may pass ?size= up to this cap
@@ -27,7 +29,7 @@ response bodies and templates — map it into the body like any other value
 response:
   json:
     body:
-      rows: sql.rows
+      rows: main.rows
       meta: page
 ```
 
@@ -47,10 +49,12 @@ the search and sort state ([declarative views](declarative-views.md)).
 ```yaml
 input:
   after: { type: integer, required: false }
-sql:
-  file: users.sql
-  params:
-    after: params.after
+sources:
+  main:
+    sql:
+      file: users.sql
+      params:
+        after: params.after
 pagination:
   strategy: keyset
   by: id                  # the cursor column; TQL-YAML-1016 when missing

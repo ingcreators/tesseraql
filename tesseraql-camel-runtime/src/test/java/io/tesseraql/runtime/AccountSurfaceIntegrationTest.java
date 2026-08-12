@@ -600,7 +600,7 @@ class AccountSurfaceIntegrationTest {
                     status: 200
                     template: home.html
                     model:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.writeString(home.resolve("home.sql"), "select 1 as x\n");
         // A command that notifies its own caller - the recipient-aware opt-out testbed.
@@ -615,7 +615,7 @@ class AccountSurfaceIntegrationTest {
                   auth: browser
                   csrf: true
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: notify-me.sql
                       mode: update
@@ -664,7 +664,7 @@ class AccountSurfaceIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pageSize.resolve("page-size.sql"),
                 "select /* size */'25' as size\n");

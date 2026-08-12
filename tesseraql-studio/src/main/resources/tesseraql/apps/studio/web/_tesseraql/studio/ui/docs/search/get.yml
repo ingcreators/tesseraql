@@ -19,4 +19,4 @@ response:
     status: 200
     template: results.html
     model:
-      results: sql
+      results: main

@@ -130,7 +130,7 @@ public record RouteSpec(
      * One bound SQL statement: the source text plus the binds and control structure parsed from it.
      * Exactly one of {@code file}, {@code contract}, or {@code service} is set.
      *
-     * @param label     the statement's role ({@code sql}, {@code step:<id>}, {@code query:<id>},
+     * @param label     the statement's role ({@code source:<name>}, {@code step:<id>},
      *                  {@code import}, {@code export}, {@code export.after})
      * @param file      the SQL file relative to the route directory, or {@code null}
      * @param contract  the Identity SQL Contract name, or {@code null}

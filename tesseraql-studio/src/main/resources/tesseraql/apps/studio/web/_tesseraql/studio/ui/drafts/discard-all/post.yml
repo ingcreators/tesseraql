@@ -7,7 +7,7 @@ recipe: command-json
 # the UI guards it behind an hc-confirm modal. Redirects back to the (now empty) Drafts list.
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.draftsDiscardAll
       params:

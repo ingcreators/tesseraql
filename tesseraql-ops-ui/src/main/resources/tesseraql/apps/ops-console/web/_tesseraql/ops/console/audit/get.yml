@@ -24,21 +24,20 @@ input:
 
 sources:
   main:
-    sql:
-      service:
-        name: ops.audit
-        params:
-          # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-          permissions: principal.permissions
-          route: params.route
-          actor: params.actor
-          status: params.status
+    service:
+      name: ops.audit
+      params:
+        # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
+        route: params.route
+        actor: params.actor
+        status: params.status
 response:
   html:
     status: 200
     template: audit.html
     model:
-      audit: sql
+      audit: main
       route: params.route
       actor: params.actor
       status: params.status

@@ -17,7 +17,7 @@ security:
   policy: rfq.write
 
 steps:
-  main:
+  - id: main
     sql:
       file: invite.sql
       mode: update

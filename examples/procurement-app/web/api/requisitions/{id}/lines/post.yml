@@ -25,7 +25,7 @@ security:
   policy: req.write
 
 steps:
-  main:
+  - id: main
     sql:
       file: add-line.sql
       mode: update

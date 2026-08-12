@@ -23,7 +23,7 @@ security:
 # the full maintenance surface; this hand route keeps the demo minimal.)
 
 steps:
-  main:
+  - id: main
     sql:
       file: update-tolerance.sql
       mode: update

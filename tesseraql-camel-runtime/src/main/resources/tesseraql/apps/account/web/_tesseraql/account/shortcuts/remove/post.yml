@@ -16,7 +16,7 @@ input:
     maxLength: 1000
 
 steps:
-  main:
+  - id: main
     service:
       name: account.shortcuts.remove
       params:

@@ -45,11 +45,11 @@ class AppLinterExportSourcesTest {
     @Test
     void aNamedQueryOnATemplatelessExportIsWarnedAbout(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir, """
-                export:
-                  format: csv
                   header:
                     sql:
                       file: header.sql
+                export:
+                  format: csv
                 """));
 
         assertThat(findings).anySatisfy(finding -> {
@@ -62,13 +62,13 @@ class AppLinterExportSourcesTest {
     @Test
     void aNamedQueryOnATemplatedExportIsClean(@TempDir Path dir) throws Exception {
         assertThat(new AppLinter().lint(app(dir, """
+                  header:
+                    sql:
+                      file: header.sql
                 export:
                   format: pdf
                   template: order.html
                   maxRows: 100
-                  header:
-                    sql:
-                      file: header.sql
                 """)))
                 .noneMatch(finding -> "TQL-LD-5312".equals(finding.code()));
     }

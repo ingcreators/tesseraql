@@ -13,6 +13,6 @@ response:
     status: 200
     template: pdf.html
     model:
-      docs: sql
+      docs: main
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

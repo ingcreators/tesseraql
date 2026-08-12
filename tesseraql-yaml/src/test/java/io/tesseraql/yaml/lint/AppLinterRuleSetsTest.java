@@ -45,7 +45,7 @@ class AppLinterRuleSetsTest {
                 validate:
                 %s
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: adjust.sql
                       mode: update

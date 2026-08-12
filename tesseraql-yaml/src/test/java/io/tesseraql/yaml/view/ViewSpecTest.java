@@ -363,7 +363,7 @@ class ViewSpecTest {
                 kind: view
                 recipe: dashboard
                 panels:
-                  - { type: view, source: sql }
+                  - { type: view, source: main }
                 """)))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("view panel requires view:");
@@ -372,7 +372,7 @@ class ViewSpecTest {
                 kind: view
                 recipe: dashboard
                 panels:
-                  - { type: stat, source: sql, column: total, view: recent }
+                  - { type: stat, source: main, column: total, view: recent }
                 """)))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("view-panel key");
@@ -446,7 +446,7 @@ class ViewSpecTest {
                 kind: view
                 recipe: dashboard
                 panels:
-                  - { type: stat, source: sql, column: total, label: Total }
+                  - { type: stat, source: main, column: total, label: Total }
                 """);
         assertThatThrownBy(() -> ViewSpec.parse(file))
                 .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")

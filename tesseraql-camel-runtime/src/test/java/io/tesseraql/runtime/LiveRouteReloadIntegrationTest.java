@@ -134,7 +134,7 @@ class LiveRouteReloadIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         HttpResponse<String> reload = studioPost("/_tesseraql/studio/reload", "");
         assertThat(reload.statusCode()).isEqualTo(200);
@@ -235,7 +235,7 @@ class LiveRouteReloadIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 'v1' as version\n");
         return target;

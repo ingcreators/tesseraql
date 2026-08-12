@@ -48,7 +48,7 @@ class AppLinterTest {
                     field: kana
                     code: not-kana
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: register.sql
                       mode: update
@@ -132,7 +132,7 @@ class AppLinterTest {
                 security:
                   auth: bearer
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: delete.sql
                       mode: update
@@ -244,7 +244,7 @@ class AppLinterTest {
                   q:
                     type: string
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bad.sql
                       mode: update
@@ -417,7 +417,7 @@ class AppLinterTest {
                   auth: bearer
                   csrf: requred
                 steps:
-                  main:
+                  - id: main
                     text: insert into items(name) values (:name)
                 response:
                   json:
@@ -447,7 +447,7 @@ class AppLinterTest {
                 inputPolicy:
                   unknownFields: Reject
                 steps:
-                  main:
+                  - id: main
                     text: insert into items(name) values (:name)
                 response:
                   json:
@@ -666,7 +666,7 @@ class AppLinterTest {
                     code: too-small
                     message: items.qty.tooSmall
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: main.sql
                       mode: update
@@ -810,23 +810,22 @@ class AppLinterTest {
                 kind: job
                 recipe: batch-pipeline
                 pipeline:
-                  - id: broken
-                    sources:
-                      main:
-                        sql:
-                          file: purge.sql
-                    notify:
-                      channel: member-mail
+                  - id: purge
+                    sql:
+                      file: purge.sql
+                      notify:
+                        channel: member-mail
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
 
         // notify: on a non-command recipe.
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1004") && f.isError());
-        // A notification without a channel, and a job step declaring both sql: and notify:.
+        // A notification without a channel. A step that reports what it wrote is a binding
+        // plus an output block, so it draws nothing (docs/unified-sources.md decision 12).
         assertThat(findings)
                 .filteredOn(f -> f.code().equals("TQL-FIELD-2004") && f.isError())
-                .hasSize(2);
+                .hasSize(1);
         // A malformed when: guard.
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SQL-2101") && f.isError());
         // An undeclared channel is a warning: another environment's config may declare it.
@@ -863,7 +862,7 @@ class AppLinterTest {
                   unaddressed:
                     channel: approvals
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: decide.sql
                       mode: update
@@ -912,18 +911,19 @@ class AppLinterTest {
                   - id: extract
                     export:
                       format: csv
-                    sources:
-                      main:
-                      file: report.sql
-                      mode: query
+                      sources:
+                        main:
+                          sql:
+                            file: report.sql
+                            mode: query
                   - id: hooked
                     notify:
                       channel: audit
-                      attach: step.extract.transferId
+                      attach: steps.extract.transferId
                   - id: mailed
                     notify:
                       channel: reports
-                      attach: step.extract.transferId
+                      attach: steps.extract.transferId
                 """);
         Files.writeString(dir.resolve("batch/report/report.sql"), "select 1 as one\n");
 
@@ -982,11 +982,11 @@ class AppLinterTest {
                     httpCall:
                       url: https://api.partner.example/v1/y
                       credential: ghost
-                  - id: ambiguous
+                  - id: reported
                     httpCall:
                       url: https://api.partner.example/v1/z
-                    notify:
-                      channel: member-mail
+                      notify:
+                        channel: member-mail
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -1003,9 +1003,10 @@ class AppLinterTest {
         // An undeclared credential is a warning, not an error.
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4072") && !f.isError()
                 && f.message().contains("ghost"));
-        // A step declaring two kinds at once.
-        assertThat(findings).anyMatch(f -> f.code().equals("TQL-FIELD-2004") && f.isError()
-                && f.message().contains("ambiguous"));
+        // A call reporting its outcome is a binding plus an output block, not a conflict
+        // (docs/unified-sources.md decision 12).
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-FIELD-2004")
+                && f.message().contains("reported"));
     }
 
     @Test
@@ -1031,7 +1032,7 @@ class AppLinterTest {
                 webhook:
                   provider: partner
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update
@@ -1287,7 +1288,7 @@ class AppLinterTest {
     void nudgesVersionPredicateOnExpectedRowCountUpdates(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
                 steps:
-                  bump:
+                  - id: bump
                     sql:
                       file: bump.sql
                       mode: update
@@ -1303,7 +1304,7 @@ class AppLinterTest {
     void nudgesExpectOnVersionPredicateUpdates(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update
@@ -1317,7 +1318,7 @@ class AppLinterTest {
     void quietWhenUpdateDeclaresExpectAndVersionPredicate(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update
@@ -1351,7 +1352,7 @@ class AppLinterTest {
                 security:
                   policy: orders.write
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update
@@ -1368,7 +1369,7 @@ class AppLinterTest {
                   channel: events
                   topic: orders.changed
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update
@@ -1386,7 +1387,7 @@ class AppLinterTest {
     void reportsMissingStepSqlFile(@TempDir Path dir) throws Exception {
         writeCommandRoute(dir, """
                 steps:
-                  header:
+                  - id: header
                     sql:
                       file: nope.sql
                 """, null);
@@ -1408,7 +1409,7 @@ class AppLinterTest {
                   fieldless:
                     rule: body.endDate >= body.startDate
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update
@@ -1436,7 +1437,7 @@ class AppLinterTest {
                     rule: 'body.endDate >='
                     field: endDate
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update
@@ -1529,7 +1530,7 @@ class AppLinterTest {
                     rule: body.endDate >= body.startDate
                     field: endDate
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: bump.sql
                       mode: update

@@ -183,7 +183,7 @@ class MessagingRecipeIntegrationTest {
                   total:
                     type: number
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-order.sql
                       mode: update
@@ -223,7 +223,7 @@ class MessagingRecipeIntegrationTest {
                   total:
                     type: number
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: project-order.sql
                       mode: update

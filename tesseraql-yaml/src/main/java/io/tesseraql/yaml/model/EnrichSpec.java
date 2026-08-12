@@ -5,8 +5,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * One enrichment of a result set (docs/lookups.md): the rows of {@code into} carry a key, the
- * reference behind that key is fetched, and the match is composed into each row.
+ * One enrichment of a result set (docs/lookups.md): the rows of the source it is declared on
+ * carry a key, the reference behind that key is fetched, and the match is composed into each row.
+ *
+ * <p>An enrichment nests under its source (docs/unified-sources.md decision 5) rather than
+ * naming one with a back-reference. The chunk step always had this shape; the route-level map
+ * with {@code into:} was the exception, and the back-reference was the only reason an
+ * {@code http:} source could not be enriched — it lived in the wrong map, not by decision.
  *
  * <p>The key is not declared separately from the join — {@code on:} is a
  * {@code parentColumn: childColumn} map, so its parent side is the key and its child side is
@@ -20,7 +25,6 @@ import java.util.Map;
  * several statements whose results merge by key. {@code maxKeys} is the separate ceiling that
  * keeps an unbounded fan-out visible.
  *
- * @param into      the result set to enrich: {@code sql} or a named query
  * @param on        {@code parentColumn: childColumn}, one entry per key column
  * @param sql       the reference query; {@code keys} is bound into it
  * @param http      the reference call; see {@code mode} for what the keys bind to
@@ -32,12 +36,9 @@ import java.util.Map;
  * @param maxKeys   the ceiling on distinct keys, beyond which the enrichment fails
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record EnrichSpec(String into, Map<String, String> on, Binding.SqlArm sql,
+public record EnrichSpec(Map<String, String> on, Binding.SqlArm sql,
         HttpSourceSpec http, String mode, String as, List<String> merge, Integer batchSize,
         Integer maxKeys) {
-
-    /** The result set an enrichment enriches when it names none: the primary source. */
-    public static final String DEFAULT_INTO = "main";
 
     /** One request for the whole key set. */
     public static final String BATCH = "batch";
@@ -48,11 +49,6 @@ public record EnrichSpec(String into, Map<String, String> on, Binding.SqlArm sql
     public EnrichSpec {
         on = on == null ? Map.of() : Map.copyOf(on);
         merge = merge == null ? List.of() : List.copyOf(merge);
-    }
-
-    /** The result set to enrich, defaulting to the route's own {@code sql:} result. */
-    public String effectiveInto() {
-        return into == null || into.isBlank() ? DEFAULT_INTO : into;
     }
 
     /**

@@ -14,4 +14,4 @@ response:
     status: 200
     template: mail.html
     model:
-      mail: sql
+      mail: main

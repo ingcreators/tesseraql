@@ -129,7 +129,7 @@ class OpenApiGeneratorTest {
         // The response.json.body structure is mirrored with property names (not just {type:object}).
         assertThat(schema.path("type").asText()).isEqualTo("object");
         com.fasterxml.jackson.databind.JsonNode props = schema.path("properties");
-        // data: sql.rows -> an array of row objects
+        // data: main.rows -> an array of row objects
         assertThat(props.path("data").path("type").asText()).isEqualTo("array");
         assertThat(props.path("data").path("items").path("type").asText()).isEqualTo("object");
         // meta: a nested object; count is a row count (integer); limit/offset take their input types.
@@ -167,7 +167,8 @@ class OpenApiGeneratorTest {
                           filename: items.xlsx
                         sources:
                           main:
-                          file: select.sql
+                            sql:
+                              file: select.sql
                         """, "export"));
         var commandRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items",
                 home.resolve("web/api/items/post.yml"), parser.parseRoute("""
@@ -180,7 +181,7 @@ class OpenApiGeneratorTest {
                             type: string
                             required: true
                         steps:
-                          main:
+                          - id: main
                             sql:
                               file: insert.sql
                               mode: update

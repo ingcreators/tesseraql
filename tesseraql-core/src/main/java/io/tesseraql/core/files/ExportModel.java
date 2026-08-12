@@ -29,6 +29,13 @@ public final class ExportModel {
     /** TQL-LD-2856: a codec asked for the row source its streaming declaration does not match. */
     static final TqlErrorCode WRONG_ROW_SOURCE = new TqlErrorCode(TqlDomain.LD, 2856);
 
+    /**
+     * The name the rows a codec writes answer to in a template: a document's primary source
+     * (docs/unified-sources.md decision 10). One envelope spelling everywhere — a spreadsheet
+     * template and an HTML page name the same result the same way.
+     */
+    public static final String SUBJECT = "main";
+
     private final Iterator<Map<String, Object>> single;
     private final Iterable<Map<String, Object>> repeatable;
     private final Map<String, Object> values;

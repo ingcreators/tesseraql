@@ -14,7 +14,7 @@ input:
     required: true
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.menu.move
       params:

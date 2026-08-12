@@ -20,7 +20,7 @@ security:
   policy: app.write
 
 steps:
-  main:
+  - id: main
     sql:
       file: delete.sql
       mode: update

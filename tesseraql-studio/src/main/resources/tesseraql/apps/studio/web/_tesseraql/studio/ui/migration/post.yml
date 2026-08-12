@@ -37,4 +37,4 @@ response:
     status: 200
     template: created.html
     model:
-      mig: sql
+      mig: main

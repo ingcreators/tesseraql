@@ -4,7 +4,7 @@ kind: route
 recipe: command-json
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.copilot.reset
       params:

@@ -297,7 +297,7 @@ input:
   d19: { type: string, required: false }
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.decisions.save
       params:

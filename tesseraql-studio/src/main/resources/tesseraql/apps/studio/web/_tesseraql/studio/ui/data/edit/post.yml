@@ -90,7 +90,7 @@ input:
   cs19: { type: string, required: false }
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.data.update
       params:

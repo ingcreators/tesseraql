@@ -40,7 +40,7 @@ class ViewEjectorTest {
         ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
                 "web/items/page.html");
         assertThat(file.path()).isEqualTo("web/items/page.html");
-        assertThat(file.content()).contains("th:each=\"row : ${sql.rows}\"");
+        assertThat(file.content()).contains("th:each=\"row : ${main.rows}\"");
         assertThat(file.content()).contains("th:href=\"|/items/${row['id']}|\"");
         assertThat(file.content()).contains("th:text=\"${row['status']}\"");
         assertThat(file.content()).contains(">Status</th>");
@@ -129,7 +129,7 @@ class ViewEjectorTest {
                 """);
         ScaffoldedFile file = ViewEjector.eject(dir, dir, "page.view.yml", spec, List.of(),
                 "web/items/page.html");
-        assertThat(file.content()).contains("row=${#lists.isEmpty(sql.rows)");
+        assertThat(file.content()).contains("row=${#lists.isEmpty(main.rows)");
         assertThat(file.content()).contains("${row == null ? '' : row['name']}");
         assertThat(file.content()).contains(">Orders</h3>");
         assertThat(file.content()).contains("th:each=\"child : ${orders.rows}\"");
@@ -192,7 +192,7 @@ class ViewEjectorTest {
                 "web/stats/page.html");
 
         assertThat(file.content()).contains("hc-grid")
-                .contains("${#lists.isEmpty(sql.rows) ? '—' : sql.rows[0]['user_count']}")
+                .contains("${#lists.isEmpty(main.rows) ? '—' : main.rows[0]['user_count']}")
                 .contains("data-hc-chart=\"bar\"")
                 .contains("th:each=\"row : ${byStatus.rows}\"")
                 .contains("#strings.listJoin(byStatus.rows.{n}, ',')")

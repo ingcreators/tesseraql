@@ -14,4 +14,4 @@ response:
     contentType: "application/json; charset=utf-8"
     filename: htmx-contract.json
     model:
-      htmx: sql
+      htmx: main

@@ -45,10 +45,8 @@ class TestRunnerIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: search finds sato
-                    sources:
-                      main:
-                        sql:
-                          file: web/api/users/search.sql
+                    sql:
+                      file: web/api/users/search.sql
                     params:
                       q: sato
                       limit: 50
@@ -58,10 +56,9 @@ class TestRunnerIntegrationTest {
                       rows:
                         - name: sato
                   - name: roles for u1
-                    contract:
-                      name: identity.find-roles-by-user-id
-                      params:
-                        userId: u1
+                    contract: identity.find-roles-by-user-id
+                    params:
+                      userId: u1
                     expect:
                       rows:
                         - role_code: USER_READ
@@ -99,10 +96,8 @@ class TestRunnerIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: deactivating sato affects one row and the read-back sees it
-                    sources:
-                      main:
-                        sql:
-                          file: web/api/users/deactivate/deactivate.sql
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
                     params:
                       name: sato
                     expect:
@@ -155,10 +150,8 @@ class TestRunnerIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: the insert returns the new row
-                    sources:
-                      main:
-                        sql:
-                          file: insert-returning.sql
+                    sql:
+                      file: insert-returning.sql
                     params:
                       name: tanaka
                     expect:
@@ -188,19 +181,15 @@ class TestRunnerIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: rowCount asserted on a write
-                    sources:
-                      main:
-                        sql:
-                          file: web/api/users/deactivate/deactivate.sql
+                    sql:
+                      file: web/api/users/deactivate/deactivate.sql
                     params:
                       name: sato
                     expect:
                       rowCount: 1
                   - name: updateCount asserted on a query
-                    sources:
-                      main:
-                        sql:
-                          file: web/api/users/search.sql
+                    sql:
+                      file: web/api/users/search.sql
                     params:
                       q: sato
                       limit: 50
@@ -215,10 +204,9 @@ class TestRunnerIntegrationTest {
                     expect:
                       updateCount: 1
                   - name: verify without a sql target
-                    contract:
-                      name: identity.find-roles-by-user-id
-                      params:
-                        userId: u1
+                    contract: identity.find-roles-by-user-id
+                    params:
+                      userId: u1
                     verify:
                       - sql:
                           file: web/api/users/search.sql

@@ -187,7 +187,7 @@ class RowLevelMaskingIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                     fields:
                       salary:
                         mask: fixed

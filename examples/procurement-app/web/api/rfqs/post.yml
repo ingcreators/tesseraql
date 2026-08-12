@@ -28,7 +28,7 @@ validate:
 # title comes straight from the requisition row, in one statement, one transaction.
 
 steps:
-  main:
+  - id: main
     sql:
       file: create-rfq.sql
       mode: update

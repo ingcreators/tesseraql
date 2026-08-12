@@ -25,4 +25,4 @@ response:
     status: 200
     template: apply.html
     model:
-      scaffold: sql
+      scaffold: main

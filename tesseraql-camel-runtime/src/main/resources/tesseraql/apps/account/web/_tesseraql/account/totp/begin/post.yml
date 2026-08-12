@@ -7,7 +7,7 @@ recipe: command-json
 # unconfirmed - nothing is enforced until a valid code confirms it.
 
 steps:
-  main:
+  - id: main
     service:
       name: account.totp.begin
       params:

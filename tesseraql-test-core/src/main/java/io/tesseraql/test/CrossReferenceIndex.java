@@ -155,9 +155,8 @@ public final class CrossReferenceIndex {
      */
     public static List<Binding> bindings(RouteDefinition definition) {
         List<Binding> bindings = new ArrayList<>();
-        if (definition.main() != null) {
-            bindings.add(definition.main());
-        }
+        // `main` is an entry of sources: like any other, so listing it separately counted the
+        // document's primary result twice (docs/unified-sources.md decision 3).
         bindings.addAll(definition.steps().values());
         bindings.addAll(definition.sources().values());
         if (definition.fileImport() != null && definition.fileImport().sql() != null) {

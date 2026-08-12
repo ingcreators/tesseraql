@@ -34,7 +34,7 @@ class MessagingRouteParsingTest {
                     orderId: body.orderId
                     total: body.total
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-order.sql
                       mode: update
@@ -70,7 +70,7 @@ class MessagingRouteParsingTest {
                   topic: orders.created
                   idempotencyKey: body.orderId
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: project-order.sql
                       mode: update

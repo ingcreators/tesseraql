@@ -32,4 +32,4 @@ response:
     status: 200
     template: test-send.html
     model:
-      send: sql
+      send: main

@@ -54,7 +54,7 @@ class SecurityDefaultsResolutionTest {
                 security:
                   policy: items.write
                 steps:
-                  insert:
+                  - id: insert
                     sql:
                       file: insert.sql
                 response:
@@ -99,7 +99,7 @@ class SecurityDefaultsResolutionTest {
                 webhook:
                   provider: inventory
                 steps:
-                  record:
+                  - id: record
                     sql:
                       file: record.sql
                 """);

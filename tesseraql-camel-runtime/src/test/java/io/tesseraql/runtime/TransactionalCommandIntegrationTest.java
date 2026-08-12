@@ -336,22 +336,22 @@ class TransactionalCommandIntegrationTest {
                     orderNo: steps.orderNo.value
                     customerId: body.customerId
                 steps:
-                  orderNo:
+                  - id: orderNo
                     sequence: order-number
-                  header:
+                  - id: header
                     sql:
                       file: insert-order.sql
                       keys: [id]
                       params:
                         orderNo: steps.orderNo.value
                         customerId: body.customerId
-                  lines:
+                  - id: lines
                     sql:
                       file: insert-lines.sql
                       params:
                         orderId: steps.header.keys.id
                         lines: body.lines
-                  placed:
+                  - id: placed
                     sql:
                       file: select-placed.sql
                       mode: query

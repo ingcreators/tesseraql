@@ -349,7 +349,7 @@ class LiveViewIntegrationTest {
                 refreshOn: orders.changed
                 panels:
                   - type: stat
-                    source: sql
+                    source: main
                     column: order_count
                 """);
         Path stats = target.resolve("web/orders/stats");
@@ -394,7 +394,7 @@ class LiveViewIntegrationTest {
                   auth: browser
                   csrf: true
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: approve.sql
                       mode: update

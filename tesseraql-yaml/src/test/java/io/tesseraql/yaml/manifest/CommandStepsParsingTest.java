@@ -30,9 +30,9 @@ class CommandStepsParsingTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  orderNo:
+                  - id: orderNo
                     sequence: order-number
-                  header:
+                  - id: header
                     sql:
                       file: insert-order.sql
                       mode: update
@@ -40,14 +40,14 @@ class CommandStepsParsingTest {
                       params:
                         orderNo: steps.orderNo.value
                         customerId: body.customerId
-                  lines:
+                  - id: lines
                     sql:
                       file: insert-lines.sql
                       mode: update
                       params:
                         orderId: steps.header.keys.id
                         lines: body.lines
-                  bump:
+                  - id: bump
                     sql:
                       file: bump-version.sql
                       mode: update
@@ -102,7 +102,7 @@ class CommandStepsParsingTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: update-order.sql
                       mode: update

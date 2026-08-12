@@ -19,5 +19,5 @@ response:
     status: 200
     template: messages.html
     model:
-      msg: sql
+      msg: main
       saved: params.saved

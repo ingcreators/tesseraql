@@ -24,11 +24,13 @@ class AppLinterChainingTest {
                     version: tesseraql/v1
                     id: chain.job%d
                     kind: job
-                    recipe: batch-tasklet
+                    recipe: batch-pipeline
                     %s
-                    sql:
-                      file: noop.sql
-                      mode: query
+                    pipeline:
+                      - id: main
+                        sql:
+                          file: noop.sql
+                          mode: query
                     """.formatted(i, triggers[i]));
         }
         Files.writeString(dir.resolve("batch/chain/noop.sql"), "select 1\n");

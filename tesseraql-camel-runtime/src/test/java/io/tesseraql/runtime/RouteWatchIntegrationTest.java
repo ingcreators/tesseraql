@@ -194,7 +194,7 @@ class RouteWatchIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(id, sql);
     }
 }

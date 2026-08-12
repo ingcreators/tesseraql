@@ -7,7 +7,7 @@ recipe: command-json
 # (docs/studio-schema-lifecycle.md) - the in-Studio replacement for the schema goal.
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.schemaRefresh
       params:

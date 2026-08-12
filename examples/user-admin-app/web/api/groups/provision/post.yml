@@ -33,7 +33,7 @@ outbox:
     members[].value: body.memberIds
 
 steps:
-  main:
+  - id: main
     sql:
       file: provision.sql
       mode: update
@@ -44,4 +44,4 @@ response:
     status: 200
     body:
       affected: steps.main.affectedRows
-      eventId: sql.eventId
+      eventId: main.eventId

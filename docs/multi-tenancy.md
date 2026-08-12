@@ -34,11 +34,13 @@ tenancy:
 ```
 
 ```yaml
-sql:
-  file: list.sql
-  mode: query
-  params:
-    tenant_id: tenant.id
+sources:
+  main:
+    sql:
+      file: list.sql
+      mode: query
+      params:
+        tenant_id: tenant.id
 ```
 
 ```sql

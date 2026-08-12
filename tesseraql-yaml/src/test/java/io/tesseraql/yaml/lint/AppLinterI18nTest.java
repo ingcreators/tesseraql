@@ -80,7 +80,7 @@ class AppLinterI18nTest {
                     field: c
                     message: tql.input.required
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update

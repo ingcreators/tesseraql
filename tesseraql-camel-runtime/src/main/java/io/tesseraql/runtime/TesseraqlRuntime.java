@@ -782,9 +782,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // binding it — otherwise the reference fails at request time with no route-level http:
         // anywhere in the app (docs/lookups.md).
         if (routeShaped(manifest).anyMatch(definition -> definition.sources().values().stream()
-                .anyMatch(io.tesseraql.yaml.model.Binding::isHttp)
-                || definition.enrich().values().stream()
-                        .anyMatch(enrich -> enrich.http() != null))) {
+                .anyMatch(binding -> binding.isHttp()
+                        || binding.enrich().values().stream()
+                                .anyMatch(enrich -> enrich.http() != null)))) {
             context.getRegistry().bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
                     outboundGateway(httpCallClient));
         }

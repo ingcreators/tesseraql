@@ -265,7 +265,7 @@ class ReloadContentDiffIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(name, name));
     }
 }

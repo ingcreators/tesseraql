@@ -451,12 +451,13 @@ public final class AppScaffolder {
 
             sources:
               main:
-                file: search.sql
-                mode: query
-                params:
-                  q: query.q
-                  limit: query.limit
-                  offset: query.offset
+                sql:
+                  file: search.sql
+                  mode: query
+                  params:
+                    q: query.q
+                    limit: query.limit
+                    offset: query.offset
             response:
               json:
                 status: 200
@@ -496,9 +497,8 @@ public final class AppScaffolder {
             version: tesseraql/v1
             tests:
               - name: the items search returns the seeded row
-                sources:
-                  main:
-                    file: web/api/items/search.sql
+                sql:
+                  file: web/api/items/search.sql
                 params:
                   q: ""
                   limit: 50
@@ -509,9 +509,8 @@ public final class AppScaffolder {
                     - name: First item
 
               - name: the items search filters by exact name
-                sources:
-                  main:
-                    file: web/api/items/search.sql
+                sql:
+                  file: web/api/items/search.sql
                 params:
                   q: First item
                   limit: 50

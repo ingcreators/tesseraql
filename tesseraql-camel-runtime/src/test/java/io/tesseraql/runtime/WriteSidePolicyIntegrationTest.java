@@ -189,7 +189,7 @@ class WriteSidePolicyIntegrationTest {
                   note: { type: string, maxLength: 200 }
                   salary: { type: integer, min: 0, policy: hr.write }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: update.sql
                       mode: update

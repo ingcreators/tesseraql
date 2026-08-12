@@ -14,4 +14,4 @@ response:
     contentType: "application/json; charset=utf-8"
     filename: openapi.json
     model:
-      openapi: sql
+      openapi: main

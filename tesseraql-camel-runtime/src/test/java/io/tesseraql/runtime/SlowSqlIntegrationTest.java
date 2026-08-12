@@ -257,7 +257,7 @@ class SlowSqlIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 1 as ok\n");
 
@@ -280,7 +280,7 @@ class SlowSqlIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(secureDir.resolve("secure.sql"), "select 1 as ok\n");
         return target;

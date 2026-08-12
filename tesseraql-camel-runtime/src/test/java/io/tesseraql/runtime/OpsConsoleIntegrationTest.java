@@ -543,13 +543,11 @@ class OpsConsoleIntegrationTest {
 
                 pipeline:
                   - id: touch
-                    sources:
-                      main:
-                        sql:
-                          file: touch.sql
-                          mode: update
-                          params:
-                            businessDate: job.businessDate
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        businessDate: params.businessDate
                 """);
         Files.writeString(probeDir.resolve("touch.sql"), """
                 update users set status = status where status = /* businessDate */ 'x';

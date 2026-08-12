@@ -52,4 +52,4 @@ response:
     status: 200
     template: build.html
     model:
-      vb: sql
+      vb: main

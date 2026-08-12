@@ -64,7 +64,7 @@ class NotifyCaseTest {
                   audit:
                     channel: audit-webhook
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-member.sql
                       mode: update
@@ -82,16 +82,14 @@ class NotifyCaseTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: purge
-                    sources:
-                      main:
-                        sql:
-                          file: purge.sql
-                          mode: update
+                    sql:
+                      file: purge.sql
+                      mode: update
                   - id: report
                     notify:
                       channel: ops-mail
                       payload:
-                        purged: step.purge.affectedRows
+                        purged: steps.purge.affectedRows
                 """);
         runner = new TestRunner(null, appHome);
     }
@@ -131,7 +129,7 @@ class NotifyCaseTest {
     @Test
     void aJobCaseEvaluatesNotifySteps() {
         TestReport report = run(new TestCase("job report step", null, null,
-                Map.of("step", Map.of("purge", Map.of("affectedRows", 7))),
+                Map.of("steps", Map.of("purge", Map.of("affectedRows", 7))),
                 new Expectation(1, List.of(
                         Map.of("notify", "report", "channel", "ops-mail", "purged", 7))),
                 null, new NotifyTarget(null, "members.cleanup", null), null));

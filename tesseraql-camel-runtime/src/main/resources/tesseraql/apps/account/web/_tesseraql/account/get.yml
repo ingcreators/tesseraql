@@ -31,7 +31,7 @@ response:
     status: 200
     template: account.html
     model:
-      profile: sql
+      profile: main
       saved: params.saved
     headers:
       Cache-Control: "no-store"

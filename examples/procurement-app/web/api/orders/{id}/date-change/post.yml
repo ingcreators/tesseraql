@@ -20,13 +20,13 @@ security:
 # the negotiation history keeps the request; the propose_accept / propose_review
 # transitions then let the table-backed tolerance judge the slip.
 steps:
-  stamp:
+  - id: stamp
     sql:
       file: stamp-proposal.sql
       params:
         id: path.id
         proposedDate: params.proposedDate
-  history:
+  - id: history
     sql:
       file: record-request.sql
       params:

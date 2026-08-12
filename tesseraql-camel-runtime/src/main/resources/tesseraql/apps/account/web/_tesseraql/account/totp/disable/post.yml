@@ -13,7 +13,7 @@ input:
     maxLength: 256
 
 steps:
-  main:
+  - id: main
     service:
       name: account.totp.disable
       params:

@@ -14,4 +14,4 @@ response:
     status: 200
     template: migration.html
     model:
-      mig: sql
+      mig: main

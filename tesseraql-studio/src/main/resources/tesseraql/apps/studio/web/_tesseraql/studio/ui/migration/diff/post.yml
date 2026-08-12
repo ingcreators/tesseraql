@@ -13,4 +13,4 @@ response:
     status: 200
     template: diff.html
     model:
-      build: sql
+      build: main

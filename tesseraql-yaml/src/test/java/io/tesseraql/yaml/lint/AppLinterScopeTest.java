@@ -53,7 +53,7 @@ class AppLinterScopeTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: adjust.sql
                       mode: update
@@ -79,11 +79,9 @@ class AppLinterScopeTest {
                     cron: "0 0 3 * * ?"
                 pipeline:
                   - id: sweep
-                    sources:
-                      main:
-                        sql:
-                          file: sweep.sql
-                          mode: update
+                    sql:
+                      file: sweep.sql
+                      mode: update
                 """);
 
         // Scoping resolves against a request principal. A job has none, so the directive can

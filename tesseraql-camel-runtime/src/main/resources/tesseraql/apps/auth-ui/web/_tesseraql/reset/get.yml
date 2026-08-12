@@ -25,7 +25,7 @@ response:
     status: 200
     template: reset.html
     model:
-      methods: sql
+      methods: main
       sent: params.sent
     headers:
       Cache-Control: "no-store"

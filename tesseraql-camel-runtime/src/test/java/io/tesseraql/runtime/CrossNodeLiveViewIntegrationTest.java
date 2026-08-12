@@ -163,7 +163,7 @@ class CrossNodeLiveViewIntegrationTest {
                   auth: browser
                   csrf: true
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: approve.sql
                       mode: update

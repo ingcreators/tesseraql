@@ -24,7 +24,7 @@ validate:
     message: inventory.adjust.insufficient
 
 steps:
-  main:
+  - id: main
     sql:
       file: adjust.sql
       mode: update

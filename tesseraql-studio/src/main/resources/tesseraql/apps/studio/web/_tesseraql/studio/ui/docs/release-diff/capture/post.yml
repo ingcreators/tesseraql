@@ -8,7 +8,7 @@ recipe: command-json
 # live OpenAPI document. Replaces the hand-copy instructions this page used to print.
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.baselineCapture
       params:

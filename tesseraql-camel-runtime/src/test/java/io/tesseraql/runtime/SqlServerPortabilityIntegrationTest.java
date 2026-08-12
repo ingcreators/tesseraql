@@ -157,7 +157,7 @@ class SqlServerPortabilityIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(route.resolve("list.sql"),
                 "select name, status from users order by name\n;\n");

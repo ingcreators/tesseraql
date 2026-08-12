@@ -24,4 +24,4 @@ response:
     status: 200
     template: jobs.html
     model:
-      jp: sql
+      jp: main

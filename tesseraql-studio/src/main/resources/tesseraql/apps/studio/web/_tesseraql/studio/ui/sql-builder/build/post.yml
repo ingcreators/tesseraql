@@ -27,4 +27,4 @@ response:
     status: 200
     template: build.html
     model:
-      b: sql
+      b: main

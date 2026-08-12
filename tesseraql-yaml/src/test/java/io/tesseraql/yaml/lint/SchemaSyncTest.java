@@ -224,7 +224,7 @@ class SchemaSyncTest {
                 .containsAll(AppLinter.knownRouteRecipes())
                 .contains("queue-consume");
         assertThat(enumOf("/schema/tesseraql-job-v1.schema.json", "recipe"))
-                .containsExactlyInAnyOrder("batch-tasklet", "batch-pipeline");
+                .containsExactlyInAnyOrder("batch-pipeline");
         assertThat(enumOf("/schema/tesseraql-view-v1.schema.json", "recipe"))
                 .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.recipes());
     }

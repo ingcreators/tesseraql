@@ -13,4 +13,4 @@ response:
     status: 200
     template: export.html
     model:
-      docs: sql
+      docs: main

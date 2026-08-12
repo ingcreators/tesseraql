@@ -143,17 +143,14 @@ public final class RouteSpecGenerator {
         return null;
     }
 
-    /** The bound SQL statements: the main {@code sql}, ordered steps and queries, and transfer SQL. */
+    /** The bound statements: the named sources, the ordered steps, and the transfer SQL. */
     private List<RouteSpec.SqlStatement> sqlStatements(RouteFile route) {
         Path dir = route.source().getParent();
         RouteDefinition definition = route.definition();
         List<RouteSpec.SqlStatement> out = new ArrayList<>();
-        if (definition.main() != null) {
-            out.add(statement("sql", dir, definition.main()));
-        }
-        definition.steps().forEach((id, binding) -> out.add(statement("step:" + id, dir, binding)));
         definition.sources()
-                .forEach((id, binding) -> out.add(statement("query:" + id, dir, binding)));
+                .forEach((id, binding) -> out.add(statement("source:" + id, dir, binding)));
+        definition.steps().forEach((id, binding) -> out.add(statement("step:" + id, dir, binding)));
         if (definition.fileImport() != null && definition.fileImport().sql() != null) {
             out.add(statement("import", dir, Binding.sql(definition.fileImport().sql())));
         }

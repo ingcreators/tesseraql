@@ -19,6 +19,6 @@ response:
     status: 200
     template: inbox.html
     model:
-      inbox: sql
+      inbox: main
     headers:
       Cache-Control: "no-store"

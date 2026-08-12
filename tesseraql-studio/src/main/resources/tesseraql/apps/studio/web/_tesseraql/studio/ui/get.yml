@@ -26,4 +26,4 @@ response:
     status: 200
     template: explorer.html
     model:
-      studio: sql
+      studio: main

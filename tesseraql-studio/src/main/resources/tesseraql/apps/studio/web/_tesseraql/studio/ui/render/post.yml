@@ -34,7 +34,7 @@ response:
     status: 200
     template: render.html
     model:
-      render: sql
+      render: main
       scripts: params.scripts
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

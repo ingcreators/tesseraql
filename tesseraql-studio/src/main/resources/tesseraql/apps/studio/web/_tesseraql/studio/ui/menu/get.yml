@@ -25,7 +25,7 @@ response:
     status: 200
     template: menu.html
     model:
-      menu: sql
+      menu: main
       added: params.added
       moved: params.moved
       removed: params.removed

@@ -17,13 +17,12 @@ input:
     required: true
 
 steps:
-  main:
-    sql:
-      service:
-        name: iam.revokeSession
-        params:
-          userId: params.subject
-          handle: params.handle
+  - id: main
+    service:
+      name: iam.revokeSession
+      params:
+        userId: params.subject
+        handle: params.handle
 response:
   redirect:
     location: /_tesseraql/admin/sessions?signedout=1

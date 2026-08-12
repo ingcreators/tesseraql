@@ -38,12 +38,14 @@ security:
   auth: bearer
   policy: orders.read
 
-sql:
-  file: find-orders.sql
-  mode: query
-  params:
-    customerId: query.customerId
-    limit: query.limit
+sources:
+  main:
+    sql:
+      file: find-orders.sql
+      mode: query
+      params:
+        customerId: query.customerId
+        limit: query.limit
 ```
 
 The runtime serves every declared tool over the Streamable HTTP transport at
@@ -92,9 +94,11 @@ security:
   auth: bearer
   policy: users.read
 
-sql:
-  file: active-users.sql
-  mode: query
+sources:
+  main:
+    sql:
+      file: active-users.sql
+      mode: query
 ```
 
 The runtime serves every declared resource over the same `/_tesseraql/mcp` endpoint as the tools.
@@ -139,15 +143,17 @@ security:
   auth: bearer
   policy: orders.read
 
-sql:
-  file: orders-board.sql
-  mode: query
+sources:
+  main:
+    sql:
+      file: orders-board.sql
+      mode: query
 
 response:
   html:
     template: orders-board.html
     model:
-      orders: sql.rows
+      orders: main.rows
 
 ui:
   prefersBorder: true

@@ -121,7 +121,7 @@ input:
   in9domain: { type: string, required: false }
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.routeForm.save
       params:

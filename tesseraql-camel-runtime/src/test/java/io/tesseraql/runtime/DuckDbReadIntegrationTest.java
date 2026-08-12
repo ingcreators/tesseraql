@@ -154,7 +154,7 @@ class DuckDbReadIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(summaryRoute.resolve("summary.sql"), """
                 select category, sum(total) as total
@@ -175,7 +175,6 @@ class DuckDbReadIntegrationTest {
                     sql:
                       file: open.sql
                       mode: query
-                queries:
                   drops:
                     sql:
                       file: drops.sql
@@ -184,7 +183,7 @@ class DuckDbReadIntegrationTest {
                 response:
                   json:
                     body:
-                      open: sql.rows
+                      open: main.rows
                       drops: drops.rows
                 """);
         Files.writeString(dashboardRoute.resolve("open.sql"),
@@ -211,7 +210,7 @@ class DuckDbReadIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outsideRoute.resolve("outside.sql"),
                 "select * from read_csv('" + home.resolve("secret.csv") + "')\n");
@@ -232,7 +231,7 @@ class DuckDbReadIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(ghostRoute.resolve("ghost.sql"),
                 "select * from read_csv(/* ${scope.ghost}/x.csv */ 'dummy.csv')\n");

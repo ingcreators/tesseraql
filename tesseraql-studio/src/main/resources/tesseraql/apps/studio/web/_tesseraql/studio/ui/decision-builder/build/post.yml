@@ -20,4 +20,4 @@ response:
     status: 200
     template: build.html
     model:
-      db: sql
+      db: main

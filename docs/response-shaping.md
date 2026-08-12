@@ -14,7 +14,7 @@ in the [core expression language](declarative-validation.md#the-expression-langu
 response:
   json:
     body:
-      rows: sql.rows
+      rows: main.rows
       total: params.qty * params.price
       label: upper(trim(params.name))
 ```
@@ -28,17 +28,19 @@ A parent row set with a named child query composes into one document — grouped
 by hand:
 
 ```yaml
-sql:
-  file: orders.sql          # parents
-  params: { customerId: query.customerId }
-queries:
+sources:
+  main:
+    sql:
+      file: orders.sql          # parents
+      params: { customerId: query.customerId }
   lines:
-    file: lines.sql         # children
-    params: { customerId: query.customerId }
+    sql:
+      file: lines.sql         # children
+      params: { customerId: query.customerId }
 response:
   json:
     body:
-      orders: sql.rows
+      orders: main.rows
     nest:
       - into: orders        # the body key holding the parent rows
         children: lines     # the named query whose rows attach
@@ -69,13 +71,14 @@ many-to-one reference — the partner name behind an order's partner code — wa
 columns on the parent row itself. `merge:` names the columns to copy:
 
 ```yaml
-queries:
+sources:
   partners:
-    file: partners.sql
+    sql:
+      file: partners.sql
 response:
   json:
     body:
-      orders: sql.rows
+      orders: main.rows
     nest:
       - into: orders
         children: partners
@@ -110,13 +113,15 @@ composes the *result set* rather than the body, an HTML list's `columns:` sees t
 column too:
 
 ```yaml
-sql:
-  file: orders.sql
-enrich:
-  partner:
-    on: { partner_code: code }        # rowColumn: referenceColumn
-    sql: { file: partners.sql, datasource: crm }
-    merge: [partner_name]             # or as: partners, to attach a list
+sources:
+  main:
+    sql:
+      file: orders.sql
+    enrich:
+      partner:
+        on: { partner_code: code }    # rowColumn: referenceColumn
+        sql: { file: partners.sql, datasource: crm }
+        merge: [partner_name]         # or as: partners, to attach a list
 ```
 
 ```sql
@@ -134,8 +139,9 @@ resolved from memory by a [code catalog](code-catalogs.md), with no query per re
 reference is fetched in batches — one statement per `batchSize` keys, not one per row. A
 hundred-row page over sixty distinct partners costs one round trip.
 
-- **`into:`** names the result set to enrich: `sql` by default, or one of the route's
-  `queries:` (`TQL-YAML-1045`), so a detail page's history list is enriched the same way.
+- **An enrichment nests under the source it transforms**, so a detail page's history list is
+  enriched by writing `enrich:` under `history:` — any source, whatever arm it names, including
+  an `http:` one.
 - **`batchSize:`** is how many keys ride one statement. The default comes from the dialect and
   the key's arity — under Oracle's 1000-expression `IN` limit and SQL Server's 2100
   parameters — so a large key set becomes several statements whose results merge by key.
@@ -217,9 +223,9 @@ Business conditions map to HTTP statuses declaratively — the generalization of
 response:
   json:
     body:
-      data: sql.rows
+      data: main.rows
     statusWhen:
-      - when: sql.rowCount == 0
+      - when: main.rowCount == 0
         status: 404
 ```
 

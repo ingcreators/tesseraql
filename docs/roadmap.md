@@ -237,7 +237,7 @@ kind and config lint (`TQL-SEC-4060..4065`) keep it machine-checkable. **Phase 2
 
 **Outbound `httpCall`** (delivered, see [docs/connectors.md](connectors.md)): a batch-pipeline
 `httpCall` step issues one synchronous outbound REST request and publishes the response
-(`step.<id>.status`/`.body`/`.headers`) to later SQL steps. It is a job step, not a transactional
+(`steps.<id>.status`/`.body`/`.headers`) to later SQL steps. It is a job step, not a transactional
 `command-json` step — a synchronous call cannot be rolled back, so a command's outbound
 integration keeps riding the Phase 20 outbox webhook. All outbound HTTP is governed by
 `tesseraql.http.outbound`: deny-by-default egress allow-list (exact or `*.wildcard` hosts),

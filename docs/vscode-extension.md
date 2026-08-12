@@ -167,7 +167,7 @@ The analytics surfaces follow the same rule: `tql-view-dashboard` and
 `tql-chart-panel` carry the kit chart vocabulary (the `series:` list, the kinds,
 the passthrough attributes — [declarative views](declarative-views.md)), and
 `tql-export-step` pairs the export step with the follow-up `notify:` that carries
-its published `step.<id>.transferId` ([jobs](jobs.md)).
+its published `steps.<id>.transferId` ([jobs](jobs.md)).
 
 HTML mail templates ([notifications](notifications.md#html-mail)) get their own
 html-language surface: `tql-mail` scaffolds the single-file wrapper + content

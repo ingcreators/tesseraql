@@ -62,4 +62,4 @@ response:
     status: 200
     template: data.html
     model:
-      data: sql
+      data: main

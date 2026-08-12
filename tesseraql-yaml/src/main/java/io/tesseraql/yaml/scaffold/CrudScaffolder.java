@@ -287,11 +287,12 @@ public final class CrudScaffolder {
 
                 sources:
                   main:
-                    file: search.sql
-                    mode: query
-                    params:
-                %s      sort: query.sort
-                      dir: query.dir
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                %s        sort: query.sort
+                        dir: query.dir
 
                 pagination:
                   size: 50
@@ -306,7 +307,7 @@ public final class CrudScaffolder {
                         ? "  q:\n    type: string\n    required: false\n    maxLength: 200\n"
                         : "",
                 sortEnum(table, names), names.pkColumn(),
-                names.searchColumn().isPresent() ? "      q: query.q\n" : "", names.entity(),
+                names.searchColumn().isPresent() ? "        q: query.q\n" : "", names.entity(),
                 cspHeaders()));
         return yml.toString();
     }
@@ -480,12 +481,13 @@ public final class CrudScaffolder {
             route.append("""
 
                     steps:
-                      record:
-                        file: insert.sql
-                        mode: update
-                        keys: [%s]
+                      - id: record
+                        sql:
+                          file: insert.sql
+                          mode: update
+                          keys: [%s]
                     """.formatted(names.pkColumn()));
-            route.append(paramsBlock("    ", formColumns(table, names)));
+            route.append(paramsBlock("      ", formColumns(table, names)));
             route.append("""
 
                     response:
@@ -496,11 +498,12 @@ public final class CrudScaffolder {
             route.append("""
 
                     steps:
-                      main:
-                        file: insert.sql
-                        mode: update
+                      - id: main
+                        sql:
+                          file: insert.sql
+                          mode: update
                     """);
-            route.append(paramsBlock("    ", formColumns(table, names)));
+            route.append(paramsBlock("      ", formColumns(table, names)));
             route.append("""
 
                     response:
@@ -563,10 +566,11 @@ public final class CrudScaffolder {
 
                 sources:
                   main:
-                    file: select.sql
-                    mode: query
-                    params:
-                      %s: params.%s
+                    sql:
+                      file: select.sql
+                      mode: query
+                      params:
+                        %s: params.%s
                 response:
                   html:
                     view: %s.edit
@@ -656,21 +660,27 @@ public final class CrudScaffolder {
         route.append("""
 
                 steps:
-                  main:
-                    file: update.sql
-                    mode: update
+                  - id: main
+                    sql:
+                      file: update.sql
+                      mode: update
                 """);
         if (locked) {
-            route.append("    expect:\n      rowCount: 1\n      onMismatch: conflict\n");
+            route.append("      expect:\n        rowCount: 1\n        onMismatch: conflict\n");
         }
-        route.append("    params:\n      ").append(names.pkField()).append(": params.")
+        route.append("      params:\n        ").append(names.pkField()).append(": params.")
                 .append(names.pkField()).append('\n');
         for (TableSchema.Column column : formColumns(table, names)) {
-            route.append("      ").append(Names.field(column)).append(": params.")
+            // An assigned key is a form column too, and it is already bound above — writing it
+            // twice was a duplicate key the parser used to resolve last-one-wins.
+            if (Names.field(column).equals(names.pkField())) {
+                continue;
+            }
+            route.append("        ").append(Names.field(column)).append(": params.")
                     .append(Names.field(column)).append('\n');
         }
         if (locked) {
-            route.append("      version: params.version\n");
+            route.append("        version: params.version\n");
         }
         route.append("""
 
@@ -743,17 +753,18 @@ public final class CrudScaffolder {
                   csrf: required
 
                 steps:
-                  main:
-                    file: delete.sql
-                    mode: update
+                  - id: main
+                    sql:
+                      file: delete.sql
+                      mode: update
                 """);
         if (locked) {
-            route.append("    expect:\n      rowCount: 1\n      onMismatch: conflict\n");
+            route.append("      expect:\n        rowCount: 1\n        onMismatch: conflict\n");
         }
-        route.append("    params:\n      ").append(names.pkField()).append(": params.")
+        route.append("      params:\n        ").append(names.pkField()).append(": params.")
                 .append(names.pkField()).append('\n');
         if (locked) {
-            route.append("      version: params.version\n");
+            route.append("        version: params.version\n");
         }
         route.append("""
 
@@ -791,9 +802,8 @@ public final class CrudScaffolder {
         // them to render (input defaults apply only on the live route, not to a raw SQL test).
         suite.append("""
                   - name: the %s search runs without a filter
-                    sources:
-                      main:
-                        file: %s/search.sql
+                    sql:
+                      file: %s/search.sql
                     params:
                       sort: %s
                       dir: asc
@@ -801,9 +811,8 @@ public final class CrudScaffolder {
         names.searchColumn().ifPresent(search -> suite.append("""
 
                   - name: the %s search filters by %s
-                    sources:
-                      main:
-                        file: %s/search.sql
+                    sql:
+                      file: %s/search.sql
                     params:
                       q: no-such-row
                       sort: %s
@@ -820,9 +829,8 @@ public final class CrudScaffolder {
         suite.append("""
 
                   - name: the %s search sorts by %s descending
-                    sources:
-                      main:
-                        file: %s/search.sql
+                    sql:
+                      file: %s/search.sql
                     params:
                       sort: %s
                       dir: desc
@@ -830,9 +838,8 @@ public final class CrudScaffolder {
         suite.append("""
 
                   - name: the %s detail select misses for an unknown key
-                    sources:
-                      main:
-                        file: %s/select.sql
+                    sql:
+                      file: %s/select.sql
                     params:
                       %s: %s
                     expect:

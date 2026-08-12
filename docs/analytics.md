@@ -146,13 +146,13 @@ pipeline:
     push:
       transport: local                             # or sftp / ftps, allow-listed
       path: outbox/reports
-      file: step.report.transferId
+      file: steps.report.transferId
   - id: announce
     notify:
       channel: reports                             # a mail channel
-      attach: step.report.transferId               # the file rides the mail
+      attach: steps.report.transferId               # the file rides the mail
       payload:
-        rows: step.report.rows
+        rows: steps.report.rows
 ```
 
 Every produced file is a tracked transfer: listed and downloadable on the operations

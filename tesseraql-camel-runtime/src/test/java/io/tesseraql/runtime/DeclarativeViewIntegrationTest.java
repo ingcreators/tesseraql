@@ -279,7 +279,6 @@ class DeclarativeViewIntegrationTest {
                       file: detail.sql
                       params:
                         name: path.name
-                queries:
                   groups:
                     sql:
                       file: groups.sql
@@ -333,7 +332,7 @@ class DeclarativeViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                       meta: page
                 """);
         Files.writeString(paged.resolve("users.sql"),
@@ -365,7 +364,7 @@ class DeclarativeViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                       meta: page
                 """);
         Files.writeString(cursor.resolve("users.sql"), """
@@ -411,7 +410,7 @@ class DeclarativeViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      echo: sql.rows
+                      echo: main.rows
                 """);
         Files.writeString(validate.resolve("probe.sql"),
                 "select /* code */ 'AB-1' as code\n");
@@ -430,7 +429,6 @@ class DeclarativeViewIntegrationTest {
                   main:
                     sql:
                       file: totals.sql
-                queries:
                   groups:
                     sql:
                       file: group-names.sql
@@ -501,7 +499,7 @@ class DeclarativeViewIntegrationTest {
                     required: true
                     maxLength: 200
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: touch.sql
                       mode: update
@@ -511,7 +509,7 @@ class DeclarativeViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      updated: sql.rowCount
+                      updated: main.rowCount
                 """);
         Files.writeString(boardCreate.resolve("touch.sql"),
                 "update users set status = status where name = /* name */ 'x'\n");

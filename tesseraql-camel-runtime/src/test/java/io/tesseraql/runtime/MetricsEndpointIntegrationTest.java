@@ -194,7 +194,7 @@ class MetricsEndpointIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 'pong' as answer\n");
         // A poll-triggered job whose sftp host is not in the (unset) allow-list: refused
@@ -229,10 +229,12 @@ class MetricsEndpointIntegrationTest {
                 version: tesseraql/v1
                 id: metrics.tick
                 kind: job
-                recipe: batch-tasklet
-                sql:
-                  file: tick.sql
-                  mode: query
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: tick.sql
+                      mode: query
                 """);
         Files.writeString(tickDir.resolve("tick.sql"), "select 1 as one\n");
         return target;

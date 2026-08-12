@@ -13,4 +13,4 @@ response:
     status: 200
     template: scaffold.html
     model:
-      scaffold: sql
+      scaffold: main

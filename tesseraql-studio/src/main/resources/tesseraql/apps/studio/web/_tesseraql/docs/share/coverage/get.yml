@@ -29,4 +29,4 @@ response:
     status: 200
     template: share-coverage.html
     model:
-      cov: sql
+      cov: main

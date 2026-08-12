@@ -57,7 +57,7 @@ class CopilotServiceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         return dir;
     }

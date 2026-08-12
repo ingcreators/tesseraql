@@ -26,7 +26,7 @@ response:
     status: 200
     template: source.html
     model:
-      src: sql
+      src: main
       saved: params.saved
       applied: params.applied
     headers:

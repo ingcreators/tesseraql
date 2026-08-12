@@ -47,7 +47,7 @@ class NotifyBlockParsingTest {
                       email: body.email
                       actor: principal.loginId
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-member.sql
                       mode: update
@@ -90,16 +90,14 @@ class NotifyBlockParsingTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: purge
-                    sources:
-                      main:
-                        sql:
-                          file: purge.sql
-                          mode: update
+                    sql:
+                      file: purge.sql
+                      mode: update
                   - id: report
                     notify:
                       channel: ops-mail
                       payload:
-                        purged: step.purge.affectedRows
+                        purged: steps.purge.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -111,7 +109,7 @@ class NotifyBlockParsingTest {
         assertThat(job.pipeline().get(1).sql()).isNull();
         assertThat(job.pipeline().get(1).notification().channel()).isEqualTo("ops-mail");
         assertThat(job.pipeline().get(1).notification().payload())
-                .containsEntry("purged", "step.purge.affectedRows");
+                .containsEntry("purged", "steps.purge.affectedRows");
     }
 
     @Test
@@ -126,7 +124,7 @@ class NotifyBlockParsingTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-member.sql
                       mode: update

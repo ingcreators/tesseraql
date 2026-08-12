@@ -22,7 +22,7 @@ input:
     maxLength: 32
 
 steps:
-  main:
+  - id: main
     service:
       name: account.delegation.save
       params:

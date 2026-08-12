@@ -70,7 +70,7 @@ class LintPositionTest {
         assertThat(new AppLinter().lint(dir))
                 .anySatisfy(f -> {
                     assertThat(f.code()).isEqualTo("TQL-YAML-1021");
-                    assertThat(f.line()).isEqualTo(7);
+                    assertThat(f.line()).isEqualTo(9);
                 });
 
         // Position-less findings render the bare source (the pre-positions shape).

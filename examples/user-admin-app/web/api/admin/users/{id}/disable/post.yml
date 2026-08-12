@@ -7,7 +7,7 @@ security:
   policy: users.write
 
 steps:
-  main:
+  - id: main
     contract:
       name: identity.disable-user
       mode: update

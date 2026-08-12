@@ -9,12 +9,11 @@ security:
   policy: iam.admin.write
 
 steps:
-  main:
-    sql:
-      service:
-        name: iam.revokeSessions
-        params:
-          userId: path.id
+  - id: main
+    service:
+      name: iam.revokeSessions
+      params:
+        userId: path.id
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?signedout=all

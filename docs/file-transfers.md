@@ -39,8 +39,10 @@ security:
   auth: bearer
   policy: users.read
 
-sql:
-  file: export.sql
+sources:
+  main:
+    sql:
+      file: export.sql
 
 export:
   format: csv
@@ -124,10 +126,10 @@ each named query under its own name, all carrying `rows`, `rowCount` and `first`
 
 ```html
 <h1 th:text="${header.first.customer}">Customer</h1>
-<tr th:each="row : ${sql.rows}"><td th:text="${row.item}">item</td></tr>
+<tr th:each="row : ${main.rows}"><td th:text="${row.item}">item</td></tr>
 ```
 
-- **`queries:`** run on the extraction's own connection, inside its transaction and before it, so
+- **`sources:`** run on the extraction's own connection, inside its transaction and before it, so
   a document reads exactly the state its rows came from. This is how a header-and-lines document
   stops denormalizing its header onto every line.
 - **Results are read in sequence**, so `rows[0]` does not resolve — a single-row query is read

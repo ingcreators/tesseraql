@@ -137,13 +137,14 @@ class ConcurrencyLimitIntegrationTest {
                             maxInFlight: 1
                         sources:
                           main:
-                            file: slow.sql
-                            mode: query
+                            sql:
+                              file: slow.sql
+                              mode: query
                         response:
                           json:
                             status: 200
                             body:
-                              ok: sql.rowCount
+                              ok: main.rowCount
                         """);
         Files.writeString(slowDir.resolve("slow.sql"), "select pg_sleep(0.5) as slept\n");
 
@@ -173,7 +174,7 @@ class ConcurrencyLimitIntegrationTest {
                   json:
                     status: 200
                     body:
-                      ok: sql.rowCount
+                      ok: main.rowCount
                 """);
         Files.writeString(ratedDir.resolve("rated.sql"), "select 1 as ok\n");
         return target;

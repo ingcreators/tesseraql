@@ -32,6 +32,6 @@ response:
     status: 200
     template: security.html
     model:
-      sec: sql
+      sec: main
       added: params.added
       removed: params.removed

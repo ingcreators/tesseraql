@@ -149,7 +149,7 @@ class FieldDomainsTest {
                 input:
                   sku: { domain: sku, required: true }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: apply.sql
                 """);

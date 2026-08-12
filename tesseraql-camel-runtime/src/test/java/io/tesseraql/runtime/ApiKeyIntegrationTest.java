@@ -166,7 +166,7 @@ class ApiKeyIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         return target;
     }

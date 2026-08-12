@@ -105,11 +105,11 @@ class AppLinterChunkTest {
                       file: writer.sql
                       mode: update
                     chunk:
-                      reader:\n
-                        sql:\n
+                      reader:
+                        sql:
                           file: reader.sql
-                      writer:\n
-                        sql:\n
+                      writer:
+                        sql:
                           file: writer.sql
                 """);
         Files.writeString(dir.resolve("batch/load/reader.sql"), "select 1 order by 1\n");

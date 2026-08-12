@@ -54,9 +54,9 @@ class NotifyEventsTest {
     @Test
     void anAttachedTransferIdRoundTripsAndAbsentAttachDecodesNull() {
         NotifyEvents.CompiledNotify notify = NotifyEvents.compile("report.daily", "send",
-                new NotifySpec("reports", null, null, "step.extract.transferId", Map.of()));
+                new NotifySpec("reports", null, null, "steps.extract.transferId", Map.of()));
         OutboxEvent event = notify.build(
-                Map.of("step", Map.of("extract", Map.of("transferId", "tr-42"))), "app");
+                Map.of("steps", Map.of("extract", Map.of("transferId", "tr-42"))), "app");
 
         NotifyEvents.Envelope envelope = NotifyEvents.parse(event.payloadJson());
         assertThat(envelope.attach()).isEqualTo("tr-42");

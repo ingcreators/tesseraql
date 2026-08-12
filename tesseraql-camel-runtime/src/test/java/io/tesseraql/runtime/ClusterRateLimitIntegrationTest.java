@@ -151,7 +151,7 @@ class ClusterRateLimitIntegrationTest {
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         return target;
     }

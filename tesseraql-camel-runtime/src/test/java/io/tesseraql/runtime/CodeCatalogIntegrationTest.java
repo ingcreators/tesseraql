@@ -439,7 +439,7 @@ class CodeCatalogIntegrationTest {
                   html:
                     template: orders.html
                     model:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.createDirectories(target.resolve("domains"));
         Files.writeString(target.resolve("domains/codes.yml"), """
@@ -464,7 +464,7 @@ class CodeCatalogIntegrationTest {
                 input:
                   取引区分: { domain: 取引区分, required: true }
                 steps:
-                  row:
+                  - id: row
                     sql:
                       file: insert.sql
                       params:
@@ -525,7 +525,6 @@ class CodeCatalogIntegrationTest {
                   main:
                     sql:
                       file: head.sql
-                queries:
                   履歴:
                     sql:
                       file: history.sql
@@ -595,7 +594,7 @@ class CodeCatalogIntegrationTest {
                   区分コード: { type: string, required: true }
                   区分名称: { type: string, required: true }
                 steps:
-                  row:
+                  - id: row
                     sql:
                       file: insert.sql
                       params:

@@ -191,7 +191,7 @@ final class DialectRuntimeChecks {
                   payload:
                     name: body.name
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: touch.sql
                       mode: update
@@ -239,7 +239,8 @@ final class DialectRuntimeChecks {
                   filename: items.csv
                 sources:
                   main:
-                  file: select-items.sql
+                    sql:
+                      file: select-items.sql
                 """);
         Files.writeString(exportRoute.resolve("select-items.sql"),
                 "select name, qty from items order by name\n;\n");

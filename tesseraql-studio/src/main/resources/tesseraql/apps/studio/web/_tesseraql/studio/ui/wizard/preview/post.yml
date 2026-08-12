@@ -119,4 +119,4 @@ response:
     status: 200
     template: preview.html
     model:
-      w: sql
+      w: main

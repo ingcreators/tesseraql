@@ -50,7 +50,7 @@ class RuleSetResolutionTest {
                 validate:
                 %s
                 steps:
-                  adjust:
+                  - id: adjust
                     sql:
                       file: adjust.sql
                 response:
@@ -203,7 +203,7 @@ class RuleSetResolutionTest {
                   sku: { type: string, required: true }
                 %s
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: apply.sql
                 """.formatted(validate));
@@ -221,7 +221,7 @@ class RuleSetResolutionTest {
                   sku: { type: string, required: true }
                 %s
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: apply.sql
                 response:

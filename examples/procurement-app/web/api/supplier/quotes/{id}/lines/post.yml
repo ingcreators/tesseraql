@@ -28,7 +28,7 @@ security:
 # (workflow/quote-priced.sql), so pricing no longer maintains counters on the side.
 
 steps:
-  main:
+  - id: main
     sql:
       file: price-line.sql
       mode: update

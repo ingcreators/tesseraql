@@ -37,7 +37,7 @@ class AppLinterMessagingTest {
                   topic: orders.created
                   idempotencyKey: body.orderId
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: project-order.sql
                       mode: update
@@ -53,7 +53,7 @@ class AppLinterMessagingTest {
                   channel: ghost
                   topic: orders.created
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: project-order.sql
                       mode: update

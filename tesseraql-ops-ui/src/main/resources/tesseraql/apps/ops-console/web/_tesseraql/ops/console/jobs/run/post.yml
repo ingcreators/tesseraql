@@ -23,17 +23,16 @@ inputPolicy:
   unknownFields: ignore
 
 steps:
-  main:
-    sql:
-      service:
-        name: ops.jobRun
-        params:
-          id: params.id
-          values: body
-          actor: principal.loginId
-          # Narrows to the caller's ops.app.<name> grants (deny by default).
-          permissions: principal.permissions
+  - id: main
+    service:
+      name: ops.jobRun
+      params:
+        id: params.id
+        values: body
+        actor: principal.loginId
+        # Narrows to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
 response:
   redirect:
     status: 303
-    location: /_tesseraql/ops/console/executions/{sql.executionId}?started=1
+    location: /_tesseraql/ops/console/executions/{steps.main.executionId}?started=1

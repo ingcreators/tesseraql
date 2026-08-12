@@ -32,7 +32,7 @@ class SystemAppsTest {
             response:
               json:
                 body:
-                  data: sql.rows
+                  data: main.rows
             """;
 
     private static final String MCP_TOOL = """

@@ -24,8 +24,10 @@ security:
   auth: bearer
   policy: users.read
 
-sql:
-  file: print.sql
+sources:
+  main:
+    sql:
+      file: print.sql
 
 export:
   format: pdf
@@ -83,7 +85,7 @@ Page-oriented CSS drives the print layout:
   <table>
     <thead><tr><th th:each="column : ${columns}" th:text="${column.header}">h</th></tr></thead>
     <tbody>
-      <tr th:each="row : ${sql.rows}"><td th:text="${row.name}">name</td></tr>
+      <tr th:each="row : ${main.rows}"><td th:text="${row.name}">name</td></tr>
     </tbody>
   </table>
 </body>
@@ -179,7 +181,7 @@ the reader already believes in. Chunking one logical table and merging the piece
 all three. See [file-transfers.md](file-transfers.md#large-results) for the ordering contract and
 the `{key}` rule.
 
-`queries:` is how an invoice reads its customer without denormalizing them onto every line.
+`sources:` is how an invoice reads its customer without denormalizing them onto every line.
 
 ## Next
 

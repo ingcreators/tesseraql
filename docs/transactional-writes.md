@@ -24,19 +24,21 @@ input:
     type: array
 
 steps:
-  orderNo:
+  - id: orderNo
     sequence: order-number          # managed document-number sequence
-  header:
-    file: insert-order.sql
-    keys: [id]                      # capture the generated key
-    params:
-      orderNo: steps.orderNo.value
-      customerId: body.customerId
-  lines:
-    file: insert-lines.sql
-    params:
-      orderId: steps.header.keys.id # bind a value produced by an earlier step
-      lines: body.lines
+  - id: header
+    sql:
+      file: insert-order.sql
+      keys: [id]                      # capture the generated key
+      params:
+        orderNo: steps.orderNo.value
+        customerId: body.customerId
+  - id: lines
+    sql:
+      file: insert-lines.sql
+      params:
+        orderId: steps.header.keys.id # bind a value produced by an earlier step
+        lines: body.lines
 
 response:
   json:
@@ -60,7 +62,7 @@ transaction rolls back. Each step publishes its result into the execution contex
 Steps default to `mode: update`. A step references only request sources and *earlier* steps;
 forward references fail at route build time (`TQL-CAMEL-3102`). The single-statement `sql:`
 form is unchanged and still publishes `sql.affectedRows`; with an outbox it also exposes the
-same event id as `sql.eventId` — a compatibility alias for `outbox.eventId`.
+same event id as `main.eventId` — a compatibility alias for `outbox.eventId`.
 
 ### Generated keys
 
@@ -97,9 +99,11 @@ meta-characters (`TQL-SQL-2108`) is only defense in depth behind it:
 input:
   sort: { type: string, enum: [id, name, created_at], default: id }
   dir:  { type: string, enum: [asc, desc], default: asc }
-sql:
-  file: search.sql
-  params: { sort: query.sort, dir: query.dir }
+sources:
+  main:
+    sql:
+      file: search.sql
+      params: { sort: query.sort, dir: query.dir }
 ```
 
 The CRUD scaffold ([scaffolding](scaffolding.md)) uses exactly this for its sortable list
@@ -129,16 +133,18 @@ The bind name `audit` is reserved; declaring it under `params:` fails at route b
 ## Row-count expectations (optimistic locking)
 
 ```yaml
-sql:
-  file: update-status.sql
-  mode: update
-  expect:
-    rowCount: 1
-    onMismatch: conflict   # the default; `error` yields a 500 instead
-  params:
-    id: body.id
-    status: body.status
-    version: body.version
+sources:
+  main:
+    sql:
+      file: update-status.sql
+      mode: update
+      expect:
+        rowCount: 1
+        onMismatch: conflict   # the default; `error` yields a 500 instead
+      params:
+        id: body.id
+        status: body.status
+        version: body.version
 ```
 
 ```sql

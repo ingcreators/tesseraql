@@ -6,7 +6,7 @@ recipe: command-json
 # Clears the caller's own out-of-office rule (roadmap Phase 52). Idempotent.
 
 steps:
-  main:
+  - id: main
     service:
       name: account.delegation.clear
       params:

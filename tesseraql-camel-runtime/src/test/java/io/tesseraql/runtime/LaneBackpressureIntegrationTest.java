@@ -129,7 +129,7 @@ class LaneBackpressureIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(slowDir.resolve("slow.sql"), "SELECT pg_sleep(1) AS napped\n");
         return target;

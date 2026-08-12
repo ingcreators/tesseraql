@@ -32,7 +32,7 @@ response:
     status: 200
     template: confirm.html
     model:
-      methods: sql
+      methods: main
       token: params.token
       invalid: params.invalid
       error: params.error

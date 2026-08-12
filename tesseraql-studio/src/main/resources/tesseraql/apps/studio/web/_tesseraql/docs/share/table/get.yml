@@ -37,4 +37,4 @@ response:
     status: 200
     template: share-table.html
     model:
-      tbl: sql
+      tbl: main

@@ -212,7 +212,7 @@ public final class OpenApiGenerator {
     /** Infers a leaf's schema from its source expression: row sets, counts, and typed params. */
     private static Map<String, Object> leafSchema(String expression, RouteDefinition definition) {
         String lower = expression.toLowerCase(java.util.Locale.ROOT);
-        if (lower.equals("sql.rows") || lower.endsWith(".rows")) {
+        if (lower.equals("main.rows") || lower.endsWith(".rows")) {
             return ordered("type", "array", "items", Map.of("type", "object"));
         }
         if (lower.endsWith("rowcount") || lower.endsWith(".count")) {

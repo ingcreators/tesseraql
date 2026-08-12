@@ -13,4 +13,4 @@ response:
     status: 200
     template: decisions.html
     model:
-      dom: sql
+      dom: main

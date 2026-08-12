@@ -10,7 +10,7 @@ input:
     required: true
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.menu.remove
       params:

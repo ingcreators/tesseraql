@@ -12,7 +12,7 @@ import org.apache.camel.Processor;
 /**
  * Rebinds the SQL parameters for one additional named query of a route (the {@code queries:} block,
  * design ch. 6.3). It runs after the main query, so its source expressions can reference earlier
- * results (for example {@code sql.rows}) as well as the request context ({@code path.id},
+ * results (for example {@code main.rows}) as well as the request context ({@code path.id},
  * {@code query.q}, {@code principal.*}).
  */
 public final class NamedQueryBinder implements Processor {

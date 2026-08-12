@@ -289,7 +289,7 @@ class InboxDeliveryIntegrationTest {
                   auth: browser
                   csrf: true
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: decide.sql
                       mode: update

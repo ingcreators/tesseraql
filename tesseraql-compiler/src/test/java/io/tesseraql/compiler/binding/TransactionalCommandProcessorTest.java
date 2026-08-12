@@ -30,7 +30,7 @@ class TransactionalCommandProcessorTest {
         steps.put("lines", step(sql("lines.sql"), Map.of("orderId", "steps.header.keys.id")));
         steps.put("header", step(sql("header.sql"), Map.of()));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-CAMEL-3102")
                 .hasMessageContaining("references step 'header'");
@@ -42,7 +42,7 @@ class TransactionalCommandProcessorTest {
                 new Binding("a.sql", null, null, null, null, null, null, "order-number", null,
                         null, null, null, null));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("exactly one of file: or sequence:");
     }
@@ -52,7 +52,7 @@ class TransactionalCommandProcessorTest {
         Map<String, Binding> steps = Map.of("header",
                 step(sql("header.sql"), Map.of("audit", "body.user")));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("'audit' is reserved");
     }
@@ -63,7 +63,7 @@ class TransactionalCommandProcessorTest {
                 "update", null, null, null, null, null, null, new Binding.Expect(1, "explode"),
                 null, null, null));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("expect.onMismatch must be conflict or error");
     }
@@ -74,7 +74,7 @@ class TransactionalCommandProcessorTest {
                 "update", null, null, null, null, null, null,
                 new Binding.Expect(null, "conflict"), null, null, null));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("expect.rows is required");
     }
@@ -85,7 +85,7 @@ class TransactionalCommandProcessorTest {
                 "identity.create-user", null, null, null, null, null, null, null, null, null,
                 null, null));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("contract/service bindings are not supported");
     }
@@ -95,7 +95,7 @@ class TransactionalCommandProcessorTest {
         Map<String, Binding> steps = Map.of("orderNo", new Binding(null, null, null, null,
                 null, null, null, "order-number", List.of("id"), null, null, null, null));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("keys/expect do not apply to a sequence step");
     }
@@ -106,19 +106,16 @@ class TransactionalCommandProcessorTest {
                 "query", null, null, null, null, null, null, new Binding.Expect(1, null), null,
                 null, null));
 
-        assertThatThrownBy(() -> processor(null, steps))
+        assertThatThrownBy(() -> processor(steps))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("expect/keys need an update statement");
     }
 
     @Test
-    void rejectsBothSqlAndSteps() throws Exception {
-        Binding sql = step(sql("single.sql"), Map.of());
-        Map<String, Binding> steps = Map.of("header", step(sql("header.sql"), Map.of()));
-
-        assertThatThrownBy(() -> processor(sql, steps))
+    void rejectsACommandThatDeclaresNoStatement() {
+        assertThatThrownBy(() -> processor(Map.of()))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("either sql: or steps:, not both");
+                .hasMessageContaining("needs a steps: declaration");
     }
 
     @Test
@@ -126,7 +123,8 @@ class TransactionalCommandProcessorTest {
         Map<String, ValidationRule> validate = Map.of("uniqueEmail", new ValidationRule(
                 null, "body.email != null", "check-email.sql", null, "email", null, null, null));
 
-        assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
+        assertThatThrownBy(
+                () -> processor(Map.of("main", step(sql("single.sql"), Map.of())), validate))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-CAMEL-3102")
                 .hasMessageContaining("exactly one of rule: or file:");
@@ -138,7 +136,8 @@ class TransactionalCommandProcessorTest {
                 null, "body.endDate >= body.startDate", null, Map.of("email", "body.email"),
                 "endDate", null, null, null));
 
-        assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
+        assertThatThrownBy(
+                () -> processor(Map.of("main", step(sql("single.sql"), Map.of())), validate))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("params apply to SQL rules only");
     }
@@ -148,7 +147,8 @@ class TransactionalCommandProcessorTest {
         Map<String, ValidationRule> validate = Map.of("uniqueEmail", new ValidationRule(
                 null, null, sql("check-email.sql"), Map.of(), "email", null, null, null));
 
-        assertThatThrownBy(() -> processor(step(sql("single.sql"), Map.of()), Map.of(), validate))
+        assertThatThrownBy(
+                () -> processor(Map.of("main", step(sql("single.sql"), Map.of())), validate))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-FIELD-2003")
                 .hasMessageContaining("must be a SELECT");
@@ -165,7 +165,8 @@ class TransactionalCommandProcessorTest {
                 Map.of("email", "body.email"), "email", "duplicate", "members.email.duplicate",
                 null));
 
-        assertThat(processor(step(sql("single.sql"), Map.of()), Map.of(), validate)).isNotNull();
+        assertThat(processor(Map.of("main", step(sql("single.sql"), Map.of())), validate))
+                .isNotNull();
     }
 
     @Test
@@ -175,7 +176,7 @@ class TransactionalCommandProcessorTest {
         steps.put("header", step(sql("header.sql"), Map.of("no", "steps.orderNo.value")));
         steps.put("lines", step(sql("lines.sql"), Map.of("orderId", "steps.header.keys.id")));
 
-        assertThat(processor(null, steps)).isNotNull();
+        assertThat(processor(steps)).isNotNull();
     }
 
     @Test
@@ -184,7 +185,7 @@ class TransactionalCommandProcessorTest {
                 new io.tesseraql.yaml.model.NotifySpec("member-mail", null,
                         Map.of("email", "body.email")));
         assertThat(new TransactionalCommandProcessor("orders.create",
-                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), Map.of(), valid,
+                Map.of("main", step(sql("single.sql"), Map.of())), Map.of(), Map.of(), valid,
                 file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
                 UNBOUNDED))
                 .isNotNull();
@@ -192,43 +193,35 @@ class TransactionalCommandProcessorTest {
         Map<String, io.tesseraql.yaml.model.NotifySpec> channelless = Map.of("confirmation",
                 new io.tesseraql.yaml.model.NotifySpec(null, null, Map.of()));
         assertThatThrownBy(() -> new TransactionalCommandProcessor("orders.create",
-                step(sql("single.sql"), Map.of()), Map.of(), Map.of(), Map.of(), channelless,
+                Map.of("main", step(sql("single.sql"), Map.of())), Map.of(), Map.of(), channelless,
                 file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
                 UNBOUNDED))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-FIELD-2004");
     }
 
-    /**
-     * A when: guard selects among steps (docs/decision-tables.md "Acting on the result"); the
-     * single-statement form IS the command, so a guard there is a declaration error.
-     */
+    /** A when: guard selects among steps (docs/decision-tables.md "Acting on the result"). */
     @Test
-    void aStepAcceptsAWhenGuardAndTheSingleStatementFormRejectsIt() throws Exception {
+    void aStepAcceptsAWhenGuard() throws Exception {
         Map<String, Binding> steps = new java.util.LinkedHashMap<>();
         steps.put("approve", new Binding(sql("approve.sql"), null, "update", Map.of(), null,
                 null, null, null, java.util.List.of(), null, null, null,
                 "decision.approvalRoute.level == 1"));
-        assertThat(processor(null, steps)).isNotNull();
 
-        Binding guarded = new Binding(sql("single.sql"), null, "update", Map.of(), null,
-                null, null, null, java.util.List.of(), null, null, null, "params.qty > 0");
-        assertThatThrownBy(() -> processor(guarded, Map.of()))
-                .isInstanceOf(TqlException.class)
-                .hasMessageContaining("when:");
+        assertThat(processor(steps)).isNotNull();
     }
 
     /** These tests cover construction and step compilation, not execution bounds. */
     private static final TransactionalCommandProcessor.Bounds UNBOUNDED = new TransactionalCommandProcessor.Bounds(
             0, -1, "fail");
 
-    private TransactionalCommandProcessor processor(Binding sql, Map<String, Binding> steps) {
-        return processor(sql, steps, Map.of());
+    private TransactionalCommandProcessor processor(Map<String, Binding> steps) {
+        return processor(steps, Map.of());
     }
 
-    private TransactionalCommandProcessor processor(Binding sql, Map<String, Binding> steps,
+    private TransactionalCommandProcessor processor(Map<String, Binding> steps,
             Map<String, ValidationRule> validate) {
-        return new TransactionalCommandProcessor("orders.create", sql, steps, validate, Map.of(),
+        return new TransactionalCommandProcessor("orders.create", steps, validate, Map.of(),
                 Map.of(), file -> dir.resolve(file), "main", "postgres", null, null, null,
                 "orders", UNBOUNDED);
     }

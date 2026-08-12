@@ -14,7 +14,7 @@ input:
     maxLength: 6
 
 steps:
-  main:
+  - id: main
     service:
       name: account.totp.confirm
       params:

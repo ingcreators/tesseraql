@@ -25,4 +25,4 @@ response:
     status: 200
     template: health.html
     model:
-      health: sql
+      health: main

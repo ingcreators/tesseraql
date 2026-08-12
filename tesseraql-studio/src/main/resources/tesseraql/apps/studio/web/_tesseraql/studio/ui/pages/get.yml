@@ -14,4 +14,4 @@ response:
     status: 200
     template: pages.html
     model:
-      pg: sql
+      pg: main

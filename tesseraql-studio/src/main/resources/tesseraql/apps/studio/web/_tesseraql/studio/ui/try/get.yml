@@ -23,4 +23,4 @@ response:
     status: 200
     template: try.html
     model:
-      tryit: sql
+      tryit: main

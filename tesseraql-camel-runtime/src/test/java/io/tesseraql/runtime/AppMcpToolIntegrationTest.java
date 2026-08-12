@@ -433,7 +433,7 @@ class AppMcpToolIntegrationTest {
                   html:
                     template: users-board.html
                     model:
-                      users: sql.rows
+                      users: main.rows
 
                 ui:
                   prefersBorder: true

@@ -23,7 +23,7 @@ from what the route actually uses, so a route cannot claim to be tame.
 | Mode | Means |
 | --- | --- |
 | `managed` | A standard recipe under the full framework guardrails. |
-| `extended` | The route binds a runtime Java service provider (`sql.service:` or `queries.<name>.service:`). |
+| `extended` | The route binds a runtime Java service provider (a `sources.<name>.service:` arm). |
 | `advanced` | The route **writes without authentication** — the guardrails are bypassed. |
 
 `advanced` wins over `extended` when both apply. Read-only surfaces — MCP resources, UI

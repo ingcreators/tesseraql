@@ -144,7 +144,7 @@ class MultiAppCanaryIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 

@@ -18,12 +18,12 @@ pipeline:
       method: GET
       url: https://api.directory.example/v1/headcount
       query:
-        unit: job.unit                 # bound from the job param, allow-listed host only
+        unit: params.unit                 # bound from the job param, allow-listed host only
       credential: directory            # X-API-Key from the SecretResolver SPI, never inline
   - id: record
     sql:
       file: record-headcount.sql
       mode: update
       params:
-        unit: job.unit
-        total: step.headcount.body.total   # the parsed JSON response feeds the SQL step
+        unit: params.unit
+        total: steps.headcount.body.total   # the parsed JSON response feeds the SQL step

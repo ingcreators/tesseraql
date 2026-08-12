@@ -223,11 +223,11 @@
         },
         "contract": {
           "type": "string",
-          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Legal on sql: and queries:, and refused inside a command step. Documented in authentication.md."
+          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Documented in authentication.md."
         },
         "service": {
           "type": "string",
-          "description": "A named runtime service provider to call instead of running SQL (docs/extending.md). Legal on sql: and queries:, and refused inside a command step — a transactional step must be a SQL file or a sequence."
+          "description": "A named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows."
         },
         "http": {
           "type": "object",
@@ -255,7 +255,15 @@
         },
         "when": {
           "type": "string",
-          "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form."
+          "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<id>.skipped. The declared branch point for decision.* outputs (docs decision-tables)."
+        },
+        "enrich": {
+          "type": "object",
+          "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
         "params": {
           "type": "object",

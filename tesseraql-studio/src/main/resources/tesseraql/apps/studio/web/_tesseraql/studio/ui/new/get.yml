@@ -24,4 +24,4 @@ response:
     status: 200
     template: drawer.html
     model:
-      form: sql
+      form: main

@@ -77,7 +77,7 @@ class FrameworkSurfaceGuardTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(appHome.resolve("mcp/list.sql"), "select 1 as one\n");
         Path scim = appHome.resolve("scim");

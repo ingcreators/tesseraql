@@ -13,16 +13,15 @@ input:
 
 sources:
   main:
-    sql:
-      service:
-        name: ops.outbox
-        params:
-          # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-          permissions: principal.permissions
+    service:
+      name: ops.outbox
+      params:
+        # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
 response:
   html:
     status: 200
     template: outbox.html
     model:
-      outbox: sql
+      outbox: main
       redelivered: params.redelivered

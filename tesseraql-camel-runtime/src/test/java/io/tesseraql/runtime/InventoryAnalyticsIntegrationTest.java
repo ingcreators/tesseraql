@@ -191,7 +191,6 @@ class InventoryAnalyticsIntegrationTest {
                     sql:
                       file: totals.sql
                       mode: query
-                queries:
                   drop:
                     sql:
                       file: drop.sql
@@ -216,7 +215,7 @@ class InventoryAnalyticsIntegrationTest {
                 recipe: dashboard
                 title: Tenant analytics
                 panels:
-                  - { type: stat, source: sql, column: products, title: Products }
+                  - { type: stat, source: main, column: products, title: Products }
                   - type: table
                     source: drop
                     title: Monthly drop

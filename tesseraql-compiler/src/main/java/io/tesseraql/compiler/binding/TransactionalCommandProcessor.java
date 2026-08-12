@@ -114,7 +114,6 @@ public final class TransactionalCommandProcessor implements Processor {
     private final io.tesseraql.core.decision.DecisionTables decisions;
     private final List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> notifications;
     private final io.tesseraql.yaml.messaging.PublishEvents.CompiledPublish publish;
-    private final boolean singleSql;
     private final Bounds defaultBounds;
     private static final System.Logger LOG = System
             .getLogger(TransactionalCommandProcessor.class.getName());
@@ -158,7 +157,8 @@ public final class TransactionalCommandProcessor implements Processor {
     /**
      * Builds the processor for a command route.
      *
-     * @param sql      the single-statement {@code sql:} binding, or null when steps are declared
+     * @param declaredSteps the command's ordered statements, keyed by step id — the one
+     *                 spelling a command's write has (docs/unified-sources.md decision 8)
      * @param validate the route's declarative validation rules, keyed by rule id (Phase 19)
      * @param notify   the route's notifications, keyed by notification id (Phase 20)
      * @param publish  the route's {@code publish:} block emitting a domain event to a messaging
@@ -166,7 +166,7 @@ public final class TransactionalCommandProcessor implements Processor {
      * @param stepFile resolves a step's or rule's SQL file reference to its (dialect-resolved)
      *                 path
      */
-    public TransactionalCommandProcessor(String routeId, Binding sql,
+    public TransactionalCommandProcessor(String routeId,
             Map<String, Binding> declaredSteps, Map<String, ValidationRule> validate,
             Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
@@ -174,7 +174,7 @@ public final class TransactionalCommandProcessor implements Processor {
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
             String appName, Bounds defaultBounds) {
-        this(routeId, sql, declaredSteps, validate, decide, notify, stepFile, datasourceName,
+        this(routeId, declaredSteps, validate, decide, notify, stepFile, datasourceName,
                 dialect, outbox, publish, errors, appName, null, defaultBounds);
     }
 
@@ -183,7 +183,7 @@ public final class TransactionalCommandProcessor implements Processor {
      * {@code workflow} binding makes the processor advance the document's state, check the
      * transition's guard, and append history in the command's transaction.
      */
-    public TransactionalCommandProcessor(String routeId, Binding sql,
+    public TransactionalCommandProcessor(String routeId,
             Map<String, Binding> declaredSteps, Map<String, ValidationRule> validate,
             Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
             Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
@@ -206,16 +206,12 @@ public final class TransactionalCommandProcessor implements Processor {
         this.generatedKeyColumns = Dialect.fromId(dialect)
                 .map(d -> d.capabilities().generatedKeyColumns())
                 .orElse(true);
-        if (sql != null && !declaredSteps.isEmpty()) {
-            throw invalid("declare either sql: or steps:, not both");
-        }
         // A plain command needs a statement; a workflow transition may be state-only (the framework
         // advances the state and appends history with no author command of its own).
-        if (sql == null && declaredSteps.isEmpty() && workflow == null) {
-            throw invalid("a command route needs a sql: or steps: declaration");
+        if (declaredSteps.isEmpty() && workflow == null) {
+            throw invalid("a command route needs a steps: declaration");
         }
-        this.singleSql = sql != null;
-        this.steps = compile(sql, declaredSteps, stepFile);
+        this.steps = compile(declaredSteps, stepFile);
         this.validation = compileValidation(validate, stepFile);
         // The one decide: compile (docs/decision-tables.md), shared with the transition
         // executor — a workflow transition's decisions ride its CompiledTransition instead
@@ -250,24 +246,16 @@ public final class TransactionalCommandProcessor implements Processor {
         return new ValidationRules(compiled);
     }
 
-    private List<Step> compile(Binding sql, Map<String, Binding> declaredSteps,
+    private List<Step> compile(Map<String, Binding> declaredSteps,
             java.util.function.Function<String, Path> stepFile) {
-        Map<String, Binding> bindings = singleSql
-                ? Map.of("sql", sql)
-                : declaredSteps;
+        Map<String, Binding> bindings = declaredSteps;
         List<Step> compiled = new ArrayList<>();
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
         for (Map.Entry<String, Binding> entry : bindings.entrySet()) {
             String name = entry.getKey();
             Binding binding = entry.getValue();
             validate(name, binding, seen);
-            String contextKey = singleSql ? "sql" : name;
-            // A guard belongs to a step of a pipeline: the single-statement form IS the
-            // command, and a command that conditionally does nothing at all should say so as
-            // two declared steps, not as a sql: that silently no-ops.
-            if (singleSql && binding.when() != null && !binding.when().isBlank()) {
-                throw invalid("sql: cannot declare when: — guards select among steps:");
-            }
+            String contextKey = name;
             io.tesseraql.core.expr.Expr when = binding.when() == null || binding.when().isBlank()
                     ? null
                     : io.tesseraql.core.expr.ExpressionParser.parse(binding.when());
@@ -277,14 +265,10 @@ public final class TransactionalCommandProcessor implements Processor {
                         boundsFor(binding), when));
             } else {
                 Path file = stepFile.apply(binding.file());
-                // Steps default to update (commands write); the single-statement form keeps its
-                // pre-Phase-18 semantics: an outbox command always executes as an update, a
-                // plain command honors the binding's effective mode (query by default).
-                String mode = singleSql
-                        ? (outboxEvents != null ? "update" : binding.effectiveMode())
-                        : (binding.mode() == null || binding.mode().isBlank()
-                                ? "update"
-                                : binding.mode());
+                // Steps default to update: a command writes.
+                String mode = binding.mode() == null || binding.mode().isBlank()
+                        ? "update"
+                        : binding.mode();
                 // Expectations and key capture count affected rows, which query mode never has.
                 if ("query".equals(mode)
                         && (binding.expect() != null || !binding.keys().isEmpty())) {
@@ -455,9 +439,6 @@ public final class TransactionalCommandProcessor implements Processor {
                             ? allocateSequence(exchange, connection, step)
                             : executeSql(exchange, connection, step, context, audit);
                     stepResults.put(step.name(), result);
-                    if (singleSql) {
-                        context.put(step.contextKey(), result);
-                    }
                 }
                 // The documented row-authority contract (docs/approval-workflow.md "guards and
                 // scopes"), enforced by the executor before history/tasks commit.
@@ -491,10 +472,6 @@ public final class TransactionalCommandProcessor implements Processor {
                 if (outboxEvents != null) {
                     String eventId = store.insert(connection, outboxEvents.build(context));
                     context.put("outbox", Map.of("eventId", eventId));
-                    if (singleSql) {
-                        // Compatibility: the single-statement form exposes sql.eventId.
-                        ((Map<String, Object>) context.get("sql")).put("eventId", eventId);
-                    }
                 }
                 if (!notifications.isEmpty()) {
                     // Notifications enqueue in the same transaction (roadmap Phase 20): a rolled
@@ -542,7 +519,7 @@ public final class TransactionalCommandProcessor implements Processor {
                 connection.setAutoCommit(previousAutoCommit);
             }
         }
-        exchange.getMessage().setBody(singleSql ? context.get("sql") : Map.copyOf(stepResults));
+        exchange.getMessage().setBody(Map.copyOf(stepResults));
     }
 
     /** The canonical audit binds: the caller's identity and one clock reading (roadmap Phase 18). */

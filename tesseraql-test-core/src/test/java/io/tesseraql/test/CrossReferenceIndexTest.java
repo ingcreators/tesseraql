@@ -89,7 +89,7 @@ class CrossReferenceIndexTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     contract:
                       name: identity.create-user
                 """);
@@ -113,7 +113,6 @@ class CrossReferenceIndexTest {
                   main:
                     sql:
                       file: list.sql
-                queries:
                   total:
                     sql:
                       file: count.sql
@@ -175,7 +174,6 @@ class CrossReferenceIndexTest {
                   main:
                     sql:
                       file: list.sql
-                queries:
                   total:
                     sql:
                       file: count.sql
@@ -185,7 +183,7 @@ class CrossReferenceIndexTest {
                 """, "web/api/users/get.yml");
 
         assertThat(CrossReferenceIndex.bindings(definition))
-                .extracting(Binding::sql)
+                .extracting(Binding::file)
                 .containsExactlyInAnyOrder("list.sql", "count.sql");
     }
 

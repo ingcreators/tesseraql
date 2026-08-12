@@ -22,6 +22,6 @@ response:
     status: 200
     template: flags.html
     model:
-      f: sql
+      f: main
       saved: params.saved
       removed: params.removed

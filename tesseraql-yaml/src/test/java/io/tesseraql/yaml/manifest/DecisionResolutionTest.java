@@ -55,7 +55,7 @@ class DecisionResolutionTest {
                 decide:
                 %s
                 steps:
-                  create:
+                  - id: create
                     sql:
                       file: create.sql
                 response:

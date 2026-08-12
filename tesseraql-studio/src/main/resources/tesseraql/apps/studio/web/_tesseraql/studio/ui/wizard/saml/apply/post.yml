@@ -57,4 +57,4 @@ response:
     status: 200
     template: applied.html
     model:
-      result: sql
+      result: main

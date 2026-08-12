@@ -249,7 +249,7 @@ class RouteRecipeIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(routeDir.resolve("ping.sql"), "select 1 as ok\n;\n");
 
@@ -273,7 +273,6 @@ class RouteRecipeIntegrationTest {
                     sql:
                       file: one.sql
                       mode: query
-                queries:
                   second:
                     sql:
                       file: two.sql
@@ -283,7 +282,7 @@ class RouteRecipeIntegrationTest {
                 response:
                   json:
                     body:
-                      first: sql.rows
+                      first: main.rows
                       second: second.rows
                 """);
         Files.writeString(multiDir.resolve("one.sql"), "select 1 as a\n;\n");
@@ -305,7 +304,7 @@ class RouteRecipeIntegrationTest {
                     type: integer
                     default: 5
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: touch.sql
                       mode: update

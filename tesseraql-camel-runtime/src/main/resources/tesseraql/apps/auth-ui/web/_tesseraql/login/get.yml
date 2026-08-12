@@ -37,7 +37,7 @@ response:
     status: 200
     template: login.html
     model:
-      methods: sql
+      methods: main
       next: params.next
       error: params.error
       reset: params.reset

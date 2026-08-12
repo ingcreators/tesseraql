@@ -33,4 +33,4 @@ response:
     status: 200
     template: share.html
     model:
-      doc: sql
+      doc: main

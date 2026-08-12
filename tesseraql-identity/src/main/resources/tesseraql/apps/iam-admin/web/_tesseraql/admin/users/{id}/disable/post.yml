@@ -11,12 +11,11 @@ security:
 # cookie expiry.
 
 steps:
-  main:
-    sql:
-      service:
-        name: iam.disableUser
-        params:
-          userId: path.id
+  - id: main
+    service:
+      name: iam.disableUser
+      params:
+        userId: path.id
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?disabled=1

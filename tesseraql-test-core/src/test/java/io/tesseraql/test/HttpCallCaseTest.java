@@ -57,7 +57,7 @@ class HttpCallCaseTest {
                       method: GET
                       url: https://api.partner.example/v1/rates
                       query:
-                        on: job.businessDate
+                        on: params.businessDate
                   - id: push
                     httpCall:
                       method: POST
@@ -79,7 +79,6 @@ class HttpCallCaseTest {
                   main:
                     sql:
                       file: orders.sql
-                sources:
                   rates:
                     http:
                       url: https://api.partner.example/v1/rates
@@ -95,7 +94,7 @@ class HttpCallCaseTest {
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         runner = new TestRunner(null, appHome);
     }
@@ -107,7 +106,7 @@ class HttpCallCaseTest {
     @Test
     void plansEveryHttpStepResolvingQueryAndAllowList() {
         TestReport report = run(new TestCase("plans all", null, null,
-                Map.of("job", Map.of("businessDate", "2026-06-14")),
+                Map.of("params", Map.of("businessDate", "2026-06-14")),
                 new Expectation(3, List.of(
                         Map.of("http", "fetch", "method", "GET",
                                 "url", "https://api.partner.example/v1/rates?on=2026-06-14",

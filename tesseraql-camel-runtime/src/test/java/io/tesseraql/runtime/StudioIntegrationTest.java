@@ -364,7 +364,7 @@ class StudioIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """;
 
         HttpResponse<String> preview = post(
@@ -1307,7 +1307,7 @@ class StudioIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """;
 
         // post/redirect/get: saving redirects back to the source page with a status flag.
@@ -1571,7 +1571,7 @@ class StudioIntegrationTest {
 
     @Test
     void renderEndpointWithLiveDataRunsRouteSqlForRealRows() throws Exception {
-        // No hand-authored sql.rows: live=true runs search.sql (q=sato) against the seeded DB.
+        // No hand-authored main.rows: live=true runs search.sql (q=sato) against the seeded DB.
         String body = MAPPER.writeValueAsString(Map.of(
                 "sampleModel", "query:\n  q: sato\n  limit: 50\n  offset: 0\n",
                 "live", "true"));
@@ -2198,7 +2198,7 @@ class StudioIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         assertThat(post("/_tesseraql/studio/reload", "", true).statusCode()).isEqualTo(200);
         assertThat(get("/api/formed", true).statusCode()).isEqualTo(200);
@@ -3744,7 +3744,7 @@ class StudioIntegrationTest {
                   policy: users.write
 
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: probe.sql
                       mode: update
@@ -3763,10 +3763,8 @@ class StudioIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: the probe update returns the affected row
-                    sources:
-                      main:
-                        sql:
-                          file: web/api/probe/probe.sql
+                    sql:
+                      file: web/api/probe/probe.sql
                     params:
                       name: sato
                     expect:
@@ -3781,8 +3779,7 @@ class StudioIntegrationTest {
                 version: tesseraql/v1
                 tests:
                   - name: the list-users contract runs under the sandbox
-                    contract:
-                      name: identity.list-users
+                    contract: identity.list-users
                 """);
         // A route whose SQL reads `customers` — a table the schema.json overlay above introspects —
         // so the docs route page's inferred data dependency cross-links to that table page (the
@@ -3807,7 +3804,7 @@ class StudioIntegrationTest {
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.writeString(target.resolve("web/api/deps/deps.sql"),
                 "select c.id, c.email from customers c order by c.id\n");
@@ -3828,7 +3825,6 @@ class StudioIntegrationTest {
                   main:
                     sql:
                       file: main.sql
-                queries:
                   active:
                     sql:
                       file: active.sql
@@ -3836,7 +3832,7 @@ class StudioIntegrationTest {
                   json:
                     status: 200
                     body:
-                      main: sql.rows
+                      main: main.rows
                       active: active.rows
                 """);
         Files.writeString(target.resolve("web/api/multi/main.sql"), "select 'main-live' as tag\n");

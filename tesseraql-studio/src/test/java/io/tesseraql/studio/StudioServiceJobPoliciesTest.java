@@ -32,7 +32,7 @@ class StudioServiceJobPoliciesTest {
                 version: tesseraql/v1
                 id: nightly.close
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule:
                     cron: "0 0 8 * * ?"
@@ -48,7 +48,7 @@ class StudioServiceJobPoliciesTest {
                 version: tesseraql/v1
                 id: nightly.send
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 sql:\n                  file: send.sql\n                  mode: update
                 """);
         Files.writeString(dir.resolve("batch/send/send.sql"), "select 1\n");

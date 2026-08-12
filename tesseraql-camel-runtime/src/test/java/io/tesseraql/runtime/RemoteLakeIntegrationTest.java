@@ -283,14 +283,13 @@ class RemoteLakeIntegrationTest {
                     sql:
                       file: current.sql
                       mode: query
-                queries:
                   firstRun:
                     sql:
                       file: first-run.sql
                 response:
                   json:
                     body:
-                      current: sql.rows
+                      current: main.rows
                       firstRun: firstRun.rows
                 """);
         Files.writeString(board.resolve("current.sql"),
@@ -335,7 +334,7 @@ class RemoteLakeIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(adhoc.resolve("drop.sql"), """
                 select category, total
@@ -359,7 +358,7 @@ class RemoteLakeIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outOfScope.resolve("outofscope.sql"),
                 "select count(*) as n from glob('s3://other/**')\n");

@@ -248,7 +248,7 @@ class OrgDataScopingIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(ordersDir.resolve("list.sql"), """
                 select id, name, region, created_by
@@ -272,7 +272,7 @@ class OrgDataScopingIntegrationTest {
                   id: { type: integer, required: true }
                   name: { type: string, required: true }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: rename.sql
                       mode: update

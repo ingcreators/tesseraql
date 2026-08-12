@@ -36,4 +36,4 @@ response:
     status: 200
     template: calendars.html
     model:
-      cal: sql
+      cal: main

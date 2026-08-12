@@ -209,7 +209,7 @@ class SqlTimeoutIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(slow.resolve("slow.sql"), "select pg_sleep(10) as nap\n");
 
@@ -222,9 +222,9 @@ class SqlTimeoutIntegrationTest {
                 version: tesseraql/v1
                 id: slow.job
                 kind: job
-                recipe: batch-tasklet
-                sources:
-                  main:
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
                     sql:
                       file: nap.sql
                       mode: query
@@ -240,9 +240,9 @@ class SqlTimeoutIntegrationTest {
                 version: tesseraql/v1
                 id: variant.job
                 kind: job
-                recipe: batch-tasklet
-                sources:
-                  main:
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
                     sql:
                       file: pick.sql
                       mode: query
@@ -262,9 +262,9 @@ class SqlTimeoutIntegrationTest {
                 version: tesseraql/v1
                 id: scoped.job
                 kind: job
-                recipe: batch-tasklet
-                sources:
-                  main:
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
                     sql:
                       file: scoped.sql
                       mode: query
@@ -284,7 +284,7 @@ class SqlTimeoutIntegrationTest {
                 security:
                   auth: public
                 steps:
-                  nap:
+                  - id: nap
                     sql:
                       file: nap.sql
                       mode: query
@@ -306,7 +306,7 @@ class SqlTimeoutIntegrationTest {
                 security:
                   auth: public
                 steps:
-                  rows:
+                  - id: rows
                     sql:
                       file: many.sql
                       mode: query
@@ -337,7 +337,7 @@ class SqlTimeoutIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(patient.resolve("patient.sql"),
                 "select 'done' as answer from pg_sleep(2)\n");

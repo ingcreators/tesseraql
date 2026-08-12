@@ -8,7 +8,7 @@ recipe: command-json
 # Drafts list so the outcome (remaining conflicts, if any) is visible.
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.draftsApplyAll
       params:

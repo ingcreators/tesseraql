@@ -45,8 +45,9 @@ class AppLinterDecisionsTest {
                 input:
                   total: { type: integer, required: true }
                 %ssteps:
-                  create:
-                    file: create.sql
+                  - id: create
+                    sql:
+                      file: create.sql
                 response:
                   json:
                     body:
@@ -218,7 +219,7 @@ class AppLinterDecisionsTest {
                 input:
                   total: { type: integer, required: true }
                 steps:
-                  create:
+                  - id: create
                     sql:
                       file: create.sql
                     when: "decision.approvalRoute.route == 'manager'"

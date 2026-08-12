@@ -32,7 +32,7 @@ class WebhookRouteParsingTest {
                     type: string
                     required: true
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-event.sql
                       mode: update

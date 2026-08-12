@@ -55,4 +55,4 @@ response:
     status: 200
     template: result.html
     model:
-      result: sql
+      result: main

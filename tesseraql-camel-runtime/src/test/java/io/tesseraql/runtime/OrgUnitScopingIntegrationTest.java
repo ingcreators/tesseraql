@@ -212,7 +212,7 @@ class OrgUnitScopingIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(ordersDir.resolve("list.sql"), """
                 select id, name, owner_unit

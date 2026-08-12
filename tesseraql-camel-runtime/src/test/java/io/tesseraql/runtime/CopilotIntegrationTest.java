@@ -364,7 +364,7 @@ class CopilotIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(ping.resolve("ping.sql"), "select 'v1' as answer\n");
         return target;

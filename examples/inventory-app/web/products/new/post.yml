@@ -14,7 +14,7 @@ security:
   policy: inv.write
 
 steps:
-  main:
+  - id: main
     sql:
       file: create.sql
       mode: update

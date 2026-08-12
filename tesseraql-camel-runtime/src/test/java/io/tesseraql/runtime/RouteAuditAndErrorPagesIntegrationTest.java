@@ -272,7 +272,7 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(things.resolve("things.sql"),
                 "select /* q */ 'x' as q_echo, 1 as value\n");
@@ -294,7 +294,7 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(broken.resolve("broken.sql"),
                 "select * from no_such_table_anywhere\n");

@@ -26,6 +26,6 @@ response:
     status: 200
     template: drafts.html
     model:
-      page: sql
+      page: main
       applied: params.applied
       discarded: params.discarded

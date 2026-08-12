@@ -352,13 +352,13 @@ class AppLinterDuckDbTest {
                 version: tesseraql/v1
                 id: sales.load
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 datasource: analytics
                 trigger:
                   schedule:
                     cron: "0 0 4 * * ?"
-                sources:
-                  main:
+                pipeline:
+                  - id: main
                     sql:
                       file: load.sql
                       mode: update
@@ -385,7 +385,7 @@ class AppLinterDuckDbTest {
                 recipe: command-json
                 datasource: analytics
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: load.sql
                       mode: update

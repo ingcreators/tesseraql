@@ -73,7 +73,7 @@ class AppLinterHttpCacheTest {
                 cache:
                   maxAge: 30s
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: orders.sql
                       mode: update

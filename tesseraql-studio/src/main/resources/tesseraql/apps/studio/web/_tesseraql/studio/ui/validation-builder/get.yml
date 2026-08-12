@@ -14,4 +14,4 @@ response:
     status: 200
     template: validation-builder.html
     model:
-      vb: sql
+      vb: main

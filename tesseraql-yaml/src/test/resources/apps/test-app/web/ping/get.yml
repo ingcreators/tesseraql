@@ -8,4 +8,4 @@ sql:
 response:
   json:
     body:
-      data: sql.rows
+      data: main.rows

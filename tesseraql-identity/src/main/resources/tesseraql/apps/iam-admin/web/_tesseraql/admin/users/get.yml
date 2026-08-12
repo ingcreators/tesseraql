@@ -22,11 +22,10 @@ input:
 
 sources:
   main:
-    sql:
-      contract:
-        name: identity.list-users
-        params:
-          q: params.q
+    contract:
+      name: identity.list-users
+      params:
+        q: params.q
   total:
     contract:
       name: identity.count-users

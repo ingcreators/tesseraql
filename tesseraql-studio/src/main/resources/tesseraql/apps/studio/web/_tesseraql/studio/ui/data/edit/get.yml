@@ -44,4 +44,4 @@ response:
     status: 200
     template: edit.html
     model:
-      row: sql
+      row: main

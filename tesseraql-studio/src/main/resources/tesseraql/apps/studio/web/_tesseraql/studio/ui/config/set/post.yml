@@ -14,7 +14,7 @@ input:
     required: false
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.configSet
       params:

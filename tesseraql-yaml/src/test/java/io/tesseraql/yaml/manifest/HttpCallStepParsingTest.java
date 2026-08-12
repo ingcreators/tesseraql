@@ -29,11 +29,9 @@ class HttpCallStepParsingTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: pending
-                    sources:
-                      main:
-                        sql:
-                          file: select-pending.sql
-                          mode: query-spool
+                    sql:
+                      file: select-pending.sql
+                      mode: query-spool
                   - id: push
                     httpCall:
                       method: POST
@@ -42,8 +40,8 @@ class HttpCallStepParsingTest {
                       headers:
                         X-Source: tesseraql
                       query:
-                        batch: job.businessDate
-                      body: step.pending.spool
+                        batch: params.businessDate
+                      body: steps.pending.spool
                       expectStatus: 201
                       requestTimeout: 20s
                   - id: mark
@@ -51,7 +49,7 @@ class HttpCallStepParsingTest {
                       file: mark-pushed.sql
                       mode: update
                       params:
-                        status: step.push.status
+                        status: steps.push.status
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -68,8 +66,8 @@ class HttpCallStepParsingTest {
         assertThat(call.url()).isEqualTo("https://api.partner.example/v1/orders");
         assertThat(call.credential()).isEqualTo("partner");
         assertThat(call.headers()).containsEntry("X-Source", "tesseraql");
-        assertThat(call.query()).containsEntry("batch", "job.businessDate");
-        assertThat(call.body()).isEqualTo("step.pending.spool");
+        assertThat(call.query()).containsEntry("batch", "params.businessDate");
+        assertThat(call.body()).isEqualTo("steps.pending.spool");
         assertThat(call.expectStatus()).isEqualTo(201);
         assertThat(call.requestTimeout()).isEqualTo("20s");
     }

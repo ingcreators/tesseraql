@@ -133,8 +133,8 @@ pipeline:
     notify:
       channel: reports
       payload:
-        rows: step.report.rows
-        transferId: step.report.transferId
+        rows: steps.report.rows
+        transferId: steps.report.transferId
 ```
 
 - **Same machinery, synchronous shape.** The step runs through the transfer service's

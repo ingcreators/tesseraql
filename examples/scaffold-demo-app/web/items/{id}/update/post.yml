@@ -43,7 +43,7 @@ validate:
     field: name
 
 steps:
-  main:
+  - id: main
     sql:
       file: update.sql
       mode: update

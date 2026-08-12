@@ -22,7 +22,7 @@ input:
   slaRunningLongerThan: { type: string, required: false }
 
 steps:
-  main:
+  - id: main
     service:
       name: studio.jobs.save
       params:

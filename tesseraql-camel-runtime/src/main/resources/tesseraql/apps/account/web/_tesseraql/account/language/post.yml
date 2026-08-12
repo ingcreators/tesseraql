@@ -14,7 +14,7 @@ input:
     maxLength: 35
 
 steps:
-  main:
+  - id: main
     service:
       name: account.language.save
       params:

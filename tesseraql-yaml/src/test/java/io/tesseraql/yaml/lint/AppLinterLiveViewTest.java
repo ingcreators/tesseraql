@@ -32,7 +32,7 @@ class AppLinterLiveViewTest {
                 recipe: command-json
                 %s
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: approve.sql
                       mode: update

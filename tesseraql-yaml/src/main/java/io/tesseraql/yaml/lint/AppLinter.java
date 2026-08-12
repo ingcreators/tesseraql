@@ -2473,13 +2473,7 @@ public final class AppLinter {
                     "Unknown route recipe '" + definition.recipe() + "'",
                     lineOf(route.source(), "recipe:"), null));
         }
-        if (definition.main() != null && definition.main().timeoutSeconds() != null
-                && definition.main().timeoutSeconds() < 0) {
-            findings.add(new LintFinding("TQL-YAML-1021", "error", source,
-                    "sql.timeoutSeconds must be >= 0 (0 disables the statement timeout)",
-                    lineOf(route.source(), "timeoutSeconds:"), null));
-        }
-        // A negative timeout on a step or named query was clamped to 0 = unlimited by the
+        // A negative timeout on a step or named source was clamped to 0 = unlimited by the
         // compiler — the inverse of the author's intent — so the guard was missing here.
         definition.steps().forEach((name, step) -> {
             if (step.timeoutSeconds() != null && step.timeoutSeconds() < 0) {
@@ -2490,7 +2484,9 @@ public final class AppLinter {
         definition.sources().forEach((name, query) -> {
             if (query.timeoutSeconds() != null && query.timeoutSeconds() < 0) {
                 findings.add(new LintFinding("TQL-YAML-1021", "error", source,
-                        "Query '" + name + "' timeoutSeconds must be >= 0"));
+                        "Source '" + name + "' timeoutSeconds must be >= 0"
+                                + " (0 disables the statement timeout)",
+                        lineOf(route.source(), "timeoutSeconds:"), null));
             }
         });
         if (definition.main() != null && !definition.main().isContract()
@@ -2775,13 +2771,10 @@ public final class AppLinter {
         }
     }
 
-    /** Every SQL file a job references: its own binding, pipeline steps, and import row SQL. */
+    /** Every SQL file a job references: its pipeline steps and the import row SQL. */
     private static List<String> jobSqlFiles(JobFile job) {
         List<String> files = new ArrayList<>();
         JobDefinition definition = job.definition();
-        if (definition.sql() != null && definition.sql().file() != null) {
-            files.add(definition.sql().file());
-        }
         if (definition.pipeline() != null) {
             definition.pipeline().forEach(step -> {
                 if (step.sql() != null && step.sql().file() != null) {
@@ -4420,43 +4413,58 @@ public final class AppLinter {
         }
         lintOverlapAndSla(job, source, findings);
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
-            int declared = 0;
-            if (step.sql() != null) {
-                declared++;
-            }
-            if (step.notification() != null) {
-                declared++;
-            }
-            if (step.httpCall() != null) {
-                declared++;
-            }
-            if (step.chunk() != null) {
-                declared++;
-            }
-            if (step.export() != null) {
-                declared++;
-            }
-            if (step.push() != null) {
-                declared++;
-            }
-            if (declared != 1) {
+            // Three axes, not one exclusive choice (docs/unified-sources.md decision 12): the
+            // binding arm reads or writes, the output blocks say what to do with the result, and
+            // chunk: processes. A step declares at least one, at most one arm, and an arm and a
+            // chunk: are two ways to say what the step's work is.
+            boolean arm = step.sql() != null && !isGuardOnly(step.sql());
+            int outputs = (step.notification() == null ? 0 : 1) + (step.export() == null ? 0 : 1)
+                    + (step.push() == null ? 0 : 1);
+            boolean processing = step.chunk() != null;
+            if (!arm && step.httpCall() == null && !processing && outputs == 0) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
-                        + step.id() + "' must declare exactly one of sql:, notify:, httpCall:,"
-                        + " chunk:, export:, or push:"));
+                        + step.id() + "' declares no work - a step needs a binding (sql:,"
+                        + " httpCall:), an output (export:, push:, notify:), or chunk:"));
                 continue;
             }
+            if (arm && step.httpCall() != null) {
+                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
+                        + step.id() + "' declares two bindings - sql: and httpCall: are both the"
+                        + " step's own work, and a step does one thing"));
+                continue;
+            }
+            if (processing && (arm || step.httpCall() != null)) {
+                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
+                        + step.id() + "' declares chunk: beside a binding - a chunk step's work"
+                        + " is its reader:/writer:, so the step has no arm of its own"));
+                continue;
+            }
+            // Each axis is linted on its own, because a step may declare one of each.
             if (step.notification() != null) {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
-            } else if (step.httpCall() != null) {
+            }
+            if (step.httpCall() != null) {
                 lintHttpCall(config, step.id(), step.httpCall(), source, findings);
-            } else if (step.chunk() != null) {
+            }
+            if (step.chunk() != null) {
                 lintChunk(job, step, source, findings);
-            } else if (step.export() != null) {
+            }
+            if (step.export() != null) {
                 lintExportStep(job, step, source, findings);
-            } else if (step.push() != null) {
+            }
+            if (step.push() != null) {
                 lintPushStep(config, step, source, findings);
             }
         }
+    }
+
+    /**
+     * Whether a step's binding carries only its {@code when:} guard — a guard is step control,
+     * not an arm, so a step spelling one without a mechanism has declared no work.
+     */
+    private static boolean isGuardOnly(io.tesseraql.yaml.model.Binding binding) {
+        return !binding.isSql() && !binding.isContract() && !binding.isService()
+                && !binding.isSequence() && !binding.isHttp();
     }
 
     /**
@@ -4549,7 +4557,7 @@ public final class AppLinter {
         }
         if (step.sql().datasource() != null) {
             findings.add(new LintFinding("TQL-YAML-1037", "error", source, "Step '" + step.id()
-                    + "': a pipeline step cannot declare datasource: — it runs on the job's"));
+                    + "': a pipeline step cannot declare datasource: - it runs on the job's"));
         }
         if (export.format() == null || export.format().isBlank()) {
             findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
@@ -4630,13 +4638,6 @@ public final class AppLinter {
                     + ")"));
         }
         chunk.enrich().forEach((name, enrich) -> {
-            // The chunk's reference is the reader's rows, not a named result the step
-            // publishes, so into: has nothing to name here.
-            if (enrich.into() != null && !enrich.into().isBlank()) {
-                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
-                        + step.id() + "': chunk enrich '" + name + "' declares into: — a chunk"
-                        + " enriches the reader's rows, which is the only result it has"));
-            }
             if (enrich.sql() == null || enrich.sql().file() == null
                     || enrich.sql().file().isBlank()) {
                 return;
@@ -5034,30 +5035,27 @@ public final class AppLinter {
     }
 
     /**
-     * Statically checks the {@code enrich:} block (docs/lookups.md): the target must be a result
-     * set the route publishes ({@code TQL-YAML-1045}), the reference must be a SQL file
-     * ({@code TQL-YAML-1046}), the join and the composition must be sayable
-     * ({@code TQL-YAML-1047}), and the reference SQL must actually bind the key set
+     * Statically checks every source's {@code enrich:} entries (docs/lookups.md): the reference
+     * must be exactly one mechanism ({@code TQL-YAML-1046}), the join and the composition must
+     * be sayable ({@code TQL-YAML-1047}), and the reference SQL must actually bind the key set
      * ({@code TQL-YAML-1048}) — a reference query that never mentions {@code keys} reads the
      * whole table once per batch and still returns the right answer, which is why only the build
      * can catch it.
+     *
+     * <p>{@code TQL-YAML-1045} retired with {@code into:}: an enrichment nests under the source
+     * it transforms (docs/unified-sources.md decision 5), so there is no back-reference left to
+     * point at a result the document does not publish.
      */
     private void lintEnrich(AppConfig config, Path file, RouteDefinition definition,
             String source, List<LintFinding> findings) {
-        definition.enrich().forEach((name, spec) -> {
-            String into = spec.effectiveInto();
-            // An export's extraction is its own `sql:` under export:, not the route's — and it
-            // is the only result an export publishes rows for (docs/lookups.md, slice 13b).
-            boolean exportsRows = definition.fileExport() != null;
-            boolean targetExists = RouteDefinition.MAIN.equals(into)
-                    ? definition.main() != null || exportsRows
-                    : definition.sources().containsKey(into);
-            if (!targetExists) {
-                findings.add(new LintFinding("TQL-YAML-1045", "error", source,
-                        "enrich '" + name + "': into: '" + into + "' is neither the route's"
-                                + " sql: result nor one of its queries:",
-                        lineOf(file, "enrich:"), null));
-            }
+        definition.sources().forEach((sourceName, binding) -> binding.enrich()
+                .forEach((name, spec) -> lintEnrichEntry(config, file, sourceName, name, spec,
+                        source, findings)));
+    }
+
+    private void lintEnrichEntry(AppConfig config, Path file, String sourceName, String name,
+            io.tesseraql.yaml.model.EnrichSpec spec, String source, List<LintFinding> findings) {
+        {
             boolean hasSql = spec.sql() != null && spec.sql().file() != null
                     && !spec.sql().file().isBlank();
             boolean hasHttp = spec.http() != null && spec.http().url() != null
@@ -5101,7 +5099,7 @@ public final class AppLinter {
                 lintHttpCall(config, "enrich '" + name + "'", spec.http().call(), source,
                         findings);
             }
-        });
+        }
     }
 
     /**
@@ -5660,10 +5658,7 @@ public final class AppLinter {
                 + " they would run to be discarded"));
     }
 
-    /**
-     * The file an export extracts from: {@code query-export} reads the route's own {@code sql:},
-     * while {@code file-export} carries its query inside the {@code export:} block.
-     */
+    /** The file an export extracts from: the document's {@code main} source, on every recipe. */
     private static java.nio.file.Path extractionSqlFile(RouteFile route,
             RouteDefinition definition) {
         // One home: the rows an export writes are the document's main source, on every recipe

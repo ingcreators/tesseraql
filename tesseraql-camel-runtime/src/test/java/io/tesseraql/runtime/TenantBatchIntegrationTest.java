@@ -130,10 +130,10 @@ class TenantBatchIntegrationTest {
                 version: tesseraql/v1
                 id: items.seed
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 perTenant: true
-                sources:
-                  main:
+                pipeline:
+                  - id: main
                     sql:
                       file: seed.sql
                       mode: update

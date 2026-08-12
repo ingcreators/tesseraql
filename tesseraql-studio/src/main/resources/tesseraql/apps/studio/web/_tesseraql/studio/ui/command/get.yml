@@ -18,4 +18,4 @@ response:
     status: 200
     template: command.html
     model:
-      cmd: sql
+      cmd: main

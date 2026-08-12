@@ -16,8 +16,10 @@ import java.util.Map;
  * @param recipe  the recipe driving compilation, e.g. {@code query-json} (design ch. 6.2)
  * @param input   declared, whitelisted inputs keyed by name
  * @param security authentication and authorization declaration
- * @param steps   ordered SQL steps of a {@code command-json} route, executed in one transaction;
- *                later steps can bind values produced by earlier ones (roadmap Phase 18)
+ * @param steps   the ordered statements of a command route, executed in one transaction; later
+ *                steps can bind values produced by earlier ones (roadmap Phase 18). Authored as
+ *                an array of id-carrying steps, the shape every ordered collection on the
+ *                surface uses (docs/unified-sources.md decision 9)
  * @param sources every named read acquisition, in authored order, each bound into the
  *                execution context under its own name so one page can compose several results;
  *                an entry names its own mechanism (docs/unified-sources.md)
@@ -54,7 +56,9 @@ public record RouteDefinition(
         IdempotencySpec idempotency,
         AdmissionSpec admission,
         OutboxSpec outbox,
-        Map<String, Binding> steps,
+        // Written as an array of id-carrying steps, held as an insertion-ordered map: the order
+        // is the syntax, the name is how everything downstream addresses a step (decision 9).
+        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = StepsDeserializer.class) Map<String, Binding> steps,
         // Every named read acquisition: one map, whatever mechanism each entry names
         // (docs/unified-sources.md). Replaced queries: plus a parallel http: map, which made
         // the map the discriminator instead of the entry's own arm.
@@ -74,9 +78,6 @@ public record RouteDefinition(
         ResponseSpec response,
         PageSpec pagination,
         String datasource,
-        // Reference lookups folded into a result set's rows, keyed by the rows themselves
-        // (docs/lookups.md).
-        Map<String, EnrichSpec> enrich,
         // Declarative HTTP caching for query responses (docs/response-shaping.md).
         CacheSpec cache,
         // Topics broadcast to live views after a successful command commit (docs/realtime.md);
@@ -107,9 +108,6 @@ public record RouteDefinition(
                         .unmodifiableMap(new java.util.LinkedHashMap<>(notifications));
         emit = emit == null ? List.of() : List.copyOf(emit);
         invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
-        enrich = enrich == null
-                ? Map.of()
-                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(enrich));
     }
 
     /**
@@ -124,8 +122,7 @@ public record RouteDefinition(
                 security, null, null, null,
                 command == null ? Map.of() : Map.of("command", command),
                 Map.of(), Map.of(), decide, Map.of(),
-                null, null, null, null, null, null, response, null, null, null, null, null,
-                null);
+                null, null, null, null, null, null, response, null, null, null, null, null);
     }
 
     /**
@@ -141,7 +138,7 @@ public record RouteDefinition(
                 idempotency, admission, outbox, steps, sources, validate, decide,
                 notifications,
                 errors, fileImport, fileExport, webhook, publish, consume, response, pagination,
-                datasource, enrich, cache, emit, invalidates);
+                datasource, cache, emit, invalidates);
     }
 
     /**
@@ -157,7 +154,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, effectiveInput, inputPolicy,
                 security, idempotency, admission, outbox, steps, sources, validate, decide,
                 notifications, effectiveErrors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, enrich, cache, emit, invalidates);
+                response, pagination, datasource, cache, emit, invalidates);
     }
 
     /**
@@ -171,7 +168,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, steps, sources, effective, decide,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, enrich, cache, emit, invalidates);
+                response, pagination, datasource, cache, emit, invalidates);
     }
 
     /**
@@ -186,7 +183,7 @@ public record RouteDefinition(
         return new RouteDefinition(version, id, kind, recipe, input, inputPolicy, security,
                 idempotency, admission, outbox, steps, sources, validate, effective,
                 notifications, errors, fileImport, fileExport, webhook, publish, consume,
-                response, pagination, datasource, enrich, cache, emit, invalidates);
+                response, pagination, datasource, cache, emit, invalidates);
     }
 
     /** The input policy, or framework defaults (reject unknown / reject read-only). */
@@ -194,8 +191,12 @@ public record RouteDefinition(
         return inputPolicy == null ? InputPolicy.defaults() : inputPolicy;
     }
 
-    /** The reserved source name every default resolves to (docs/unified-sources.md). */
-    public static final String MAIN = "main";
+    /**
+     * The reserved source name every default resolves to (docs/unified-sources.md). Held in core
+     * so the export codecs — which do not see the YAML model — name the rows they write the same
+     * way a response, a view, and a test expectation do.
+     */
+    public static final String MAIN = io.tesseraql.core.files.ExportModel.SUBJECT;
 
     /**
      * The primary source, or {@code null} when the document declares none.

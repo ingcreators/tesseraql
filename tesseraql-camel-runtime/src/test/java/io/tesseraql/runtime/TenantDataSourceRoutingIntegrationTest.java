@@ -248,7 +248,7 @@ class TenantDataSourceRoutingIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
@@ -273,7 +273,7 @@ class TenantDataSourceRoutingIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(reportDir.resolve("report.sql"),
                 "select id, name from items order by id\n");
@@ -295,7 +295,7 @@ class TenantDataSourceRoutingIntegrationTest {
                   name: { type: string, required: true, maxLength: 200 }
 
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update

@@ -58,7 +58,7 @@ class AppLifecycleCommandsTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Captured broken = executeCapturing("lint", "--app", app.toString(), "--format", "json");
         assertThat(broken.exitCode()).isOne();
@@ -149,7 +149,7 @@ class AppLifecycleCommandsTest {
                 version: tesseraql/v1
                 id: nightly.close
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule:
                     cron: "0 0 2 * * ?"

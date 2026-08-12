@@ -110,14 +110,14 @@ class JobCommandIntegrationTest {
                 version: tesseraql/v1
                 id: demo.touch
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 sql: { file: noop.sql, mode: query }
                 """);
         Files.writeString(app.resolve("batch/demo/chained.yml"), """
                 version: tesseraql/v1
                 id: demo.chained
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   after: demo.touch
                 sql: { file: noop.sql, mode: query }
@@ -126,7 +126,7 @@ class JobCommandIntegrationTest {
                 version: tesseraql/v1
                 id: demo.gated
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule:
                     cron: "0 0 2 * * ?"
@@ -167,7 +167,7 @@ class JobCommandIntegrationTest {
                 version: tesseraql/v1
                 id: demo.payday
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule:
                     cron: "0 0 8 * * ?"
@@ -179,7 +179,7 @@ class JobCommandIntegrationTest {
                 version: tesseraql/v1
                 id: demo.paydayGated
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule:
                     cron: "0 0 8 * * ?"

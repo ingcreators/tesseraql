@@ -189,7 +189,7 @@ class AppMigrationIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(route.resolve("list.sql"), "select name from items order by id\n;\n");
         Path job = home.resolve("batch/touch-items");
@@ -201,11 +201,9 @@ class AppMigrationIntegrationTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: touch
-                    sources:
-                      main:
-                        sql:
-                          file: touch.sql
-                          mode: update
+                    sql:
+                      file: touch.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("touch.sql"), "update items set name = name\n;\n");
         return home;

@@ -21,4 +21,4 @@ response:
     status: 200
     template: migrate.html
     model:
-      mig: sql
+      mig: main

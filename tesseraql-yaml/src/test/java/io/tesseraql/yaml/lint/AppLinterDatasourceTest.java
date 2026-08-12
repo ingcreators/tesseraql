@@ -87,7 +87,7 @@ class AppLinterDatasourceTest {
                   payload:
                     orderId: body.orderId
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update
@@ -135,7 +135,7 @@ class AppLinterDatasourceTest {
                 input:
                   orderId: { type: string, required: true }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: upsert.sql
                       mode: update
@@ -163,7 +163,7 @@ class AppLinterDatasourceTest {
                 input:
                   orderId: { type: string, required: true }
                 steps:
-                  insert:
+                  - id: insert
                     sql:
                       file: insert.sql
                       mode: update

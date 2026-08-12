@@ -49,6 +49,10 @@ import java.util.Map;
  *                 bindings — a step inside a transactional pipeline cannot pick its own connector
  *                 ({@code TQL-YAML-1037}), because the pipeline is one transaction on one
  *                 connection
+ * @param enrich   keyed references folded into this binding's rows before anything reads them
+ *                 (docs/lookups.md), keyed by enrichment name and applied in authored order —
+ *                 declared here rather than named by a back-reference, so any arm's rows can
+ *                 be enriched (docs/unified-sources.md decision 5)
  * @param when     optional guard expression on a command step (docs/decision-tables.md "Acting
  *                 on the result"): a falsy guard skips the step, which records
  *                 {@code steps.<name>.skipped} instead of a result — the declared branch point
@@ -58,19 +62,32 @@ import java.util.Map;
 public record Binding(String file, String contract, String mode, Map<String, String> params,
         String service, HttpSourceSpec http, Materialize materialize, String sequence,
         java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
-        String when) {
+        String when, Map<String, EnrichSpec> enrich) {
 
     public Binding {
         params = params == null ? Map.of() : Map.copyOf(params);
         keys = keys == null ? java.util.List.of() : java.util.List.copyOf(keys);
+        enrich = enrich == null
+                ? Map.of()
+                : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(enrich));
+    }
+
+    /** The shape before an enrichment could nest under the source it transforms. */
+    public Binding(String file, String contract, String mode, Map<String, String> params,
+            String service, HttpSourceSpec http, Materialize materialize, String sequence,
+            java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
+            String when) {
+        this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
+                timeoutSeconds, datasource, when, null);
     }
 
     /**
      * The authoring form: one arm key whose value carries that mechanism's keys.
      *
-     * <p>{@code sequence} and the step-level {@code when:} sit beside the arm rather than
-     * inside one — a guard is about whether the step runs at all, which is not a question for
-     * the mechanism, and a sequence allocation has no body beyond its name.
+     * <p>{@code sequence}, the step-level {@code when:} and {@code enrich:} sit beside the arm
+     * rather than inside one — a guard is about whether the step runs at all, an enrichment is
+     * about the rows whatever fetched them, and a sequence allocation has no body beyond its
+     * name. None of the three is a question for the mechanism.
      */
     @com.fasterxml.jackson.annotation.JsonCreator
     static Binding of(
@@ -79,7 +96,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             @com.fasterxml.jackson.annotation.JsonProperty("service") NamedCall service,
             @com.fasterxml.jackson.annotation.JsonProperty("http") HttpSourceSpec http,
             @com.fasterxml.jackson.annotation.JsonProperty("sequence") String sequence,
-            @com.fasterxml.jackson.annotation.JsonProperty("when") String when) {
+            @com.fasterxml.jackson.annotation.JsonProperty("when") String when,
+            @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich) {
         NamedCall call = contract != null ? contract : service;
         return new Binding(
                 sql == null ? null : sql.file(),
@@ -94,7 +112,8 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 sql != null ? sql.expect() : (call == null ? null : call.expect()),
                 sql == null ? null : sql.timeoutSeconds(),
                 sql == null ? null : sql.datasource(),
-                when);
+                when,
+                enrich);
     }
 
     /**
@@ -106,6 +125,16 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     public record SqlArm(String file, String mode, Map<String, String> params,
             Materialize materialize, java.util.List<String> keys, Expect expect,
             Integer timeoutSeconds, String datasource) {
+
+        /** A plain SQL file arm. */
+        public static SqlArm of(String file) {
+            return of(file, null, null);
+        }
+
+        /** A SQL file arm in a declared mode, with its binds. */
+        public static SqlArm of(String file, String mode, Map<String, String> params) {
+            return new SqlArm(file, mode, params, null, null, null, null, null);
+        }
     }
 
     /**

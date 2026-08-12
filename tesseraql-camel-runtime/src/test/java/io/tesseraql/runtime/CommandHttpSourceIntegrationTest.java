@@ -156,7 +156,7 @@ class CommandHttpSourceIntegrationTest {
                 input:
                   partnerCode: { type: string, required: true }
                 steps:
-                  header:
+                  - id: header
                     sql:
                       file: insert.sql
                       params:

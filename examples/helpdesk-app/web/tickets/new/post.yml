@@ -20,7 +20,7 @@ notify:
       priority: body.priority
 
 steps:
-  main:
+  - id: main
     sql:
       file: create.sql
       mode: update

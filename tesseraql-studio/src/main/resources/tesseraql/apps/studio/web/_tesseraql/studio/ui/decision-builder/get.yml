@@ -13,4 +13,4 @@ response:
     status: 200
     template: decision-builder.html
     model:
-      db: sql
+      db: main

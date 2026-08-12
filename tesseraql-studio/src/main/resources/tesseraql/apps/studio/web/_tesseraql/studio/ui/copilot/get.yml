@@ -15,4 +15,4 @@ response:
     status: 200
     template: copilot.html
     model:
-      chat: sql
+      chat: main

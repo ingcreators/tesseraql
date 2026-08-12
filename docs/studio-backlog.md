@@ -29,7 +29,7 @@ Studio editor + docs work (2026-06):
   sandboxed `iframe` visual preview styled with the hc stylesheet. Two shapes render:
   - a **template file** (`.html`/`.tpl`) against the sample as its template variables;
   - a **web route** (`web/**/<method>.yml`) against the sample as the execution context (`params`,
-    `sql.rows`, …): `query-html`/`page` resolves `response.html.model` and renders the route's
+    `main.rows`, …): `query-html`/`page` resolves `response.html.model` and renders the route's
     template, `query-json` resolves `response.json.body`, applies its `response.json.fields`
     output-field masking, and pretty-prints it.
 
@@ -53,7 +53,7 @@ Studio editor + docs work (2026-06):
   endpoint, and the `/_tesseraql/studio/ui/run-tests` editor fragment.
 - **Live data in the rendered preview (A1 "real bound params" × A2 sandbox)** — the route render
   panel gains a **Use live data** toggle (when the test runner is enabled): instead of a
-  hand-authored `sql.rows` fixture, it runs the route's main `sql` query through the same
+  hand-authored `main.rows` fixture, it runs the route's main `sql` query through the same
   `SandboxDataSource` (bind params resolved from the sample's `params`/`query`) and injects the real
   `rows`/`rowCount`, so editing a route previews the actual page/JSON over live dev data.
   `StudioService.RowSource` (a DB-free callback the runtime fills with `StudioTestService.liveRows`);
@@ -116,7 +116,7 @@ and is being adopted (see E below).
    visual `iframe` for HTML — the "Studio as the center of the edit loop" gate (decision point 4) is
    met. Optional follow-ups, not blockers (pick up opportunistically):
    - **PDF preview** — *done*: a `query-export` `format: pdf` route renders an actual PDF in the
-     preview panel — its print template is converted to PDF from the sample's `sql.rows` and shown in
+     preview panel — its print template is converted to PDF from the sample's `main.rows` and shown in
      an `<iframe>` (`data:` URL) with a download link. Reuses the canonical PDF codec; Studio stays
      free of the heavy optional `tesseraql-pdf` stack via a `StudioService.PdfRender` callback the
      runtime fills (degrades to a clear message when the module is absent). Source/render CSP gains
@@ -131,7 +131,7 @@ and is being adopted (see E below).
    routes, live data, JSON field-masking, and PDF export preview).
 
    The "render against **real** bound params" end — executing the route's SQL through the A2
-   sandbox to populate live rows instead of a hand-authored `sql.rows` fixture — is **done** (the
+   sandbox to populate live rows instead of a hand-authored `main.rows` fixture — is **done** (the
    render panel's **Use live data** toggle; see Shipped). (Email/notification `.html` templates
    already preview via the template-file path: supply `payload`/`event` as the sample.)
 2. **Run a route's or job's declarative suite from Studio** — *done* (see Shipped): a **Run tests**

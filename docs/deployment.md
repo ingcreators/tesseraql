@@ -176,7 +176,7 @@ emits one line per request on the `tesseraql.access` logger —
 ## Safety valves and multi-node semantics
 
 **SQL statement timeout.** Every route SQL statement is bounded by default: 30 seconds, the
-app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `sql.timeoutSeconds` override —
+app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `timeoutSeconds:` override —
 an explicit `0` opts a deliberately long-running statement out. A runaway query is cancelled
 by the driver instead of holding a pool connection forever.
 

@@ -20,7 +20,7 @@
       <tr><th th:each="column : ${columns}" th:text="${column.header}">header</th></tr>
     </thead>
     <tbody>
-      <tr th:each="row : ${sql.rows}">
+      <tr th:each="row : ${main.rows}">
         <td th:each="column : ${columns}" th:text="${row[column.name]}">value</td>
       </tr>
     </tbody>

@@ -45,6 +45,9 @@ public final class JxlsFileCodec implements FileCodec {
     /** TQL-LD-2852: placement data reached template content below the data area. */
     private static final TqlErrorCode PLACEMENT_COLLISION = new TqlErrorCode(TqlDomain.LD, 2852);
 
+    /** The name the rows a codec writes answer to — a document's primary source. */
+    private static final String SUBJECT = io.tesseraql.core.files.ExportModel.SUBJECT;
+
     @Override
     public String format() {
         return "excel";
@@ -333,9 +336,11 @@ public final class JxlsFileCodec implements FileCodec {
     private static void writeWithJxlsTemplate(OutputStream out, FileWriteSpec spec,
             io.tesseraql.core.files.ExportModel model) throws IOException {
         // jxls adds its loop variables to the context, so the map must be mutable. The export's
-        // other declared sources go in under their own names (docs/export-pipeline.md, dec. 2).
+        // other declared sources go in under their own names (docs/export-pipeline.md, dec. 2),
+        // and the rows the codec writes are the document's `main` source, addressed by the one
+        // envelope every surface uses (docs/unified-sources.md decision 10).
         Map<String, Object> context = new LinkedHashMap<>(model.values());
-        context.put("sql", model.subject());
+        context.put(SUBJECT, model.subject());
         org.jxls.builder.JxlsStreaming streaming = org.jxls.builder.JxlsStreaming.STREAMING_ON;
         if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
             // Grouping is the framework's, not the template's: jxls's own groupBy materializes

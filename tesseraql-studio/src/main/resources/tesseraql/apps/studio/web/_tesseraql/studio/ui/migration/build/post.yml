@@ -59,4 +59,4 @@ response:
     status: 200
     template: build.html
     model:
-      build: sql
+      build: main

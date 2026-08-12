@@ -14,14 +14,13 @@ input:
     required: true
 
 steps:
-  main:
-    sql:
-      service:
-        name: ops.outboxRedeliver
-        params:
-          id: params.id
-          # Narrows to the caller's ops.app.<name> grants (deny by default).
-          permissions: principal.permissions
+  - id: main
+    service:
+      name: ops.outboxRedeliver
+      params:
+        id: params.id
+        # Narrows to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
 response:
   redirect:
     status: 303

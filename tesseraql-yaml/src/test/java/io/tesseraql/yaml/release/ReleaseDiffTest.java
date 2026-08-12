@@ -50,7 +50,7 @@ class ReleaseDiffTest {
                     body:
                       data: main.rows
                       %s
-                """.formatted(candidate ? "extra: sql.rowCount" : ""));
+                """.formatted(candidate ? "extra: main.rowCount" : ""));
 
         if (!candidate) {
             // A route only the baseline serves -> REMOVED in the diff.

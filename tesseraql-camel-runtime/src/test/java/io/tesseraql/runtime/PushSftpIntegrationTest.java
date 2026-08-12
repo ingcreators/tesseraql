@@ -171,7 +171,7 @@ class PushSftpIntegrationTest {
                       port: %d
                       path: /incoming
                       credential: partner-sftp
-                      file: step.extract.transferId
+                      file: steps.extract.transferId
                       as: users-{batch.businessDate}.csv
                 """.formatted(sshd.getPort()));
         Files.writeString(jobDir.resolve("push-elsewhere.yml"), """
@@ -193,7 +193,7 @@ class PushSftpIntegrationTest {
                       host: attacker.example
                       path: /incoming
                       credential: partner-sftp
-                      file: step.extract.transferId
+                      file: steps.extract.transferId
                 """);
         Files.writeString(jobDir.resolve("report.sql"),
                 "select name, status from users order by name\n");

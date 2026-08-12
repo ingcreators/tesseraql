@@ -35,7 +35,7 @@ Two of these are worse than merely dead, because the surface promises them:
   `body.memberIds` rather than `params.memberIds`, so it never touches the coercion path that would
   have failed it.
 - **`jobs: params:` is documented and shipped.** [jobs.md](jobs.md) promises that declared `params:`
-  document the expected names and types, and `examples/user-admin-app/batch/directory-sync/job.yml`
+  document the expected names and types, and `examples/user-admin-app/batch/directory-sync/params.yml`
   ships a `params:` block that is parsed and discarded. A `required: true` there is silently
   unenforced.
 

@@ -8,15 +8,14 @@ security:
 
 sources:
   main:
-    sql:
-      service:
-        name: ops.jobs
-        params:
-          # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-          permissions: principal.permissions
+    service:
+      name: ops.jobs
+      params:
+        # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
 response:
   html:
     status: 200
     template: jobs.html
     model:
-      jobs: sql
+      jobs: main

@@ -17,7 +17,7 @@ input:
     required: false
 
 steps:
-  main:
+  - id: main
     service:
       name: account.notify.save
       params:

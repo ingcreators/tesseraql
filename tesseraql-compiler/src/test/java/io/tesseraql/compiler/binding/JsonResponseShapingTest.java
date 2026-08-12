@@ -28,10 +28,10 @@ class JsonResponseShapingTest {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200, Map.of(
                 "total", "params.qty * params.price",
                 "label", "upper(params.name)",
-                "rows", "sql.rows"), null, null, null);
+                "rows", "main.rows"), null, null, null);
         Exchange exchange = render(response, Map.of(
                 "params", Map.of("qty", 3, "price", 4, "name", "sato"),
-                "sql", Map.of("rows", List.of(Map.of("id", 1)))));
+                "main", Map.of("rows", List.of(Map.of("id", 1)))));
         String json = exchange.getMessage().getBody(String.class);
         assertThat(json).contains("\"total\":12").contains("\"label\":\"SATO\"")
                 .contains("\"rows\":[{\"id\":1}]");
@@ -50,11 +50,11 @@ class JsonResponseShapingTest {
     @Test
     void nestGroupsChildRowsUnderTheirParents() throws Exception {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,
-                Map.of("orders", "sql.rows"), null, null,
+                Map.of("orders", "main.rows"), null, null,
                 List.of(new ResponseSpec.NestSpec("orders", "lines", "lines", null,
                         Map.of("id", "order_id"))));
         Exchange exchange = render(response, Map.of(
-                "sql", Map.of("rows", List.of(row("id", 1), row("id", 2))),
+                "main", Map.of("rows", List.of(row("id", 1), row("id", 2))),
                 "lines", Map.of("rows", List.of(
                         row("order_id", 1, "sku", "A"),
                         row("order_id", 1, "sku", "B"),
@@ -68,11 +68,11 @@ class JsonResponseShapingTest {
     @Test
     void mergeCopiesTheMatchingRowsColumnsOntoEachParent() throws Exception {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,
-                Map.of("orders", "sql.rows"), null, null,
+                Map.of("orders", "main.rows"), null, null,
                 List.of(new ResponseSpec.NestSpec("orders", "partners", null,
                         List.of("partner_name"), Map.of("partner_code", "code"))));
         Exchange exchange = render(response, Map.of(
-                "sql", Map.of("rows", List.of(
+                "main", Map.of("rows", List.of(
                         row("id", 1, "partner_code", "P1"),
                         row("id", 2, "partner_code", "P9"))),
                 "partners", Map.of("rows", List.of(
@@ -87,12 +87,12 @@ class JsonResponseShapingTest {
     @Test
     void aCompositeOnJoinsOnEveryKeyColumn() throws Exception {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,
-                Map.of("orders", "sql.rows"), null, null,
+                Map.of("orders", "main.rows"), null, null,
                 List.of(new ResponseSpec.NestSpec("orders", "partners", null,
                         List.of("partner_name"),
                         Map.of("buyer_code", "buyer", "supplier_code", "supplier"))));
         Exchange exchange = render(response, Map.of(
-                "sql", Map.of("rows", List.of(
+                "main", Map.of("rows", List.of(
                         row("buyer_code", "B1", "supplier_code", "S1"),
                         row("buyer_code", "B1", "supplier_code", "S2"))),
                 "partners", Map.of("rows", List.of(
@@ -107,11 +107,11 @@ class JsonResponseShapingTest {
     @Test
     void keysCompareCanonicallyAcrossDriverTypes() throws Exception {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,
-                Map.of("orders", "sql.rows"), null, null,
+                Map.of("orders", "main.rows"), null, null,
                 List.of(new ResponseSpec.NestSpec("orders", "partners", null,
                         List.of("partner_name"), Map.of("id", "id"))));
         Exchange exchange = render(response, Map.of(
-                "sql", Map.of("rows", List.of(row("id", 1))),
+                "main", Map.of("rows", List.of(row("id", 1))),
                 "partners", Map.of("rows", List.of(row("id", 1L, "partner_name", "Acme")))));
         assertThat(exchange.getMessage().getBody(String.class))
                 .contains("\"partner_name\":\"Acme\"");
@@ -120,11 +120,11 @@ class JsonResponseShapingTest {
     @Test
     void aMergeMatchingSeveralRowsFailsRatherThanPickingOne() {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,
-                Map.of("orders", "sql.rows"), null, null,
+                Map.of("orders", "main.rows"), null, null,
                 List.of(new ResponseSpec.NestSpec("orders", "partners", null,
                         List.of("partner_name"), Map.of("partner_code", "code"))));
         Map<String, Object> context = Map.of(
-                "sql", Map.of("rows", List.of(row("partner_code", "P1"))),
+                "main", Map.of("rows", List.of(row("partner_code", "P1"))),
                 "partners", Map.of("rows", List.of(
                         row("code", "P1", "partner_name", "one"),
                         row("code", "P1", "partner_name", "two"))));
@@ -145,12 +145,12 @@ class JsonResponseShapingTest {
     @Test
     void statusWhenMapsBusinessConditionsToStatuses() throws Exception {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,
-                Map.of("data", "sql.rows"), null,
-                List.of(new ResponseSpec.StatusWhen("sql.rowCount == 0", 404)), null);
-        Exchange missing = render(response, Map.of("sql", Map.of("rows", List.of(),
+                Map.of("data", "main.rows"), null,
+                List.of(new ResponseSpec.StatusWhen("main.rowCount == 0", 404)), null);
+        Exchange missing = render(response, Map.of("main", Map.of("rows", List.of(),
                 "rowCount", 0)));
         assertThat(missing.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(404);
-        Exchange found = render(response, Map.of("sql", Map.of("rows",
+        Exchange found = render(response, Map.of("main", Map.of("rows",
                 List.of(Map.of("id", 1)), "rowCount", 1)));
         assertThat(found.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE)).isEqualTo(200);
     }

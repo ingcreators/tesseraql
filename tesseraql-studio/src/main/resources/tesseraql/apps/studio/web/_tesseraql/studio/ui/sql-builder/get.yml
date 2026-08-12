@@ -14,4 +14,4 @@ response:
     status: 200
     template: sql-builder.html
     model:
-      b: sql
+      b: main

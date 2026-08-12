@@ -203,7 +203,7 @@ class ExportDataSourcesIntegrationTest {
                   <h1 th:text="${customer.first.customer}">Customer</h1>
                   <p th:text="${company.first.issuer}">Issuer</p>
                   <table>
-                    <tr th:each="row : ${sql.rows}">
+                    <tr th:each="row : ${main.rows}">
                       <td th:text="${row.item}">item</td>
                     </tr>
                   </table>
@@ -219,7 +219,7 @@ class ExportDataSourcesIntegrationTest {
                   <h1 th:text="'Order ' + ${header.first.order_no}">Order</h1>
                   <p th:text="${header.first.customer}">Customer</p>
                   <table>
-                    <tr th:each="row : ${sql.rows}">
+                    <tr th:each="row : ${main.rows}">
                       <td th:text="${row.item}">item</td>
                       <td th:text="${row.qty}">qty</td>
                     </tr>

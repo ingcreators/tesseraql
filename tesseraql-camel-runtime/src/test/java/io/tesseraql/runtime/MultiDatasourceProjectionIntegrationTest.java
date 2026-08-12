@@ -245,7 +245,7 @@ class MultiDatasourceProjectionIntegrationTest {
                   total:
                     type: number
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert-order.sql
                       mode: update
@@ -281,7 +281,7 @@ class MultiDatasourceProjectionIntegrationTest {
                   total:
                     type: number
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: upsert-order.sql
                       mode: update
@@ -323,7 +323,7 @@ class MultiDatasourceProjectionIntegrationTest {
                   total:
                     type: number
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: project-order.sql
                       mode: update

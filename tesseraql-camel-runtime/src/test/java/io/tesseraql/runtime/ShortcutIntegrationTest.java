@@ -234,7 +234,7 @@ class ShortcutIntegrationTest {
                     status: 200
                     template: home.html
                     model:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.writeString(home.resolve("home.sql"), "select 1 as x\n");
         // A detail view (Phase 39) - the recents trigger (slice 2).

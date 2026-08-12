@@ -102,7 +102,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
 
     /**
      * A JSON response. {@code body} is a free-form tree (maps, lists, scalars) whose leaf strings
-     * are source expressions such as {@code sql.rows}, {@code sql.rowCount}, or {@code params.limit}
+     * are source expressions such as {@code main.rows}, {@code main.rowCount}, or {@code params.limit}
      * resolved by the response renderer against the execution context.
      *
      * @param status HTTP status code, defaulting to 200
@@ -193,7 +193,7 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *                 {@code views['<id>']}, so a hand-owned template inserts
      *                 {@code ~{tql/view/list :: view(${views['items']})}} — the ladder's
      *                 round-trip; illegal alongside {@code view:}
-     * @param model    template model: each value is a source expression (e.g. {@code sql.rows})
+     * @param model    template model: each value is a source expression (e.g. {@code main.rows})
      * @param headers  response headers; nested map values (e.g. {@code HX-Trigger}) are serialized
      *                 to JSON, and {@code {expression}} placeholders in values are resolved against
      *                 the execution context (like the redirect location), so a header can carry

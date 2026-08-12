@@ -18,15 +18,14 @@ input:
 
 sources:
   main:
-    sql:
-      service:
-        name: iam.sessions
-        params:
-          q: params.q
+    service:
+      name: iam.sessions
+      params:
+        q: params.q
 response:
   html:
     status: 200
     template: sessions.html
     model:
-      sessions: sql
+      sessions: main
       signedout: params.signedout

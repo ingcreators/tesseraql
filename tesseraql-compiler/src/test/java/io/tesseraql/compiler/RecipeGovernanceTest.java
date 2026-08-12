@@ -165,7 +165,7 @@ class RecipeGovernanceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(policy), "list.sql");
 
         route(dir, "web/items/create", "post.yml", """
@@ -177,7 +177,7 @@ class RecipeGovernanceTest {
                   auth: public
                 %s
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update
@@ -252,7 +252,8 @@ class RecipeGovernanceTest {
                   format: csv
                 sources:
                   main:
-                  file: list.sql
+                    sql:
+                      file: list.sql
                 """.formatted(policy), "list.sql");
 
         route(dir, "consume/items", "consumed.yml", """
@@ -267,7 +268,7 @@ class RecipeGovernanceTest {
                 input:
                   name: { type: string }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update
@@ -290,7 +291,7 @@ class RecipeGovernanceTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(policy), "list.sql");
 
         route(dir, "mcp", "write.yml", """
@@ -305,7 +306,7 @@ class RecipeGovernanceTest {
                 input:
                   name: { type: string }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update

@@ -21,35 +21,30 @@ input:
 
 sources:
   main:
-    sql:
-      contract:
-        name: identity.find-user-by-id
-        params:
-          userId: path.id
+    contract:
+      name: identity.find-user-by-id
+      params:
+        userId: path.id
   roles:
-    sql:
-      contract:
-        name: identity.find-roles-by-user-id
-        params:
-          userId: path.id
+    contract:
+      name: identity.find-roles-by-user-id
+      params:
+        userId: path.id
   groups:
-    sql:
-      contract:
-        name: identity.find-groups-by-user-id
-        params:
-          userId: path.id
+    contract:
+      name: identity.find-groups-by-user-id
+      params:
+        userId: path.id
   permissions:
-    sql:
-      contract:
-        name: identity.find-permissions-by-user-id
-        params:
-          userId: path.id
+    contract:
+      name: identity.find-permissions-by-user-id
+      params:
+        userId: path.id
   sessions:
-    sql:
-      service:
-        name: iam.userSessions
-        params:
-          userId: path.id
+    service:
+      name: iam.userSessions
+      params:
+        userId: path.id
 response:
   html:
     status: 200

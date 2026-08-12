@@ -19,4 +19,4 @@ response:
     status: 200
     template: route.html
     model:
-      doc: sql
+      doc: main

@@ -23,7 +23,7 @@ import org.apache.camel.Processor;
  * {@code tesseraqlJsonResponseRenderer}).
  *
  * <p>The response body template is walked recursively; leaf strings are treated as context
- * expressions (for example {@code sql.rows}, {@code params.limit}) resolved against the execution
+ * expressions (for example {@code main.rows}, {@code params.limit}) resolved against the execution
  * context, then the resulting tree is serialized to JSON.
  */
 public final class JsonResponseRenderer implements Processor {

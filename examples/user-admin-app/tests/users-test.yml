@@ -99,10 +99,9 @@ tests:
             - status: INACTIVE
 
   - name: admin user resolves the USER_READ role
-    contract:
-      name: identity.find-roles-by-user-id
-      params:
-        userId: u1
+    contract: identity.find-roles-by-user-id
+    params:
+      userId: u1
     expect:
       rows:
         - role_code: USER_READ

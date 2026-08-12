@@ -19,5 +19,5 @@ response:
     status: 200
     template: release-diff.html
     model:
-      docs: sql
+      docs: main
       captured: params.captured

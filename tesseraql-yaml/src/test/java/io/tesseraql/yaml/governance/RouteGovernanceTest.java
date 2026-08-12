@@ -58,7 +58,7 @@ class RouteGovernanceTest {
             kind: route
             recipe: command-json
             steps:
-              main:
+              - id: main
                 sql:
                   file: deactivate.sql
                   mode: update

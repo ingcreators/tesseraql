@@ -452,7 +452,7 @@ public final class StudioService {
      *       read as the template's top-level variables;</li>
      *   <li>a <b>web route</b> ({@code web/**}/{@code <method>.yml}) renders its {@code response}
      *       against {@code sampleModel} read as the execution context (e.g. {@code params},
-     *       {@code sql.rows}): a {@code query-html}/{@code page} route resolves
+     *       {@code main.rows}): a {@code query-html}/{@code page} route resolves
      *       {@code response.html.model} and renders the route's template, a {@code query-json} route
      *       resolves {@code response.json.body} and pretty-prints it.</li>
      * </ul>
@@ -616,7 +616,7 @@ public final class StudioService {
 
     /**
      * Renders a {@code query-export} {@code format: pdf} route to a {@code data:} URL preview (Studio
-     * backlog A1 follow-up): the sample's {@code sql.rows} feed the route's PDF, produced by the
+     * backlog A1 follow-up): the sample's {@code main.rows} feed the route's PDF, produced by the
      * runtime-provided {@link PdfRender} over the canonical PDF codec. Degrades to a clear message
      * when no PDF renderer/codec is available (the optional {@code tesseraql-pdf} module is absent).
      */
@@ -640,11 +640,11 @@ public final class StudioService {
                 + java.util.Base64.getEncoder().encodeToString(pdf));
     }
 
-    /** The sample's {@code sql.rows} as the export route's query rows, or empty. */
+    /** The sample's {@code main.rows} as the export route's query rows, or empty. */
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> sampleRows(Map<String, Object> context) {
-        if (context.get("sql") instanceof Map<?, ?> sql
-                && sql.get("rows") instanceof List<?> rows) {
+        if (context.get(io.tesseraql.yaml.model.RouteDefinition.MAIN) instanceof Map<?, ?> main
+                && main.get("rows") instanceof List<?> rows) {
             return (List<Map<String, Object>>) (List<?>) rows;
         }
         return List.of();
@@ -754,7 +754,7 @@ public final class StudioService {
      * (e.g. {@code .../table.html} → {@code .../table.sample.yml}, {@code .../get.yml} →
      * {@code .../get.sample.yml}), or null when the file is not renderable or no fixture exists. The
      * fixture is a YAML map: the template's variables for a template, or the execution context
-     * ({@code params}, {@code sql.rows}, …) for a route. The manifest loader ignores it (only
+     * ({@code params}, {@code main.rows}, …) for a route. The manifest loader ignores it (only
      * HTTP-method {@code *.yml} files under {@code web/} are routes), so it lives beside its file.
      */
     public String sampleModel(String relativePath) {
@@ -2534,7 +2534,7 @@ public final class StudioService {
                             status: 200
                             template: page.html
                             model:
-                              rows: sql.rows
+                              rows: main.rows
                             headers:
                               Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
                               X-Content-Type-Options: nosniff
@@ -2578,7 +2578,7 @@ public final class StudioService {
                       json:
                         status: 200
                         body:
-                          data: sql.rows
+                          data: main.rows
                     """.formatted(id);
         };
     }

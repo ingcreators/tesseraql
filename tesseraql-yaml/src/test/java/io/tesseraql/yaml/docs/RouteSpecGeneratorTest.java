@@ -66,7 +66,7 @@ class RouteSpecGeneratorTest {
         RouteSpec search = route("items.search");
 
         assertThat(search.sql()).singleElement().satisfies(statement -> {
-            assertThat(statement.label()).isEqualTo("sql");
+            assertThat(statement.label()).isEqualTo("source:main");
             assertThat(statement.file()).isEqualTo("search.sql");
             assertThat(statement.contract()).isNull();
             assertThat(statement.mode()).isEqualTo("query");

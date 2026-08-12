@@ -21,7 +21,7 @@ idempotency:
   ttl: 24h
 
 steps:
-  main:
+  - id: main
     sql:
       file: deactivate.sql
       mode: update

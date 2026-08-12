@@ -152,7 +152,7 @@ class MultiDatasourceReadIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(summaryRoute.resolve("summary.sql"),
                 "select region from turnover order by id\n;\n");
@@ -169,7 +169,6 @@ class MultiDatasourceReadIntegrationTest {
                     sql:
                       file: open.sql
                       mode: query
-                queries:
                   turnover:
                     sql:
                       file: turnover.sql
@@ -178,7 +177,7 @@ class MultiDatasourceReadIntegrationTest {
                 response:
                   json:
                     body:
-                      open: sql.rows
+                      open: main.rows
                       turnover: turnover.rows
                 """);
         Files.writeString(dashboardRoute.resolve("open.sql"),

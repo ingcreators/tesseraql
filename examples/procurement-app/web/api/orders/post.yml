@@ -29,13 +29,13 @@ validate:
 # One transaction: the order header captures the selection facts (total, lowest?,
 # % above lowest) from the submitted quotes, then the lines copy from the quote.
 steps:
-  order:
+  - id: order
     sql:
       file: create-order.sql
       params:
         quoteId: params.quoteId
         reason: params.reason
-  lines:
+  - id: lines
     sql:
       file: copy-order-lines.sql
       params:

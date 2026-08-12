@@ -187,7 +187,7 @@ class DuckDbDatasetIntegrationTest {
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(route.resolve("report.sql"), """
                 select count(*) as n

@@ -140,7 +140,6 @@ final class StudioTestService {
         Path jobDir = job.source().getParent();
         Set<Path> sqlFiles = new LinkedHashSet<>();
         Set<String> contracts = new LinkedHashSet<>();
-        bindings(job.definition().sql(), jobDir, sqlFiles, contracts);
         for (PipelineStep step : job.definition().effectiveSteps()) {
             bindings(step.sql(), jobDir, sqlFiles, contracts);
         }

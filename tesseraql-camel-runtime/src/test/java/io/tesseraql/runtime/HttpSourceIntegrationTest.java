@@ -211,7 +211,7 @@ class HttpSourceIntegrationTest {
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                       fx: rates.rows
                       base: meta.body.base
                 """.formatted(upstreamPort, upstreamPort));
@@ -232,7 +232,7 @@ class HttpSourceIntegrationTest {
                     http:
                       method: POST
                       url: http://localhost:%d/v1/search
-                      body: sql.rows
+                      body: main.rows
                       select: matches
                 response:
                   json:
@@ -263,7 +263,7 @@ class HttpSourceIntegrationTest {
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                       fx: fx.rows
                 """);
         return target;

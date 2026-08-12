@@ -32,7 +32,7 @@ response:
     status: 200
     template: invite.html
     model:
-      methods: sql
+      methods: main
       token: params.token
       invalid: params.invalid
       error: params.error

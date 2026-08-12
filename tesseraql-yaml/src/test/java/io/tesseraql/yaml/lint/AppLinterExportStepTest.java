@@ -9,13 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Lints around the export step (docs/analytics-experience.md track 3): the extraction query
- * and format are required, the step runs on the job's datasource, and the download-timed
- * follow-up stays route vocabulary.
+ * Lints around the export step (docs/analytics-experience.md track 3): the rows the step writes
+ * come from the step's own arm, the format is required, the step runs on the job's datasource,
+ * and the download-timed follow-up stays route vocabulary.
  */
 class AppLinterExportStepTest {
 
-    private Path app(@TempDir Path dir, String exportBody) throws Exception {
+    private static final String EXTRACTION = "    sql:\n      file: report.sql\n      mode: query\n";
+
+    private Path app(@TempDir Path dir, String stepBody) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
         Files.createDirectories(dir.resolve("batch/report"));
@@ -26,9 +28,8 @@ class AppLinterExportStepTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: report
-                    export:
                 %s
-                """.formatted(exportBody));
+                """.formatted(stepBody));
         Files.writeString(dir.resolve("batch/report/report.sql"),
                 "select name from users order by name\n");
         return dir;
@@ -37,7 +38,7 @@ class AppLinterExportStepTest {
     @Test
     void aWellFormedExportStepIsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      format: csv\n      sql:\n        file: report.sql\n        mode: query"));
+                EXTRACTION + "    export:\n      format: csv"));
 
         assertThat(findings).noneMatch(finding -> "TQL-YAML-1041".equals(finding.code())
                 || "TQL-FIELD-2004".equals(finding.code()));
@@ -45,14 +46,15 @@ class AppLinterExportStepTest {
 
     @Test
     void anExportStepWithoutItsQueryOrFormatIsAnError(@TempDir Path dir) throws Exception {
-        List<LintFinding> findings = new AppLinter().lint(app(dir, "      format: csv"));
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    export:\n      format: csv"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
             assertThat(finding.message()).contains("sql:");
         });
 
-        findings = new AppLinter().lint(app(dir,
-                "      sql:\n        file: report.sql\n        mode: query"));
+        findings = new AppLinter()
+                .lint(app(dir, EXTRACTION + "    export:\n      filename: x.csv"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
             assertThat(finding.message()).contains("format:");
@@ -62,19 +64,20 @@ class AppLinterExportStepTest {
     @Test
     void anExportStepCannotPickItsOwnDatasource(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      format: csv\n"
-                        + "      sql:\n        file: report.sql\n        mode: query\n        datasource: reporting"));
+                "    sql:\n      file: report.sql\n      mode: query\n"
+                        + "      datasource: reporting\n"
+                        + "    export:\n      format: csv"));
 
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1037");
-            assertThat(finding.message()).contains("job's datasource");
+            assertThat(finding.message()).contains("job's");
         });
     }
 
     @Test
     void aDownloadTimedFollowUpIsRouteVocabulary(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      format: csv\n      sql:\n        file: report.sql\n        mode: query\n"
+                EXTRACTION + "    export:\n      format: csv\n"
                         + "      after:\n        timing: download\n"
                         + "        sql:\n          file: report.sql\n          mode: update"));
 
@@ -85,33 +88,24 @@ class AppLinterExportStepTest {
     }
 
     @Test
-    void aStepDecliningToChooseItsOneBodyIsAnError(@TempDir Path dir) throws Exception {
-        Files.createDirectories(dir.resolve("config"));
-        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
-        Files.createDirectories(dir.resolve("batch/report"));
-        Files.writeString(dir.resolve("batch/report/job.yml"), """
-                version: tesseraql/v1
-                id: report.daily
-                kind: job
-                recipe: batch-pipeline
-                pipeline:
-                  - id: report
-                    sql:
-                      file: report.sql
-                      mode: query
-                    export:
-                      format: csv
-                    sources:
-                      main:
-                      file: report.sql
-                      mode: query
-                """);
-        Files.writeString(dir.resolve("batch/report/report.sql"), "select 1 as one\n");
+    void aStepDecliningToDeclareAnyWorkIsAnError(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir, "    when: params.dryRun"));
 
-        List<LintFinding> findings = new AppLinter().lint(dir);
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-FIELD-2004");
-            assertThat(finding.message()).contains("export:");
+            assertThat(finding.message()).contains("declares no work");
+        });
+    }
+
+    @Test
+    void aStepCannotDeclareTwoBindings(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                EXTRACTION + "    httpCall:\n      method: GET\n"
+                        + "      url: https://partner.example/x"));
+
+        assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-FIELD-2004");
+            assertThat(finding.message()).contains("two bindings");
         });
     }
 }

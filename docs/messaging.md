@@ -44,12 +44,14 @@ recipe: command-json
 input:
   orderId: { type: string, required: true }
   total:   { type: number }
-sql:
-  file: insert-order.sql
-  mode: update
-  params:
-    orderId: body.orderId
-    total: body.total
+sources:
+  main:
+    sql:
+      file: insert-order.sql
+      mode: update
+      params:
+        orderId: body.orderId
+        total: body.total
 publish:
   channel: events                 # a channel under tesseraql.messaging.channels
   topic: orders.created           # the logical event name a consumer subscribes to
@@ -81,12 +83,14 @@ consume:
 input:                            # declare the message shape — the mass-assignment guard applies
   orderId: { type: string, required: true }
   total:   { type: number }
-sql:                              # or steps: — runs in one transaction, like a command
-  file: project-order.sql
-  mode: update
-  params:
-    orderId: body.orderId
-    total: body.total
+sources:
+  main:
+    sql:                              # or steps: — runs in one transaction, like a command
+      file: project-order.sql
+      mode: update
+      params:
+        orderId: body.orderId
+        total: body.total
 ```
 
 The message body is the published payload, bound into the context exactly like a request body — so
@@ -113,9 +117,11 @@ consume:
   channel: events
   topic: orders.created
   idempotencyKey: body.orderId
-sql:
-  file: upsert-order-projection.sql   # an idempotent upsert, in reporting's schema
-  mode: update
+sources:
+  main:
+    sql:
+      file: upsert-order-projection.sql   # an idempotent upsert, in reporting's schema
+      mode: update
 ```
 
 Only where the SQL commits moves: the channel, its claim, and the consumed-key dedup records stay

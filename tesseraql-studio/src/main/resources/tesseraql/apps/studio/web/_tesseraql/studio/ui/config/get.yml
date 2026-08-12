@@ -25,5 +25,5 @@ response:
     status: 200
     template: config.html
     model:
-      cfg: sql
+      cfg: main
       saved: params.saved

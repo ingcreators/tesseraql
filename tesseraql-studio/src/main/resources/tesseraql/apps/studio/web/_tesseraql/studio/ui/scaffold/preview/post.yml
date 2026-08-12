@@ -19,4 +19,4 @@ response:
     status: 200
     template: preview.html
     model:
-      scaffold: sql
+      scaffold: main

@@ -24,7 +24,7 @@ input:
 # new password rather than staying on a session created under the old one.
 
 steps:
-  main:
+  - id: main
     service:
       name: account.password.change
       params:

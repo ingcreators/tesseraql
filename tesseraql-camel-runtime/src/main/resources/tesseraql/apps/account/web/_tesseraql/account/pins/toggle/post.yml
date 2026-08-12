@@ -17,7 +17,7 @@ input:
     maxLength: 200
 
 steps:
-  main:
+  - id: main
     service:
       name: account.pins.toggle
       params:

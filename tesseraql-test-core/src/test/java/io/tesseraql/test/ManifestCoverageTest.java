@@ -217,7 +217,7 @@ class ManifestCoverageTest {
               auth: api-key
               policy: invoices.write
             steps:
-              main:
+              - id: main
                 sql:
                   file: post.sql
             """;
@@ -244,7 +244,7 @@ class ManifestCoverageTest {
               auth: mtls
               policy: ledger.write
             steps:
-              main:
+              - id: main
                 sql:
                   file: post.sql
             """;
@@ -270,7 +270,7 @@ class ManifestCoverageTest {
             webhook:
               provider: partner
             steps:
-              main:
+              - id: main
                 sql:
                   file: insert.sql
                   mode: update
@@ -297,7 +297,7 @@ class ManifestCoverageTest {
                 kind: route
                 recipe: command-json
                 steps:
-                  main:
+                  - id: main
                     contract:
                       name: identity.create-user
                 """));
@@ -323,7 +323,7 @@ class ManifestCoverageTest {
                 file: check-email.sql
                 field: email
             steps:
-              main:
+              - id: main
                 sql:
                   file: insert-member.sql
                   mode: update
@@ -380,7 +380,7 @@ class ManifestCoverageTest {
               audit:
                 channel: audit-webhook
             steps:
-              main:
+              - id: main
                 sql:
                   file: insert-member.sql
                   mode: update
@@ -389,7 +389,7 @@ class ManifestCoverageTest {
     private static io.tesseraql.yaml.manifest.JobFile notifyingJob() {
         return new io.tesseraql.yaml.manifest.JobFile(APP_HOME.resolve("batch/cleanup/job.yml"),
                 new io.tesseraql.yaml.model.JobDefinition("tesseraql/v1", "members.cleanup",
-                        "job", "batch-pipeline", null, Map.of(), null,
+                        "job", "batch-pipeline", null, null, Map.of(),
                         List.of(
                                 new io.tesseraql.yaml.model.PipelineStep("purge",
                                         io.tesseraql.yaml.model.Binding.sql("purge.sql", "update",
@@ -397,7 +397,7 @@ class ManifestCoverageTest {
                                 new io.tesseraql.yaml.model.PipelineStep("report", null,
                                         new io.tesseraql.yaml.model.NotifySpec("ops-mail", null,
                                                 Map.of()))),
-                        false));
+                        false, null));
     }
 
     private static TestSuite notifySuite(String route, String job, String id) {
@@ -484,7 +484,7 @@ class ManifestCoverageTest {
     private static io.tesseraql.yaml.manifest.JobFile httpCallJob() {
         return new io.tesseraql.yaml.manifest.JobFile(APP_HOME.resolve("batch/sync/job.yml"),
                 new io.tesseraql.yaml.model.JobDefinition("tesseraql/v1", "orders.sync", "job",
-                        "batch-pipeline", null, Map.of(), null,
+                        "batch-pipeline", null, null, Map.of(),
                         List.of(
                                 new io.tesseraql.yaml.model.PipelineStep("pending",
                                         io.tesseraql.yaml.model.Binding.sql("pending.sql", "query",
@@ -493,7 +493,7 @@ class ManifestCoverageTest {
                                         new io.tesseraql.yaml.model.HttpCallSpec("POST",
                                                 "https://api.partner.example/v1/orders", Map.of(),
                                                 Map.of(), "partner", null, 201, null, null))),
-                        false));
+                        false, null));
     }
 
     private static TestSuite httpCallSuite(String job, String id) {
@@ -527,10 +527,10 @@ class ManifestCoverageTest {
                         new io.tesseraql.yaml.model.TriggerSpec(null,
                                 new io.tesseraql.yaml.model.PollSpec("local", null, null,
                                         "/data/inbound", null, "*.csv", "60s", null, null)),
-                        Map.of(), null, List.of(), false,
+                        Map.of(), List.of(), false,
                         new io.tesseraql.yaml.model.ImportSpec("csv", List.of(), null, null, null,
                                 null, null,
-                                io.tesseraql.yaml.model.Binding.sql("upsert.sql", "update",
+                                io.tesseraql.yaml.model.Binding.SqlArm.of("upsert.sql", "update",
                                         Map.of()))));
     }
 
@@ -564,7 +564,7 @@ class ManifestCoverageTest {
                   topic: orders.created
                   idempotencyKey: body.orderId
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: project-order.sql
                       mode: update

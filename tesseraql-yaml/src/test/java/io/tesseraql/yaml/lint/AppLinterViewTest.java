@@ -40,7 +40,7 @@ class AppLinterViewTest {
                 input:
                   name: { type: string, required: true, maxLength: 200 }
                 steps:
-                  main:
+                  - id: main
                     sql:
                       file: insert.sql
                       mode: update

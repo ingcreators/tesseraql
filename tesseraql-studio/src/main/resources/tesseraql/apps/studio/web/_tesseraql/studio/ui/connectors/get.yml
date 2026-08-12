@@ -20,4 +20,4 @@ response:
     status: 200
     template: connectors.html
     model:
-      cx: sql
+      cx: main
