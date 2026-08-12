@@ -222,7 +222,7 @@ class ReloadContentDiffIntegrationTest {
                 kind: workflow
                 mode: managed
                 document: { type: thing, table: things, key: id }
-                http: { basePath: /api/things }
+                basePath: /api/things
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -233,11 +233,11 @@ class ReloadContentDiffIntegrationTest {
                     from: draft
                     to: done
                     guard: "document.touched == false"
-                    command: submit.sql
+                    command: { file: submit.sql }
                   - id: cancel
                     from: draft
                     to: done
-                    command: submit.sql
+                    command: { file: submit.sql }
                 dispatch:
                   - id: finish
                     oneOf: [submit, cancel]

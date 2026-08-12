@@ -408,7 +408,7 @@ class WorkflowTransitionIntegrationTest {
                 id: purchase_request
                 kind: workflow
                 document: { type: purchase_request, table: purchase_requests, key: id }
-                http: { basePath: /purchase-requests }
+                basePath: /purchase-requests
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -423,10 +423,10 @@ class WorkflowTransitionIntegrationTest {
                     guard: "document.amount > 0"
                     stamp:
                       lane: principal.subject
-                    command: submit.sql
+                    command: { file: submit.sql }
                     assign: { file: approver.sql }
-                  - { id: approve, from: submitted, to: approved, command: approve.sql }
-                  - { id: reject, from: submitted, to: rejected, command: reject.sql }
+                  - { id: approve, from: submitted, to: approved, command: { file: approve.sql } }
+                  - { id: reject, from: submitted, to: rejected, command: { file: reject.sql } }
                 reminders:
                   assigned:
                     channel: task-reminders
@@ -449,7 +449,7 @@ class WorkflowTransitionIntegrationTest {
                 id: funded_request
                 kind: workflow
                 document: { type: funded_request, table: purchase_requests, key: id }
-                http: { basePath: /funded-requests }
+                basePath: /funded-requests
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -460,12 +460,12 @@ class WorkflowTransitionIntegrationTest {
                     from: draft
                     to: cleared
                     guard: { file: funded.sql, code: not-funded }
-                    command: approve.sql
+                    command: { file: approve.sql }
                   - id: writeoff
                     from: draft
                     to: cleared
                     guard: "document.amount == 0"
-                    command: approve.sql
+                    command: { file: approve.sql }
                 dispatch:
                   - id: settle
                     oneOf: [clear, writeoff]
@@ -493,7 +493,7 @@ class WorkflowTransitionIntegrationTest {
                 id: routed_request
                 kind: workflow
                 document: { type: routed_request, table: purchase_requests, key: id }
-                http: { basePath: /routed-requests }
+                basePath: /routed-requests
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -504,12 +504,12 @@ class WorkflowTransitionIntegrationTest {
                     from: draft
                     to: routed
                     guard: "decision.routing.lane == 'fast'"
-                    command: approve.sql
+                    command: { file: approve.sql }
                   - id: slowlane
                     from: draft
                     to: routed
                     guard: "decision.routing.lane == 'slow'"
-                    command: approve.sql
+                    command: { file: approve.sql }
                 dispatch:
                   - id: route_next
                     decide:
@@ -526,7 +526,7 @@ class WorkflowTransitionIntegrationTest {
                         kind: workflow
                         mode: app
                         document: { type: expense, table: expenses, key: id, stateColumn: status }
-                        http: { basePath: /expenses }
+                        basePath: /expenses
                         security: { auth: bearer }
                         initial: draft
                         states:
@@ -534,8 +534,8 @@ class WorkflowTransitionIntegrationTest {
                           - { id: submitted }
                           - { id: approved, type: terminal }
                         transitions:
-                          - { id: submit, from: draft, to: submitted, guard: "document.amount > 0", command: ex_submit.sql }
-                          - { id: approve, from: submitted, to: approved, command: ex_approve.sql }
+                          - { id: submit, from: draft, to: submitted, guard: "document.amount > 0", command: { file: ex_submit.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: ex_approve.sql } }
                         """);
         Files.writeString(workflowDir.resolve("ex_submit.sql"),
                 "update expenses set note = /* audit.user */ 'x' where id = /* key */ 'x'\n");
@@ -547,7 +547,7 @@ class WorkflowTransitionIntegrationTest {
                 id: escalating_request
                 kind: workflow
                 document: { type: escalating_request, table: escalating_requests, key: id }
-                http: { basePath: /escalating-requests }
+                basePath: /escalating-requests
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -558,9 +558,9 @@ class WorkflowTransitionIntegrationTest {
                   - id: submit
                     from: draft
                     to: submitted
-                    command: e_submit.sql
+                    command: { file: e_submit.sql }
                     assign: { file: e_approver.sql }
-                  - { id: approve, from: submitted, to: approved, command: e_approve.sql }
+                  - { id: approve, from: submitted, to: approved, command: { file: e_approve.sql } }
                 deadlines:
                   - state: submitted
                     within: 0s
@@ -587,7 +587,7 @@ class WorkflowTransitionIntegrationTest {
                         id: auto_request
                         kind: workflow
                         document: { type: auto_request, table: auto_requests, key: id }
-                        http: { basePath: /auto-requests }
+                        basePath: /auto-requests
                         security: { auth: bearer }
                         initial: draft
                         states:
@@ -595,8 +595,8 @@ class WorkflowTransitionIntegrationTest {
                           - { id: submitted }
                           - { id: approved, type: terminal }
                         transitions:
-                          - { id: submit, from: draft, to: submitted, command: a_submit.sql, assign: { file: a_approver.sql } }
-                          - { id: approve, from: submitted, to: approved, command: a_approve.sql }
+                          - { id: submit, from: draft, to: submitted, command: { file: a_submit.sql }, assign: { file: a_approver.sql } }
+                          - { id: approve, from: submitted, to: approved, command: { file: a_approve.sql } }
                         deadlines:
                           - state: submitted
                             within: 0s

@@ -479,9 +479,9 @@ public final class TestRunner {
                                     List.of(), 0, observer),
                             target.key(), context);
             session.advance(connection, context);
-            if (transition.command() != null && !transition.command().isBlank()) {
+            if (transition.command() != null && !transition.commandFile().isBlank()) {
                 SqlOutcome result = executeSql(connection,
-                        workflowDir(def).resolve(transition.command()), context);
+                        workflowDir(def).resolve(transition.commandFile()), context);
                 session.enforceCommandRows(result.updateCount() != null,
                         result.updateCount() == null ? 0 : result.updateCount());
             }

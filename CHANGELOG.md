@@ -51,8 +51,43 @@ All notable changes to TesseraQL are documented here. The format follows
   thing and the runtime holds another. It matters more now that reads share one `sources:` map,
   where a collision a lint used to catch across two maps is a duplicate key inside one.
 
+- **BREAKING: a job's `query` step publishes its rows** (docs/unified-sources.md decision 18).
+  It used to drain the `ResultSet` into a count and discard it, which made "fetch a control
+  value, bind it into later steps" inexpressible for a reason no reader of the document could
+  see: the step existed, its result did not. It now publishes `steps.<id>.rows` / `.rowCount` /
+  `.first` like any other read, bounded by `materialize.maxRows` or the app's default — counting
+  was memory protection, and the bound keeps that protection while the rows become usable. A
+  `query-spool` step publishes `rowCount` and `spool` and no `rows`: the point of spooling is
+  that the rows were never held, so publishing the count under the name that means a list
+  everywhere else was the envelope contradicting itself.
+- **`batch-tasklet` is gone** — see the top-level `sql:` entry; a job's work is its `pipeline:`,
+  whatever the step count.
+
+### Added
+
+- **A chunk step loads what an earlier step spooled** (docs/unified-sources.md decision 19). The
+  reader takes `spool: steps.<id>.spool` instead of `sql:`, and a batch **read** step may name
+  its own `datasource:` — which together make a copy between two databases expressible for the
+  first time: extract on one connector, load on the job's, neither side holding the result.
+  There is still no distributed transaction; the copy is eventual, explicit and restartable, and
+  the spool is the snapshot a rerun re-reads, which a SQL-reading chunk cannot offer. A write may
+  not move connectors (`TQL-YAML-1037`): that would be a second transaction the job does not own.
+  Spooled values round-trip through JSON, so a writer binding a date or a decimal casts in SQL —
+  the rule `chunk.after` already carries, documented and linted the same way.
+
+- **BREAKING: a workflow's `basePath:` is top level, and `command:` names a file.** `http:
+  { basePath: … }` named a mechanism rather than the thing it held, and with the route-level
+  `http:` map gone, keeping the word for an unrelated meaning would squat on it. `command:
+  submit.sql` was the surface's only bare-string statement reference — its binds sat a level out
+  from the statement they bound — and becomes `command: { file: submit.sql, params: … }`, the one
+  spelling every role-typed SQL reference shares (docs/unified-sources.md decisions 14 and 16).
+
 ### Fixed
 
+- **`query-spool` stopped promising a result nothing could reach.** The mode published a spool
+  reference that no pipeline vocabulary read: the only consumers of `tempStore.openInput` were
+  route-side export paths, so "the spool is available to later steps" was true of the reference
+  and false of the rows.
 - **The unknown-key lint stopped warning about keys the loader reads.** It compared authored
   keys against record component names without following their `@JsonProperty` overrides, so
   every app declaring `export:`, `import:` or `notify:` was told the key would be "silently

@@ -37,9 +37,9 @@ class AppLinterWorkflowTest {
               - { id: approved, type: terminal }
               - { id: rejected, type: terminal }
             transitions:
-              - { id: submit, from: draft, to: submitted, guard: "document.amount > 0", command: submit.sql }
-              - { id: approve, from: submitted, to: approved, command: approve.sql }
-              - { id: reject, from: submitted, to: rejected, command: approve.sql }
+              - { id: submit, from: draft, to: submitted, guard: "document.amount > 0", command: { file: submit.sql } }
+              - { id: approve, from: submitted, to: approved, command: { file: approve.sql } }
+              - { id: reject, from: submitted, to: rejected, command: { file: approve.sql } }
             """;
 
     private static List<String> codes(List<LintFinding> findings) {
@@ -72,7 +72,7 @@ class AppLinterWorkflowTest {
         // Drop the submit transition, so 'submitted' (and its successors) are unreachable from draft.
         writeWorkflow(dir, WELL_FORMED.replace(
                 "  - { id: submit, from: draft, to: submitted, guard: \"document.amount > 0\","
-                        + " command: submit.sql }\n",
+                        + " command: { file: submit.sql } }\n",
                 ""));
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3102");
     }
@@ -85,7 +85,7 @@ class AppLinterWorkflowTest {
 
     @Test
     void missingCommandFileIsAnError(@TempDir Path dir) throws Exception {
-        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql", "command: nope.sql"));
+        writeWorkflow(dir, WELL_FORMED.replace("file: submit.sql", "file: nope.sql"));
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3104");
     }
 
@@ -104,23 +104,23 @@ class AppLinterWorkflowTest {
 
     @Test
     void stampLintsColumnIdentifiersAndDecisionAliases(@TempDir Path dir) throws Exception {
-        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
-                "command: submit.sql, stamp: { \"bad-col\": 1 } }"));
+        writeWorkflow(dir, WELL_FORMED.replace("command: { file: submit.sql } }",
+                "command: { file: submit.sql }, stamp: { \"bad-col\": 1 } }"));
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3111");
 
-        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
-                "command: submit.sql, stamp: { lane: decision.ghost.route } }"));
+        writeWorkflow(dir, WELL_FORMED.replace("command: { file: submit.sql } }",
+                "command: { file: submit.sql }, stamp: { lane: decision.ghost.route } }"));
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-WORKFLOW-3111");
 
-        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
-                "command: submit.sql, stamp: { lane: body.route } }"));
+        writeWorkflow(dir, WELL_FORMED.replace("command: { file: submit.sql } }",
+                "command: { file: submit.sql }, stamp: { lane: body.route } }"));
         assertThat(new AppLinter().lint(dir)).anyMatch(f -> f.code()
                 .equals("TQL-WORKFLOW-3111") && !f.isError());
 
         // The identifier contract (docs/unicode-identifiers.md): a Japanese stamp column is
         // a plain identifier.
-        writeWorkflow(dir, WELL_FORMED.replace("command: submit.sql }",
-                "command: submit.sql, stamp: { 承認区分: approved } }"));
+        writeWorkflow(dir, WELL_FORMED.replace("command: { file: submit.sql } }",
+                "command: { file: submit.sql }, stamp: { 承認区分: approved } }"));
         assertThat(codes(new AppLinter().lint(dir))).doesNotContain("TQL-WORKFLOW-3111");
     }
 
@@ -295,7 +295,7 @@ class AppLinterWorkflowTest {
                   - { id: open, type: initial }
                   - { id: shipped, type: terminal }
                 transitions:
-                  - { id: ship, from: open, to: shipped, command: approve.sql }
+                  - { id: ship, from: open, to: shipped, command: { file: approve.sql } }
                 """);
         Files.createDirectories(dir.resolve("rules"));
         // The file pins purchase_request, so 'shipped' — a real state, of the WRONG

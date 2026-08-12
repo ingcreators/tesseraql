@@ -47,13 +47,15 @@ public final class JobExecutor {
 
     private static final Logger LOG = LoggerFactory.getLogger(JobExecutor.class);
     private static final TqlErrorCode STEP_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5002);
+    /** TQL-LD-0001: a query step's result exceeded the row cap — the same code routes raise. */
+    private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
     /** TQL-BATCH-4041: the reserved businessDate parameter is not an ISO date (HTTP 400). */
     private static final TqlErrorCode INVALID_BUSINESS_DATE = new TqlErrorCode(TqlDomain.BATCH,
             4041);
 
     private int sqlTimeoutSeconds;
-    private int exportMaxRows = 10_000;
-    private String exportOnOverflow = "fail";
+    private int maxRows = 10_000;
+    private String onOverflow = "fail";
 
     /** Observes failed job executions (roadmap Phase 20 operations alerts). */
     @FunctionalInterface
@@ -74,6 +76,7 @@ public final class JobExecutor {
     private io.tesseraql.core.account.PreferenceStore preferenceStore;
     private FailureListener failureListener;
     private java.util.function.Function<String, io.tesseraql.core.sql.FilePathResolver> filePathResolvers;
+    private java.util.function.Function<String, DataSource> connectors;
     private io.tesseraql.core.files.FileTransferService fileTransfers;
     private Path appHome;
     private FilePusher filePusher;
@@ -123,13 +126,28 @@ public final class JobExecutor {
     }
 
     /**
-     * The materializing-result bounds a step's {@code export:} inherits when it declares none of
-     * its own (docs/export-pipeline.md, decision 7). A job has no request to read configuration
-     * from, so the runtime hands them over the way it does the SQL timeout.
+     * The declared connectors, by name, so a batch <em>read</em> step may run on one other than
+     * the job's (docs/unified-sources.md decision 19). {@code TQL-YAML-1037} forbids this inside
+     * a command's transaction, where the pipeline is one transaction on one connection; a batch
+     * step owns its own transaction, so a read-side override splits nothing — the same reasoning
+     * that lets a route's read-only named query override today. What it buys is the case the
+     * framework could not express at all: extract from one database, load into another.
      */
-    public JobExecutor exportRowBounds(int maxRows, String onOverflow) {
-        this.exportMaxRows = maxRows;
-        this.exportOnOverflow = onOverflow == null ? "fail" : onOverflow;
+    public JobExecutor connectors(java.util.function.Function<String, DataSource> byName) {
+        this.connectors = byName;
+        return this;
+    }
+
+    /**
+     * The materializing-result bounds a step inherits when it declares none of its own
+     * (docs/export-pipeline.md, decision 7) — an {@code export:}'s extraction and a
+     * {@code mode: query} step's rows alike, because they are the same bound on the same
+     * memory. A job has no request to read configuration from, so the runtime hands them over
+     * the way it does the SQL timeout.
+     */
+    public JobExecutor resultBounds(int maxRows, String onOverflow) {
+        this.maxRows = maxRows;
+        this.onOverflow = onOverflow == null ? "fail" : onOverflow;
         return this;
     }
 
@@ -151,8 +169,8 @@ public final class JobExecutor {
     private io.tesseraql.core.files.ExportRowCap declaredExportRowCap(
             io.tesseraql.yaml.model.ExportSpec export) {
         return new io.tesseraql.core.files.ExportRowCap(
-                export.maxRows() != null ? export.maxRows() : exportMaxRows,
-                export.onOverflow() != null ? export.onOverflow() : exportOnOverflow,
+                export.maxRows() != null ? export.maxRows() : maxRows,
+                export.onOverflow() != null ? export.onOverflow() : onOverflow,
                 export.format());
     }
 
@@ -433,19 +451,18 @@ public final class JobExecutor {
             } else if (step.push() != null) {
                 result = runPushStep(step, context);
             } else {
-                result = runStep(jobFile, step, dataSource, context, stepContext);
+                result = runStep(jobFile, step, stepDataSource(step, dataSource), context,
+                        stepContext);
             }
             stepResults.put(step.id(), result);
             if (Boolean.TRUE.equals(result.get("stopped"))) {
                 // The chunk stopped on a committed checkpoint: counts are real, a rerun
                 // for the same business date resumes exactly there.
-                repository.stopStep(stepExecutionId,
-                        ((Number) result.getOrDefault("affectedRows", 0)).intValue(),
+                repository.stopStep(stepExecutionId, recordedRows(result),
                         ((Number) result.getOrDefault("skipped", 0)).intValue());
                 return true;
             }
-            repository.completeStep(stepExecutionId,
-                    ((Number) result.getOrDefault("affectedRows", 0)).intValue(),
+            repository.completeStep(stepExecutionId, recordedRows(result),
                     ((Number) result.getOrDefault("skipped", 0)).intValue());
             return false;
         } catch (RuntimeException ex) {
@@ -524,6 +541,42 @@ public final class JobExecutor {
      * <p>Reading the vendor asks the pool for a connection, too expensive to repeat per step, and
      * a datasource does not change vendor while the process runs.
      */
+    /**
+     * The row count the execution record carries: what the step wrote, or — for a read — what it
+     * produced. A read publishes {@code rowCount} and a write {@code affectedRows}
+     * (docs/unified-sources.md decision 10), and the operations console shows one number either
+     * way, because an operator asking "how much did this step move" means the same question.
+     */
+    private static int recordedRows(Map<String, Object> result) {
+        Object count = result.get("affectedRows");
+        if (count == null) {
+            count = result.getOrDefault("rowCount", 0);
+        }
+        return ((Number) count).intValue();
+    }
+
+    /**
+     * The connector a step runs on: its own {@code datasource:} when it declares one, else the
+     * job's. Only a read may override — a write on another connector would be a second
+     * transaction the executor does not own, which is the doctrine
+     * [multi-datasource.md](../../../../../../../docs/multi-datasource.md) states and
+     * {@code TQL-YAML-1037} enforces at build time.
+     */
+    private DataSource stepDataSource(PipelineStep step, DataSource jobPool) {
+        String declared = step.sql() == null ? null : step.sql().datasource();
+        if (declared == null || declared.isBlank()) {
+            return jobPool;
+        }
+        DataSource pool = connectors == null ? null : connectors.apply(declared);
+        if (pool == null) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "': datasource '" + declared
+                            + "' is not declared under tesseraql.datasources")
+                    .build();
+        }
+        return pool;
+    }
+
     private String dialectOf(DataSource dataSource) {
         return dialects.computeIfAbsent(dataSource,
                 pool -> io.tesseraql.core.util.DatabaseVendors.vendor(pool).orElse(""));
@@ -563,19 +616,12 @@ public final class JobExecutor {
             bind(statement, bound);
             Map<String, Object> result = switch (mode) {
                 case "query-spool" -> spool(statement);
-                case "query" -> {
-                    try (ResultSet rs = statement.executeQuery()) {
-                        int count = 0;
-                        while (rs.next()) {
-                            count++;
-                        }
-                        yield Map.of("affectedRows", count);
-                    }
-                }
+                case "query" -> query(step, statement);
                 default -> Map.of("affectedRows", statement.executeUpdate());
             };
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
-            long rows = ((Number) result.getOrDefault("affectedRows", 0)).longValue();
+            long rows = ((Number) result.getOrDefault("affectedRows",
+                    result.getOrDefault("rowCount", 0))).longValue();
             span.attribute("affectedRows", rows);
             slowSqlLog.record(new io.tesseraql.core.diag.SqlExecution(
                     sqlPath.toString(), mode, durationMs, rows, startedAt));
@@ -841,10 +887,12 @@ public final class JobExecutor {
             DataSource dataSource, Map<String, Object> context, String executionId,
             io.tesseraql.core.telemetry.SpanContext parentContext) {
         io.tesseraql.yaml.model.ChunkSpec chunk = step.chunk();
-        if (chunk.reader() == null || chunk.reader().file() == null
+        boolean spooled = chunk.reader() != null && chunk.reader().isSpool();
+        if (chunk.reader() == null || (!spooled && chunk.reader().file() == null)
                 || chunk.writer() == null || chunk.writer().file() == null) {
             throw TqlException.builder(STEP_ERROR)
-                    .message("Step '" + step.id() + "': chunk needs reader.file and writer.file")
+                    .message("Step '" + step.id() + "': chunk needs a reader (sql: with a file:,"
+                            + " or spool: naming an earlier step's spool) and writer.file")
                     .build();
         }
         String jobId = jobFile.definition().id();
@@ -856,15 +904,21 @@ public final class JobExecutor {
         context.put("chunk", chunkContext);
 
         String dialect = dialectOf(dataSource);
-        Path readerPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                jobFile.source().getParent().resolve(chunk.reader().file()).normalize(), dialect);
+        Path readerPath = spooled
+                ? null
+                : io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                        jobFile.source().getParent().resolve(chunk.reader().file()).normalize(),
+                        dialect);
         Path writerPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
                 jobFile.source().getParent().resolve(chunk.writer().file()).normalize(), dialect);
-        BoundSql boundReader = SqlRenderer.render(
-                io.tesseraql.core.sql.Sql2WayParser.parse(read(readerPath)),
-                resolveParams(chunk.reader(), context),
-                io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, context,
-                io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
+        String readerId = spooled ? "spool:" + chunk.reader().spool() : readerPath.toString();
+        BoundSql boundReader = spooled
+                ? null
+                : SqlRenderer.render(
+                        io.tesseraql.core.sql.Sql2WayParser.parse(read(readerPath)),
+                        resolveParams(chunk.reader(), context),
+                        io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, context,
+                        io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
         java.util.List<io.tesseraql.core.sql.SqlNode> writerTemplate = io.tesseraql.core.sql.Sql2WayParser
                 .parse(read(writerPath));
 
@@ -872,32 +926,41 @@ public final class JobExecutor {
                 chunk, dialect);
 
         io.tesseraql.core.telemetry.Span span = tracer.start("tesseraql.sql.execute", parentContext)
-                .attribute("sqlId", readerPath.toString())
+                .attribute("sqlId", readerId)
                 .attribute("mode", "chunk")
                 .attribute("stepId", step.id());
         long startedAt = System.currentTimeMillis();
         long startNanos = System.nanoTime();
         int processed = 0;
         int skipped = 0;
-        try (Connection reader = dataSource.getConnection();
+        // A spooled reader takes no connection at all: its rows were read once, on the step
+        // that produced them, possibly on another datasource entirely.
+        try (Connection reader = spooled ? null : dataSource.getConnection();
                 Connection writer = dataSource.getConnection()) {
             // A held cursor needs its own transaction (PostgreSQL only streams with autocommit
             // off), and the writer's commit cadence is the whole point of the chunk.
-            reader.setAutoCommit(false);
+            if (reader != null) {
+                reader.setAutoCommit(false);
+            }
             writer.setAutoCommit(false);
             Map<String, PreparedStatement> writerStatements = new LinkedHashMap<>();
-            try (PreparedStatement select = reader.prepareStatement(boundReader.sql())) {
-                if (sqlTimeoutSeconds > 0) {
-                    select.setQueryTimeout(sqlTimeoutSeconds);
+            try (PreparedStatement select = spooled
+                    ? null
+                    : reader.prepareStatement(boundReader.sql())) {
+                if (select != null) {
+                    if (sqlTimeoutSeconds > 0) {
+                        select.setQueryTimeout(sqlTimeoutSeconds);
+                    }
+                    select.setFetchSize(
+                            Math.max(100, Math.min(chunk.effectiveCommitEvery(), 1000)));
+                    bind(select, boundReader);
                 }
-                select.setFetchSize(Math.max(100, Math.min(chunk.effectiveCommitEvery(), 1000)));
-                bind(select, boundReader);
                 String lastKey = null;
                 int sinceCommit = 0;
                 boolean stopRequested = false;
-                try (ResultSet rows = select.executeQuery()) {
-                    ResultSetMetaData metaData = rows.getMetaData();
-                    int columns = metaData.getColumnCount();
+                try (ChunkRows rows = spooled
+                        ? ChunkRows.of(tempStore, spoolRef(step, chunk, context), mapper)
+                        : ChunkRows.of(select.executeQuery())) {
                     // The reader is read a window at a time so an enrichment can fold its
                     // reference in before the writer sees a row (docs/lookups.md, slice 14).
                     // With no enrichment the window is one row and the loop is what it was.
@@ -911,15 +974,7 @@ public final class JobExecutor {
                     while (more && !stopRequested) {
                         buffered.clear();
                         while (buffered.size() < window && more) {
-                            Map<String, Object> row = new LinkedHashMap<>();
-                            for (int col = 1; col <= columns; col++) {
-                                String label = metaData.getColumnLabel(col);
-                                Object value = rows.getObject(col);
-                                row.put(label, value);
-                                // Oracle answers uppercase labels; binds are written lowercase.
-                                row.putIfAbsent(label.toLowerCase(java.util.Locale.ROOT), value);
-                            }
-                            buffered.add(row);
+                            buffered.add(rows.row());
                             more = rows.next();
                         }
                         // A reference failure fails the WINDOW, and the step with it. It is not
@@ -929,7 +984,7 @@ public final class JobExecutor {
                         for (Map<String, Object> row : enrichWindow(enrichments, step, context,
                                 dataSource, buffered)) {
                             Object keyValue = keyOf(row, chunk.effectiveKey(), step.id(),
-                                    readerPath);
+                                    readerId);
                             context.put("row", row);
                             BoundSql boundWriter = SqlRenderer.render(writerTemplate,
                                     resolveParams(chunk.writer(), context),
@@ -1010,7 +1065,7 @@ public final class JobExecutor {
             span.attribute("affectedRows", (long) processed);
             span.attribute("skippedRows", (long) skipped);
             slowSqlLog.record(new io.tesseraql.core.diag.SqlExecution(
-                    readerPath.toString(), "chunk", durationMs, processed, startedAt));
+                    readerId, "chunk", durationMs, processed, startedAt));
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("affectedRows", processed);
             result.put("skipped", skipped);
@@ -1018,7 +1073,7 @@ public final class JobExecutor {
         } catch (SQLException ex) {
             TqlException failure = TqlException.builder(STEP_ERROR)
                     .message("Step '" + step.id() + "' failed: " + ex.getMessage())
-                    .source(readerPath.toString())
+                    .source(readerId)
                     .cause(ex)
                     .build();
             span.recordError(failure);
@@ -1031,9 +1086,28 @@ public final class JobExecutor {
         }
     }
 
+    /**
+     * The spool an earlier step published, named by a context path (decision 19). A rerun with
+     * {@code --from-failed-step} hands the prior spool over unchanged, which is what makes the
+     * cross-datasource copy restartable rather than merely repeatable.
+     */
+    private static io.tesseraql.core.spool.SpoolRef spoolRef(PipelineStep step,
+            io.tesseraql.yaml.model.ChunkSpec chunk, Map<String, Object> context) {
+        Object resolved = new EvaluationContext(context)
+                .resolve(java.util.Arrays.asList(chunk.reader().spool().split("\\.")));
+        if (resolved instanceof io.tesseraql.core.spool.SpoolRef ref) {
+            return ref;
+        }
+        throw TqlException.builder(STEP_ERROR)
+                .message("Step '" + step.id() + "': reader spool: '" + chunk.reader().spool()
+                        + "' does not resolve to a spool — name an earlier step's spool, which"
+                        + " only a mode: query-spool step publishes")
+                .build();
+    }
+
     /** The checkpoint key of one reader row; a reader that never selects it is misdeclared. */
     private static Object keyOf(Map<String, Object> row, String key, String stepId,
-            Path readerPath) {
+            String readerId) {
         if (row.containsKey(key)) {
             return row.get(key);
         }
@@ -1047,12 +1121,62 @@ public final class JobExecutor {
         }
         throw TqlException.builder(STEP_ERROR)
                 .message("Step '" + stepId + "': the reader's rows carry no '" + key
-                        + "' column — chunk.key must name a selected column")
-                .source(readerPath.toString())
+                        + "' column — chunk.key must name a column the reader produces")
+                .source(readerId)
                 .build();
     }
 
     /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
+    /**
+     * A {@code mode: query} step publishes the envelope every read publishes —
+     * {@code rows} / {@code rowCount} / {@code first} — bounded by the step's
+     * {@code materialize.maxRows} or the job's default (docs/unified-sources.md decision 18).
+     *
+     * <p>It used to drain the {@code ResultSet} into a count and discard the rows, which made
+     * "fetch a control value, bind it into later steps" inexpressible for a reason no reader of
+     * the document could see: the step existed, its result did not. Counting was memory
+     * protection; the bound keeps that protection while the rows become usable, and an extract
+     * too large to hold is what {@code query-spool} is for.
+     */
+    private Map<String, Object> query(PipelineStep step, PreparedStatement statement)
+            throws SQLException {
+        int cap = step.sql().materialize() != null && step.sql().materialize().maxRows() != null
+                ? step.sql().materialize().maxRows()
+                : maxRows;
+        String overflow = step.sql().materialize() != null
+                && step.sql().materialize().onOverflow() != null
+                        ? step.sql().materialize().onOverflow()
+                        : onOverflow;
+        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        try (ResultSet rs = statement.executeQuery()) {
+            ResultSetMetaData metaData = rs.getMetaData();
+            int columns = metaData.getColumnCount();
+            while (rs.next()) {
+                if (cap >= 0 && rows.size() >= cap) {
+                    if (!"warn".equals(overflow)) {
+                        throw TqlException.builder(MATERIALIZATION_OVERFLOW)
+                                .message("Step '" + step.id() + "': query returned more than "
+                                        + cap + " rows; raise materialize.maxRows, or use"
+                                        + " mode: query-spool for an extract too large to hold")
+                                .build();
+                    }
+                    LOG.warn("Job step {} query exceeded {} rows; truncating", step.id(), cap);
+                    break;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (int col = 1; col <= columns; col++) {
+                    row.put(metaData.getColumnLabel(col), rs.getObject(col));
+                }
+                rows.add(row);
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("rows", rows);
+        result.put("rowCount", rows.size());
+        result.put("first", rows.isEmpty() ? null : rows.get(0));
+        return result;
+    }
+
     private Map<String, Object> spool(PreparedStatement statement)
             throws SQLException, IOException {
         SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);
@@ -1071,10 +1195,11 @@ public final class JobExecutor {
         }
         // toRef() is only valid after close, which the try-with-resources performed.
         SpoolRef ref = writer.toRef();
-        long rows = ref.rows();
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("affectedRows", (int) rows);
-        result.put("rows", rows);
+        // A spool has a count and a reference, and no `rows` — the point of spooling is that the
+        // rows were never held. `rows` means a list on every other surface (decision 10), so
+        // publishing the count under that name was the envelope contradicting itself.
+        result.put("rowCount", (int) ref.rows());
         result.put("spool", ref);
         return result;
     }

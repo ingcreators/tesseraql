@@ -251,11 +251,15 @@
         },
         "datasource": {
           "type": "string",
-          "description": "The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037)."
+          "description": "The named connector this read binding runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037)."
         },
         "when": {
           "type": "string",
           "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<id>.skipped. The declared branch point for decision.* outputs (docs decision-tables)."
+        },
+        "spool": {
+          "type": "string",
+          "description": "A context path resolving to an earlier step's spool reference (steps.<id>.spool), read as this binding's rows. A chunk reader declares it instead of sql: to load what another step extracted, possibly from another connector; both halves stream, and the spool is the snapshot a rerun re-reads. Documented in jobs.md."
         },
         "enrich": {
           "type": "object",

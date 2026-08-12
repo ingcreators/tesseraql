@@ -299,7 +299,7 @@ class DelegationIntegrationTest {
                 id: purchase_request
                 kind: workflow
                 document: { type: purchase_request, table: purchase_requests, key: id }
-                http: { basePath: /purchase-requests }
+                basePath: /purchase-requests
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -310,9 +310,9 @@ class DelegationIntegrationTest {
                   - id: submit
                     from: draft
                     to: submitted
-                    command: submit.sql
+                    command: { file: submit.sql }
                     assign: { file: approver.sql }
-                  - { id: approve, from: submitted, to: approved, command: approve.sql }
+                  - { id: approve, from: submitted, to: approved, command: { file: approve.sql } }
                 """);
         Files.writeString(workflowDir.resolve("submit.sql"), "update purchase_requests set "
                 + "last_action = 'submit', acted_by = /* audit.user */ 'x' where id = /* key */ 'x'\n");

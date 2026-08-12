@@ -9,8 +9,7 @@ kind: workflow
 # caller's own partner rows.
 mode: app
 document: { type: quote, table: quotes, key: id, stateColumn: status }
-http:
-  basePath: /api/supplier/quotes
+basePath: /api/supplier/quotes
 security: { auth: bearer, policy: sup.act }
 initial: draft
 states:
@@ -25,4 +24,4 @@ transitions:
       file: quote-priced.sql
       code: unpriced-lines
       message: procurement.quote.unpriced
-    command: quote-submit.sql
+    command: { file: quote-submit.sql }

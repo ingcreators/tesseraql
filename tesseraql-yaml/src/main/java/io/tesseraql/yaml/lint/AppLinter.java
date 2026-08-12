@@ -3259,9 +3259,9 @@ public final class AppLinter {
             }
             lintGuard(t.guard(), dir, where, source, findings);
             lintStamp(t, where, source, findings);
-            if (t.command() != null && !Files.isRegularFile(dir.resolve(t.command()))) {
+            if (t.commandFile() != null && !Files.isRegularFile(dir.resolve(t.commandFile()))) {
                 findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
-                        where + " references missing command '" + t.command() + "'"));
+                        where + " references missing command '" + t.commandFile() + "'"));
             }
             if (t.assign() != null && t.assign().file() != null
                     && !Files.isRegularFile(dir.resolve(t.assign().file()))) {
@@ -4439,6 +4439,7 @@ public final class AppLinter {
                         + " is its reader:/writer:, so the step has no arm of its own"));
                 continue;
             }
+            lintStepDatasource(config, step, source, findings);
             // Each axis is linted on its own, because a step may declare one of each.
             if (step.notification() != null) {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
@@ -4459,12 +4460,76 @@ public final class AppLinter {
     }
 
     /**
+     * A batch step may run its <em>read</em> on a connector other than the job's
+     * (docs/unified-sources.md decision 19): each batch step owns its transaction, so the
+     * override splits nothing — which is what makes "extract from one database, load into
+     * another" expressible at all. A <em>write</em> may not: that would be a second transaction
+     * the executor does not own, the stance {@code TQL-YAML-1037} has always enforced.
+     */
+    private void lintStepDatasource(AppConfig config,
+            io.tesseraql.yaml.model.PipelineStep step, String source, List<LintFinding> findings) {
+        String declared = step.sql() == null ? null : step.sql().datasource();
+        if (declared == null || declared.isBlank()) {
+            return;
+        }
+        String mode = step.sql().effectiveMode();
+        if (!"query".equals(mode) && !"query-spool".equals(mode)) {
+            findings.add(new LintFinding("TQL-YAML-1037", "error", source, "Step '" + step.id()
+                    + "': only a read step may declare datasource: - a write on another"
+                    + " connector would be a second transaction the job does not own"));
+            return;
+        }
+        if (!"main".equals(declared)
+                && config.navigate("tesseraql.datasources." + declared) == null) {
+            findings.add(new LintFinding("TQL-YAML-1035", "error", source, "Step '" + step.id()
+                    + "': datasource '" + declared
+                    + "' is not declared under tesseraql.datasources"));
+        }
+    }
+
+    /**
      * Whether a step's binding carries only its {@code when:} guard — a guard is step control,
      * not an arm, so a step spelling one without a mechanism has declared no work.
      */
     private static boolean isGuardOnly(io.tesseraql.yaml.model.Binding binding) {
         return !binding.isSql() && !binding.isContract() && !binding.isService()
                 && !binding.isSequence() && !binding.isHttp();
+    }
+
+    /**
+     * A {@code spool:} names an earlier step's spool, and only a {@code mode: query-spool} step
+     * publishes one. A reference to a later step, to a step that never spooled, or to nothing at
+     * all fails at execution with the load half already scheduled — which on a batch estate is
+     * the middle of the night.
+     */
+    private void lintSpoolReference(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String reference, String source,
+            List<LintFinding> findings) {
+        String[] path = reference.split("\\.");
+        if (path.length < 2 || !"steps".equals(path[0])) {
+            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                    + "': reader spool: '" + reference + "' must name an earlier step's spool"
+                    + " (steps.<id>.spool)"));
+            return;
+        }
+        String referenced = path[1];
+        for (io.tesseraql.yaml.model.PipelineStep earlier : job.definition().pipeline()) {
+            if (earlier.id().equals(step.id())) {
+                break;
+            }
+            if (!earlier.id().equals(referenced)) {
+                continue;
+            }
+            if (earlier.sql() == null
+                    || !"query-spool".equals(earlier.sql().effectiveMode())) {
+                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
+                        + step.id() + "': step '" + referenced + "' publishes no spool - only a"
+                        + " mode: query-spool step does"));
+            }
+            return;
+        }
+        findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                + "': reader spool: names '" + referenced + "', which is not an earlier step"));
     }
 
     /**
@@ -4537,9 +4602,7 @@ public final class AppLinter {
 
     /**
      * Statically checks an export step (docs/analytics-experience.md track 3): the extraction
-     * query is required, the step runs on the job's datasource (the {@code TQL-YAML-1037}
-     * stance — a pipeline step cannot pick its own connector), and {@code after.timing:
-     * download} stays route vocabulary — a job-produced file's download is an ops action, not
+     * query is required, and {@code after.timing: download} stays route vocabulary — a job-produced file's download is an ops action, not
      * a business signal, so the only follow-up a step supports is the extraction-transaction
      * one ({@code TQL-YAML-1041}).
      */
@@ -4554,10 +4617,6 @@ public final class AppLinter {
                     + "': an export step needs the rows to write — declare the step's own"
                     + " sql: { file: … }"));
             return;
-        }
-        if (step.sql().datasource() != null) {
-            findings.add(new LintFinding("TQL-YAML-1037", "error", source, "Step '" + step.id()
-                    + "': a pipeline step cannot declare datasource: - it runs on the job's"));
         }
         if (export.format() == null || export.format().isBlank()) {
             findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
@@ -4614,14 +4673,26 @@ public final class AppLinter {
             io.tesseraql.yaml.model.PipelineStep step, String source,
             List<LintFinding> findings) {
         io.tesseraql.yaml.model.ChunkSpec chunk = step.chunk();
-        if (chunk.reader() == null || chunk.reader().file() == null
-                || chunk.reader().file().isBlank()
-                || chunk.writer() == null || chunk.writer().file() == null
+        // A reader names exactly one input: its own SQL, or an earlier step's spool
+        // (docs/unified-sources.md decision 19). Both stream, so the choice is where the rows
+        // come from, not how much memory the step takes.
+        boolean readsSql = chunk.reader() != null && chunk.reader().file() != null
+                && !chunk.reader().file().isBlank();
+        boolean readsSpool = chunk.reader() != null && chunk.reader().isSpool();
+        if (readsSql == readsSpool) {
+            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
+                    + "': chunk needs exactly one reader - sql: { file: … }, or spool: naming an"
+                    + " earlier step's spool"));
+            return;
+        }
+        if (chunk.writer() == null || chunk.writer().file() == null
                 || chunk.writer().file().isBlank()) {
             findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk needs reader: { sql: { file: … } } and writer:"
-                    + " { sql: { file: … } }"));
+                    + "': chunk needs writer: { sql: { file: … } }"));
             return;
+        }
+        if (readsSpool) {
+            lintSpoolReference(job, step, chunk.reader().spool(), source, findings);
         }
         if (chunk.commitEvery() != null && chunk.commitEvery() < 1) {
             findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()

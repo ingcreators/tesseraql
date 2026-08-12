@@ -85,7 +85,7 @@ class DispatchCaseTest {
                 kind: workflow
                 mode: app
                 document: { type: settleable, table: docs, key: id, stateColumn: status }
-                http: { basePath: /api/settleable }
+                basePath: /api/settleable
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -96,12 +96,12 @@ class DispatchCaseTest {
                     from: draft
                     to: done
                     guard: { file: funded.sql, code: not-funded }
-                    command: tick.sql
+                    command: { file: tick.sql }
                   - id: writeoff
                     from: draft
                     to: done
                     guard: "document.amount == 0"
-                    command: tick.sql
+                    command: { file: tick.sql }
                 dispatch:
                   - id: settle
                     oneOf: [clear, writeoff]
@@ -113,7 +113,7 @@ class DispatchCaseTest {
                 kind: workflow
                 mode: app
                 document: { type: routed, table: docs, key: id, stateColumn: status }
-                http: { basePath: /api/routed }
+                basePath: /api/routed
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -124,12 +124,12 @@ class DispatchCaseTest {
                     from: draft
                     to: done
                     guard: "decision.route.lane == 'fast'"
-                    command: tick.sql
+                    command: { file: tick.sql }
                   - id: slowlane
                     from: draft
                     to: done
                     guard: "decision.route.lane == 'slow'"
-                    command: tick.sql
+                    command: { file: tick.sql }
                 dispatch:
                   - id: route_next
                     decide:

@@ -6,8 +6,7 @@ kind: workflow
 # submit evaluates it from the document and stamps it, the two approve paths guard on the
 # stamped column, so every lane the decision can produce has exactly one path out.
 document: { type: requisition, table: purchase_requisitions, key: id }
-http:
-  basePath: /api/requisitions
+basePath: /api/requisitions
 security: { auth: bearer, policy: req.act }
 initial: draft
 states:
@@ -33,40 +32,40 @@ transitions:
     # the command carries only the audit note.
     stamp:
       approval_route: decision.approvalRoute.route
-    command: submit.sql
+    command: { file: submit.sql }
     assign: { file: approver.sql }
   # The manager lane finishes in one approval ...
   - id: approve
     from: submitted
     to: approved
     guard: "document.approval_route == 'manager'"
-    command: approve.sql
+    command: { file: approve.sql }
   # ... the two-stage lane passes through the procurement head.
   - id: advance
     from: submitted
     to: mgr_approved
     guard: "document.approval_route == 'two_stage'"
-    command: advance.sql
+    command: { file: advance.sql }
     assign: { file: head.sql }
   - id: approve_final
     from: mgr_approved
     to: approved
-    command: approve.sql
+    command: { file: approve.sql }
   - id: reject
     from: submitted
     to: rejected
-    command: reject.sql
+    command: { file: reject.sql }
   - id: reject_final
     from: mgr_approved
     to: rejected
-    command: reject.sql
+    command: { file: reject.sql }
   - id: rework
     from: rejected
     to: draft
     # The declared clearing: the next submit re-evaluates the decision.
     stamp:
       approval_route: null
-    command: rework.sql
+    command: { file: rework.sql }
 # The one-action dispatch (docs/workflow-expressiveness.md): the approver's UI calls
 # POST /api/requisitions/{key}/submit_decision and the engine fires whichever member
 # the stamped approval_route admits — no client-side lane knowledge.

@@ -53,6 +53,11 @@ import java.util.Map;
  *                 (docs/lookups.md), keyed by enrichment name and applied in authored order —
  *                 declared here rather than named by a back-reference, so any arm's rows can
  *                 be enriched (docs/unified-sources.md decision 5)
+ * @param spool    a context path resolving to an earlier step's spool reference, read as this
+ *                 binding's rows (docs/unified-sources.md decisions 19 and 19a). Spooling is
+ *                 not a SQL feature — it is what a large result does on its way to a consumer
+ *                 that reads it once — so whatever filled the spool, a reader has one thing to
+ *                 understand
  * @param when     optional guard expression on a command step (docs/decision-tables.md "Acting
  *                 on the result"): a falsy guard skips the step, which records
  *                 {@code steps.<name>.skipped} instead of a result — the declared branch point
@@ -62,7 +67,7 @@ import java.util.Map;
 public record Binding(String file, String contract, String mode, Map<String, String> params,
         String service, HttpSourceSpec http, Materialize materialize, String sequence,
         java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
-        String when, Map<String, EnrichSpec> enrich) {
+        String spool, String when, Map<String, EnrichSpec> enrich) {
 
     public Binding {
         params = params == null ? Map.of() : Map.copyOf(params);
@@ -78,7 +83,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             java.util.List<String> keys, Expect expect, Integer timeoutSeconds, String datasource,
             String when) {
         this(file, contract, mode, params, service, http, materialize, sequence, keys, expect,
-                timeoutSeconds, datasource, when, null);
+                timeoutSeconds, datasource, null, when, null);
     }
 
     /**
@@ -96,6 +101,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
             @com.fasterxml.jackson.annotation.JsonProperty("service") NamedCall service,
             @com.fasterxml.jackson.annotation.JsonProperty("http") HttpSourceSpec http,
             @com.fasterxml.jackson.annotation.JsonProperty("sequence") String sequence,
+            @com.fasterxml.jackson.annotation.JsonProperty("spool") String spool,
             @com.fasterxml.jackson.annotation.JsonProperty("when") String when,
             @com.fasterxml.jackson.annotation.JsonProperty("enrich") Map<String, EnrichSpec> enrich) {
         NamedCall call = contract != null ? contract : service;
@@ -112,6 +118,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 sql != null ? sql.expect() : (call == null ? null : call.expect()),
                 sql == null ? null : sql.timeoutSeconds(),
                 sql == null ? null : sql.datasource(),
+                spool,
                 when,
                 enrich);
     }
@@ -221,6 +228,11 @@ public record Binding(String file, String contract, String mode, Map<String, Str
     /** Whether this binding invokes a named runtime service provider instead of SQL. */
     public boolean isService() {
         return service != null && !service.isBlank();
+    }
+
+    /** Whether this binding reads an earlier step's spool rather than executing anything. */
+    public boolean isSpool() {
+        return spool != null && !spool.isBlank();
     }
 
     /** Whether this binding's rows come from an outbound call rather than a datasource. */

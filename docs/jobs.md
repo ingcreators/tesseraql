@@ -227,7 +227,9 @@ steps bind from:
 | Context path               | Value                                                              |
 | -------------------------- | ------------------------------------------------------------------ |
 | `params.<name>`            | a job parameter                                                    |
-| `steps.<id>.affectedRows`  | rows affected (update) or returned (query) by an earlier step      |
+| `steps.<id>.affectedRows`  | rows affected by an earlier `mode: update` step                    |
+| `steps.<id>.rows` / `.rowCount` / `.first` | an earlier `mode: query` step's result             |
+| `steps.<id>.spool` / `.rowCount` | an earlier `mode: query-spool` step's spool reference        |
 | `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `httpCall` step's response |
 | `steps.<id>.eventId`       | the outbox event id an earlier `notify:` step enqueued             |
 | `steps.<id>.transferId` / `steps.<id>.filename` / `steps.<id>.rows` | an earlier `export:` step's produced transfer |
@@ -235,10 +237,9 @@ steps bind from:
 | `tenant.id`                | the current tenant, on a [per-tenant job](#per-tenant-jobs)        |
 
 A SQL step names its file (relative to the job's directory) and an execution mode:
-`update` for statements that modify rows, `query` to execute and count, or `query-spool` to
-stream the result set to a temporary JSONL spool — the spool reference and row count are
-published to later steps, which keeps arbitrarily large extracts out of memory. The file
-stays runnable in a plain SQL tool; binds are marked with `/* name */ dummy` comments:
+`update` for statements that modify rows, `query` to read them, or `query-spool` to stream the
+result set to a temporary JSONL spool. The file stays runnable in a plain SQL tool; binds are
+marked with `/* name */ dummy` comments:
 
 ```yaml
 pipeline:
@@ -271,8 +272,8 @@ restart that does not start over, and a policy for the one bad row
 pipeline:
   - id: revalue
     chunk:
-      reader: { file: unprocessed-orders.sql }   # SELECT, keyset-ordered
-      writer: { file: revalue-order.sql }        # runs once per row
+      reader: { sql: { file: unprocessed-orders.sql } }  # SELECT, keyset-ordered
+      writer: { sql: { file: revalue-order.sql } }       # runs once per row
       key: id                                    # the reader column checkpoints track
       commitEvery: 1000                          # default 500
       onError: skip                              # default: fail
@@ -314,6 +315,46 @@ point would be undefined), and a reader that never binds `chunk.after` is a warn
 (`TQL-BATCH-4208` — a restart reprocesses from the top, which only an idempotent writer
 survives). The `key` column's values must be unique and ascending under the reader's
 `order by`; the gallery's `user.anonymizeInactive` job is the runnable reference.
+
+### Loading what another step read
+
+A reader declares **`spool:`** instead of `sql:` to load an earlier step's spool. That is what
+makes a copy between two databases expressible: the extract runs on one connector, the load on
+the job's, and neither side holds the result.
+
+```yaml
+kind: job
+datasource: erp_b                                  # the load side
+pipeline:
+  - id: extract
+    sql:
+      file: extract-orders.sql
+      mode: query-spool
+      datasource: erp_a                            # the extract side
+  - id: load
+    chunk:
+      reader: { spool: steps.extract.spool }
+      writer: { sql: { file: upsert-order.sql } }
+      key: id
+```
+
+A batch step may name its own `datasource:` **only for a read**: each batch step owns its
+transaction, so an extract elsewhere splits nothing, while a write on another connector would be
+a second transaction the job does not own (`TQL-YAML-1037`). There is still no distributed
+transaction — the copy is eventual, explicit and restartable, which is
+[the stance](multi-datasource.md) the whole surface takes.
+
+Two consequences worth knowing before you rely on it:
+
+- **The spool is the snapshot.** A rerun re-reads exactly the rows the extract saw, which a
+  SQL-reading chunk cannot offer — its source table has moved on. Spool retention has to cover
+  the rerun window.
+- **Values round-trip through JSON.** A writer binding a date or a decimal casts in SQL, the
+  same rule `chunk.after` carries. It matters more here, because a JSON number landing in a
+  numeric column is the common case rather than the exception.
+
+Anything that fills a spool can feed a chunk, not only SQL: an acquisition that pages a large
+result out of an API spools the same way, and the reader neither knows nor needs to.
 
 ## The export step
 

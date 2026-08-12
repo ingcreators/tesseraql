@@ -134,8 +134,8 @@ class AppLifecycleCommandsTest {
                   - { id: escalated, type: terminal }
                 transitions:
                   - { id: approve, from: draft, to: approved,
-                      guard: "document.amount > 0", command: tick.sql }
-                  - { id: escalate, from: draft, to: escalated, command: tick.sql }
+                      guard: "document.amount > 0", command: { file: tick.sql } }
+                  - { id: escalate, from: draft, to: escalated, command: { file: tick.sql } }
                 dispatch:
                   - { id: decide_next, oneOf: [approve, escalate] }
                 """);

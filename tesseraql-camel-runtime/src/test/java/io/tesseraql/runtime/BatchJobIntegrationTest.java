@@ -341,6 +341,24 @@ class BatchJobIntegrationTest {
         }
     }
 
+    /**
+     * Decision 19: an extract spools, and the chunk loads the spool. This is the shape that
+     * makes a cross-datasource copy expressible — both halves stream, and the spool is the
+     * consistent snapshot a rerun re-reads, which a SQL-reading chunk cannot have.
+     */
+    @Test
+    void aChunkLoadsWhatAnEarlierStepSpooled() throws Exception {
+        JobExecution execution = runtime.runJob("user.chunkSpooled",
+                Map.of("businessDate", "2026-08-01"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_e")).isEqualTo(6);
+        // The extract publishes a count and a reference, never rows: holding them is the one
+        // thing spooling exists to avoid.
+        List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
+        assertThat(steps).extracting(StepExecution::stepId).containsExactly("extract", "load");
+    }
+
     @Test
     void chunkStepResumesFromTheCheckpointAfterAFailure() throws Exception {
         // skipLimit 0 (the default): the poison row at b08 fails the step after the first
@@ -1067,6 +1085,16 @@ class BatchJobIntegrationTest {
             chunkFixtures.append("insert into chunk_items_d values ('d%02d', '%s');%n"
                     .formatted(i, i == 4 ? "K9" : (i % 2 == 1 ? "K1" : "K2")));
         }
+        // The spool-fed chunk (docs/unified-sources.md decision 19): one step extracts to a
+        // spool, the next loads it. Six rows so the commit cadence turns over.
+        chunkFixtures.append("create table chunk_items_e"
+                + " (item_key varchar(32) primary key, payload varchar(32) not null);\n")
+                .append("create table chunk_results_e"
+                        + " (item_key varchar(32) primary key, val integer not null);\n");
+        for (int i = 1; i <= 6; i++) {
+            chunkFixtures.append("insert into chunk_items_e values ('e%02d', '1');%n"
+                    .formatted(i));
+        }
         // The cooperative-stop chunk (docs/jobs.md "Stopping a run"): each row sleeps a
         // little, so the test can request the cancel while the chunk is mid-stream.
         chunkFixtures.append("create table chunk_items_c"
@@ -1079,6 +1107,32 @@ class BatchJobIntegrationTest {
         }
         Files.writeString(target.resolve("db/migration/V3__chunk_fixtures.sql"),
                 chunkFixtures.toString());
+        Files.writeString(target.resolve("batch/chunk/extract-e.sql"),
+                "select item_key, payload from chunk_items_e order by item_key\n");
+        Files.writeString(target.resolve("batch/chunk/writer-e.sql"), """
+                insert into chunk_results_e (item_key, val)
+                values (/* row.item_key */'x', cast(/* row.payload */'1' as integer))
+                """);
+        Files.writeString(target.resolve("batch/chunk/spooled.yml"), """
+                version: tesseraql/v1
+                id: user.chunkSpooled
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    sql:
+                      file: extract-e.sql
+                      mode: query-spool
+                  - id: load
+                    chunk:
+                      reader:
+                        spool: steps.extract.spool
+                      writer:
+                        sql:
+                          file: writer-e.sql
+                      key: item_key
+                      commitEvery: 2
+                """);
         Files.writeString(target.resolve("batch/chunk/slow.yml"), """
                 version: tesseraql/v1
                 id: user.chunkSlow

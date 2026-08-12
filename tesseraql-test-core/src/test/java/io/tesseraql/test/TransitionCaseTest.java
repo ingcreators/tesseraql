@@ -102,7 +102,7 @@ class TransitionCaseTest {
                 kind: workflow
                 mode: managed
                 document: { type: doc, table: docs, key: id }
-                http: { basePath: /api/docs }
+                basePath: /api/docs
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -113,7 +113,7 @@ class TransitionCaseTest {
                     from: draft
                     to: submitted
                     guard: "document.amount > 0"
-                    command: submit.sql
+                    command: { file: submit.sql }
                     decide:
                       lane:
                         use: lane
@@ -131,7 +131,7 @@ class TransitionCaseTest {
                 kind: workflow
                 mode: app
                 document: { type: guarded, table: docs, key: id, stateColumn: status }
-                http: { basePath: /api/guarded }
+                basePath: /api/guarded
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -142,7 +142,7 @@ class TransitionCaseTest {
                     from: draft
                     to: done
                     guard: { file: funded.sql, code: not-funded }
-                    command: tick.sql
+                    command: { file: tick.sql }
                 """);
         Files.writeString(appHome.resolve("workflow/read-back.sql"),
                 "select lane, last_action from docs where id = /* key */ 'D-0'\n");
@@ -152,7 +152,7 @@ class TransitionCaseTest {
                 kind: workflow
                 mode: app
                 document: { type: thing, table: docs, key: id, stateColumn: status }
-                http: { basePath: /api/things }
+                basePath: /api/things
                 security: { auth: bearer }
                 initial: draft
                 states:
@@ -162,7 +162,7 @@ class TransitionCaseTest {
                   - id: finish
                     from: draft
                     to: done
-                    command: tick.sql
+                    command: { file: tick.sql }
                 """);
     }
 

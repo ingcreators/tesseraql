@@ -61,16 +61,35 @@ class AppLinterExportStepTest {
         });
     }
 
+    /**
+     * A batch step owns its own transaction, so its <em>read</em> may run on another declared
+     * connector (docs/unified-sources.md decision 19) — the name still has to exist.
+     */
     @Test
-    void anExportStepCannotPickItsOwnDatasource(@TempDir Path dir) throws Exception {
+    void aReadStepMayPickAnotherDeclaredConnectorButNotAnUndeclaredOne(@TempDir Path dir)
+            throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "    sql:\n      file: report.sql\n      mode: query\n"
                         + "      datasource: reporting\n"
                         + "    export:\n      format: csv"));
 
         assertThat(findings).anySatisfy(finding -> {
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1035");
+            assertThat(finding.message()).contains("reporting");
+        });
+        assertThat(findings).noneMatch(finding -> "TQL-YAML-1037".equals(finding.code()));
+    }
+
+    /** A write on another connector would be a second transaction the job does not own. */
+    @Test
+    void aWriteStepCannotPickItsOwnDatasource(@TempDir Path dir) throws Exception {
+        List<LintFinding> findings = new AppLinter().lint(app(dir,
+                "    sql:\n      file: report.sql\n      mode: update\n"
+                        + "      datasource: reporting"));
+
+        assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1037");
-            assertThat(finding.message()).contains("job's");
+            assertThat(finding.message()).contains("only a read step");
         });
     }
 

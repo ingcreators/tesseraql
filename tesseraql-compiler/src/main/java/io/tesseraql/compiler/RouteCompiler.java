@@ -532,9 +532,9 @@ public final class RouteCompiler {
     private RouteFile transitionRouteFile(io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
             io.tesseraql.yaml.model.WorkflowDefinition def,
             io.tesseraql.yaml.model.TransitionSpec transition, String basePath) {
-        io.tesseraql.yaml.model.Binding command = transition.command() == null
+        io.tesseraql.yaml.model.Binding command = transition.commandFile() == null
                 ? null
-                : io.tesseraql.yaml.model.Binding.sql(transition.command(), "update",
+                : io.tesseraql.yaml.model.Binding.sql(transition.commandFile(), "update",
                         commandParams(transition));
         io.tesseraql.yaml.model.SecuritySpec security = transition.security() != null
                 ? transition.security()
@@ -686,7 +686,7 @@ public final class RouteCompiler {
     }
 
     private static String workflowBasePath(io.tesseraql.yaml.model.WorkflowDefinition def) {
-        String basePath = def.http() == null ? null : def.http().basePath();
+        String basePath = def.basePath();
         if (basePath == null || basePath.isBlank()) {
             basePath = "/" + def.id();
         }

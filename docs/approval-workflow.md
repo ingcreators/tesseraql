@@ -77,7 +77,7 @@ transitions:
     from: draft
     to: submitted
     guard: "document.amount > 0"                  # state-machine legality (expression language)
-    command: submit.sql                           # transactional-write step; /*%scope%/ confines the write
+    command: { file: submit.sql }                 # transactional-write step; /*%scope%/ confines the write
     assign:                                       # who gets the resulting task (the dual of a scope)
       file: assignees/manager_of_requester.sql
       params:
@@ -248,7 +248,7 @@ the outputs:
     approvalRoute:
       use: approvalRoute                     # decisions/approval.yml
       params: { amount: document.amount }
-  command: submit.sql
+  command: { file: submit.sql }
   assign: { file: approver.sql }             # select /* decision.approvalRoute.assignee */'x' as assignee
 ```
 
@@ -290,7 +290,7 @@ Authors do not write a route per transition. The `workflow/` document declares t
 transitions, and the compiler **synthesizes** one transactional-command route per transition — the
 way `consume/` documents ([messaging](messaging.md)) synthesize `queue-consume` routes. Each
 transition compiles to a `direct:workflow.<id>.<transitionId>` route and a
-`POST {http.basePath}/{key}/{transitionId}` endpoint, carrying the transition's (or the workflow's)
+`POST {basePath}/{key}/{transitionId}` endpoint, carrying the transition's (or the workflow's)
 `security`.
 
 The synthesized route runs the existing command machinery with one added workflow binding (document
@@ -389,7 +389,7 @@ document:
   table: purchase_requests    # required in BOTH modes (the guard loads the document row)
   key: id
   stateColumn: wf_state       # app mode only (managed keeps state in the instance row)
-http: { basePath: /purchase-requests }
+basePath: /purchase-requests
 security: { auth: browser, policy: pr-actor }   # default for every transition; per-transition override allowed
 initial: draft
 states:
@@ -398,10 +398,10 @@ states:
   - { id: approved,  type: terminal }
   - { id: rejected,  type: terminal }
 transitions:
-  - { id: submit,  from: draft,     to: submitted, guard: "document.amount > 0",        command: submit.sql,
+  - { id: submit,  from: draft,     to: submitted, guard: "document.amount > 0",        command: { file: submit.sql },
       assign: { file: assignees/manager.sql, params: { requester: document.created_by } } }
-  - { id: approve, from: submitted, to: approved,  guard: "principal.role == 'approver'", command: approve.sql }
-  - { id: reject,  from: submitted, to: rejected,                                          command: reject.sql }
+  - { id: approve, from: submitted, to: approved,  guard: "principal.role == 'approver'", command: { file: approve.sql } }
+  - { id: reject,  from: submitted, to: rejected,                                          command: { file: reject.sql } }
 deadlines:
   - { state: submitted, within: 48h, onBreach: { escalate: approve } }
 ```

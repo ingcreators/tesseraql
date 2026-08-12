@@ -3,8 +3,7 @@ id: purchase_request
 kind: workflow
 # Managed mode: state, tasks and history live in tql_workflow_* (docs/approval-workflow.md).
 document: { type: purchase_request, table: purchase_requests, key: id }
-http:
-  basePath: /api/purchase-requests
+basePath: /api/purchase-requests
 security: { auth: bearer, policy: pr.write }
 initial: draft
 states:
@@ -22,11 +21,11 @@ transitions:
     from: draft
     to: submitted
     guard: "document.amount > 0"
-    command: submit.sql
+    command: { file: submit.sql }
     decide:
       approvalRoute:
         use: approvalRoute
         params: { amount: document.amount }
     assign: { file: approver.sql }
-  - { id: approve, from: submitted, to: approved, command: approve.sql }
-  - { id: reject, from: submitted, to: rejected, command: reject.sql }
+  - { id: approve, from: submitted, to: approved, command: { file: approve.sql } }
+  - { id: reject, from: submitted, to: rejected, command: { file: reject.sql } }

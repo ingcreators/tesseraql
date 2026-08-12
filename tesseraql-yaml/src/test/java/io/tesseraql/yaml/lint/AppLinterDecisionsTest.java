@@ -104,7 +104,7 @@ class AppLinterDecisionsTest {
                 id: request
                 kind: workflow
                 document: { type: request, table: requests, key: id }
-                http: { basePath: /api/requests }
+                basePath: /api/requests
                 security: { auth: bearer, policy: req.write }
                 initial: draft
                 states:
@@ -114,7 +114,7 @@ class AppLinterDecisionsTest {
                   - id: submit
                     from: draft
                     to: submitted
-                    command: submit.sql
+                    command: { file: submit.sql }
                     decide:
                       approvalRoute:
                         use: approvalRoute

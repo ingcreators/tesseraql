@@ -3,8 +3,7 @@ id: ticket
 kind: workflow
 mode: app
 document: { type: ticket, table: tickets, key: id, stateColumn: status }
-http:
-  basePath: /api/tickets
+basePath: /api/tickets
 security: { auth: bearer, policy: help.agent }
 initial: open
 states:
@@ -14,7 +13,7 @@ states:
   - { id: closed, type: terminal }
 
 transitions:
-  - { id: triage, from: open, to: triaged, command: triage.sql }
-  - { id: resolve, from: triaged, to: resolved, command: resolve.sql }
-  - { id: reopen, from: resolved, to: triaged, command: triage.sql }
-  - { id: close, from: resolved, to: closed, command: close.sql }
+  - { id: triage, from: open, to: triaged, command: { file: triage.sql } }
+  - { id: resolve, from: triaged, to: resolved, command: { file: resolve.sql } }
+  - { id: reopen, from: resolved, to: triaged, command: { file: triage.sql } }
+  - { id: close, from: resolved, to: closed, command: { file: close.sql } }

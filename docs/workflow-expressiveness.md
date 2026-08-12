@@ -73,7 +73,7 @@ after `decide:` resolution, before the expression guard would run:
     file: shipment-registered.sql        # SELECT returning a row = pass, no row = fail
     code: shipment-not-registered        # rides the 422 payload like a validation code
     message: procurement.ship.unregistered   # optional messages/ key
-  command: order-ship.sql
+  command: { file: order-ship.sql }
 ```
 
 ```sql

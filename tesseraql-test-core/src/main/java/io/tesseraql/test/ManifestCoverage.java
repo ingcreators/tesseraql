@@ -200,7 +200,8 @@ public final class ManifestCoverage {
                 String item = workflowId + "#" + transition.id();
                 coverage.declare(item);
                 if (transition.command() != null
-                        && testedPaths.contains(dir.resolve(transition.command()).normalize())) {
+                        && testedPaths
+                                .contains(dir.resolve(transition.commandFile()).normalize())) {
                     coverage.cover(item);
                 }
             }
