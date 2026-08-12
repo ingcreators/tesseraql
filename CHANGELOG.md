@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **An export folds a keyed reference into the rows it writes** (docs/lookups.md, slice 13b).
+  `enrich:` on a `query-export` or `file-export` route was refused; it now applies a window at a
+  time — `batchSize` rows read, the reference fetched once for their distinct keys, the enriched
+  window written. A million-row extract makes one reference query per window and never holds
+  more rows than it already did. Wrapping the row *iterator* rather than any one branch is what
+  makes the streaming, buffering and `splitBy:` paths one case: none of them learns that an
+  enrichment happened. `RowEnricher` in core is the seam, and `EnrichProcessor` is split so a
+  route and an export run one implementation of the key collection, the batching, the degrade
+  rule and the many-to-one refusal.
 - **An export's code names answer in the export's locale**, not in the requesting browser's
   (docs/lookups.md, decision 12). Otherwise one document carried names in the reader's language
   and its numbers and dates in the export's — a mismatch nobody declared and nobody could

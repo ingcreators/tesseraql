@@ -225,7 +225,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, extractionDialect,
                             effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename);
+                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename,
+                            request.enricher(), request.enrichWindow());
                     rows = iterator.count;
                     writer.incrementRows(rows);
                 }
@@ -477,7 +478,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                         OutputStream out = new SpoolOutputStream(writer)) {
                     RowIterator iterator = new RowIterator(results, vendor(),
                             effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename);
+                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename,
+                            request.enricher(), request.enrichWindow());
                     rows = iterator.count;
                     writer.incrementRows(rows);
                 }
@@ -535,8 +537,13 @@ public final class JdbcFileTransferService implements FileTransferService {
      * without the result set living in memory. The row cap fires during the drain either way.
      */
     private void writeThrough(FileCodec codec, OutputStream out, FileWriteSpec writeSpec,
-            Iterator<Map<String, Object>> rows, Map<String, Object> values, String filename)
-            throws IOException {
+            Iterator<Map<String, Object>> source, Map<String, Object> values, String filename,
+            io.tesseraql.core.files.RowEnricher enricher, int enrichWindow) throws IOException {
+        // Wrapping the iterator rather than any one branch: a streaming codec then sees a
+        // sliding window, a buffering one spools what comes out, and a splitBy: bundle spools it
+        // too — none of them learns that an enrichment happened (docs/lookups.md, slice 13b).
+        Iterator<Map<String, Object>> rows = io.tesseraql.core.files.EnrichingRows.of(source,
+                enricher, enrichWindow);
         if (writeSpec.splitBy() != null && !writeSpec.splitBy().isBlank()) {
             // One document per group, bundled (docs/export-pipeline.md, decision 12). The rows are
             // spooled whatever the codec declared: splitting is a deliberate choice, and holding

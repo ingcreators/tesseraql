@@ -132,6 +132,16 @@ class EnrichIntegrationTest {
         assertThat(rows.get(3).get("partner_name").isNull()).isTrue();
     }
 
+    /** An export folds the reference into the rows it writes, a window at a time. */
+    @Test
+    void anExportEnrichesTheRowsItWrites() throws Exception {
+        String csv = get("/api/orders/report").body();
+        // Two windows of two rows, one reference query each; every row still carries its name.
+        assertThat(csv).contains("Acme").contains("Globex");
+        // The unmatched key writes an empty cell rather than dropping the row.
+        assertThat(csv.lines().filter(line -> !line.isBlank()).count()).isEqualTo(5);
+    }
+
     /** A composite key joins on every column, from a reference on a second table. */
     @Test
     void aCompositeKeyEnrichesFromItsOwnReference() throws Exception {
@@ -273,6 +283,40 @@ class EnrichIntegrationTest {
                     status: 200
                     body:
                       rows: sql.rows
+                """);
+
+        // An export enriches the rows it is writing, a window at a time (slice 13b). batchSize
+        // is 2 against 4 rows, so the windowing is exercised rather than incidental.
+        Path report = target.resolve("web/api/orders/report");
+        Files.createDirectories(report);
+        Files.writeString(report.resolve("rows.sql"),
+                "select id, partner_code from orders order by id\n");
+        Files.writeString(report.resolve("partners.sql"), """
+                select code, name as partner_name
+                from partners
+                where code in /* keys */('P1', 'P2')
+                """);
+        Files.writeString(report.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: orders.report
+                kind: route
+                recipe: query-export
+                sql:
+                  file: rows.sql
+                  mode: query-export
+                enrich:
+                  partner:
+                    on: { partner_code: code }
+                    sql: { file: partners.sql }
+                    batchSize: 2
+                    merge: [partner_name]
+                export:
+                  format: csv
+                  filename: orders.csv
+                  locale: en
+                  columns:
+                    - name: id
+                    - name: partner_name
                 """);
 
         Path detail = target.resolve("web/api/orders/{id}");
