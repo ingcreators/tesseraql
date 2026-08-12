@@ -27,6 +27,5 @@ columns:
     label: ""
     text: Open
     link: /items/{id}
-
 slots:
   header: frags.html::new-link

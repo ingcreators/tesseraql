@@ -167,7 +167,7 @@ tests:
     notify:
       job: user.dailyMaintenance
     params:
-      step:
+      steps:
         deactivatePending:
           affectedRows: 3
     expect:
