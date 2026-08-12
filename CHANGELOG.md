@@ -50,10 +50,10 @@ All notable changes to TesseraQL are documented here. The format follows
   says, gated by `ops.batch.run` like every other ops write; an undeclared name is a 404, not a
   silent no-op.
 - **A catalog may be declared by a SQL file, and its names may come from the message catalog**
-  (docs/lookups.md, decisions 12-13). `file: 通貨.sql` covers the shape `table:` and equality
+  (docs/lookups.md, decisions 12-13). `file: currency.sql` covers the shape `table:` and equality
   filters cannot express — codes in one table, their names per language in another — and then
   `tables:` lists what the SQL reads, so a maintenance command's `invalidates:` reaches it
-  without anything parsing SQL. `label: { message: "code.優先度.{key}" }` takes the names from
+  without anything parsing SQL. `label: { message: "code.priority.{key}" }` takes the names from
   the message catalog instead, which puts them in the translation workflow the Studio message
   editor already serves and adds no per-language table: the load says which codes exist, and one
   row becomes one entry per locale the app supports. `file:` and `table:` are exclusive, `file:`
@@ -69,9 +69,9 @@ All notable changes to TesseraQL are documented here. The format follows
   a table no catalog reads — a typo in a verbatim identifier looks exactly like a correct
   declaration, and the symptom is a screen showing yesterday's names. The scaffolder emits it
   itself for a table a catalog reads, and only for those.
-- **A code catalog may carry its names in more than one language.** `language: 言語コード` on a
+- **A code catalog may carry its names in more than one language.** `language: language` on a
   catalog makes language a *dimension* of the catalog rather than part of its key, so the call
-  is the same in every language — `${codes.取引区分.of(row.取引区分)}` — and only the labels
+  is the same in every language — `${codes.payment_method.of(row.payment_method)}` — and only the labels
   differ. The language is the surface's resolved locale (on a route: the request's), a code with
   no translation falls back to the **default language** rather than to the raw code, and the key
   set never narrows — validation asks whether a code exists, which is not a question about
@@ -83,18 +83,20 @@ All notable changes to TesseraQL are documented here. The format follows
   catalog's codes now resolves the name wherever the column is rendered — a list's `columns:`,
   a detail's `fields:`, a detail's history child, a dashboard's table panel, and the template
   the page was ejected into, which calls the catalog rather than carrying today's names as
-  literals. One declaration, one answer: no screen can say 現金 while another says 1.
+  literals. One declaration, one answer: no screen can say "Bank transfer" while another says
+  `TRANSFER`.
 - **A catalog-backed field renders as a `<select>`** offering the catalog's active codes in its
   declared order, and an ejected form keeps reading them rather than freezing today's codes into
   markup — ejection freezes the layout, not the behaviour.
-- **A field domain may be backed by a code catalog** — `codes: 取引区分` on a domain, and the
+- **A field domain may be backed by a code catalog** — `codes: payment_method` on a domain, and the
   input binder accepts only that catalog's active codes. The violation is the `enum` field
   error, because a catalog is a dynamic enum; a value the held copy does not carry is re-read
   from the source before it is refused, so a code added a minute ago is never rejected for the
   length of the hold.
 - **Code catalogs** (docs/lookups.md): a `catalogs/` document declares a small, nearly static
   table of codes and the names they stand for, and every template resolves it from memory —
-  `${codes.取引区分.of(row.取引区分)}` — with no query per request and no per-route declaration.
+  `${codes.payment_method.of(row.payment_method)}` — with no query per request and no
+  per-route declaration.
   `where:` pins one kind's slice of a shared code master, so the twenty kinds a general master
   holds are twenty single-keyed catalogs over one table. Labels resolve over every row while
   `active:` marks what a form still offers, because a retired code must render on last year's

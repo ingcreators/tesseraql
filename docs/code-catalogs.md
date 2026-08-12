@@ -17,13 +17,13 @@ namespace, and a name declared twice is a build error.
 # catalogs/codes.yml
 version: tesseraql/v1
 catalogs:
-  取引区分:
-    table: 区分マスタ
-    where: { 区分種別: '01' }   # this catalog's slice of a shared master
-    key:   区分コード
-    label: 区分名称
-    order: 表示順               # the order a form offers the codes in
-    active: 有効フラグ           # which codes may still be chosen
+  payment_method:
+    table: code_master
+    where: { code_type: 'PAY' }   # this catalog's slice of a shared master
+    key:   code
+    label: label
+    order: sort_order             # the order a form offers the codes in
+    active: active                # which codes may still be chosen
 ```
 
 `where:` is what makes one physical table serve many catalogs. A general code master
@@ -44,7 +44,7 @@ collation is locale-dependent, and code masters already carry a display-order co
 In a hand-written template, the catalogs are in the model under `codes`:
 
 ```html
-<td th:text="${codes.取引区分.of(row.取引区分)}">現金</td>
+<td th:text="${codes.payment_method.of(row.payment_method)}">Bank transfer</td>
 ```
 
 `of(...)` returns the name, or the code itself when the catalog has no name for it. A
@@ -55,19 +55,19 @@ In a [declarative view](declarative-views.md), point the column at a domain inst
 
 ```yaml
 columns:
-  - name: 受注番号
-  - name: 取引区分
-    domain: 取引区分
+  - name: order_no
+  - name: payment_method
+    domain: payment_method
 ```
 
 ```yaml
 # domains/codes.yml
 version: tesseraql/v1
 domains:
-  取引区分:
+  payment_method:
     type: string
-    maxLength: 2
-    codes: 取引区分       # the catalog this field's values come from
+    maxLength: 8
+    codes: payment_method   # the catalog this field's values come from
 ```
 
 One declaration, and the name renders everywhere that column does: a list, a detail
@@ -94,13 +94,22 @@ Language is a **dimension** of the catalog, not part of its key. Add the column 
 call site does not change:
 
 ```yaml
-  取引区分:
-    table: 区分マスタ
-    where: { 区分種別: '01' }
-    key: 区分コード
-    label: 区分名称
-    language: 言語コード
+  payment_method:
+    table: code_master
+    where: { code_type: 'PAY' }
+    key: code
+    label: label
+    language: language
 ```
+
+One code, one row per language it is written in:
+
+| code | language | label |
+| --- | --- | --- |
+| `TRANSFER` | `en` | Bank transfer |
+| `TRANSFER` | `ja` | 振込 |
+| `CASH` | `en` | Cash |
+| `CASH` | `ja` | 現金 |
 
 The catalog answers in the surface's locale. On a route that is the request's resolved
 locale, negotiated exactly as [internationalization](internationalization.md) describes.
@@ -122,13 +131,13 @@ Some masters keep the codes in one table and their per-language names in another
 `table:`/`where:` cannot express that join, so declare the SQL instead:
 
 ```yaml
-  通貨:
-    file: 通貨.sql                  # resolved under catalogs/
-    tables: [通貨マスタ, 通貨名称]    # what the SQL reads
-    key: 通貨コード
-    label: 名称
-    language: 言語コード
-    active: 有効フラグ
+  currency:
+    file: currency.sql                    # resolved under catalogs/
+    tables: [currency, currency_name]     # what the SQL reads
+    key: currency_code
+    label: name
+    language: language
+    active: active
 ```
 
 `key:`/`label:`/`language:`/`active:` name that SELECT's **result columns**, exactly as
@@ -142,17 +151,25 @@ A code's name is often already a translated string. Take it from the message cat
 rather than adding a per-language table beside the codes:
 
 ```yaml
-  優先度:
-    table: 優先度マスタ
-    key: 優先度
-    label: { message: "code.優先度.{key}" }
-    order: 表示順
+  priority:
+    table: priority_master
+    key: priority
+    label: { message: "code.priority.{key}" }
+    order: sort_order
+```
+
+```yaml
+# messages/en.yml
+code:
+  priority:
+    H: High
+    L: Low
 ```
 
 ```yaml
 # messages/ja.yml
 code:
-  優先度:
+  priority:
     H: 高
     L: 低
 ```
@@ -172,7 +189,7 @@ that reads that table, so the next screen shows what was just saved:
 # web/admin/codes/post.yml
 steps:
   upsert: { file: upsert-code.sql }
-invalidates: [区分マスタ]
+invalidates: [code_master]
 ```
 
 It names the **table**, not the catalog. A maintenance screen for a shared master writes
