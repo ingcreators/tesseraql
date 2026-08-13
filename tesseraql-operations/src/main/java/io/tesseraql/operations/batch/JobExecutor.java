@@ -181,7 +181,7 @@ public final class JobExecutor {
         return this;
     }
 
-    /** Wires the outbound HTTP client {@code httpCall:} steps issue through (roadmap Phase 26). */
+    /** Wires the outbound HTTP client an {@code http:} step calls through (roadmap Phase 26). */
     public JobExecutor httpCall(io.tesseraql.operations.http.HttpCallClient client) {
         this.httpCallClient = client;
         return this;
@@ -439,7 +439,7 @@ public final class JobExecutor {
         io.tesseraql.core.telemetry.SpanContext stepContext = stepSpan.context();
         try {
             Map<String, Object> result;
-            if (step.httpCall() != null) {
+            if (step.sql() != null && step.sql().isHttp()) {
                 result = runHttpStep(step, context, stepContext);
             } else if (step.notification() != null) {
                 result = runNotifyStep(jobFile, step, context, appName);
@@ -520,19 +520,13 @@ public final class JobExecutor {
      */
     private Map<String, Object> runHttpStep(PipelineStep step, Map<String, Object> context,
             io.tesseraql.core.telemetry.SpanContext parentContext) {
-        if (step.sql() != null || step.notification() != null) {
-            throw TqlException.builder(STEP_ERROR)
-                    .message("Step '" + step.id() + "' must declare exactly one of sql:, notify:,"
-                            + " or httpCall:")
-                    .build();
-        }
         if (httpCallClient == null) {
             throw TqlException.builder(STEP_ERROR)
-                    .message("Step '" + step.id() + "': httpCall steps need the runtime's"
+                    .message("Step '" + step.id() + "': an http: step needs the runtime's"
                             + " outbound HTTP client")
                     .build();
         }
-        return httpCallClient.call(step.httpCall(), context, parentContext);
+        return httpCallClient.call(step.sql().http().call(), context, parentContext);
     }
 
     /**

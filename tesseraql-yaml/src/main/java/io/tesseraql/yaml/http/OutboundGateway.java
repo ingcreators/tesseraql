@@ -5,7 +5,7 @@ import java.util.Map;
 
 /**
  * The one seam every outbound HTTP call leaves through (docs/lookups.md, decision 15): a job's
- * {@code httpCall:} step, a query route's {@code http:} source, a command's pre-transaction
+ * job step's {@code http:} arm, a query route's {@code http:} source, a command's pre-transaction
  * fetch, an enrichment's HTTP reference, and a webhook notification's delivery. The runtime
  * binds the job pipeline's client behind it, so all of them inherit the same egress discipline
  * — the deny-by-default allow-list, named secret-managed credentials, timeouts, and the

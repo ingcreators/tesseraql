@@ -451,7 +451,7 @@ public final class ManifestCoverage {
                 continue;
             }
             job.definition().effectiveSteps().stream()
-                    .filter(step -> step.httpCall() != null)
+                    .filter(step -> step.sql() != null && step.sql().isHttp())
                     .forEach(step -> coverage.declare(job.definition().id() + "." + step.id()));
         }
         for (TestSuite suite : suites) {

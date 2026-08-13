@@ -107,7 +107,7 @@ Each table reads: **threat → vector → control → residual**. Controls are c
 
 | Threat | Vector | Control | Residual |
 | --- | --- | --- | --- |
-| Server-side request forgery | an `httpCall` / connector / remote-lake URL aimed at an internal host | deny-by-default `allowedHosts`; a bare `*` is refused at admission; outbound keeps certificate verification | the allow-list is the operator's to keep tight; pair it with network egress rules |
+| Server-side request forgery | an `http:` / connector / remote-lake URL aimed at an internal host | deny-by-default `allowedHosts`; a bare `*` is refused at admission; outbound keeps certificate verification | the allow-list is the operator's to keep tight; pair it with network egress rules |
 | Spoofing (credential leak to a rogue host) | tricking the engine into authenticating to an attacker prefix | object-storage secrets are prefix-scoped — an out-of-scope URL fails authentication | — |
 
 ### Files and resources

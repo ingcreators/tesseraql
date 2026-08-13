@@ -964,27 +964,27 @@ class AppLinterTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: allowed
-                    httpCall:
+                    http:
                       url: https://api.partner.example/v1/orders
                       credential: partner
                   - id: subdomain
-                    httpCall:
+                    http:
                       url: https://eu.internal.example/v1/rates
                   - id: denied
-                    httpCall:
+                    http:
                       url: https://evil.example/v1/exfil
                   - id: relative
-                    httpCall:
+                    http:
                       method: GET
                   - id: badcred
-                    httpCall:
+                    http:
                       url: https://api.partner.example/v1/y
                       credential: ghost
                   - id: reported
-                    httpCall:
+                    http:
                       url: https://api.partner.example/v1/z
-                      notify:
-                        channel: member-mail
+                    notify:
+                      channel: member-mail
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);

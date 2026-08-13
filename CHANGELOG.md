@@ -33,7 +33,7 @@ All notable changes to TesseraQL are documented here. The format follows
   `states:`, `transitions:` and `match:` already followed it, and route `steps:` was the one map
   whose *authoring order* was semantic. Now the order is the syntax.
 - **BREAKING: a pipeline step is a binding with an `id`, plus its output blocks.** Its keys fall
-  on three axes — the binding arm (`sql:`, `httpCall:`), the output blocks (`export:`, `push:`,
+  on three axes — the binding arm (`sql:`, `http:`), the output blocks (`export:`, `push:`,
   `notify:`) and `chunk:` — and a step declares at least one, rather than exactly one of six.
   A step that extracts rows and writes them to a file is one step with two keys; the extraction
   is the step's own arm, never a statement hidden inside `export:`. Output blocks do not read;
@@ -96,6 +96,13 @@ All notable changes to TesseraQL are documented here. The format follows
   and it was the mirror image of the export block carrying its extraction — one confusion,
   stated twice. It moves to the document's one `steps:` (route) or `pipeline:` (poll job) entry,
   so every write on the surface is a step and every parsing declaration is only that.
+
+- **BREAKING: `httpCall:` is `http:`, on a job step and on a test case** (docs/unified-sources.md
+  decision 12). The step key was the binding union's `http` arm wearing a pre-union name, so a job
+  step and a route source spoke two vocabularies for one mechanism. A suite case names its target
+  after the document key it points at — as `sql:`, `contract:` and `notify:` already do — so the
+  case key moved with it. After this, every place an outbound call is declared or targeted spells
+  it `http:`.
 
 ### Fixed
 

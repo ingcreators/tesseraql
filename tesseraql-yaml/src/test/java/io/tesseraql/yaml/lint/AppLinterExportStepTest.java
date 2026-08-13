@@ -119,7 +119,7 @@ class AppLinterExportStepTest {
     @Test
     void aStepCannotDeclareTwoBindings(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                EXTRACTION + "    httpCall:\n      method: GET\n"
+                EXTRACTION + "    http:\n      method: GET\n"
                         + "      url: https://partner.example/x"));
 
         assertThat(findings).anySatisfy(finding -> {

@@ -235,6 +235,15 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         return spool != null && !spool.isBlank();
     }
 
+    /**
+     * Whether an {@code http:} arm was declared at all. A call missing its url is still an
+     * HTTP binding — a misdeclared one, which the gateway lints report as such; treating it as
+     * no arm would answer "this step declares no work", which is not the author's mistake.
+     */
+    public boolean declaresHttp() {
+        return http != null;
+    }
+
     /** Whether this binding's rows come from an outbound call rather than a datasource. */
     public boolean isHttp() {
         return http != null && http.call() != null && http.call().url() != null

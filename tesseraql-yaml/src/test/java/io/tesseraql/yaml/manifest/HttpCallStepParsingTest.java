@@ -33,7 +33,7 @@ class HttpCallStepParsingTest {
                       file: select-pending.sql
                       mode: query-spool
                   - id: push
-                    httpCall:
+                    http:
                       method: POST
                       url: https://api.partner.example/v1/orders
                       credential: partner
@@ -57,10 +57,10 @@ class HttpCallStepParsingTest {
 
         assertThat(job.pipeline()).hasSize(3);
         PipelineStep push = job.pipeline().get(1);
-        assertThat(push.sql()).isNull();
+        assertThat(push.sql().isSql()).isFalse();
         assertThat(push.notification()).isNull();
 
-        HttpCallSpec call = push.httpCall();
+        HttpCallSpec call = push.sql().http().call();
         assertThat(call).isNotNull();
         assertThat(call.effectiveMethod()).isEqualTo("POST");
         assertThat(call.url()).isEqualTo("https://api.partner.example/v1/orders");
@@ -85,12 +85,13 @@ class HttpCallStepParsingTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: fetch
-                    httpCall:
+                    http:
                       url: https://api.partner.example/v1/rates
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
-        HttpCallSpec call = manifest.jobs().get(0).definition().pipeline().get(0).httpCall();
+        HttpCallSpec call = manifest.jobs().get(0).definition().pipeline().get(0)
+                .sql().http().call();
         assertThat(call.effectiveMethod()).isEqualTo("GET");
         assertThat(call.headers()).isEmpty();
         assertThat(call.query()).isEmpty();

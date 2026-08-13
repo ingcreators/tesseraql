@@ -136,7 +136,7 @@
     },
     "pipeline": {
       "type": "array",
-      "description": "The job's ordered steps. A step is a binding with an id (sql:) plus its output blocks (export:, push:, notify:) or a chunk:, each publishing its result to the step context. Documented in jobs.md.",
+      "description": "The job's ordered steps. A step is a binding with an id (sql: or http:) plus its output blocks (export:, push:, notify:) or a chunk:, each publishing its result to the step context. Documented in jobs.md.",
       "items": {
         "type": "object",
         "additionalProperties": true

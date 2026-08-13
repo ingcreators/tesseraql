@@ -855,7 +855,7 @@ public final class TestRunner {
     }
 
     /**
-     * Plans a job's {@code httpCall:} steps against the case's params (roadmap Phase 26), without
+     * Plans a job's {@code http:} steps against the case's params (roadmap Phase 26), without
      * issuing a network request: each matching step is one row carrying its id, method, the resolved
      * url and host, whether the host is allow-listed, and the credential name. URL placeholders and
      * query bindings resolve exactly as they would at runtime, so a case exercises the binding and
@@ -878,7 +878,10 @@ public final class TestRunner {
         if (hasJob) {
             io.tesseraql.yaml.manifest.JobFile job = job(target.job());
             for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
-                io.tesseraql.yaml.model.HttpCallSpec spec = step.httpCall();
+                io.tesseraql.yaml.model.HttpCallSpec spec = step.sql() == null
+                        || !step.sql().isHttp()
+                                ? null
+                                : step.sql().http().call();
                 if (spec == null || (target.id() != null && !target.id().equals(step.id()))) {
                     continue;
                 }

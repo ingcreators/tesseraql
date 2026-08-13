@@ -14,7 +14,7 @@ input:
 
 pipeline:
   - id: headcount
-    httpCall:
+    http:
       method: GET
       url: https://api.directory.example/v1/headcount
       query:

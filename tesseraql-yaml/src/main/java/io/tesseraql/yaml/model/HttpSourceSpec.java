@@ -11,7 +11,7 @@ import java.util.Map;
  * response or view.
  *
  * <p>The call itself is an {@link HttpCallSpec} — the same declaration a job's
- * {@code httpCall:} step and an enrichment's {@code http:} reference carry, so
+ * job step and an enrichment's {@code http:} reference carry, so
  * {@code method}, {@code url}, {@code headers}, {@code query}, {@code body},
  * {@code credential}, {@code expectStatus} and the timeouts mean one thing everywhere
  * (docs/lookups.md, decision 15). A source adds only what the read side needs: which part of

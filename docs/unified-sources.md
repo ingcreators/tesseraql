@@ -1,13 +1,12 @@
 # The unified source model
 
-Status: **designed 2026-08-12; slices 1-9 and 11 implemented 2026-08-12.**
+Status: **designed 2026-08-12; slices 1-9 and 11-12 implemented 2026-08-12.**
 Pre-1.0 breaking change (rule 10): the replaced spellings are deleted, not aliased; the
 CHANGELOG records what changed and why.
 
-Still open: decision 12's `httpCall:`/`http:` merge on a job step (slice 9's vocabulary sweep
-landed; the two records have not merged), the Studio/portal half of slice 10 — the editor
-extension and the generated references are caught up — and decision 19a's second half: the chunk
-reader takes a spool from whoever filled it, and today only `mode: query-spool` fills one.
+Still open: the Studio/portal half of slice 10 — the editor extension and the generated
+references are caught up — and decision 19a's second half: the chunk reader takes a spool from
+whoever filled it, and today only `mode: query-spool` fills one.
 
 How a document acquires data is spelled five different ways: a privileged top-level `sql:`, a
 `queries:` map, a parallel `http:` map, a `sql:`/`http:` pair inside every `enrich:` entry, and an

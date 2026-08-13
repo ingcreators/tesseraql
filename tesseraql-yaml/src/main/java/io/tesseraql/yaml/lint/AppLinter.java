@@ -4369,8 +4369,8 @@ public final class AppLinter {
 
     /**
      * Statically checks a batch job's pipeline steps (roadmap Phase 20, 26): a step declares
-     * exactly one of {@code sql:}, {@code notify:}, or {@code httpCall:}; notify steps lint like a
-     * route's, and httpCall steps lint their egress against the allow-list (deny by default).
+     * at most one binding arm ({@code sql:} or {@code http:}); notify steps lint like a
+     * route's, and an http: step lints its egress against the allow-list (deny by default).
      */
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.calendar.Calendars calendars, List<LintFinding> findings) {
@@ -4389,23 +4389,25 @@ public final class AppLinter {
             // binding arm reads or writes, the output blocks say what to do with the result, and
             // chunk: processes. A step declares at least one, at most one arm, and an arm and a
             // chunk: are two ways to say what the step's work is.
+            boolean writes = step.sql() != null && step.sql().isSql();
+            boolean calls = step.sql() != null && step.sql().declaresHttp();
             boolean arm = step.sql() != null && !isGuardOnly(step.sql());
             int outputs = (step.notification() == null ? 0 : 1) + (step.export() == null ? 0 : 1)
                     + (step.push() == null ? 0 : 1);
             boolean processing = step.chunk() != null;
-            if (!arm && step.httpCall() == null && !processing && outputs == 0) {
+            if (!arm && !processing && outputs == 0) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
-                        + step.id() + "' declares no work - a step needs a binding (sql:,"
-                        + " httpCall:), an output (export:, push:, notify:), or chunk:"));
+                        + step.id() + "' declares no work - a step needs a binding (sql:, http:),"
+                        + " an output (export:, push:, notify:), or chunk:"));
                 continue;
             }
-            if (arm && step.httpCall() != null) {
+            if (writes && calls) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
-                        + step.id() + "' declares two bindings - sql: and httpCall: are both the"
+                        + step.id() + "' declares two bindings - sql: and http: are both the"
                         + " step's own work, and a step does one thing"));
                 continue;
             }
-            if (processing && (arm || step.httpCall() != null)) {
+            if (processing && arm) {
                 findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
                         + step.id() + "' declares chunk: beside a binding - a chunk step's work"
                         + " is its reader:/writer:, so the step has no arm of its own"));
@@ -4416,8 +4418,8 @@ public final class AppLinter {
             if (step.notification() != null) {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
             }
-            if (step.httpCall() != null) {
-                lintHttpCall(config, step.id(), step.httpCall(), source, findings);
+            if (calls) {
+                lintHttpCall(config, step.id(), step.sql().http().call(), source, findings);
             }
             if (step.chunk() != null) {
                 lintChunk(job, step, source, findings);
@@ -4465,7 +4467,7 @@ public final class AppLinter {
      */
     private static boolean isGuardOnly(io.tesseraql.yaml.model.Binding binding) {
         return !binding.isSql() && !binding.isContract() && !binding.isService()
-                && !binding.isSequence() && !binding.isHttp();
+                && !binding.isSequence() && !binding.declaresHttp();
     }
 
     /**
@@ -5316,7 +5318,7 @@ public final class AppLinter {
             // (an unresolved ${...} secret in the host is checked by the runtime instead).
             if (resolved == null || !resolved.contains("${")) {
                 findings.add(new LintFinding("TQL-SEC-4071", "error", source,
-                        "httpCall step '" + id + "' needs an absolute http or https url:"));
+                        "http: '" + id + "' needs an absolute http or https url:"));
             }
             lintHttpCredential(config, id, spec, source, findings);
             return;
@@ -5326,7 +5328,7 @@ public final class AppLinter {
             declared.forEach(value -> allowedHosts.add(String.valueOf(value)));
         }
         if (!io.tesseraql.yaml.http.HttpOutbound.hostAllowed(allowedHosts, host)) {
-            findings.add(new LintFinding("TQL-SEC-4070", "error", source, "httpCall step '" + id
+            findings.add(new LintFinding("TQL-SEC-4070", "error", source, "http: '" + id
                     + "' targets host '" + host + "' which is not in"
                     + " tesseraql.http.outbound.allowedHosts (deny by default)"));
         }
@@ -5340,7 +5342,7 @@ public final class AppLinter {
             return;
         }
         if (config.navigate("tesseraql.http.outbound.credentials." + credential) == null) {
-            findings.add(new LintFinding("TQL-SEC-4072", "warning", source, "httpCall step '" + id
+            findings.add(new LintFinding("TQL-SEC-4072", "warning", source, "http: '" + id
                     + "' references undeclared credential '" + credential + "'"));
         }
     }

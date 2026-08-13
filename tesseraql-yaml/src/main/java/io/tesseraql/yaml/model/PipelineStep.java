@@ -12,10 +12,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * declares at least one:
  *
  * <ul>
- *   <li><b>Acquisition or statement</b> — the binding arm ({@code sql:}), at most one. The arm
- *       sits directly on the step because a step is one unit of work in a sequence, named by its
- *       {@code id}; a route's reads are a namespace, so they are a map of wrapped bindings
- *       (rule 7a).</li>
+ *   <li><b>Acquisition or statement</b> — the binding arm ({@code sql:} or {@code http:}), at
+ *       most one. The arm sits directly on the step because a step is one unit of work in a
+ *       sequence, named by its {@code id}; a route's reads are a namespace, so they are a map of
+ *       wrapped bindings (rule 7a). The job-side HTTP step used to be a {@code httpCall:} key of
+ *       its own, which is the {@code http} arm wearing a pre-union name — so a job step and a
+ *       route source answered to two vocabularies for one mechanism.</li>
  *   <li><b>Output</b> — {@code export:}, {@code push:}, {@code notify:}, any of them, beside the
  *       arm. An output block says how to write rows, never what to read.</li>
  *   <li><b>Processing</b> — {@code chunk:}, at most one, carrying its own {@code reader:} /
@@ -34,8 +36,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param sql          the binding this step executes — the arm authored on the step itself
  * @param notification the {@code notify:} declaration of a notification step ("notify" itself
  *                     is not a legal record component: it would hide {@code Object.notify()})
- * @param httpCall     the {@code httpCall:} declaration of an outbound REST step (roadmap
- *                     Phase 26)
  * @param chunk        the {@code chunk:} declaration of a reader/writer chunk step
  * @param export       the {@code export:} declaration of a file-producing step — the route
  *                     recipes' export vocabulary, run on the job's datasource. It writes the
@@ -46,7 +46,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record PipelineStep(String id, Binding sql,
         @JsonProperty("notify") NotifySpec notification,
-        HttpCallSpec httpCall,
         ChunkSpec chunk,
         ExportSpec export,
         PushSpec push) {
@@ -61,51 +60,46 @@ public record PipelineStep(String id, Binding sql,
             @JsonProperty("id") String id,
             @JsonProperty("sql") Binding.SqlArm sql,
             @JsonProperty("when") String when,
+            @JsonProperty("http") HttpSourceSpec http,
             @JsonProperty("notify") NotifySpec notification,
-            @JsonProperty("httpCall") HttpCallSpec httpCall,
             @JsonProperty("chunk") ChunkSpec chunk,
             @JsonProperty("export") ExportSpec export,
             @JsonProperty("push") PushSpec push) {
-        Binding binding = sql == null && when == null ? null : binding(sql, when);
-        return new PipelineStep(id, binding, notification, httpCall, chunk, export, push);
+        Binding binding = sql == null && http == null && when == null
+                ? null
+                : binding(sql, http, when);
+        return new PipelineStep(id, binding, notification, chunk, export, push);
     }
 
-    private static Binding binding(Binding.SqlArm sql, String when) {
+    private static Binding binding(Binding.SqlArm sql, HttpSourceSpec http, String when) {
         Binding armed = Binding.sql(sql);
         return armed == null
-                ? new Binding(null, null, null, null, null, null, null, null, null, null, null,
-                        null, when)
+                ? new Binding(null, null, null, null, null, http, null, null, null, null, null,
+                        null, null, when, null)
                 : new Binding(armed.file(), armed.contract(), armed.mode(), armed.params(),
-                        armed.service(), armed.http(), armed.materialize(), armed.sequence(),
+                        armed.service(), http, armed.materialize(), armed.sequence(),
                         armed.keys(), armed.expect(), armed.timeoutSeconds(), armed.datasource(),
-                        when);
+                        null, when, null);
     }
 
     /** Convenience constructor for a SQL step (the pre-Phase-20 shape). */
     public PipelineStep(String id, Binding sql) {
-        this(id, sql, null, null, null, null, null);
+        this(id, sql, null, null, null, null);
     }
 
     /** Convenience constructor for a SQL or notification step (the pre-Phase-26 shape). */
     public PipelineStep(String id, Binding sql, NotifySpec notification) {
-        this(id, sql, notification, null, null, null, null);
-    }
-
-    /** Convenience constructor for a step without a {@code chunk:} body (the pre-chunk shape). */
-    public PipelineStep(String id, Binding sql, NotifySpec notification,
-            HttpCallSpec httpCall) {
-        this(id, sql, notification, httpCall, null, null, null);
+        this(id, sql, notification, null, null, null);
     }
 
     /** Convenience constructor for a step without an {@code export:} body (the pre-export shape). */
-    public PipelineStep(String id, Binding sql, NotifySpec notification,
-            HttpCallSpec httpCall, ChunkSpec chunk) {
-        this(id, sql, notification, httpCall, chunk, null, null);
+    public PipelineStep(String id, Binding sql, NotifySpec notification, ChunkSpec chunk) {
+        this(id, sql, notification, chunk, null, null);
     }
 
     /** Convenience constructor for a step without a {@code push:} body (the pre-push shape). */
-    public PipelineStep(String id, Binding sql, NotifySpec notification,
-            HttpCallSpec httpCall, ChunkSpec chunk, ExportSpec export) {
-        this(id, sql, notification, httpCall, chunk, export, null);
+    public PipelineStep(String id, Binding sql, NotifySpec notification, ChunkSpec chunk,
+            ExportSpec export) {
+        this(id, sql, notification, chunk, export, null);
     }
 }

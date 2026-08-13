@@ -3,7 +3,7 @@ tests:
   # Phase 26: an http-call case plans the job's outbound step against the case params — the url
   # and query bindings resolve, and the egress allow-list is applied — without a network call.
   - name: the directory sync job calls the allow-listed directory API
-    httpCall:
+    http:
       job: directory.sync
       id: headcount
     params:

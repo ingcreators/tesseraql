@@ -213,7 +213,7 @@ Its keys fall on three axes, and a step declares at least one:
 
 | Axis | Keys | How many |
 | --- | --- | --- |
-| Acquisition or statement | `sql:` (a 2-way SQL file), `httpCall:` (one synchronous outbound REST request) | at most one |
+| Acquisition or statement | `sql:` (a 2-way SQL file), `http:` (one synchronous outbound REST request) | at most one |
 | Output | `export:` (write a formatted file, [below](#the-export-step)), `push:` (deliver a produced file, [below](#the-push-step)), `notify:` (enqueue a notification on the transactional outbox) | any, beside the arm |
 | Processing | `chunk:` (restartable per-row processing, committed in slices, [below](#the-chunk-step)) | at most one |
 
@@ -230,7 +230,7 @@ steps bind from:
 | `steps.<id>.affectedRows`  | rows affected by an earlier `mode: update` step                    |
 | `steps.<id>.rows` / `.rowCount` / `.first` | an earlier `mode: query` step's result             |
 | `steps.<id>.spool` / `.rowCount` | an earlier `mode: query-spool` step's spool reference        |
-| `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `httpCall` step's response |
+| `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `http:` step's response |
 | `steps.<id>.eventId`       | the outbox event id an earlier `notify:` step enqueued             |
 | `steps.<id>.transferId` / `steps.<id>.filename` / `steps.<id>.rows` | an earlier `export:` step's produced transfer |
 | `steps.<id>.target` / `steps.<id>.filename` | an earlier `push:` step's delivery |
@@ -258,7 +258,7 @@ pipeline:
 
 The `notify:` step is the job-side twin of a command's `notify:` block — same channels, same
 outbox delivery, same per-user opt-out and declarative test cases; see
-[notifications](notifications.md). The `httpCall:` step interleaves an allow-listed
+[notifications](notifications.md). The `http:` step interleaves an allow-listed
 outbound REST call with SQL steps; see [managed connectors](connectors.md).
 
 ## The chunk step
@@ -404,7 +404,7 @@ pipeline:
   step publishes `transferId`, `rows`, and `filename` into the step context, so a
   follow-up `notify:` carries the pointer — or, on a mail channel, the file itself:
   `attach: steps.report.transferId` sends the produced file as a mail attachment
-  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `httpCall:`
+  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `http:`
   can tell a partner system the drop is ready.
 
 ## The push step
@@ -588,7 +588,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-5315` | a `push:` delivery failed — connect, authenticate, write, or rename |
 | `TQL-SEC-4141` | a `push:` target host outside `tesseraql.connectors.push.allowedHosts` (deny by default) |
 
-The `notify:` and `httpCall:` step families report their own codes in the same domain
+The `notify:` and `http:` step families report their own codes in the same domain
 (channels `TQL-BATCH-5301`…, outbound HTTP `TQL-BATCH-5305`…); see
 [notifications](notifications.md), [managed connectors](connectors.md), and the
 [error-code reference](reference-error-codes.md).
@@ -610,7 +610,7 @@ Lint checks jobs statically:
 
 - [guide-integration.md](guide-integration.md) — the reading order for an integration or batch application.
 
-- [Managed connectors](connectors.md) — `httpCall` steps, the `poll:` trigger, egress policy
+- [Managed connectors](connectors.md) — `http:` steps, the `poll:` trigger, egress policy
 - [Notifications](notifications.md) — the `notify:` step, channels, alerts, notify test cases
 - [Transactional writes](transactional-writes.md) — the command-side transaction model jobs deliberately differ from
 - [Deployment](deployment.md) — multi-node semantics and operations permissions

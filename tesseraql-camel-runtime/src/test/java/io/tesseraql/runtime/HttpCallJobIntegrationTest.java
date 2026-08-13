@@ -162,7 +162,7 @@ class HttpCallJobIntegrationTest {
                     fixedDelay: 1s
                 pipeline:
                   - id: fetch
-                    httpCall:
+                    http:
                       method: GET
                       url: http://localhost:%d/rates
                   - id: record

@@ -489,10 +489,15 @@ class ManifestCoverageTest {
                                 new io.tesseraql.yaml.model.PipelineStep("pending",
                                         io.tesseraql.yaml.model.Binding.sql("pending.sql", "query",
                                                 Map.of())),
-                                new io.tesseraql.yaml.model.PipelineStep("push", null, null,
-                                        new io.tesseraql.yaml.model.HttpCallSpec("POST",
-                                                "https://api.partner.example/v1/orders", Map.of(),
-                                                Map.of(), "partner", null, 201, null, null))),
+                                new io.tesseraql.yaml.model.PipelineStep("push",
+                                        io.tesseraql.yaml.model.Binding.http(
+                                                new io.tesseraql.yaml.model.HttpSourceSpec(
+                                                        new io.tesseraql.yaml.model.HttpCallSpec(
+                                                                "POST",
+                                                                "https://api.partner.example/v1/orders",
+                                                                Map.of(), Map.of(), "partner",
+                                                                null, 201, null, null),
+                                                        null, null, null)))),
                         false, null));
     }
 

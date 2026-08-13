@@ -5,14 +5,14 @@ recipes for files and HTTP. Camel's component catalog stays an
 implementation detail — an app never writes a raw endpoint URI; it declares a connector that
 runs under the framework's allow-lists, secrets, lint, and coverage.
 
-This page covers the outbound `httpCall` pipeline step, the inbound directory-polling trigger
+This page covers the outbound `http:` pipeline step, the inbound directory-polling trigger
 for `file-import`, and the inbound `webhook` recipe. For publish/subscribe between commands and
 other systems — domain events on a broker-free database channel — see
 [messaging and events](messaging.md).
 
-## The `httpCall` pipeline step
+## The `http:` pipeline step
 
-An `httpCall` step is a batch-pipeline step that issues one synchronous outbound REST request
+An `http:` step is a batch-pipeline step that issues one synchronous outbound REST request
 and publishes the response to later steps. It interleaves with SQL steps, so a job can fetch
 from an API and persist the result, or read from the database and push it to a partner system.
 
@@ -29,7 +29,7 @@ input:
 
 pipeline:
   - id: fetch
-    httpCall:
+    http:
       method: GET                                   # defaults to GET
       url: https://api.partner.example/v1/rates     # host must be allow-listed
       query:
@@ -65,17 +65,17 @@ success to one exact status — without it any `2xx` succeeds — and `connectTi
 
 ### Why a job step, not a command step
 
-`httpCall` is a job-pipeline step, never a transactional `command-json` step. A command runs
+`http:` is a job-pipeline step, never a transactional `command-json` step. A command runs
 every step in one database transaction, and a synchronous outbound call cannot be rolled back —
 so putting it inside a command would break the all-or-nothing guarantee. A command's outbound
 integration instead rides the transactional outbox as an HMAC-signed webhook (see
 [notifications](notifications.md)): the event is written in the transaction and delivered
-at-least-once afterwards. Use `httpCall` when a pipeline needs the **response** to drive
+at-least-once afterwards. Use `http:` when a pipeline needs the **response** to drive
 subsequent steps; use a webhook notification for fire-and-forget delivery.
 
 ## HTTP sources on query routes
 
-The read-side counterpart of `httpCall`: a query route can compose an external JSON API with
+The read-side counterpart of `http:`: a query route can compose an external JSON API with
 its SQL result **in one screen or one JSON response**, declaratively. Each named `http:`
 source is one call executed after the route's SQL, landing in the execution context exactly
 like a named query. It carries the same call vocabulary a job step does — `method`, `url`,
@@ -115,7 +115,7 @@ response:
   `<name>.status` carries the upstream status.
 - **`onError: empty`** (default `fail`) keeps a widget-shaped source from taking the page
   down: the source yields zero rows plus `<name>.error`, and everything else renders.
-- **The same discipline as `httpCall`**: sources execute through the one outbound gateway —
+- **The same discipline as `http:`**: sources execute through the one outbound gateway —
   the deny-by-default `allowedHosts` list, named secret-managed credentials, connect/request
   timeouts, and the per-host circuit breaker. Lint enforces the surface: query recipes only
   and no shadowing of SQL result keys (`TQL-YAML-1022`), plus the same host/url/credential
@@ -160,7 +160,7 @@ written in the same transaction and delivered at-least-once afterwards. Its resp
 success, never data — a command that must *store* the partner's answer writes a pending row and
 lets a job's `httpCall:` step complete it.
 
-- An `httpCall` **test case** plans a route's sources like a job's steps, without a network
+- An `http:` **test case** plans a route's sources like a job's steps, without a network
   request: `httpCall: {route: orders.list}` rows carry the resolved url, host, allow-list
   verdict, and credential — and `send: true` performs the call for real against the runner's
   capture server ([testing](testing.md#real-send-cases)).
@@ -216,7 +216,7 @@ any other outcome fails the step (and so the job). The call is recorded as a
 
 ## Governance
 
-`httpCall` surfaces under the existing governance model — the host allow-list is the egress
+`http:` surfaces under the existing governance model — the host allow-list is the egress
 control, enforced both statically (lint) and at runtime (deny by default). Lint of a job's
 pipeline catches misconfigured egress before it ships:
 
@@ -232,16 +232,16 @@ the runtime's identical deny-by-default guard. At runtime an off-allow-list host
 
 ## Testing
 
-An `httpCall` declarative test ([testing](testing.md)) **plans** a job's steps against the
+An `http:` declarative test ([testing](testing.md)) **plans** a job's steps against the
 case's params — resolving the url, binding query params, and applying the allow-list — without
 issuing a network request.
 Each planned request is a row, so a suite asserts the recipe is wired correctly and the
-`httpCall` coverage kind tracks it.
+`http:` coverage kind tracks it.
 
 ```yaml
 tests:
   - name: the refresh job calls the allow-listed partner API
-    httpCall:
+    http:
       job: rates.refresh
       id: fetch                       # optional; omit to plan every httpCall step of the job
     params:
