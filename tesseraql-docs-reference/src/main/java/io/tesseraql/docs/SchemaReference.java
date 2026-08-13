@@ -199,9 +199,11 @@ final class SchemaReference {
         flattened.put("type", "object");
         for (JsonNode branch : branches) {
             JsonNode resolved = resolve(branch, defs);
-            resolved.path("properties").fields()
-                    .forEachRemaining(property -> properties.set(property.getKey(),
-                            property.getValue()));
+            JsonNode branchProperties = resolved.path("properties");
+            for (Iterator<String> names = branchProperties.fieldNames(); names.hasNext();) {
+                String name = names.next();
+                properties.set(name, branchProperties.get(name));
+            }
             resolved.path("required").forEach(required::add);
         }
         // No description: a merged shape's own is the property's, which the reader has just
