@@ -645,6 +645,52 @@ class AppLinterTest {
                 && f.message().contains("export.filenam"));
     }
 
+    /**
+     * A pipeline step's blocks are checked the way the document's are — and the step's own keys
+     * come from its {@code @JsonCreator}, not its components: it holds a folded {@code Binding},
+     * so reading components would have called {@code when:}, {@code http:} and {@code enrich:}
+     * unknown on a step that legally carries all three.
+     */
+    @Test
+    void flagsAnUnknownKeyInAPipelineStepsBlocks(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("batch/reports"));
+        Files.writeString(dir.resolve("batch/reports/daily.yml"), """
+                version: tesseraql/v1
+                id: reports.daily
+                kind: job
+                recipe: batch-pipeline
+                trigger:
+                  schedule:
+                    cron: "0 0 4 * * ?"
+                pipeline:
+                  - id: report
+                    when: params.run
+                    sql: { file: report.sql, mode: query }
+                    export:
+                      format: csv
+                    push:
+                      transport: local
+                      pth: outbox/reports
+                  - id: announce
+                    notify:
+                      channel: reports
+                      attatch: steps.report.transferId
+                """);
+        Files.writeString(dir.resolve("batch/reports/report.sql"), "select 1\n;\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1043")
+                && f.message().contains("step 'report' push.pth"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1043")
+                && f.message().contains("step 'announce' notify.attatch"));
+        // `when:` is authored on the step and folded into its binding — a legal key, not a finding.
+        assertThat(findings).noneMatch(f -> f.message().contains("'when"));
+    }
+
     @Test
     void flagsARenamedDecisionSourceKeyColumn(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

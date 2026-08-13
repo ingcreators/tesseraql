@@ -9,14 +9,24 @@ All notable changes to TesseraQL are documented here. The format follows
 ### Changed
 
 - **A block whose shape is fixed says so, and refuses a key it does not have.** `export:`,
-  `import:`, `outbox:` and `errors:` were `additionalProperties: true` with no properties at all
-  — a schema that describes nothing and validates nothing — and the unknown-key lint stopped at
-  a document's own keys. So an `export.sql:` was dropped in silence, and the export wrote an
-  empty file. All four now carry their real keys, closed to the rest, and the lint checks them
-  the way it checks the document: an unknown key is `TQL-YAML-1043`, and one the unified source
-  model moved is `TQL-YAML-1044` naming where it went (`export.sql:` → `sources:`,
-  `import.sql:` → `steps:`). A file transfer's `columns:` gains a shared definition, so the
-  published reference documents the column form instead of calling it `any`.
+  `import:`, `outbox:`, `errors:`, and a pipeline step's `notify:`, `chunk:` and `push:` were
+  `additionalProperties: true` with no properties at all — a schema that describes nothing and
+  validates nothing — and the unknown-key lint stopped at a document's own keys. So an
+  `export.sql:` was dropped in silence, and the export wrote an empty file. All of them now carry
+  their real keys, closed to the rest, and the lint checks them the way it checks the document,
+  a pipeline step's own keys included: an unknown key is `TQL-YAML-1043`, and one the unified
+  source model moved is `TQL-YAML-1044` naming where it went (`export.sql:` → `sources:`,
+  `import.sql:` → `steps:`).
+- **One shape, one home, for the shapes a step and a route share.** A notification, a push
+  target, a chunk loop, an enrichment and a file-transfer column are shared definitions now,
+  referenced from the four places that used to describe them separately or not at all. A
+  step's blocks and a route's `notify:` entries are the same declarations, and the published
+  reference documents each once.
+- **The YAML surface reference documents a pipeline step.** It rendered as `array of any`,
+  because a step is composed with `allOf` — the binding's arms plus the step's own keys — and
+  the generator followed `$ref` and `items` but not `allOf`. The most important shape on a job
+  document was the one the page did not show. A `$ref`-only property also takes its description
+  from the target rather than rendering an em dash.
 
 ### Fixed
 

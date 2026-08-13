@@ -104,6 +104,23 @@ class SchemaSyncTest {
                 .containsExactlyInAnyOrderElementsOf(
                         yamlNames(io.tesseraql.yaml.model.ColumnSpec.class));
 
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "notification"))
+                .as("the notification shape documents the notify model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.NotifySpec.class));
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "push"))
+                .as("the push shape documents the push model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.PushSpec.class));
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "chunk"))
+                .as("the chunk shape documents the chunk model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.ChunkSpec.class));
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "enrichment"))
+                .as("the enrichment shape documents the enrich model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.EnrichSpec.class));
+
         JsonNode route = new ObjectMapper().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         assertThat(names(route.path("properties").path("outbox").path("properties")))
@@ -114,6 +131,34 @@ class SchemaSyncTest {
                 .as("the errors block documents the errors model's keys, and only those")
                 .containsExactlyInAnyOrderElementsOf(
                         yamlNames(io.tesseraql.yaml.model.ErrorsSpec.class));
+    }
+
+    /**
+     * A pipeline step's blocks are the shared shapes, not copies of them.
+     *
+     * <p>They were three separate {@code additionalProperties: true} stubs in the job schema
+     * while the route's {@code notify:} was a fourth — one concept, four descriptions, none of
+     * them a shape. A {@code $ref} is what keeps the next added key from having to be added in
+     * four places and being added in one.
+     */
+    @Test
+    void aPipelineStepsBlocksReferTheSharedShapes() throws Exception {
+        JsonNode step = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-job-v1.schema.json"))
+                .path("properties").path("pipeline").path("items").path("allOf").path(1)
+                .path("properties");
+
+        assertThat(List.of(step.path("notify"), step.path("chunk"), step.path("push"),
+                step.path("export")))
+                .as("a step's output and processing blocks are shared definitions")
+                .allMatch(node -> node.path("$ref").asText().contains("tesseraql-defs-v1"));
+
+        JsonNode routeNotify = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"))
+                .path("properties").path("notify").path("additionalProperties");
+        assertThat(routeNotify.path("$ref").asText())
+                .as("a route's notifications are the same shape a step's is")
+                .contains("notification");
     }
 
     /**
@@ -131,6 +176,10 @@ class SchemaSyncTest {
                 defs.path("$defs").path("shared").path("export").path("additionalProperties"),
                 defs.path("$defs").path("shared").path("import").path("additionalProperties"),
                 defs.path("$defs").path("fileColumn").path("additionalProperties"),
+                defs.path("$defs").path("notification").path("additionalProperties"),
+                defs.path("$defs").path("push").path("additionalProperties"),
+                defs.path("$defs").path("chunk").path("additionalProperties"),
+                defs.path("$defs").path("enrichment").path("additionalProperties"),
                 route.path("properties").path("outbox").path("additionalProperties"),
                 route.path("properties").path("errors").path("additionalProperties")))
                 .as("a fixed-shape block is closed, so an unknown key is a red squiggle rather"

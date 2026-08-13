@@ -161,6 +161,178 @@
         "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md."
       }
     },
+    "enrichment": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The join: each column of the rows being enriched to the column of the reference it matches. Several pairs make a composite key, compared by the framework's canonical normalization (INTEGER 1 matches BIGINT 1)."
+        },
+        "sql": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Fetch the reference by key, written as a source's `sql:` arm is. The statement must bind `keys` — one that never mentions it reads the whole table once per batch and still returns the right answer, which is why only the build can catch it (TQL-YAML-1048)."
+        },
+        "http": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Call the reference by key, written as a source's `http:` arm is, plus `select:` and `onError:`. How the keys reach it is `mode:`."
+        },
+        "source": {
+          "type": "string",
+          "description": "A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-CAMEL-3114) — load it into a table and enrich from there."
+        },
+        "mode": {
+          "type": "string",
+          "examples": [
+            "perRow",
+            "batch"
+          ],
+          "description": "For an `http:` reference: `perRow` (default) makes one request per distinct key, `batch` one request per `batchSize` keys. A `sql:` reference is always batched — a statement takes a key list by construction."
+        },
+        "as": {
+          "type": "string",
+          "description": "Attach the matched rows as a list under this name. Exactly one of `as:` or `merge:` (TQL-YAML-1047)."
+        },
+        "merge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Copy these columns of the matched row onto each row instead of attaching a list. Exactly one of `as:` or `merge:` (TQL-YAML-1047)."
+        },
+        "batchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many distinct keys one fetch carries."
+        },
+        "maxKeys": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The ceiling on distinct keys collected for one enrichment, past which the reference is refused rather than read unboundedly."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One keyed reference folded into a binding's rows: where the keys are (`on:`), what answers them (`sql:`, `http:` or `source:` — exactly one), and how the answer lands (`as:` or `merge:`). Documented in lookups.md."
+    },
+    "notification": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The declared channel this notification is enqueued on, which decides the transport (mail, webhook, queue) and its configuration. It must exist (TQL-FIELD-2004)."
+        },
+        "when": {
+          "type": "string",
+          "description": "A core expression over the result context; the notification is enqueued only when it holds, so a conditional send is a declaration rather than a branch."
+        },
+        "recipient": {
+          "type": "string",
+          "description": "A bindable path resolving to the address this notification goes to, overriding the channel's configured recipients."
+        },
+        "attach": {
+          "type": "string",
+          "description": "A bindable path resolving to a transfer id — typically an export step's `steps.<id>.transferId` — whose file rides along. Mail channels only (TQL-FIELD-2004)."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Each payload key to the bindable path supplying its value; the template or transport reads them by name."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One notification enqueued on the transactional outbox, so it is sent if and only if the write commits. Documented in notifications.md."
+    },
+    "push": {
+      "type": "object",
+      "properties": {
+        "transport": {
+          "type": "string",
+          "examples": [
+            "local",
+            "sftp",
+            "ftps"
+          ],
+          "description": "Where the file goes: `local` writes under the work directory, `sftp`/`ftps` reach an allow-listed remote host."
+        },
+        "host": {
+          "type": "string",
+          "description": "The remote server, which must be allow-listed under `tesseraql.connectors.push.hosts`. Required on a remote transport (TQL-YAML-1042)."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The remote port, defaulting to the transport's."
+        },
+        "path": {
+          "type": "string",
+          "description": "The destination directory. The file is staged and renamed into place, so a poller on the far side never reads a partial file."
+        },
+        "credential": {
+          "type": "string",
+          "description": "The named credential under `tesseraql.connectors.push.credentials`. Required on a remote transport (TQL-YAML-1042)."
+        },
+        "file": {
+          "type": "string",
+          "description": "A bindable path resolving to the transfer id of the file to deliver, typically an earlier export step's `steps.<id>.transferId`."
+        },
+        "as": {
+          "type": "string",
+          "description": "The name the file lands under, defaulting to the transfer's own filename. `{dotted.path}` interpolates a context value."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Delivery of a produced transfer to a local or remote drop — the outbound mirror of the poll trigger, under the same policy block. Documented in file-transfers.md."
+    },
+    "chunk": {
+      "type": "object",
+      "properties": {
+        "reader": {
+          "$ref": "#/$defs/binding",
+          "description": "What the loop reads, a window at a time: its own `sql:`, or `spool:` naming an earlier step's spool. A chunk step's work is its reader and writer, so the step declares no arm of its own (TQL-FIELD-2004)."
+        },
+        "writer": {
+          "$ref": "#/$defs/binding",
+          "description": "What runs for each row the reader produced, binding that row's columns."
+        },
+        "key": {
+          "type": "string",
+          "description": "The reader column checkpoints track, defaulting to `id`. A restart resumes after the last committed key, which is why the reader must be ordered by it."
+        },
+        "commitEvery": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many rows one committed slice holds. A checkpoint lands with each commit, so this is also how much a restart repeats."
+        },
+        "onError": {
+          "type": "string",
+          "examples": [
+            "fail",
+            "skip"
+          ],
+          "description": "`fail` (default) fails the step on the first writer error; `skip` records the row in `tql_job_skips` and continues, up to `skipLimit`."
+        },
+        "skipLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many skipped rows the step tolerates before failing anyway, so a systematically broken load does not run to completion looking fine."
+        },
+        "enrich": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/enrichment"
+          },
+          "description": "Keyed references folded into each window before the writer sees it, so a writer may bind a column the reader's query never selected. A reference failure fails the window, not the row."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Restartable per-row processing: a reader, a writer, and committed checkpoints, so a job that stops resumes where it left off instead of starting over. Documented in jobs.md."
+    },
     "fileColumn": {
       "type": [
         "string",
@@ -594,8 +766,7 @@
         "enrich": {
           "type": "object",
           "additionalProperties": {
-            "type": "object",
-            "additionalProperties": true
+            "$ref": "#/$defs/enrichment"
           },
           "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows."
         }

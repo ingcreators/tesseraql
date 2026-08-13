@@ -267,6 +267,17 @@ public final class AppLinter {
             "errors", io.tesseraql.yaml.model.ErrorsSpec.class);
 
     /**
+     * The output and processing blocks a pipeline step carries, checked the same way. A step's
+     * own keys are the step record's; these are the blocks hanging off it, and they drifted for
+     * the same reason the document-level ones did.
+     */
+    private static final Map<String, Class<?>> STEP_BLOCKS = Map.of(
+            "export", io.tesseraql.yaml.model.ExportSpec.class,
+            "notify", io.tesseraql.yaml.model.NotifySpec.class,
+            "push", io.tesseraql.yaml.model.PushSpec.class,
+            "chunk", io.tesseraql.yaml.model.ChunkSpec.class);
+
+    /**
      * Keys the unified source model moved out of a block, per block (docs/unified-sources.md
      * decision 7). Like the top-level renames these deserialize away in silence, so they are an
      * error naming where the key went rather than a generic unknown-key warning — an
@@ -287,18 +298,58 @@ public final class AppLinter {
     private Set<String> catalogTables = Set.of();
 
     /**
-     * The YAML keys a record accepts — a document-family root, or one of the fixed-shape blocks
-     * inside it — derived from its record components and their {@code @JsonProperty} overrides
-     * (so {@code notify}/{@code import}/{@code export} map correctly). Cached per class.
+     * The YAML keys a record accepts — a document-family root, a fixed-shape block, or a
+     * pipeline step — derived from its {@code @JsonCreator} factory when it has one and from its
+     * record components otherwise, honoring {@code @JsonProperty} either way (so
+     * {@code notify}/{@code import}/{@code export} map correctly). Cached per class.
+     *
+     * <p>The creator comes first because the authoring form is what the author writes, and the
+     * two part company exactly where a record is a folded shape: {@link
+     * io.tesseraql.yaml.model.PipelineStep} holds a {@code Binding} but is authored with the
+     * arms spread across the step, so its components list neither {@code when} nor {@code http}
+     * nor {@code enrich}. Reading components alone would call three legal keys unknown.
      */
     private Set<String> acceptedKeys(Class<?> recordClass) {
         return acceptedKeyCache.computeIfAbsent(recordClass, cls -> {
             Set<String> keys = new java.util.TreeSet<>();
+            List<String> authored = creatorKeys(cls);
+            if (authored != null) {
+                keys.addAll(authored);
+                return keys;
+            }
             for (java.lang.reflect.RecordComponent component : cls.getRecordComponents()) {
                 keys.add(yamlName(cls, component));
             }
             return keys;
         });
+    }
+
+    /**
+     * The {@code @JsonProperty} names of a class's properties-mode {@code @JsonCreator}, or null
+     * when it has none. A delegating creator (a scalar shorthand such as a bare column name)
+     * names no properties, so it is not one of these.
+     */
+    private static List<String> creatorKeys(Class<?> cls) {
+        for (java.lang.reflect.Method method : cls.getDeclaredMethods()) {
+            if (method.getAnnotation(com.fasterxml.jackson.annotation.JsonCreator.class) == null
+                    || method.getParameterCount() == 0) {
+                continue;
+            }
+            List<String> names = new ArrayList<>();
+            for (java.lang.reflect.Parameter parameter : method.getParameters()) {
+                var property = parameter.getAnnotation(
+                        com.fasterxml.jackson.annotation.JsonProperty.class);
+                if (property == null) {
+                    names = null;
+                    break;
+                }
+                names.add(property.value());
+            }
+            if (names != null) {
+                return names;
+            }
+        }
+        return null;
     }
 
     /**
@@ -362,20 +413,62 @@ public final class AppLinter {
             // Keyed by name, so confirm this document's key really is that record before
             // checking against it — a second family reusing the word would otherwise be linted
             // against a shape it never had.
-            if (!declaresBlock(recordClass, block.getKey(), block.getValue())
-                    || !(tree.get(block.getKey()) instanceof Map<?, ?> declared)) {
+            if (!declaresBlock(recordClass, block.getKey(), block.getValue())) {
                 continue;
             }
-            Set<String> blockKeys = acceptedKeys(block.getValue());
-            Map<String, String> moved = REMOVED_BLOCK_KEYS.getOrDefault(block.getKey(), Map.of());
-            for (Object key : declared.keySet()) {
+            lintBlockKeys(tree.get(block.getKey()), block.getKey(), block.getValue(), source,
+                    findings);
+        }
+        lintPipelineSteps(tree.get("pipeline"), source, findings);
+    }
+
+    /**
+     * A job's steps, each checked as the fixed shape it is: the step's own keys, then the output
+     * and processing blocks hanging off it ({@link #STEP_BLOCKS}). A route's {@code steps:} are
+     * bindings whose arms the binding lints already walk; a pipeline step is where the output
+     * blocks live, which is why this side needed the check.
+     */
+    private void lintPipelineSteps(Object pipeline, String source, List<LintFinding> findings) {
+        if (!(pipeline instanceof List<?> steps)) {
+            return;
+        }
+        Set<String> stepKeys = acceptedKeys(io.tesseraql.yaml.model.PipelineStep.class);
+        for (Object item : steps) {
+            if (!(item instanceof Map<?, ?> step)) {
+                continue;
+            }
+            String id = step.get("id") == null ? "?" : String.valueOf(step.get("id"));
+            for (Object key : step.keySet()) {
                 String name = String.valueOf(key);
-                if (blockKeys.contains(name)) {
+                if (stepKeys.contains(name)) {
                     continue;
                 }
-                reportUnknownKey(block.getKey() + "." + name, moved.get(name), true, blockKeys,
-                        source, findings);
+                reportUnknownKey("step '" + id + "' " + name, null, false, stepKeys, source,
+                        findings);
             }
+            for (var block : STEP_BLOCKS.entrySet()) {
+                lintBlockKeys(step.get(block.getKey()), "step '" + id + "' " + block.getKey(),
+                        block.getValue(), source, findings);
+            }
+        }
+    }
+
+    /** One fixed-shape block's keys against the record that holds it. */
+    private void lintBlockKeys(Object block, String path, Class<?> blockClass, String source,
+            List<LintFinding> findings) {
+        if (!(block instanceof Map<?, ?> declared)) {
+            return;
+        }
+        Set<String> blockKeys = acceptedKeys(blockClass);
+        String name = path.substring(path.lastIndexOf(' ') + 1);
+        Map<String, String> moved = REMOVED_BLOCK_KEYS.getOrDefault(name, Map.of());
+        for (Object key : declared.keySet()) {
+            String declaredKey = String.valueOf(key);
+            if (blockKeys.contains(declaredKey)) {
+                continue;
+            }
+            reportUnknownKey(path + "." + declaredKey, moved.get(declaredKey), true, blockKeys,
+                    source, findings);
         }
     }
 

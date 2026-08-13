@@ -294,8 +294,7 @@
     "notify": {
       "type": "object",
       "additionalProperties": {
-        "type": "object",
-        "additionalProperties": true
+        "$ref": "tesseraql-defs-v1.schema.json#/$defs/notification"
       },
       "description": "Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md."
     },
