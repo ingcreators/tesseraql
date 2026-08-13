@@ -64,7 +64,7 @@ where o.customer_id = /* customerId */1
 Join keys compare canonically (INTEGER 1 matches BIGINT 1); rows are copied, so shared context
 rows are never mutated. `TQL-YAML-1046` keeps the references honest.
 
-This is [enrichment](#enrichment-enrich) with a `source:` reference instead of a `sql:` one —
+This is [enrichment](#fetching-a-reference-by-key) with a `source:` reference instead of a `sql:` one —
 same join, same composition, one implementation. Composing two results the document already
 fetched used to be a separate block (`nest:`) with its own `into:`/`children:` vocabulary, which
 could serve only a JSON body: `into:` named a body key, and JSON is the only surface that has
