@@ -5,7 +5,6 @@ import io.tesseraql.camel.tenant.TenantRouting;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.core.files.SpooledRows;
@@ -256,41 +255,22 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 SpoolWriter writer = tempStore.createWriter(kind);
                 // The writer closes first (listed first); toRef() is only valid after close.
                 try (writer; ResultSet resultSet = statement.executeQuery()) {
-                    io.tesseraql.core.files.ExportRowCap cap = rowCap(exchange, codec, spec);
+                    io.tesseraql.core.files.ExportRowCap cap = io.tesseraql.core.files.ExportWrite
+                            .effectiveCap(codec, spec, exchange.getProperty(
+                                    TesseraqlProperties.EXPORT_ROW_CAP,
+                                    io.tesseraql.core.files.ExportRowCap.class));
                     Map<String, Object> values = composedValues(exchange, connection, tempStore,
                             cap, spools);
-                    // The enrichment wraps the cursor, so every branch below sees enriched
-                    // rows and none of them holds more than it already did (slice 13b).
-                    java.util.Iterator<Map<String, Object>> rows = io.tesseraql.core.files.EnrichingRows
-                            .of(
-                                    new ResultRows(resultSet, writer, cap),
-                                    exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
-                                            io.tesseraql.core.files.RowEnricher.class),
-                                    exchange.getProperty(TesseraqlProperties.EXPORT_ENRICH_WINDOW,
-                                            0,
-                                            Integer.class));
-                    // A codec that holds its rows is handed a re-readable set instead of the
-                    // cursor, so a template may walk it more than once without the result set
-                    // living in memory (docs/export-pipeline.md, decision 1). The row cap still
-                    // fires during the drain, before anything reaches the spool.
-                    if (spec.splitBy() != null && !spec.splitBy().isBlank()) {
-                        // One document per group, bundled (docs/export-pipeline.md, dec. 12): the
-                        // rows spool whatever the codec declared, because holding one group at a
-                        // time is what splitting buys.
-                        try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
-                            io.tesseraql.core.files.SplitExport.write(codec, spec, spooled, values,
-                                    spec.splitBy(), endpoint.getFilename(),
-                                    new SpoolOutputStream(writer));
-                        }
-                    } else if (codec.streams(spec)) {
-                        codec.write(new SpoolOutputStream(writer), spec,
-                                ExportModel.streaming(rows, values));
-                    } else {
-                        try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
-                            codec.write(new SpoolOutputStream(writer), spec,
-                                    ExportModel.repeatable(spooled, values));
-                        }
-                    }
+                    io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
+                            resultSet, endpoint.getDialect(), cap, EXECUTION_ERROR);
+                    io.tesseraql.core.files.ExportWrite.write(codec, spec, tempStore, extraction,
+                            exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
+                                    io.tesseraql.core.files.RowEnricher.class),
+                            exchange.getProperty(TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
+                                    Integer.class),
+                            values, endpoint.getFilename(),
+                            new io.tesseraql.core.spool.SpoolOutput(writer));
+                    writer.incrementRows(extraction.count());
                 }
                 ref = writer.toRef();
             } finally {
@@ -363,68 +343,16 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     // Spooled like the extraction, and counted by the same ceiling: a cap that
                     // bounds the subject and lets a named query run unbounded bounds nothing
                     // (docs/export-pipeline.md, decision 15).
-                    SpooledRows spooled = SpooledRows.drain(tempStore,
-                            new NamedRows(resultSet, cap));
-                    spools.add(spooled);
-                    values.put(query.name(),
-                            ExportModel.result(spooled, spooled.size()));
+                    values.put(query.name(), io.tesseraql.core.files.ExportWrite.namedResult(
+                            tempStore, new io.tesseraql.core.files.ResultSetRows(resultSet,
+                                    endpoint.getDialect(), cap, EXECUTION_ERROR),
+                            spools));
                 }
             } catch (java.sql.SQLException ex) {
                 throw executionError(ex);
             }
         }
         return Map.copyOf(values);
-    }
-
-    /** A named query's rows, label-normalized and counted against the export's ceiling. */
-    private final class NamedRows implements java.util.Iterator<Map<String, Object>> {
-
-        private final ResultSet resultSet;
-        private final io.tesseraql.core.files.ExportRowCap cap;
-        private final List<String> labels = new ArrayList<>();
-        private Boolean pending;
-        private long read;
-
-        NamedRows(ResultSet resultSet, io.tesseraql.core.files.ExportRowCap cap)
-                throws java.sql.SQLException {
-            this.resultSet = resultSet;
-            this.cap = cap;
-            ResultSetMetaData metaData = resultSet.getMetaData();
-            for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                labels.add(io.tesseraql.core.dialect.Labels.normalize(
-                        endpoint.getDialect(), metaData.getColumnLabel(col)));
-            }
-        }
-
-        @Override
-        public boolean hasNext() {
-            try {
-                if (pending == null) {
-                    pending = resultSet.next();
-                }
-                return pending && cap.admits(read);
-            } catch (java.sql.SQLException ex) {
-                throw executionError(ex);
-            }
-        }
-
-        @Override
-        public Map<String, Object> next() {
-            if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
-            }
-            pending = null;
-            try {
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= labels.size(); col++) {
-                    row.put(labels.get(col - 1), resultSet.getObject(col));
-                }
-                read++;
-                return row;
-            } catch (java.sql.SQLException ex) {
-                throw executionError(ex);
-            }
-        }
     }
 
     /** An export query's parsed SQL, read once per file and kept for the endpoint's lifetime. */
@@ -441,79 +369,6 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         });
     }
 
-    /**
-     * The cap this export runs under: the route's declaration, but only where the codec holds the
-     * rows for this spec (docs/export-pipeline.md, decisions 6 and 7). A streaming export
-     * accumulates nothing, so a ceiling there would exist only to be raised.
-     */
-    private static io.tesseraql.core.files.ExportRowCap rowCap(Exchange exchange, FileCodec codec,
-            FileWriteSpec spec) {
-        if (codec.streams(spec)) {
-            return io.tesseraql.core.files.ExportRowCap.unbounded();
-        }
-        io.tesseraql.core.files.ExportRowCap cap = exchange.getProperty(
-                TesseraqlProperties.EXPORT_ROW_CAP, io.tesseraql.core.files.ExportRowCap.class);
-        return cap != null ? cap : io.tesseraql.core.files.ExportRowCap.unbounded();
-    }
-
-    /** Streams result-set rows to the codec as label-normalized maps, counting them as read. */
-    private final class ResultRows implements java.util.Iterator<Map<String, Object>> {
-
-        private final ResultSet resultSet;
-        private final SpoolWriter writer;
-        private final io.tesseraql.core.files.ExportRowCap cap;
-        private final List<String> labels = new ArrayList<>();
-        private Boolean pending;
-        private long written;
-
-        ResultRows(ResultSet resultSet, SpoolWriter writer,
-                io.tesseraql.core.files.ExportRowCap cap) throws java.sql.SQLException {
-            this.resultSet = resultSet;
-            this.writer = writer;
-            this.cap = cap;
-            ResultSetMetaData metaData = resultSet.getMetaData();
-            for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                labels.add(io.tesseraql.core.dialect.Labels.normalize(
-                        endpoint.getDialect(), metaData.getColumnLabel(col)));
-            }
-        }
-
-        @Override
-        public boolean hasNext() {
-            try {
-                if (pending == null) {
-                    pending = resultSet.next();
-                }
-                // The cap is asked before the row is handed over, so warn mode truncates cleanly
-                // and fail mode raises before the codec has accepted a row it cannot hold.
-                return pending && cap.admits(written);
-            } catch (java.sql.SQLException ex) {
-                throw executionError(ex);
-            }
-        }
-
-        @Override
-        public Map<String, Object> next() {
-            if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
-            }
-            pending = null;
-            try {
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= labels.size(); col++) {
-                    // Raw JDBC values, like the asynchronous file-export path: the codec's
-                    // ColumnValues formatting decides how temporals and numbers render.
-                    row.put(labels.get(col - 1), resultSet.getObject(col));
-                }
-                writer.incrementRows(1);
-                written++;
-                return row;
-            } catch (java.sql.SQLException ex) {
-                throw executionError(ex);
-            }
-        }
-    }
-
     /** The bundle's own name: the declared filename with its placeholder and extension dropped. */
     private static String zipName(String filename) {
         String withoutKey = filename.replace(io.tesseraql.core.files.SplitExport.KEY, "")
@@ -521,26 +376,6 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         int dot = withoutKey.lastIndexOf('.');
         String stem = dot > 0 ? withoutKey.substring(0, dot) : withoutKey;
         return (stem.isBlank() ? "export" : stem) + ".zip";
-    }
-
-    /** Adapts the spool writer to the {@link java.io.OutputStream} the codecs write to. */
-    private static final class SpoolOutputStream extends java.io.OutputStream {
-
-        private final SpoolWriter writer;
-
-        SpoolOutputStream(SpoolWriter writer) {
-            this.writer = writer;
-        }
-
-        @Override
-        public void write(int b) throws java.io.IOException {
-            writer.write(new byte[]{(byte) b});
-        }
-
-        @Override
-        public void write(byte[] data, int offset, int length) throws java.io.IOException {
-            writer.write(java.util.Arrays.copyOfRange(data, offset, offset + length));
-        }
     }
 
     private TempStore tempStore() {
