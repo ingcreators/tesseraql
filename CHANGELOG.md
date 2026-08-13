@@ -60,6 +60,23 @@ All notable changes to TesseraQL are documented here. The format follows
   binds what the extract read; a value the encoding cannot carry fails with the column named
   instead of degrading to text. HTTP-sourced rows keep JSONL, because that data was JSON to
   begin with and JSON is faithful there.
+- **An unknown key is answered the same way at every depth of every document.** Three
+  mechanisms answered "what happens to a typo": a view document refused one at every nesting
+  level, `domains/` and `catalogs/` refused one at the top while rule sets, decisions and
+  calendars checked nothing at all, and routes, jobs, scopes, workflows, consumers and mcp
+  documents got a warning for their own keys plus the blocks somebody had registered in a map —
+  so `securty:` beside a route was reported and `polcy:` inside its `security:` was not. Which
+  of the three a family got was an accident of the campaign that last touched it. The walk now
+  recurses into every shape the model declares — a record, the entries of a sequence of
+  records, the values of a map of records — so `security.polcy:`, `sources.main.sql.mod:` and
+  `response.json.bdy:` raise `TQL-YAML-1043` the way a top-level typo always did, and a key the
+  unified source model moved still raises `TQL-YAML-1044` naming where it went. `kind: prompt`
+  documents load through a model of their own instead of being read out of the raw tree
+  unchecked, and rule sets, decisions and calendars are walked too. The strict surfaces keep
+  their semantics — a view or domain typo still refuses the load — but every accepted-key set,
+  strict or lenient, is now read from the model rather than restated beside it, so a nested
+  block is covered the day its record lands instead of the day someone remembers to register
+  it. Documents with keys the loader was quietly dropping will report them.
 
 ### Fixed
 

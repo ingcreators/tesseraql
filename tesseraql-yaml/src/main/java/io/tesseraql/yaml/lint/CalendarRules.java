@@ -31,6 +31,13 @@ final class CalendarRules implements LintRule {
      */
     io.tesseraql.yaml.calendar.Calendars lintCalendars(Path appHome,
             List<LintFinding> findings) {
+        // A calendars document parses into ignoreUnknown records, so a `holidys:` left a
+        // calendar with no holidays at all and said nothing (docs/lint-restructure.md
+        // decision 3).
+        for (Path document : LintSupport.documents(appHome, "calendars")) {
+            UnknownKeyRules.lintUnknownKeys(context, appHome, document,
+                    io.tesseraql.yaml.model.CalendarsDocument.class, java.util.Set.of(), findings);
+        }
         io.tesseraql.yaml.calendar.Calendars calendars;
         try {
             calendars = io.tesseraql.yaml.calendar.Calendars.load(appHome,

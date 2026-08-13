@@ -626,10 +626,10 @@ public final class ManifestLoader {
                         Map<String, Object> tree = parser.parseTree(file);
                         String description = string(tree.get("description"));
                         Object kind = tree.get("kind");
-                        // A prompt is pure text (no recipe/SQL), so it is parsed from the tree
-                        // directly rather than through the route parser (which requires a recipe).
+                        // A prompt is pure text (no recipe/SQL), so it reads through its own
+                        // model rather than the route parser (which requires a recipe).
                         if ("prompt".equals(kind)) {
-                            prompts.add(promptFile(file, tree, description));
+                            prompts.add(promptFile(file, parser.parsePrompt(file)));
                             return;
                         }
                         // A non-null kind outside the legal set was silently treated as a tool —
@@ -658,24 +658,15 @@ public final class ManifestLoader {
         }
     }
 
-    /** Parses a {@code kind: prompt} document into a {@link PromptFile} (id, arguments, template). */
-    @SuppressWarnings("unchecked")
-    private static PromptFile promptFile(Path file, Map<String, Object> tree, String description) {
+    /** Turns a parsed prompt document into a {@link PromptFile} (id, arguments, template). */
+    private static PromptFile promptFile(Path file,
+            io.tesseraql.yaml.model.PromptDefinition definition) {
         List<PromptFile.Argument> arguments = new ArrayList<>();
-        if (tree.get("input") instanceof Map<?, ?> input) {
-            for (Map.Entry<?, ?> entry : input.entrySet()) {
-                String name = String.valueOf(entry.getKey());
-                String argDescription = null;
-                boolean required = false;
-                if (entry.getValue() instanceof Map<?, ?> spec) {
-                    argDescription = string(((Map<String, Object>) spec).get("description"));
-                    required = Boolean.TRUE.equals(((Map<String, Object>) spec).get("required"));
-                }
-                arguments.add(new PromptFile.Argument(name, argDescription, required));
-            }
-        }
-        return new PromptFile(file, string(tree.get("id")), description, arguments,
-                string(tree.get("template")));
+        definition.input().forEach((name, argument) -> arguments.add(new PromptFile.Argument(name,
+                argument == null ? null : argument.description(),
+                argument != null && argument.required())));
+        return new PromptFile(file, definition.id(), definition.description(), arguments,
+                definition.template());
     }
 
     private static String string(Object value) {

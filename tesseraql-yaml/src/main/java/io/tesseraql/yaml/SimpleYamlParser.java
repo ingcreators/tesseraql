@@ -69,13 +69,23 @@ public final class SimpleYamlParser {
         }
     }
 
-    /** The keys a field domain may carry (docs/field-domains.md): the field itself, never the
-     * operation's use of it. */
-    private static final java.util.Set<String> DOMAIN_KEYS = java.util.Set.of("type", "min",
-            "max", "minLength", "maxLength", "pattern", "format", "enum", "items",
-            "classification", "mask", "widget", "codes");
-    private static final java.util.Set<String> CONSTRAINT_KEYS = java.util.Set.of("field", "code",
-            "message");
+    /**
+     * The keys a field domain may carry (docs/field-domains.md): an input field's own, less the
+     * operational ones each route's use of it declares. Derived from the model rather than
+     * restated, so a key added to {@link io.tesseraql.yaml.model.InputField} is accepted inside a
+     * domain the day it lands (docs/lint-restructure.md decision 3).
+     */
+    private static final java.util.Set<String> DOMAIN_KEYS = describingKeys();
+
+    private static java.util.Set<String> describingKeys() {
+        java.util.Set<String> keys = new java.util.TreeSet<>(io.tesseraql.yaml.model.AcceptedKeys
+                .of(io.tesseraql.yaml.model.InputField.class));
+        keys.removeAll(io.tesseraql.yaml.model.InputField.OPERATIONAL_KEYS);
+        return java.util.Collections.unmodifiableSet(keys);
+    }
+
+    private static final java.util.Set<String> CONSTRAINT_KEYS = io.tesseraql.yaml.model.AcceptedKeys
+            .of(io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping.class);
 
     private static final TqlErrorCode DOMAIN_OPERATIONAL_KEY = new TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.FIELD, 4602);
@@ -138,10 +148,12 @@ public final class SimpleYamlParser {
     private static final TqlErrorCode CATALOG_MALFORMED = new TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.FIELD, 4616);
 
-    /** The keys a catalog may carry (docs/lookups.md): where the codes are, and which columns. */
-    private static final java.util.Set<String> CATALOG_KEYS = java.util.Set.of("table", "where",
-            "file", "tables", "key", "label", "language", "order", "active", "datasource",
-            "cache");
+    /**
+     * The keys a catalog may carry (docs/lookups.md): where the codes are, and which columns —
+     * the catalog model's own, read from it rather than restated beside it.
+     */
+    private static final java.util.Set<String> CATALOG_KEYS = io.tesseraql.yaml.model.AcceptedKeys
+            .of(io.tesseraql.yaml.model.CatalogSpec.class);
 
     /** Parses a {@code catalogs/*.yml} document (docs/lookups.md, decision 9). */
     public java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> parseCatalogs(Path file) {
@@ -290,6 +302,18 @@ public final class SimpleYamlParser {
         requireField(job.kind(), "kind", source);
         requireField(job.recipe(), "recipe", source);
         return job;
+    }
+
+    /** Parses a {@code kind: prompt} mcp document (Studio backlog G follow-on). */
+    public io.tesseraql.yaml.model.PromptDefinition parsePrompt(Path file) {
+        String content = readFile(file);
+        try {
+            return mapper.readValue(content, io.tesseraql.yaml.model.PromptDefinition.class);
+        } catch (TqlException ex) {
+            throw ex;
+        } catch (IOException | RuntimeException ex) {
+            throw schemaError("prompt", file.toString(), ex);
+        }
     }
 
     /** Parses a scope YAML file (roadmap Phase 29). */
