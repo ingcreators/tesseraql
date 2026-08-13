@@ -28,14 +28,173 @@
       },
       "import": {
         "type": "object",
-        "additionalProperties": true,
+        "properties": {
+          "format": {
+            "type": "string",
+            "examples": [
+              "csv",
+              "excel"
+            ],
+            "description": "The tabular format the uploaded file is parsed as. `csv` is built in; `excel` needs the tesseraql-excel module (TQL-LD-2801 when the codec is absent)."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/fileColumn"
+            },
+            "description": "How the file's columns map to the per-row statement's bind names. Omit it to use the header labels as bind names."
+          },
+          "headerRow": {
+            "type": "boolean",
+            "description": "Whether the table starts with a header row (default `true`). With a header, simple-form columns match by label rather than by position."
+          },
+          "startRow": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The 1-based row the table starts at, for files carrying title rows above the data (default 1)."
+          },
+          "sheet": {
+            "type": "string",
+            "description": "For workbook formats, the sheet to read (default: the first)."
+          },
+          "locale": {
+            "type": "string",
+            "description": "The locale `type:`/`format:` columns parse dates and numbers in. A literal, or a request source such as `principal.claim.locale`; unset, `tesseraql.files.locale` applies."
+          },
+          "onError": {
+            "type": "string",
+            "examples": [
+              "rollback",
+              "skip"
+            ],
+            "description": "What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers."
+          }
+        },
+        "additionalProperties": false,
         "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md."
       },
       "export": {
         "type": "object",
-        "additionalProperties": true,
-        "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md."
+        "properties": {
+          "format": {
+            "type": "string",
+            "examples": [
+              "csv",
+              "excel",
+              "pdf"
+            ],
+            "description": "The format the rows are written as. `csv` is built in; `excel` and `pdf` need their modules (TQL-LD-2801 when the codec is absent)."
+          },
+          "filename": {
+            "type": "string",
+            "description": "The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`."
+          },
+          "template": {
+            "type": "string",
+            "description": "A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid."
+          },
+          "sheet": {
+            "type": "string",
+            "description": "For workbook formats, the sheet to write."
+          },
+          "startCell": {
+            "type": "string",
+            "description": "Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template, and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/fileColumn"
+            },
+            "description": "The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name."
+          },
+          "locale": {
+            "type": "string",
+            "description": "The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`."
+          },
+          "after": {
+            "type": "object",
+            "properties": {
+              "timing": {
+                "type": "string",
+                "examples": [
+                  "extract",
+                  "download"
+                ],
+                "description": "`extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041)."
+              },
+              "sql": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys."
+              }
+            },
+            "additionalProperties": false,
+            "description": "A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on."
+          },
+          "maxRows": {
+            "type": "integer",
+            "description": "The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped."
+          },
+          "onOverflow": {
+            "type": "string",
+            "examples": [
+              "fail",
+              "warn"
+            ],
+            "description": "`fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs."
+          },
+          "groupBy": {
+            "type": "string",
+            "description": "A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851)."
+          },
+          "splitBy": {
+            "type": "string",
+            "description": "A column that splits the export into one document per value, delivered as a single ZIP; `filename:` must carry `{key}`. The rows must be ordered by it (TQL-LD-2851)."
+          }
+        },
+        "additionalProperties": false,
+        "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md."
       }
+    },
+    "fileColumn": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The bind name on import, the row column on export. The simple form `- name` is this key and nothing else."
+        },
+        "label": {
+          "type": "string",
+          "description": "The heading in the file — the same word a view column uses, and a message key resolves through the app bundles. Defaults to `name`."
+        },
+        "column": {
+          "type": "string",
+          "description": "An explicit position instead of matching by header: a column letter (`D`) or a 1-based number."
+        },
+        "type": {
+          "type": "string",
+          "examples": [
+            "date",
+            "datetime",
+            "number"
+          ],
+          "description": "Parses the file's text into a typed bind on import, and writes a typed cell on export. Omit it for plain text."
+        },
+        "format": {
+          "type": "string",
+          "description": "The parse/render pattern the `type:` uses, e.g. `yyyy/MM/dd` or `#,##0.00` — and, for workbooks, the matching cell format."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One column of a file transfer, in either form: the bare name, or an object adding the file-side heading, an explicit position, and a type with its pattern. Documented in file-transfers.md."
     },
     "inputField": {
       "type": "object",

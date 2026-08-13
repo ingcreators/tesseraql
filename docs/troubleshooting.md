@@ -92,6 +92,11 @@ transactional ones, where the call runs before the write's transaction. The [YAM
 reference](reference-yaml-surface.md) lists which root properties apply to which `kind` and
 `recipe`.
 
+A key the document does not have is `TQL-YAML-1043`, a warning saying it is ignored; a key that
+moved before v1 is `TQL-YAML-1044`, an error naming where it went. Both check a block whose shape
+is fixed — `export:`, `import:`, `outbox:`, `errors:` — as well as the document itself, so
+`export.sql:` is reported rather than dropped.
+
 ### `TQL-VIEW-3304` / `3308` / `3309` — a view names something the route does not declare
 
 A view's `fields:`, `children:`, and `search:` are checked against the route it belongs to.

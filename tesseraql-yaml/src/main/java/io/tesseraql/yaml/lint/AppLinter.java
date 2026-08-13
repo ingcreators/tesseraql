@@ -250,6 +250,32 @@ public final class AppLinter {
             JobDefinition.class, Map.of("params", "input"),
             WorkflowDefinition.class, Map.of("notify", "reminders"));
 
+    /**
+     * Top-level blocks whose shape is a fixed record rather than a map of things the author
+     * names, checked the same way the document's own keys are (docs/unified-sources.md decision
+     * 15: the loose {@code additionalProperties: true} islands get real schemas, so editors
+     * validate what the loader enforces — and so does the build).
+     *
+     * <p>Only fixed-shape blocks belong here. {@code sources:}, {@code steps:} and {@code input:}
+     * are maps and arrays of author-named entries, so every key in them is "unknown" by
+     * construction; their contents are checked by the lints that understand them.
+     */
+    private static final Map<String, Class<?>> FIXED_SHAPE_BLOCKS = Map.of(
+            "export", io.tesseraql.yaml.model.ExportSpec.class,
+            "import", io.tesseraql.yaml.model.ImportSpec.class,
+            "outbox", io.tesseraql.yaml.model.OutboxSpec.class,
+            "errors", io.tesseraql.yaml.model.ErrorsSpec.class);
+
+    /**
+     * Keys the unified source model moved out of a block, per block (docs/unified-sources.md
+     * decision 7). Like the top-level renames these deserialize away in silence, so they are an
+     * error naming where the key went rather than a generic unknown-key warning — an
+     * {@code export.sql:} produced an export that wrote nothing at all.
+     */
+    private static final Map<String, Map<String, String>> REMOVED_BLOCK_KEYS = Map.of(
+            "export", Map.of("sql", "sources", "queries", "sources", "http", "sources"),
+            "import", Map.of("sql", "steps"));
+
     private final Map<Class<?>, Set<String>> acceptedKeyCache = new java.util.HashMap<>();
 
     /**
@@ -261,11 +287,11 @@ public final class AppLinter {
     private Set<String> catalogTables = Set.of();
 
     /**
-     * The YAML keys a document-family root record accepts, derived from its record components and
-     * their {@code @JsonProperty} overrides (so {@code notify}/{@code import}/{@code export} map
-     * correctly). Cached per class.
+     * The YAML keys a record accepts — a document-family root, or one of the fixed-shape blocks
+     * inside it — derived from its record components and their {@code @JsonProperty} overrides
+     * (so {@code notify}/{@code import}/{@code export} map correctly). Cached per class.
      */
-    private Set<String> acceptedTopLevelKeys(Class<?> recordClass) {
+    private Set<String> acceptedKeys(Class<?> recordClass) {
         return acceptedKeyCache.computeIfAbsent(recordClass, cls -> {
             Set<String> keys = new java.util.TreeSet<>();
             for (java.lang.reflect.RecordComponent component : cls.getRecordComponents()) {
@@ -302,13 +328,19 @@ public final class AppLinter {
     }
 
     /**
-     * Flags unknown top-level keys on a document (TQL-YAML-1043, warning) and renamed ones
+     * Flags unknown keys on a document (TQL-YAML-1043, warning) and renamed ones
      * (TQL-YAML-1044, error). The model records are {@code @JsonIgnoreProperties(ignoreUnknown)},
-     * so without this a typo'd {@code securty:} block drops auth with no diagnostic. Top-level
-     * only for now — nested blocks stay a follow-up. {@code extraKeys} carries keys a loader reads
-     * from the raw tree rather than the record (e.g. mcp {@code description}/{@code uri}).
+     * so without this a typo'd {@code securty:} block drops auth with no diagnostic.
+     * {@code extraKeys} carries keys a loader reads from the raw tree rather than the record
+     * (e.g. mcp {@code description}/{@code uri}).
+     *
+     * <p>The document's own keys and its {@link #FIXED_SHAPE_BLOCKS} are checked the same way.
+     * Nested blocks were a follow-up for a long time, and the cost showed: {@code export:} took
+     * an {@code sql:} for two releases after the extraction moved to {@code sources:}, dropping
+     * it in silence, and the documentation taught the dropped spelling because nothing
+     * contradicted it.
      */
-    private void lintUnknownTopLevelKeys(Path appHome, Path file, Class<?> recordClass,
+    private void lintUnknownKeys(Path appHome, Path file, Class<?> recordClass,
             Set<String> extraKeys, List<LintFinding> findings) {
         Map<String, Object> tree;
         try {
@@ -317,23 +349,66 @@ public final class AppLinter {
             // A malformed document already failed the manifest load before lint ran; skip it.
             return;
         }
-        Set<String> accepted = acceptedTopLevelKeys(recordClass);
+        Set<String> accepted = acceptedKeys(recordClass);
         Map<String, String> renamed = REMOVED_TOP_LEVEL_KEYS.getOrDefault(recordClass, Map.of());
         String source = relative(appHome, file);
         for (String key : tree.keySet()) {
             if (accepted.contains(key) || extraKeys.contains(key)) {
                 continue;
             }
-            String replacement = renamed.get(key);
-            if (replacement != null) {
-                findings.add(new LintFinding("TQL-YAML-1044", "error", source,
-                        "'" + key + ":' was renamed to '" + replacement + ":' before v1 and is now "
-                                + "silently dropped — rename it"));
-            } else {
-                findings.add(new LintFinding("TQL-YAML-1043", "warning", source,
-                        "Unknown key '" + key + ":' (accepted: " + accepted
-                                + ") — it is silently ignored"));
+            reportUnknownKey(key, renamed.get(key), false, accepted, source, findings);
+        }
+        for (var block : FIXED_SHAPE_BLOCKS.entrySet()) {
+            // Keyed by name, so confirm this document's key really is that record before
+            // checking against it — a second family reusing the word would otherwise be linted
+            // against a shape it never had.
+            if (!declaresBlock(recordClass, block.getKey(), block.getValue())
+                    || !(tree.get(block.getKey()) instanceof Map<?, ?> declared)) {
+                continue;
             }
+            Set<String> blockKeys = acceptedKeys(block.getValue());
+            Map<String, String> moved = REMOVED_BLOCK_KEYS.getOrDefault(block.getKey(), Map.of());
+            for (Object key : declared.keySet()) {
+                String name = String.valueOf(key);
+                if (blockKeys.contains(name)) {
+                    continue;
+                }
+                reportUnknownKey(block.getKey() + "." + name, moved.get(name), true, blockKeys,
+                        source, findings);
+            }
+        }
+    }
+
+    /** Whether a document family declares {@code key} and holds it as exactly {@code blockClass}. */
+    private static boolean declaresBlock(Class<?> recordClass, String key, Class<?> blockClass) {
+        for (java.lang.reflect.RecordComponent component : recordClass.getRecordComponents()) {
+            if (yamlName(recordClass, component).equals(key)) {
+                return component.getType() == blockClass;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * One unknown key, named by its path so {@code export.sql} does not read as a top-level
+     * {@code sql}. A key with a known replacement is an error, because the author wrote
+     * something meaningful and the loader threw it away. A top-level key was renamed in place;
+     * a block key moved to a different block, and saying so is the whole diagnostic.
+     */
+    private static void reportUnknownKey(String path, String replacement, boolean moved,
+            Set<String> accepted, String source, List<LintFinding> findings) {
+        if (replacement != null && moved) {
+            findings.add(new LintFinding("TQL-YAML-1044", "error", source,
+                    "'" + path + ":' moved to '" + replacement + ":' before v1 and is now"
+                            + " silently dropped — declare it there"));
+        } else if (replacement != null) {
+            findings.add(new LintFinding("TQL-YAML-1044", "error", source,
+                    "'" + path + ":' was renamed to '" + replacement + ":' before v1 and is now "
+                            + "silently dropped — rename it"));
+        } else {
+            findings.add(new LintFinding("TQL-YAML-1043", "warning", source,
+                    "Unknown key '" + path + ":' (accepted: " + accepted
+                            + ") — it is silently ignored"));
         }
     }
 
@@ -2443,7 +2518,7 @@ public final class AppLinter {
             List<LintFinding> findings) {
         RouteDefinition definition = route.definition();
         String source = appHome.relativize(route.source()).toString().replace('\\', '/');
-        lintUnknownTopLevelKeys(appHome, route.source(), RouteDefinition.class, Set.of(), findings);
+        lintUnknownKeys(appHome, route.source(), RouteDefinition.class, Set.of(), findings);
 
         if (!KNOWN_ROUTE_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding("TQL-YAML-1002", "error", source,
@@ -2712,7 +2787,7 @@ public final class AppLinter {
         Set<String> declared = new HashSet<>();
         for (ScopeFile scope : manifest.scopes()) {
             lintScopeDefinition(appHome, scope, findings);
-            lintUnknownTopLevelKeys(appHome, scope.source(), ScopeDefinition.class, Set.of(),
+            lintUnknownKeys(appHome, scope.source(), ScopeDefinition.class, Set.of(),
                     findings);
             if (scope.definition().id() != null) {
                 declared.add(scope.definition().id());
@@ -3196,7 +3271,7 @@ public final class AppLinter {
     private void lintWorkflow(Path appHome, AppConfig config, WorkflowFile workflow,
             List<LintFinding> findings) {
         String source = relative(appHome, workflow.source());
-        lintUnknownTopLevelKeys(appHome, workflow.source(), WorkflowDefinition.class, Set.of(),
+        lintUnknownKeys(appHome, workflow.source(), WorkflowDefinition.class, Set.of(),
                 findings);
         WorkflowDefinition def = workflow.definition();
         String id = def.id();
@@ -3735,7 +3810,7 @@ public final class AppLinter {
             List<LintFinding> findings) {
         RouteDefinition definition = consumer.definition();
         String source = appHome.relativize(consumer.source()).toString().replace('\\', '/');
-        lintUnknownTopLevelKeys(appHome, consumer.source(), RouteDefinition.class, Set.of(),
+        lintUnknownKeys(appHome, consumer.source(), RouteDefinition.class, Set.of(),
                 findings);
         if (!"queue-consume".equals(definition.recipe())) {
             findings.add(new LintFinding("TQL-YAML-1010", "error", source, "a consume/ route must"
@@ -4387,7 +4462,7 @@ public final class AppLinter {
     private void lintJob(Path appHome, AppConfig config, io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.calendar.Calendars calendars, List<LintFinding> findings) {
         String source = appHome.relativize(job.source()).toString().replace('\\', '/');
-        lintUnknownTopLevelKeys(appHome, job.source(), JobDefinition.class, Set.of(), findings);
+        lintUnknownKeys(appHome, job.source(), JobDefinition.class, Set.of(), findings);
         if (job.definition().trigger() != null && job.definition().trigger().poll() != null) {
             lintPollJob(config, job, source, findings);
         }

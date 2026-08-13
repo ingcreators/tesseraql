@@ -81,6 +81,81 @@ class SchemaSyncTest {
     }
 
     /**
+     * The fixed-shape blocks are checked the same way their document is.
+     *
+     * <p>They were {@code additionalProperties: true} with no properties at all, which is a
+     * schema that describes nothing and validates nothing (docs/unified-sources.md decision 15).
+     * The cost was concrete: {@code export:} accepted an {@code sql:} and dropped it in silence
+     * for two releases after the extraction moved to {@code sources:}, and the published
+     * reference documented the block in one sentence because there was nothing else to render.
+     */
+    @Test
+    void everyFixedShapeBlockMatchesItsModelExactly() throws Exception {
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "shared", "export"))
+                .as("the export block documents the export model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.ExportSpec.class));
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "shared", "import"))
+                .as("the import block documents the import model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.ImportSpec.class));
+        assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "fileColumn"))
+                .as("a file column documents the column model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.ColumnSpec.class));
+
+        JsonNode route = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
+        assertThat(names(route.path("properties").path("outbox").path("properties")))
+                .as("the outbox block documents the outbox model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.OutboxSpec.class));
+        assertThat(names(route.path("properties").path("errors").path("properties")))
+                .as("the errors block documents the errors model's keys, and only those")
+                .containsExactlyInAnyOrderElementsOf(
+                        yamlNames(io.tesseraql.yaml.model.ErrorsSpec.class));
+    }
+
+    /**
+     * A block with real properties still lets anything through unless it says so, and the point
+     * of these schemas is that an editor refuses what the loader drops.
+     */
+    @Test
+    void everyFixedShapeBlockRefusesUnknownKeys() throws Exception {
+        JsonNode defs = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
+        JsonNode route = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
+
+        assertThat(List.of(
+                defs.path("$defs").path("shared").path("export").path("additionalProperties"),
+                defs.path("$defs").path("shared").path("import").path("additionalProperties"),
+                defs.path("$defs").path("fileColumn").path("additionalProperties"),
+                route.path("properties").path("outbox").path("additionalProperties"),
+                route.path("properties").path("errors").path("additionalProperties")))
+                .as("a fixed-shape block is closed, so an unknown key is a red squiggle rather"
+                        + " than a key the loader quietly ignores")
+                .allMatch(node -> node.isBoolean() && !node.asBoolean());
+    }
+
+    /** The property names of one {@code $defs} entry, addressed by its path. */
+    private List<String> defProperties(String resource, String... path) throws Exception {
+        JsonNode node = new ObjectMapper().readTree(getClass().getResourceAsStream(resource))
+                .path("$defs");
+        for (String step : path) {
+            node = node.path(step);
+        }
+        return names(node.path("properties"));
+    }
+
+    /** The field names of a schema node, in declaration order. */
+    private static List<String> names(JsonNode node) {
+        List<String> names = new ArrayList<>();
+        node.fieldNames().forEachRemaining(names::add);
+        return names;
+    }
+
+    /**
      * The binding definition documents the <em>authoring</em> form, which is the creator's
      * parameters — not the record's components.
      *

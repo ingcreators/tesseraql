@@ -580,6 +580,71 @@ class AppLinterTest {
                 && f.message().contains("page") && f.message().contains("pagination"));
     }
 
+    /**
+     * The extraction moved out of {@code export:} and into {@code sources:}, and the block still
+     * accepted the old key — {@code @JsonIgnoreProperties(ignoreUnknown)} on the record, no
+     * properties in the schema, and an unknown-key lint that stopped at the document's own keys.
+     * The result was an export that wrote an empty file with nothing said at build time, which
+     * is exactly what the documentation went on teaching.
+     */
+    @Test
+    void flagsAnExtractionLeftInsideTheExportBlock(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items/export"));
+        Files.writeString(dir.resolve("web/api/items/export/get.yml"), """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                export:
+                  format: csv
+                  sql:
+                    file: extract.sql
+                  queries:
+                    header: { file: header.sql }
+                sources:
+                  main:
+                    text: select 1
+                """);
+        Files.writeString(dir.resolve("web/api/items/export/extract.sql"), "select 1\n;\n");
+        Files.writeString(dir.resolve("web/api/items/export/header.sql"), "select 1\n;\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1044") && f.isError()
+                && f.message().contains("export.sql") && f.message().contains("sources"));
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1044") && f.isError()
+                && f.message().contains("export.queries"));
+    }
+
+    /** A key nobody moved is still the warning it is at the top level, named by its path. */
+    @Test
+    void flagsAnUnknownKeyInsideAFixedShapeBlock(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("web/api/items/export"));
+        Files.writeString(dir.resolve("web/api/items/export/get.yml"), """
+                version: tesseraql/v1
+                id: items.export
+                kind: route
+                recipe: query-export
+                export:
+                  format: csv
+                  filenam: items.csv
+                sources:
+                  main:
+                    text: select 1
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1043") && !f.isError()
+                && f.message().contains("export.filenam"));
+    }
+
     @Test
     void flagsARenamedDecisionSourceKeyColumn(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

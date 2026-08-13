@@ -69,6 +69,15 @@ rather than written into each query. See [data-scoping.md](data-scoping.md).
 **shared definition** — knowledge declared once for the whole application and referenced:
 domains, rules, decisions, scopes, calendars.
 
+**source** — one named acquisition of rows, declared under `sources:`. Its arm names the
+mechanism — `sql:`, `http:`, `contract:` or `service:` — and every source publishes the same
+envelope under its own name: `<name>.rows`, `.rowCount`, `.first`. See
+[response-shaping.md](response-shaping.md).
+
+**`main`** — the reserved source name every default resolves to: a view's rows, an export's
+extraction, what pagination pages. A naming convention rather than a slot, so a document with no
+use for one simply does not declare it.
+
 **Studio** — the bundled browser IDE. See [studio.md](studio.md).
 
 **suite** — a declarative test file under `tests/`, exercising routes, SQL, security, or

@@ -18,15 +18,15 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `security` | [object](#security) | How this document authenticates and authorizes. Routes are deny-by-default: one that declares no security is unreachable. Documented in authentication.md. |
 | `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
 | `admission` | [object](#admission) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
-| `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
+| `outbox` | [object](#outbox) | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
 | `steps` | array of any | The command's ordered statements, executed inside one transaction (command recipes). Each item carries an id: and one binding arm; each result binds under `steps.<id>`. Documented in transactional-writes.md. |
 | `sources` | map of [binding](#binding) | Every named read acquisition, in authored order: each entry names its own mechanism (sql \| contract \| service \| http) and publishes rows/rowCount/first under its name, so a response, a view or a later source refers to one without knowing how it was fetched. Documented in unified-sources.md. |
 | `validate` | map of [object](#validate) | Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools. |
 | `decide` | map of [object](#decide) | Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md. |
 | `notify` | map of object | Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md. |
-| `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
-| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
-| `export` | object | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md. |
+| `errors` | [object](#errors) | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
+| `import` | [object](#import) | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
+| `export` | [object](#export) | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md. |
 | `webhook` | [object](#webhook) | Inbound webhook verification and payload mapping for a `webhook` route. Documented in connectors.md. |
 | `publish` | [object](#publish) | The domain event this command publishes on a messaging channel after commit, on the same transactional outbox as `notify:`. Documented in messaging.md. |
 | `consume` | [object](#consume) | What a `consume/**` document subscribes to. Documented in messaging.md. |
@@ -94,6 +94,17 @@ Token-bucket rate limit for this route.
 | `burst` | integer | Burst capacity (default: requestsPerSecond). |
 | `scope` | enum: `node` \| `cluster` | node (default) limits per runtime node; cluster coordinates through the shared lease store (TQL-YAML-1023). |
 
+### outbox
+
+Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `eventType` | string | The event's type, e.g. `USER_DISABLED` — what a consumer subscribes by. |
+| `aggregateType` | string | The kind of thing the event is about, e.g. `User`. |
+| `aggregateId` | string | A bindable path resolving to the id of the thing the event is about, e.g. `body.name`. |
+| `payload` | map of string | Each payload key to the bindable path supplying its value. A dotted key builds a nested object (`name.givenName`) and a `[]` key builds an array — of scalars (`members[]`), or, zipped by index, of objects (`members[].value`). |
+
 ### validate
 
 | Property | Type | Description |
@@ -114,6 +125,67 @@ Token-bucket rate limit for this route.
 | `use` \* | string | Name of a decision declared under decisions/. |
 | `params` \* | map of string | Wiring of each decision input to a request-context expression (params.total, principal.orgUnit, "principal.role == 'officer'"). |
 | `effectiveAt` | string | Reference instant of a dated table-backed decision's effective: window - audit.now unless wired to a document date (params.postingDate). |
+
+### errors
+
+Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `constraints` | map of [object](#errorsconstraints) | Database constraint name, as declared in the schema, to the field-level error a violation of it becomes. |
+
+#### errors.constraints
+
+How one constraint violation is reported.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `field` | string | The input field the violation is reported against, so the caller sees a field error rather than a 500. |
+| `code` | string | A stable application error code, defaulting to the violation kind (`duplicate` for a unique violation). |
+| `message` | string | A message key resolved through the app bundles; unset, the framework's `tql.constraint.<code>` texts apply. |
+
+### import
+
+file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `format` | string | The tabular format the uploaded file is parsed as. `csv` is built in; `excel` needs the tesseraql-excel module (TQL-LD-2801 when the codec is absent). |
+| `columns` | array of [fileColumn](#filecolumn) | How the file's columns map to the per-row statement's bind names. Omit it to use the header labels as bind names. |
+| `headerRow` | boolean | Whether the table starts with a header row (default `true`). With a header, simple-form columns match by label rather than by position. |
+| `startRow` | integer ≥ 1 | The 1-based row the table starts at, for files carrying title rows above the data (default 1). |
+| `sheet` | string | For workbook formats, the sheet to read (default: the first). |
+| `locale` | string | The locale `type:`/`format:` columns parse dates and numbers in. A literal, or a request source such as `principal.claim.locale`; unset, `tesseraql.files.locale` applies. |
+| `onError` | string | What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers. |
+
+### export
+
+query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `format` | string | The format the rows are written as. `csv` is built in; `excel` and `pdf` need their modules (TQL-LD-2801 when the codec is absent). |
+| `filename` | string | The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`. |
+| `template` | string | A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid. |
+| `sheet` | string | For workbook formats, the sheet to write. |
+| `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template, and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |
+| `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
+| `locale` | string | The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
+| `timezone` | string | The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`. |
+| `after` | [object](#exportafter) | A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on. |
+| `maxRows` | integer | The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped. |
+| `onOverflow` | string | `fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs. |
+| `groupBy` | string | A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851). |
+| `splitBy` | string | A column that splits the export into one document per value, delivered as a single ZIP; `filename:` must carry `{key}`. The rows must be ordered by it (TQL-LD-2851). |
+
+#### export.after
+
+A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `timing` | string | `extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041). |
+| `sql` | object | The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys. |
 
 ### webhook
 
@@ -269,7 +341,7 @@ Schema for TesseraQL batch job documents (batch/**/job.yml): how the job is trig
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md. |
 | `pipeline` | array of any | The job's ordered steps. A step is a binding with an id (sql: or http:) plus its output blocks (export:, push:, notify:) or a chunk:, each publishing its result to the step context. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
-| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
+| `import` | [object](#import) | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
 | `overlap` | enum: `skip` \| `concurrent` | What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md. |
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 
@@ -311,6 +383,20 @@ Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding 
 | `delay` | string | Poll interval (duration string). |
 | `move` | string | Relative directory for processed files (default .done). Plain names only - no paths or placeholders. |
 | `moveFailed` | string | Relative directory for failed files (default .error). Plain names only. |
+
+### import
+
+file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `format` | string | The tabular format the uploaded file is parsed as. `csv` is built in; `excel` needs the tesseraql-excel module (TQL-LD-2801 when the codec is absent). |
+| `columns` | array of [fileColumn](#filecolumn) | How the file's columns map to the per-row statement's bind names. Omit it to use the header labels as bind names. |
+| `headerRow` | boolean | Whether the table starts with a header row (default `true`). With a header, simple-form columns match by label rather than by position. |
+| `startRow` | integer ≥ 1 | The 1-based row the table starts at, for files carrying title rows above the data (default 1). |
+| `sheet` | string | For workbook formats, the sheet to read (default: the first). |
+| `locale` | string | The locale `type:`/`format:` columns parse dates and numbers in. A literal, or a request source such as `principal.claim.locale`; unset, `tesseraql.files.locale` applies. |
+| `onError` | string | What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers. |
 
 ### sla
 
@@ -459,6 +545,18 @@ The app-owned table carrying the rows (exactly one of rows:/source:): business u
 | `outputs` \* | object | The outputs this row sets — exactly the declared outputs. |
 
 ## Shared definitions
+
+### fileColumn
+
+One column of a file transfer, in either form: the bare name, or an object adding the file-side heading, an explicit position, and a type with its pattern. Documented in file-transfers.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | string | The bind name on import, the row column on export. The simple form `- name` is this key and nothing else. |
+| `label` | string | The heading in the file — the same word a view column uses, and a message key resolves through the app bundles. Defaults to `name`. |
+| `column` | string | An explicit position instead of matching by header: a column letter (`D`) or a 1-based number. |
+| `type` | string | Parses the file's text into a typed bind on import, and writes a typed cell on export. Omit it for plain text. |
+| `format` | string | The parse/render pattern the `type:` uses, e.g. `yyyy/MM/dd` or `#,##0.00` — and, for workbooks, the matching cell format. |
 
 ### inputField
 

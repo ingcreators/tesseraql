@@ -6,6 +6,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **A block whose shape is fixed says so, and refuses a key it does not have.** `export:`,
+  `import:`, `outbox:` and `errors:` were `additionalProperties: true` with no properties at all
+  — a schema that describes nothing and validates nothing — and the unknown-key lint stopped at
+  a document's own keys. So an `export.sql:` was dropped in silence, and the export wrote an
+  empty file. All four now carry their real keys, closed to the rest, and the lint checks them
+  the way it checks the document: an unknown key is `TQL-YAML-1043`, and one the unified source
+  model moved is `TQL-YAML-1044` naming where it went (`export.sql:` → `sources:`,
+  `import.sql:` → `steps:`). A file transfer's `columns:` gains a shared definition, so the
+  published reference documents the column form instead of calling it `any`.
+
 ### Fixed
 
 - **The documentation caught up with the unified source model.** Eight published pages still
