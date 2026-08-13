@@ -168,47 +168,36 @@ final class StudioProviders {
                 })
                 .register("studio.source", params -> {
                     String path = String.valueOf(params.get("path"));
-                    String sample = studio.sampleModel(path);
-                    String draft = studio.readDraft(path);
-                    Map<String, Object> model;
-                    if (draft == null) {
-                        // No draft: show the source (404s when the file does not exist).
-                        String src = studio.source(path);
-                        model = io.tesseraql.studio.StudioViews.source(path, src,
-                                studio.isReadOnly(), false, src, sample);
-                    } else {
-                        // A draft is edited; sourceIfExists is null for a new-file draft.
-                        model = io.tesseraql.studio.StudioViews.source(path, draft,
-                                studio.isReadOnly(), true, studio.sourceIfExists(path),
-                                sample);
+                    EditorChrome chrome = EditorChrome.of(studio, studioAccess, path,
+                            params.get("roles"));
+                    if (!chrome.hasDraft() && chrome.saved() == null) {
+                        // Neither a draft nor a file: the source read raises the 404 the
+                        // editor page answers with.
+                        studio.source(path);
                     }
+                    // The editor shows the draft when one exists (sourceContent is null for a
+                    // new-file draft), otherwise the source it just read.
+                    Map<String, Object> model = io.tesseraql.studio.StudioViews.source(path,
+                            chrome.text(), studio.isReadOnly(), chrome.hasDraft(),
+                            chrome.saved(), chrome.sampleModel());
                     // The Studio-to-editor half of the boundary's round trip (Phase 57).
                     model.put("editorHref", studio.editorHref(path));
                     // Offer the "run tests" action on a route page only when A2 is enabled.
                     model.put("testRunnerEnabled", testRunnerEnabled);
-                    // Warn when applying would overwrite a concurrently changed source (D5).
-                    model.put("conflict", draft != null && studio.draftConflicts(path));
-                    // Require an explicit diff acknowledgment before apply when configured.
-                    model.put("confirmApply", studioAccess.confirmApply());
-                    // The edit surface follows the caller's edit permission (backlog D6).
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
+                    // The conflict warning, the confirm-before-apply gate and the edit
+                    // permission the shared action bar renders from.
+                    chrome.applyTo(model);
                     // The visual builder's entry (docs/page-builder.md D1): eligible
                     // page templates offer "Edit visually"; composable mail templates
                     // route to the mail composer instead.
-                    String current = draft != null ? draft : studio.sourceIfExists(path);
-                    model.put("builderEligible", path.endsWith(".html")
-                            && io.tesseraql.studio.PageBuilder.parse(current).isPresent()
-                            && io.tesseraql.studio.MailComposer.parse(current).isEmpty());
-                    model.put("mailComposable", path.endsWith(".html")
-                            && io.tesseraql.studio.MailComposer.parse(current)
-                                    .isPresent());
+                    Eligibility eligible = Eligibility.of(path, chrome.text());
+                    model.put("builderEligible", eligible.builder());
+                    model.put("mailComposable", eligible.mailComposer());
                     // The eject ramp's entry (docs/page-builder.md D2): a route that
                     // declares response.html.view offers "Eject to template". The
                     // saved source is authoritative — a draft's view: line does not
                     // eject until applied.
-                    String saved = studio.sourceIfExists(path);
+                    String saved = chrome.saved();
                     model.put("ejectableView", path.startsWith("web/")
                             && path.endsWith(".yml") && saved != null
                             && saved.matches("(?s).*(?m)^\\s*view:\\s*\\S.*"));
@@ -246,14 +235,9 @@ final class StudioProviders {
                         row.put("template", template);
                         boolean html = template.endsWith(".html");
                         row.put("isHtml", html);
-                        String draft = template.isEmpty()
+                        String text = template.isEmpty()
                                 ? null
-                                : studio.readDraft(template);
-                        String text = draft != null
-                                ? draft
-                                : template.isEmpty()
-                                        ? null
-                                        : studio.sourceIfExists(template);
+                                : draftOrSource(studio, template);
                         row.put("exists", text != null);
                         row.put("composable", html && (text == null
                                 || io.tesseraql.studio.MailComposer.parse(text)
@@ -268,29 +252,24 @@ final class StudioProviders {
                 })
                 .register("studio.mailComposer", params -> {
                     String path = String.valueOf(params.get("path"));
-                    String draft = studio.readDraft(path);
-                    String source = studio.sourceIfExists(path);
-                    String text = draft != null ? draft : source;
-                    Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("path", path);
+                    EditorChrome chrome = EditorChrome.of(studio, studioAccess, path,
+                            params.get("roles"));
+                    String text = chrome.text();
+                    Map<String, Object> model = chrome.model();
                     model.put("isNew", text == null);
-                    model.put("hasDraft", draft != null);
-                    model.put("conflict", draft != null && studio.draftConflicts(path));
-                    model.put("confirmApply", studioAccess.confirmApply());
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
                     // The preview model mirrors MailNotifier's: payload + event.
-                    String sample = studio.sampleModel(path);
-                    model.put("sampleModel", sample == null || sample.isBlank()
-                            ? "payload:\n  name: Example\nevent:\n  app: app\n  id: evt-1\n"
-                            : sample);
+                    String sample = chrome.sampleModel();
+                    if (sample == null || sample.isBlank()) {
+                        model.put("sampleModel",
+                                "payload:\n  name: Example\nevent:\n  app: app\n  id: evt-1\n");
+                    }
+                    // A missing template opens on the starter document; anything else opens
+                    // as blocks only when it matches the composer grammar.
                     java.util.Optional<io.tesseraql.studio.MailComposer.Composition> parsed = text == null
                             ? java.util.Optional
                                     .of(io.tesseraql.studio.MailComposer.starter())
-                            : io.tesseraql.studio.MailComposer.parse(text);
+                            : Eligibility.of(path, text).composition();
                     model.put("composable", parsed.isPresent());
-                    model.put("source", text == null ? "" : text);
                     parsed.ifPresent(composition -> {
                         model.put("title", composition.title());
                         model.put("preheader", composition.preheader());
@@ -308,26 +287,15 @@ final class StudioProviders {
                 // scaffold-checksum header) survives byte-for-byte.
                 .register("studio.pageBuilder", params -> {
                     String path = String.valueOf(params.get("path"));
-                    String draft = studio.readDraft(path);
-                    String text = draft != null ? draft : studio.sourceIfExists(path);
-                    Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("path", path);
-                    model.put("hasDraft", draft != null);
-                    model.put("conflict", draft != null && studio.draftConflicts(path));
-                    model.put("confirmApply", studioAccess.confirmApply());
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
-                    model.put("editable", canEdit);
-                    model.put("readOnly", !canEdit);
-                    String sample = studio.sampleModel(path);
-                    model.put("sampleModel", sample == null ? "" : sample);
-                    model.put("source", text == null ? "" : text);
-                    java.util.Optional<io.tesseraql.studio.PageBuilder.Parts> parts = io.tesseraql.studio.PageBuilder
-                            .parse(text);
-                    boolean composable = path.endsWith(".html") && parts.isPresent()
-                            && io.tesseraql.studio.MailComposer.parse(text).isEmpty();
+                    EditorChrome chrome = EditorChrome.of(studio, studioAccess, path,
+                            params.get("roles"));
+                    Map<String, Object> model = chrome.model();
+                    Eligibility eligible = Eligibility.of(path, chrome.text());
+                    boolean composable = eligible.builder();
                     model.put("composable", composable);
                     if (composable) {
-                        io.tesseraql.studio.PageBuilder.Parts split = parts.orElseThrow();
+                        io.tesseraql.studio.PageBuilder.Parts split = eligible.parts()
+                                .orElseThrow();
                         model.put("prefix", split.prefix());
                         model.put("region", split.region());
                         model.put("suffix", split.suffix());
@@ -462,11 +430,8 @@ final class StudioProviders {
                                     || io.tesseraql.yaml.view.ViewSpec.FORM.equals(kind);
                         } else if (!isView && refPath != null
                                 && refPath.endsWith(".html")) {
-                            String text = studio.sourceIfExists(refPath);
-                            builderEligible = io.tesseraql.studio.PageBuilder
-                                    .parse(text).isPresent()
-                                    && io.tesseraql.studio.MailComposer.parse(text)
-                                            .isEmpty();
+                            builderEligible = Eligibility
+                                    .of(refPath, studio.sourceIfExists(refPath)).builder();
                         }
                         row.put("kind", kind);
                         row.put("ejectable", ejectable);
@@ -2002,5 +1967,100 @@ final class StudioProviders {
                                     io.tesseraql.studio.StudioViews.AUDIT_PAGE_SIZE),
                             q, sort, dir);
                 });
+    }
+
+    /**
+     * The text an editor surface reads for {@code path}: its pending draft when one exists,
+     * otherwise the saved source — {@code null} when neither does. The draft-preferring read every
+     * authoring surface makes, so a second edit sees the first.
+     */
+    private static String draftOrSource(io.tesseraql.studio.StudioService studio, String path) {
+        String draft = studio.readDraft(path);
+        return draft != null ? draft : studio.sourceIfExists(path);
+    }
+
+    /**
+     * The chrome the three text editors share (source editor, mail composer, page builder): the
+     * draft and the saved source read once, the colocated sample fixture, and the draft/conflict/
+     * permission state their common apply-discard bar renders from. Each surface then adds only
+     * what is its own — the composer's blocks, the builder's split, the source page's tools.
+     *
+     * @param path the app-relative file being edited
+     * @param draft its pending draft, or null when none is saved
+     * @param saved its source on disk, or null for a not-yet-applied new file
+     * @param sampleModel the colocated {@code .sample.yml} fixture, or null
+     * @param conflict whether applying the draft would overwrite a concurrently changed source
+     * @param confirmApply whether an explicit acknowledgment is required before apply
+     * @param canEdit whether the caller may edit (backlog D6)
+     */
+    private record EditorChrome(String path, String draft, String saved, String sampleModel,
+            boolean conflict, boolean confirmApply, boolean canEdit) {
+
+        /** Reads the chrome of {@code path} for the caller's {@code roles}, one read per file. */
+        static EditorChrome of(io.tesseraql.studio.StudioService studio, StudioAccess access,
+                String path, Object roles) {
+            String draft = studio.readDraft(path);
+            return new EditorChrome(path, draft, studio.sourceIfExists(path),
+                    studio.sampleModel(path), draft != null && studio.draftConflicts(path),
+                    access.confirmApply(), access.canEdit(roles));
+        }
+
+        /** The text the surface edits — the draft-preferring read, over what was read already. */
+        String text() {
+            return draft != null ? draft : saved;
+        }
+
+        /** Whether an unsaved draft is what the surface is showing. */
+        boolean hasDraft() {
+            return draft != null;
+        }
+
+        /** The shared keys of an editor page model, for a surface to add its own to. */
+        Map<String, Object> model() {
+            Map<String, Object> model = new java.util.LinkedHashMap<>();
+            model.put("path", path);
+            model.put("hasDraft", hasDraft());
+            model.put("source", text() == null ? "" : text());
+            model.put("sampleModel", sampleModel == null ? "" : sampleModel);
+            return applyTo(model);
+        }
+
+        /** Adds the action bar's own keys to a model built elsewhere (the source page's view). */
+        Map<String, Object> applyTo(Map<String, Object> model) {
+            // Warn when applying would overwrite a concurrently changed source (D5), require an
+            // explicit acknowledgment when configured, and follow the caller's edit permission.
+            model.put("conflict", conflict);
+            model.put("confirmApply", confirmApply);
+            model.put("editable", canEdit);
+            model.put("readOnly", !canEdit);
+            return model;
+        }
+    }
+
+    /**
+     * Which visual authoring surface a template is eligible for, from a single parse of its text:
+     * the page builder takes builder-shaped pages that are not mail (docs/page-builder.md D1), the
+     * mail composer takes documents matching the {@code tql/email/*} block grammar
+     * (docs/html-email.md D4) — anything else stays with the source editor.
+     *
+     * @param builder whether the page builder may open it
+     * @param mailComposer whether the mail composer may open it
+     * @param parts the builder's verbatim prefix/region/suffix split, when it parsed
+     * @param composition the composer's parsed blocks, when they parsed
+     */
+    private record Eligibility(boolean builder, boolean mailComposer,
+            java.util.Optional<io.tesseraql.studio.PageBuilder.Parts> parts,
+            java.util.Optional<io.tesseraql.studio.MailComposer.Composition> composition) {
+
+        /** Parses {@code text} (null tolerated) once for both surfaces. */
+        static Eligibility of(String path, String text) {
+            java.util.Optional<io.tesseraql.studio.PageBuilder.Parts> parts = io.tesseraql.studio.PageBuilder
+                    .parse(text);
+            java.util.Optional<io.tesseraql.studio.MailComposer.Composition> composition = io.tesseraql.studio.MailComposer
+                    .parse(text);
+            boolean html = path != null && path.endsWith(".html");
+            return new Eligibility(html && parts.isPresent() && composition.isEmpty(),
+                    html && composition.isPresent(), parts, composition);
+        }
     }
 }

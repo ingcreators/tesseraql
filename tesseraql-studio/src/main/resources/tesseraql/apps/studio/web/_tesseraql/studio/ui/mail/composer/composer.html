@@ -136,34 +136,7 @@
       </div>
     </div>
 
-    <p class="hc-alert" data-variant="warning" role="alert" th:if="${cmp.conflict}">The saved source
-      changed since this draft was started &mdash; applying overwrites those changes.</p>
-    <div id="apply-result" class="hc-stack" aria-live="polite"></div>
-    <div class="tql-editor-bar">
-      <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
-      <form class="hc-cluster" th:hx-post="@{/_tesseraql/studio/ui/apply}" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
-        <input type="hidden" name="path" th:value="${cmp.path}">
-        <label class="hc-field" th:if="${cmp.conflict}">
-          <input type="checkbox" name="force" value="true" required>
-          I reviewed the changes &mdash; overwrite the updated source
-        </label>
-        <label class="hc-field" th:if="${cmp.confirmApply and not cmp.conflict}">
-          <input type="checkbox" name="confirm" value="true" required>
-          I reviewed the preview &mdash; apply this draft
-        </label>
-        <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
-      </form>
-      <span class="hc-spacer"></span>
-      <form method="post" th:action="@{/_tesseraql/studio/ui/discard}" th:if="${cmp.hasDraft}">
-        <input type="hidden" name="_csrf" th:value="${_csrf}">
-        <input type="hidden" name="path" th:value="${cmp.path}">
-        <button type="submit" class="hc-button" data-variant="error"
-                data-hc-confirm="Discard this draft? The saved source stays as-is; the draft's changes are lost."
-                data-hc-confirm-title="Discard draft" data-hc-confirm-label="Discard"
-                data-hc-confirm-variant="error">Discard draft</button>
-      </form>
-    </div>
-    <script type="module" th:src="@{/assets/_tesseraql/mail-composer.js}"></script>
+    <th:block th:replace="~{templates/editor.html :: visual-chrome(${cmp}, '/assets/_tesseraql/mail-composer.js')}"/>
   </th:block>
 </section>
 </div>

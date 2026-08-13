@@ -2,6 +2,7 @@
 # Studio UI app (design ch. 16): served by the runtime as a mounted system app.
 config/tesseraql.yml
 templates/catalog.html
+templates/editor.html
 templates/wizard.html
 web/_tesseraql/docs/share/coverage/get.yml
 web/_tesseraql/docs/share/coverage/share-coverage.html

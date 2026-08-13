@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<!-- The editor chrome the three authoring surfaces share (docs/studio-ux-refresh.md slice 5,
+     docs/html-email.md D4, docs/page-builder.md D1): the source editor, the mail composer and the
+     page builder all drive the same /save, /apply, /discard and /render endpoints, so the bar
+     around them is written once here. Each fragment takes `m`, the surface's own page model — it
+     carries path/hasDraft/conflict/confirmApply whatever built it. Resolved app-home-relative like
+     the other shared templates, so pages reference it as ~{templates/editor.html :: …}.
+
+     The bodies are indented for their call sites (all three sit at the same depth inside the page
+     card), so extracting them left the rendered markup byte-for-byte unchanged. -->
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- The sticky action bar: Save / Apply / Discard stay reachable however long the editor grows.
+     Save submits the surface's save-form via form=; Apply keeps its htmx form (the force and
+     confirm checkboxes gate inline); Discard is a confirmed destructive action — the draft is real
+     work. `reviewed` names what the confirm gate asks the author to have reviewed: the source
+     editor points at its diff, the visual editors at their preview. -->
+<div class="tql-editor-bar" th:fragment="editor-bar(m, reviewed)">
+      <button type="submit" form="save-form" class="hc-button" data-variant="primary">Save draft</button>
+      <form class="hc-cluster" th:hx-post="@{/_tesseraql/studio/ui/apply}" hx-target="#apply-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+        <input type="hidden" name="path" th:value="${m.path}">
+        <label class="hc-field" th:if="${m.conflict}">
+          <input type="checkbox" name="force" value="true" required>
+          I reviewed the changes &mdash; overwrite the updated source
+        </label>
+        <label class="hc-field" th:if="${m.confirmApply and not m.conflict}">
+          <input type="checkbox" name="confirm" value="true" required>
+          I reviewed [[${reviewed}]] &mdash; apply this draft
+        </label>
+        <button type="submit" class="hc-button">Apply draft &amp; reload</button><th:block th:replace="~{tql/shell :: busy('Applying…')}"/>
+      </form>
+      <span class="hc-spacer"></span>
+      <form method="post" th:action="@{/_tesseraql/studio/ui/discard}" th:if="${m.hasDraft}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="path" th:value="${m.path}">
+        <button type="submit" class="hc-button" data-variant="error"
+                data-hc-confirm="Discard this draft? The saved source stays as-is; the draft's changes are lost."
+                data-hc-confirm-title="Discard draft" data-hc-confirm-label="Discard"
+                data-hc-confirm-variant="error">Discard draft</button>
+      </form>
+    </div>
+<!-- The visual editors' whole chrome: the conflict warning, the apply target, the shared bar and
+     the surface's own module script — the mail composer and the page builder differ in nothing
+     else, so `script` (the module that drives the canvas) is the only parameter beyond the model. -->
+<th:block th:fragment="visual-chrome(m, script)"><p class="hc-alert" data-variant="warning" role="alert" th:if="${m.conflict}">The saved source
+      changed since this draft was started &mdash; applying overwrites those changes.</p>
+    <div id="apply-result" class="hc-stack" aria-live="polite"></div>
+    <th:block th:replace="~{templates/editor.html :: editor-bar(${m}, 'the preview')}"/>
+    <script type="module" th:src="@{${script}}"></script></th:block>
+</body>
+</html>
