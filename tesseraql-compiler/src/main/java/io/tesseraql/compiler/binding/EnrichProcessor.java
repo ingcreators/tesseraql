@@ -45,7 +45,7 @@ public final class EnrichProcessor implements Processor {
 
     public EnrichProcessor(String into, String name, EnrichSpec spec, List<SqlNode> nodes,
             String sourcePath, String datasource, String dialect,
-            TransactionalCommandProcessor.Bounds bounds) {
+            ExecutionBounds bounds) {
         this.into = into;
         this.name = name;
         this.spec = spec;

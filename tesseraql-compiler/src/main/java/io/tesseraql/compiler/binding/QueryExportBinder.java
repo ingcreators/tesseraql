@@ -27,15 +27,6 @@ public final class QueryExportBinder implements Processor {
             String localeDeclaration, String timezoneDeclaration,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
-            java.util.Set<String> httpSources) {
-        this(codec, writeSpec, localeDeclaration, timezoneDeclaration, rowCap, queries,
-                httpSources, java.util.List.of());
-    }
-
-    public QueryExportBinder(FileCodec codec, FileWriteSpec writeSpec,
-            String localeDeclaration, String timezoneDeclaration,
-            io.tesseraql.core.files.ExportRowCap rowCap,
-            java.util.List<io.tesseraql.core.files.ExportQuery> queries,
             java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
         this.codec = codec;
         this.writeSpec = writeSpec;
