@@ -476,7 +476,7 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: required
                 """);
-        route.append(validateBlock(table, names, false));
+        route.append(validateBlock(table, names));
         if (generatedKey) {
             route.append("""
 
@@ -656,7 +656,7 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: required
                 """);
-        route.append(validateBlock(table, names, true));
+        route.append(validateBlock(table, names));
         route.append("""
 
                 steps:
@@ -949,8 +949,14 @@ public final class CrudScaffolder {
                 names.pkColumn());
     }
 
-    /** The validate: block referencing the shared uniqueness and FK-existence rules. */
-    private static String validateBlock(TableSchema table, Names names, boolean forUpdate) {
+    /**
+     * The validate: block referencing the shared uniqueness and FK-existence rules. Create and
+     * update wire the same params — the contract requires every declared bind, and the rule's
+     * SQL guards {@code excludeId} itself: on create the key param is null (generated keys) or
+     * a value no existing row carries, so nothing is excluded; on update it is the row being
+     * updated.
+     */
+    private static String validateBlock(TableSchema table, Names names) {
         if (table.uniqueIndexes().isEmpty() && table.foreignKeys().isEmpty()) {
             return "";
         }
@@ -977,9 +983,7 @@ public final class CrudScaffolder {
                     .append("_is_free\n");
             yml.append("    params:\n");
             yml.append("      ").append(field).append(": params.").append(field).append('\n');
-            yml.append("      excludeId: ").append(forUpdate
-                    ? "params." + names.pkField()
-                    : "params." + names.pkField()).append('\n');
+            yml.append("      excludeId: params.").append(names.pkField()).append('\n');
             yml.append("    field: ").append(field).append('\n');
         });
         return yml.toString();

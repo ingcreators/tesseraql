@@ -73,6 +73,10 @@ All notable changes to TesseraQL are documented here. The format follows
   `TQL-SQL-2603`), and a build guard now refuses a code declared at two sites unless it is on
   the reviewed list of deliberate shares (a unique violation is one meaning wherever it is
   mapped).
+- **An `inputPolicy:` violation is reported once, not twice.** `lintRoute` called the
+  input-policy lint twice in a row, so every `TQL-FIELD-2006` finding appeared twice in the
+  CLI, the editor and Studio. The lint suite now also asserts app-wide that no finding is ever
+  reported twice.
 - **The documentation caught up with the unified source model.** Eight published pages still
   taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
   `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown

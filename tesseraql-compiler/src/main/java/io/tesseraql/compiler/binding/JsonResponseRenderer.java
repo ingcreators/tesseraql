@@ -87,7 +87,6 @@ public final class JsonResponseRenderer implements Processor {
         EvaluationContext evaluation = new EvaluationContext(context);
 
         Object body = resolve(compiledBody, evaluation);
-        body = body;
         if (!response.fields().isEmpty()) {
             PolicyEngine policyEngine = exchange.getContext().getRegistry()
                     .lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,

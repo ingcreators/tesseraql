@@ -457,8 +457,15 @@ class AppLinterTest {
 
         List<LintFinding> findings = new AppLinter().lint(dir);
 
-        assertThat(findings).anyMatch(f -> f.code().equals("TQL-FIELD-2006") && f.isError()
-                && f.message().contains("mass-assignment"));
+        // Exactly one finding: lintInputPolicy used to be called twice from lintRoute, so every
+        // violation was reported twice. No rule may double-report — the same invariant, app-wide.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-FIELD-2006") && f.isError()
+                        && f.message().contains("mass-assignment"))
+                .hasSize(1);
+        assertThat(findings)
+                .as("no lint finding is reported twice")
+                .doesNotHaveDuplicates();
     }
 
     @Test
