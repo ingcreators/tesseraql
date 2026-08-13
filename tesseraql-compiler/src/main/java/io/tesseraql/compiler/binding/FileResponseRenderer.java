@@ -27,7 +27,7 @@ public final class FileResponseRenderer implements Processor {
     public FileResponseRenderer(FileResponse response, Path appHome, Path routeDir) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
-        this.templateName = HtmlResponseRenderer.resolveTemplate(
+        this.templateName = TemplateResolution.resolve(
                 this.appHome, routeDir, response.template());
     }
 

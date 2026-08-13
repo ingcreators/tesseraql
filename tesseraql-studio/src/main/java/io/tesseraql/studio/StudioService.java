@@ -679,7 +679,7 @@ public final class StudioService {
     }
 
     /**
-     * Resolves a route's template like the compiler's {@code HtmlResponseRenderer}: colocated next to
+     * Resolves a route's template like the compiler's {@code TemplateResolution}: colocated next to
      * the route first, then the shared {@code templates/} root; confined to the app home. Returns the
      * app-home-relative path.
      */

@@ -202,7 +202,7 @@ public final class ViewBinding {
             readPolicies.putAll(embedded.binding().readPolicies);
         }
         String entry = spec.template() != null
-                ? HtmlResponseRenderer.resolveTemplate(home, viewDir, spec.template())
+                ? TemplateResolution.resolve(home, viewDir, spec.template())
                 : "tql/view/" + spec.view();
         return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
                 Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), Map.copyOf(readPolicies),
@@ -259,7 +259,7 @@ public final class ViewBinding {
             }
             String template = ref.substring(0, separator).trim();
             String fragment = ref.substring(separator + 2).trim();
-            String engineName = HtmlResponseRenderer.resolveTemplate(appHome, viewDir, template);
+            String engineName = TemplateResolution.resolve(appHome, viewDir, template);
             resolved.put(name, engineName + " :: " + fragment);
         });
         return Map.copyOf(resolved);
@@ -659,7 +659,7 @@ public final class ViewBinding {
         if (path instanceof Map) {
             merged.putAll((Map<String, Object>) path);
         }
-        return HtmlResponseRenderer.interpolateString(action, new EvaluationContext(merged));
+        return Interpolation.interpolateString(action, new EvaluationContext(merged));
     }
 
     /** A detail view's labelled values: explicit {@code fields:}, else the row's own columns. */
@@ -748,7 +748,7 @@ public final class ViewBinding {
                 cell.put("button", column.text() != null);
                 cell.put("href", column.link() == null
                         ? null
-                        : HtmlResponseRenderer.interpolateString(column.link(), rowContext));
+                        : Interpolation.interpolateString(column.link(), rowContext));
                 line.add(cell);
             }
             cells.add(line);
