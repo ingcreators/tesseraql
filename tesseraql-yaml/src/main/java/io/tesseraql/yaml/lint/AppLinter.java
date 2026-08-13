@@ -2288,6 +2288,8 @@ public final class AppLinter {
             io.tesseraql.yaml.manifest.UiResourceFile ui, List<LintFinding> findings) {
         RouteDefinition definition = ui.definition();
         String source = appHome.relativize(ui.source()).toString().replace('\\', '/');
+        lintUnknownKeys(appHome, ui.source(), RouteDefinition.class,
+                Set.of("description", "uri", "ui"), findings);
 
         if (!KNOWN_UI_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding("TQL-MCP-1008", "error", source,
@@ -2360,6 +2362,8 @@ public final class AppLinter {
             io.tesseraql.yaml.manifest.ResourceFile resource, List<LintFinding> findings) {
         RouteDefinition definition = resource.definition();
         String source = appHome.relativize(resource.source()).toString().replace('\\', '/');
+        lintUnknownKeys(appHome, resource.source(), RouteDefinition.class,
+                Set.of("description", "uri", "mimeType"), findings);
 
         boolean write = !"query-json".equals(definition.recipe())
                 || (definition.main() != null
@@ -2439,6 +2443,10 @@ public final class AppLinter {
             List<LintFinding> findings) {
         RouteDefinition definition = tool.definition();
         String source = appHome.relativize(tool.source()).toString().replace('\\', '/');
+        // mcp documents reuse the route record plus loader-read keys; without this a typo'd
+        // securty: on a tool was dropped in silence while every other surface flagged it.
+        lintUnknownKeys(appHome, tool.source(), RouteDefinition.class,
+                Set.of("description", "ui"), findings);
 
         if (!KNOWN_TOOL_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding("TQL-MCP-1001", "error", source,
