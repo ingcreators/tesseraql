@@ -8,6 +8,10 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The ops console and the ops API list the same recent-event window.** The console's outbox
+  and queue-event pages showed the most recent 100 rows while the JSON API returned 200 — a
+  drift, not a decision. The two faces now share one handler core, and both list 200.
+
 - **A block whose shape is fixed says so, and refuses a key it does not have.** `export:`,
   `import:`, `outbox:`, `errors:`, and a pipeline step's `notify:`, `chunk:` and `push:` were
   `additionalProperties: true` with no properties at all — a schema that describes nothing and

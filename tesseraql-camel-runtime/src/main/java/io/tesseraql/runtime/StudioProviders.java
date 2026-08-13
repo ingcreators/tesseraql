@@ -61,7 +61,8 @@ final class StudioProviders {
             Path appHome, String appName, int port, CamelContext context,
             HikariDataSource dataSource, Map<String, HikariDataSource> dataSources,
             TenantDataSources tenantDataSources, CalendarDecisions calendarDecisions,
-            io.tesseraql.yaml.notify.NotificationChannels notificationChannels) {
+            io.tesseraql.yaml.notify.NotificationChannels notificationChannels,
+            StudioDocCache docCache) {
     }
 
     /** Registers every {@code studio.*} provider on {@code serviceProviders}, in boot order. */
@@ -88,6 +89,7 @@ final class StudioProviders {
         CalendarDecisions calendarDecisions = deps.calendarDecisions();
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels = deps
                 .notificationChannels();
+        StudioDocCache docCache = deps.docCache();
         serviceProviders
                 .register("studio.explorer", params -> {
                     Object query = params.get("q");
@@ -211,10 +213,11 @@ final class StudioProviders {
                             && path.endsWith(".yml") && saved != null
                             && saved.matches("(?s).*(?m)^\\s*view:\\s*\\S.*"));
                     // On a route SQL file, offer the 2-way SQL builder inline (insert into the
-                    // editor): populate its table dropdown from the schema overlay.
+                    // editor): populate its table dropdown from the schema overlay. The list
+                    // reads through the shared memo — an editor page render must not re-parse
+                    // schema.json every time.
                     if (Boolean.TRUE.equals(model.get("isRouteSql"))) {
-                        java.util.List<String> tables = new io.tesseraql.studio.DocService(
-                                manifest).tableNames();
+                        java.util.List<String> tables = docCache.tableNames();
                         model.put("tables", tables);
                         model.put("hasTables", !tables.isEmpty());
                     }
@@ -1241,9 +1244,10 @@ final class StudioProviders {
                         // column's role, keyed by the displayed column name — a map
                         // PARALLEL to `columns` (whose shape the filter selects and the
                         // empty-state colspan reuse), matched case-insensitively against
-                        // the names the decision declares.
-                        Map<String, String> contracts = new io.tesseraql.studio.DocService(
-                                manifest).columnContracts(data.table());
+                        // the names the decision declares — read through the shared memo,
+                        // so a page render stops re-loading every decision set from disk.
+                        Map<String, String> contracts = docCache
+                                .columnContracts(data.table());
                         Map<String, String> columnContracts = new java.util.LinkedHashMap<>();
                         for (String column : data.columns()) {
                             contracts.forEach((mapped, role) -> {
@@ -1812,6 +1816,9 @@ final class StudioProviders {
                         }
                     }
                     studio.refreshSchema(introspected, actorOf(params));
+                    // schema.json changed in place, outside any route reload: the shared
+                    // memo's table list must not keep serving the pre-refresh overlay.
+                    docCache.invalidate();
                     return java.util.Map.of("refreshed", true,
                             "datasources", introspected.size());
                 })

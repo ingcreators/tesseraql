@@ -55,11 +55,7 @@ final class SystemApps {
             Path root = source.materialize(workRoot);
             AppManifest loaded = new ManifestLoader().load(root);
             AppConfig mounted = withOwnResponseHeaders(mainConfig, loaded.config());
-            apps.add(new MountedApp(source.name(), new AppManifest(loaded.appHome(), mounted,
-                    loaded.routes(), loaded.jobs(), loaded.tools(), loaded.resources(),
-                    loaded.uiResources(), loaded.consumers(), loaded.scopes(), loaded.workflows(),
-                    loaded.attachments(), loaded.migrations(), loaded.prompts(), loaded.views(),
-                    loaded.index())));
+            apps.add(new MountedApp(source.name(), loaded.withConfig(mounted)));
             LOG.info("Mounted app '{}' from {} ({} routes, {} jobs)",
                     source.name(), root, loaded.routes().size(), loaded.jobs().size());
         }

@@ -48,6 +48,16 @@ public record AppManifest(Path appHome, AppConfig config, List<RouteFile> routes
         views = List.copyOf(views);
     }
 
+    /**
+     * This manifest with only {@code config} replaced. The full positional component listing
+     * lives here, next to the record — a caller rebuilding the manifest by hand to swap one
+     * component would silently drop whatever field the record grows next.
+     */
+    public AppManifest withConfig(AppConfig config) {
+        return new AppManifest(appHome, config, routes, jobs, tools, resources, uiResources,
+                consumers, scopes, workflows, attachments, migrations, prompts, views, index);
+    }
+
     /** The registry lookup: the view document declaring {@code id}, or {@code null}. */
     public ViewFile viewById(String id) {
         for (ViewFile view : views) {

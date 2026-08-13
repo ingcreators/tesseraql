@@ -7,7 +7,6 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.batch.StepExecution;
-import io.tesseraql.opsui.OpsScope;
 import io.tesseraql.security.Principal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,14 +27,6 @@ import org.apache.camel.builder.RouteBuilder;
 final class OperationsRouteBuilder extends RouteBuilder {
 
     private static final String VIEW = "tesseraql-auth:authenticate?auth=bearer";
-    /**
-     * TQL-BATCH-4040: the requested operations resource (job, execution, trace, or event) is
-     * unknown — or outside the caller's {@code ops.app.<name>} scope, which reads the same.
-     * Thrown, so the standard error path answers 404 with the framework envelope (the shape
-     * {@code ErrorResponseRenderer.httpStatus} always promised for this code).
-     */
-    private static final io.tesseraql.core.error.TqlErrorCode UNKNOWN = new io.tesseraql.core.error.TqlErrorCode(
-            io.tesseraql.core.error.TqlDomain.BATCH, 4040);
 
     /** The app's code catalogs, or null when it declares none (docs/lookups.md, decision 14). */
     private static io.tesseraql.core.catalog.CatalogStore catalogStore(
@@ -65,37 +56,16 @@ final class OperationsRouteBuilder extends RouteBuilder {
         return row;
     }
 
-    /** The 404 refusal for an unknown — or out-of-scope, which reads the same — resource. */
-    private static TqlException notFound(String what) {
-        return TqlException.builder(UNKNOWN)
-                .message(what + " is unknown or outside the caller's ops.app scope")
-                .build();
-    }
-
     private final ObjectMapper mapper = new ObjectMapper();
-    private final JobRunner runner;
+    /** The shared find/scope/act cores both the JSON API and the console providers call. */
+    private final OpsActions actions;
     private final JobRepository repository;
     private final Map<String, String> jobOwners;
     private final Map<String, io.tesseraql.yaml.model.JobDefinition> definitions;
     private final io.tesseraql.opsui.OpsDashboard dashboard;
-    private final io.tesseraql.operations.outbox.JdbcOutboxStore outbox;
-    private final io.tesseraql.core.messaging.EventChannelStore events;
     private final MetricsSettings metrics;
     private final io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit;
     private final io.tesseraql.core.files.FileTransferService transfers;
-    /** The applications this runtime serves; ops never reports on another runtime's rows. */
-    private final java.util.Set<String> servedApps;
-
-    /**
-     * Runs a job by id; decouples the route builder from the runtime instance. The trigger
-     * facts ride along so the execution row records how - and for a manual run, by whom -
-     * it started (docs/ops-console-actions.md).
-     */
-    @FunctionalInterface
-    interface JobRunner {
-        JobExecution run(String jobId, Map<String, Object> params, String triggerType,
-                String triggeredBy);
-    }
 
     /**
      * The Prometheus exposition settings (roadmap Phase 45): opt-in, bearer-gated default.
@@ -107,17 +77,13 @@ final class OperationsRouteBuilder extends RouteBuilder {
             io.tesseraql.opsui.PollSourceStatus pollSources) {
     }
 
-    OperationsRouteBuilder(JobRunner runner, JobRepository repository,
+    OperationsRouteBuilder(OpsActions actions, JobRepository repository,
             Map<String, String> jobOwners,
             Map<String, io.tesseraql.yaml.model.JobDefinition> definitions,
-            io.tesseraql.opsui.OpsDashboard dashboard,
-            io.tesseraql.operations.outbox.JdbcOutboxStore outbox,
-            io.tesseraql.core.messaging.EventChannelStore events, MetricsSettings metrics,
+            io.tesseraql.opsui.OpsDashboard dashboard, MetricsSettings metrics,
             io.tesseraql.operations.audit.JdbcRouteAuditStore routeAudit,
-            io.tesseraql.core.files.FileTransferService transfers,
-            java.util.Set<String> servedApps) {
-        this.servedApps = java.util.Set.copyOf(servedApps);
-        this.runner = runner;
+            io.tesseraql.core.files.FileTransferService transfers) {
+        this.actions = actions;
         this.repository = repository;
         this.transfers = transfers;
         // Job id -> owning app, insertion-ordered so the job list keeps its declaration order.
@@ -125,8 +91,6 @@ final class OperationsRouteBuilder extends RouteBuilder {
         this.definitions = java.util.Collections
                 .unmodifiableMap(new LinkedHashMap<>(definitions));
         this.dashboard = dashboard;
-        this.outbox = outbox;
-        this.events = events;
         this.metrics = metrics;
         this.routeAudit = routeAudit;
     }
@@ -323,7 +287,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                     String name = exchange.getMessage().getHeader("name", String.class);
                     if (store == null || store.status().stream()
                             .noneMatch(status -> status.name().equals(name))) {
-                        throw notFound("Catalog '" + name + "'");
+                        throw OpsActions.notFound("Catalog '" + name + "'");
                     }
                     // reload() re-reads whatever the hold says, which is the whole point of a
                     // manual refresh: an operator presses it because the source changed
@@ -337,13 +301,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
         from("direct:ops.outbox").routeId("ops.outbox")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> {
-                    Predicate<String> scope = scope(exchange);
-                    return outbox.recent(200).stream()
-                            .filter(event -> scope.test(event.appName()))
-                            .map(this::outboxEventMap)
-                            .toList();
-                }));
+                .process(jsonProcessor(exchange -> mapList(
+                        actions.recentOutbox(scope(exchange)), this::outboxEventMap)));
 
         from("direct:ops.outbox.redeliver").routeId("ops.outbox.redeliver")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
@@ -351,13 +310,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
         from("direct:ops.events").routeId("ops.events")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> {
-                    Predicate<String> scope = scope(exchange);
-                    return events.recent(200).stream()
-                            .filter(event -> scope.test(event.appName()))
-                            .map(this::channelEventMap)
-                            .toList();
-                }));
+                .process(jsonProcessor(exchange -> mapList(
+                        actions.recentEvents(scope(exchange)), this::channelEventMap)));
 
         from("direct:ops.events.redeliver").routeId("ops.events.redeliver")
                 .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
@@ -366,32 +320,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     /** Requeues a FAILED/DEAD event; outside the caller's scope it reads as unknown. */
     private Object redeliverOutboxEvent(Exchange exchange) {
-        String id = exchange.getMessage().getHeader("id", String.class);
-        io.tesseraql.core.outbox.OutboxEvent event = outbox.find(id)
-                .filter(found -> scope(exchange).test(found.appName()))
-                .orElse(null);
-        if (event == null) {
-            throw notFound("Outbox event '" + id + "'");
-        }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", id);
-        result.put("redelivered", outbox.redeliver(id));
-        return result;
+        return actions.redeliverOutbox(
+                exchange.getMessage().getHeader("id", String.class), scope(exchange));
     }
 
     /** Requeues a DEAD queue message; outside the caller's scope it reads as unknown. */
     private Object redeliverChannelEvent(Exchange exchange) {
-        String id = exchange.getMessage().getHeader("id", String.class);
-        io.tesseraql.core.messaging.ChannelEvent event = events.find(id)
-                .filter(found -> scope(exchange).test(found.appName()))
-                .orElse(null);
-        if (event == null) {
-            throw notFound("Queue event '" + id + "'");
-        }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", id);
-        result.put("redelivered", events.redeliver(id));
-        return result;
+        return actions.redeliverEvent(
+                exchange.getMessage().getHeader("id", String.class), scope(exchange));
     }
 
     private Map<String, Object> channelEventMap(io.tesseraql.core.messaging.ChannelEvent event) {
@@ -425,13 +361,12 @@ final class OperationsRouteBuilder extends RouteBuilder {
     }
 
     /**
-     * The caller's per-app scope: what this runtime serves, narrowed by the principal's
-     * {@code ops.app.*} grants (docs/app-isolation-model.md decision 4).
+     * The caller's per-app scope: what this runtime serves, narrowed by the bearer
+     * principal's {@code ops.app.*} grants (docs/app-isolation-model.md decision 4).
      */
     private Predicate<String> scope(Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
-        return OpsScope.allowedApps(
-                principal == null ? null : principal.permissions(), servedApps);
+        return actions.scope(principal == null ? null : principal.permissions());
     }
 
     /** One declared job for the API listing: identity, trigger story, and policies. */
@@ -458,14 +393,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     private Object runJob(Exchange exchange) {
         String jobId = exchange.getMessage().getHeader("jobId", String.class);
-        // A job outside the caller's scope is indistinguishable from an unknown one.
-        if (!scope(exchange).test(jobOwners.get(jobId))) {
-            throw notFound("Job '" + jobId + "'");
-        }
-        Map<String, Object> params = parseBody(exchange);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
-        JobExecution execution = runner.run(jobId, params, "manual",
-                principal == null ? null : principal.loginId());
+        JobExecution execution = actions.runJob(jobId, () -> parseBody(exchange),
+                principal == null ? null : principal.loginId(), scope(exchange));
         // Work accepted, poll the execution: the same 202 + Location contract the
         // file-transfer start answers (docs/vocabulary-cleanup.md slice 3).
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
@@ -487,11 +417,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     private Object cancelExecution(Exchange exchange) {
         String id = exchange.getMessage().getHeader("id", String.class);
-        JobExecution execution = repository.findExecution(id)
-                .filter(found -> scope(exchange).test(found.appName()))
-                .orElse(null);
+        JobExecution execution = actions.findExecution(id, scope(exchange));
         if (execution == null) {
-            throw notFound("Execution '" + id + "'");
+            throw OpsActions.notFound("Execution '" + id + "'");
         }
         if (!repository.requestCancel(id)) {
             throw io.tesseraql.core.error.TqlException.builder(NOT_RUNNING)
@@ -507,11 +435,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     private Object executionDetail(Exchange exchange) {
         String id = exchange.getMessage().getHeader("id", String.class);
-        JobExecution execution = repository.findExecution(id)
-                .filter(found -> scope(exchange).test(found.appName()))
-                .orElse(null);
+        JobExecution execution = actions.findExecution(id, scope(exchange));
         if (execution == null) {
-            throw notFound("Execution '" + id + "'");
+            throw OpsActions.notFound("Execution '" + id + "'");
         }
         Map<String, Object> detail = executionMap(execution);
         List<Object> steps = new ArrayList<>();
@@ -617,7 +543,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         io.tesseraql.core.files.FileTransferService.TransferStatus status = transfers
                 .status(id).orElse(null);
         if (status == null || !scope(exchange).test(status.appName())) {
-            throw notFound("Transfer '" + id + "'");
+            throw OpsActions.notFound("Transfer '" + id + "'");
         }
         io.tesseraql.core.files.FileTransferService.Download download = transfers.download(id)
                 .orElse(null);

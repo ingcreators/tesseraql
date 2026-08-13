@@ -50,6 +50,8 @@ final class RouteReloader {
     private final StudioService studio;
     private final String appName;
     private final List<SystemApps.MountedApp> mountedApps;
+    /** Studio's memoized schema/decision lookups; every reload drops what they hold. */
+    private final StudioDocCache docCache;
     /**
      * The app's base path, resolved once. Restated on every REST configuration this class
      * builds: a reloaded or stubbed route re-enters the context-wide configuration, and a hot
@@ -66,13 +68,14 @@ final class RouteReloader {
     private String workflowFingerprint;
 
     RouteReloader(CamelContext context, Path appHome, AppManifest current, StudioService studio,
-            String appName, List<SystemApps.MountedApp> mountedApps) {
+            String appName, List<SystemApps.MountedApp> mountedApps, StudioDocCache docCache) {
         this.context = context;
         this.appHome = appHome;
         this.current = current;
         this.studio = studio;
         this.appName = appName;
         this.mountedApps = List.copyOf(mountedApps);
+        this.docCache = docCache;
         this.basePath = io.tesseraql.core.http.BasePaths.normalize(
                 current.config().getString("tesseraql.http.basePath").orElse(null));
         this.fingerprints = fingerprintsOf(current);
@@ -246,6 +249,9 @@ final class RouteReloader {
         this.fingerprints = prints;
         this.appFingerprint = appNow;
         this.workflowFingerprint = workflowNow;
+        // The reload's scope includes the shared definitions Studio's memoized lookups read
+        // (decisions/ for the data browser's column contracts), so a reload is their epoch.
+        docCache.invalidate();
         LOG.info("Hot reload: {} reloaded, {} added, {} removed, {} failed, {} unchanged",
                 reloadedIds.size(), addedIds.size(), removed.size(), failed.size(), unchanged);
         return new Result(reloadedIds, addedIds, removed, failed, studio.reload());
