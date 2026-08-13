@@ -44,8 +44,8 @@ recipe: command-json
 input:
   orderId: { type: string, required: true }
   total:   { type: number }
-sources:
-  main:
+steps:
+  - id: main
     sql:
       file: insert-order.sql
       mode: update
@@ -83,9 +83,9 @@ consume:
 input:                            # declare the message shape — the mass-assignment guard applies
   orderId: { type: string, required: true }
   total:   { type: number }
-sources:
-  main:
-    sql:                              # or steps: — runs in one transaction, like a command
+steps:                            # the pipeline — runs in one transaction, like a command's
+  - id: main
+    sql:
       file: project-order.sql
       mode: update
       params:
@@ -117,8 +117,8 @@ consume:
   channel: events
   topic: orders.created
   idempotencyKey: body.orderId
-sources:
-  main:
+steps:
+  - id: main
     sql:
       file: upsert-order-projection.sql   # an idempotent upsert, in reporting's schema
       mode: update

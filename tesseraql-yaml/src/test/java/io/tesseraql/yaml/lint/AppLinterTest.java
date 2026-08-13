@@ -1296,6 +1296,24 @@ class AppLinterTest {
                       data: main.rows
                 """);
 
+        // A webhook whose only pipeline is sources.main: it used to pass this lint and then
+        // fail at startup — the compiled route always runs the transactional command
+        // processor, whose pipeline is the steps: array.
+        Files.createDirectories(dir.resolve("web/hooks/sourced"));
+        Files.writeString(dir.resolve("web/hooks/sourced/read.sql"), "select 1\n");
+        Files.writeString(dir.resolve("web/hooks/sourced/post.yml"), """
+                version: tesseraql/v1
+                id: sourced.receive
+                kind: route
+                recipe: webhook
+                webhook:
+                  provider: partner
+                sources:
+                  main:
+                    sql:
+                      file: read.sql
+                """);
+
         List<LintFinding> findings = new AppLinter().lint(dir);
 
         // Only the unconfigured verifier ('ghost') is flagged; 'partner' is configured.
@@ -1303,10 +1321,16 @@ class AppLinterTest {
                 .filteredOn(f -> f.code().equals("TQL-SEC-4083") && f.isError())
                 .singleElement()
                 .matches(f -> f.message().contains("ghost"));
-        // The bad route has no SQL pipeline, and the query-json route misuses webhook:.
+        // The bad route and the sources-only route have no steps: pipeline, and the
+        // query-json route misuses webhook:.
         assertThat(findings)
                 .filteredOn(f -> f.code().equals("TQL-YAML-1008") && f.isError())
-                .hasSize(2);
+                .hasSize(3);
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-YAML-1008") && f.isError()
+                        && f.source().contains("sourced"))
+                .singleElement()
+                .matches(f -> f.message().contains("steps: pipeline"));
     }
 
     @Test

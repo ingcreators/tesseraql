@@ -305,6 +305,10 @@ public final class RouteCompiler {
         return definition.outbox() != null
                 || !definition.validate().isEmpty()
                 || !definition.notifications().isEmpty()
+                // publish: is a transactional-outbox write exactly like notify: — it was missing
+                // from this list, so a command with publish: and no transactional step compiled
+                // down the read path and the publish was silently dropped.
+                || definition.publish() != null
                 // A step is transactional when it writes on the command's own connection: SQL
                 // or a managed sequence. A contract/service step runs through its component,
                 // which has no place in a JDBC transaction, so it keeps the standard pipeline.
@@ -746,6 +750,13 @@ public final class RouteCompiler {
                 || consume.topic() == null || consume.topic().isBlank()) {
             throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
                     + "': queue-consume recipe needs a consume.channel and consume.topic");
+        }
+        // The backstop for TQL-YAML-1051: a consumer mounts no sources — nothing runs before its
+        // transaction and nothing reads a result after it — so a declared one is refused here
+        // rather than compiled to nothing.
+        if (!definition.sources().isEmpty()) {
+            throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
+                    + "': queue-consume mounts no sources: — the pipeline is its steps:");
         }
         Path routeDir = routeFile.source().getParent();
         // The projection pattern (docs/multi-datasource.md): the consumer's apply transaction may
