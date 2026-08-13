@@ -626,10 +626,15 @@ public final class ManifestLoader {
                         Map<String, Object> tree = parser.parseTree(file);
                         String description = string(tree.get("description"));
                         Object kind = tree.get("kind");
-                        // A prompt is pure text (no recipe/SQL), so it reads through its own
-                        // model rather than the route parser (which requires a recipe).
+                        // A prompt that declares a recipe: is a route like its three siblings
+                        // (docs/prompt-as-recipe.md decision 1) and reads through the route
+                        // parser, which requires one. A prompt without a recipe: is the older
+                        // pure-text form and reads through its own model. Slice 2 deletes the
+                        // second arm, and this branch with it.
                         if ("prompt".equals(kind)) {
-                            prompts.add(promptFile(file, parser.parsePrompt(file)));
+                            prompts.add(tree.get("recipe") == null
+                                    ? promptFile(file, parser.parsePrompt(file))
+                                    : promptFile(file, parser.parseRoute(file), description));
                             return;
                         }
                         // A non-null kind outside the legal set was silently treated as a tool —
@@ -666,7 +671,21 @@ public final class ManifestLoader {
                 argument == null ? null : argument.description(),
                 argument != null && argument.required())));
         return new PromptFile(file, definition.id(), definition.description(), arguments,
-                definition.template());
+                definition.template(), null);
+    }
+
+    /**
+     * Turns a route-parsed prompt document into a {@link PromptFile} carrying its route
+     * definition. The declared arguments are the route's {@code input:}, so {@code prompts/list}
+     * advertises what the binder actually validates; the description is read from the raw tree
+     * like every other mcp kind's.
+     */
+    private static PromptFile promptFile(Path file, RouteDefinition definition,
+            String description) {
+        List<PromptFile.Argument> arguments = new ArrayList<>();
+        definition.input().forEach((name, field) -> arguments.add(new PromptFile.Argument(name,
+                null, field != null && field.required())));
+        return new PromptFile(file, definition.id(), description, arguments, null, definition);
     }
 
     private static String string(Object value) {

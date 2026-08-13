@@ -40,7 +40,10 @@ class RecipeGovernanceTest {
             "items.import", // file-import
             "items.dump", // file-export
             "queue.items.consumed",
-            "mcp.items.tool");
+            "mcp.items.tool",
+            // A prompt is a route like its three mcp siblings (docs/prompt-as-recipe.md): it
+            // gets the head every recipe gets, which is the whole point of it having one.
+            "mcp.prompt.items.brief");
 
     @Test
     void everyRecipeCarriesTheGovernedHeadInOrder(@TempDir Path dir) throws Exception {
@@ -315,6 +318,30 @@ class RecipeGovernanceTest {
                 emit:
                   - items.changed
                 """.formatted(policy), "insert.sql");
+
+        route(dir, "mcp", "brief.yml", """
+                version: tesseraql/v1
+                id: items.brief
+                kind: prompt
+                recipe: prompt-text
+                description: brief the model on the items
+                security:
+                  policy: app.read
+                %s
+                input:
+                  name: { type: string }
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
+                response:
+                  text:
+                    template: brief.txt.tpl
+                    model:
+                      items: main.rows
+                """.formatted(policy), "list.sql");
+        Files.writeString(dir.resolve("mcp/brief.txt.tpl"), "[(${items})]\n");
 
         Files.createDirectories(dir.resolve("attachments"));
         Files.writeString(dir.resolve("attachments/notes.yml"), """

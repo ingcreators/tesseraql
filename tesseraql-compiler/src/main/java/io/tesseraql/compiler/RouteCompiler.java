@@ -42,6 +42,10 @@ public final class RouteCompiler {
     private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.CAMEL, 3101);
     /** TQL-CAMEL-3112: a non-main command transaction cannot carry main-anchored features. */
     private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.CAMEL, 3112);
+    /** TQL-CAMEL-3116: a prompt-text recipe declares command steps, and prompts/get is a read. */
+    private static final TqlErrorCode PROMPT_WRITES = new TqlErrorCode(TqlDomain.CAMEL, 3116);
+    /** TQL-CAMEL-3117: a prompt-text recipe declares no response.text: to render its message. */
+    private static final TqlErrorCode PROMPT_WITHOUT_TEXT = new TqlErrorCode(TqlDomain.CAMEL, 3117);
     private static final String DEFAULT_DATASOURCE = "main";
     private static final int DEFAULT_MAX_ROWS = 10_000;
     private static final long DEFAULT_IDEMPOTENCY_TTL = java.time.Duration.ofHours(24).toMillis();
@@ -156,6 +160,17 @@ public final class RouteCompiler {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(uiFile.definition().id())) {
                         buildMcpUi(this, manifest.appHome(), uiFile);
+                    }
+                }
+                // Application-declared MCP prompts (docs/prompt-as-recipe.md): a prompt that
+                // declares recipe: prompt-text compiles to a read-only direct: route whose
+                // response.text: renders the message. A prompt with no recipe: is the older
+                // pure-text form the runtime renders itself, and has no route to build.
+                for (io.tesseraql.yaml.manifest.PromptFile promptFile : manifest.prompts()) {
+                    if (promptFile.definition() != null
+                            && (onlyRouteIds == null
+                                    || onlyRouteIds.contains(promptFile.definition().id()))) {
+                        buildMcpPrompt(this, promptFile);
                     }
                 }
                 // Messaging consumers (roadmap Phase 27): each queue-consume route compiles to a
@@ -602,7 +617,7 @@ public final class RouteCompiler {
                         java.util.Map.of("ok", Boolean.TRUE, "transition",
                                 "dispatch.transition"),
                         null, null),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     /** The command-json route a workflow transition compiles to (roadmap Phase 28). */
@@ -690,7 +705,7 @@ public final class RouteCompiler {
         return new io.tesseraql.yaml.model.ResponseSpec(
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
                         java.util.Map.of("ok", Boolean.TRUE), null, null),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     /** The command's binds: the document key (always) plus the transition's declared params. */
@@ -1307,6 +1322,55 @@ public final class RouteCompiler {
         step = enrichments(step, uiDir, definition);
         step.process(new HtmlResponseRenderer(withDefaultHeaders(definition.response().html()),
                 appHome, uiDir, i18n.defaultTag()).basePath(basePath()));
+    }
+
+    /**
+     * Builds an application-declared MCP prompt (docs/prompt-as-recipe.md) as a read-only
+     * {@code direct:} route, never mounted on HTTP. It runs the same head every recipe runs -
+     * telemetry, audit, the prompt's own security (auth + policy), tenancy and locale resolution,
+     * input binding, then the declared {@code sources:} - and ends in the {@code text:} renderer,
+     * whose rendered string is the message. The runtime's MCP endpoint sends to
+     * {@code direct:mcp.prompt.<id>} on {@code prompts/get} and wraps the body as one
+     * {@code user} message.
+     *
+     * <p>The recipe is a read: {@code prompts/get} is a read in the protocol's own vocabulary, so
+     * a command step is refused rather than compiled into a prompt that writes.
+     */
+    private void buildMcpPrompt(RouteBuilder builder,
+            io.tesseraql.yaml.manifest.PromptFile promptFile) {
+        RouteDefinition definition = promptFile.definition();
+        Path promptDir = promptFile.source().getParent();
+        if (!"prompt-text".equals(definition.recipe())) {
+            throw new TqlException(UNSUPPORTED_RECIPE, "Prompt '" + definition.id()
+                    + "': unknown recipe '" + definition.recipe()
+                    + "'; a prompt document uses prompt-text");
+        }
+        if (!definition.steps().isEmpty()) {
+            throw new TqlException(PROMPT_WRITES, "Prompt '" + definition.id()
+                    + "' declares steps: — prompts/get is a read, so a prompt renders text from"
+                    + " sources: and a prompt that writes is a tool");
+        }
+        if (definition.response() == null || definition.response().text() == null) {
+            throw new TqlException(PROMPT_WITHOUT_TEXT, "Prompt '" + definition.id()
+                    + "' declares no response.text: — the rendered text is the message it"
+                    + " returns, so there is nothing to answer with");
+        }
+        String routeId = "mcp.prompt." + definition.id();
+        String direct = "direct:" + routeId;
+
+        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        applyCommonGovernance(route, definition.id(), "MCP-PROMPT", "/" + definition.id(),
+                definition);
+        ProcessorDefinition<?> step = route
+                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
+                .process(new io.tesseraql.compiler.binding.CatalogBinder());
+        for (var entry : definition.sources().entrySet()) {
+            step = source(step, promptDir, entry.getKey(), entry.getValue(),
+                    definition.effectiveDatasource());
+        }
+        step = enrichments(step, promptDir, definition);
+        step.process(new io.tesseraql.compiler.binding.TextResponseRenderer(
+                definition.response().text(), compiledAppHome, promptDir));
     }
 
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */

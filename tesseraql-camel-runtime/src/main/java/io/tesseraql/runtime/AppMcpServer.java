@@ -36,6 +36,13 @@ import org.apache.camel.ProducerTemplate;
  * by the route's error renderer) becomes an MCP tool error or, for a (UI) resource, a
  * {@code resources/read} JSON-RPC error.
  *
+ * <p>A prompt that declares a {@code recipe:} is a route too (docs/prompt-as-recipe.md): its
+ * handler sends to {@code direct:mcp.prompt.<id>} and wraps the rendered text as one {@code user}
+ * message, so a prompt that reads data is governed like everything else here. A prompt that
+ * declares none is the older pure-text form, rendered in this class from its own template. All
+ * four primitives reach their route through one sender, {@code call}, and differ only in how they
+ * wrap what it returns.
+ *
  * <p>A tool that links to a UI resource (its {@code ui:} field) advertises the link as the tool's
  * {@code _meta.ui.resourceUri}, the UI resource carries its {@code _meta.ui} rendering hints, and the
  * MCP Apps extension is negotiated under {@code capabilities.extensions["io.modelcontextprotocol/ui"]}
@@ -119,11 +126,21 @@ final class AppMcpServer {
                 promptBuilder.argument(argument.name(), argument.description(),
                         argument.required());
             }
-            Path appHome = manifest.appHome();
-            Path template = prompt.template() == null
-                    ? null
-                    : prompt.source().getParent().resolve(prompt.template()).normalize();
-            promptBuilder.handler(args -> renderPrompt(appHome, template, args));
+            if (prompt.definition() != null) {
+                // A prompt that declares a recipe: is a route like its three siblings
+                // (docs/prompt-as-recipe.md): the message comes from the compiled route, which
+                // runs its own security, binding and SQL. Slice 2 makes this the only arm.
+                String endpoint = "direct:mcp.prompt." + prompt.definition().id();
+                promptBuilder.handler(
+                        (arguments, context) -> getPrompt(producer, endpoint, arguments, context));
+            } else {
+                Path appHome = manifest.appHome();
+                Path template = prompt.template() == null
+                        ? null
+                        : prompt.source().getParent().resolve(prompt.template()).normalize();
+                promptBuilder.handler((arguments, context) -> renderPrompt(appHome, template,
+                        arguments));
+            }
             builder.prompt(promptBuilder.build());
         }
     }
@@ -141,6 +158,18 @@ final class AppMcpServer {
         String name = appHome.toAbsolutePath().normalize().relativize(template).toString()
                 .replace('\\', '/');
         return McpPromptResult.user(Templates.render(appHome, name, model));
+    }
+
+    /**
+     * Gets a prompt by sending the supplied arguments to its compiled route and wrapping the
+     * rendered text as one {@code user} message. Like a resource read, a thrown exception (the
+     * send failed, or the route's error renderer set a non-2xx status) propagates to the server,
+     * which turns it into a {@code prompts/get} JSON-RPC error.
+     */
+    private static McpPromptResult getPrompt(ProducerTemplate producer, String endpoint,
+            Map<String, String> arguments, McpCallContext context) {
+        return McpPromptResult.user(requireOk(call(producer, endpoint, arguments, context),
+                "prompt"));
     }
 
     /** A linking tool's {@code _meta.ui}: the UI resource it renders into, visible to model and app. */
@@ -180,25 +209,7 @@ final class AppMcpServer {
      * propagates to the server, which turns it into a {@code resources/read} JSON-RPC error.
      */
     private static String read(ProducerTemplate producer, String endpoint, McpCallContext context) {
-        Exchange out = producer.send(endpoint, exchange -> {
-            exchange.getMessage().setBody(Map.of());
-            if (context.authorization() != null) {
-                exchange.getMessage().setHeader("Authorization", context.authorization());
-            }
-        });
-        if (out.getException() != null) {
-            Throwable cause = out.getException();
-            throw new IllegalStateException(cause.getMessage() != null
-                    ? cause.getMessage()
-                    : cause.toString());
-        }
-        String body = out.getMessage().getBody(String.class);
-        Integer status = out.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
-        if (status != null && status >= 400) {
-            throw new IllegalStateException(
-                    body == null ? "resource error (" + status + ")" : body);
-        }
-        return body == null ? "" : body;
+        return requireOk(call(producer, endpoint, Map.of(), context), "resource");
     }
 
     @SuppressWarnings("unchecked")
@@ -207,27 +218,89 @@ final class AppMcpServer {
         Map<String, Object> input = arguments == null || arguments.isNull()
                 ? Map.of()
                 : MAPPER.convertValue(arguments, Map.class);
+        Outcome outcome = call(producer, endpoint, input, context);
+        if (outcome.failed()) {
+            return McpToolResult.error(outcome.failure());
+        }
+        if (outcome.errored()) {
+            return McpToolResult.error(outcome.body() == null
+                    ? "tool error (" + outcome.status() + ")"
+                    : outcome.body());
+        }
+        try {
+            return McpToolResult.json(MAPPER.readTree(
+                    outcome.body() == null ? "null" : outcome.body()));
+        } catch (Exception ex) {
+            return McpToolResult.text(outcome.body() == null ? "" : outcome.body());
+        }
+    }
+
+    /**
+     * The one sender every MCP primitive reaches its route through: the declared body plus the
+     * call's {@code Authorization} header, so the route's own authentication, authorization,
+     * input validation and SQL all run. What comes back is the exchange's outcome, and each
+     * primitive wraps it - a tool as an {@link McpToolResult}, a resource or UI resource as its
+     * body, a prompt as one {@code user} message.
+     *
+     * <p>Prompts reaching the wire this way is what gives a prompt security at all: the older,
+     * routeless form passed no {@code Authorization} anywhere, having no route to pass it to
+     * (docs/prompt-as-recipe.md decision 7).
+     */
+    private static Outcome call(ProducerTemplate producer, String endpoint, Object body,
+            McpCallContext context) {
         Exchange out = producer.send(endpoint, exchange -> {
-            exchange.getMessage().setBody(input);
+            exchange.getMessage().setBody(body);
             if (context.authorization() != null) {
                 exchange.getMessage().setHeader("Authorization", context.authorization());
             }
         });
         if (out.getException() != null) {
-            Throwable cause = out.getException();
-            return McpToolResult.error(cause.getMessage() != null
-                    ? cause.getMessage()
-                    : cause.toString());
+            return new Outcome(null, null, out.getException());
         }
-        String body = out.getMessage().getBody(String.class);
-        Integer status = out.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
-        if (status != null && status >= 400) {
-            return McpToolResult.error(body == null ? "tool error (" + status + ")" : body);
+        return new Outcome(out.getMessage().getBody(String.class),
+                out.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class), null);
+    }
+
+    /**
+     * The body of a send that succeeded, for the two primitives that answer with a JSON-RPC error
+     * rather than a result: a failure becomes an {@link IllegalStateException} the server turns
+     * into that error. {@code what} names the primitive in the fallback message a status with no
+     * body leaves.
+     */
+    private static String requireOk(Outcome outcome, String what) {
+        if (outcome.failed()) {
+            throw new IllegalStateException(outcome.failure());
         }
-        try {
-            return McpToolResult.json(MAPPER.readTree(body == null ? "null" : body));
-        } catch (Exception ex) {
-            return McpToolResult.text(body == null ? "" : body);
+        if (outcome.errored()) {
+            throw new IllegalStateException(outcome.body() == null
+                    ? what + " error (" + outcome.status() + ")"
+                    : outcome.body());
+        }
+        return outcome.body() == null ? "" : outcome.body();
+    }
+
+    /**
+     * One send's outcome: the rendered body and its status, or the exception the send failed with.
+     *
+     * @param body      the rendered body, or null when the send failed or the route set none
+     * @param status    the response status the route set, or null when it set none
+     * @param exception the exception the send failed with, or null
+     */
+    private record Outcome(String body, Integer status, Throwable exception) {
+
+        /** Whether the send itself failed, before any response was rendered. */
+        boolean failed() {
+            return exception != null;
+        }
+
+        /** Whether the route's error renderer answered — a handled auth, validation or conflict. */
+        boolean errored() {
+            return status != null && status >= 400;
+        }
+
+        /** The failure text, which is the exception's message when it has one. */
+        String failure() {
+            return exception.getMessage() != null ? exception.getMessage() : exception.toString();
         }
     }
 

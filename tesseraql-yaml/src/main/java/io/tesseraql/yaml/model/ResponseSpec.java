@@ -4,12 +4,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * Route response declaration (design ch. 6.3, 6.4): JSON, HTML (template-rendered), streaming
- * (large-data export), redirect, and generated-file shapes, plus an optional {@code onError} that
- * steers the error response of an htmx caller.
+ * (large-data export), redirect, generated-file and generated-text shapes, plus an optional
+ * {@code onError} that steers the error response of an htmx caller.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse stream,
-        RedirectResponse redirect, FileResponse file, OnError onError,
+        RedirectResponse redirect, FileResponse file, TextResponse text, OnError onError,
         SessionResponse session) {
 
     /**
@@ -71,6 +71,34 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
             return contentType == null || contentType.isBlank()
                     ? "text/plain; charset=utf-8"
                     : contentType;
+        }
+    }
+
+    /**
+     * A template-generated text response (docs/prompt-as-recipe.md decision 3): the template
+     * renders against the model in Thymeleaf TEXT mode, exactly as {@code file:} does, and the
+     * rendered string <em>is</em> the answer — the message a {@code prompts/get} returns rather
+     * than a download.
+     *
+     * <p>It is {@code file:} without {@code filename:} and {@code contentType:}, because a
+     * message has nowhere to put either. Reusing {@code file:} here would have accepted both keys
+     * and dropped them, which is the class of defect the design document is about.
+     *
+     * @param status   HTTP status code, defaulting to 200 — the exchange status the MCP endpoint
+     *                 reads to tell a rendered message from a failure the error renderer handled
+     * @param template template path relative to the template root
+     * @param model    template model: each value is a source expression (e.g. {@code params.x})
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TextResponse(Integer status, String template,
+            java.util.Map<String, Object> model) {
+
+        public TextResponse {
+            model = model == null ? java.util.Map.of() : java.util.Map.copyOf(model);
+        }
+
+        public int effectiveStatus() {
+            return status == null ? 200 : status;
         }
     }
 

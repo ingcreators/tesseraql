@@ -51,7 +51,7 @@ class McpServerTest {
                         .title("Greeting")
                         .description("Builds a greeting")
                         .argument("who", "whom to greet", true)
-                        .handler(args -> McpPromptResult.user("a greeting",
+                        .handler((args, ctx) -> McpPromptResult.user("a greeting",
                                 "Say hello to " + args.get("who")))
                         .build())
                 .build();

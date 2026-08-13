@@ -116,7 +116,7 @@ public final class McpServer {
             case "prompts/list" :
                 return Optional.of(result(id, promptsList()));
             case "prompts/get" :
-                return Optional.of(promptsGet(id, params));
+                return Optional.of(promptsGet(id, params, context));
             default :
                 return Optional.of(error(id, METHOD_NOT_FOUND, "Unknown method: " + method));
         }
@@ -299,7 +299,7 @@ public final class McpServer {
         return result;
     }
 
-    private JsonNode promptsGet(JsonNode id, JsonNode params) {
+    private JsonNode promptsGet(JsonNode id, JsonNode params, McpCallContext context) {
         if (params == null || !params.hasNonNull("name")) {
             return error(id, INVALID_PARAMS, "prompts/get requires a prompt name");
         }
@@ -325,7 +325,7 @@ public final class McpServer {
         }
         McpPromptResult outcome;
         try {
-            outcome = prompt.handler().handle(arguments);
+            outcome = prompt.handler().handle(arguments, context);
         } catch (TqlException ex) {
             return error(id, INTERNAL_ERROR, ex.code() + ": " + ex.getMessage());
         } catch (Exception ex) {

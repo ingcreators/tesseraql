@@ -28,7 +28,7 @@
       "description": "route (web/**, consume/**) and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model."
     },
     "recipe": {
-      "description": "What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), and queue-consume (consume/** documents).",
+      "description": "What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and prompt-text (an mcp/ prompt document, which renders its message from a route like every other mcp kind).",
       "enum": [
         "query-json",
         "command-json",
@@ -38,7 +38,8 @@
         "file-import",
         "file-export",
         "webhook",
-        "queue-consume"
+        "queue-consume",
+        "prompt-text"
       ]
     },
     "input": {
@@ -538,6 +539,28 @@
           },
           "additionalProperties": true,
           "description": "Render a template into a file and answer with it as a download."
+        },
+        "text": {
+          "type": "object",
+          "required": [
+            "template"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer",
+              "description": "The status answered on success (default 200)."
+            },
+            "template": {
+              "type": "string",
+              "description": "The template rendered into the message, in Thymeleaf TEXT mode."
+            },
+            "model": {
+              "type": "object",
+              "description": "Extra model entries for the template: each name to the bindable path supplying it."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Render a template and answer with the text itself — the message a `prompt-text` recipe returns from `prompts/get`. It is `file:` without `filename:`/`contentType:`, which a message has nowhere to put. Documented in app-mcp.md."
         },
         "onError": {
           "type": "object",

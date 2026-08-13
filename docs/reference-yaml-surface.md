@@ -12,7 +12,7 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `version` \* | const `tesseraql/v1` | The document format version. Always `tesseraql/v1`. |
 | `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
 | `kind` \* | enum: `route` \| `tool` \| `resource` \| `ui` \| `prompt` | route (web/**, consume/**) and the mcp/ kinds tool/resource/ui/prompt, which reuse the route model. |
-| `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), and queue-consume (consume/** documents). |
+| `recipe` | enum: `query-json` \| `command-json` \| `query-html` \| `page` \| `query-export` \| `file-import` \| `file-export` \| `webhook` \| `queue-consume` \| `prompt-text` | What the route does: query-json/command-json (JSON APIs), query-html/page (HTML pages), query-export/file-import/file-export (file transfers), webhook (inbound webhooks), queue-consume (consume/** documents), and prompt-text (an mcp/ prompt document, which renders its message from a route like every other mcp kind). |
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md. |
 | `inputPolicy` | [object](#inputpolicy) | Route-level input handling policy (e.g. unknown-field behavior) layered over the deny-by-default input: contract. |
 | `security` | [object](#security) | How this document authenticates and authorizes. Routes are deny-by-default: one that declares no security is unreachable. Documented in authentication.md. |
@@ -323,6 +323,7 @@ How the result becomes an HTTP response: JSON, HTML, a redirect, a stream, or a 
 | `stream` | [object](#responsestream) | Stream the generated file back as the response body (`query-export`). Documented in file-transfers.md. |
 | `redirect` | [object](#responseredirect) | Answer with a redirect instead of a body — the usual close of a browser form post. |
 | `file` | [object](#responsefile) | Render a template into a file and answer with it as a download. |
+| `text` | [object](#responsetext) | Render a template and answer with the text itself — the message a `prompt-text` recipe returns from `prompts/get`. It is `file:` without `filename:`/`contentType:`, which a message has nowhere to put. Documented in app-mcp.md. |
 | `onError` | [object](#responseonerror) | How an error response reaches htmx, so a failed submit lands in the right place instead of replacing the page. Documented in response-shaping.md. |
 | `session` | [object](#responsesession) | Browser-session handling for the response (docs/authentication.md). |
 
@@ -380,6 +381,16 @@ Render a template into a file and answer with it as a download.
 | `template` \* | string | The template rendered into the file. |
 | `contentType` | string | The Content-Type of the produced file. |
 | `filename` | string | The download filename offered to the client, as a literal or a bindable path. |
+| `model` | object | Extra model entries for the template: each name to the bindable path supplying it. |
+
+#### response.text
+
+Render a template and answer with the text itself — the message a `prompt-text` recipe returns from `prompts/get`. It is `file:` without `filename:`/`contentType:`, which a message has nowhere to put. Documented in app-mcp.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `status` | integer | The status answered on success (default 200). |
+| `template` \* | string | The template rendered into the message, in Thymeleaf TEXT mode. |
 | `model` | object | Extra model entries for the template: each name to the bindable path supplying it. |
 
 #### response.onError
