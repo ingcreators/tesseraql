@@ -48,7 +48,7 @@ final class SchedulingRouteBuilder extends RouteBuilder {
         }
     }
 
-    private final OperationsRouteBuilder.JobRunner runner;
+    private final OpsActions.JobRunner runner;
     private final JobRepository repository;
     private final List<JobFile> jobs;
     private final Map<String, String> claimKeys;
@@ -58,7 +58,7 @@ final class SchedulingRouteBuilder extends RouteBuilder {
      * @param claimKeys the cluster-wide claim key per job id ({@code <app>:<jobId>}), so
      *                  different apps sharing a database never contend for each other's firings
      */
-    SchedulingRouteBuilder(OperationsRouteBuilder.JobRunner runner, JobRepository repository,
+    SchedulingRouteBuilder(OpsActions.JobRunner runner, JobRepository repository,
             List<JobFile> jobs, Map<String, String> claimKeys, CalendarGate calendarGate) {
         this.runner = runner;
         this.repository = repository;
