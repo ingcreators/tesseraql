@@ -34,6 +34,7 @@ class CommandHttpSourceIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
     static HttpServer upstream;
+    static final java.util.concurrent.atomic.AtomicInteger partnerCalls = new java.util.concurrent.atomic.AtomicInteger();
 
     @BeforeAll
     static void start() throws Exception {
@@ -45,6 +46,7 @@ class CommandHttpSourceIntegrationTest {
         }
         upstream = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         upstream.createContext("/partner", exchange -> {
+            partnerCalls.incrementAndGet();
             byte[] body = "{\"name\":\"Acme from CRM\"}".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
@@ -75,9 +77,13 @@ class CommandHttpSourceIntegrationTest {
     /** The fetched name is written by the command's own step, in its transaction. */
     @Test
     void aCommandWritesAValueItFetchedOverHttp() throws Exception {
+        int callsBefore = partnerCalls.get();
         HttpResponse<String> response = post("/api/orders", "{\"partnerCode\":\"P1\"}");
         assertThat(response.statusCode()).isEqualTo(201);
         assertThat(storedName("P1")).isEqualTo("Acme from CRM");
+        // Exactly one fetch per command: the source used to be mounted a second time after the
+        // commit, so a partner flake at that point failed a write that had already happened.
+        assertThat(partnerCalls.get() - callsBefore).isEqualTo(1);
     }
 
     /** A failed fetch fails the command before a row is written — not after. */
