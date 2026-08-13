@@ -17,8 +17,7 @@ import java.nio.file.Path;
  */
 final class TemplateResolution {
 
-    /** TQL-TPL-2001: template resolution failures (the renderers' render-error code). */
-    /** TQL-TPL-2001: the template could not be resolved or rendered - one rule, declared once. */
+    /** TQL-TPL-2001: the template could not be resolved or rendered — one rule, declared once. */
     static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.TPL, 2001);
 
     private TemplateResolution() {
