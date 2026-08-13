@@ -33,10 +33,11 @@ final class StudioAccess {
     }
 
     /**
-     * Whether a draft apply must be acknowledged in the editor first
-     * ({@code tesseraql.studio.confirmApply}): a general review-the-diff-before-every-apply gate that
-     * extends the conflict-only review (Studio backlog D5). UI-only — the programmatic JSON and MCP
-     * apply paths are not gated, as they have no human diff to review.
+     * Whether a draft apply must be acknowledged first
+     * ({@code tesseraql.studio.confirmApply}): a general review-the-diff-before-every-apply gate
+     * that extends the conflict-only review (Studio backlog D5). Every apply surface honors it —
+     * the editor confirms in the compare panel, and the programmatic JSON apply passes
+     * {@code confirm=true}; an API that skipped the gate made the policy a suggestion.
      */
     boolean confirmApply() {
         return confirmApply;

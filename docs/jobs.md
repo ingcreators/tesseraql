@@ -676,6 +676,7 @@ Lint checks jobs statically:
 | Finding | Code |
 | --- | --- |
 | A step declaring no work at all, two bindings, or a `chunk:` beside a binding | `TQL-FIELD-2004` |
+| A step whose blocks are not one executable unit: `sql:` beside `notify:` or `push:`, an `http:` arm beside `export:`, or a second output block — the executor runs one unit per step, and the rest would fail at run time or be dropped in silence. A plain `sql:` arm feeding `export:` is the one designed pair | `TQL-FIELD-2008` |
 | A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
 | A malformed `export:` step: no arm to read the rows, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
 | A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1005` |

@@ -22,7 +22,9 @@ running application:
 
 If the source changed underneath a draft, applying is refused until you review the
 conflict. With `tesseraql.studio.confirmApply` set, every apply requires that review, not
-just conflicting ones.
+just conflicting ones — on every surface: the editor confirms in the compare panel, and an
+automation calling the JSON API passes `confirm=true` (or `force=true`, which also
+acknowledges a conflict).
 
 Jobs, queue consumers, and `config/` changes still need a restart. Everything else is
 instant.

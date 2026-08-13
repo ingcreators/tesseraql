@@ -4523,10 +4523,11 @@ public final class AppLinter {
         }
         lintOverlapAndSla(job, source, findings);
         for (io.tesseraql.yaml.model.PipelineStep step : job.definition().pipeline()) {
-            // Three axes, not one exclusive choice (docs/unified-sources.md decision 12): the
-            // binding arm reads or writes, the output blocks say what to do with the result, and
-            // chunk: processes. A step declares at least one, at most one arm, and an arm and a
-            // chunk: are two ways to say what the step's work is.
+            // The axes (docs/unified-sources.md decision 12): the binding arm reads or writes,
+            // an output block says what to do with a result, chunk: processes. A step declares
+            // at least one — and, because the executor dispatches one unit per step, at most
+            // one output, with the plain-sql-arm-plus-export: extraction pair as the one
+            // designed combination (checked below).
             boolean writes = step.sql() != null && step.sql().isSql();
             boolean calls = step.sql() != null && step.sql().declaresHttp();
             boolean arm = step.sql() != null && !isGuardOnly(step.sql());
@@ -4551,8 +4552,41 @@ public final class AppLinter {
                         + " is its reader:/writer:, so the step has no arm of its own"));
                 continue;
             }
+            // The executor runs ONE unit per step, chosen in dispatch order (http arm, notify,
+            // chunk, export, push, then plain sql) — so most block combinations either fail at
+            // 3am or silently drop a block the author wrote. The one designed pair is a plain
+            // sql arm consumed by export: as its extraction. Everything else is refused here,
+            // where the author is still looking (TQL-FIELD-2008, one rule).
+            if (outputs > 1) {
+                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                        + step.id() + "' declares " + outputs + " output blocks - the executor"
+                        + " runs one unit per step, and the others would be dropped in silence."
+                        + " Split them into steps"));
+                continue;
+            }
+            if (step.sql() != null && step.notification() != null) {
+                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                        + step.id() + "' declares sql: beside notify: - a notify step carries"
+                        + " no binding (the executor refuses it at run time). Compute in a"
+                        + " prior step and reference its result from the notification"));
+                continue;
+            }
+            if (step.sql() != null && step.push() != null) {
+                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                        + step.id() + "' declares sql: beside push: - a push delivers an"
+                        + " earlier transfer (file: steps.<id>.transferId), and the binding"
+                        + " would never run. Split them into steps"));
+                continue;
+            }
+            if (calls && step.export() != null) {
+                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                        + step.id() + "' declares an http: arm beside export: - an export's"
+                        + " extraction is a plain sql: arm, and the export would be dropped in"
+                        + " silence. Spool the acquisition and export from a later step"));
+                continue;
+            }
             lintStepDatasource(config, step, source, findings);
-            // Each axis is linted on its own, because a step may declare one of each.
+            // Each remaining axis is linted on its own.
             if (step.notification() != null) {
                 lintNotifySpec(config, step.id(), step.notification(), source, findings);
             }
