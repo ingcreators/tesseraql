@@ -84,9 +84,7 @@ public final class PdfFileCodec implements FileCodec {
         List<Map<String, Object>> data = new ArrayList<>();
         while (rows.hasNext()) {
             Map<String, Object> row = rows.next();
-            if (columns.isEmpty()) {
-                row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-            }
+            ColumnMapping.deriveIfAbsent(columns, row);
             Map<String, Object> formatted = new LinkedHashMap<>();
             for (ColumnMapping column : columns) {
                 formatted.put(column.name(),

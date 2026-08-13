@@ -5,6 +5,7 @@ import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.core.files.RowHandler;
+import io.tesseraql.core.files.TabularReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -13,7 +14,6 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.commons.csv.CSVFormat;
@@ -49,42 +49,27 @@ public final class CsvFileCodec implements FileCodec {
     public void read(InputStream in, FileReadSpec spec, RowHandler handler) throws Exception {
         try (CSVParser parser = CSVParser.parse(
                 new InputStreamReader(in, StandardCharsets.UTF_8), CSVFormat.RFC4180)) {
-            Iterator<CSVRecord> records = parser.iterator();
-            for (int skip = 1; skip < spec.startRow() && records.hasNext(); skip++) {
-                records.next();
-            }
-            List<String> header = null;
-            if (spec.headerRow() && records.hasNext()) {
-                header = new ArrayList<>();
-                for (String cell : records.next()) {
-                    header.add(cell);
-                }
-            }
-            boolean declared = !spec.columns().isEmpty();
-            List<ColumnMapping> columns = declared || header == null
-                    ? spec.columns()
-                    : header.stream().map(ColumnMapping::of).toList();
-            int[] positions = io.tesseraql.core.files.Tables.positions(columns, header);
-            if (declared) {
-                io.tesseraql.core.files.Tables.requireDeclaredHeadersMatched(columns, header,
-                        positions);
-            }
-            long rowNumber = 0;
-            while (records.hasNext()) {
-                CSVRecord record = records.next();
-                rowNumber++;
-                Map<String, Object> values = new LinkedHashMap<>();
-                for (int i = 0; i < columns.size(); i++) {
-                    int position = positions[i];
-                    values.put(columns.get(i).name(),
-                            position >= 0 && position < record.size()
-                                    ? record.get(position)
-                                    : null);
-                }
-                handler.row(rowNumber, values);
-            }
+            TabularReader.read(parser.iterator(), spec, CELLS, handler);
         }
     }
+
+    /** CSV cell access: every cell is text, and a position past the record's end reads null. */
+    private static final TabularReader.Cells<CSVRecord> CELLS = new TabularReader.Cells<CSVRecord>() {
+
+        @Override
+        public List<String> header(CSVRecord row) {
+            List<String> header = new ArrayList<>();
+            for (String cell : row) {
+                header.add(cell);
+            }
+            return header;
+        }
+
+        @Override
+        public Object value(CSVRecord row, int position, ColumnMapping column) {
+            return position >= 0 && position < row.size() ? row.get(position) : null;
+        }
+    };
 
     @Override
     // The printer is deliberately not closed: closing it would close the caller-owned stream;
@@ -100,9 +85,7 @@ public final class CsvFileCodec implements FileCodec {
         List<ColumnMapping> columns = new ArrayList<>(spec.columns());
         while (rows.hasNext()) {
             Map<String, Object> row = rows.next();
-            if (columns.isEmpty()) {
-                row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-            }
+            ColumnMapping.deriveIfAbsent(columns, row);
             if (printer.getRecordCount() == 0) {
                 printer.printRecord(columns.stream().map(ColumnMapping::effectiveHeader).toList());
             }

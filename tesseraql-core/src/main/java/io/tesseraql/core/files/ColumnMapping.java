@@ -35,6 +35,21 @@ public record ColumnMapping(String name, String header, Integer index, String ty
     }
 
     /**
+     * Derives an export's columns from the first row's own keys when the export declares none
+     * (design ch. 28): every codec's write side falls back to the query's result shape, in the
+     * order the row carries it. A no-op once the list holds columns, so it is called per row.
+     *
+     * @param columns the mutable working column list of a write in progress
+     * @param row     the row being written
+     */
+    public static void deriveIfAbsent(java.util.List<ColumnMapping> columns,
+            java.util.Map<String, Object> row) {
+        if (columns.isEmpty()) {
+            row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
+        }
+    }
+
+    /**
      * Parses a column reference: a letter reference ({@code A}, {@code D}, {@code AB}) or a
      * 1-based number, to a 0-based index.
      */
