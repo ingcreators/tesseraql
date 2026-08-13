@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import java.util.List;
 
 /**
@@ -8,6 +10,8 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class OverlapSlaRules {
+
+    private static final String INVALID_OVERLAP_OR_SLA = "TQL-BATCH-4210";
 
     private OverlapSlaRules() {
     }
@@ -23,7 +27,7 @@ final class OverlapSlaRules {
         String jobId = job.definition().id();
         String overlap = job.definition().overlap();
         if (overlap != null && !List.of("concurrent", "skip").contains(overlap)) {
-            findings.add(new LintFinding("TQL-BATCH-4210", "error", source, "Job '" + jobId
+            findings.add(new LintFinding(INVALID_OVERLAP_OR_SLA, ERROR, source, "Job '" + jobId
                     + "' overlap '" + overlap + "' is not one of concurrent, skip"));
         }
         io.tesseraql.yaml.model.SlaSpec sla = job.definition().sla();
@@ -32,14 +36,14 @@ final class OverlapSlaRules {
         }
         if ((sla.completeBy() == null || sla.completeBy().isBlank())
                 && (sla.runningLongerThan() == null || sla.runningLongerThan().isBlank())) {
-            findings.add(new LintFinding("TQL-BATCH-4210", "error", source, "Job '" + jobId
+            findings.add(new LintFinding(INVALID_OVERLAP_OR_SLA, ERROR, source, "Job '" + jobId
                     + "' declares sla: without completeBy: or runningLongerThan:"));
         }
         if (sla.completeBy() != null && !sla.completeBy().isBlank()) {
             try {
                 java.time.LocalTime.parse(sla.completeBy());
             } catch (java.time.format.DateTimeParseException ex) {
-                findings.add(new LintFinding("TQL-BATCH-4210", "error", source, "Job '" + jobId
+                findings.add(new LintFinding(INVALID_OVERLAP_OR_SLA, ERROR, source, "Job '" + jobId
                         + "' sla completeBy '" + sla.completeBy()
                         + "' is not a wall-clock time (HH:mm)"));
             }
@@ -48,7 +52,7 @@ final class OverlapSlaRules {
             try {
                 io.tesseraql.core.util.Durations.toMillis(sla.runningLongerThan());
             } catch (RuntimeException ex) {
-                findings.add(new LintFinding("TQL-BATCH-4210", "error", source, "Job '" + jobId
+                findings.add(new LintFinding(INVALID_OVERLAP_OR_SLA, ERROR, source, "Job '" + jobId
                         + "' sla runningLongerThan '" + sla.runningLongerThan()
                         + "' is not a duration (e.g. 2h, 30m)"));
             }

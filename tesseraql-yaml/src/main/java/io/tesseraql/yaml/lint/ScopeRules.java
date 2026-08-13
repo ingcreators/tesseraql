@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -28,6 +31,16 @@ import java.util.regex.Pattern;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ScopeRules implements LintRule {
+
+    private static final String SCOPE_DIRECTIVE_IN_JOB = "TQL-SCOPE-3014";
+
+    private static final String UNGOVERNED_WRITE_TO_SCOPED_TABLE = "TQL-SEC-4100";
+
+    private static final String INVALID_SCOPE_DEFINITION = "TQL-SCOPE-3012";
+
+    private static final String UNDECLARED_SCOPE = "TQL-SCOPE-3011";
+
+    private static final String SCOPE_ALIAS_NOT_IDENTIFIER = "TQL-SCOPE-3013";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -91,7 +104,7 @@ final class ScopeRules implements LintRule {
                 Path sqlFile = dir.resolve(file);
                 String sql = Files.isRegularFile(sqlFile) ? context.content(sqlFile) : null;
                 if (sql != null && SCOPE_DIRECTIVE.matcher(sql).find()) {
-                    findings.add(new LintFinding("TQL-SCOPE-3014", "error", source,
+                    findings.add(new LintFinding(SCOPE_DIRECTIVE_IN_JOB, ERROR, source,
                             "batch job '" + job.definition().id() + "' uses a /*%scope … */"
                                     + " directive in " + file + ", but a job runs with no"
                                     + " principal to scope against — it would fail at execution"
@@ -174,7 +187,7 @@ final class ScopeRules implements LintRule {
                 }
                 String table = lastSegment(target.group(1));
                 if (scopedTables.contains(table) && !SCOPE_DIRECTIVE.matcher(sql).find()) {
-                    findings.add(new LintFinding("TQL-SEC-4100", "warning", source,
+                    findings.add(new LintFinding(UNGOVERNED_WRITE_TO_SCOPED_TABLE, WARNING, source,
                             "route '" + id + "' writes scope-governed table '" + table
                                     + "' with no /*%scope … */ predicate; confirm the write cannot"
                                     + " reach rows outside the caller's scope"));
@@ -250,11 +263,11 @@ final class ScopeRules implements LintRule {
         String source = LintSupport.relative(appHome, scope.source());
         ScopeDefinition definition = scope.definition();
         if (!"scope".equals(definition.kind())) {
-            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+            findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                     "scope '" + definition.id() + "' must declare kind: scope"));
         }
         if (definition.match().isEmpty()) {
-            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+            findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                     "scope '" + definition.id() + "' declares no match arms"));
         }
         Path scopeDir = scope.source().getParent();
@@ -264,15 +277,15 @@ final class ScopeRules implements LintRule {
             boolean hasApply = arm.apply() != null && !arm.apply().isBlank();
             boolean hasFile = arm.file() != null && !arm.file().isBlank();
             if (hasApply == hasFile) {
-                findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                         where + " must declare exactly one of apply (all|none) or file"));
             }
             if (hasApply && !arm.isAll() && !arm.isNone()) {
-                findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                         where + " apply must be 'all' or 'none', not '" + arm.apply() + "'"));
             }
             if (hasFile && !Files.isRegularFile(scopeDir.resolve(arm.file()))) {
-                findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+                findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                         where + " references missing fragment '" + arm.file() + "'"));
             }
             lintWhen(arm.when(), where, source, findings);
@@ -288,17 +301,17 @@ final class ScopeRules implements LintRule {
         int set = (when.role() != null ? 1 : 0) + (when.permission() != null ? 1 : 0)
                 + (when.claim() != null ? 1 : 0);
         if (set == 0) {
-            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+            findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                     where + " when declares no role/permission/claim (an empty block or a "
                             + "misspelled key would match every principal); remove when for an "
                             + "unconditional arm, or name a predicate"));
         }
         if (set > 1) {
-            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+            findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                     where + " when must set only one of role/permission/claim"));
         }
         if (when.claim() != null && when.value() == null) {
-            findings.add(new LintFinding("TQL-SCOPE-3012", "error", source,
+            findings.add(new LintFinding(INVALID_SCOPE_DEFINITION, ERROR, source,
                     where + " when claim needs an 'equals' value"));
         }
     }
@@ -332,12 +345,12 @@ final class ScopeRules implements LintRule {
                     alias = content.substring(on + " on ".length()).trim();
                 }
                 if (!declared.contains(name)) {
-                    findings.add(new LintFinding("TQL-SCOPE-3011", "error", source,
+                    findings.add(new LintFinding(UNDECLARED_SCOPE, ERROR, source,
                             "route '" + id + "' references scope '" + name
                                     + "' not declared under scope/"));
                 }
                 if (alias != null && !SQL_IDENTIFIER.matcher(alias).matches()) {
-                    findings.add(new LintFinding("TQL-SCOPE-3013", "error", source,
+                    findings.add(new LintFinding(SCOPE_ALIAS_NOT_IDENTIFIER, ERROR, source,
                             "route '" + id + "' scope 'on' alias '" + alias
                                     + "' is not a SQL identifier"));
                 }

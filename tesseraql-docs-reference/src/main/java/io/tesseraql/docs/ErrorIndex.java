@@ -29,6 +29,19 @@ final class ErrorIndex {
     // The trailing guard keeps wildcard mentions like "TQL-ADM-47xx" out of the index.
     private static final Pattern LITERAL = Pattern.compile("TQL-([A-Z]+)-(\\d+)(?![0-9A-Za-z])");
     private static final Pattern CONSTRUCTED = Pattern.compile("TqlDomain\\.([A-Z]+),\\s*(\\d+)");
+
+    /**
+     * A code held in a {@code String} constant — the lint families' idiom since
+     * docs/lint-restructure.md decision 4. The constant's <em>uses</em> are the raise sites, so
+     * the index resolves the name back to the code rather than losing the message and the
+     * provenance at every site that stopped spelling the number.
+     */
+    private static final Pattern STRING_CONSTANT = Pattern.compile(
+            "static\\s+final\\s+String\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*\"(TQL-[A-Z]+-\\d+)\"");
+
+    /** A screaming-snake identifier: the only shape a resolved code constant reference has. */
+    private static final Pattern REFERENCE = Pattern.compile("\\b[A-Z][A-Z0-9_]*\\b");
+
     private static final String BLOB = "https://github.com/ingcreators/tesseraql/blob/main/";
 
     /** One error code with everywhere it appears; the sets keep themselves sorted. */
@@ -75,10 +88,12 @@ final class ErrorIndex {
         return md.toString();
     }
 
-    /** Both scan patterns over every module's {@code src/main/java}, unioned. */
+    /** All three scan patterns over every module's {@code src/main/java}, unioned. */
     static Map<String, Map<Integer, Code>> scan(Path repoRoot) throws IOException {
         Map<String, Map<Integer, Code>> byDomain = new TreeMap<>();
-        for (Path tree : sourceTrees(repoRoot)) {
+        List<Path> trees = sourceTrees(repoRoot);
+        Map<String, CodeConstant> constants = codeConstants(repoRoot, trees);
+        for (Path tree : trees) {
             try (Stream<Path> files = Files.walk(tree)) {
                 for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                     String source = Files.readString(file);
@@ -86,10 +101,102 @@ final class ErrorIndex {
                     Lexed lexed = lex(source);
                     collect(byDomain, LITERAL.matcher(source), rel, source, lexed);
                     collect(byDomain, CONSTRUCTED.matcher(source), rel, source, lexed);
+                    collectReferences(byDomain, constants, rel, source, lexed);
                 }
             }
         }
         return byDomain;
+    }
+
+    /** One code constant: the code it holds, and the repo-relative file and class declaring it. */
+    private record CodeConstant(String code, String file, String owner) {
+    }
+
+    /**
+     * Every {@code static final String NAME = "TQL-…"} in the scanned trees, by name. A name
+     * that two files give different codes is dropped rather than guessed at — an ambiguous
+     * reference would attribute one rule's message to another rule's number.
+     */
+    private static Map<String, CodeConstant> codeConstants(Path repoRoot, List<Path> trees)
+            throws IOException {
+        Map<String, CodeConstant> byName = new TreeMap<>();
+        Set<String> ambiguous = new TreeSet<>();
+        for (Path tree : trees) {
+            try (Stream<Path> files = Files.walk(tree)) {
+                for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                    String rel = repoRoot.relativize(file).toString().replace('\\', '/');
+                    String name = file.getFileName().toString();
+                    String owner = name.substring(0, name.length() - ".java".length());
+                    Matcher declaration = STRING_CONSTANT.matcher(Files.readString(file));
+                    while (declaration.find()) {
+                        CodeConstant previous = byName.put(declaration.group(1),
+                                new CodeConstant(declaration.group(2), rel, owner));
+                        if (previous != null && !previous.code().equals(declaration.group(2))) {
+                            ambiguous.add(declaration.group(1));
+                        }
+                    }
+                }
+            }
+        }
+        ambiguous.forEach(byName::remove);
+        return byName;
+    }
+
+    /**
+     * The raise sites that name a code constant instead of spelling the number: each use
+     * carries the same provenance and message a literal did. A reference counts only where it
+     * is unmistakably this constant — inside the declaring file, or written
+     * {@code Owner.NAME} — because a screaming-snake name is not reserved, and
+     * {@code ViewSpec.UNKNOWN_KEY} is a different rule from a lint family's. The declaration
+     * itself is not a use: its literal is already scanned, so a constant nobody calls stays
+     * honestly meaningless.
+     */
+    private static void collectReferences(Map<String, Map<Integer, Code>> byDomain,
+            Map<String, CodeConstant> constants, String rel, String source, Lexed lexed) {
+        if (constants.isEmpty()) {
+            return;
+        }
+        Matcher reference = REFERENCE.matcher(source);
+        while (reference.find()) {
+            CodeConstant constant = constants.get(reference.group());
+            int start = reference.start();
+            int end = reference.end();
+            if (constant == null || lexed.insideComment(start, end)
+                    || lexed.insideLiteral(start, end) || isDeclaredAt(source, start)
+                    || !refersTo(source, start, rel, constant)) {
+                continue;
+            }
+            Matcher parsed = LITERAL.matcher(constant.code());
+            if (!parsed.find()) {
+                continue;
+            }
+            Code entry = byDomain.computeIfAbsent(parsed.group(1), domain -> new TreeMap<>())
+                    .computeIfAbsent(Integer.parseInt(parsed.group(2)),
+                            number -> new Code(new TreeSet<>(), new TreeSet<>(), new TreeSet<>()));
+            entry.sources().add(rel);
+            meaningAt(source, lexed, start, end).ifPresent(entry.messages()::add);
+        }
+    }
+
+    /** Whether the identifier at {@code start} really names {@code constant}. */
+    private static boolean refersTo(String source, int start, String rel, CodeConstant constant) {
+        if (constant.file().equals(rel)) {
+            return true;
+        }
+        String qualifier = constant.owner() + ".";
+        return start >= qualifier.length()
+                && source.startsWith(qualifier, start - qualifier.length());
+    }
+
+    /** Whether the identifier at {@code start} is the name being declared, not a use of it. */
+    private static boolean isDeclaredAt(String source, int start) {
+        int i = start - 1;
+        while (i >= 0 && Character.isWhitespace(source.charAt(i))) {
+            i--;
+        }
+        int from = i - "String".length() + 1;
+        return from > 0 && source.startsWith("String", from)
+                && !Character.isJavaIdentifierPart(source.charAt(from - 1));
     }
 
     /**

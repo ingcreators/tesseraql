@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.List;
@@ -11,6 +13,8 @@ import java.util.Map;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class JobChainingRules implements LintRule {
+
+    private static final String INVALID_JOB_CHAIN = "TQL-BATCH-4209";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -41,12 +45,13 @@ final class JobChainingRules implements LintRule {
             String source = appHome.relativize(job.source()).toString().replace('\\', '/');
             String jobId = job.definition().id();
             if (trigger.schedule() != null || trigger.poll() != null) {
-                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
-                        "Job '" + jobId + "' declares after: together with another trigger"
-                                + " kind; declare one"));
+                findings.add(
+                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+                                "Job '" + jobId + "' declares after: together with another trigger"
+                                        + " kind; declare one"));
             }
             if (!jobIds.contains(trigger.after())) {
-                findings.add(new LintFinding("TQL-BATCH-4209", "error", source,
+                findings.add(new LintFinding(INVALID_JOB_CHAIN, ERROR, source,
                         "Job '" + jobId + "' chains after unknown job '" + trigger.after()
                                 + "' — it would never fire"));
                 continue;
@@ -61,7 +66,7 @@ final class JobChainingRules implements LintRule {
                 current = parents.get(current);
             }
             if (parents.containsKey(current) && current.equals(jobId)) {
-                findings.add(new LintFinding("TQL-BATCH-4209", "error",
+                findings.add(new LintFinding(INVALID_JOB_CHAIN, ERROR,
                         appHome.relativize(job.source()).toString().replace('\\', '/'),
                         "Job '" + jobId + "' is part of an after: cycle (" + walked
                                 + ") — a chain must end"));

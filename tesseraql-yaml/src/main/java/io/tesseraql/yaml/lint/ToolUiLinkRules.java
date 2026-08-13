@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.List;
@@ -11,6 +13,8 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ToolUiLinkRules implements LintRule {
+
+    private static final String TOOL_UI_LINK_UNRESOLVED = "TQL-MCP-1012";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -38,7 +42,7 @@ final class ToolUiLinkRules implements LintRule {
             String link = tool.uiResource();
             if (link != null && !link.isBlank() && !declared.contains(link)) {
                 String source = appHome.relativize(tool.source()).toString().replace('\\', '/');
-                findings.add(new LintFinding("TQL-MCP-1012", "error", source,
+                findings.add(new LintFinding(TOOL_UI_LINK_UNRESOLVED, ERROR, source,
                         "MCP tool '" + tool.definition().id() + "' links ui: '" + link
                                 + "' but no kind: ui resource declares that uri"));
             }

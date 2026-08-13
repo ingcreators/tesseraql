@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
@@ -16,6 +19,10 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class AmbientPrincipalRules implements LintRule {
+
+    private static final String PRINCIPAL_BIND_WITHOUT_AUTHENTICATION = "TQL-SEC-4136";
+
+    private static final String REDUNDANT_PRINCIPAL_WIRING = "TQL-SEC-4137";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -62,7 +69,7 @@ final class AmbientPrincipalRules implements LintRule {
                 || "public".equals(def.security().auth());
         if (noPrincipal) {
             for (String bind : principalBinds(file, def)) {
-                findings.add(new LintFinding("TQL-SEC-4136", "error", source,
+                findings.add(new LintFinding(PRINCIPAL_BIND_WITHOUT_AUTHENTICATION, ERROR, source,
                         "Route '" + def.id() + "' binds '" + bind + "' but never carries an"
                                 + " authenticated principal — the bind can only fail as an"
                                 + " unbound parameter at runtime"));
@@ -71,7 +78,7 @@ final class AmbientPrincipalRules implements LintRule {
         sqlParamMaps(def).forEach((where, params) -> params.forEach((bindName, expr) -> {
             if (expr != null && io.tesseraql.core.sql.AmbientBinds.isAmbient(expr)
                     && expr.startsWith("principal.")) {
-                findings.add(new LintFinding("TQL-SEC-4137", "warning", source,
+                findings.add(new LintFinding(REDUNDANT_PRINCIPAL_WIRING, WARNING, source,
                         "Route '" + def.id() + "' " + where + " wires '" + bindName + ": "
                                 + expr + "' — the ambient bind /* " + expr + " */ makes the"
                                 + " wiring unnecessary"));

@@ -8,6 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A lint severity is an enum and a lint code is a constant.** The linter's ~360 findings
+  spelled their severity as the string `"error"` or `"warning"` and their code as a string
+  literal, so a typo in either was a finding nobody could filter and a number two rule families
+  could quietly share. A severity is now `LintFinding.Severity`, and every code is a constant on
+  the family that raises it — or in `LintCodes` when several families raise it, because one home
+  is what stops a number from drifting into two meanings. Nothing outside the linter changes
+  shape: `severity` is still serialized as the same string the CLI's `lint --format json`, the
+  MCP dev-tools, the ops and Studio pages and the VS Code extension have always read. The
+  uniqueness guard that could only see declared constants now sees lint codes too, and refuses a
+  code raised as a bare literal.
+- **`TQL-FIELD-2004` answers one question again.** It reported both "what is this step's work?"
+  — no work at all, two bindings, a `chunk:` beside a binding — and a command step declaring
+  `enrich:`, so the published reference merged two rules into one row and a build failure named
+  a number that documented something else. The step-shape question keeps the number it is
+  documented under; a command step declaring `enrich:` is now `TQL-FIELD-2009`, documented with
+  the other command-time codes in [transactional-writes.md](docs/transactional-writes.md).
 - **`confirmApply` gates every apply, not only the editor's.** The JSON `studio.apply` API was
   exempt from the review-before-apply gate, which made the policy a suggestion for exactly the
   callers most likely to promote drafts unattended. The API now requires `confirm=true` (or

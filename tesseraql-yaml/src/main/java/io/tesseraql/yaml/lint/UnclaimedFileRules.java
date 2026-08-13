@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +14,8 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class UnclaimedFileRules implements LintRule {
+
+    private static final String UNLOADED_FILE = "TQL-APP-4205";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -91,7 +95,7 @@ final class UnclaimedFileRules implements LintRule {
                 String stem = name.replaceFirst("\\.ya?ml$", "");
                 String problem = rule.check(treeRelative, stem, isYaml);
                 if (problem != null) {
-                    findings.add(new LintFinding("TQL-APP-4205", "error",
+                    findings.add(new LintFinding(UNLOADED_FILE, ERROR,
                             LintSupport.relative(appHome, file),
                             "'" + tree + "/" + treeRelative + "' is not loaded — " + problem));
                 }

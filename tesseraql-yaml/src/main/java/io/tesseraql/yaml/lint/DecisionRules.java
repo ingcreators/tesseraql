@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.WorkflowFile;
@@ -20,6 +23,22 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class DecisionRules implements LintRule {
+
+    private static final String UNDECLARED_DECISION_REFERENCE = "TQL-DECISION-4711";
+
+    private static final String UNREACHABLE_DECISION_ROW = "TQL-DECISION-4715";
+
+    private static final String UNREFERENCED_DECISION = "TQL-DECISION-4716";
+
+    private static final String RENAMED_DECISION_SOURCE_KEY = "TQL-DECISION-4718";
+
+    private static final String IMPOSSIBLE_DECISION_COMPARISON = "TQL-DECISION-4713";
+
+    private static final String UNHANDLED_DECISION_OUTCOME = "TQL-DECISION-4712";
+
+    private static final String SUBTREE_WITHOUT_MANAGED_ORG = "TQL-DECISION-4717";
+
+    private static final String DECISION_MAPPING_UNKNOWN_TO_SCHEMA = "TQL-DECISION-4710";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -54,7 +73,7 @@ final class DecisionRules implements LintRule {
             for (String bind : decisionBinds(document.getKey(), def)) {
                 String alias = bind.split("\\.")[1];
                 if (!def.decide().containsKey(alias)) {
-                    findings.add(new LintFinding("TQL-DECISION-4711", "error", source,
+                    findings.add(new LintFinding(UNDECLARED_DECISION_REFERENCE, ERROR, source,
                             "Route '" + def.id() + "' binds '" + bind + "' but declares no"
                                     + " decide: entry '" + alias + "' — the bind can only fail"
                                     + " at runtime"));
@@ -94,7 +113,7 @@ final class DecisionRules implements LintRule {
             for (int later = 1; later < rows.size(); later++) {
                 for (int earlier = 0; earlier < later; earlier++) {
                     if (rows.get(later).containedIn(rows.get(earlier))) {
-                        findings.add(new LintFinding("TQL-DECISION-4715", "warning", "decisions",
+                        findings.add(new LintFinding(UNREACHABLE_DECISION_ROW, WARNING, "decisions",
                                 "Decision '" + name + "' row " + (later + 1) + " is unreachable"
                                         + " — row " + (earlier + 1) + " already matches"
                                         + " everything it matches"));
@@ -105,7 +124,7 @@ final class DecisionRules implements LintRule {
         });
         sets.decisions().keySet().stream()
                 .filter(name -> !referenced.contains(name))
-                .forEach(name -> findings.add(new LintFinding("TQL-DECISION-4716", "warning",
+                .forEach(name -> findings.add(new LintFinding(UNREFERENCED_DECISION, WARNING,
                         "decisions", "Decision '" + name + "' is declared but never referenced")));
         lintDecisionSources(appHome, manifest, sets, findings);
         lintDecisionConsumption(appHome, manifest, findings);
@@ -137,7 +156,8 @@ final class DecisionRules implements LintRule {
                             if (decision.getValue() instanceof Map<?, ?> body
                                     && body.get("source") instanceof Map<?, ?> src
                                     && ((Map<String, Object>) src).containsKey("id")) {
-                                findings.add(new LintFinding("TQL-DECISION-4718", "error", source,
+                                findings.add(new LintFinding(RENAMED_DECISION_SOURCE_KEY, ERROR,
+                                        source,
                                         "Decision '" + decision.getKey()
                                                 + "' source.id: was renamed to "
                                                 + "keyColumn: before v1 — the old key is dropped and the "
@@ -230,7 +250,7 @@ final class DecisionRules implements LintRule {
         for (List<String> path : paths) {
             if (path.size() >= 2 && "decision".equals(path.get(0))
                     && !decide.containsKey(path.get(1))) {
-                findings.add(new LintFinding("TQL-DECISION-4711", "error", source,
+                findings.add(new LintFinding(UNDECLARED_DECISION_REFERENCE, ERROR, source,
                         where + " references 'decision." + path.get(1) + "' but declares no"
                                 + " decide: entry '" + path.get(1)
                                 + "' — the reference can only resolve null at runtime"));
@@ -246,7 +266,7 @@ final class DecisionRules implements LintRule {
                     .anyMatch(value -> String.valueOf(value)
                             .equals(String.valueOf(comparison.literal())));
             if (!known) {
-                findings.add(new LintFinding("TQL-DECISION-4713", "error", source,
+                findings.add(new LintFinding(IMPOSSIBLE_DECISION_COMPARISON, ERROR, source,
                         where + " compares decision." + comparison.alias() + "."
                                 + comparison.output() + " to '" + comparison.literal()
                                 + "', which the decision cannot produce — its enum is "
@@ -314,7 +334,7 @@ final class DecisionRules implements LintRule {
             }
         }
         if (!unhandled.isEmpty()) {
-            findings.add(new LintFinding("TQL-DECISION-4712", "warning", source,
+            findings.add(new LintFinding(UNHANDLED_DECISION_OUTCOME, WARNING, source,
                     "State '" + from + "' branches on decision." + alias + "." + output
                             + " but no transition handles " + unhandled
                             + " — a value the decision can produce has no receiver"));
@@ -390,7 +410,7 @@ final class DecisionRules implements LintRule {
             boolean subtree = decision.inputs().values().stream()
                     .anyMatch(input -> "subtree".equals(input.match()));
             if (subtree && !managedOrgUnits) {
-                findings.add(new LintFinding("TQL-DECISION-4717", "error", "decisions",
+                findings.add(new LintFinding(SUBTREE_WITHOUT_MANAGED_ORG, ERROR, "decisions",
                         "Decision '" + name + "' matches subtree, which resolves through"
                                 + " the managed org closure — set tesseraql.orgunit.mode:"
                                 + " managed or drop the subtree input"));
@@ -407,7 +427,7 @@ final class DecisionRules implements LintRule {
         java.util.function.BiConsumer<String, List<String>> check = (table, columns) -> {
             Set<String> present = ddl.get(table.toLowerCase(java.util.Locale.ROOT));
             if (present == null) {
-                findings.add(new LintFinding("TQL-DECISION-4710", "error", "decisions",
+                findings.add(new LintFinding(DECISION_MAPPING_UNKNOWN_TO_SCHEMA, ERROR, "decisions",
                         "Decision '" + name + "' maps table '" + table + "', which the schema"
                                 + " sidecar does not know — regenerate .tesseraql/docs/"
                                 + "schema.json or fix the mapping"));
@@ -416,8 +436,9 @@ final class DecisionRules implements LintRule {
             columns.stream()
                     .filter(column -> column != null && !column.isBlank())
                     .filter(column -> !present.contains(column.toLowerCase(java.util.Locale.ROOT)))
-                    .forEach(column -> findings.add(new LintFinding("TQL-DECISION-4710",
-                            "error", "decisions", "Decision '" + name + "' maps column '"
+                    .forEach(column -> findings.add(new LintFinding(
+                            DECISION_MAPPING_UNKNOWN_TO_SCHEMA,
+                            ERROR, "decisions", "Decision '" + name + "' maps column '"
                                     + column + "' of '" + table + "', which the schema sidecar"
                                     + " does not know")));
         };

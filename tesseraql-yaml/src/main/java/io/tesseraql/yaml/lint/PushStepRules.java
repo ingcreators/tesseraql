@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import java.util.List;
 
@@ -9,6 +12,8 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class PushStepRules {
+
+    private static final String INCOMPLETE_PUSH_STEP = "TQL-YAML-1042";
 
     private PushStepRules() {
     }
@@ -25,40 +30,41 @@ final class PushStepRules {
             String source, List<LintFinding> findings) {
         io.tesseraql.yaml.model.PushSpec push = step.push();
         if (push.file() == null || push.file().isBlank()) {
-            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '" + step.id()
                     + "': push needs file: (a context path resolving to a transfer id, e.g."
                     + " step.report.transferId)"));
         }
         String transport = push.effectiveTransport();
         if (!"local".equals(transport) && !"sftp".equals(transport) && !"ftps".equals(transport)) {
-            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '" + step.id()
                     + "': push transport: must be local, sftp, or ftps"));
             return;
         }
         if (push.path() == null || push.path().isBlank()) {
-            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '" + step.id()
                     + "': push needs path: (the directory to deliver into)"));
         }
         if (push.isRemote()) {
             if (push.host() == null || push.host().isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '"
+                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
                         + step.id() + "': a remote push target needs host:"));
             }
             if (push.credential() == null || push.credential().isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '"
+                findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '"
                         + step.id() + "': a remote push target needs credential: (declared"
                         + " under tesseraql.connectors.push.credentials)"));
             } else if (config.navigate("tesseraql.connectors.push.credentials."
                     + push.credential()) == null) {
                 // A warning, not an error: another environment's config may declare it.
-                findings.add(new LintFinding("TQL-YAML-1102", "warning", source, "Step '"
-                        + step.id() + "' references undeclared push credential '"
-                        + push.credential() + "'"));
+                findings.add(new LintFinding(LintCodes.UNDECLARED_CHANNEL_OR_CREDENTIAL, WARNING,
+                        source, "Step '"
+                                + step.id() + "' references undeclared push credential '"
+                                + push.credential() + "'"));
             }
         }
         if (push.as() != null && (push.as().contains("/") || push.as().contains("\\")
                 || push.as().contains("..") || push.as().contains("${"))) {
-            findings.add(new LintFinding("TQL-YAML-1042", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_PUSH_STEP, ERROR, source, "Step '" + step.id()
                     + "': push as: must be a plain file name ({dotted.path} placeholders"
                     + " resolve against the job context)"));
         }
@@ -68,16 +74,18 @@ final class PushStepRules {
         if ("sftp".equals(transport)
                 && config.getString("tesseraql.connectors.push.knownHostsFile")
                         .filter(value -> !value.isBlank()).isEmpty()) {
-            findings.add(new LintFinding("TQL-SEC-4084", "warning", source, "Step '" + step.id()
-                    + "': sftp push without tesseraql.connectors.push.knownHostsFile — the"
-                    + " server's host key is not verified"));
+            findings.add(new LintFinding(LintCodes.SFTP_HOST_KEY_UNVERIFIED, WARNING, source,
+                    "Step '" + step.id()
+                            + "': sftp push without tesseraql.connectors.push.knownHostsFile — the"
+                            + " server's host key is not verified"));
         }
         if ("ftps".equals(transport)
                 && config.navigate("tesseraql.connectors.push.trustStore") == null) {
-            findings.add(new LintFinding("TQL-SEC-4085", "error", source, "Step '" + step.id()
-                    + "': ftps push needs tesseraql.connectors.push.trustStore — without it"
-                    + " the server certificate is not verified and TLS proves nothing about"
-                    + " the peer"));
+            findings.add(new LintFinding(LintCodes.FTPS_SERVER_UNVERIFIED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': ftps push needs tesseraql.connectors.push.trustStore — without it"
+                            + " the server certificate is not verified and TLS proves nothing about"
+                            + " the peer"));
         }
     }
 }

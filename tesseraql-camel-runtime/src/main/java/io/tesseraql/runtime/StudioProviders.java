@@ -673,7 +673,8 @@ final class StudioProviders {
                         findings = studio.health();
                     } catch (RuntimeException ex) {
                         findings = java.util.List.of(new io.tesseraql.yaml.lint.LintFinding(
-                                "TQL-STUDIO-4225", "error", "app",
+                                "TQL-STUDIO-4225",
+                                io.tesseraql.yaml.lint.LintFinding.Severity.ERROR, "app",
                                 "The app failed to load: " + ex.getMessage()));
                     }
                     int errors = 0;

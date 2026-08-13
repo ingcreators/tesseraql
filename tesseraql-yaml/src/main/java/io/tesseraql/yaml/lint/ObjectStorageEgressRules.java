@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -12,6 +14,8 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ObjectStorageEgressRules implements LintRule {
+
+    private static final String INVALID_OBJECT_STORAGE_BUCKET = "TQL-SEC-4110";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -45,18 +49,20 @@ final class ObjectStorageEgressRules implements LintRule {
             String source = LintSupport.relative(appHome, attachment.source());
             String logical = def.bucket();
             if (logical == null || logical.isBlank()) {
-                findings.add(new LintFinding("TQL-SEC-4110", "error", source, "attachment '"
-                        + def.id()
-                        + "' must declare a bucket when tesseraql.object-storage.provider"
-                        + " is s3"));
+                findings.add(new LintFinding(INVALID_OBJECT_STORAGE_BUCKET, ERROR, source,
+                        "attachment '"
+                                + def.id()
+                                + "' must declare a bucket when tesseraql.object-storage.provider"
+                                + " is s3"));
                 continue;
             }
             String real = config.getString(
                     "tesseraql.object-storage.buckets." + logical + ".bucket").orElse(logical);
             if (!allowed.contains(real)) {
-                findings.add(new LintFinding("TQL-SEC-4110", "error", source, "attachment '"
-                        + def.id() + "' targets bucket '" + real + "' which is not in "
-                        + "tesseraql.object-storage.allowedBuckets (deny by default)"));
+                findings.add(new LintFinding(INVALID_OBJECT_STORAGE_BUCKET, ERROR, source,
+                        "attachment '"
+                                + def.id() + "' targets bucket '" + real + "' which is not in "
+                                + "tesseraql.object-storage.allowedBuckets (deny by default)"));
             }
         }
     }

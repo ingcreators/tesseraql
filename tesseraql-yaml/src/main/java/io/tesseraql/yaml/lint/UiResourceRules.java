@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -14,6 +17,14 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class UiResourceRules implements LintRule {
+
+    private static final String UI_RESOURCE_RECIPE_UNSUPPORTED = "TQL-MCP-1008";
+
+    private static final String UI_RESOURCE_WITHOUT_URI = "TQL-MCP-1009";
+
+    private static final String UI_RESOURCE_DECLARES_INPUT = "TQL-MCP-1011";
+
+    private static final String UI_RESOURCE_WITHOUT_DESCRIPTION = "TQL-MCP-1010";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -49,23 +60,23 @@ final class UiResourceRules implements LintRule {
                 Set.of("description", "uri", "ui"), findings);
 
         if (!KNOWN_UI_RECIPES.contains(definition.recipe())) {
-            findings.add(new LintFinding("TQL-MCP-1008", "error", source,
+            findings.add(new LintFinding(UI_RESOURCE_RECIPE_UNSUPPORTED, ERROR, source,
                     "MCP UI resource '" + definition.id() + "' has recipe '" + definition.recipe()
                             + "'; a UI resource renders HTML - use query-html or page"));
         }
         if (ui.uri() == null || !ui.uri().startsWith(UI_SCHEME)) {
-            findings.add(new LintFinding("TQL-MCP-1009", "error", source,
+            findings.add(new LintFinding(UI_RESOURCE_WITHOUT_URI, ERROR, source,
                     "MCP UI resource '" + definition.id() + "' must declare a ui:// uri: it is the"
                             + " address the client reads and a tool links to"));
         }
         if (!definition.input().isEmpty()) {
-            findings.add(new LintFinding("TQL-MCP-1011", "error", source,
+            findings.add(new LintFinding(UI_RESOURCE_DECLARES_INPUT, ERROR, source,
                     "MCP UI resource '" + definition.id()
                             + "' must not declare input: a UI resource"
                             + " is addressed only by its uri and takes no arguments"));
         }
         if (ui.description() == null || ui.description().isBlank()) {
-            findings.add(new LintFinding("TQL-MCP-1010", "warning", source,
+            findings.add(new LintFinding(UI_RESOURCE_WITHOUT_DESCRIPTION, WARNING, source,
                     "MCP UI resource '" + definition.id() + "' has no description; it is the hint"
                             + " the model uses to decide whether to surface the UI"));
         }
@@ -73,12 +84,12 @@ final class UiResourceRules implements LintRule {
                 && definition.main().file() != null
                 && !Files
                         .isRegularFile(ui.source().getParent().resolve(definition.main().file()))) {
-            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+            findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                     "Referenced SQL file is missing: " + definition.main().file()));
         }
         String policy = definition.security() == null ? null : definition.security().policy();
         if (policy != null && !policy.isBlank() && !DocumentRules.policyDefined(config, policy)) {
-            findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
+            findings.add(new LintFinding(LintCodes.UNDEFINED_POLICY, WARNING, source,
                     "MCP UI resource references undefined policy '" + policy
                             + "' (deny by default)"));
         }

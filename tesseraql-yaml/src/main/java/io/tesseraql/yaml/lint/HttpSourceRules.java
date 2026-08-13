@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.util.List;
@@ -11,6 +14,18 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class HttpSourceRules {
+
+    private static final String HTTP_SOURCE_ON_UNSUPPORTED_RECIPE = "TQL-YAML-1022";
+
+    private static final String HTTP_SOURCE_NEEDS_READ_ONLY = "TQL-YAML-1050";
+
+    private static final String HTTP_BODY_WITHOUT_BODY_METHOD = "TQL-YAML-1049";
+
+    private static final String HTTP_SOURCE_URL_NOT_ABSOLUTE = "TQL-SEC-4071";
+
+    private static final String HTTP_SOURCE_HOST_NOT_ALLOWED = "TQL-SEC-4070";
+
+    private static final String HTTP_SOURCE_UNDECLARED_CREDENTIAL = "TQL-SEC-4072";
 
     private HttpSourceRules() {
     }
@@ -49,7 +64,7 @@ final class HttpSourceRules {
         // partner (docs/lookups.md, decision 19). Every other recipe still has no place for one.
         boolean write = DocumentRules.TRANSACTIONAL_DATASOURCE_RECIPES.contains(recipe);
         if (!read && !write) {
-            findings.add(new LintFinding("TQL-YAML-1022", "error", source,
+            findings.add(new LintFinding(HTTP_SOURCE_ON_UNSUPPORTED_RECIPE, ERROR, source,
                     "an http: source is supported on query recipes (query-json,"
                             + " query-html, page) and on transactional ones ("
                             + String.join(", ",
@@ -63,7 +78,7 @@ final class HttpSourceRules {
             // write the author states that it is a reference. The framework can guarantee the
             // declaration exists, never that it is true.
             if (write && !spec.isReadOnly()) {
-                findings.add(new LintFinding("TQL-YAML-1050", "error", source,
+                findings.add(new LintFinding(HTTP_SOURCE_NEEDS_READ_ONLY, ERROR, source,
                         "http: source '" + name + "' on a '" + recipe + "' route needs"
                                 + " readOnly: true — the call is made before the transaction and"
                                 + " a rollback cannot un-make it, so a call with a side effect"
@@ -87,7 +102,7 @@ final class HttpSourceRules {
         // in fact sends it, and either way the author asked for something that does not
         // happen. Refuse it at build time (docs/lookups.md, decision 16).
         if (spec.body() != null && !spec.body().isBlank() && !spec.carriesBody()) {
-            findings.add(new LintFinding("TQL-YAML-1049", "error", source,
+            findings.add(new LintFinding(HTTP_BODY_WITHOUT_BODY_METHOD, ERROR, source,
                     "'" + id + "': body: is declared with method " + spec.effectiveMethod()
                             + ", which carries no request body — declare the method that does"
                             + " (POST, PUT, PATCH), or drop the body"));
@@ -117,7 +132,7 @@ final class HttpSourceRules {
             // Flag a genuinely missing or relative url, but not one we merely cannot resolve yet
             // (an unresolved ${...} secret in the host is checked by the runtime instead).
             if (resolved == null || !resolved.contains("${")) {
-                findings.add(new LintFinding("TQL-SEC-4071", "error", source,
+                findings.add(new LintFinding(HTTP_SOURCE_URL_NOT_ABSOLUTE, ERROR, source,
                         "http: '" + id + "' needs an absolute http or https url:"));
             }
             lintHttpCredential(config, id, spec, source, findings);
@@ -128,7 +143,7 @@ final class HttpSourceRules {
             declared.forEach(value -> allowedHosts.add(String.valueOf(value)));
         }
         if (!io.tesseraql.yaml.http.HttpOutbound.hostAllowed(allowedHosts, host)) {
-            findings.add(new LintFinding("TQL-SEC-4070", "error", source, "http: '" + id
+            findings.add(new LintFinding(HTTP_SOURCE_HOST_NOT_ALLOWED, ERROR, source, "http: '" + id
                     + "' targets host '" + host + "' which is not in"
                     + " tesseraql.http.outbound.allowedHosts (deny by default)"));
         }
@@ -142,8 +157,9 @@ final class HttpSourceRules {
             return;
         }
         if (config.navigate("tesseraql.http.outbound.credentials." + credential) == null) {
-            findings.add(new LintFinding("TQL-SEC-4072", "warning", source, "http: '" + id
-                    + "' references undeclared credential '" + credential + "'"));
+            findings.add(new LintFinding(HTTP_SOURCE_UNDECLARED_CREDENTIAL, WARNING, source,
+                    "http: '" + id
+                            + "' references undeclared credential '" + credential + "'"));
         }
     }
 }

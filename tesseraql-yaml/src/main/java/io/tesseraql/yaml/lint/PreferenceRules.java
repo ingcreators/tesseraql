@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.List;
@@ -30,7 +32,7 @@ final class PreferenceRules implements LintRule {
         try {
             io.tesseraql.yaml.account.PreferencesSpec.load(appHome);
         } catch (io.tesseraql.core.error.TqlException ex) {
-            findings.add(new LintFinding(ex.code().toString(), "error",
+            findings.add(new LintFinding(ex.code().toString(), ERROR,
                     "config/preferences.yml", ex.getMessage()));
         }
     }

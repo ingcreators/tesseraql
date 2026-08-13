@@ -26,6 +26,13 @@ import org.junit.jupiter.api.Test;
  * raised from more than one surface — a unique violation mapped by both the SQL producer and
  * the command processor is still one meaning. Each such share is listed here with its meaning,
  * so adding a new one is a reviewed decision instead of an accident.
+ *
+ * <p>The guard reads both declaration idioms: the {@code TqlErrorCode} constant the runtime
+ * raises, and the {@code String} constant a lint rule family raises
+ * (docs/lint-restructure.md decision 4). Lint codes used to be string literals at the raise
+ * site, which no guard could see; the same code in two families is now a compile-time
+ * duplicate declaration this test refuses. The two idioms are counted separately, because a
+ * build-time lint and the runtime error it anticipates routinely share a number on purpose.
  */
 class ErrorCodeUniquenessTest {
 
@@ -60,25 +67,78 @@ class ErrorCodeUniquenessTest {
             Map.entry("SQL-4091", "a foreign-key violation, mapped per surface"),
             Map.entry("WORKFLOW-3203", "the task is not assigned to the caller - HTTP 403"),
             Map.entry("WORKFLOW-3210", "the workflow feature's backing store is not configured"),
-            Map.entry("YAML-1201", "a manifest path escapes the app home (traversal guard)"));
+            Map.entry("YAML-1201", "a manifest path escapes the app home (traversal guard)"),
+            Map.entry("GOV-3001", "a route needing review has no valid approval, reported by"
+                    + " the CLI command and the maven goal alike"));
 
     private static final Pattern DECLARATION = Pattern.compile(
             "TqlErrorCode\\s+([A-Z_0-9]+)\\s*=\\s*new\\s+TqlErrorCode\\(\\s*TqlDomain\\.([A-Z]+)"
                     + "\\s*,\\s*(\\d+)\\s*\\)");
 
+    /** A lint family's code constant: {@code static final String NAME = "TQL-DOMAIN-n"}. */
+    private static final Pattern LINT_DECLARATION = Pattern.compile(
+            "static\\s+final\\s+String\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*\"TQL-([A-Z]+)-(\\d+)\"");
+
+    /** The rule families, whose codes must all be constants for this guard to see them. */
+    private static final Path LINT_PACKAGE = REPO
+            .resolve("tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint");
+
+    private static final Pattern BARE_CODE = Pattern.compile("\"TQL-[A-Z]+-\\d+\"");
+
     @Test
     void everyErrorCodeIsDeclaredForOneRule() throws IOException {
-        Map<String, Set<String>> byCode = new TreeMap<>();
-        for (Path source : mainSources()) {
-            String content = Files.readString(source);
-            Matcher declaration = DECLARATION.matcher(content);
-            while (declaration.find()) {
-                String code = declaration.group(2) + "-" + declaration.group(3);
-                byCode.computeIfAbsent(code, key -> new TreeSet<>())
-                        .add(source.getFileName() + "#" + declaration.group(1));
+        assertOneDeclarationPerCode(declarations(DECLARATION));
+    }
+
+    @Test
+    void everyLintCodeIsDeclaredForOneRuleFamily() throws IOException {
+        assertOneDeclarationPerCode(declarations(LINT_DECLARATION));
+    }
+
+    /**
+     * A code a lint family spells as a literal is invisible to this guard, which is how
+     * {@code TQL-FIELD-2004} came to answer four questions. The families keep their codes in
+     * constants — their own, or {@code LintCodes} for the ones several families raise.
+     */
+    @Test
+    void noRuleFamilyRaisesABareCodeLiteral() throws IOException {
+        Map<String, Set<String>> literals = new TreeMap<>();
+        try (Stream<Path> files = Files.walk(LINT_PACKAGE)) {
+            for (Path source : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                String content = Files.readString(source);
+                String declared = LINT_DECLARATION.matcher(content).replaceAll("");
+                Matcher bare = BARE_CODE.matcher(declared);
+                while (bare.find()) {
+                    literals.computeIfAbsent(bare.group(), key -> new TreeSet<>())
+                            .add(source.getFileName().toString());
+                }
             }
         }
 
+        assertThat(literals)
+                .as("lint codes spelled as literals at the raise site - declare the code as a"
+                        + " constant on its rule family (or in LintCodes when a second family"
+                        + " raises it) so the uniqueness guard can see it: %s", literals)
+                .isEmpty();
+    }
+
+    /**
+     * The allowlist may only shrink: an entry whose code is no longer multi-declared is stale
+     * and should be removed with the share it described. Either idiom keeps an entry alive.
+     */
+    @Test
+    void theSharedAllowlistOnlyNamesCodesThatAreStillShared() throws IOException {
+        Map<String, Set<String>> runtime = declarations(DECLARATION);
+        Map<String, Set<String>> lint = declarations(LINT_DECLARATION);
+
+        SHARED.keySet().forEach(code -> assertThat(Math.max(
+                runtime.getOrDefault(code, Set.of()).size(),
+                lint.getOrDefault(code, Set.of()).size()))
+                .as("SHARED entry '%s' no longer names a multi-declared code", code)
+                .isGreaterThan(1));
+    }
+
+    private static void assertOneDeclarationPerCode(Map<String, Set<String>> byCode) {
         Map<String, Set<String>> collisions = new TreeMap<>();
         byCode.forEach((code, sites) -> {
             if (sites.size() > 1 && !SHARED.containsKey(code)) {
@@ -92,12 +152,20 @@ class ErrorCodeUniquenessTest {
                         + " pre-1.0 renumbering is free), or add a SHARED entry when the"
                         + " declarations really are one rule: %s", collisions)
                 .isEmpty();
+    }
 
-        // The allowlist may only shrink: an entry whose code is no longer multi-declared is
-        // stale and should be removed with the share it described.
-        SHARED.keySet().forEach(code -> assertThat(byCode.getOrDefault(code, Set.of()))
-                .as("SHARED entry '%s' no longer names a multi-declared code", code)
-                .hasSizeGreaterThan(1));
+    /** Every declaration the pattern finds, as code to {@code File#CONSTANT} sites. */
+    private static Map<String, Set<String>> declarations(Pattern pattern) throws IOException {
+        Map<String, Set<String>> byCode = new TreeMap<>();
+        for (Path source : mainSources()) {
+            Matcher declaration = pattern.matcher(Files.readString(source));
+            while (declaration.find()) {
+                String code = declaration.group(2) + "-" + declaration.group(3);
+                byCode.computeIfAbsent(code, key -> new TreeSet<>())
+                        .add(source.getFileName() + "#" + declaration.group(1));
+            }
+        }
+        return byCode;
     }
 
     private static List<Path> mainSources() throws IOException {

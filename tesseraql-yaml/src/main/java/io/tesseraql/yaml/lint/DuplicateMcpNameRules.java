@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.List;
@@ -19,6 +21,9 @@ import java.util.List;
  * is flagged here, where the author is still looking and both files can be named.
  */
 final class DuplicateMcpNameRules implements LintRule {
+
+    private static final String DUPLICATE_RESOURCE_URI = "TQL-MCP-1007";
+    private static final String DUPLICATE_MCP_ID = "TQL-MCP-1014";
 
     @Override
     public void lint(LintContext context, AppManifest manifest,
@@ -71,7 +76,7 @@ final class DuplicateMcpNameRules implements LintRule {
         String source = appHome.relativize(file).toString().replace('\\', '/');
         String previous = seen.putIfAbsent(uri, source);
         if (previous != null) {
-            findings.add(new LintFinding("TQL-MCP-1007", "error", source,
+            findings.add(new LintFinding(DUPLICATE_RESOURCE_URI, ERROR, source,
                     "MCP resource uri '" + uri + "' is already declared by " + previous));
         }
     }
@@ -84,7 +89,7 @@ final class DuplicateMcpNameRules implements LintRule {
         String source = appHome.relativize(file).toString().replace('\\', '/');
         String previous = seen.putIfAbsent(id, source);
         if (previous != null) {
-            findings.add(new LintFinding("TQL-MCP-1014", "error", source,
+            findings.add(new LintFinding(DUPLICATE_MCP_ID, ERROR, source,
                     "MCP " + kind + " id '" + id + "' is already declared by " + previous
                             + " - the mcp/ folders organize files and name nothing, so two"
                             + " documents in different folders share one namespace"));

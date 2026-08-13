@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -17,6 +20,20 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class RouteRules implements LintRule {
+
+    private static final String UNKNOWN_RECIPE = "TQL-YAML-1002";
+
+    private static final String NEGATIVE_TIMEOUT = "TQL-YAML-1021";
+
+    private static final String ENRICH_ON_COMMAND_STEP = "TQL-FIELD-2009";
+
+    private static final String VALIDATE_WITHOUT_EFFECT = "TQL-YAML-1003";
+
+    private static final String COMMAND_KEYS_WITHOUT_STEPS = "TQL-YAML-1052";
+
+    private static final String INVALID_CSRF_MODE = "TQL-SEC-4132";
+
+    private static final String INVALID_INPUT_POLICY = "TQL-FIELD-2006";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -52,7 +69,7 @@ final class RouteRules implements LintRule {
                 Set.of(), findings);
 
         if (!KNOWN_ROUTE_RECIPES.contains(definition.recipe())) {
-            findings.add(new LintFinding("TQL-YAML-1002", "error", source,
+            findings.add(new LintFinding(UNKNOWN_RECIPE, ERROR, source,
                     "Unknown route recipe '" + definition.recipe() + "'",
                     context.lineOf(route.source(), "recipe:"), null));
         }
@@ -60,7 +77,7 @@ final class RouteRules implements LintRule {
         // compiler — the inverse of the author's intent — so the guard was missing here.
         definition.steps().forEach((name, step) -> {
             if (step.timeoutSeconds() != null && step.timeoutSeconds() < 0) {
-                findings.add(new LintFinding("TQL-YAML-1021", "error", source,
+                findings.add(new LintFinding(NEGATIVE_TIMEOUT, ERROR, source,
                         "Step '" + name + "' timeoutSeconds must be >= 0"));
             }
             // A route step is a write — the transactional arms only (decision 9) — so it
@@ -68,7 +85,7 @@ final class RouteRules implements LintRule {
             // there is nothing here for one to fold into, and the compiler builds enrichment
             // processors from sources: alone. Declared here it was accepted and dropped.
             if (!step.enrich().isEmpty()) {
-                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '" + name
+                findings.add(new LintFinding(ENRICH_ON_COMMAND_STEP, ERROR, source, "Step '" + name
                         + "' declares enrich: but a command step writes - it publishes"
                         + " affectedRows and keys, not rows. An enrichment nests under the"
                         + " source whose rows it folds into."));
@@ -76,7 +93,7 @@ final class RouteRules implements LintRule {
         });
         definition.sources().forEach((name, query) -> {
             if (query.timeoutSeconds() != null && query.timeoutSeconds() < 0) {
-                findings.add(new LintFinding("TQL-YAML-1021", "error", source,
+                findings.add(new LintFinding(NEGATIVE_TIMEOUT, ERROR, source,
                         "Source '" + name + "' timeoutSeconds must be >= 0"
                                 + " (0 disables the statement timeout)",
                         context.lineOf(route.source(), "timeoutSeconds:"), null));
@@ -86,21 +103,21 @@ final class RouteRules implements LintRule {
                 && definition.main().file() != null) {
             Path sqlFile = route.source().getParent().resolve(definition.main().file());
             if (!Files.isRegularFile(sqlFile)) {
-                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                         "Referenced SQL file is missing: " + definition.main().file()));
             }
         }
         definition.steps().forEach((name, step) -> {
             if (step.file() != null
                     && !Files.isRegularFile(route.source().getParent().resolve(step.file()))) {
-                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
             }
         });
         definition.sources().forEach((name, query) -> {
             if (query.file() != null
                     && !Files.isRegularFile(route.source().getParent().resolve(query.file()))) {
-                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                         "Query '" + name + "' references a missing SQL file: " + query.file()));
             }
         });
@@ -109,7 +126,7 @@ final class RouteRules implements LintRule {
         // shape is checked the same way wherever they are declared.
         if (!definition.validate().isEmpty() && definition.recipe() != null
                 && !VALIDATING_RECIPES.contains(definition.recipe())) {
-            findings.add(new LintFinding("TQL-YAML-1003", "error", source,
+            findings.add(new LintFinding(VALIDATE_WITHOUT_EFFECT, ERROR, source,
                     "validate: has no effect on '" + definition.recipe() + "' routes — it is"
                             + " honored on " + String.join(", ", VALIDATING_RECIPES)
                             + ", queue consumers, and MCP tools"));
@@ -130,14 +147,15 @@ final class RouteRules implements LintRule {
         if ("command-json".equals(definition.recipe()) && definition.steps().isEmpty()
                 && (definition.publish() != null || !definition.notifications().isEmpty()
                         || definition.outbox() != null || !definition.validate().isEmpty())) {
-            findings.add(new LintFinding("TQL-YAML-1052", "error", source, "route '"
+            findings.add(new LintFinding(COMMAND_KEYS_WITHOUT_STEPS, ERROR, source, "route '"
                     + definition.id() + "' declares publish:/notify:/outbox:/validate: but no"
                     + " steps: pipeline — these ride the command transaction"));
         }
         if (definition.consume() != null) {
-            findings.add(new LintFinding("TQL-YAML-1010", "error", source, "consume: is only"
-                    + " supported on a queue-consume route under consume/, not the '"
-                    + definition.recipe() + "' recipe"));
+            findings.add(new LintFinding(LintCodes.MESSAGING_KEY_ON_WRONG_RECIPE, ERROR, source,
+                    "consume: is only"
+                            + " supported on a queue-consume route under consume/, not the '"
+                            + definition.recipe() + "' recipe"));
         }
         ExportRules.lintRouteExport(context, route, definition, source, findings);
         ExportRules.lintExportRowCap(definition.fileExport(), "", source, findings);
@@ -147,7 +165,7 @@ final class RouteRules implements LintRule {
         DocumentRules.lintEmbeddedVariables(context, route.source(), definition, source, findings);
         if (definition.security() != null && definition.security().policy() != null
                 && !DocumentRules.policyDefined(config, definition.security().policy())) {
-            findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
+            findings.add(new LintFinding(LintCodes.UNDEFINED_POLICY, WARNING, source,
                     "Route references undefined policy '" + definition.security().policy()
                             + "' (deny by default)"));
         }
@@ -158,7 +176,7 @@ final class RouteRules implements LintRule {
             // silently resolved to auto (no enforcement on a bearer route) before this.
             if (csrf != null && !"auto".equals(csrf) && !"required".equals(csrf)
                     && !"off".equals(csrf)) {
-                findings.add(new LintFinding("TQL-SEC-4132", "error", source,
+                findings.add(new LintFinding(INVALID_CSRF_MODE, ERROR, source,
                         "Route '" + definition.id() + "' csrf must be auto, required or off, not '"
                                 + csrf + "'"));
             }
@@ -182,7 +200,7 @@ final class RouteRules implements LintRule {
         }
         String unknown = policy.unknownFields();
         if (unknown != null && !"reject".equals(unknown) && !"ignore".equals(unknown)) {
-            findings.add(new LintFinding("TQL-FIELD-2006", "error", source,
+            findings.add(new LintFinding(INVALID_INPUT_POLICY, ERROR, source,
                     "Route '" + definition.id() + "' inputPolicy.unknownFields must be reject or "
                             + "ignore, not '" + unknown + "' (an unrecognized value silently "
                             + "disables the mass-assignment guard)"));
@@ -190,7 +208,7 @@ final class RouteRules implements LintRule {
         String readOnly = policy.readOnlyFieldBehavior();
         if (readOnly != null && !"reject".equals(readOnly) && !"ignore".equals(readOnly)
                 && !"warn".equals(readOnly)) {
-            findings.add(new LintFinding("TQL-FIELD-2006", "error", source,
+            findings.add(new LintFinding(INVALID_INPUT_POLICY, ERROR, source,
                     "Route '" + definition.id() + "' inputPolicy.readOnlyFieldBehavior must be "
                             + "reject, ignore or warn, not '" + readOnly + "'"));
         }

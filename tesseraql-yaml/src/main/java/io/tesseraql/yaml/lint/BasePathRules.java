@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
@@ -13,6 +15,8 @@ import java.util.regex.Pattern;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class BasePathRules implements LintRule {
+
+    private static final String ORIGIN_ROOTED_LINK = "TQL-TPL-2004";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -62,7 +66,7 @@ final class BasePathRules implements LintRule {
                     String source = appHome.relativize(file).toString().replace('\\', '/');
                     Matcher urls = ROOT_ABSOLUTE_URL.matcher(java.nio.file.Files.readString(file));
                     while (urls.find()) {
-                        findings.add(new LintFinding("TQL-TPL-2004", "warning", source,
+                        findings.add(new LintFinding(ORIGIN_ROOTED_LINK, WARNING, source,
                                 urls.group(1) + "=\"" + urls.group(2) + "\" is rooted at the"
                                         + " origin, and this application is served under"
                                         + " tesseraql.http.basePath — write th:" + urls.group(1)
@@ -71,7 +75,7 @@ final class BasePathRules implements LintRule {
                     }
                 }
             } catch (java.io.IOException ex) {
-                findings.add(new LintFinding("TQL-TPL-2004", "warning", tree,
+                findings.add(new LintFinding(ORIGIN_ROOTED_LINK, WARNING, tree,
                         "templates could not be read: " + ex.getMessage()));
             }
         }
