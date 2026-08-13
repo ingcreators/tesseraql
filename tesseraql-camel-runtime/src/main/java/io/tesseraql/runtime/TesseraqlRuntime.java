@@ -739,13 +739,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // longest anything goes unnoticed — nobody is waiting for the response.
                 .sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
                         .map(Integer::parseInt).orElse(30))
-                // A job has no request to read configuration from, so the export step's default
+                // A job has no request to read configuration from, so a step's default row
                 // ceiling arrives the same way its timeout does (docs/export-pipeline.md, dec. 7).
-                .exportRowBounds(
+                .resultBounds(
                         manifest.config().getString("tesseraql.resultMaterialization.maxRows")
                                 .map(Integer::parseInt).orElse(10_000),
                         manifest.config().getString("tesseraql.resultMaterialization.onOverflow")
                                 .orElse("fail"))
+                // A batch read step may extract from another declared connector and load into
+                // the job's (docs/unified-sources.md decision 19).
+                .connectors(dataSources::get)
                 .notificationOutbox(outboxStore)
                 // Recipient-aware notify steps honor per-user opt-outs (roadmap Phase 48).
                 .preferenceStore(preferences)
@@ -781,9 +784,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // An enrichment's http: reference calls through the same gateway, so it counts toward
         // binding it — otherwise the reference fails at request time with no route-level http:
         // anywhere in the app (docs/lookups.md).
-        if (routeShaped(manifest).anyMatch(definition -> !definition.http().isEmpty()
-                || definition.enrich().values().stream()
-                        .anyMatch(enrich -> enrich.http() != null))) {
+        if (routeShaped(manifest).anyMatch(definition -> definition.sources().values().stream()
+                .anyMatch(binding -> binding.isHttp()
+                        || binding.enrich().values().stream()
+                                .anyMatch(enrich -> enrich.http() != null)))) {
             context.getRegistry().bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
                     outboundGateway(httpCallClient));
         }
@@ -4176,9 +4180,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 continue;
             }
             List<io.tesseraql.core.sql.SqlNode> commandNodes = null;
-            if (transition.command() != null) {
+            if (transition.commandFile() != null) {
                 java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                        dir.resolve(transition.command()).normalize(), dialect);
+                        dir.resolve(transition.commandFile()).normalize(), dialect);
                 try {
                     commandNodes = io.tesseraql.core.sql.Sql2WayParser
                             .parse(java.nio.file.Files.readString(file));

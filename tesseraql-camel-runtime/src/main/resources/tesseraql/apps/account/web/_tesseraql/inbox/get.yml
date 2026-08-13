@@ -7,17 +7,18 @@ recipe: query-html
 # bell. The subject is always the session principal's - the route maps principal.* into the
 # service params, so the page can only ever list the caller's messages.
 
-sql:
-  service: account.inbox.view
-  params:
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+sources:
+  main:
+    service:
+      name: account.inbox.view
+      params:
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   html:
     status: 200
     template: inbox.html
     model:
-      inbox: sql
+      inbox: main
     headers:
       Cache-Control: "no-store"

@@ -45,8 +45,9 @@ class AppLinterDecisionsTest {
                 input:
                   total: { type: integer, required: true }
                 %ssteps:
-                  create:
-                    file: create.sql
+                  - id: create
+                    sql:
+                      file: create.sql
                 response:
                   json:
                     body:
@@ -103,7 +104,7 @@ class AppLinterDecisionsTest {
                 id: request
                 kind: workflow
                 document: { type: request, table: requests, key: id }
-                http: { basePath: /api/requests }
+                basePath: /api/requests
                 security: { auth: bearer, policy: req.write }
                 initial: draft
                 states:
@@ -113,7 +114,7 @@ class AppLinterDecisionsTest {
                   - id: submit
                     from: draft
                     to: submitted
-                    command: submit.sql
+                    command: { file: submit.sql }
                     decide:
                       approvalRoute:
                         use: approvalRoute
@@ -218,8 +219,9 @@ class AppLinterDecisionsTest {
                 input:
                   total: { type: integer, required: true }
                 steps:
-                  create:
-                    file: create.sql
+                  - id: create
+                    sql:
+                      file: create.sql
                     when: "decision.approvalRoute.route == 'manager'"
                 response:
                   json:

@@ -274,10 +274,11 @@ class AppMenuIntegrationTest {
                         field: gate
                         code: blocked
 
-                    sql:
-                      file: flag-gate.sql
-                      mode: update
-
+                    steps:
+                      - id: main
+                        sql:
+                          file: flag-gate.sql
+                          mode: update
                     response:
                       json:
                         body:

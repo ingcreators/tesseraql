@@ -479,9 +479,9 @@ public final class TestRunner {
                                     List.of(), 0, observer),
                             target.key(), context);
             session.advance(connection, context);
-            if (transition.command() != null && !transition.command().isBlank()) {
+            if (transition.command() != null && !transition.commandFile().isBlank()) {
                 SqlOutcome result = executeSql(connection,
-                        workflowDir(def).resolve(transition.command()), context);
+                        workflowDir(def).resolve(transition.commandFile()), context);
                 session.enforceCommandRows(result.updateCount() != null,
                         result.updateCount() == null ? 0 : result.updateCount());
             }
@@ -855,7 +855,7 @@ public final class TestRunner {
     }
 
     /**
-     * Plans a job's {@code httpCall:} steps against the case's params (roadmap Phase 26), without
+     * Plans a job's {@code http:} steps against the case's params (roadmap Phase 26), without
      * issuing a network request: each matching step is one row carrying its id, method, the resolved
      * url and host, whether the host is allow-listed, and the credential name. URL placeholders and
      * query bindings resolve exactly as they would at runtime, so a case exercises the binding and
@@ -878,19 +878,22 @@ public final class TestRunner {
         if (hasJob) {
             io.tesseraql.yaml.manifest.JobFile job = job(target.job());
             for (io.tesseraql.yaml.model.PipelineStep step : job.definition().effectiveSteps()) {
-                io.tesseraql.yaml.model.HttpCallSpec spec = step.httpCall();
+                io.tesseraql.yaml.model.HttpCallSpec spec = step.sql() == null
+                        || !step.sql().isHttp()
+                                ? null
+                                : step.sql().http().call();
                 if (spec == null || (target.id() != null && !target.id().equals(step.id()))) {
                     continue;
                 }
                 calls.add(Map.entry(step.id(), spec));
             }
         } else {
-            // A query route's http: sources plan the same way a job's steps do
+            // A route source whose arm is an outbound call plans the same way a job's step does
             // (docs/connectors.md, "HTTP sources") — url, host, and the allow-list verdict.
             RouteFile route = route(target.route());
-            route.definition().http().forEach((name, source) -> {
-                if (target.id() == null || target.id().equals(name)) {
-                    calls.add(Map.entry(name, source.call()));
+            route.definition().sources().forEach((name, binding) -> {
+                if (binding.isHttp() && (target.id() == null || target.id().equals(name))) {
+                    calls.add(Map.entry(name, binding.http().call()));
                 }
             });
         }

@@ -6,18 +6,18 @@ recipe: query-html
 security:
   policy: pr.read
 
-sql:
-  file: request.sql
-  mode: query
-  params:
-    id: path.id
-
-queries:
+sources:
+  main:
+    sql:
+      file: request.sql
+      mode: query
+      params:
+        id: path.id
   history:
-    file: history.sql
-    params:
-      id: path.id
-
+    sql:
+      file: history.sql
+      params:
+        id: path.id
 response:
   html:
     status: 200

@@ -144,13 +144,15 @@ class MultiDatasourceReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: reporting
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(summaryRoute.resolve("summary.sql"),
                 "select region from turnover order by id\n;\n");
@@ -162,18 +164,20 @@ class MultiDatasourceReadIntegrationTest {
                 id: dashboard.view
                 kind: route
                 recipe: query-json
-                sql:
-                  file: open.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: open.sql
+                      mode: query
                   turnover:
-                    file: turnover.sql
-                    mode: query
-                    datasource: reporting
+                    sql:
+                      file: turnover.sql
+                      mode: query
+                      datasource: reporting
                 response:
                   json:
                     body:
-                      open: sql.rows
+                      open: main.rows
                       turnover: turnover.rows
                 """);
         Files.writeString(dashboardRoute.resolve("open.sql"),

@@ -30,12 +30,14 @@ class LintPositionTest {
                   q:
                     type: string
                     pattern: "["
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -55,18 +57,20 @@ class LintPositionTest {
                 id: x
                 kind: route
                 recipe: query-json
-                sql:
-                  file: x.sql
-                  timeoutSeconds: -1
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
+                      timeoutSeconds: -1
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         assertThat(new AppLinter().lint(dir))
                 .anySatisfy(f -> {
                     assertThat(f.code()).isEqualTo("TQL-YAML-1021");
-                    assertThat(f.line()).isEqualTo(7);
+                    assertThat(f.line()).isEqualTo(9);
                 });
 
         // Position-less findings render the bare source (the pre-positions shape).

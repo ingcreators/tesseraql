@@ -6,8 +6,8 @@ import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.UiResourceFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -140,7 +140,8 @@ public final class RouteGovernance {
     public static Assessment assessTool(AppManifest manifest, ToolFile tool) {
         RouteDefinition definition = tool.definition();
         boolean write = "command-json".equals(definition.recipe())
-                || (definition.sql() != null && "update".equals(definition.sql().effectiveMode()));
+                || (definition.main() != null
+                        && "update".equals(definition.main().effectiveMode()));
         boolean authenticated = isAuthenticated(definition);
         boolean usesService = usesService(definition);
 
@@ -232,7 +233,7 @@ public final class RouteGovernance {
         if ("command-json".equals(definition.recipe())) {
             return true;
         }
-        if (definition.sql() != null && "update".equals(definition.sql().effectiveMode())) {
+        if (definition.main() != null && "update".equals(definition.main().effectiveMode())) {
             return true;
         }
         return WRITE_METHODS.contains(route.httpMethod().toUpperCase(Locale.ROOT));
@@ -245,24 +246,24 @@ public final class RouteGovernance {
     }
 
     private static boolean usesService(RouteDefinition definition) {
-        if (definition.sql() != null && definition.sql().isService()) {
+        if (definition.main() != null && definition.main().isService()) {
             return true;
         }
-        return definition.queries().values().stream().anyMatch(SqlBinding::isService);
+        return definition.sources().values().stream().anyMatch(Binding::isService);
     }
 
     /** Request-sourced bind expressions whose input was never declared (no validation applies). */
     private static Set<String> undeclaredInputs(RouteDefinition definition) {
         Set<String> undeclared = new TreeSet<>();
-        collectUndeclared(definition, definition.sql(), undeclared);
+        collectUndeclared(definition, definition.main(), undeclared);
         definition.steps().values()
                 .forEach(binding -> collectUndeclared(definition, binding, undeclared));
-        definition.queries().values()
+        definition.sources().values()
                 .forEach(binding -> collectUndeclared(definition, binding, undeclared));
         return undeclared;
     }
 
-    private static void collectUndeclared(RouteDefinition definition, SqlBinding binding,
+    private static void collectUndeclared(RouteDefinition definition, Binding binding,
             Set<String> into) {
         if (binding == null) {
             return;

@@ -146,13 +146,15 @@ class DuckDbReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(summaryRoute.resolve("summary.sql"), """
                 select category, sum(total) as total
@@ -168,18 +170,20 @@ class DuckDbReadIntegrationTest {
                 id: dashboard.view
                 kind: route
                 recipe: query-json
-                sql:
-                  file: open.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: open.sql
+                      mode: query
                   drops:
-                    file: drops.sql
-                    mode: query
-                    datasource: analytics
+                    sql:
+                      file: drops.sql
+                      mode: query
+                      datasource: analytics
                 response:
                   json:
                     body:
-                      open: sql.rows
+                      open: main.rows
                       drops: drops.rows
                 """);
         Files.writeString(dashboardRoute.resolve("open.sql"),
@@ -198,13 +202,15 @@ class DuckDbReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: outside.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: outside.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outsideRoute.resolve("outside.sql"),
                 "select * from read_csv('" + home.resolve("secret.csv") + "')\n");
@@ -217,13 +223,15 @@ class DuckDbReadIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: ghost.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ghost.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(ghostRoute.resolve("ghost.sql"),
                 "select * from read_csv(/* ${scope.ghost}/x.csv */ 'dummy.csv')\n");

@@ -242,8 +242,10 @@ class ExcelTransferIntegrationTest {
                 import:
                   format: excel
                   columns: [fullName, age]
-                  sql:
-                    file: upsert-person.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: upsert-person.sql
                 """);
         Files.writeString(importRoute.resolve("upsert-person.sql"), """
                 insert into people (full_name, age)
@@ -262,8 +264,10 @@ class ExcelTransferIntegrationTest {
                 export:
                   format: excel
                   filename: people.xlsx
-                  sql:
-                    file: select-people.sql
+                sources:
+                  main:
+                    sql:
+                      file: select-people.sql
                 """);
         Files.writeString(exportRoute.resolve("select-people.sql"),
                 "select full_name, age from people order by full_name\n;\n");
@@ -276,8 +280,10 @@ class ExcelTransferIntegrationTest {
                 id: people.download
                 kind: route
                 recipe: query-export
-                sql:
-                  file: select-people.sql
+                sources:
+                  main:
+                    sql:
+                      file: select-people.sql
                 export:
                   format: excel
                   filename: people-sync.xlsx
@@ -302,8 +308,10 @@ class ExcelTransferIntegrationTest {
                   columns:
                     - { name: full_name, column: B }
                     - { name: age,       column: D }
-                  sql:
-                    file: select-people.sql
+                sources:
+                  main:
+                    sql:
+                      file: select-people.sql
                 """);
         Files.writeString(reportRoute.resolve("select-people.sql"),
                 "select full_name, age from people order by full_name\n;\n");

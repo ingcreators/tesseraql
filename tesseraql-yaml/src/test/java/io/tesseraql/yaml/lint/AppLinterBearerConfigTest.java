@@ -32,12 +32,14 @@ class AppLinterBearerConfigTest {
                 path: /api/items
                 security:
                   auth: %s
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """.formatted(routeAuth));
         return dir;
     }
@@ -91,12 +93,14 @@ class AppLinterBearerConfigTest {
                 description: Picks an item.
                 security:
                   auth: api-key
-                sql:
-                  file: pick.sql
+                sources:
+                  main:
+                    sql:
+                      file: pick.sql
                 response:
                   json:
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         List<LintFinding> findings = new AppLinter().lint(app);
         assertThat(findings)

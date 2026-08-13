@@ -199,14 +199,16 @@ class DuckDbEtlIntegrationTest {
                 version: tesseraql/v1
                 id: sales.readOnlyProbe
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 datasource: analyticsRo
                 trigger:
                   schedule:
                     cron: "0 0 4 1 1 ? 2099"
-                sql:
-                  file: read-only-probe.sql
-                  mode: update
+                pipeline:
+                  - id: main
+                    sql:
+                      file: read-only-probe.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("read-only-probe.sql"),
                 "insert into app.sales_summary (category, total) values ('ghost', 1)\n");
@@ -219,13 +221,15 @@ class DuckDbEtlIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: install.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: install.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(installRoute.resolve("install.sql"), "INSTALL httpfs\n");
 
@@ -237,13 +241,15 @@ class DuckDbEtlIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: joined.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: joined.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(joinedRoute.resolve("joined.sql"), """
                 select s.category, s.total, p.total as landed

@@ -547,7 +547,7 @@ class OpsConsoleIntegrationTest {
                       file: touch.sql
                       mode: update
                       params:
-                        businessDate: job.businessDate
+                        businessDate: params.businessDate
                 """);
         Files.writeString(probeDir.resolve("touch.sql"), """
                 update users set status = status where status = /* businessDate */ 'x';

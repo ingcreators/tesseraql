@@ -39,8 +39,8 @@ import java.util.function.LongSupplier;
  * <p>Egress is deny-by-default: the resolved target host must be allow-listed, otherwise the call
  * never leaves the process (defense in depth — the same rule lint enforces statically). Credentials,
  * timeouts, and the circuit breaker come from configuration so a step never carries a secret. The
- * response is published to later steps as {@code step.<id>.status}, {@code step.<id>.body} (parsed
- * JSON when the response is JSON, else the raw text), and {@code step.<id>.headers}.
+ * response is published to later steps as {@code steps.<id>.status}, {@code steps.<id>.body} (parsed
+ * JSON when the response is JSON, else the raw text), and {@code steps.<id>.headers}.
  *
  * <p>A per-host circuit breaker trips after a threshold of consecutive <em>systemic</em> failures —
  * transport errors and {@code 5xx} responses — and stays open for the configured duration, failing

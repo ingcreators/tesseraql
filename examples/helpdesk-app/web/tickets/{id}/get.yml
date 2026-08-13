@@ -6,12 +6,13 @@ recipe: query-html
 security:
   policy: help.read
 
-sql:
-  file: ticket.sql
-  mode: query
-  params:
-    id: path.id
-
+sources:
+  main:
+    sql:
+      file: ticket.sql
+      mode: query
+      params:
+        id: path.id
 response:
   html:
     status: 200

@@ -40,15 +40,17 @@ class ReleaseDiffTest {
                 security:
                   auth: bearer
                   policy: app.read
-                sql:
-                  file: items.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                       %s
-                """.formatted(candidate ? "extra: sql.rowCount" : ""));
+                """.formatted(candidate ? "extra: main.rowCount" : ""));
 
         if (!candidate) {
             // A route only the baseline serves -> REMOVED in the diff.
@@ -62,13 +64,15 @@ class ReleaseDiffTest {
                     recipe: query-json
                     security:
                       auth: bearer
-                    sql:
-                      file: legacy.sql
-                      mode: query
+                    sources:
+                      main:
+                        sql:
+                          file: legacy.sql
+                          mode: query
                     response:
                       json:
                         body:
-                          data: sql.rows
+                          data: main.rows
                     """);
         } else {
             // A route only the candidate serves -> ADDED, plus a new migration to run.
@@ -82,13 +86,15 @@ class ReleaseDiffTest {
                     recipe: query-json
                     security:
                       auth: bearer
-                    sql:
-                      file: orders.sql
-                      mode: query
+                    sources:
+                      main:
+                        sql:
+                          file: orders.sql
+                          mode: query
                     response:
                       json:
                         body:
-                          data: sql.rows
+                          data: main.rows
                     """);
         }
 

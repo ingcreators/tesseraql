@@ -200,7 +200,7 @@ that names the replacement (`"page: was renamed to pagination: before v1"`). The
 
 `web/` loads only exact-HTTP-method stems; every other tree loads any `*.yml` but nothing
 loads a `.yaml`, and `domains/`/`rules/`/`decisions/`/`calendars/` are non-recursive
-(`Files.list`) so a `domains/hr/fields.yml` is invisible while `batch/hr/job.yml` is found.
+(`Files.list`) so a `domains/hr/fields.yml` is invisible while `batch/hr/params.yml` is found.
 No lint reports an unclaimed YAML file. `post.yaml`, `Get.yml`, `psot.yml`, `domains/x/y.yml`
 — the document simply does not exist, and the author gets a 404 with nothing pointing at the
 filename.

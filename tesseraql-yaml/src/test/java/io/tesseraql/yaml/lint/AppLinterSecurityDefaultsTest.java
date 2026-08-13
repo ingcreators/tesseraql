@@ -55,12 +55,14 @@ class AppLinterSecurityDefaultsTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/admin/ping/ping.sql"), "select 1\n");
 
@@ -94,12 +96,14 @@ class AppLinterSecurityDefaultsTest {
                 id: admin.audit
                 kind: route
                 recipe: query-json
-                sql:
-                  file: audit.sql
+                sources:
+                  main:
+                    sql:
+                      file: audit.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/admin/audit/audit.sql"), "select 1\n");
 

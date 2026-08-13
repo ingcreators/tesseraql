@@ -11,7 +11,7 @@ import java.util.Map;
  * response or view.
  *
  * <p>The call itself is an {@link HttpCallSpec} — the same declaration a job's
- * {@code httpCall:} step and an enrichment's {@code http:} reference carry, so
+ * job step and an enrichment's {@code http:} reference carry, so
  * {@code method}, {@code url}, {@code headers}, {@code query}, {@code body},
  * {@code credential}, {@code expectStatus} and the timeouts mean one thing everywhere
  * (docs/lookups.md, decision 15). A source adds only what the read side needs: which part of
@@ -31,10 +31,16 @@ import java.util.Map;
  *                 degrades to zero rows and the page still renders)
  * @param readOnly the author's assertion that the call has no side effect, required on a
  *                 command route: the write can roll back and the request cannot
+ * @param mode     how the acquired rows are delivered: {@code query} (default — they are held
+ *                 and published as {@code rows}) or {@code query-spool} (they are streamed to a
+ *                 spool a later chunk step reads). Spooling is not a SQL feature, so it is not
+ *                 a key of the {@code sql} arm alone (docs/unified-sources.md decision 19a);
+ *                 every arm carries a {@code mode:} and the legal values are the mechanism's,
+ *                 which is what keeps the key in one place instead of two
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record HttpSourceSpec(HttpCallSpec call, String select, String onError,
-        Boolean readOnly) {
+        Boolean readOnly, String mode) {
 
     /**
      * The flat authoring form: a source's YAML is the call's keys and the source's own, on one
@@ -54,9 +60,10 @@ public record HttpSourceSpec(HttpCallSpec call, String select, String onError,
             @JsonProperty("requestTimeout") String requestTimeout,
             @JsonProperty("select") String select,
             @JsonProperty("onError") String onError,
-            @JsonProperty("readOnly") Boolean readOnly) {
+            @JsonProperty("readOnly") Boolean readOnly,
+            @JsonProperty("mode") String mode) {
         return new HttpSourceSpec(new HttpCallSpec(method, url, headers, query, credential, body,
-                expectStatus, connectTimeout, requestTimeout), select, onError, readOnly);
+                expectStatus, connectTimeout, requestTimeout), select, onError, readOnly, mode);
     }
 
     /**
@@ -72,6 +79,11 @@ public record HttpSourceSpec(HttpCallSpec call, String select, String onError,
     /** Whether a failed call degrades to an empty source instead of failing the request. */
     public boolean degradesToEmpty() {
         return "empty".equals(onError);
+    }
+
+    /** Whether the acquired rows are streamed to a spool instead of being held. */
+    public boolean spools() {
+        return "query-spool".equals(mode);
     }
 
     /** The target URL, for the lint and test surfaces that read it without making the call. */

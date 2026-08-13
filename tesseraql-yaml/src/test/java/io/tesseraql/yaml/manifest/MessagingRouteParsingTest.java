@@ -26,11 +26,6 @@ class MessagingRouteParsingTest {
                 id: orders.create
                 kind: route
                 recipe: command-json
-                sql:
-                  file: insert-order.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
                 publish:
                   channel: events
                   topic: orders.created
@@ -38,6 +33,13 @@ class MessagingRouteParsingTest {
                   payload:
                     orderId: body.orderId
                     total: body.total
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-order.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
                 """);
         Files.writeString(routeDir.resolve("insert-order.sql"),
                 "insert into orders (id) values (/* orderId */ 'x')\n");
@@ -67,11 +69,13 @@ class MessagingRouteParsingTest {
                   channel: events
                   topic: orders.created
                   idempotencyKey: body.orderId
-                sql:
-                  file: project-order.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
+                steps:
+                  - id: main
+                    sql:
+                      file: project-order.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
                 """);
         Files.writeString(consumeDir.resolve("project-order.sql"),
                 "insert into projected (id) values (/* orderId */ 'x')\n");

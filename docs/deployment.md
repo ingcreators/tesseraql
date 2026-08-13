@@ -100,7 +100,7 @@ security headers already live in a production deployment. The operator's respons
   forwards the verified certificate (subject DN / SAN / SHA-256) in a header the runtime
   reads. Configure the proxy to set that header only from a verified handshake and to strip
   any client-supplied copy.
-- **Outbound** calls (`httpCall`, connectors, the analytics engine's remote tier) use HTTPS
+- **Outbound** calls (`http:`, connectors, the analytics engine's remote tier) use HTTPS
   by their configured URLs and are bounded by the deny-by-default egress allow-list; the
   runtime does not disable certificate verification.
 
@@ -176,7 +176,7 @@ emits one line per request on the `tesseraql.access` logger —
 ## Safety valves and multi-node semantics
 
 **SQL statement timeout.** Every route SQL statement is bounded by default: 30 seconds, the
-app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `sql.timeoutSeconds` override —
+app-wide `tesseraql.sql.timeoutSeconds`, or a per-binding `timeoutSeconds:` override —
 an explicit `0` opts a deliberately long-running statement out. A runaway query is cancelled
 by the driver instead of holding a pool connection forever.
 
@@ -279,7 +279,7 @@ nightly run *not* appearing.
 Beyond the route metrics, the scrape carries the node's poll-source health — the
 registry behind the console's jobs page, rendered as gauges at scrape time so a silent
 poll source is alertable without anyone watching a screen — and an egress-denial counter
-for `httpCall` steps. `jobId` (or `host`) is the only label; source strings and skip
+for `http:` steps. `jobId` (or `host`) is the only label; source strings and skip
 reasons stay on the console page.
 
 | Family | Meaning | Sample alert |
@@ -287,7 +287,7 @@ reasons stay on the console page.
 | `tesseraql_poll_source_wired` | `1` polling, `0` refused at wire time | `tesseraql_poll_source_wired == 0` |
 | `tesseraql_poll_source_consecutive_failures` | current import-failure streak | `tesseraql_poll_source_consecutive_failures >= 3` |
 | `tesseraql_poll_source_last_poll_age_seconds` | seconds since the last poll; absent until one completes | `tesseraql_poll_source_last_poll_age_seconds > 3600` |
-| `tesseraql_egress_denied_total` | `httpCall` refusals per denied host | `rate(tesseraql_egress_denied_total[5m]) > 0` |
+| `tesseraql_egress_denied_total` | `http:` refusals per denied host | `rate(tesseraql_egress_denied_total[5m]) > 0` |
 
 The scrape is **bearer + `ops.metrics.view` policy** by default (labels reveal route ids);
 give the scraper a token via `bearer_token_file`, or set

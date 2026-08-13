@@ -19,8 +19,10 @@ class AppLinterScopeTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 """);
     }
 
@@ -50,9 +52,11 @@ class AppLinterScopeTest {
                 id: orders.adjust
                 kind: route
                 recipe: command-json
-                sql:
-                  file: adjust.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: adjust.sql
+                      mode: update
                 response:
                   json:
                     status: 200

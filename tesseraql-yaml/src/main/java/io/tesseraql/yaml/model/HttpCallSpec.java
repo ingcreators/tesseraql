@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * An {@code http-call} step: a synchronous outbound REST call in a batch pipeline (roadmap
  * Phase 26). The step issues one request to a declared {@link #url} and publishes the response
- * into the job's step context as {@code step.<id>.status} and {@code step.<id>.body}, so a later
+ * into the job's step context as {@code steps.<id>.status} and {@code steps.<id>.body}, so a later
  * step can bind it like any other step result.
  *
  * <p>It is a job-pipeline step, never a transactional command step: a command runs every step in

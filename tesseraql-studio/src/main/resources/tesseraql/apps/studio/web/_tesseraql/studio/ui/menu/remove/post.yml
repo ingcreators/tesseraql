@@ -9,13 +9,14 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.menu.remove
-  params:
-    index: params.index
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.menu.remove
+      params:
+        index: params.index
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/menu?removed=1

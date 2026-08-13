@@ -201,13 +201,15 @@ class SqlTimeoutIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: slow.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: slow.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(slow.resolve("slow.sql"), "select pg_sleep(10) as nap\n");
 
@@ -220,10 +222,12 @@ class SqlTimeoutIntegrationTest {
                 version: tesseraql/v1
                 id: slow.job
                 kind: job
-                recipe: batch-tasklet
-                sql:
-                  file: nap.sql
-                  mode: query
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: nap.sql
+                      mode: query
                 """);
         Files.writeString(slowJob.resolve("nap.sql"), "select pg_sleep(10) as nap\n");
 
@@ -236,10 +240,12 @@ class SqlTimeoutIntegrationTest {
                 version: tesseraql/v1
                 id: variant.job
                 kind: job
-                recipe: batch-tasklet
-                sql:
-                  file: pick.sql
-                  mode: query
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: pick.sql
+                      mode: query
                 """);
         // The generic file references a table that does not exist; the variant is valid. Which
         // one ran is therefore the job's outcome, not something the test has to introspect.
@@ -256,10 +262,12 @@ class SqlTimeoutIntegrationTest {
                 version: tesseraql/v1
                 id: scoped.job
                 kind: job
-                recipe: batch-tasklet
-                sql:
-                  file: scoped.sql
-                  mode: query
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: scoped.sql
+                      mode: query
                 """);
         Files.writeString(scopedJob.resolve("scoped.sql"),
                 "select 1 as ok from (select 1) t where /*%scope orders on t */ (1=1)\n");
@@ -276,9 +284,10 @@ class SqlTimeoutIntegrationTest {
                 security:
                   auth: public
                 steps:
-                  nap:
-                    file: nap.sql
-                    mode: query
+                  - id: nap
+                    sql:
+                      file: nap.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -297,9 +306,10 @@ class SqlTimeoutIntegrationTest {
                 security:
                   auth: public
                 steps:
-                  rows:
-                    file: many.sql
-                    mode: query
+                  - id: rows
+                    sql:
+                      file: many.sql
+                      mode: query
                 response:
                   json:
                     status: 200
@@ -318,14 +328,16 @@ class SqlTimeoutIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: patient.sql
-                  mode: query
-                  timeoutSeconds: 0
+                sources:
+                  main:
+                    sql:
+                      file: patient.sql
+                      mode: query
+                      timeoutSeconds: 0
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(patient.resolve("patient.sql"),
                 "select 'done' as answer from pg_sleep(2)\n");

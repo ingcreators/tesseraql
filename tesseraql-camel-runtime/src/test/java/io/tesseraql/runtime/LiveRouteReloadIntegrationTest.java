@@ -125,14 +125,16 @@ class LiveRouteReloadIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: pong.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: pong.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         HttpResponse<String> reload = studioPost("/_tesseraql/studio/reload", "");
         assertThat(reload.statusCode()).isEqualTo(200);
@@ -224,14 +226,16 @@ class LiveRouteReloadIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 'v1' as version\n");
         return target;

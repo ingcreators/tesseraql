@@ -3,12 +3,14 @@ id: tql.studio.docs.coverage
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.coverage
+sources:
+  main:
+    service:
+      name: docs.coverage
 
 response:
   html:
     status: 200
     template: coverage.html
     model:
-      cov: sql
+      cov: main

@@ -20,14 +20,15 @@ idempotency:
   required: false
   ttl: 24h
 
-sql:
-  file: deactivate.sql
-  mode: update
-  params:
-    name: body.name
-
+steps:
+  - id: main
+    sql:
+      file: deactivate.sql
+      mode: update
+      params:
+        name: body.name
 response:
   json:
     status: 200
     body:
-      affected: sql.affectedRows
+      affected: steps.main.affectedRows

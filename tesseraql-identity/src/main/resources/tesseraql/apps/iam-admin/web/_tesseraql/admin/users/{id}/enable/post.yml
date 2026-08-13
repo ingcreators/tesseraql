@@ -6,12 +6,13 @@ recipe: command-json
 security:
   policy: iam.admin.write
 
-sql:
-  contract: identity.enable-user
-  mode: update
-  params:
-    userId: path.id
-
+steps:
+  - id: main
+    contract:
+      name: identity.enable-user
+      mode: update
+      params:
+        userId: path.id
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?enabled=1

@@ -10,10 +10,11 @@ pagination:
   size: 20
   count: true
 
-sql:
-  file: rfqs.sql
-  mode: query
-
+sources:
+  main:
+    sql:
+      file: rfqs.sql
+      mode: query
 response:
   html:
     status: 200

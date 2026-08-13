@@ -3,12 +3,14 @@ id: tql.studio.docs.rules
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.rules
+sources:
+  main:
+    service:
+      name: docs.rules
 
 response:
   html:
     status: 200
     template: rules.html
     model:
-      dom: sql
+      dom: main

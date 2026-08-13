@@ -13,14 +13,15 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.newForm
-  params:
-    prefix: params.prefix
-
+sources:
+  main:
+    service:
+      name: studio.newForm
+      params:
+        prefix: params.prefix
 response:
   html:
     status: 200
     template: drawer.html
     model:
-      form: sql
+      form: main

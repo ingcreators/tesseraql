@@ -70,12 +70,14 @@ class FrameworkSurfaceGuardTest {
                 description: a tool, so the MCP endpoint mounts
                 security:
                   policy: scim.manage
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(appHome.resolve("mcp/list.sql"), "select 1 as one\n");
         Path scim = appHome.resolve("scim");

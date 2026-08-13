@@ -8,12 +8,12 @@ import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.MigrationFile;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.NotifySpec;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.model.ValidationRule;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -143,33 +143,25 @@ public final class RouteSpecGenerator {
         return null;
     }
 
-    /** The bound SQL statements: the main {@code sql}, ordered steps and queries, and transfer SQL. */
+    /** The bound statements: the named sources, the ordered steps, and the transfer SQL. */
     private List<RouteSpec.SqlStatement> sqlStatements(RouteFile route) {
         Path dir = route.source().getParent();
         RouteDefinition definition = route.definition();
         List<RouteSpec.SqlStatement> out = new ArrayList<>();
-        if (definition.sql() != null) {
-            out.add(statement("sql", dir, definition.sql()));
-        }
+        definition.sources()
+                .forEach((id, binding) -> out.add(statement("source:" + id, dir, binding)));
         definition.steps().forEach((id, binding) -> out.add(statement("step:" + id, dir, binding)));
-        definition.queries()
-                .forEach((id, binding) -> out.add(statement("query:" + id, dir, binding)));
-        if (definition.fileImport() != null && definition.fileImport().sql() != null) {
-            out.add(statement("import", dir, definition.fileImport().sql()));
-        }
         if (definition.fileExport() != null) {
-            if (definition.fileExport().sql() != null) {
-                out.add(statement("export", dir, definition.fileExport().sql()));
-            }
             if (definition.fileExport().after() != null
                     && definition.fileExport().after().sql() != null) {
-                out.add(statement("export.after", dir, definition.fileExport().after().sql()));
+                out.add(statement("export.after", dir,
+                        Binding.sql(definition.fileExport().after().sql())));
             }
         }
         return out;
     }
 
-    private RouteSpec.SqlStatement statement(String label, Path dir, SqlBinding binding) {
+    private RouteSpec.SqlStatement statement(String label, Path dir, Binding binding) {
         String text = null;
         List<String> binds = List.of();
         List<RouteSpec.Control> structure = List.of();

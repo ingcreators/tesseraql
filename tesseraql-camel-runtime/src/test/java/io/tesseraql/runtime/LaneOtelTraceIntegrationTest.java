@@ -136,14 +136,16 @@ class LaneOtelTraceIntegrationTest {
                   auth: public
                 admission:
                   lane: io
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 1 as ok\n");
         return target;

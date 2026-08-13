@@ -5,16 +5,18 @@ import { referenceLinks } from '../src/core/links';
 test('sql file and template references link with exact spans; a view id does not', () => {
   // view: carries a registry id since docs/view-composition.md wave 1, not a path.
   const text = [
-    'sql:',
-    '  file: search.sql',
+    'sources:',
+    '  main:',
+    '    sql:',
+    '      file: search.sql',
     'response:',
     '  html:',
     '    view: items',
     '    template: index.html',
   ].join('\n');
   assert.deepEqual(referenceLinks(text), [
-    { line: 1, start: 8, end: 18, target: 'search.sql' },
-    { line: 5, start: 14, end: 24, target: 'index.html' },
+    { line: 3, start: 12, end: 22, target: 'search.sql' },
+    { line: 7, start: 14, end: 24, target: 'index.html' },
   ]);
 });
 
@@ -30,8 +32,9 @@ test('a view document kind is not a reference', () => {
 test('step files and list items link, comments do not', () => {
   const text = [
     'steps:',
-    '  record:',
-    '    file: insert.sql',
+    '  - id: record',
+    '    sql:',
+    '      file: insert.sql',
     '# file: not-a-ref.sql',
     '  - file: also.sql',
   ].join('\n');

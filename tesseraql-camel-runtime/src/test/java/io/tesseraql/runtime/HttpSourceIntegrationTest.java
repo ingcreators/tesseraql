@@ -194,20 +194,23 @@ class HttpSourceIntegrationTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                   rates:
-                    url: http://localhost:%d/v1/rates
-                    credential: fx-api
-                    select: rates
+                    http:
+                      url: http://localhost:%d/v1/rates
+                      credential: fx-api
+                      select: rates
                   meta:
-                    url: http://localhost:%d/v1/rates
+                    http:
+                      url: http://localhost:%d/v1/rates
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                       fx: rates.rows
                       base: meta.body.base
                 """.formatted(upstreamPort, upstreamPort));
@@ -219,14 +222,16 @@ class HttpSourceIntegrationTest {
                 id: search.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: search.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                   matches:
-                    method: POST
-                    url: http://localhost:%d/v1/search
-                    body: sql.rows
-                    select: matches
+                    http:
+                      method: POST
+                      url: http://localhost:%d/v1/search
+                      body: main.rows
+                      select: matches
                 response:
                   json:
                     status: 200
@@ -241,19 +246,21 @@ class HttpSourceIntegrationTest {
                 id: degraded.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: degraded.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: degraded.sql
                   fx:
-                    url: http://localhost:1/v1/rates
-                    connectTimeout: 1s
-                    requestTimeout: 1s
-                    onError: empty
+                    http:
+                      url: http://localhost:1/v1/rates
+                      connectTimeout: 1s
+                      requestTimeout: 1s
+                      onError: empty
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                       fx: fx.rows
                 """);
         return target;

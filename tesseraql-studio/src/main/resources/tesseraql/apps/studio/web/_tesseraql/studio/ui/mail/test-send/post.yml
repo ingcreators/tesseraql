@@ -17,18 +17,19 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.mailTestSend
-  params:
-    roles: principal.roles
-    path: params.path
-    to: params.to
-    content: params.content
-    sampleModel: params.sampleModel
-
+sources:
+  main:
+    service:
+      name: studio.mailTestSend
+      params:
+        roles: principal.roles
+        path: params.path
+        to: params.to
+        content: params.content
+        sampleModel: params.sampleModel
 response:
   html:
     status: 200
     template: test-send.html
     model:
-      send: sql
+      send: main

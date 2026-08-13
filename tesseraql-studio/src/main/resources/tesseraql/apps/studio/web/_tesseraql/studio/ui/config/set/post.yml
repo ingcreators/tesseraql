@@ -13,14 +13,15 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.configSet
-  params:
-    key: params.key
-    value: params.value
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.configSet
+      params:
+        key: params.key
+        value: params.value
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/config?saved=1

@@ -125,8 +125,10 @@ class PdfExportIntegrationTest {
                 id: users.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: print.sql
+                sources:
+                  main:
+                    sql:
+                      file: print.sql
                 export:
                   format: pdf
                   filename: users.pdf
@@ -162,7 +164,7 @@ class PdfExportIntegrationTest {
                       <tr><th th:each="column : ${columns}" th:text="${column.header}">h</th></tr>
                     </thead>
                     <tbody>
-                      <tr th:each="row : ${sql.rows}">
+                      <tr th:each="row : ${main.rows}">
                         <td th:text="${row.name}">name</td>
                         <td th:text="${row.status}">status</td>
                       </tr>

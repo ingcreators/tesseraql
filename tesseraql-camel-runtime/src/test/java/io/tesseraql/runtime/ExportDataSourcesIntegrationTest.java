@@ -141,16 +141,18 @@ class ExportDataSourcesIntegrationTest {
                 id: orders.print
                 kind: route
                 recipe: query-export
-                sql:
-                  file: lines.sql
+                sources:
+                  main:
+                    sql:
+                      file: lines.sql
+                  header:
+                    sql:
+                      file: header.sql
                 export:
                   format: pdf
                   filename: order.pdf
                   template: order.html
                   maxRows: 100
-                  queries:
-                    header:
-                      file: header.sql
                   columns:
                     - { name: item, label: Item }
                     - { name: qty,  label: Qty }
@@ -166,19 +168,22 @@ class ExportDataSourcesIntegrationTest {
                 id: orders.bill
                 kind: route
                 recipe: query-export
-                sql:
-                  file: all-lines.sql
+                sources:
+                  main:
+                    sql:
+                      file: all-lines.sql
+                  customer:
+                    sql:
+                      file: customers.sql
+                  company:
+                    sql:
+                      file: company.sql
                 export:
                   format: pdf
                   filename: invoice-{key}.pdf
                   template: invoice.html
                   maxRows: 100
                   splitBy: order_no
-                  queries:
-                    customer:
-                      file: customers.sql
-                    company:
-                      file: company.sql
                   columns:
                     - { name: item, label: Item }
                     - { name: qty,  label: Qty }
@@ -198,7 +203,7 @@ class ExportDataSourcesIntegrationTest {
                   <h1 th:text="${customer.first.customer}">Customer</h1>
                   <p th:text="${company.first.issuer}">Issuer</p>
                   <table>
-                    <tr th:each="row : ${sql.rows}">
+                    <tr th:each="row : ${main.rows}">
                       <td th:text="${row.item}">item</td>
                     </tr>
                   </table>
@@ -214,7 +219,7 @@ class ExportDataSourcesIntegrationTest {
                   <h1 th:text="'Order ' + ${header.first.order_no}">Order</h1>
                   <p th:text="${header.first.customer}">Customer</p>
                   <table>
-                    <tr th:each="row : ${sql.rows}">
+                    <tr th:each="row : ${main.rows}">
                       <td th:text="${row.item}">item</td>
                       <td th:text="${row.qty}">qty</td>
                     </tr>

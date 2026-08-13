@@ -17,16 +17,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.connectors.egress
-  params:
-    scope: params.scope
-    host: params.host
-    remove: params.remove
-    confirm: params.confirm
-    roles: principal.roles
-    actor: principal.loginId
-
+steps:
+  - id: main
+    service:
+      name: studio.connectors.egress
+      params:
+        scope: params.scope
+        host: params.host
+        remove: params.remove
+        confirm: params.confirm
+        roles: principal.roles
+        actor: principal.loginId
 response:
   redirect:
     status: 303

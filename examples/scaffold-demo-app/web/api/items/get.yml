@@ -24,20 +24,21 @@ input:
 security:
   policy: app.read
 
-sql:
-  file: search.sql
-  mode: query
-  params:
-    q: query.q
-    limit: query.limit
-    offset: query.offset
-
+sources:
+  main:
+    sql:
+      file: search.sql
+      mode: query
+      params:
+        q: query.q
+        limit: query.limit
+        offset: query.offset
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows
       meta:
-        count: sql.rowCount
+        count: main.rowCount
         limit: params.limit
         offset: params.offset

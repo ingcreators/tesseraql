@@ -482,7 +482,7 @@ public final class ManifestLoader {
                     decisions.resolveForWorkflow(alias, use, source.toString())));
             resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
                     transition.from(), transition.to(), transition.guard(),
-                    transition.command(), transition.params(), transition.assign(),
+                    transition.command(), transition.assign(),
                     transition.security(), merged, transition.stamp()));
         }
         // A dispatch consumes shared decisions the way its members do
@@ -496,7 +496,7 @@ public final class ManifestLoader {
                     dispatch.oneOf()));
         }
         return new io.tesseraql.yaml.model.WorkflowDefinition(def.version(), def.id(),
-                def.kind(), def.mode(), def.document(), def.http(), def.security(),
+                def.kind(), def.mode(), def.document(), def.basePath(), def.security(),
                 def.initial(), def.states(), resolved, def.deadlines(), dispatches,
                 def.reminders());
     }

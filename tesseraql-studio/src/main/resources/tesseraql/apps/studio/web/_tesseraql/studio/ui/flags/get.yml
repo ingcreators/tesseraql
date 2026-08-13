@@ -11,16 +11,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.flags
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.flags
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200
     template: flags.html
     model:
-      f: sql
+      f: main
       saved: params.saved
       removed: params.removed

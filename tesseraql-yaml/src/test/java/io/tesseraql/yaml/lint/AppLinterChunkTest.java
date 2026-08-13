@@ -39,7 +39,7 @@ class AppLinterChunkTest {
     @Test
     void aReaderWithoutOrderByIsAnError(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      reader: { file: reader.sql }\n      writer: { file: writer.sql }",
+                "      reader:\n        sql:\n          file: reader.sql\n      writer:\n        sql:\n          file: writer.sql",
                 "select id from orders where id > /* chunk.after */ 0\n"));
 
         assertThat(findings).anySatisfy(finding -> {
@@ -51,7 +51,7 @@ class AppLinterChunkTest {
     @Test
     void aReaderThatNeverBindsTheCheckpointIsAWarning(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      reader: { file: reader.sql }\n      writer: { file: writer.sql }",
+                "      reader:\n        sql:\n          file: reader.sql\n      writer:\n        sql:\n          file: writer.sql",
                 "select id from orders order by id\n"));
 
         assertThat(findings).anySatisfy(finding -> {
@@ -64,12 +64,13 @@ class AppLinterChunkTest {
     @Test
     void aChunkWithoutReaderOrWriterAndBadNumbersAreErrors(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      writer: { file: writer.sql }\n      commitEvery: 5", null));
+                "      writer:\n        sql:\n          file: writer.sql\n      commitEvery: 5",
+                null));
         assertThat(findings).anySatisfy(
                 finding -> assertThat(finding.code()).isEqualTo("TQL-BATCH-4206"));
 
         findings = new AppLinter().lint(app(dir,
-                "      reader: { file: reader.sql }\n      writer: { file: writer.sql }\n"
+                "      reader:\n        sql:\n          file: reader.sql\n      writer:\n        sql:\n          file: writer.sql\n"
                         + "      commitEvery: 0\n      onError: skip\n      skipLimit: -1",
                 "select id from orders where id > /* chunk.after */ 0 order by id\n"));
         assertThat(findings.stream().filter(f -> "TQL-BATCH-4206".equals(f.code()))).hasSize(2);
@@ -78,7 +79,7 @@ class AppLinterChunkTest {
     @Test
     void aWellFormedChunkStepIsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
-                "      reader: { file: reader.sql }\n      writer: { file: writer.sql }\n"
+                "      reader:\n        sql:\n          file: reader.sql\n      writer:\n        sql:\n          file: writer.sql\n"
                         + "      key: id\n      commitEvery: 500\n"
                         + "      onError: skip\n      skipLimit: 10",
                 "select id from orders\n/*%if chunk.after != null */\n"
@@ -100,10 +101,16 @@ class AppLinterChunkTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: revalue
-                    sql: { file: writer.sql, mode: update }
+                    sql:
+                      file: writer.sql
+                      mode: update
                     chunk:
-                      reader: { file: reader.sql }
-                      writer: { file: writer.sql }
+                      reader:
+                        sql:
+                          file: reader.sql
+                      writer:
+                        sql:
+                          file: writer.sql
                 """);
         Files.writeString(dir.resolve("batch/load/reader.sql"), "select 1 order by 1\n");
         Files.writeString(dir.resolve("batch/load/writer.sql"), "select 1\n");

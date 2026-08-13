@@ -24,12 +24,12 @@ anywhere on the read side.
 
 **A named query can already reference an earlier result.** `NamedQueryBinder` resolves each
 named query's `params:` against the live execution context, and says so in its javadoc — a
-`params:` entry may read `sql.rows`. No test covers it, no page documents it, and no example
+`params:` entry may read `main.rows`. No test covers it, no page documents it, and no example
 in the repository uses it. It is a wired capability, not a feature.
 
 **Path resolution is plain dotted segments.** `EvaluationContext.resolve` walks map keys,
 getters, and fields, with virtual `size`/`length`/`empty`. There is no indexing and no
-projection: `sql.rows[0].id` and "the `id` of every row" are both unsayable. Whatever a param
+projection: `main.rows[0].id` and "the `id` of every row" are both unsayable. Whatever a param
 binds from a result set, it binds whole.
 
 **`nest:` composes, and only in JSON.** `JsonResponseRenderer.nest` groups a named query's
@@ -65,7 +65,7 @@ per-row execution in the framework, and it is one level deep by construction.
 
 **An export's model already mirrors a route's context.** Wave 2 of the export pipeline
 published the extraction as `sql` and spooled every named result, so a template reads
-`${sql.rows}` and `${header.rows}` the same way. `ExportModel` is built either `streaming`
+`${main.rows}` and `${header.rows}` the same way. `ExportModel` is built either `streaming`
 (a single-pass iterator) or `repeatable` (an iterable), and asking for the wrong one fails
 loudly (`TQL-LD-2856`).
 
@@ -849,7 +849,7 @@ such a query. `TQL-SEC-4142` exists so the choice is made at build time rather t
 forty round trips looks exactly like one that makes one.
 
 **Read-side param chaining stays undecided until slice 2.** `NamedQueryBinder`'s ability to bind
-`sql.rows` is untested and undocumented today. Once `enrich:` exists it is the wrong way to do
+`main.rows` is untested and undocumented today. Once `enrich:` exists it is the wrong way to do
 the same thing, and the honest options are to document named queries as mutually independent
 and refuse row-derived params, or to keep the capability and cover it. Slice 2 picks one; leaving
 it in its current state is not an option.

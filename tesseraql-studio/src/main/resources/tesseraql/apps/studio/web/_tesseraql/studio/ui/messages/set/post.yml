@@ -16,15 +16,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.messageSet
-  params:
-    locale: params.locale
-    key: params.key
-    value: params.value
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.messageSet
+      params:
+        locale: params.locale
+        key: params.key
+        value: params.value
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/messages?saved=1

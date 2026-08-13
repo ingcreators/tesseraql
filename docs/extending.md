@@ -46,8 +46,10 @@ A **service provider** exposes runtime state that SQL cannot reach — execution
 file trees, drafts. A route binds one instead of a SQL file:
 
 ```yaml
-sql:
-  service: ops.lanes
+sources:
+  main:
+    sql:
+      service: ops.lanes
 ```
 
 The interface is one method:
@@ -66,7 +68,7 @@ Three rules the runtime holds you to:
   configure.
 - **Query routes must be side-effect free.** A provider bound on a command route may perform
   runtime administration; one bound on a query route may not.
-- **Steps cannot bind a provider.** `service:` is legal on `sql:` and on `queries.<name>:`,
+- **Steps cannot bind a provider.** `service:` is legal on any `sources:` entry,
   and is refused at build time inside a command's `steps:` — a transactional step must be a
   SQL file or a sequence.
 

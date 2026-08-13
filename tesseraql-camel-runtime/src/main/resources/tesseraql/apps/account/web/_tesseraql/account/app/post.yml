@@ -17,14 +17,15 @@ input:
     required: false
     maxLength: 2000
 
-sql:
-  service: account.app.save
-  params:
-    key: params.key
-    value: params.value
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.app.save
+      params:
+        key: params.key
+        value: params.value
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

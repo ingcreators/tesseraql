@@ -3,12 +3,14 @@ id: tql.studio.docs.domains
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.domains
+sources:
+  main:
+    service:
+      name: docs.domains
 
 response:
   html:
     status: 200
     template: domains.html
     model:
-      dom: sql
+      dom: main

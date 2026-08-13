@@ -188,13 +188,15 @@ class WriteSidePolicyIntegrationTest {
                   id: { type: integer, writable: false }
                   note: { type: string, maxLength: 200 }
                   salary: { type: integer, min: 0, policy: hr.write }
-                sql:
-                  file: update.sql
-                  mode: update
-                  params:
-                    id: params.id
-                    note: params.note
-                    salary: params.salary
+                steps:
+                  - id: main
+                    sql:
+                      file: update.sql
+                      mode: update
+                      params:
+                        id: params.id
+                        note: params.note
+                        salary: params.salary
                 response:
                   json:
                     status: 200
@@ -220,11 +222,13 @@ class WriteSidePolicyIntegrationTest {
                   policy: emp.read
                 input:
                   id: { type: integer, writable: false }
-                sql:
-                  file: select.sql
-                  mode: query
-                  params:
-                    id: params.id
+                sources:
+                  main:
+                    sql:
+                      file: select.sql
+                      mode: query
+                      params:
+                        id: params.id
                 response:
                   html:
                     view: employees.edit.form

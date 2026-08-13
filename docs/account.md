@@ -204,7 +204,7 @@ options, `1033` default outside the acceptable values) validates the file exactl
 the runtime loads it. A `preference` NOTE coverage kind lists the declared keys, like
 the `oidc` kind. The account page resolves each `label` through the message catalog
 and falls back to the raw key untranslated; the `preference.<key>` namespace feeds
-route expressions, templates, and `sql.params` mappings — declared keys only, stored
+route expressions, templates, and a binding's `params:` mappings — declared keys only, stored
 value else declared default.
 
 ## Error taxonomy

@@ -225,9 +225,13 @@ class RemoteLakeIntegrationTest {
                     cron: "0 0 4 1 1 ? 2099"
                 pipeline:
                   - id: ensure
-                    sql: { file: ensure-history.sql, mode: update }
+                    sql:
+                      file: ensure-history.sql
+                      mode: update
                   - id: append
-                    sql: { file: append-history.sql, mode: update }
+                    sql:
+                      file: append-history.sql
+                      mode: update
                 """);
         Files.writeString(job.resolve("ensure-history.sql"),
                 "create table if not exists lake.price_history"
@@ -247,11 +251,17 @@ class RemoteLakeIntegrationTest {
                     cron: "0 0 4 1 1 ? 2099"
                 pipeline:
                   - id: retire
-                    sql: { file: retire-history.sql, mode: update }
+                    sql:
+                      file: retire-history.sql
+                      mode: update
                   - id: expire
-                    sql: { file: expire-now.sql, mode: query }
+                    sql:
+                      file: expire-now.sql
+                      mode: query
                   - id: cleanup
-                    sql: { file: cleanup-files.sql, mode: query }
+                    sql:
+                      file: cleanup-files.sql
+                      mode: query
                 """);
         Files.writeString(job.resolve("retire-history.sql"),
                 "delete from lake.price_history where loaded_at < now()\n");
@@ -268,16 +278,18 @@ class RemoteLakeIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: current.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: current.sql
+                      mode: query
                   firstRun:
-                    file: first-run.sql
+                    sql:
+                      file: first-run.sql
                 response:
                   json:
                     body:
-                      current: sql.rows
+                      current: main.rows
                       firstRun: firstRun.rows
                 """);
         Files.writeString(board.resolve("current.sql"),
@@ -314,13 +326,15 @@ class RemoteLakeIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: drop.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: drop.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(adhoc.resolve("drop.sql"), """
                 select category, total
@@ -336,13 +350,15 @@ class RemoteLakeIntegrationTest {
                 kind: route
                 recipe: query-json
                 datasource: analytics
-                sql:
-                  file: outofscope.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: outofscope.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outOfScope.resolve("outofscope.sql"),
                 "select count(*) as n from glob('s3://other/**')\n");

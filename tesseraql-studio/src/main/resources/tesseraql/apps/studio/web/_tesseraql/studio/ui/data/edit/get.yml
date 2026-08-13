@@ -26,21 +26,22 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.data.editForm
-  params:
-    table: params.table
-    k0: params.k0
-    v0: params.v0
-    k1: params.k1
-    v1: params.v1
-    k2: params.k2
-    v2: params.v2
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.data.editForm
+      params:
+        table: params.table
+        k0: params.k0
+        v0: params.v0
+        k1: params.k1
+        v1: params.v1
+        k2: params.k2
+        v2: params.v2
+        roles: principal.roles
 response:
   html:
     status: 200
     template: edit.html
     model:
-      row: sql
+      row: main

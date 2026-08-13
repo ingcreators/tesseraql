@@ -186,13 +186,15 @@ class MetricsEndpointIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 'pong' as answer\n");
         // A poll-triggered job whose sftp host is not in the (unset) allow-list: refused
@@ -215,8 +217,10 @@ class MetricsEndpointIntegrationTest {
                   format: csv
                   columns:
                     - orderNo
-                  sql:
-                    file: noop.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: noop.sql
                 """);
         Files.writeString(jobDir.resolve("noop.sql"), "select 1\n");
         // A runnable tasklet: the job-metrics test drives one run through the executor so
@@ -227,8 +231,12 @@ class MetricsEndpointIntegrationTest {
                 version: tesseraql/v1
                 id: metrics.tick
                 kind: job
-                recipe: batch-tasklet
-                sql: { file: tick.sql, mode: query }
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: tick.sql
+                      mode: query
                 """);
         Files.writeString(tickDir.resolve("tick.sql"), "select 1 as one\n");
         return target;

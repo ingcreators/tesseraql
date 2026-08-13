@@ -12,14 +12,15 @@ input:
 security:
   policy: rfq.read
 
-sql:
-  file: suppliers.sql
-  mode: query
-  params:
-    id: path.id
-
+sources:
+  main:
+    sql:
+      file: suppliers.sql
+      mode: query
+      params:
+        id: path.id
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows

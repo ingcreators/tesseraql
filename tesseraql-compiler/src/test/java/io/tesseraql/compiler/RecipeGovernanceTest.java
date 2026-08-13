@@ -157,13 +157,15 @@ class RecipeGovernanceTest {
                 security:
                   auth: public
                 %s
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(policy), "list.sql");
 
         route(dir, "web/items/create", "post.yml", """
@@ -174,9 +176,11 @@ class RecipeGovernanceTest {
                 security:
                   auth: public
                 %s
-                sql:
-                  file: insert.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
                 response:
                   json:
                     body:
@@ -193,9 +197,11 @@ class RecipeGovernanceTest {
                 %s
                 idempotency:
                   required: true
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   html:
                     template: page.html
@@ -210,9 +216,11 @@ class RecipeGovernanceTest {
                 security:
                   auth: public
                 %s
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 export:
                   format: csv
                 """.formatted(policy), "list.sql");
@@ -228,8 +236,10 @@ class RecipeGovernanceTest {
                 import:
                   format: csv
                   columns: [name]
-                  sql:
-                    file: insert.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: insert.sql
                 """.formatted(policy), "insert.sql");
 
         route(dir, "web/items/dump", "get.yml", """
@@ -242,8 +252,10 @@ class RecipeGovernanceTest {
                 %s
                 export:
                   format: csv
-                  sql:
-                    file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 """.formatted(policy), "list.sql");
 
         route(dir, "consume/items", "consumed.yml", """
@@ -257,9 +269,11 @@ class RecipeGovernanceTest {
                 %s
                 input:
                   name: { type: string }
-                sql:
-                  file: insert.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
                 """.formatted(policy), "insert.sql");
 
         route(dir, "mcp", "tool.yml", """
@@ -271,13 +285,15 @@ class RecipeGovernanceTest {
                 security:
                   policy: app.read
                 %s
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(policy), "list.sql");
 
         route(dir, "mcp", "write.yml", """
@@ -291,9 +307,11 @@ class RecipeGovernanceTest {
                 %s
                 input:
                   name: { type: string }
-                sql:
-                  file: insert.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
                 emit:
                   - items.changed
                 """.formatted(policy), "insert.sql");

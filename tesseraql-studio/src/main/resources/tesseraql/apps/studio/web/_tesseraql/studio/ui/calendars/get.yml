@@ -20,19 +20,20 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.calendars.view
-  params:
-    name: params.name
-    month: params.month
-    dayOfMonth: params.dayOfMonth
-    shift: params.shift
-    saved: params.saved
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.calendars.view
+      params:
+        name: params.name
+        month: params.month
+        dayOfMonth: params.dayOfMonth
+        shift: params.shift
+        saved: params.saved
+        roles: principal.roles
 response:
   html:
     status: 200
     template: calendars.html
     model:
-      cal: sql
+      cal: main

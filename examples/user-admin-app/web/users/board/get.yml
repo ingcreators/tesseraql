@@ -6,9 +6,10 @@ recipe: query-html
 security:
   policy: users.read
 
-sql:
-  file: board.sql
-
+sources:
+  main:
+    sql:
+      file: board.sql
 response:
   html:
     view: users.board

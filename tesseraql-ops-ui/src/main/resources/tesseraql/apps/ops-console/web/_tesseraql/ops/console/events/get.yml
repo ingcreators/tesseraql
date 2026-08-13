@@ -13,16 +13,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: ops.events
-  params:
-    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-    permissions: principal.permissions
-
+sources:
+  main:
+    service:
+      name: ops.events
+      params:
+        # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
 response:
   html:
     status: 200
     template: events.html
     model:
-      events: sql
+      events: main
       redelivered: params.redelivered

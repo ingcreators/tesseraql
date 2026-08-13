@@ -271,15 +271,14 @@ class NotificationIntegrationTest {
         // dead-letter ceiling so the retry path is quick to observe.
         yaml = yaml.replace("    # alerts:\n    #   channel: audit-webhook",
                 "    alerts:\n      channel: audit-webhook");
+        // The app already allow-lists localhost for the audit webhook, and appending a second
+        // http: block replaced its credentials rather than adding to them — a duplicate key
+        // the parser used to resolve last-one-wins.
         yaml += """
 
                   outbox:
                     dispatch:
                       maxAttempts: 2
-                  http:
-                    outbound:
-                      allowedHosts:
-                        - localhost
                 """;
         Files.writeString(config, yaml);
 
@@ -287,8 +286,8 @@ class NotificationIntegrationTest {
         // dead-letter test can follow that exact event through the operations API.
         Path provision = target.resolve("web/api/users/provision/post.yml");
         Files.writeString(provision, Files.readString(provision).replace(
-                "      eventId: sql.eventId",
-                "      eventId: sql.eventId\n      auditEventId: notify.audit.eventId"));
+                "      eventId: main.eventId",
+                "      eventId: main.eventId\n      auditEventId: notify.audit.eventId"));
 
         // A job whose SQL fails, to assert the job-failure alert.
         Path broken = target.resolve("batch/broken");
@@ -297,10 +296,12 @@ class NotificationIntegrationTest {
                 version: tesseraql/v1
                 id: user.broken
                 kind: job
-                recipe: batch-tasklet
-                sql:
-                  file: broken.sql
-                  mode: update
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: broken.sql
+                      mode: update
                 """);
         Files.writeString(broken.resolve("broken.sql"),
                 "update no_such_table set x = 1\n");

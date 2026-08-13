@@ -10,6 +10,7 @@ fields:
   - { name: requested_by, label: Requested by }
   - { name: last_action, label: Last action }
   - { name: acted_by, label: Acted by }
+
 children:
   - source: history
     title: Approval history

@@ -44,9 +44,11 @@ class AppLinterRuleSetsTest {
                   delta: { type: integer, required: true }
                 validate:
                 %s
-                sql:
-                  file: adjust.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: adjust.sql
+                      mode: update
                 response:
                   json:
                     body:

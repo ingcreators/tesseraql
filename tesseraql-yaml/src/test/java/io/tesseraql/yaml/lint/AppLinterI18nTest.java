@@ -79,9 +79,11 @@ class AppLinterI18nTest {
                     rule: body.c != null
                     field: c
                     message: tql.input.required
-                sql:
-                  file: insert.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
                 response:
                   json:
                     body:

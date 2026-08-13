@@ -241,13 +241,15 @@ class RouteRecipeIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(routeDir.resolve("ping.sql"), "select 1 as ok\n;\n");
 
@@ -266,19 +268,21 @@ class RouteRecipeIntegrationTest {
                   n:
                     type: integer
                     default: 7
-                sql:
-                  file: one.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: one.sql
+                      mode: query
                   second:
-                    file: two.sql
-                    mode: query
-                    params:
-                      n: query.n
+                    sql:
+                      file: two.sql
+                      mode: query
+                      params:
+                        n: query.n
                 response:
                   json:
                     body:
-                      first: sql.rows
+                      first: main.rows
                       second: second.rows
                 """);
         Files.writeString(multiDir.resolve("one.sql"), "select 1 as a\n;\n");
@@ -299,11 +303,13 @@ class RouteRecipeIntegrationTest {
                   n:
                     type: integer
                     default: 5
-                sql:
-                  file: touch.sql
-                  mode: update
-                  params:
-                    n: query.n
+                steps:
+                  - id: main
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        n: query.n
                 response:
                   redirect:
                     location: /sysapp/multi?n={params.n}

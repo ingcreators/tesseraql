@@ -186,13 +186,15 @@ class InventoryAnalyticsIntegrationTest {
                 # require a session here.
                 security:
                   auth: public
-                sql:
-                  file: totals.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: totals.sql
+                      mode: query
                   drop:
-                    file: drop.sql
-                    datasource: analytics
+                    sql:
+                      file: drop.sql
+                      datasource: analytics
                 response:
                   html:
                     status: 200
@@ -208,12 +210,11 @@ class InventoryAnalyticsIntegrationTest {
         Files.writeString(board.resolve("tenantboard.view.yml"), """
                 version: tesseraql/v1
                 id: tenantboard.page
-                version: tesseraql/v1
                 kind: view
                 recipe: dashboard
                 title: Tenant analytics
                 panels:
-                  - { type: stat, source: sql, column: products, title: Products }
+                  - { type: stat, source: main, column: products, title: Products }
                   - type: table
                     source: drop
                     title: Monthly drop

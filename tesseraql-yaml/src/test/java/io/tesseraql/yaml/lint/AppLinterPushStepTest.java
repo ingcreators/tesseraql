@@ -28,7 +28,9 @@ class AppLinterPushStepTest {
                   - id: extract
                     export:
                       format: csv
-                      sql: { file: report.sql, mode: query }
+                    sql:
+                      file: report.sql
+                      mode: query
                   - id: deliver
                     push:
                 %s
@@ -42,7 +44,7 @@ class AppLinterPushStepTest {
     void aWellFormedLocalPushIsClean(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      transport: local\n      path: outbox\n"
-                        + "      file: step.extract.transferId"));
+                        + "      file: steps.extract.transferId"));
 
         assertThat(findings).noneMatch(finding -> "TQL-YAML-1042".equals(finding.code())
                 || "TQL-FIELD-2004".equals(finding.code()));
@@ -59,12 +61,12 @@ class AppLinterPushStepTest {
 
         findings = new AppLinter().lint(app(dir,
                 "      transport: carrier-pigeon\n      path: outbox\n"
-                        + "      file: step.extract.transferId"));
+                        + "      file: steps.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> assertThat(finding.message())
                 .contains("must be local, sftp, or ftps"));
 
         findings = new AppLinter().lint(app(dir,
-                "      transport: local\n      file: step.extract.transferId"));
+                "      transport: local\n      file: steps.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> assertThat(finding.message())
                 .contains("needs path:"));
     }
@@ -73,7 +75,7 @@ class AppLinterPushStepTest {
     void aRemoteTargetNeedsHostAndCredential(@TempDir Path dir) throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      transport: sftp\n      path: incoming\n"
-                        + "      file: step.extract.transferId"));
+                        + "      file: steps.extract.transferId"));
 
         assertThat(findings)
                 .filteredOn(finding -> "TQL-YAML-1042".equals(finding.code()))
@@ -87,7 +89,7 @@ class AppLinterPushStepTest {
         // SFTP without the push block's known-hosts file: a warning, like poll's 4084.
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      transport: sftp\n      host: partner.example\n      path: incoming\n"
-                        + "      credential: partner\n      file: step.extract.transferId"));
+                        + "      credential: partner\n      file: steps.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-SEC-4084");
             assertThat(finding.severity()).isEqualTo("warning");
@@ -97,7 +99,7 @@ class AppLinterPushStepTest {
         // FTPS without the push block's trust store: an error, like poll's 4085.
         findings = new AppLinter().lint(app(dir,
                 "      transport: ftps\n      host: partner.example\n      path: incoming\n"
-                        + "      credential: partner\n      file: step.extract.transferId"));
+                        + "      credential: partner\n      file: steps.extract.transferId"));
         assertThat(findings).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-SEC-4085");
             assertThat(finding.severity()).isEqualTo("error");
@@ -110,7 +112,7 @@ class AppLinterPushStepTest {
             throws Exception {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "      transport: sftp\n      host: partner.example\n      path: incoming\n"
-                        + "      credential: partner\n      file: step.extract.transferId\n"
+                        + "      credential: partner\n      file: steps.extract.transferId\n"
                         + "      as: ../escape.csv"));
 
         assertThat(findings).anySatisfy(finding -> {

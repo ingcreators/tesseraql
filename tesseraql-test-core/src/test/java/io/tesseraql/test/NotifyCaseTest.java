@@ -63,14 +63,16 @@ class NotifyCaseTest {
                       email: body.email
                   audit:
                     channel: audit-webhook
-                sql:
-                  file: insert-member.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.createDirectories(appHome.resolve("batch/cleanup"));
         Files.writeString(appHome.resolve("batch/cleanup/job.yml"), """
@@ -87,7 +89,7 @@ class NotifyCaseTest {
                     notify:
                       channel: ops-mail
                       payload:
-                        purged: step.purge.affectedRows
+                        purged: steps.purge.affectedRows
                 """);
         runner = new TestRunner(null, appHome);
     }
@@ -127,7 +129,7 @@ class NotifyCaseTest {
     @Test
     void aJobCaseEvaluatesNotifySteps() {
         TestReport report = run(new TestCase("job report step", null, null,
-                Map.of("step", Map.of("purge", Map.of("affectedRows", 7))),
+                Map.of("steps", Map.of("purge", Map.of("affectedRows", 7))),
                 new Expectation(1, List.of(
                         Map.of("notify", "report", "channel", "ops-mail", "purged", 7))),
                 null, new NotifyTarget(null, "members.cleanup", null), null));

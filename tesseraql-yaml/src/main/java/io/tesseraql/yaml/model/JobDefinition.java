@@ -7,18 +7,19 @@ import java.util.Map;
 /**
  * A TesseraQL Simple YAML batch job definition (design ch. 6.1, 6.5).
  *
- * <p>A {@code batch-tasklet} job runs a single {@link #sql} statement; a {@code batch-pipeline}
- * job runs an ordered list of {@link #pipeline} steps.
+ * <p>A job's work is its {@link #pipeline}: an ordered list of steps, each a binding with an
+ * {@code id} plus its output blocks. The single-statement {@code batch-tasklet} spelling is gone
+ * with its top-level {@code sql:} key (docs/unified-sources.md decision 8) — one statement is a
+ * one-step pipeline, and the surface no longer has a second way to say it.
  *
  * @param version  the DSL version, e.g. {@code tesseraql/v1}
  * @param id       unique job id, e.g. {@code user.dailyMaintenance}
  * @param kind     always {@code job}
- * @param recipe   {@code batch-tasklet} or {@code batch-pipeline}
+ * @param recipe   {@code batch-pipeline}
  * @param trigger  schedule trigger, when present
  * @param input    declared job parameters — the same field contract routes declare
  *                 with {@code input:} (docs/vocabulary-cleanup.md slice 1)
- * @param sql      the single statement for a tasklet job
- * @param pipeline  the steps for a pipeline job
+ * @param pipeline the ordered steps this job runs
  * @param perTenant when true, the job runs once per configured tenant (design ch. 30.3)
  * @param fileImport the {@code import:} block of a poll-triggered {@code file-import} job
  *                 (roadmap Phase 26): the runtime feeds every polled file through it
@@ -36,7 +37,6 @@ public record JobDefinition(
         String datasource,
         TriggerSpec trigger,
         Map<String, InputField> input,
-        SqlBinding sql,
         List<PipelineStep> pipeline,
         boolean perTenant,
         @com.fasterxml.jackson.annotation.JsonProperty("import") ImportSpec fileImport,
@@ -50,26 +50,18 @@ public record JobDefinition(
 
     /** Convenience constructor without overlap/SLA declarations (the pre-track-E shape). */
     public JobDefinition(String version, String id, String kind, String recipe, String datasource,
-            TriggerSpec trigger, Map<String, InputField> input, SqlBinding sql,
+            TriggerSpec trigger, Map<String, InputField> input,
             List<PipelineStep> pipeline, boolean perTenant, ImportSpec fileImport) {
-        this(version, id, kind, recipe, datasource, trigger, input, sql, pipeline, perTenant,
+        this(version, id, kind, recipe, datasource, trigger, input, pipeline, perTenant,
                 fileImport, null, null);
     }
 
     /** Convenience constructor for a job on the main datasource (the pre-duckdb shape). */
     public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
-            Map<String, InputField> input, SqlBinding sql, List<PipelineStep> pipeline,
+            Map<String, InputField> input, List<PipelineStep> pipeline,
             boolean perTenant, ImportSpec fileImport) {
-        this(version, id, kind, recipe, null, trigger, input, sql, pipeline, perTenant,
+        this(version, id, kind, recipe, null, trigger, input, pipeline, perTenant,
                 fileImport, null, null);
-    }
-
-    /** Convenience constructor for a job without an {@code import:} block (the pre-Phase-26 shape). */
-    public JobDefinition(String version, String id, String kind, String recipe, TriggerSpec trigger,
-            Map<String, InputField> input, SqlBinding sql, List<PipelineStep> pipeline,
-            boolean perTenant) {
-        this(version, id, kind, recipe, null, trigger, input, sql, pipeline, perTenant, null,
-                null, null);
     }
 
     /**
@@ -82,11 +74,17 @@ public record JobDefinition(
         return !"concurrent".equals(overlap);
     }
 
-    /** Returns the steps to run: the explicit pipeline, or a single synthetic step for a tasklet. */
+    /**
+     * The per-row statement of a poll-triggered {@code file-import} job: its one pipeline step.
+     * The write used to sit inside {@code import:}, where it looked like a query and was a
+     * write (docs/unified-sources.md decision 7b).
+     */
+    public Binding rowStep() {
+        return pipeline.isEmpty() ? null : pipeline.get(0).sql();
+    }
+
+    /** Returns the steps to run — the pipeline, which is all a job's work has ever been. */
     public List<PipelineStep> effectiveSteps() {
-        if (!pipeline.isEmpty()) {
-            return pipeline;
-        }
-        return sql == null ? List.of() : List.of(new PipelineStep("main", sql));
+        return pipeline;
     }
 }

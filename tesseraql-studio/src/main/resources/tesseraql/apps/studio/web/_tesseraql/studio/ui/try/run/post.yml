@@ -36,22 +36,23 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.tryRun
-  params:
-    method: params.method
-    path: params.path
-    query: params.query
-    body: params.body
-    contentType: params.contentType
-    bearer: params.bearer
-    useSession: params.useSession
-    cookie: params.Cookie
-    csrf: params._csrf
-
+sources:
+  main:
+    service:
+      name: studio.tryRun
+      params:
+        method: params.method
+        path: params.path
+        query: params.query
+        body: params.body
+        contentType: params.contentType
+        bearer: params.bearer
+        useSession: params.useSession
+        cookie: params.Cookie
+        csrf: params._csrf
 response:
   html:
     status: 200
     template: result.html
     model:
-      result: sql
+      result: main

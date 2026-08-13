@@ -3,14 +3,15 @@ id: tql.studio.pages
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.pages
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.pages
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200
     template: pages.html
     model:
-      pg: sql
+      pg: main

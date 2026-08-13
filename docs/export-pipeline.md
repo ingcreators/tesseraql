@@ -494,7 +494,7 @@ decision 2 exists to end. The flagship case of `splitBy` is the one it serves wo
 ### 14. An export's model is shaped like a route's context
 
 The extraction is published as **`sql`**, with `rows` and `rowCount`, exactly as a named query is.
-A template reads `${sql.rows}` and `${header.rows}`, and the only difference left between them is
+A template reads `${main.rows}` and `${header.rows}`, and the only difference left between them is
 the one that is real: which result the export is *about*.
 
 `rowCount` is answerable because a template mode is a buffering mode — its rows are spooled, and a
@@ -505,7 +505,7 @@ The blast radius is one gallery template, the framework's own bundled PDF grid, 
 buys one sentence of explanation instead of two: *an export's template sees what a route's template
 sees*.
 
-Rejected: publishing `rows` **and** `sql.rows`. Two names for one thing is worse than either name.
+Rejected: publishing `rows` **and** `main.rows`. Two names for one thing is worse than either name.
 
 ### 15. Every result an export carries is re-readable and capped
 
@@ -547,7 +547,7 @@ N+1; the grouping machinery already exists and does not need it.
 ## Slices
 
 11. **The model mirrors a route's context, and every result is re-readable** (decisions 14, 15):
-    `sql.rows` in place of `rows`, named results spooled, the cap counting them, and the templates
+    `main.rows` in place of `rows`, named results spooled, the cap counting them, and the templates
     that move with it.
 12. **Per-document values on a split export** (decision 16), over slice 11's re-readable results.
 

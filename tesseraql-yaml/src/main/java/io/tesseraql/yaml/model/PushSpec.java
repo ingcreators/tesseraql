@@ -20,7 +20,7 @@ import java.util.Locale;
  * @param credential a named credential under {@code tesseraql.connectors.push.credentials}
  *                   (remote targets); a local target needs none
  * @param file       a context path resolving to the transfer id whose produced file is
- *                   delivered — typically {@code step.<id>.transferId} from an export step
+ *                   delivered — typically {@code steps.<id>.transferId} from an export step
  * @param as         optional delivered filename ({@code {dotted.path}} placeholders resolve
  *                   against the job context); default: the transfer's own filename
  */

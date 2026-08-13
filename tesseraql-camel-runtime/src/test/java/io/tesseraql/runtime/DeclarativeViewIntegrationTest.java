@@ -240,8 +240,10 @@ class DeclarativeViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: public
-                sql:
-                  file: board.sql
+                sources:
+                  main:
+                    sql:
+                      file: board.sql
                 response:
                   html:
                     view: board
@@ -271,13 +273,15 @@ class DeclarativeViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: public
-                sql:
-                  file: detail.sql
-                  params:
-                    name: path.name
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: detail.sql
+                      params:
+                        name: path.name
                   groups:
-                    file: groups.sql
+                    sql:
+                      file: groups.sql
                 response:
                   html:
                     view: detail
@@ -316,8 +320,10 @@ class DeclarativeViewIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: users.sql
+                sources:
+                  main:
+                    sql:
+                      file: users.sql
                 pagination:
                   size: 2
                   maxSize: 10
@@ -326,7 +332,7 @@ class DeclarativeViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                       meta: page
                 """);
         Files.writeString(paged.resolve("users.sql"),
@@ -344,10 +350,12 @@ class DeclarativeViewIntegrationTest {
                   after:
                     type: integer
                     required: false
-                sql:
-                  file: users.sql
-                  params:
-                    after: params.after
+                sources:
+                  main:
+                    sql:
+                      file: users.sql
+                      params:
+                        after: params.after
                 pagination:
                   strategy: keyset
                   by: id
@@ -356,7 +364,7 @@ class DeclarativeViewIntegrationTest {
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                       meta: page
                 """);
         Files.writeString(cursor.resolve("users.sql"), """
@@ -391,16 +399,18 @@ class DeclarativeViewIntegrationTest {
                     type: string
                     required: false
                     requiredWhen: params.kind == 'noted'
-                sql:
-                  file: probe.sql
-                  mode: query
-                  params:
-                    code: params.code
+                steps:
+                  - id: main
+                    sql:
+                      file: probe.sql
+                      mode: query
+                      params:
+                        code: params.code
                 response:
                   json:
                     status: 200
                     body:
-                      echo: sql.rows
+                      echo: main.rows
                 """);
         Files.writeString(validate.resolve("probe.sql"),
                 "select /* code */ 'AB-1' as code\n");
@@ -415,11 +425,13 @@ class DeclarativeViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: public
-                sql:
-                  file: totals.sql
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: totals.sql
                   groups:
-                    file: group-names.sql
+                    sql:
+                      file: group-names.sql
                 response:
                   html:
                     view: stats
@@ -486,16 +498,18 @@ class DeclarativeViewIntegrationTest {
                     type: string
                     required: true
                     maxLength: 200
-                sql:
-                  file: touch.sql
-                  mode: update
-                  params:
-                    name: params.name
+                steps:
+                  - id: main
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        name: params.name
                 response:
                   json:
                     status: 200
                     body:
-                      updated: sql.rowCount
+                      updated: main.rowCount
                 """);
         Files.writeString(boardCreate.resolve("touch.sql"),
                 "update users set status = status where name = /* name */ 'x'\n");

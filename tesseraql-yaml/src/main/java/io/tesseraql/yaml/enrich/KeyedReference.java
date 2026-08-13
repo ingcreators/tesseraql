@@ -48,6 +48,8 @@ public final class KeyedReference {
     public static final TqlErrorCode AMBIGUOUS_MERGE = new TqlErrorCode(TqlDomain.CAMEL, 3113);
     /** TQL-LD-1: the reference returned more rows than the app's materialization cap. */
     public static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
+    /** TQL-CAMEL-3114: an enrichment's source: names no result set. */
+    public static final TqlErrorCode NO_SIBLING = new TqlErrorCode(TqlDomain.CAMEL, 3114);
 
     /** SQL Server refuses a statement past this many parameters. */
     private static final int SQLSERVER_PARAMETERS = 2100;
@@ -186,9 +188,13 @@ public final class KeyedReference {
         List<List<Object>> keys = List.copyOf(distinct.values());
         Map<Object, List<Map<String, Object>>> reference;
         try {
-            reference = spec.sql() != null
-                    ? fetchSql(environment, context, keys, matchColumns)
-                    : fetchHttp(environment, context, keys, matchColumns);
+            if (spec.composesSource()) {
+                reference = fromSibling(context, matchColumns);
+            } else if (spec.sql() != null) {
+                reference = fetchSql(environment, context, keys, matchColumns);
+            } else {
+                reference = fetchHttp(environment, context, keys, matchColumns);
+            }
         } catch (RuntimeException ex) {
             // Degrading means no key is merged, never the batches that happened to succeed: a
             // list where some rows carry a name and some do not reads as a data problem and
@@ -202,6 +208,48 @@ public final class KeyedReference {
             reference = Map.of();
         }
         return compose(rows, reference);
+    }
+
+    /**
+     * A sibling source, already in the context: its rows group by the match columns exactly as a
+     * fetched reference's do, so everything downstream — the composition, the many-to-one
+     * refusal, the null handling — is the one implementation.
+     *
+     * <p>There is no key set to send anywhere, which is the whole point: {@code nest:} existed
+     * because joining two results the document already had needed no fetch, and it was a second
+     * vocabulary for that reason alone.
+     *
+     * <p>The name is a <em>context path</em>, not a root key. A route's sources sit at the root,
+     * so {@code source: rates} reads the same either way; a job's results sit under
+     * {@code steps}, and a root lookup could never reach one — which made the arm unaddressable
+     * on the whole job side rather than unsupported there.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<Object, List<Map<String, Object>>> fromSibling(Map<String, Object> context,
+            List<String> matchColumns) {
+        Object sibling = new io.tesseraql.core.expr.EvaluationContext(context)
+                .resolve(java.util.Arrays.asList(spec.source().split("\\.")));
+        if (!(sibling instanceof Map<?, ?> result)
+                || !(((Map<String, Object>) result).get("rows") instanceof List<?> siblingRows)) {
+            throw TqlException.builder(NO_SIBLING)
+                    .message("enrich '" + name + "': source: '" + spec.source()
+                            + "' is not a result set with rows"
+                            + (sibling instanceof Map<?, ?> spooled
+                                    && ((Map<String, Object>) spooled).containsKey("spool")
+                                            ? " - it spooled its rows instead of holding them,"
+                                                    + " so load the spool into a table with a"
+                                                    + " chunk: step and reference that"
+                                            : ""))
+                    .source(sourcePath)
+                    .build();
+        }
+        Map<Object, List<Map<String, Object>>> reference = new LinkedHashMap<>();
+        for (Object raw : siblingRows) {
+            Map<String, Object> row = (Map<String, Object>) raw;
+            reference.computeIfAbsent(JoinKeys.of(row, matchColumns),
+                    ignored -> new ArrayList<>()).add(row);
+        }
+        return reference;
     }
 
     /** Whether the reference declares that a failure degrades instead of failing the request. */

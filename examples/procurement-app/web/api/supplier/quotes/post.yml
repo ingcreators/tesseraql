@@ -17,15 +17,16 @@ security:
 # ('Q-' || rfq || '-' || partner), so starting twice is a zero-row no-op, and the
 # invitation row's scope keeps an uninvited partner from starting anything.
 steps:
-  quote:
-    file: start-quote.sql
-    params:
-      rfqId: params.rfqId
-  lines:
-    file: copy-lines.sql
-    params:
-      rfqId: params.rfqId
-
+  - id: quote
+    sql:
+      file: start-quote.sql
+      params:
+        rfqId: params.rfqId
+  - id: lines
+    sql:
+      file: copy-lines.sql
+      params:
+        rfqId: params.rfqId
 response:
   json:
     status: 201

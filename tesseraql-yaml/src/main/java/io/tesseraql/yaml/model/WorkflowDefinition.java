@@ -19,7 +19,11 @@ import java.util.List;
  * @param mode        {@code managed} or {@code app}; {@code null} defers to
  *                    {@code tesseraql.workflow.mode}
  * @param document    the business document the workflow governs
- * @param http        the HTTP mounting of the synthesized transition routes
+ * @param basePath    where the synthesized transition routes mount:
+ *                    {@code POST {basePath}/{key}/<transition-id>}. It was nested under an
+ *                    {@code http:} key, which named a mechanism rather than the thing it held
+ *                    and collided with the route-level {@code http:} the unified source model
+ *                    replaced (docs/unified-sources.md decision 16)
  * @param security    the default security for every transition (a transition may override it)
  * @param initial     the id of the initial state
  * @param states      the declared states
@@ -32,7 +36,7 @@ import java.util.List;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record WorkflowDefinition(String version, String id, String kind, String mode,
-        DocumentSpec document, HttpSpec http, SecuritySpec security, String initial,
+        DocumentSpec document, String basePath, SecuritySpec security, String initial,
         List<StateSpec> states, List<TransitionSpec> transitions, List<DeadlineSpec> deadlines,
         // One-action dispatches (docs/workflow-expressiveness.md slice 3).
         List<DispatchSpec> dispatch,
@@ -50,8 +54,4 @@ public record WorkflowDefinition(String version, String id, String kind, String 
     public record DocumentSpec(String type, String table, String key, String stateColumn) {
     }
 
-    /** How the synthesized transition routes are mounted on HTTP. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record HttpSpec(String basePath) {
-    }
 }

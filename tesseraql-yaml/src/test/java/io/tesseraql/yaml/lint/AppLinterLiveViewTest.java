@@ -31,9 +31,11 @@ class AppLinterLiveViewTest {
                 kind: route
                 recipe: command-json
                 %s
-                sql:
-                  file: approve.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: approve.sql
+                      mode: update
                 response:
                   json:
                     status: 200
@@ -51,8 +53,10 @@ class AppLinterLiveViewTest {
                 id: orders.list
                 kind: route
                 recipe: query-html
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   html:
                     view: orders
@@ -118,12 +122,14 @@ class AppLinterLiveViewTest {
                 security:
                   policy: app.read
                 emit: orders.changed
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   json:
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.writeString(dir.resolve("mcp/orders.sql"), "select 1\n");
 
@@ -141,13 +147,15 @@ class AppLinterLiveViewTest {
                 kind: route
                 recipe: query-json
                 emit: orders.changed
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
                 && "TQL-YAML-1038".equals(finding.code()));

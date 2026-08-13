@@ -19,10 +19,10 @@ import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.AdmissionSpec;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.IdempotencySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
-import io.tesseraql.yaml.model.SqlBinding;
 import java.nio.file.Path;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.ProcessorDefinition;
@@ -303,11 +303,13 @@ public final class RouteCompiler {
      */
     private static boolean usesTransactionalCommand(RouteDefinition definition) {
         return definition.outbox() != null
-                || !definition.steps().isEmpty()
                 || !definition.validate().isEmpty()
                 || !definition.notifications().isEmpty()
-                || ("command-json".equals(definition.recipe())
-                        && definition.sql() != null && definition.sql().file() != null);
+                // A step is transactional when it writes on the command's own connection: SQL
+                // or a managed sequence. A contract/service step runs through its component,
+                // which has no place in a JDBC transaction, so it keeps the standard pipeline.
+                || definition.steps().values().stream()
+                        .anyMatch(step -> step.file() != null || step.isSequence());
     }
 
     /**
@@ -395,10 +397,8 @@ public final class RouteCompiler {
                     definition.invalidates()));
         }
         // Named queries still run after the command (outside its transaction), in authored order.
-        for (var entry : definition.queries().entrySet()) {
-            step = step
-                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
+        for (var entry : definition.sources().entrySet()) {
+            step = source(step, routeFile, entry.getKey(), entry.getValue());
         }
         applySessionRotation(step, definition).process(responseRenderer(definition));
         applyIdempotencyComplete(step, definition);
@@ -414,9 +414,11 @@ public final class RouteCompiler {
     private static ProcessorDefinition<?> commandHttpSources(ProcessorDefinition<?> step,
             RouteDefinition definition) {
         ProcessorDefinition<?> fetched = step;
-        for (var entry : definition.http().entrySet()) {
-            fetched = fetched.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                    entry.getKey(), entry.getValue()));
+        for (var entry : definition.sources().entrySet()) {
+            if (entry.getValue().isHttp()) {
+                fetched = fetched.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                        entry.getKey(), entry.getValue().http()));
+            }
         }
         return fetched;
     }
@@ -437,7 +439,7 @@ public final class RouteCompiler {
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                 .resolve(routeDir.resolve(file).normalize(), dialect);
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                definition.id(), definition.sql(), definition.steps(), definition.validate(),
+                definition.id(), definition.steps(), definition.validate(),
                 definition.decide(), definition.notifications(), stepFile, datasource,
                 dialect, definition.outbox(), definition.publish(), definition.errors(),
                 appName, workflow, commandBounds());
@@ -502,11 +504,8 @@ public final class RouteCompiler {
                                 transitionBinding(workflowFile, def, member, managed,
                                         appStore))));
             }
-            RouteDefinition definition = new RouteDefinition("tesseraql/v1", routeId, "route",
-                    "command-json", java.util.Map.of(), null, security, null, null, null, null,
-                    java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                    java.util.Map.of(), java.util.Map.of(), null, null, null, null, null, null,
-                    dispatchResponse(), null, null, null, null, null, null, null);
+            RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, security,
+                    null, java.util.Map.of(), dispatchResponse());
             String direct = "direct:" + routeId;
             if (mountRest) {
                 restEndpoint(builder, "POST", urlPath).to(direct);
@@ -533,10 +532,10 @@ public final class RouteCompiler {
     private RouteFile transitionRouteFile(io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
             io.tesseraql.yaml.model.WorkflowDefinition def,
             io.tesseraql.yaml.model.TransitionSpec transition, String basePath) {
-        io.tesseraql.yaml.model.SqlBinding command = transition.command() == null
+        io.tesseraql.yaml.model.Binding command = transition.commandFile() == null
                 ? null
-                : new io.tesseraql.yaml.model.SqlBinding(transition.command(), null, "update",
-                        commandParams(transition), null, null, null, null, null);
+                : io.tesseraql.yaml.model.Binding.sql(transition.commandFile(), "update",
+                        commandParams(transition));
         io.tesseraql.yaml.model.SecuritySpec security = transition.security() != null
                 ? transition.security()
                 : def.security();
@@ -573,20 +572,17 @@ public final class RouteCompiler {
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
                         java.util.Map.of("ok", Boolean.TRUE, "transition",
                                 "dispatch.transition"),
-                        null, null, null),
+                        null, null),
                 null, null, null, null, null, null);
     }
 
     /** The command-json route a workflow transition compiles to (roadmap Phase 28). */
     private RouteDefinition synthesizedTransition(String routeId,
             io.tesseraql.yaml.model.SecuritySpec security,
-            io.tesseraql.yaml.model.SqlBinding command,
+            io.tesseraql.yaml.model.Binding command,
             io.tesseraql.yaml.model.TransitionSpec transition) {
-        return new RouteDefinition("tesseraql/v1", routeId, "route",
-                "command-json", java.util.Map.of(), null, security, null, null, null, command,
-                java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                transition.decide(), java.util.Map.of(), null, null, null, null, null, null,
-                workflowResponse(), null, null, null, null, null, null, null);
+        return RouteDefinition.synthesizedCommand(routeId, security, command,
+                transition.decide(), workflowResponse());
     }
 
     /** The compiled task-assignment reminder (Phase 20 channels), or {@code null} when undeclared. */
@@ -621,12 +617,8 @@ public final class RouteCompiler {
         if (mountRest) {
             restEndpoint(builder, "POST", urlPath).to(direct);
         }
-        RouteDefinition definition = new RouteDefinition("tesseraql/v1", routeId, "route",
-                "command-json", java.util.Map.of(), null, def.security(), null, null, null, null,
-                java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of(),
-                java.util.Map.of(), null,
-                null, null, null, null, null, workflowResponse(), null, null, null, null,
-                null, null, null);
+        RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, def.security(),
+                null, java.util.Map.of(), workflowResponse());
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
         route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome))
@@ -672,7 +664,7 @@ public final class RouteCompiler {
     private static io.tesseraql.yaml.model.ResponseSpec workflowResponse() {
         return new io.tesseraql.yaml.model.ResponseSpec(
                 new io.tesseraql.yaml.model.ResponseSpec.JsonResponse(200,
-                        java.util.Map.of("ok", Boolean.TRUE), null, null, null),
+                        java.util.Map.of("ok", Boolean.TRUE), null, null),
                 null, null, null, null, null, null);
     }
 
@@ -694,7 +686,7 @@ public final class RouteCompiler {
     }
 
     private static String workflowBasePath(io.tesseraql.yaml.model.WorkflowDefinition def) {
-        String basePath = def.http() == null ? null : def.http().basePath();
+        String basePath = def.basePath();
         if (basePath == null || basePath.isBlank()) {
             basePath = "/" + def.id();
         }
@@ -773,7 +765,7 @@ public final class RouteCompiler {
                 .stop()
                 .end();
         route.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                routeId, definition.sql(), definition.steps(), definition.validate(),
+                routeId, definition.steps(), definition.validate(),
                 definition.decide(), definition.notifications(), stepFile, datasource, dialect,
                 definition.outbox(), definition.publish(), definition.errors(), appName,
                 commandBounds()));
@@ -791,10 +783,10 @@ public final class RouteCompiler {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
         Path routeDir = routeFile.source().getParent();
-        if (spec != null && (spec.sql() != null || spec.after() != null)) {
-            throw new TqlException(INVALID_EXPORT, "Route '" + routeId + "': query-export reads"
-                    + " its query from the route's sql: block and has no after: hook - use the"
-                    + " file-export recipe for asynchronous extraction with follow-up statements");
+        if (spec != null && spec.after() != null) {
+            throw new TqlException(INVALID_EXPORT, "Route '" + routeId + "': query-export has no"
+                    + " after: hook - use the file-export recipe for asynchronous extraction"
+                    + " with follow-up statements");
         }
         String format = spec != null && spec.format() != null ? spec.format() : "csv";
         io.tesseraql.core.files.FileCodec codec = io.tesseraql.core.files.FileCodecs.discover()
@@ -811,19 +803,19 @@ public final class RouteCompiler {
         if (mountRest) {
             restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
         }
-        Path sqlPath = routeDir.resolve(definition.sql().file()).normalize();
+        Path sqlPath = routeDir.resolve(definition.main().file()).normalize();
         // The export URI is hand-built because its mode and filename are not a binding's, but it
         // carries the same execution parameters every other endpoint does. Omitting them meant a
         // dialect variant was never picked up, the statement ran with no timeout, and on
         // PostgreSQL the default streaming profile left autocommit on - so the driver ignored
         // the fetch size and buffered the whole result set, which is exactly what streaming an
         // export exists to avoid.
-        String exportDatasource = bindingDatasource(definition.sql(),
+        String exportDatasource = bindingDatasource(definition.main(),
                 definition.effectiveDatasource());
         String sqlUri = "tesseraql-sql:file:" + sqlPath
                 + "?datasource=" + exportDatasource
                 + "&mode=query-export&filename=" + exportFilename(definition, codec)
-                + executionParams(exportDatasource, definition.sql());
+                + executionParams(exportDatasource, definition.main());
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
@@ -839,8 +831,8 @@ public final class RouteCompiler {
                         "tesseraql.files.locale"),
                 formatDeclaration(spec == null ? null : spec.timezone(),
                         "tesseraql.files.timezone"),
-                declaredExportRowCap(spec, format), exportQueries(spec, routeDir),
-                definition.http().keySet(), enrichProcessors(routeDir, definition)))
+                declaredExportRowCap(spec, format), exportQueries(definition, routeDir),
+                httpSourceNames(definition), enrichProcessors(routeDir, definition)))
                 .to(sqlUri);
     }
 
@@ -852,7 +844,8 @@ public final class RouteCompiler {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
         String routeId = definition.id();
-        Path rowSql = routeFile.source().getParent().resolve(spec.sql().file()).normalize();
+        Path rowSql = routeFile.source().getParent()
+                .resolve(definition.rowStep().file()).normalize();
 
         String direct = "direct:" + routeId;
         if (mountRest) {
@@ -877,7 +870,9 @@ public final class RouteCompiler {
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
         Path routeDir = routeFile.source().getParent();
-        Path querySql = routeDir.resolve(spec.sql().file()).normalize();
+        // The rows an export writes are the document's main source, on every export surface
+        // (docs/unified-sources.md, decision 7).
+        Path querySql = routeDir.resolve(definition.main().file()).normalize();
         String afterTiming = spec.after() == null ? null : spec.after().effectiveTiming();
         Path afterSql = spec.after() == null
                 ? null
@@ -908,7 +903,7 @@ public final class RouteCompiler {
                 formatDeclaration(spec.timezone(), "tesseraql.files.timezone"),
                 spec.filename(), querySql, afterTiming, afterSql,
                 declaredExportRowCap(spec, spec.format()),
-                exportQueries(spec, routeDir), definition.http().keySet(),
+                exportQueries(definition, routeDir), httpSourceNames(definition),
                 enrichProcessors(routeDir, definition)));
         mountTransferStatus(builder, routeFile, routeId);
 
@@ -1036,21 +1031,23 @@ public final class RouteCompiler {
             step = step
                     .process(new io.tesseraql.compiler.binding.PageBinder(definition.pagination()));
         }
-        // A route may have no data binding at all (the page recipe: forms, static pages).
-        if (definition.sql() != null) {
-            step = step.to(executionUri(routeFile, definition.sql(), "sql"));
+        // Named sources run in authored order, each result keyed under its name — `main`
+        // included, which is why there is no primary step beside this loop any more: the
+        // primary was the one result that published under a mechanism's name ("sql") instead
+        // of its own (docs/unified-sources.md decision 10). A route may declare no source at
+        // all (the page recipe: forms, static pages). One loop, because the mechanism is the
+        // entry's own arm: two loops meant a SQL source could never read an earlier HTTP one,
+        // for no reason a reader of the document could see.
+        for (var entry : definition.sources().entrySet()) {
+            step = source(step, routeFile, entry.getKey(), entry.getValue());
         }
-        // Additional named queries run in authored order, each result keyed under its name.
-        for (var entry : definition.queries().entrySet()) {
-            step = step
-                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(routeFile, entry.getValue(), entry.getKey()));
-        }
-        // http: sources run after the SQL, each keyed under its name like a named query
-        // (docs/connectors.md, "HTTP sources") — the response composes them, never the SQL.
-        for (var entry : definition.http().entrySet()) {
-            step = step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                    entry.getKey(), entry.getValue()));
+        // A command whose statements are contract/service calls is not transactional — those
+        // run through their own components, not the command's JDBC connection — so its steps
+        // execute here, publishing under steps.<id> exactly as the transactional processor's do.
+        for (var entry : definition.steps().entrySet()) {
+            step = step.process(new io.tesseraql.compiler.binding.NamedQueryBinder(
+                    entry.getValue()))
+                    .to(executionUri(routeFile, entry.getValue(), "steps." + entry.getKey()));
         }
         // enrich: runs last of the data stage: it reads a result set the earlier steps
         // published and writes it back enriched (docs/lookups.md).
@@ -1059,6 +1056,46 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.PageHeaders());
         }
         return step;
+    }
+
+    /** The names of the sources whose arm is an outbound call. */
+    private static java.util.Set<String> httpSourceNames(RouteDefinition definition) {
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        definition.sources().forEach((name, binding) -> {
+            if (binding.isHttp()) {
+                names.add(name);
+            }
+        });
+        return names;
+    }
+
+    /**
+     * One named source, mounted by the arm it declares: an outbound call rides the gateway
+     * processor, anything else executes on a datasource. Both publish the same envelope under
+     * the source's name, which is what lets a response, a view or a later source refer to one
+     * without knowing how it was fetched.
+     */
+    private ProcessorDefinition<?> source(ProcessorDefinition<?> step, RouteFile routeFile,
+            String name, io.tesseraql.yaml.model.Binding binding) {
+        if (binding.isHttp()) {
+            return step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                    name, binding.http()));
+        }
+        return step
+                .process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
+                .to(executionUri(routeFile, binding, name));
+    }
+
+    /** The same, for the {@code direct:} pipelines that carry a directory instead of a route. */
+    private ProcessorDefinition<?> source(ProcessorDefinition<?> step, Path dir, String name,
+            io.tesseraql.yaml.model.Binding binding, String datasource) {
+        if (binding.isHttp()) {
+            return step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                    name, binding.http()));
+        }
+        return step
+                .process(new io.tesseraql.compiler.binding.NamedQueryBinder(binding))
+                .to(executionUri(dir, binding, name, datasource));
     }
 
     /**
@@ -1086,24 +1123,27 @@ public final class RouteCompiler {
     private java.util.List<io.tesseraql.compiler.binding.EnrichProcessor> enrichProcessors(
             Path routeDir, RouteDefinition definition) {
         java.util.List<io.tesseraql.compiler.binding.EnrichProcessor> processors = new java.util.ArrayList<>();
-        for (var entry : definition.enrich().entrySet()) {
-            io.tesseraql.yaml.model.EnrichSpec spec = entry.getValue();
+        // An enrichment nests under the source whose rows it folds into (docs/unified-sources.md
+        // decision 5), so the target is where it is written, not a name it carries.
+        definition.sources().forEach((into, binding) -> binding.enrich().forEach((name, spec) -> {
             if (spec.sql() == null) {
-                // An HTTP reference has no file, no datasource and no dialect: it rides the
-                // outbound gateway, which the processor looks up per request.
+                // A sibling source is already in the context and an HTTP reference has no file,
+                // no datasource and no dialect — it rides the outbound gateway, which the
+                // processor looks up per request. Neither needs anything compiled here.
                 processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
-                        entry.getKey(), spec, java.util.List.of(), null, null, null,
+                        into, name, spec, java.util.List.of(), null, null, null,
                         commandBounds()));
-                continue;
+                return;
             }
-            String datasource = bindingDatasource(spec.sql(), definition.effectiveDatasource());
+            String datasource = bindingDatasource(io.tesseraql.yaml.model.Binding.sql(spec.sql()),
+                    definition.effectiveDatasource());
             String dialect = datasourceDialect(datasource);
             Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
                     routeDir.resolve(spec.sql().file()).normalize(), dialect);
             processors.add(new io.tesseraql.compiler.binding.EnrichProcessor(
-                    entry.getKey(), spec, parseSql(file), file.toString(), datasource, dialect,
+                    into, name, spec, parseSql(file), file.toString(), datasource, dialect,
                     commandBounds()));
-        }
+        }));
         return processors;
     }
 
@@ -1144,13 +1184,15 @@ public final class RouteCompiler {
             java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                     .resolve(toolDir.resolve(file).normalize(), dialect);
             step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                    routeId, definition.sql(), definition.steps(), definition.validate(),
+                    routeId, definition.steps(), definition.validate(),
                     definition.decide(), definition.notifications(), stepFile, datasource,
                     dialect, definition.outbox(), definition.publish(), definition.errors(),
                     appName, commandBounds()));
-        } else if (definition.sql() != null) {
-            step = step.to(executionUri(toolDir, definition.sql(), "sql",
-                    definition.effectiveDatasource()));
+        } else {
+            for (var entry : definition.sources().entrySet()) {
+                step = source(step, toolDir, entry.getKey(), entry.getValue(),
+                        definition.effectiveDatasource());
+            }
         }
         // Same placement as an HTTP command's: after the write, so a rollback bypasses it. A
         // tool that changes data has the same reason to refresh a live view that a route does,
@@ -1163,11 +1205,9 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.CatalogInvalidateProcessor(
                     definition.invalidates()));
         }
-        for (var entry : definition.queries().entrySet()) {
-            step = step
-                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(toolDir, entry.getValue(), entry.getKey(),
-                            definition.effectiveDatasource()));
+        for (var entry : definition.sources().entrySet()) {
+            step = source(step, toolDir, entry.getKey(), entry.getValue(),
+                    definition.effectiveDatasource());
         }
         step = enrichments(step, toolDir, definition);
         step.process(mcpToolRenderer(definition));
@@ -1201,15 +1241,9 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
-        if (definition.sql() != null) {
-            step = step.to(executionUri(resourceDir, definition.sql(), "sql",
-                    definition.effectiveDatasource()));
-        }
-        for (var entry : definition.queries().entrySet()) {
-            step = step
-                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(resourceDir, entry.getValue(), entry.getKey(),
-                            definition.effectiveDatasource()));
+        for (var entry : definition.sources().entrySet()) {
+            step = source(step, resourceDir, entry.getKey(), entry.getValue(),
+                    definition.effectiveDatasource());
         }
         step = enrichments(step, resourceDir, definition);
         step.process(mcpToolRenderer(definition));
@@ -1242,15 +1276,9 @@ public final class RouteCompiler {
         ProcessorDefinition<?> step = route
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
-        if (definition.sql() != null) {
-            step = step.to(executionUri(uiDir, definition.sql(), "sql",
-                    definition.effectiveDatasource()));
-        }
-        for (var entry : definition.queries().entrySet()) {
-            step = step
-                    .process(new io.tesseraql.compiler.binding.NamedQueryBinder(entry.getValue()))
-                    .to(executionUri(uiDir, entry.getValue(), entry.getKey(),
-                            definition.effectiveDatasource()));
+        for (var entry : definition.sources().entrySet()) {
+            step = source(step, uiDir, entry.getKey(), entry.getValue(),
+                    definition.effectiveDatasource());
         }
         step = enrichments(step, uiDir, definition);
         step.process(new HtmlResponseRenderer(withDefaultHeaders(definition.response().html()),
@@ -1277,17 +1305,17 @@ public final class RouteCompiler {
     }
 
     /** Builds an execution step URI: a service provider, a tesseraql-iam contract or a SQL file. */
-    private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.SqlBinding binding,
+    private String executionUri(RouteFile routeFile, io.tesseraql.yaml.model.Binding binding,
             String resultKey) {
         return executionUri(routeFile.source().getParent(), binding, resultKey,
                 routeFile.definition().effectiveDatasource());
     }
 
-    /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.SqlBinding, String)}, resolving
+    /** As {@link #executionUri(RouteFile, io.tesseraql.yaml.model.Binding, String)}, resolving
      * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). The binding's own
      * {@code datasource:} wins over {@code routeDatasource}, the route-level connector (roadmap
      * Phase 53); the baked dialect follows the connector the SQL actually runs on. */
-    private String executionUri(Path sourceDir, io.tesseraql.yaml.model.SqlBinding binding,
+    private String executionUri(Path sourceDir, io.tesseraql.yaml.model.Binding binding,
             String resultKey, String routeDatasource) {
         if (binding.isService()) {
             return "tesseraql-service:call?name=" + binding.service() + "&resultKey=" + resultKey;
@@ -1311,7 +1339,7 @@ public final class RouteCompiler {
      * variants from it, picks the dialect's streaming profile, and folds column labels with it —
      * a hand-built URI that omits it silently runs the base file with default streaming.
      */
-    private String executionParams(String datasource, io.tesseraql.yaml.model.SqlBinding binding) {
+    private String executionParams(String datasource, io.tesseraql.yaml.model.Binding binding) {
         return "&dialect=" + datasourceDialect(datasource)
                 + "&maxRows=" + effectiveMaxRows(binding)
                 + "&onOverflow=" + effectiveOnOverflow(binding)
@@ -1319,7 +1347,7 @@ public final class RouteCompiler {
     }
 
     /** The connector a binding runs on: its own {@code datasource:} when declared, else the route's. */
-    private static String bindingDatasource(io.tesseraql.yaml.model.SqlBinding binding,
+    private static String bindingDatasource(io.tesseraql.yaml.model.Binding binding,
             String routeDatasource) {
         return binding.datasource() == null || binding.datasource().isBlank()
                 ? routeDatasource
@@ -1332,7 +1360,7 @@ public final class RouteCompiler {
      * bounded BY DEFAULT. An explicit {@code 0} disables the guard for a deliberately
      * long-running statement.
      */
-    private int effectiveTimeoutSeconds(io.tesseraql.yaml.model.SqlBinding binding) {
+    private int effectiveTimeoutSeconds(io.tesseraql.yaml.model.Binding binding) {
         if (binding.timeoutSeconds() != null) {
             return Math.max(0, binding.timeoutSeconds());
         }
@@ -1355,9 +1383,9 @@ public final class RouteCompiler {
         }
         boolean anchored = !definition.notifications().isEmpty() || definition.publish() != null
                 || definition.outbox() != null
-                || (definition.sql() != null && definition.sql().isSequence())
+                || (definition.main() != null && definition.main().isSequence())
                 || definition.steps().values().stream()
-                        .anyMatch(io.tesseraql.yaml.model.SqlBinding::isSequence);
+                        .anyMatch(io.tesseraql.yaml.model.Binding::isSequence);
         if (anchored) {
             throw new TqlException(MAIN_ANCHORED, "Route '" + definition.id()
                     + "': notify:/publish:/outbox: and sequence allocation ride the main"
@@ -1587,28 +1615,30 @@ public final class RouteCompiler {
     private static ProcessorDefinition<?> exportHttpSources(ProcessorDefinition<?> step,
             RouteDefinition definition) {
         ProcessorDefinition<?> current = step;
-        for (var entry : definition.http().entrySet()) {
-            current = current.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                    entry.getKey(), entry.getValue()));
+        for (var entry : definition.sources().entrySet()) {
+            if (entry.getValue().isHttp()) {
+                current = current.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
+                        entry.getKey(), entry.getValue().http()));
+            }
         }
         return current;
     }
 
     /**
-     * The export's named queries, resolved against the declaring directory
-     * (docs/export-pipeline.md, decision 2). They are a document's other data — the order header,
-     * the totals — and run on the extraction's own connection, so the executing path receives the
-     * files rather than a second set of route steps.
+     * The document's other data — the order header, the totals — resolved against the declaring
+     * directory. These are the sources beside {@code main}: an export writes {@code main}'s rows
+     * and a template composes the rest around them, so they run on the extraction's own
+     * connection and the executing path receives the files rather than a second set of steps.
      */
     private static java.util.List<io.tesseraql.core.files.ExportQuery> exportQueries(
-            io.tesseraql.yaml.model.ExportSpec spec, Path dir) {
-        if (spec == null || spec.queries().isEmpty()) {
-            return java.util.List.of();
-        }
+            RouteDefinition definition, Path dir) {
         java.util.List<io.tesseraql.core.files.ExportQuery> queries = new java.util.ArrayList<>();
-        spec.queries().forEach((name, binding) -> queries.add(
-                new io.tesseraql.core.files.ExportQuery(name,
-                        dir.resolve(binding.file()).normalize())));
+        definition.sources().forEach((name, binding) -> {
+            if (!RouteDefinition.MAIN.equals(name) && binding.file() != null) {
+                queries.add(new io.tesseraql.core.files.ExportQuery(name,
+                        dir.resolve(binding.file()).normalize()));
+            }
+        });
         return java.util.List.copyOf(queries);
     }
 
@@ -1632,7 +1662,7 @@ public final class RouteCompiler {
     }
 
     /** Resolves the effective row cap: route override, then global config, then default (ch. 28.7). */
-    private int effectiveMaxRows(SqlBinding sql) {
+    private int effectiveMaxRows(Binding sql) {
         if (sql.materialize() != null && sql.materialize().maxRows() != null) {
             return sql.materialize().maxRows();
         }
@@ -1641,7 +1671,7 @@ public final class RouteCompiler {
                 .orElse(DEFAULT_MAX_ROWS);
     }
 
-    private String effectiveOnOverflow(SqlBinding sql) {
+    private String effectiveOnOverflow(Binding sql) {
         if (sql.materialize() != null && sql.materialize().onOverflow() != null) {
             return sql.materialize().onOverflow();
         }

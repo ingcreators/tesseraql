@@ -22,4 +22,4 @@ pipeline:
     notify:
       channel: audit-webhook
       payload:
-        deactivated: step.deactivatePending.affectedRows
+        deactivated: steps.deactivatePending.affectedRows

@@ -239,14 +239,16 @@ class OrgDataScopingIntegrationTest {
                 recipe: query-json
                 security:
                   auth: bearer
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(ordersDir.resolve("list.sql"), """
                 select id, name, region, created_by
@@ -269,17 +271,19 @@ class OrgDataScopingIntegrationTest {
                 input:
                   id: { type: integer, required: true }
                   name: { type: string, required: true }
-                sql:
-                  file: rename.sql
-                  mode: update
-                  params:
-                    id: params.id
-                    name: params.name
+                steps:
+                  - id: main
+                    sql:
+                      file: rename.sql
+                      mode: update
+                      params:
+                        id: params.id
+                        name: params.name
                 response:
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(renameDir.resolve("rename.sql"), """
                 update orders o

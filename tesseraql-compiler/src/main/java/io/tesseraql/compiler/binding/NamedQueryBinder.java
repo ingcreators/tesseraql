@@ -2,7 +2,7 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
-import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.Binding;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -12,14 +12,14 @@ import org.apache.camel.Processor;
 /**
  * Rebinds the SQL parameters for one additional named query of a route (the {@code queries:} block,
  * design ch. 6.3). It runs after the main query, so its source expressions can reference earlier
- * results (for example {@code sql.rows}) as well as the request context ({@code path.id},
+ * results (for example {@code main.rows}) as well as the request context ({@code path.id},
  * {@code query.q}, {@code principal.*}).
  */
 public final class NamedQueryBinder implements Processor {
 
-    private final SqlBinding binding;
+    private final Binding binding;
 
-    public NamedQueryBinder(SqlBinding binding) {
+    public NamedQueryBinder(Binding binding) {
         this.binding = binding;
     }
 

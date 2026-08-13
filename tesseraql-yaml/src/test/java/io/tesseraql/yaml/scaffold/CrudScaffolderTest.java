@@ -10,6 +10,7 @@ import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Path;
 import java.sql.Types;
@@ -126,10 +127,11 @@ class CrudScaffolderTest {
 
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/items/{id}/update/post.yml"), "post.yml");
-        assertThat(update.sql().expect().rowCount()).isEqualTo(1);
-        assertThat(update.sql().expect().effectiveOnMismatch()).isEqualTo("conflict");
+        Binding statement = update.steps().get("main");
+        assertThat(statement.expect().rowCount()).isEqualTo(1);
+        assertThat(statement.expect().effectiveOnMismatch()).isEqualTo("conflict");
         // Binds read the coerced params.* view: raw body/path values are strings (Phase 22).
-        assertThat(update.sql().params()).containsEntry("version", "params.version")
+        assertThat(statement.params()).containsEntry("version", "params.version")
                 .containsEntry("id", "params.id");
         assertThat(update.input().get("id").domain()).isEqualTo("items.id");
         assertThat(update.input().get("version").required()).isTrue();
@@ -400,14 +402,16 @@ class CrudScaffolderTest {
         // Assigned key: the form carries it and the redirect reads it from the body.
         RouteDefinition create = parser.parseRoute(content(files, "web/codes/create/post.yml"),
                 "post.yml");
-        assertThat(create.steps()).isEmpty();
+        // No generated key to capture, so the insert needs no keys: — but it is still a step,
+        // because a command has one spelling whatever its statement count.
+        assertThat(create.steps().get("main").keys()).isEmpty();
         assertThat(create.input()).containsKey("code");
         assertThat(create.response().redirect().location()).isEqualTo("/codes/{params.code}");
 
         // No version column: no locking predicate, no expectation (lint pairing TQL-SQL-2105).
         RouteDefinition update = parser.parseRoute(
                 content(files, "web/codes/{code}/update/post.yml"), "post.yml");
-        assertThat(update.sql().expect()).isNull();
+        assertThat(update.steps().get("main").expect()).isNull();
         assertThat(content(files, "web/codes/{code}/update/update.sql"))
                 .doesNotContain("version");
 

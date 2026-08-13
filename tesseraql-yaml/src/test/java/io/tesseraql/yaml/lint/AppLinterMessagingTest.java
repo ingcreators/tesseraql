@@ -36,11 +36,13 @@ class AppLinterMessagingTest {
                   channel: events
                   topic: orders.created
                   idempotencyKey: body.orderId
-                sql:
-                  file: project-order.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
+                steps:
+                  - id: main
+                    sql:
+                      file: project-order.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
                 """);
         Files.writeString(consumeDir.resolve("bad.yml"), """
                 version: tesseraql/v1
@@ -50,9 +52,11 @@ class AppLinterMessagingTest {
                 consume:
                   channel: ghost
                   topic: orders.created
-                sql:
-                  file: project-order.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: project-order.sql
+                      mode: update
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -82,11 +86,13 @@ class AppLinterMessagingTest {
                 id: report.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
                 publish:
                   channel: events
                   topic: report.viewed
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);

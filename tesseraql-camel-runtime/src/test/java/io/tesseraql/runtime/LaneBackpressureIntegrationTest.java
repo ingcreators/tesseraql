@@ -120,15 +120,16 @@ class LaneBackpressureIntegrationTest {
                 admission:
                   lane: io
 
-                sql:
-                  file: slow.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: slow.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(slowDir.resolve("slow.sql"), "SELECT pg_sleep(1) AS napped\n");
         return target;

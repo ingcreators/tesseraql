@@ -162,7 +162,7 @@ class HttpCallJobIntegrationTest {
                     fixedDelay: 1s
                 pipeline:
                   - id: fetch
-                    httpCall:
+                    http:
                       method: GET
                       url: http://localhost:%d/rates
                   - id: record
@@ -170,8 +170,8 @@ class HttpCallJobIntegrationTest {
                       file: record.sql
                       mode: update
                       params:
-                        status: step.fetch.status
-                        rate: step.fetch.body.rate
+                        status: steps.fetch.status
+                        rate: steps.fetch.body.rate
                 """.formatted(endpointPort));
         Files.writeString(jobDir.resolve("record.sql"),
                 "insert into rate_log (status, rate) values (/* status */ 200, /* rate */ 0)\n");

@@ -13,7 +13,7 @@ public class TesseraqlSqlEndpoint extends DefaultEndpoint {
     private final String sqlPath;
     private String datasource = "main";
     private String mode = "query";
-    private String resultKey = "sql";
+    private String resultKey = "main";
     private int maxRows = -1;
     private int queryTimeoutSeconds = 0;
     private String onOverflow = "fail";

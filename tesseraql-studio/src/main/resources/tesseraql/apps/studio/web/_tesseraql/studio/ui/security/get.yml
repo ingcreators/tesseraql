@@ -19,18 +19,19 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.security
-  params:
-    roles: principal.roles
-    status: params.status
-    q: params.q
-
+sources:
+  main:
+    service:
+      name: studio.security
+      params:
+        roles: principal.roles
+        status: params.status
+        q: params.q
 response:
   html:
     status: 200
     template: security.html
     model:
-      sec: sql
+      sec: main
       added: params.added
       removed: params.removed

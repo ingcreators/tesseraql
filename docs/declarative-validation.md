@@ -153,12 +153,14 @@ validate:
     field: endDate
     code: end-before-start
 
-sql:
-  file: insert-member.sql
-  mode: update
-  keys: [id]
-  params:
-    email: body.email
+sources:
+  main:
+    sql:
+      file: insert-member.sql
+      mode: update
+      keys: [id]
+      params:
+        email: body.email
 
 response:
   json:

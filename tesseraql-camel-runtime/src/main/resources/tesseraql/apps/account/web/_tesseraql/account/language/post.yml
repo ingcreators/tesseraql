@@ -13,13 +13,14 @@ input:
     required: true
     maxLength: 35
 
-sql:
-  service: account.language.save
-  params:
-    locale: params.locale
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.language.save
+      params:
+        locale: params.locale
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

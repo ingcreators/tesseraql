@@ -43,7 +43,7 @@ exit codes. Full job-net orchestration is an explicit **non-goal**; the light
 
 Business batch is date-driven — "run the 2026-07-31 close", "rerun the 14th after
 the fix" — and today a scheduled firing runs with **no parameters at all** (jobs.md
-documents that job SQL "must work when its `job.*` binds are null"; the concept is
+documents that job SQL "must work when its `params.*` binds are null"; the concept is
 absent, not optional).
 
 - A new ambient bind namespace for job SQL: **`batch.businessDate`** (a SQL `date`)
@@ -122,7 +122,7 @@ pipeline:
 - **Two connections**: the reader streams its SELECT (fetch-sized cursor, its own
   connection); the writer runs per row on a second connection that commits every
   `commitEvery` rows. The writer's binds are the reader's row (`row.*`) plus the
-  ambient `batch.*`/`job.*` context.
+  ambient `batch.*` context and the job's `params.*`.
 - **Checkpoint restart**: after each committed chunk, the last row's `key` value is
   written to a managed `tql_job_checkpoint` row (job, step, business date). A rerun
   for the same business date finds the checkpoint and seeds it as the

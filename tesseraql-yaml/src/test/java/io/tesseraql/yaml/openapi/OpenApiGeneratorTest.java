@@ -44,8 +44,10 @@ class OpenApiGeneratorTest {
                         id: orders.detail
                         kind: route
                         recipe: query-json
-                        sql:
-                          file: detail.sql
+                        sources:
+                          main:
+                            sql:
+                              file: detail.sql
                         """, "detail"));
         AppManifest manifest = new AppManifest(home,
                 new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),
@@ -88,8 +90,10 @@ class OpenApiGeneratorTest {
                         id: orders.list
                         kind: route
                         recipe: query-json
-                        sql:
-                          file: list.sql
+                        sources:
+                          main:
+                            sql:
+                              file: list.sql
                         """, "list"));
         java.util.Map<String, Object> config = basePath == null
                 ? java.util.Map.of()
@@ -125,7 +129,7 @@ class OpenApiGeneratorTest {
         // The response.json.body structure is mirrored with property names (not just {type:object}).
         assertThat(schema.path("type").asText()).isEqualTo("object");
         com.fasterxml.jackson.databind.JsonNode props = schema.path("properties");
-        // data: sql.rows -> an array of row objects
+        // data: main.rows -> an array of row objects
         assertThat(props.path("data").path("type").asText()).isEqualTo("array");
         assertThat(props.path("data").path("items").path("type").asText()).isEqualTo("object");
         // meta: a nested object; count is a row count (integer); limit/offset take their input types.
@@ -149,8 +153,10 @@ class OpenApiGeneratorTest {
                         import:
                           format: csv
                           columns: [name]
-                          sql:
-                            file: upsert.sql
+                        steps:
+                          - id: row
+                            sql:
+                              file: upsert.sql
                         """, "import"));
         var exportRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items/export",
                 home.resolve("web/api/items/export/post.yml"), parser.parseRoute("""
@@ -161,8 +167,10 @@ class OpenApiGeneratorTest {
                         export:
                           format: excel
                           filename: items.xlsx
-                          sql:
-                            file: select.sql
+                        sources:
+                          main:
+                            sql:
+                              file: select.sql
                         """, "export"));
         var commandRoute = new io.tesseraql.yaml.manifest.RouteFile("post", "/api/items",
                 home.resolve("web/api/items/post.yml"), parser.parseRoute("""
@@ -174,9 +182,11 @@ class OpenApiGeneratorTest {
                           name:
                             type: string
                             required: true
-                        sql:
-                          file: insert.sql
-                          mode: update
+                        steps:
+                          - id: main
+                            sql:
+                              file: insert.sql
+                              mode: update
                         """, "command"));
         AppManifest manifest = new AppManifest(home,
                 new io.tesseraql.yaml.config.AppConfig(java.util.Map.of(), name -> null),

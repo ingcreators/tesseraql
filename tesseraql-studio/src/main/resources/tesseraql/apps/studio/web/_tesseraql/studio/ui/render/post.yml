@@ -20,20 +20,21 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.render
-  params:
-    path: params.path
-    content: params.content
-    sampleModel: params.sampleModel
-    live: params.live
-
+sources:
+  main:
+    service:
+      name: studio.render
+      params:
+        path: params.path
+        content: params.content
+        sampleModel: params.sampleModel
+        live: params.live
 response:
   html:
     status: 200
     template: render.html
     model:
-      render: sql
+      render: main
       scripts: params.scripts
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

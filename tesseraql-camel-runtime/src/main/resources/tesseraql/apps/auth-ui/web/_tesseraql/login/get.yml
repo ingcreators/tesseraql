@@ -27,15 +27,17 @@ input:
 security:
   auth: public
 
-sql:
-  service: auth.loginMethods
+sources:
+  main:
+    service:
+      name: auth.loginMethods
 
 response:
   html:
     status: 200
     template: login.html
     model:
-      methods: sql
+      methods: main
       next: params.next
       error: params.error
       reset: params.reset

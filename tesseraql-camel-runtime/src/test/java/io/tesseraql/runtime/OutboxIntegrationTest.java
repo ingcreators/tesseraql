@@ -184,16 +184,18 @@ class OutboxIntegrationTest {
                   aggregateId: body.name
                   payload:
                     name: body.name
-                sql:
-                  file: break.sql
-                  mode: update
-                  params:
-                    name: body.name
+                steps:
+                  - id: main
+                    sql:
+                      file: break.sql
+                      mode: update
+                      params:
+                        name: body.name
                 response:
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(breakDir.resolve("break.sql"),
                 "update users set status = null where name = /* name */ 'x'\n");

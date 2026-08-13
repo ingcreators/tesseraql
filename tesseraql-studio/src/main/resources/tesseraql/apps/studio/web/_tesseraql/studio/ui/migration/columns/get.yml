@@ -8,14 +8,15 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.migration.columns
-  params:
-    table: params.table
-
+sources:
+  main:
+    service:
+      name: studio.migration.columns
+      params:
+        table: params.table
 response:
   html:
     status: 200
     template: columns.html
     model:
-      cols: sql
+      cols: main

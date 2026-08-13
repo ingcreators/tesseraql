@@ -16,7 +16,7 @@ public final class CoverageThresholdResolver {
     /** The item-coverage kinds a {@code coverage.thresholds.<kind>} percentage can gate. */
     private static final List<String> KINDS = List.of("assertion", "iam-contract", "route",
             "security", "api-key", "mtls", "saml", "oidc", "scim", "validation", "notification",
-            "httpCall", "file-poll", "webhook", "document", "message", "mcp", "mcp-resource",
+            "http", "file-poll", "webhook", "document", "message", "mcp", "mcp-resource",
             "mcp-ui", "data-scope", "workflow", "view", "page");
 
     private CoverageThresholdResolver() {

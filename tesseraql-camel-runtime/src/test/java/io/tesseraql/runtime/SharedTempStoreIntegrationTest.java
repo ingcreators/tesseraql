@@ -177,8 +177,10 @@ class SharedTempStoreIntegrationTest {
                 recipe: query-export
                 security:
                   auth: public
-                sql:
-                  file: export.sql
+                sources:
+                  main:
+                    sql:
+                      file: export.sql
                 export:
                   format: csv
                   filename: orders.csv

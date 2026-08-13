@@ -7,7 +7,7 @@ kind: workflow
 # else waits for the procurement head. Both lanes leave through `issued`, so the
 # enum lint proves nothing the decision can produce is unhandled.
 document: { type: order, table: orders, key: id }
-http: { basePath: /api/orders }
+basePath: /api/orders
 security: { auth: bearer, policy: rfq.act }
 initial: draft
 states:
@@ -19,6 +19,7 @@ states:
   - { id: shipped }
   - { id: received, type: terminal }
   - { id: rejected }
+
 transitions:
   - id: submit
     from: draft
@@ -31,30 +32,30 @@ transitions:
           deltaPct: document.delta_pct
     stamp:
       approval_lane: decision.orderApproval.lane
-    command: order-submit.sql
+    command: { file: order-submit.sql }
     assign: { file: order-approver.sql }
   # The auto lane issues immediately ...
   - id: issue
     from: submitted
     to: issued
     guard: "document.approval_lane == 'auto'"
-    command: order-issue.sql
+    command: { file: order-issue.sql }
   # ... the review lane waits for the head's task.
   - id: approve_issue
     from: submitted
     to: issued
     guard: "document.approval_lane == 'head_review'"
-    command: order-issue.sql
+    command: { file: order-issue.sql }
   - id: reject
     from: submitted
     to: rejected
-    command: order-reject.sql
+    command: { file: order-reject.sql }
   - id: rework
     from: rejected
     to: draft
     stamp:
       approval_lane: null
-    command: order-rework.sql
+    command: { file: order-rework.sql }
   # The supplier accepts the promised dates as ordered ... (the supplier-facing
   # transitions override the workflow's buyer-side default policy; the command's
   # scope still confines them to their own partner's rows)
@@ -62,7 +63,7 @@ transitions:
     from: issued
     to: confirmed
     security: { auth: bearer, policy: sup.act }
-    command: order-confirm.sql
+    command: { file: order-confirm.sql }
   # ... or proposes a new date (stamped by /api/orders/{id}/date-change first). The
   # table-backed deliveryAutoAccept decision judges the slip: within tolerance the
   # proposal confirms with no human in the loop, outside it a review task opens for
@@ -75,22 +76,22 @@ transitions:
     to: confirmed
     security: { auth: bearer, policy: sup.act }
     guard: "decision.deliveryAutoAccept.action == 'auto_confirm'"
-    command: apply-proposal.sql
+    command: { file: apply-proposal.sql }
   - id: propose_review
     from: issued
     to: date_proposed
     security: { auth: bearer, policy: sup.act }
     guard: "decision.deliveryAutoAccept.action == 'review'"
-    command: mark-review.sql
+    command: { file: mark-review.sql }
     assign: { file: order-owner.sql }
   - id: accept_date
     from: date_proposed
     to: confirmed
-    command: apply-proposal.sql
+    command: { file: apply-proposal.sql }
   - id: decline_date
     from: date_proposed
     to: issued
-    command: clear-proposal.sql
+    command: { file: clear-proposal.sql }
   # Shipping requires the registered shipment (web/api/orders/{id}/shipment): a SQL
   # guard file (docs/workflow-expressiveness.md), so the refusal names itself instead
   # of surfacing as a generic zero-row conflict.
@@ -102,13 +103,13 @@ transitions:
       file: shipment-registered.sql
       code: shipment-not-registered
       message: procurement.ship.unregistered
-    command: order-ship.sql
+    command: { file: order-ship.sql }
   # Receiving is the requester's move: the persona who started the chain closes it.
   - id: receive
     from: shipped
     to: received
     security: { auth: bearer, policy: req.act }
-    command: order-receive.sql
+    command: { file: order-receive.sql }
 # One-action dispatches (docs/workflow-expressiveness.md): the client calls one
 # endpoint and the engine picks the member whose guard holds, so the lane knowledge
 # (which approval_lane value, which deliveryAutoAccept outcome) stays out of the UI.

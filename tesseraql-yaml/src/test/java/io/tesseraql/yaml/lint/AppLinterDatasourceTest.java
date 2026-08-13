@@ -37,9 +37,11 @@ class AppLinterDatasourceTest {
                 kind: route
                 recipe: query-json
                 datasource: reporting
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 """);
         Path ghostDir = dir.resolve("web/api/ghost");
         Files.createDirectories(ghostDir);
@@ -50,9 +52,11 @@ class AppLinterDatasourceTest {
                 kind: route
                 recipe: query-json
                 datasource: warehouse
-                sql:
-                  file: summary.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: summary.sql
+                      mode: query
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -77,16 +81,18 @@ class AppLinterDatasourceTest {
                 datasource: reporting
                 input:
                   orderId: { type: string, required: true }
-                sql:
-                  file: insert.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
                 publish:
                   channel: events
                   topic: orders.created
                   payload:
                     orderId: body.orderId
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -128,11 +134,13 @@ class AppLinterDatasourceTest {
                   idempotencyKey: body.orderId
                 input:
                   orderId: { type: string, required: true }
-                sql:
-                  file: upsert.sql
-                  mode: update
-                  params:
-                    orderId: body.orderId
+                steps:
+                  - id: main
+                    sql:
+                      file: upsert.sql
+                      mode: update
+                      params:
+                        orderId: body.orderId
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -155,12 +163,13 @@ class AppLinterDatasourceTest {
                 input:
                   orderId: { type: string, required: true }
                 steps:
-                  insert:
-                    file: insert.sql
-                    mode: update
-                    datasource: reporting
-                    params:
-                      orderId: body.orderId
+                  - id: insert
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      datasource: reporting
+                      params:
+                        orderId: body.orderId
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -181,18 +190,21 @@ class AppLinterDatasourceTest {
                 id: dashboard.view
                 kind: route
                 recipe: query-json
-                sql:
-                  file: open.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: open.sql
+                      mode: query
                   turnover:
-                    file: turnover.sql
-                    mode: query
-                    datasource: reporting
+                    sql:
+                      file: turnover.sql
+                      mode: query
+                      datasource: reporting
                   ghost:
-                    file: turnover.sql
-                    mode: query
-                    datasource: warehouse
+                    sql:
+                      file: turnover.sql
+                      mode: query
+                      datasource: warehouse
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);

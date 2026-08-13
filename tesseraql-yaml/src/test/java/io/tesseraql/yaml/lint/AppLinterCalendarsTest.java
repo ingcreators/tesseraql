@@ -27,11 +27,15 @@ class AppLinterCalendarsTest {
                 version: tesseraql/v1
                 id: nightly.close
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule:
                 %s
-                sql: { file: close.sql, mode: update }
+                pipeline:
+                  - id: main
+                    sql:
+                      file: close.sql
+                      mode: update
                 """.formatted(schedule));
         Files.writeString(dir.resolve("batch/nightly/close.sql"), "select 1\n");
         return dir;

@@ -144,11 +144,11 @@ class OpsViewsTest {
     @Test
     void jobsRowsCarryTheTriggerStoryPoliciesAndCalendarNext() {
         io.tesseraql.yaml.model.JobDefinition definition = new io.tesseraql.yaml.model.JobDefinition(
-                "tesseraql/v1", "nightly.close", "job", "batch-tasklet", null,
+                "tesseraql/v1", "nightly.close", "job", "batch-pipeline", null,
                 new io.tesseraql.yaml.model.TriggerSpec(
                         new io.tesseraql.yaml.model.TriggerSpec.Schedule(
                                 "0 0 8 * * ?", null, "jp-banking", null, 5, null)),
-                Map.of(), null, List.of(), false, null, "skip",
+                Map.of(), List.of(), false, null, "skip",
                 new io.tesseraql.yaml.model.SlaSpec("06:00", "2h"));
 
         Map<String, Object> model = OpsViews.jobs(List.of(new OpsViews.JobCatalogEntry(

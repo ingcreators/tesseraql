@@ -11,15 +11,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.preview
-  params:
-    path: params.path
-    content: params.content
-
+sources:
+  main:
+    service:
+      name: studio.preview
+      params:
+        path: params.path
+        content: params.content
 response:
   html:
     status: 200
     template: preview.html
     model:
-      preview: sql
+      preview: main

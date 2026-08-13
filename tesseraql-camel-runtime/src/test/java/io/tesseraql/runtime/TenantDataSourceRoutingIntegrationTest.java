@@ -239,15 +239,16 @@ class TenantDataSourceRoutingIntegrationTest {
                 security:
                   auth: public
 
-                sql:
-                  file: list.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
@@ -263,15 +264,16 @@ class TenantDataSourceRoutingIntegrationTest {
                 security:
                   auth: public
 
-                sql:
-                  file: report.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: report.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(reportDir.resolve("report.sql"),
                 "select id, name from items order by id\n");
@@ -292,17 +294,18 @@ class TenantDataSourceRoutingIntegrationTest {
                 input:
                   name: { type: string, required: true, maxLength: 200 }
 
-                sql:
-                  file: insert.sql
-                  mode: update
-                  params:
-                    name: params.name
-
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      params:
+                        name: params.name
                 response:
                   json:
                     status: 201
                     body:
-                      created: sql.affectedRows
+                      created: steps.main.affectedRows
                 """);
         Files.writeString(notesDir.resolve("insert.sql"),
                 "insert into notes (name) values (/* name */ 'sample')\n");

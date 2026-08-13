@@ -5,12 +5,14 @@ recipe: command-json
 
 # Introspects the runtime's own datasources and rewrites the schema sidecar
 # (docs/studio-schema-lifecycle.md) - the in-Studio replacement for the schema goal.
-sql:
-  service: studio.schemaRefresh
-  params:
-    actor: principal.loginId
-    roles: principal.roles
 
+steps:
+  - id: main
+    service:
+      name: studio.schemaRefresh
+      params:
+        actor: principal.loginId
+        roles: principal.roles
 response:
   redirect:
     status: 303

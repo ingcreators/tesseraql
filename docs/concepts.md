@@ -41,7 +41,7 @@ Every YAML document declares its `kind`.
 A route's `recipe` says what shape of endpoint it is: `query-json` and `command-json` for
 JSON APIs, `query-html` and `page` for HTML, `query-export` / `file-import` /
 `file-export` for files, `webhook` for inbound calls, `queue-consume` for messages, and
-`batch-tasklet` / `batch-pipeline` for jobs. The recipe decides which keys the document
+`batch-pipeline` for jobs. The recipe decides which keys the document
 may carry, which is why the reference is organized by it.
 
 ## How a request travels

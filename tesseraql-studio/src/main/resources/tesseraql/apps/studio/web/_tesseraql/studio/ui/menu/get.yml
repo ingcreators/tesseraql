@@ -14,17 +14,18 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.menu.view
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.menu.view
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200
     template: menu.html
     model:
-      menu: sql
+      menu: main
       added: params.added
       moved: params.moved
       removed: params.removed

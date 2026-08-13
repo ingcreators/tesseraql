@@ -152,19 +152,19 @@ class HtmlResponseRendererViewTest {
                 recipe: dashboard
                 title: Board
                 panels:
-                  - { type: stat, source: sql, column: total, title: Total }
+                  - { type: stat, source: main, column: total, title: Total }
                   - { type: view, view: recent }
                 """);
         RouteDefinition route = MAPPER.convertValue(Map.of(
                 "id", "board", "kind", "route", "recipe", "query-html",
-                "queries", Map.of("recent", Map.of("file", "recent.sql"))),
+                "sources", Map.of("recent", Map.of("sql", Map.of("file", "recent.sql")))),
                 RouteDefinition.class);
         ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir));
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
                 binding);
         String html = render(renderer, Map.of(
-                "sql", Map.of("rows", List.of(Map.of("total", 9))),
+                "main", Map.of("rows", List.of(Map.of("total", 9))),
                 "recent", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt")))));
         assertThat(html).contains(">9</strong>");
         // The embedded list renders through its own pattern, card and datagrid included.
@@ -190,7 +190,7 @@ class HtmlResponseRendererViewTest {
                 """);
         RouteDefinition route = MAPPER.convertValue(Map.of(
                 "id", "item", "kind", "route", "recipe", "query-html",
-                "queries", Map.of("audit", Map.of("file", "audit.sql"))),
+                "sources", Map.of("audit", Map.of("sql", Map.of("file", "audit.sql")))),
                 RouteDefinition.class);
         ViewBinding binding = ViewBinding.of(dir, "page", route, path -> null, registry(dir));
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
@@ -198,7 +198,7 @@ class HtmlResponseRendererViewTest {
                 binding);
         // The child's source: audit remaps onto the embedded document's own source (sql).
         String html = render(renderer, Map.of(
-                "sql", Map.of("rows", List.of(Map.of("id", 5, "name", "Bolt"))),
+                "main", Map.of("rows", List.of(Map.of("id", 5, "name", "Bolt"))),
                 "audit", Map.of("rows", List.of(Map.of("event", "created")))));
         assertThat(html).contains("History").contains(">created<");
     }
@@ -245,7 +245,7 @@ class HtmlResponseRendererViewTest {
                 dir, dir, "en", binding);
         String html = render(renderer, Map.of(
                 "notice", Map.of("text", "maintenance tonight"),
-                "sql", Map.of("rows", List.of(Map.of("id", 1)))));
+                "main", Map.of("rows", List.of(Map.of("id", 1)))));
         assertThat(html).contains("maintenance tonight").contains("hc-datagrid__table");
     }
 
@@ -255,7 +255,7 @@ class HtmlResponseRendererViewTest {
                 "version: tesseraql/v1\nkind: view\nrecipe: list\n");
         ViewBinding binding = ViewBinding.of(dir, "page", null, path -> null, registry(dir));
         assertThatThrownBy(() -> new HtmlResponseRenderer(new HtmlResponse(200, null, "page",
-                null, null, Map.of("v", "sql.rows"), Map.of(), Map.of(), null), dir, dir, "en",
+                null, null, Map.of("v", "main.rows"), Map.of(), Map.of(), null), dir, dir, "en",
                 binding))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-VIEW-3319");
@@ -319,7 +319,7 @@ class HtmlResponseRendererViewTest {
         HtmlResponseRenderer renderer = new HtmlResponseRenderer(new HtmlResponse(200, null,
                 "page", null, null, Map.of(), Map.of(), Map.of(), null), dir, dir, "en",
                 binding);
-        String html = render(renderer, Map.of("sql", Map.of("rows", List.of(
+        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
                 Map.of("holder", "Sato", "card", "4111111111111111")))));
         String masked = String.valueOf(
                 io.tesseraql.core.mask.Masking.apply("last4", "4111111111111111"));
@@ -358,7 +358,7 @@ class HtmlResponseRendererViewTest {
                 "overview.html", null, null, List.of("recent"), Map.of(), Map.of(), Map.of(),
                 null), dir, dir, "en", null, Map.of("recent", bound));
         String html = render(renderer, Map.of(
-                "sql", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt")))));
+                "main", Map.of("rows", List.of(Map.of("id", 1, "name", "Bolt")))));
         assertThat(html).contains("<h1>Overview</h1>").contains("Recent items")
                 .contains(">Bolt<");
     }
@@ -371,7 +371,7 @@ class HtmlResponseRendererViewTest {
                 recipe: list
                 title: Items
                 """);
-        String html = render(renderer, Map.of("sql", Map.of("rows", List.of(
+        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
                 Map.of("id", 1, "name", "Bolt"),
                 Map.of("id", 2, "name", "Nut")))));
         assertThat(html).contains("hc-datagrid__table");
@@ -390,7 +390,7 @@ class HtmlResponseRendererViewTest {
                   - name: name
                     link: /items/{id}
                 """);
-        String html = render(renderer, Map.of("sql", Map.of("rows", List.of(
+        String html = render(renderer, Map.of("main", Map.of("rows", List.of(
                 Map.of("id", 7, "name", "Bolt")))));
         assertThat(html).contains("href=\"/items/7\"").contains(">Bolt</a>");
     }
@@ -491,7 +491,7 @@ class HtmlResponseRendererViewTest {
                 "id", "items.detail",
                 "kind", "route",
                 "recipe", "query-html",
-                "queries", Map.of("orders", Map.of("file", "orders.sql"))),
+                "sources", Map.of("orders", Map.of("sql", Map.of("file", "orders.sql")))),
                 RouteDefinition.class);
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1
@@ -509,7 +509,7 @@ class HtmlResponseRendererViewTest {
                       - name: qty
                 """, route);
         String html = render(renderer, Map.of(
-                "sql", Map.of("rows", List.of(Map.of("name", "Bolt", "status", "OPEN"))),
+                "main", Map.of("rows", List.of(Map.of("name", "Bolt", "status", "OPEN"))),
                 "orders", Map.of("rows", List.of(Map.of("qty", 3), Map.of("qty", 5)))));
         assertThat(html).contains(">Name</span>").contains(">Bolt</span>");
         assertThat(html).contains(">State</span>").contains(">OPEN</span>");
@@ -567,9 +567,9 @@ class HtmlResponseRendererViewTest {
                 "id", "stats",
                 "kind", "route",
                 "recipe", "query-html",
-                "queries", Map.of(
-                        "totals", Map.of("file", "totals.sql"),
-                        "signups", Map.of("file", "signups.sql"))),
+                "sources", Map.of(
+                        "totals", Map.of("sql", Map.of("file", "totals.sql")),
+                        "signups", Map.of("sql", Map.of("file", "signups.sql")))),
                 RouteDefinition.class);
         HtmlResponseRenderer renderer = renderer(dir, """
                 version: tesseraql/v1
@@ -648,7 +648,7 @@ class HtmlResponseRendererViewTest {
                 .eject(dir, dir, "page.view.yml", spec, List.of(), "page.html");
         Files.writeString(dir.resolve("page.html"), ejected.content());
         String html = Templates.render(dir, "page.html", Map.of(
-                "sql", Map.of("rows", List.of(Map.of("id", 7, "name", "Bolt")))),
+                "main", Map.of("rows", List.of(Map.of("id", 7, "name", "Bolt")))),
                 java.util.Locale.ENGLISH);
         assertThat(html).contains("href=\"/items/7\"").contains(">Bolt</a>");
         assertThat(html).contains("hc-datagrid__table");
@@ -690,7 +690,7 @@ class HtmlResponseRendererViewTest {
         Files.writeString(dir.resolve("page.html"), ejected.content());
 
         String html = Templates.render(dir, "page.html", Map.of(
-                "sql", Map.of("rows", List.of(Map.of("user_count", 42))),
+                "main", Map.of("rows", List.of(Map.of("user_count", 42))),
                 "byStatus", Map.of("rows", List.of(
                         Map.of("status", "ACTIVE", "n", 3),
                         Map.of("status", "DISABLED", "n", 1))),

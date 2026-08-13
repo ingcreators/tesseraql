@@ -60,12 +60,10 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,
         String startCell, List<ColumnSpec> columns, String locale, String timezone,
-        SqlBinding sql, AfterSpec after, Integer maxRows, String onOverflow,
-        java.util.Map<String, SqlBinding> queries, String groupBy, String splitBy) {
+        AfterSpec after, Integer maxRows, String onOverflow, String groupBy, String splitBy) {
 
     public ExportSpec {
         columns = columns == null ? List.of() : List.copyOf(columns);
-        queries = queries == null ? java.util.Map.of() : java.util.Map.copyOf(queries);
     }
 
     /**
@@ -87,7 +85,7 @@ public record ExportSpec(String format, String filename, String template, String
      * prevents double extraction), {@code download} runs it once on the first file fetch.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record AfterSpec(String timing, SqlBinding sql) {
+    public record AfterSpec(String timing, Binding.SqlArm sql) {
 
         public String effectiveTiming() {
             return timing == null || timing.isBlank() ? "extract" : timing;

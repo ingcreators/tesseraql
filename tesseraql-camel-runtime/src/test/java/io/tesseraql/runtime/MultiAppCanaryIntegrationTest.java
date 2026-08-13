@@ -135,14 +135,16 @@ class MultiAppCanaryIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 

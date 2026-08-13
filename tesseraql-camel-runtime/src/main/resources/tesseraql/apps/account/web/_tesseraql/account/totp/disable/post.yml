@@ -12,14 +12,15 @@ input:
     required: true
     maxLength: 256
 
-sql:
-  service: account.totp.disable
-  params:
-    current: params.current
-    loginId: principal.loginId
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.totp.disable
+      params:
+        current: params.current
+        loginId: principal.loginId
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

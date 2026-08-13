@@ -20,8 +20,10 @@ class AppLinterViewTest {
                 id: items.page
                 kind: route
                 recipe: query-html
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   html:
                     view: items
@@ -37,11 +39,13 @@ class AppLinterViewTest {
                 recipe: command-json
                 input:
                   name: { type: string, required: true, maxLength: 200 }
-                sql:
-                  file: insert.sql
-                  mode: update
-                  params:
-                    name: params.name
+                steps:
+                  - id: main
+                    sql:
+                      file: insert.sql
+                      mode: update
+                      params:
+                        name: params.name
                 """);
     }
 
@@ -79,8 +83,10 @@ class AppLinterViewTest {
                 id: items.page
                 kind: route
                 recipe: query-html
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   html:
                     template: index.html
@@ -221,11 +227,13 @@ class AppLinterViewTest {
                 id: items.page
                 kind: route
                 recipe: query-html
-                sql:
-                  file: list.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                   rates:
-                    url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
+                    http:
+                      url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
                 response:
                   html:
                     view: items

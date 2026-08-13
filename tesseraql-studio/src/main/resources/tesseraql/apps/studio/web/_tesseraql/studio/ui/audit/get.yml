@@ -17,17 +17,18 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.audit
-  params:
-    q: params.q
-    page: params.page
-    sort: params.sort
-    dir: params.dir
-
+sources:
+  main:
+    service:
+      name: studio.audit
+      params:
+        q: params.q
+        page: params.page
+        sort: params.sort
+        dir: params.dir
 response:
   html:
     status: 200
     template: audit.html
     model:
-      page: sql
+      page: main

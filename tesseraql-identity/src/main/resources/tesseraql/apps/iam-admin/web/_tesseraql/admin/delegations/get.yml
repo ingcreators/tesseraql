@@ -9,16 +9,17 @@ recipe: query-html
 security:
   policy: iam.admin.view
 
-sql:
-  service: identity.delegations
-  params:
-    tenantId: principal.tenantId
-
+sources:
+  main:
+    service:
+      name: identity.delegations
+      params:
+        tenantId: principal.tenantId
 response:
   html:
     status: 200
     template: delegations.html
     model:
-      delegations: sql
+      delegations: main
     headers:
       Cache-Control: "no-store"

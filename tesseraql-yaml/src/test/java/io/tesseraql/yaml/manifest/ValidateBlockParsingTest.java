@@ -52,16 +52,18 @@ class ValidateBlockParsingTest {
                     field: email
                     code: duplicate
                     message: members.email.duplicate
-                sql:
-                  file: insert-member.sql
-                  mode: update
-                  params:
-                    email: body.email
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
+                      params:
+                        email: body.email
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -99,14 +101,16 @@ class ValidateBlockParsingTest {
                 id: members.register
                 kind: route
                 recipe: command-json
-                sql:
-                  file: insert-member.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);

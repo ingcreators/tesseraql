@@ -20,12 +20,14 @@ class AppLinterInputTest {
                 kind: route
                 recipe: query-json
                 %s
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(inputBlock));
     }
 
@@ -87,7 +89,7 @@ class AppLinterInputTest {
     }
 
     @Test
-    void aDanglingNestIsAnError(@TempDir Path dir) throws Exception {
+    void aCompositionNamingNoSiblingSourceIsAnError(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("web/items"));
         Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
         Files.writeString(dir.resolve("web/items/get.yml"), """
@@ -95,51 +97,53 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                    enrich:
+                      lines:
+                        on: { id: order_id }
+                        source: ghost
+                        as: lines
                 response:
                   json:
                     body:
-                      orders: sql.rows
-                    nest:
-                      - into: orders
-                        children: ghost
-                        as: lines
-                        on: { id: order_id }
+                      orders: main.rows
                 """);
-        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1019");
+        assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1046");
     }
 
     @Test
-    void anAttachingNestIsAccepted(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+    void anAttachingCompositionIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, """
                 on: { id: order_id }
                         as: lines""")))).isEmpty();
     }
 
     @Test
-    void aMergingNestOverACompositeKeyIsAccepted(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+    void aMergingCompositionOverACompositeKeyIsAccepted(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, """
                 on: { buyer_code: buyer, supplier_code: supplier }
                         merge: [partner_name]""")))).isEmpty();
     }
 
     @Test
-    void aNestDeclaringBothAsAndMergeIsAnError(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, """
+    void aCompositionDeclaringBothAsAndMergeIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, """
                 on: { id: order_id }
                         as: lines
-                        merge: [partner_name]""")))).contains("TQL-YAML-1019");
+                        merge: [partner_name]""")))).contains("TQL-YAML-1047");
     }
 
     @Test
-    void aNestComposingNothingIsAnError(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(nestRoute(dir, "on: { id: order_id }"))))
-                .contains("TQL-YAML-1019");
+    void aCompositionComposingNothingIsAnError(@TempDir Path dir) throws Exception {
+        assertThat(codes(new AppLinter().lint(compositionRoute(dir, "on: { id: order_id }"))))
+                .contains("TQL-YAML-1047");
     }
 
-    /** A route whose one nest entry joins and composes as {@code composition} declares. */
-    private static Path nestRoute(Path dir, String composition) throws Exception {
+    /** A route composing a sibling source into main, as {@code composition} declares. */
+    private static Path compositionRoute(Path dir, String composition) throws Exception {
         Files.createDirectories(dir.resolve("web/items"));
         Files.writeString(dir.resolve("web/items/list.sql"), "select 1 as one\n");
         Files.writeString(dir.resolve("web/items/lines.sql"), "select 1 as one\n");
@@ -148,19 +152,21 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                    enrich:
+                      lines:
+                        source: lines
+                        %s
                   lines:
-                    file: lines.sql
+                    sql:
+                      file: lines.sql
                 response:
                   json:
                     body:
-                      orders: sql.rows
-                    nest:
-                      - into: orders
-                        children: lines
-                        %s
+                      orders: main.rows
                 """.formatted(composition));
         return dir;
     }
@@ -169,24 +175,16 @@ class AppLinterInputTest {
     void anEnrichmentOverADeclaredResultIsAccepted(@TempDir Path dir) throws Exception {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql: { file: partners.sql }
-                    merge: [partner_name]""", KEYED_REFERENCE)))).isEmpty();
-    }
-
-    @Test
-    void anEnrichmentIntoAnUndeclaredResultIsAnError(@TempDir Path dir) throws Exception {
-        assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
-                into: ghost
-                    on: { partner_code: code }
-                    sql: { file: partners.sql }
-                    merge: [partner_name]""", KEYED_REFERENCE)))).contains("TQL-YAML-1045");
+                        sql:
+                          file: partners.sql
+                        merge: [partner_name]""", KEYED_REFERENCE)))).isEmpty();
     }
 
     @Test
     void anEnrichmentComposingNothingIsAnError(@TempDir Path dir) throws Exception {
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql: { file: partners.sql }""", KEYED_REFERENCE))))
+                        sql:\n                          file: partners.sql""", KEYED_REFERENCE))))
                 .contains("TQL-YAML-1047");
     }
 
@@ -196,8 +194,9 @@ class AppLinterInputTest {
         // build can see the mistake.
         assertThat(codes(new AppLinter().lint(enrichRoute(dir, """
                 on: { partner_code: code }
-                    sql: { file: partners.sql }
-                    merge: [partner_name]""",
+                        sql:
+                          file: partners.sql
+                        merge: [partner_name]""",
                 "select code, name as partner_name from partners\n"))))
                 .contains("TQL-YAML-1048");
     }
@@ -215,15 +214,17 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                enrich:
-                  partner:
-                    %s
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                    enrich:
+                      partner:
+                        %s
                 response:
                   json:
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """.formatted(enrichment));
         return dir;
     }
@@ -236,14 +237,16 @@ class AppLinterInputTest {
                 id: items.probe
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                     statusWhen:
-                      - when: "sql.rowCount =="
+                      - when: "main.rowCount =="
                         status: 404
                 """);
         assertThat(codes(new AppLinter().lint(dir))).contains("TQL-YAML-1020");

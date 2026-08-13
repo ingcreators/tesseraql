@@ -42,6 +42,13 @@ import org.apache.camel.support.DefaultProducer;
  */
 public class TesseraqlSqlProducer extends DefaultProducer {
 
+    /**
+     * The document's primary source. Declarative pagination is main-bound
+     * (docs/unified-sources.md, out of scope), so only the query publishing under this name
+     * executes with the dialect's page clause appended.
+     */
+    private static final String MAIN = io.tesseraql.core.files.ExportModel.SUBJECT;
+
     /** TQL-SQL-2500: the SQL failed to execute for a reason beyond the portable constraint kinds. */
     private static final TqlErrorCode EXECUTION_ERROR = new TqlErrorCode(TqlDomain.SQL, 2500);
     private static final TqlErrorCode UNSUPPORTED_MODE = new TqlErrorCode(TqlDomain.SQL, 2501);
@@ -113,7 +120,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             io.tesseraql.camel.PageRequest page = exchange.getProperty(TesseraqlProperties.PAGE,
                     io.tesseraql.camel.PageRequest.class);
             boolean paged = page != null && "query".equals(mode)
-                    && "sql".equals(endpoint.getResultKey());
+                    && MAIN.equals(endpoint.getResultKey());
             Map<String, Object> result;
             if (paged) {
                 result = executeQuery(dataSource, paginated(bound, page));
@@ -156,7 +163,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
                     endpoint.getSqlPath(), mode, durationMs, rows, startedAt));
             if (context != null) {
-                context.put(endpoint.getResultKey(), result);
+                io.tesseraql.camel.ContextResults.put(context, endpoint.getResultKey(), result);
             }
             exchange.getMessage().setBody(result);
         } catch (RuntimeException ex) {

@@ -21,15 +21,16 @@ input:
     required: true
     maxLength: 32
 
-sql:
-  service: account.delegation.save
-  params:
-    delegate: params.delegate
-    startsAt: params.startsAt
-    endsAt: params.endsAt
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.delegation.save
+      params:
+        delegate: params.delegate
+        startsAt: params.startsAt
+        endsAt: params.endsAt
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

@@ -100,7 +100,7 @@ class PdfFileCodecTest {
                 <body>
                   <h1>利用者一覧</h1>
                   <table>
-                    <tr th:each="row : ${sql.rows}">
+                    <tr th:each="row : ${main.rows}">
                       <td th:text="${row.user_name}">name</td>
                       <td th:text="${row.joined_on}">joined</td>
                     </tr>

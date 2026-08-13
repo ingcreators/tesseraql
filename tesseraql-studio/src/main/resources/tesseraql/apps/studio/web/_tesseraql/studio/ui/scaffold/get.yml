@@ -3,12 +3,14 @@ id: tql.studio.scaffold
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.scaffold.tables
+sources:
+  main:
+    service:
+      name: studio.scaffold.tables
 
 response:
   html:
     status: 200
     template: scaffold.html
     model:
-      scaffold: sql
+      scaffold: main

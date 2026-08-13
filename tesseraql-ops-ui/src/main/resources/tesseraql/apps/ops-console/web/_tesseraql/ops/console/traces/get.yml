@@ -6,15 +6,16 @@ recipe: query-html
 security:
   policy: ops.batch.view
 
-sql:
-  service: ops.traces
-  params:
-    # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
-    permissions: principal.permissions
-
+sources:
+  main:
+    service:
+      name: ops.traces
+      params:
+        # Narrows visibility to the caller's ops.app.<name> grants (deny by default).
+        permissions: principal.permissions
 response:
   html:
     status: 200
     template: traces.html
     model:
-      traces: sql
+      traces: main

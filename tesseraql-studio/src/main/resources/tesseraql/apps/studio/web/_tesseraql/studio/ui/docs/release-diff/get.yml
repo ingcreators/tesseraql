@@ -8,15 +8,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: docs.releaseDiff
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: docs.releaseDiff
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200
     template: release-diff.html
     model:
-      docs: sql
+      docs: main
       captured: params.captured

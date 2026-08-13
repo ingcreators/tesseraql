@@ -3,14 +3,15 @@ id: tql.studio.migration
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.migration.new
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.migration.new
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200
     template: migration.html
     model:
-      mig: sql
+      mig: main

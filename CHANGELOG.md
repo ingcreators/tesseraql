@@ -6,6 +6,164 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **BREAKING: one vocabulary for acquiring rows** (docs/unified-sources.md). How a document
+  acquired data was spelled five ways — a privileged top-level `sql:`, a `queries:` map, a
+  parallel `http:` map, a `sql:`/`http:` pair inside every `enrich:` entry, and an extraction
+  that lived at route level on one export recipe and inside `export:` on the other. They are now
+  one `sources:` map whose entries each name their own mechanism arm (`sql` | `contract` |
+  `service` | `http`). The map no longer encodes the mechanism, so an HTTP source is a source
+  like any other: named, enrichable, composable. `TQL-YAML-1022` (http placement) and
+  `TQL-CAMEL-3101` (which of the two homes an extraction used) retire with the shapes they
+  policed.
+- **BREAKING: the top-level `sql:` key is deleted, on routes and on jobs.** It was a role
+  wearing a mechanism's name — a route whose `sql:` declared `service:` contained no SQL at all.
+  The primary is now the reserved source name `main`, which is a naming convention rather than a
+  slot: every default resolves to it, and a document that has no use for one simply does not
+  declare it. A command's write has one spelling too — `steps:` on a route, `pipeline:` on a job
+  — so `batch-tasklet` dies with the key that was its only difference from `batch-pipeline`.
+- **BREAKING: the envelope is universal.** Every read source publishes `rows` / `rowCount` /
+  `first` under its own name, and the primary result is `main.rows` everywhere: a response body,
+  a template, a view `source:`, an export template, a test expectation. Previously the primary
+  bound as bare `rows` in one place and as `sql` in another, which meant an expression's meaning
+  depended on where it was written.
+- **BREAKING: `steps:` is an array of id-carrying steps.** The surface's rule is that a
+  namespace is a map and an ordered sequence is an array whose items carry `id:` — `pipeline:`,
+  `states:`, `transitions:` and `match:` already followed it, and route `steps:` was the one map
+  whose *authoring order* was semantic. Now the order is the syntax.
+- **BREAKING: a pipeline step is a binding with an `id`, plus its output blocks.** Its keys fall
+  on three axes — the binding arm (`sql:`, `http:`), the output blocks (`export:`, `push:`,
+  `notify:`) and `chunk:` — and a step declares at least one, rather than exactly one of six.
+  A step that extracts rows and writes them to a file is one step with two keys; the extraction
+  is the step's own arm, never a statement hidden inside `export:`. Output blocks do not read;
+  `response:` never did.
+- **BREAKING: an enrichment nests under the source it transforms, and `into:` is deleted.** The
+  chunk step always had this shape; the route-level map with a back-reference was the exception,
+  and the back-reference was the only reason an `http:` source could not be enriched — it lived
+  in the wrong map, not by decision. `TQL-YAML-1045` retires with the key.
+- **BREAKING: one context vocabulary across routes and jobs.** Declared inputs bind as
+  `params.*` on a job as on a route (`job.*` is gone; the ambient `batch.*` stays), and job step
+  results bind as `steps.<id>.*`, retiring the singular `step.`. An expression now means the
+  same thing in a route, a job, an export template and a test.
+- **A repeated YAML key is an error.** Every authored map is a namespace, and silently keeping
+  the second `main:` is the shape of bug this codebase keeps finding: the document says one
+  thing and the runtime holds another. It matters more now that reads share one `sources:` map,
+  where a collision a lint used to catch across two maps is a duplicate key inside one.
+
+- **BREAKING: a job's `query` step publishes its rows** (docs/unified-sources.md decision 18).
+  It used to drain the `ResultSet` into a count and discard it, which made "fetch a control
+  value, bind it into later steps" inexpressible for a reason no reader of the document could
+  see: the step existed, its result did not. It now publishes `steps.<id>.rows` / `.rowCount` /
+  `.first` like any other read, bounded by `materialize.maxRows` or the app's default — counting
+  was memory protection, and the bound keeps that protection while the rows become usable. A
+  `query-spool` step publishes `rowCount` and `spool` and no `rows`: the point of spooling is
+  that the rows were never held, so publishing the count under the name that means a list
+  everywhere else was the envelope contradicting itself.
+- **`batch-tasklet` is gone** — see the top-level `sql:` entry; a job's work is its `pipeline:`,
+  whatever the step count.
+
+### Added
+
+- **A chunk step loads what an earlier step spooled** (docs/unified-sources.md decision 19). The
+  reader takes `spool: steps.<id>.spool` instead of `sql:`, and a batch **read** step may name
+  its own `datasource:` — which together make a copy between two databases expressible for the
+  first time: extract on one connector, load on the job's, neither side holding the result.
+  There is still no distributed transaction; the copy is eventual, explicit and restartable, and
+  the spool is the snapshot a rerun re-reads, which a SQL-reading chunk cannot offer. A write may
+  not move connectors (`TQL-YAML-1037`): that would be a second transaction the job does not own.
+  Spooled values round-trip through JSON, so a writer binding a date or a decimal casts in SQL —
+  the rule `chunk.after` already carries, documented and linted the same way.
+
+- **BREAKING: a workflow's `basePath:` is top level, and `command:` names a file.** `http:
+  { basePath: … }` named a mechanism rather than the thing it held, and with the route-level
+  `http:` map gone, keeping the word for an unrelated meaning would squat on it. `command:
+  submit.sql` was the surface's only bare-string statement reference — its binds sat a level out
+  from the statement they bound — and becomes `command: { file: submit.sql, params: … }`, the one
+  spelling every role-typed SQL reference shares (docs/unified-sources.md decisions 14 and 16).
+
+- **BREAKING: `response.json.nest` is retired; `enrich:` gains a `source:` arm**
+  (docs/unified-sources.md decision 6). `nest` joined two already-fetched results, `enrich`
+  fetched a reference by key: the same join (`on:`), the same composition (`as:` | `merge:`),
+  one runtime (`KeyedReference`) — and two vocabularies. The reference arms are now
+  `sql | http | source`, where `source: <name>` composes a sibling's rows without a fetch. The
+  gain is not tidiness: `nest:` could serve only a JSON body, because `into:` named a body key
+  and JSON is the only surface that has one. Written under the source it composes into, the same
+  join reaches an HTML list's `columns:` and an export's. `TQL-YAML-1019` retires with the block.
+
+- **BREAKING: `import:` says how to parse, and the per-row write is a step**
+  (docs/unified-sources.md decision 7b). An `import.sql:` looked like a query and was a write,
+  and it was the mirror image of the export block carrying its extraction — one confusion,
+  stated twice. It moves to the document's one `steps:` (route) or `pipeline:` (poll job) entry,
+  so every write on the surface is a step and every parsing declaration is only that.
+
+- **BREAKING: `httpCall:` is `http:`, on a job step and on a test case** (docs/unified-sources.md
+  decision 12). The step key was the binding union's `http` arm wearing a pre-union name, so a job
+  step and a route source spoke two vocabularies for one mechanism. A suite case names its target
+  after the document key it points at — as `sql:`, `contract:` and `notify:` already do — so the
+  case key moved with it. After this, every place an outbound call is declared or targeted spells
+  it `http:` — including the coverage kind, which gates on `coverage.thresholds.http`.
+
+- **An `http:` step publishes the envelope every read publishes** (docs/unified-sources.md
+  decision 10). `select:` names the part of the response that becomes rows, exactly as it does
+  on a route's `http:` source, and the step's `rows` / `rowCount` / `first` sit beside the
+  call's `status` / `body` / `headers`. Before, a job step published the response only, so
+  binding one row of it meant walking the raw body — the arm meant two different things
+  depending on which document declared it. `onError: empty` degrades a failed call the same way
+  it does on a route, logged and metered rather than silently.
+
+- **An `http:` acquisition can spool, so a chunk loads what an API returned**
+  (docs/unified-sources.md decision 19a). Spooling is not a SQL feature — it is what a large
+  result does on its way to a consumer that reads it once — so `mode: query-spool` means the
+  same thing on a call, and the same `reader: { spool: … }` loads it. This closes a gap the
+  campaign would otherwise have left: fetching a large result from an API and writing it into
+  the database had no expressible shape, since a statement bound to a response holds every row
+  and the only alternative was a file round trip through `push:` and a poll trigger. The
+  gateway still buffers the response body, so the spool bounds what the rest of the job holds,
+  not the call. `update` on an `http:` arm is refused at build time: a call reads.
+
+- **A reading step folds references into its own rows** (docs/unified-sources.md decision 5).
+  A job step's `enrich:` was read by nothing: the key was dropped at parse time, so the
+  declaration was accepted, never run, and never reported — the failure mode where the document
+  says one thing and the runtime does another. A step that reads (`mode: query`, or an `http:`
+  call) now enriches like a route source and a chunk reader do; a step that holds no rows says
+  so at build time instead of dropping the block, and so does a command step, whose writes
+  publish `affectedRows` and keys rather than rows.
+
+### Fixed
+
+- **An enrichment's `source:` could not name a job result.** It was read as a root context key,
+  and a job publishes under `steps.<id>` — so the sibling arm was unaddressable on the whole job
+  side rather than unsupported there, and the error blamed the wrong thing. It resolves as a
+  context path now, which is what a route's `source: rates` already was, one segment long. A
+  sibling that spooled still refuses (`TQL-CAMEL-3114`), and now says what to do instead: load
+  the spool into a table with a `chunk:` step and reference that.
+- **The shipped `binding` schema described a shape the parser no longer reads.** After the arms
+  landed, the definition still offered a bare `file:` and a string `contract:` — the flat
+  record, not the nested authoring form — and the published YAML surface reference is generated
+  from it, so a reader authoring from the reference wrote documents that silently did nothing.
+  The definition now documents the arms, and a test compares it against the creator's
+  parameters so the next added key cannot drift the same way.
+- **Linting an app whose chunk reader took a spool crashed the linter.** The reader's SQL file
+  was resolved before asking whether there was one, so `reader: { spool: … }` — the shape the
+  cross-connector copy introduced — threw a `NullPointerException` out of `lint`. A spooled
+  reader has no SQL to inspect: its order is the order the spool was written in.
+
+- **`query-spool` stopped promising a result nothing could reach.** The mode published a spool
+  reference that no pipeline vocabulary read: the only consumers of `tempStore.openInput` were
+  route-side export paths, so "the spool is available to later steps" was true of the reference
+  and false of the rows.
+- **The unknown-key lint stopped warning about keys the loader reads.** It compared authored
+  keys against record component names without following their `@JsonProperty` overrides, so
+  every app declaring `export:`, `import:` or `notify:` was told the key would be "silently
+  ignored" — while the runtime read it correctly.
+- **A scaffolded update bound its primary key twice.** An assigned (non-generated) key is a form
+  column as well as the row's identity, and the generated `params:` listed it from both, which
+  the parser resolved last-one-wins. Strict duplicate detection surfaced it.
+- **Declarative pagination followed the primary result's name, not the mechanism's.** The page
+  clause was appended only to a query publishing under the literal key `sql`, which the rename
+  would have silently turned off.
+
 ### Added
 
 - **A `chunk:` step enriches each window before its writer sees it** (docs/lookups.md, slice

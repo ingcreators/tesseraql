@@ -13,16 +13,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.explorer
-  params:
-    q: params.q
-    create: params.create
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.explorer
+      params:
+        q: params.q
+        create: params.create
+        roles: principal.roles
 response:
   html:
     status: 200
     template: explorer.html
     model:
-      studio: sql
+      studio: main

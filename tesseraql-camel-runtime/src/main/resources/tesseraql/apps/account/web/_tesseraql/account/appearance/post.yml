@@ -13,13 +13,14 @@ input:
     required: true
     enum: [light, dark]
 
-sql:
-  service: account.theme.save
-  params:
-    theme: params.theme
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.theme.save
+      params:
+        theme: params.theme
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

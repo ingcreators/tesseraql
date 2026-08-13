@@ -14,7 +14,7 @@ public class TesseraqlIamEndpoint extends DefaultEndpoint {
     private String name;
     private String realm;
     private String mode = "query";
-    private String resultKey = "sql";
+    private String resultKey = "main";
 
     public TesseraqlIamEndpoint(String uri, TesseraqlIamComponent component, String operation) {
         super(uri, component);

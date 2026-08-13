@@ -8,11 +8,12 @@ recipe: command-json
 security:
   policy: iam.admin.write
 
-sql:
-  service: iam.revokeSessions
-  params:
-    userId: path.id
-
+steps:
+  - id: main
+    service:
+      name: iam.revokeSessions
+      params:
+        userId: path.id
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?signedout=all

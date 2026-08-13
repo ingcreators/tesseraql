@@ -16,15 +16,16 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.policyRemoveRule
-  params:
-    policy: params.policy
-    kind: params.kind
-    value: params.value
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.policyRemoveRule
+      params:
+        policy: params.policy
+        kind: params.kind
+        value: params.value
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/security?removed=1

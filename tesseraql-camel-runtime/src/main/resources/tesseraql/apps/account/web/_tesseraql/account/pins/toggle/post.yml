@@ -16,14 +16,15 @@ input:
     required: false
     maxLength: 200
 
-sql:
-  service: account.pins.toggle
-  params:
-    href: params.href
-    label: params.label
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.pins.toggle
+      params:
+        href: params.href
+        label: params.label
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

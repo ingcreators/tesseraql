@@ -3,12 +3,14 @@ id: tql.studio.decisionBuilder
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.decisionBuilder
+sources:
+  main:
+    service:
+      name: studio.decisionBuilder
 
 response:
   html:
     status: 200
     template: decision-builder.html
     model:
-      db: sql
+      db: main

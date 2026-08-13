@@ -3,14 +3,16 @@ id: tql.studio.docs.export.pdf
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.routesPdf
+sources:
+  main:
+    service:
+      name: docs.routesPdf
 
 response:
   html:
     status: 200
     template: pdf.html
     model:
-      docs: sql
+      docs: main
     headers:
       Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

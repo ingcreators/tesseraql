@@ -12,19 +12,20 @@ input:
 security:
   policy: req.read
 
-sql:
-  file: requisitions.sql
-  mode: query
-  params:
-    q: query.q
-
+sources:
+  main:
+    sql:
+      file: requisitions.sql
+      mode: query
+      params:
+        q: query.q
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows
       meta:
-        count: sql.rowCount
+        count: main.rowCount
     # The buyer-internal estimate is removed from the response unless the caller
     # clears req.cost (docs/procurement-demo.md: a plain requester sees quantities,
     # not costs). policy: alone means pass = see it, fail = the field is absent.

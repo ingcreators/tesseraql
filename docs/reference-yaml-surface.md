@@ -19,14 +19,13 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `idempotency` | [object](#idempotency) | Idempotent replay for commands. A replayed key returns the stored response; a reused key with a different body is TQL-IDEM-4090. Documented in transactional-writes.md. |
 | `admission` | [object](#admission) | Admission policy for this route: concurrency, rate limiting, and the execution lane. Documented in productivity.md (admission) and jobs.md (lanes). |
 | `outbox` | object | Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md. |
-| `sql` | [sqlBinding](#sqlbinding) | The document's single statement: a colocated 2-way SQL file, a named IAM contract, or a service call. Its result binds as `rows`. |
-| `steps` | map of [sqlBinding](#sqlbinding) | Named statements executed in order inside one transaction (command recipes). Each result binds under `steps.<name>`. Documented in transactional-writes.md. |
-| `queries` | map of [sqlBinding](#sqlbinding) | Additional named queries executed after sql, each bound into the execution context under its name. |
+| `steps` | array of any | The command's ordered statements, executed inside one transaction (command recipes). Each item carries an id: and one binding arm; each result binds under `steps.<id>`. Documented in transactional-writes.md. |
+| `sources` | map of [binding](#binding) | Every named read acquisition, in authored order: each entry names its own mechanism (sql \| contract \| service \| http) and publishes rows/rowCount/first under its name, so a response, a view or a later source refers to one without knowing how it was fetched. Documented in unified-sources.md. |
 | `validate` | map of [object](#validate) | Declarative validation rules keyed by rule id. A rule declares exactly one of rule: (a cross-field expression), file: (validation SQL), or use: (a shared rule declared under rules/). Honored on command-json, query-json and webhook routes, on queue consumers, and on MCP tools. |
 | `decide` | map of [object](#decide) | Decision-table references keyed by alias, evaluated once per operation before the validate: rules; outputs publish as decision.<alias>.<output> for SQL binds and directives. Documented in decision-tables.md. |
 | `notify` | map of object | Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md. |
 | `errors` | object | Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md. |
-| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
+| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
 | `export` | object | query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md. |
 | `webhook` | [object](#webhook) | Inbound webhook verification and payload mapping for a `webhook` route. Documented in connectors.md. |
 | `publish` | [object](#publish) | The domain event this command publishes on a messaging channel after commit, on the same transactional outbox as `notify:`. Documented in messaging.md. |
@@ -34,8 +33,6 @@ Schema for TesseraQL route documents: web/**/<method>.yml, queue consumers under
 | `response` | [object](#response) | How the result becomes an HTTP response: JSON, HTML, a redirect, a stream, or a rendered file. Documented in response-shaping.md. |
 | `pagination` | [object](#pagination) | Declarative pagination: the framework appends the dialect clause; authored SQL carries no LIMIT/FETCH. |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
-| `http` | map of [object](#http) | Named HTTP sources on a query route (docs/connectors.md, "HTTP sources"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022). |
-| `enrich` | map of [object](#enrich) | Reference lookups folded into a result set's rows (docs/lookups.md): the rows of `into` carry a key, the reference behind that key is fetched in batches of distinct keys, and the match is composed into each row. One statement per `batchSize` keys rather than one per row. |
 | `cache` | [object](#cache) | Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025). |
 | `emit` | any | Topic(s) broadcast to live views after this command commits (docs/realtime.md). A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data. |
 | `invalidates` | any | Source table(s) whose code catalogs this command's write makes stale (docs/lookups.md). Named by table, not by catalog: a maintenance screen for a shared code master writes a row whose kind is request data, so which catalog is affected is not known until the write happens. Dropped after the commit, so a rollback invalidates nothing. |
@@ -171,17 +168,6 @@ The JSON response: status, body, per-field policy, and nested composition.
 | `body` | any | What the response body is: a bindable path such as `rows` or `steps.<name>`, or a literal shape composing several. |
 | `fields` | map of [fieldPolicy](#fieldpolicy) | Per-field visibility, masking, and classification applied to the body. Documented in data-scoping.md. |
 | `statusWhen` | [statusWhen](#statuswhen) | Conditional statuses: the first entry whose expression matches decides the status. |
-| `nest` | array of [object](#responsejsonnest) | Compose the rows of a named query into the parent rows, so one request answers a parent-and-children shape without a second endpoint. |
-
-##### response.json.nest
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `into` | string | The parent collection the children are nested into. |
-| `children` | string | The named query under `queries:` supplying the child rows. |
-| `as` | string | The property name the children appear under on each parent row; one of `as` or `merge` composes the match. |
-| `merge` | array of string | Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`. |
-| `on` | map of string | The join: each parent property to the child property it matches, one entry per key column. |
 
 #### response.html
 
@@ -257,37 +243,6 @@ Declarative pagination: the framework appends the dialect clause; authored SQL c
 | `count` | boolean | Also run a count query so the response carries the total row count. |
 | `by` | string | keyset cursor column |
 
-### http
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `method` | string | The HTTP method, defaulting to GET. A reference API that takes a key list or a query document (POST .../search, JSON-RPC, GraphQL) declares its own; a non-GET method is written out, never inferred from `body`. |
-| `url` | string | Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070). |
-| `body` | string | A source expression resolving to the JSON request body. Declaring it beside a method that carries no body (GET, HEAD) is a build error (TQL-YAML-1049). |
-| `headers` | map of string | Static request headers sent with the call. Credential material belongs in a named credential, never here. |
-| `query` | map of string | Query-string bindings, each an expression over the execution context. |
-| `credential` | string | A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072). |
-| `expectStatus` | integer | The HTTP status the response must carry; any other status fails the call. |
-| `connectTimeout` | string | How long to wait for the connection (duration string such as `2s`). |
-| `requestTimeout` | string | How long to wait for the complete response (duration string such as `10s`). |
-| `select` | string | Dotted path into the response JSON naming the rows array or object the source exposes. |
-| `readOnly` | boolean | The author's assertion that the call has no side effect. Required on a transactional recipe (TQL-YAML-1050): the call is made before the transaction and a rollback cannot un-make it. |
-| `onError` | enum: `fail` \| `empty` | fail (default) or empty: the source degrades to zero rows and the page still renders. |
-
-### enrich
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `into` | string | The result set to enrich: `sql` (the default) or one of the route's `queries:` (TQL-YAML-1045). |
-| `on` | map of string | The join, one entry per key column: each row column to the reference column it matches. The row side is the key that is looked up; the reference side names the columns bound as `keys`. |
-| `sql` | [sqlBinding](#sqlbinding) | The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). Exactly one of `sql` or `http` is the reference. |
-| `http` | object | The reference call, in the vocabulary every outbound call shares, plus `select` and `onError`. Exactly one of `sql` or `http` is the reference. A `perRow` call may key its url with `{key.<column>}` placeholders, percent-encoded per path segment; a `batch` call carries the whole key set as `keys`. |
-| `mode` | enum: `perRow` \| `batch` | How an HTTP reference is fetched: `perRow` (the default — one request per distinct key, for a resource keyed per URL) or `batch` (one request per `batchSize` keys, for an endpoint that accepts a key list). A SQL reference is always batched. |
-| `as` | string | Attach the matching reference rows as a list under this field; exactly one of `as` or `merge` composes the match (TQL-YAML-1047). |
-| `merge` | array of string | Copy these columns of the single matching reference row onto each row, for a many-to-one reference; the alternative to `as`. |
-| `batchSize` | integer ≥ 1 | Distinct keys per statement. Defaults from the dialect and the key arity, under Oracle's 1000-expression IN limit and SQL Server's 2100 parameters. |
-| `maxKeys` | integer ≥ 1 | The ceiling on distinct keys, beyond which the enrichment fails (TQL-SQL-2114) rather than issuing an unbounded number of round trips. Defaults to 10000. |
-
 ### cache
 
 Declarative HTTP caching for query responses (docs/response-shaping.md): Cache-Control from maxAge/visibility (private default; public lints onto auth: public only) and a content ETag answering If-None-Match with 304. Query recipes only (TQL-YAML-1025).
@@ -308,14 +263,13 @@ Schema for TesseraQL batch job documents (batch/**/job.yml): how the job is trig
 | `version` \* | const `tesseraql/v1` | The document format version. Always `tesseraql/v1`. |
 | `id` \* | string, min length 1 | Unique document id, e.g. products.page; referenced by tests, coverage, governance approvals, and logs. |
 | `kind` \* | const `job` | Batch job documents (batch/**/job.yml). |
-| `recipe` | enum: `batch-tasklet` \| `batch-pipeline` | What the job does: batch-tasklet (a single statement) or batch-pipeline (an ordered pipeline: of steps). |
+| `recipe` | enum: `batch-pipeline` | What the job does: batch-pipeline runs an ordered pipeline: of steps. |
 | `datasource` | string | The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036). |
 | `trigger` | [object](#trigger) | How a job starts (kind: job): a schedule, or a directory/SFTP/FTPS poll source feeding the import: pipeline. Documented in jobs.md and connectors.md. |
 | `input` | map of [inputField](#inputfield) | Declared input fields - one contract for routes and jobs alike (a job's parameters bind and validate exactly like a route's). Documented in app-layout.md and jobs.md. |
-| `sql` | [sqlBinding](#sqlbinding) | The document's single statement: a colocated 2-way SQL file, a named IAM contract, or a service call. Its result binds as `rows`. |
-| `pipeline` | array of object | A batch-pipeline job's ordered steps (exactly one of sql, notify, httpCall, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md. |
+| `pipeline` | array of any | The job's ordered steps. A step is a binding with an id (sql: or http:) plus its output blocks (export:, push:, notify:) or a chunk:, each publishing its result to the step context. Documented in jobs.md. |
 | `perTenant` | boolean | Run this job once per configured tenant, each on its own datasource and tenant context (kind: job). Documented in multi-tenancy.md. |
-| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). Documented in file-transfers.md. |
+| `import` | object | file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback\|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md. |
 | `overlap` | enum: `skip` \| `concurrent` | What a firing does while the previous execution still runs (kind: job): skip (default) records a SKIPPED execution naming the running one; concurrent runs anyway - declare it only for jobs that are safe to overlap. Documented in jobs.md. |
 | `sla` | [object](#sla) | Deadline expectations a periodic managed check alerts on through the alerts channel (kind: job) - alert-only, nothing is killed. Documented in jobs.md. |
 
@@ -539,41 +493,6 @@ Element constraints for `type: array`.
 | `type` | string | The element type. |
 | `enum` | array of string | The accepted element values; anything else is refused. |
 
-### sqlBinding
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `file` | string | A colocated 2-way SQL file (must exist; TQL-SQL-2103). |
-| `contract` | string | A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Legal on sql: and queries:, and refused inside a command step. Documented in authentication.md. |
-| `service` | string | A named runtime service provider to call instead of running SQL (docs/extending.md). Legal on sql: and queries:, and refused inside a command step — a transactional step must be a SQL file or a sequence. |
-| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (a streamed result). |
-| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
-| `datasource` | string | The named connector this read binding runs on, overriding the route's connector. A step inside a transactional pipeline cannot pick its own connector (TQL-YAML-1037). |
-| `when` | string | Guard expression on a command step: a falsy guard skips the step, recording steps.<name>.skipped. The declared branch point for decision.* outputs (docs decision-tables); not legal on the single-statement sql: form. |
-| `params` | map of string | Arguments for a `service:` or `contract:` call: each name to the bindable path supplying its value. |
-| `sequence` | string | Allocate the next value of a managed document-number sequence instead of running SQL; it binds as `steps.<name>.value`. Documented in transactional-writes.md. |
-| `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<name>.keys.<column>`. |
-| `materialize` | [object](#sqlbindingmaterialize) | Bounds on how much of the result is held in memory. |
-| `expect` | [object](#sqlbindingexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
-
-#### sqlBinding.materialize
-
-Bounds on how much of the result is held in memory.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
-| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
-
-#### sqlBinding.expect
-
-The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
-
-| Property | Type | Description |
-| --- | --- | --- |
-| `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
-| `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
-
 ### fieldPolicy
 
 | Property | Type | Description |
@@ -590,3 +509,100 @@ The row count this statement must affect, and what happens when it does not — 
 | --- | --- | --- |
 | `when` \* | string | A whitelist-only expression over the execution context; the first matching entry wins. |
 | `status` \* | integer ≥ 100 ≤ 599 | The HTTP status to answer when the expression is truthy. |
+
+### binding
+
+One acquisition or one statement. Exactly one mechanism arm names the means — sql (a colocated 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call) — or the write-side sequence, and that arm nests the keys the mechanism owns. Beside the arms sit the three questions no mechanism answers: the when: guard, the enrich: folded into the rows, and the spool: another step filled. Documented in unified-sources.md.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `sql` | [object](#bindingsql) | The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong. |
+| `contract` | [object](#bindingcontract) | The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`. |
+| `service` | [object](#bindingservice) | The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation. |
+| `http` | [object](#bindinghttp) | The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker. |
+| `sequence` | string | Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md. |
+| `spool` | string | A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md. |
+| `when` | string | Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables). |
+| `enrich` | map of object | Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows. |
+
+#### binding.sql
+
+The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `file` | string | A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`. |
+| `mode` | string | How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (rows streamed to a spool a later chunk: step reads, never held). |
+| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
+| `keys` | array of string | Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`. |
+| `timeoutSeconds` | integer ≥ 0 | Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s. |
+| `datasource` | string | The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037). |
+| `materialize` | [object](#bindingsqlmaterialize) | Bounds on how much of the result is held in memory. |
+| `expect` | [object](#bindingsqlexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
+
+##### binding.sql.materialize
+
+Bounds on how much of the result is held in memory.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `maxRows` | integer | Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`. |
+| `onOverflow` | string | `fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs. |
+
+##### binding.sql.expect
+
+The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
+| `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
+
+#### binding.contract
+
+The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | string | The named IAM SQL contract to execute instead of a colocated file, so an app reuses the identity schema's statements. Documented in authentication.md. |
+| `mode` | string | How the contract runs and what it binds, exactly as it means on the `sql` arm. |
+| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
+| `expect` | [object](#bindingcontractexpect) | The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete. |
+
+##### binding.contract.expect
+
+The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rowCount` | integer | The exact number of rows the statement must affect (rows is a list of records everywhere else). |
+| `onMismatch` | string | `conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500. |
+
+#### binding.service
+
+The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | string | The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows. |
+| `params` | map of string | Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`. |
+
+#### binding.http
+
+The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `method` | string | The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads. |
+| `url` | string | The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070). |
+| `headers` | map of string | Static request headers; values may carry ${…} config or secret placeholders, resolved on send. |
+| `query` | map of string | Query-string parameters, each a bindable path resolved against the execution context. |
+| `credential` | string | A named credential the SecretResolver supplies at call time, so a document never carries a secret. |
+| `body` | string | A bindable path whose value is serialized as the request body. |
+| `expectStatus` | integer | The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down. |
+| `connectTimeout` | string | Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout. |
+| `requestTimeout` | string | Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout. |
+| `select` | string | A dotted path into the response JSON naming the part that becomes rows. Default: the whole body. |
+| `onError` | string | `fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent. |
+| `readOnly` | boolean | The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot. |
+| `mode` | string | How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has. |

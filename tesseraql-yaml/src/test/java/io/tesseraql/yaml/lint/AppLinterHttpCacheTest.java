@@ -29,13 +29,15 @@ class AppLinterHttpCacheTest {
                   auth: %s
                 cache:
                 %s
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """.formatted(recipe, auth, cache));
     }
 
@@ -70,9 +72,11 @@ class AppLinterHttpCacheTest {
                 recipe: command-json
                 cache:
                   maxAge: 30s
-                sql:
-                  file: orders.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: orders.sql
+                      mode: update
                 response:
                   json:
                     status: 200

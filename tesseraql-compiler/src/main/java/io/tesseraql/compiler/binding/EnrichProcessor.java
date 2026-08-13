@@ -37,13 +37,16 @@ public final class EnrichProcessor implements Processor {
     /** TQL-CAMEL-3114: the target of an enrich: is not a result set with rows. */
     static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.CAMEL, 3114);
 
+    /** The source whose rows this enrichment folds into: the one it is declared on. */
+    private final String into;
     private final String name;
     private final EnrichSpec spec;
     private final KeyedReference reference;
 
-    public EnrichProcessor(String name, EnrichSpec spec, List<SqlNode> nodes,
+    public EnrichProcessor(String into, String name, EnrichSpec spec, List<SqlNode> nodes,
             String sourcePath, String datasource, String dialect,
             TransactionalCommandProcessor.Bounds bounds) {
+        this.into = into;
         this.name = name;
         this.spec = spec;
         this.reference = new KeyedReference(name, spec, nodes, sourcePath, datasource, dialect,
@@ -58,7 +61,6 @@ public final class EnrichProcessor implements Processor {
     public void process(Exchange exchange) throws Exception {
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.of(),
                 Map.class);
-        String into = spec.effectiveInto();
         Object targetRaw = context.get(into);
         if (!(targetRaw instanceof Map<?, ?> target)
                 || !(((Map<String, Object>) target).get("rows") instanceof List<?> rowsRaw)) {

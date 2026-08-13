@@ -36,8 +36,10 @@ class PollTriggerParsingTest {
                   format: csv
                   columns: [orderNo, qty]
                   onError: skip
-                  sql:
-                    file: upsert-order.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert-order.sql
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -56,7 +58,7 @@ class PollTriggerParsingTest {
         assertThat(job.fileImport()).isNotNull();
         assertThat(job.fileImport().format()).isEqualTo("csv");
         assertThat(job.fileImport().effectiveOnError()).isEqualTo("skip");
-        assertThat(job.fileImport().sql().file()).isEqualTo("upsert-order.sql");
+        assertThat(job.rowStep().file()).isEqualTo("upsert-order.sql");
     }
 
     @Test
@@ -81,8 +83,10 @@ class PollTriggerParsingTest {
                     moveFailed: rejected
                 import:
                   format: csv
-                  sql:
-                    file: upsert-order.sql
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert-order.sql
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);

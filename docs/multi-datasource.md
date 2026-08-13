@@ -43,9 +43,11 @@ id: sales.summary
 kind: route
 recipe: query-json
 datasource: reporting          # a name under tesseraql.datasources
-sql:
-  file: sales-summary.sql
-  mode: query
+sources:
+  main:
+    sql:
+      file: sales-summary.sql
+      mode: query
 ```
 
 A page composing several result sets may pick per query — the route-level value is
@@ -53,8 +55,9 @@ the default, a **read-only** named query may override it:
 
 ```yaml
 recipe: page
-sql: { file: orders-open.sql, mode: query }        # runs on main
-queries:
+sources:
+  main:
+    sql: { file: orders-open.sql, mode: query }  # runs on main
   turnover: { file: turnover.sql, mode: query, datasource: reporting }
 ```
 
@@ -123,9 +126,11 @@ consume:
 input:
   orderId: { type: string, required: true }
   total:   { type: number }
-sql:
-  file: upsert-order-projection.sql   # an idempotent upsert, in reporting's schema
-  mode: update
+sources:
+  main:
+    sql:
+      file: upsert-order-projection.sql   # an idempotent upsert, in reporting's schema
+      mode: update
 ```
 
 Delivery semantics are [messaging](messaging.md)'s, unchanged, because the *bus*

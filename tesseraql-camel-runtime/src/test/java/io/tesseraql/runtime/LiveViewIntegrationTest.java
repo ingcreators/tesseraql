@@ -294,8 +294,10 @@ class LiveViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: orders.sql
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                 response:
                   html:
                     view: orders
@@ -325,8 +327,10 @@ class LiveViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: ../order.sql
+                sources:
+                  main:
+                    sql:
+                      file: ../order.sql
                 response:
                   html:
                     view: order
@@ -345,7 +349,7 @@ class LiveViewIntegrationTest {
                 refreshOn: orders.changed
                 panels:
                   - type: stat
-                    source: sql
+                    source: main
                     column: order_count
                 """);
         Path stats = target.resolve("web/orders/stats");
@@ -357,8 +361,10 @@ class LiveViewIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: ../stats.sql
+                sources:
+                  main:
+                    sql:
+                      file: ../stats.sql
                 response:
                   html:
                     view: stats
@@ -387,16 +393,18 @@ class LiveViewIntegrationTest {
                 security:
                   auth: browser
                   csrf: true
-                sql:
-                  file: approve.sql
-                  mode: update
-                  params:
-                    status: body.status
+                steps:
+                  - id: main
+                    sql:
+                      file: approve.sql
+                      mode: update
+                      params:
+                        status: body.status
                 response:
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         return target;
     }

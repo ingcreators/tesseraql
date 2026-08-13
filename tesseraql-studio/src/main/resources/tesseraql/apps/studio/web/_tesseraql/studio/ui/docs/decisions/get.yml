@@ -3,12 +3,14 @@ id: tql.studio.docs.decisions
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.decisions
+sources:
+  main:
+    service:
+      name: docs.decisions
 
 response:
   html:
     status: 200
     template: decisions.html
     model:
-      dom: sql
+      dom: main

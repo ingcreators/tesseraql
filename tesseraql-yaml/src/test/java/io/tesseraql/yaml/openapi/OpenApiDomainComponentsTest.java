@@ -37,8 +37,9 @@ class OpenApiDomainComponentsTest {
                   sku:
                 %s
                 steps:
-                  record:
-                    file: insert.sql
+                  - id: record
+                    sql:
+                      file: insert.sql
                 response:
                   json:
                     body:

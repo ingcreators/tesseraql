@@ -6,29 +6,33 @@ recipe: query-html
 security:
   policy: inv.read
 
-sql:
-  file: totals.sql
-  mode: query
-
-queries:
+sources:
+  main:
+    sql:
+      file: totals.sql
+      mode: query
   byCategory:
-    file: by-category.sql
+    sql:
+      file: by-category.sql
   lowStock:
-    file: low-stock.sql
+    sql:
+      file: low-stock.sql
   # Supplier price drops, read straight off the CSV files by the analytics engine
   # (docs/duckdb.md) — one response composing the live database and the file drop.
   supplierPrices:
-    file: supplier-prices.sql
-    datasource: analytics
+    sql:
+      file: supplier-prices.sql
+      datasource: analytics
   # The lake's history (docs/duckdb.md "Lake tables"): every pricing run appended a
   # snapshot; the trend and the snapshot list read them beside the live tables.
   priceTrend:
-    file: price-trend.sql
-    datasource: analytics
+    sql:
+      file: price-trend.sql
+      datasource: analytics
   lakeSnapshots:
-    file: lake-snapshots.sql
-    datasource: analytics
-
+    sql:
+      file: lake-snapshots.sql
+      datasource: analytics
 response:
   html:
     status: 200

@@ -24,17 +24,18 @@ input:
 security:
   policy: sup.act
 
-sql:
-  file: register-shipment.sql
-  mode: update
-  params:
-    id: path.id
-    shipDate: params.shipDate
-    carrier: params.carrier
-    deliveryNoteNo: params.deliveryNoteNo
-
+steps:
+  - id: main
+    sql:
+      file: register-shipment.sql
+      mode: update
+      params:
+        id: path.id
+        shipDate: params.shipDate
+        carrier: params.carrier
+        deliveryNoteNo: params.deliveryNoteNo
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      created: steps.main.affectedRows

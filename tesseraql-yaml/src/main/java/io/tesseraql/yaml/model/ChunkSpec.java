@@ -25,11 +25,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *                  query never selected
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ChunkSpec(SqlBinding reader, SqlBinding writer, String key, Integer commitEvery,
+public record ChunkSpec(Binding reader, Binding writer, String key, Integer commitEvery,
         String onError, Integer skipLimit, java.util.Map<String, EnrichSpec> enrich) {
 
     /** The shape before a chunk could enrich between its reader and its writer. */
-    public ChunkSpec(SqlBinding reader, SqlBinding writer, String key, Integer commitEvery,
+    public ChunkSpec(Binding reader, Binding writer, String key, Integer commitEvery,
             String onError, Integer skipLimit) {
         this(reader, writer, key, commitEvery, onError, skipLimit, java.util.Map.of());
     }

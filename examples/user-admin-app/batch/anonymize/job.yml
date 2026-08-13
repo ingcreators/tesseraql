@@ -9,8 +9,12 @@ recipe: batch-pipeline
 pipeline:
   - id: anonymize
     chunk:
-      reader: { file: inactive-users.sql }
-      writer: { file: anonymize-user.sql }
+      reader:
+        sql:
+          file: inactive-users.sql
+      writer:
+        sql:
+          file: anonymize-user.sql
       key: id
       commitEvery: 200
       onError: skip

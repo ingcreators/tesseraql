@@ -3,15 +3,16 @@ id: tql.studio.copilot
 kind: route
 recipe: query-html
 
-sql:
-  service: studio.copilot.view
-  params:
-    roles: principal.roles
-    actor: principal.loginId
-
+sources:
+  main:
+    service:
+      name: studio.copilot.view
+      params:
+        roles: principal.roles
+        actor: principal.loginId
 response:
   html:
     status: 200
     template: copilot.html
     model:
-      chat: sql
+      chat: main

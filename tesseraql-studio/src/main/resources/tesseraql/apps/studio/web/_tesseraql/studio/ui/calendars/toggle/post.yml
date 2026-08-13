@@ -14,14 +14,15 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.calendars.toggle
-  params:
-    name: params.name
-    date: params.date
-    roles: principal.roles
-    actor: principal.loginId
-
+steps:
+  - id: main
+    service:
+      name: studio.calendars.toggle
+      params:
+        name: params.name
+        date: params.date
+        roles: principal.roles
+        actor: principal.loginId
 response:
   redirect:
     status: 303

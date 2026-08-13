@@ -25,15 +25,16 @@ validate:
       title: params.title
     field: title
 
-sql:
-  file: create.sql
-  mode: update
-  params:
-    title: params.title
-    amount: params.amount
-
+steps:
+  - id: main
+    sql:
+      file: create.sql
+      mode: update
+      params:
+        title: params.title
+        amount: params.amount
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      created: steps.main.affectedRows

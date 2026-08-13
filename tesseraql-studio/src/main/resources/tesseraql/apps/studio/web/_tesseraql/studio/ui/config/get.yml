@@ -13,16 +13,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.config
-  params:
-    roles: principal.roles
-    q: params.q
-
+sources:
+  main:
+    service:
+      name: studio.config
+      params:
+        roles: principal.roles
+        q: params.q
 response:
   html:
     status: 200
     template: config.html
     model:
-      cfg: sql
+      cfg: main
       saved: params.saved

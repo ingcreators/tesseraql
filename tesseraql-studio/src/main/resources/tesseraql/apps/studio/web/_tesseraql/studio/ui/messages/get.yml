@@ -8,15 +8,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.messages
-  params:
-    roles: principal.roles
-
+sources:
+  main:
+    service:
+      name: studio.messages
+      params:
+        roles: principal.roles
 response:
   html:
     status: 200
     template: messages.html
     model:
-      msg: sql
+      msg: main
       saved: params.saved

@@ -226,15 +226,17 @@ class ShortcutIntegrationTest {
                     required: false
                 security:
                   auth: browser
-                sql:
-                  file: home.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: home.sql
+                      mode: query
                 response:
                   html:
                     status: 200
                     template: home.html
                     model:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.writeString(home.resolve("home.sql"), "select 1 as x\n");
         // A detail view (Phase 39) - the recents trigger (slice 2).
@@ -247,11 +249,13 @@ class ShortcutIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: thing.sql
-                  mode: query
-                  params:
-                    id: path.id
+                sources:
+                  main:
+                    sql:
+                      file: thing.sql
+                      mode: query
+                      params:
+                        id: path.id
                 response:
                   html:
                     status: 200
@@ -262,7 +266,6 @@ class ShortcutIntegrationTest {
         Files.writeString(thing.resolve("thing.view.yml"), """
                 version: tesseraql/v1
                 id: things.detail.view
-                version: tesseraql/v1
                 kind: view
                 recipe: detail
                 title: Thing

@@ -3,8 +3,10 @@ id: tql.studio.docs.export.htmx
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.htmx
+sources:
+  main:
+    service:
+      name: docs.htmx
 
 response:
   file:
@@ -12,4 +14,4 @@ response:
     contentType: "application/json; charset=utf-8"
     filename: htmx-contract.json
     model:
-      htmx: sql
+      htmx: main

@@ -7,7 +7,7 @@ it. All of that requires a person looking at a page. Outside the console the ale
 story is unchanged — a partner noticing missing files — because the registry never reaches
 the scrape: `/_tesseraql/metrics` exposes route counters and latency histograms, nothing
 about polling. Both building blocks exist; this document connects them, and rides one
-adjacent counter along: egress denials from `httpCall` steps, the "same idea, different
+adjacent counter along: egress denials from `http:` steps, the "same idea, different
 subsystem" item the poll-status design left out of scope.
 
 ## Decisions

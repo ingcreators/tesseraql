@@ -35,12 +35,14 @@ class SecurityDefaultsResolutionTest {
                 id: items.api.search
                 kind: route
                 recipe: query-json
-                sql:
-                  file: search.sql
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(dir.resolve("web/api/items/search.sql"), "select 1\n");
         Files.createDirectories(dir.resolve("web/items/create"));
@@ -52,8 +54,9 @@ class SecurityDefaultsResolutionTest {
                 security:
                   policy: items.write
                 steps:
-                  insert:
-                    file: insert.sql
+                  - id: insert
+                    sql:
+                      file: insert.sql
                 response:
                   json:
                     body:
@@ -96,8 +99,9 @@ class SecurityDefaultsResolutionTest {
                 webhook:
                   provider: inventory
                 steps:
-                  record:
-                    file: record.sql
+                  - id: record
+                    sql:
+                      file: record.sql
                 """);
         Files.writeString(home.resolve("web/hooks/inventory/record.sql"), "select 1\n");
 

@@ -11,15 +11,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.migration.dryRun
-  params:
-    path: params.path
-    content: params.content
-
+sources:
+  main:
+    service:
+      name: studio.migration.dryRun
+      params:
+        path: params.path
+        content: params.content
 response:
   html:
     status: 200
     template: dry-run.html
     model:
-      dryRun: sql
+      dryRun: main

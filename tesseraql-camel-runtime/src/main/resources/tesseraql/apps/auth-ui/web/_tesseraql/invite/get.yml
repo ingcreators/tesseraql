@@ -22,15 +22,17 @@ input:
 security:
   auth: public
 
-sql:
-  service: auth.loginMethods
+sources:
+  main:
+    service:
+      name: auth.loginMethods
 
 response:
   html:
     status: 200
     template: invite.html
     model:
-      methods: sql
+      methods: main
       token: params.token
       invalid: params.invalid
       error: params.error

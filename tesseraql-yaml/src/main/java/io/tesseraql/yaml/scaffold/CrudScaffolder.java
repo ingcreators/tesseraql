@@ -285,12 +285,14 @@ public final class CrudScaffolder {
                   auth: browser
                   policy: app.read
 
-                sql:
-                  file: search.sql
-                  mode: query
-                  params:
-                %s    sort: query.sort
-                    dir: query.dir
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
+                      params:
+                %s        sort: query.sort
+                        dir: query.dir
 
                 pagination:
                   size: 50
@@ -305,7 +307,7 @@ public final class CrudScaffolder {
                         ? "  q:\n    type: string\n    required: false\n    maxLength: 200\n"
                         : "",
                 sortEnum(table, names), names.pkColumn(),
-                names.searchColumn().isPresent() ? "    q: query.q\n" : "", names.entity(),
+                names.searchColumn().isPresent() ? "        q: query.q\n" : "", names.entity(),
                 cspHeaders()));
         return yml.toString();
     }
@@ -479,12 +481,13 @@ public final class CrudScaffolder {
             route.append("""
 
                     steps:
-                      record:
-                        file: insert.sql
-                        mode: update
-                        keys: [%s]
+                      - id: record
+                        sql:
+                          file: insert.sql
+                          mode: update
+                          keys: [%s]
                     """.formatted(names.pkColumn()));
-            route.append(paramsBlock("    ", formColumns(table, names)));
+            route.append(paramsBlock("      ", formColumns(table, names)));
             route.append("""
 
                     response:
@@ -494,11 +497,13 @@ public final class CrudScaffolder {
         } else {
             route.append("""
 
-                    sql:
-                      file: insert.sql
-                      mode: update
+                    steps:
+                      - id: main
+                        sql:
+                          file: insert.sql
+                          mode: update
                     """);
-            route.append(paramsBlock("  ", formColumns(table, names)));
+            route.append(paramsBlock("      ", formColumns(table, names)));
             route.append("""
 
                     response:
@@ -559,12 +564,13 @@ public final class CrudScaffolder {
                   auth: browser
                   policy: app.read
 
-                sql:
-                  file: select.sql
-                  mode: query
-                  params:
-                    %s: params.%s
-
+                sources:
+                  main:
+                    sql:
+                      file: select.sql
+                      mode: query
+                      params:
+                        %s: params.%s
                 response:
                   html:
                     view: %s.edit
@@ -653,21 +659,28 @@ public final class CrudScaffolder {
         route.append(validateBlock(table, names, true));
         route.append("""
 
-                sql:
-                  file: update.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: update.sql
+                      mode: update
                 """);
         if (locked) {
-            route.append("  expect:\n    rowCount: 1\n    onMismatch: conflict\n");
+            route.append("      expect:\n        rowCount: 1\n        onMismatch: conflict\n");
         }
-        route.append("  params:\n    ").append(names.pkField()).append(": params.")
+        route.append("      params:\n        ").append(names.pkField()).append(": params.")
                 .append(names.pkField()).append('\n');
         for (TableSchema.Column column : formColumns(table, names)) {
-            route.append("    ").append(Names.field(column)).append(": params.")
+            // An assigned key is a form column too, and it is already bound above — writing it
+            // twice was a duplicate key the parser used to resolve last-one-wins.
+            if (Names.field(column).equals(names.pkField())) {
+                continue;
+            }
+            route.append("        ").append(Names.field(column)).append(": params.")
                     .append(Names.field(column)).append('\n');
         }
         if (locked) {
-            route.append("    version: params.version\n");
+            route.append("        version: params.version\n");
         }
         route.append("""
 
@@ -739,17 +752,19 @@ public final class CrudScaffolder {
                   policy: app.write
                   csrf: required
 
-                sql:
-                  file: delete.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: delete.sql
+                      mode: update
                 """);
         if (locked) {
-            route.append("  expect:\n    rowCount: 1\n    onMismatch: conflict\n");
+            route.append("      expect:\n        rowCount: 1\n        onMismatch: conflict\n");
         }
-        route.append("  params:\n    ").append(names.pkField()).append(": params.")
+        route.append("      params:\n        ").append(names.pkField()).append(": params.")
                 .append(names.pkField()).append('\n');
         if (locked) {
-            route.append("    version: params.version\n");
+            route.append("        version: params.version\n");
         }
         route.append("""
 

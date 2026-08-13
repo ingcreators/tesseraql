@@ -190,16 +190,18 @@ final class DialectRuntimeChecks {
                   aggregateId: body.name
                   payload:
                     name: body.name
-                sql:
-                  file: touch.sql
-                  mode: update
-                  params:
-                    name: body.name
+                steps:
+                  - id: main
+                    sql:
+                      file: touch.sql
+                      mode: update
+                      params:
+                        name: body.name
                 response:
                   json:
                     status: 200
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
         Files.writeString(touch.resolve("touch.sql"),
                 "update users set status = status where name = /* name */ 'x'\n");
@@ -216,8 +218,10 @@ final class DialectRuntimeChecks {
                   columns:
                     - name
                     - { name: qty, type: number }
-                  sql:
-                    file: insert-item.sql
+                steps:
+                  - id: row
+                    sql:
+                      file: insert-item.sql
                 """);
         Files.writeString(importRoute.resolve("insert-item.sql"), """
                 insert into items (name, qty)
@@ -235,8 +239,10 @@ final class DialectRuntimeChecks {
                 export:
                   format: csv
                   filename: items.csv
-                  sql:
-                    file: select-items.sql
+                sources:
+                  main:
+                    sql:
+                      file: select-items.sql
                 """);
         Files.writeString(exportRoute.resolve("select-items.sql"),
                 "select name, qty from items order by name\n;\n");

@@ -8,8 +8,8 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ScopeFile;
 import io.tesseraql.yaml.manifest.WorkflowFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.model.TransitionSpec;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -200,7 +200,8 @@ public final class ManifestCoverage {
                 String item = workflowId + "#" + transition.id();
                 coverage.declare(item);
                 if (transition.command() != null
-                        && testedPaths.contains(dir.resolve(transition.command()).normalize())) {
+                        && testedPaths
+                                .contains(dir.resolve(transition.commandFile()).normalize())) {
                     coverage.cover(item);
                 }
             }
@@ -239,7 +240,7 @@ public final class ManifestCoverage {
     private static Set<String> referencedScopes(RouteFile route) {
         Set<String> names = new LinkedHashSet<>();
         Path dir = route.source().getParent();
-        for (SqlBinding binding : CrossReferenceIndex.bindings(route.definition())) {
+        for (Binding binding : CrossReferenceIndex.bindings(route.definition())) {
             if (binding.file() == null) {
                 continue;
             }
@@ -427,10 +428,10 @@ public final class ManifestCoverage {
                 continue;
             }
             coverage.declare(definition.id());
-            io.tesseraql.yaml.model.ImportSpec importSpec = definition.fileImport();
-            if (importSpec != null && importSpec.sql() != null && importSpec.sql().file() != null
+            io.tesseraql.yaml.model.Binding rowStep = definition.rowStep();
+            if (definition.fileImport() != null && rowStep != null && rowStep.file() != null
                     && testedPaths.contains(job.source().getParent()
-                            .resolve(importSpec.sql().file()).normalize())) {
+                            .resolve(rowStep.file()).normalize())) {
                 coverage.cover(definition.id());
             }
         }
@@ -444,13 +445,13 @@ public final class ManifestCoverage {
      * connector is exercised before it ships.
      */
     public static ItemCoverage httpCall(AppManifest manifest, List<TestSuite> suites) {
-        ItemCoverage coverage = new ItemCoverage("httpCall");
+        ItemCoverage coverage = new ItemCoverage("http");
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
             if (job.definition().id() == null) {
                 continue;
             }
             job.definition().effectiveSteps().stream()
-                    .filter(step -> step.httpCall() != null)
+                    .filter(step -> step.sql() != null && step.sql().isHttp())
                     .forEach(step -> coverage.declare(job.definition().id() + "." + step.id()));
         }
         for (TestSuite suite : suites) {

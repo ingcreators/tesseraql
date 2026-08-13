@@ -188,16 +188,18 @@ class InventoryLakeIntegrationTest {
                 security:
                   auth: public
                 datasource: analytics
-                sql:
-                  file: current.sql
-                  mode: query
-                queries:
+                sources:
+                  main:
+                    sql:
+                      file: current.sql
+                      mode: query
                   firstRun:
-                    file: first-run.sql
+                    sql:
+                      file: first-run.sql
                 response:
                   json:
                     body:
-                      current: sql.rows
+                      current: main.rows
                       firstRun: firstRun.rows
                 """);
         Files.writeString(board.resolve("current.sql"),
@@ -217,11 +219,17 @@ class InventoryLakeIntegrationTest {
                     cron: "0 0 4 1 1 ? 2099"
                 pipeline:
                   - id: retire
-                    sql: { file: retire-history.sql, mode: update }
+                    sql:
+                      file: retire-history.sql
+                      mode: update
                   - id: expire
-                    sql: { file: expire-now.sql, mode: query }
+                    sql:
+                      file: expire-now.sql
+                      mode: query
                   - id: cleanup
-                    sql: { file: cleanup-files.sql, mode: query }
+                    sql:
+                      file: cleanup-files.sql
+                      mode: query
                 """);
         Files.writeString(prune.resolve("retire-history.sql"),
                 "delete from lake.price_history where loaded_at < now()\n");
@@ -241,13 +249,15 @@ class InventoryLakeIntegrationTest {
                 security:
                   auth: public
                 datasource: analytics
-                sql:
-                  file: outside.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: outside.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(outside.resolve("outside.sql"),
                 "select * from read_csv('/etc/hostname')\n");

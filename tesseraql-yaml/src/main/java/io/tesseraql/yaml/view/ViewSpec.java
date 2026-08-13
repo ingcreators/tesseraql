@@ -187,7 +187,7 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     }
 
     public ViewSpec {
-        source = source == null || source.isBlank() ? "sql" : source;
+        source = source == null || source.isBlank() ? "main" : source;
         fields = fields == null ? List.of() : List.copyOf(fields);
         columns = columns == null ? List.of() : List.copyOf(columns);
         children = children == null ? List.of() : List.copyOf(children);

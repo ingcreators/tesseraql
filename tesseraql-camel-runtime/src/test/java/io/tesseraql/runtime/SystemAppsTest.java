@@ -24,13 +24,15 @@ class SystemAppsTest {
             id: %s
             kind: route
             recipe: query-json
-            sql:
-              file: ping.sql
-              mode: query
+            sources:
+              main:
+                sql:
+                  file: ping.sql
+                  mode: query
             response:
               json:
                 body:
-                  data: sql.rows
+                  data: main.rows
             """;
 
     private static final String MCP_TOOL = """
@@ -39,9 +41,11 @@ class SystemAppsTest {
             kind: tool
             recipe: query-json
             description: A tool.
-            sql:
-              file: tool.sql
-              mode: query
+            sources:
+              main:
+                sql:
+                  file: tool.sql
+                  mode: query
             """;
 
     private static final String MCP_RESOURCE = """
@@ -51,9 +55,11 @@ class SystemAppsTest {
             recipe: query-json
             uri: %s
             description: A resource.
-            sql:
-              file: tool.sql
-              mode: query
+            sources:
+              main:
+                sql:
+                  file: tool.sql
+                  mode: query
             """;
 
     private static final String MCP_UI = """
@@ -63,9 +69,11 @@ class SystemAppsTest {
             recipe: query-html
             uri: %s
             description: A UI resource.
-            sql:
-              file: tool.sql
-              mode: query
+            sources:
+              main:
+                sql:
+                  file: tool.sql
+                  mode: query
             response:
               html:
                 template: ui.html

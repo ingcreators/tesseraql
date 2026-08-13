@@ -8,14 +8,15 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.scaffold.preview
-  params:
-    table: params.table
-
+sources:
+  main:
+    service:
+      name: studio.scaffold.preview
+      params:
+        table: params.table
 response:
   html:
     status: 200
     template: preview.html
     model:
-      scaffold: sql
+      scaffold: main

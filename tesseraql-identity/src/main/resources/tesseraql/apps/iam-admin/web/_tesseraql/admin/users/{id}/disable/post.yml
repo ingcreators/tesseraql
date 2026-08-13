@@ -9,11 +9,13 @@ security:
 # A service, not a bare contract (docs/session-administration.md): disabling flips the
 # status AND ends every session of the subject - disabled means disabled now, not at
 # cookie expiry.
-sql:
-  service: iam.disableUser
-  params:
-    userId: path.id
 
+steps:
+  - id: main
+    service:
+      name: iam.disableUser
+      params:
+        userId: path.id
 response:
   redirect:
     location: /_tesseraql/admin/users/{path.id}?disabled=1

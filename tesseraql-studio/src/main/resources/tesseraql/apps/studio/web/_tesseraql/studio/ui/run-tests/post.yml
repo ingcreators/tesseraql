@@ -8,14 +8,15 @@ input:
     type: string
     required: true
 
-sql:
-  service: studio.runTests
-  params:
-    path: params.path
-
+sources:
+  main:
+    service:
+      name: studio.runTests
+      params:
+        path: params.path
 response:
   html:
     status: 200
     template: run-tests.html
     model:
-      tests: sql
+      tests: main

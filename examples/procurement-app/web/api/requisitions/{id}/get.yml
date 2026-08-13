@@ -12,19 +12,20 @@ input:
 security:
   policy: req.read
 
-sql:
-  file: requisition.sql
-  mode: query
-  params:
-    id: path.id
-
+sources:
+  main:
+    sql:
+      file: requisition.sql
+      mode: query
+      params:
+        id: path.id
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows
     statusWhen:
-      - when: sql.rowCount == 0
+      - when: main.rowCount == 0
         status: 404
     fields:
       internal_estimate:

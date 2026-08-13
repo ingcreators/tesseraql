@@ -14,15 +14,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.apply
-  params:
-    path: params.path
-    force: params.force
-    confirm: params.confirm
-    actor: principal.loginId
-    roles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.apply
+      params:
+        path: params.path
+        force: params.force
+        confirm: params.confirm
+        actor: principal.loginId
+        roles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/source?path={params.path}&applied=1

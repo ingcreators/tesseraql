@@ -94,10 +94,12 @@ input:
   sort: { type: string, required: false }
   dir: { type: string, required: false, enum: [asc, desc] }
 pagination: { size: 20, count: true }
-sql:
-  file: items.sql
-  mode: query
-  params: { q: query.q }
+sources:
+  main:
+    sql:
+      file: items.sql
+      mode: query
+      params: { q: query.q }
 response:
   html:
     view: items.list
@@ -176,7 +178,7 @@ camelCase input names to snake_case columns.
 
 `recipe: detail` renders a labelled value list over one row, and composes its route's
 named queries as child lists: a `children:` entry names a source that must be one of
-the route's `queries:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
+the route's `sources:` (`TQL-VIEW-3308`). A detail offers the same `header`/`footer`
 slots as a list.
 
 ## Views embed views
@@ -273,7 +275,7 @@ The chart scripts — the self-hosted Observable Plot bundle and the framework's
 `charts.js` bootstrap — load only on pages where a chart panel renders; the CSP stays
 `default-src 'self'`. Chart vocabulary violations are `TQL-VIEW-3313`. Panel sources
 validate like children: a panel's `source:` must be `sql` or one of the route's named
-`queries:` or [`http:` sources](connectors.md#http-sources-on-query-routes)
+`sources:` entries, whatever arm each names ([`http:` included](connectors.md#http-sources-on-query-routes))
 (`TQL-VIEW-3308`). Dashboards eject like any other view, with the pinning
 preconditions the ladder describes (L3): chart panels need explicit `x:` and
 `series:`/`y:`, table panels explicit `columns:`, and a sparkline's `data-max` has no
@@ -290,9 +292,10 @@ every panel with it:
 # web/sales/dashboard/get.yml (excerpt)
 input:
   from: { type: date, required: false }
-queries:
+sources:
   byRegion:
-    file: by-region.sql        # ... where sale_date >= coalesce(/* query.from */ null, ...)
+    sql:
+      file: by-region.sql        # ... where sale_date >= coalesce(/* query.from */ null, ...)
 ```
 
 ```html
@@ -439,7 +442,7 @@ Lint family **`TQL-VIEW-33xx`**:
 | 3305 | unknown widget name |
 | 3306 | unknown slot name for the view kind |
 | 3307 | an L2 override file lacks the expected `th:fragment` signature |
-| 3308 | a `children:` or `panels:` entry names a source the route's `queries:` do not declare |
+| 3308 | a `children:` or `panels:` entry names a source the route's `sources:` do not declare |
 | 3309 | `search:` names an input the route does not declare |
 | 3310 | sortable columns without the route declaring the `sort`/`dir` inputs its SQL applies |
 | 3313 | chart-panel vocabulary: unknown `chart:`, `y:` and `series:` together (or neither), `mark:` outside `chart: combo`, a malformed `xType:`/`height:`, or chart keys on a non-chart panel |

@@ -590,15 +590,17 @@ class AccountSurfaceIntegrationTest {
                 recipe: query-html
                 security:
                   auth: browser
-                sql:
-                  file: home.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: home.sql
+                      mode: query
                 response:
                   html:
                     status: 200
                     template: home.html
                     model:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         Files.writeString(home.resolve("home.sql"), "select 1 as x\n");
         // A command that notifies its own caller - the recipient-aware opt-out testbed.
@@ -612,9 +614,11 @@ class AccountSurfaceIntegrationTest {
                 security:
                   auth: browser
                   csrf: true
-                sql:
-                  file: notify-me.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: notify-me.sql
+                      mode: update
                 notify:
                   ping:
                     channel: user-mail
@@ -650,15 +654,17 @@ class AccountSurfaceIntegrationTest {
                 recipe: query-json
                 security:
                   auth: browser
-                sql:
-                  file: page-size.sql
-                  mode: query
-                  params:
-                    size: preference.pageSize
+                sources:
+                  main:
+                    sql:
+                      file: page-size.sql
+                      mode: query
+                      params:
+                        size: preference.pageSize
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pageSize.resolve("page-size.sql"),
                 "select /* size */'25' as size\n");

@@ -2,38 +2,33 @@
 
 Routes answer requests; **jobs** do the work nobody is waiting on: nightly maintenance,
 data exports, fetch-and-persist integrations. A job is a YAML document under the app's
-`batch/` tree — conventionally `batch/**/job.yml` — with `kind: job`, and its steps are the
+`batch/` tree — conventionally `batch/**/params.yml` — with `kind: job`, and its steps are the
 same plain 2-way SQL files the rest of the framework runs. Jobs fire on a schedule, on a
 polled directory, or on demand through the operations API, and every run is recorded with
 per-step status, timing, and row counts.
 
-## Two recipes
+## One recipe
 
-- **`batch-tasklet`** — the job is a single SQL statement, declared in a top-level `sql:`
-  block. Use it when there is exactly one thing to do.
-- **`batch-pipeline`** — the job is an ordered `pipeline:` of steps that run sequentially
-  and pass results forward. Use it when steps feed each other, or when the job mixes SQL
-  with a notification or an outbound HTTP call.
-
-A tasklet is the smallest possible job:
+A job's work is its `pipeline:` — an ordered list of steps that run sequentially and pass
+results forward. There is one spelling whatever the step count, so the smallest possible job
+is a one-step pipeline:
 
 ```yaml
 version: tesseraql/v1
 id: user.purgeExpired
 kind: job
-recipe: batch-tasklet
+recipe: batch-pipeline
 
 trigger:
   schedule:
     cron: "0 0 3 * * ?"
 
-sql:
-  file: purge-expired.sql
-  mode: update
+pipeline:
+  - id: purge
+    sql:
+      file: purge-expired.sql
+      mode: update
 ```
-
-Internally a tasklet runs as a one-step pipeline, so everything below about steps,
-executions, and failure behavior applies to both recipes.
 
 ## Scheduling
 
@@ -178,8 +173,9 @@ deny-by-default host allow-list. Polling is part of the managed-connector surfac
 (gated by the `ops.batch.run` policy) runs the job immediately and answers with the
 execution id and final status. The JSON request body becomes the job's parameters. Declared
 `input:` on the job document the expected names and types; each value is available to steps
-as `job.<name>`. Scheduled firings run with no parameters, so a scheduled job's SQL must
-work when its `job.*` binds are null.
+as `params.<name>` — the same name a route's declared inputs bind under. Scheduled firings
+run with no parameters, so a scheduled job's SQL must work when its `params.*` binds are
+null.
 
 ## Driving jobs from an external scheduler
 
@@ -212,36 +208,38 @@ $ tesseraql job cancel <executionId> --app .   # the cooperative stop, see below
 
 ## Pipeline steps and the step context
 
-Each pipeline step has an `id` and declares **exactly one** of:
+A step **is a binding with an `id`**, plus the output blocks that act on what it produced.
+Its keys fall on three axes, and a step declares at least one:
 
-- `sql:` — render and execute a 2-way SQL file
-- `notify:` — enqueue a notification on the transactional outbox
-- `httpCall:` — issue one synchronous outbound REST request
-- `chunk:` — restartable per-row processing, committed in slices
-  ([below](#the-chunk-step))
-- `export:` — write a formatted file from an extraction query
-  ([below](#the-export-step))
-- `push:` — deliver a produced file to a partner drop, local or SFTP/FTPS
-  ([below](#the-push-step))
+| Axis | Keys | How many |
+| --- | --- | --- |
+| Acquisition or statement | `sql:` (a 2-way SQL file), `http:` (one synchronous outbound REST request) | at most one |
+| Output | `export:` (write a formatted file, [below](#the-export-step)), `push:` (deliver a produced file, [below](#the-push-step)), `notify:` (enqueue a notification on the transactional outbox) | any, beside the arm |
+| Processing | `chunk:` (restartable per-row processing, committed in slices, [below](#the-chunk-step)) | at most one |
+
+So a step that extracts rows and writes them to a file is one step with two keys — the arm
+reads, the output block writes — and a step that reports what it wrote adds `notify:` beside
+them.
 
 Steps run in order, and each step publishes its result into a shared context that later
 steps bind from:
 
 | Context path               | Value                                                              |
 | -------------------------- | ------------------------------------------------------------------ |
-| `job.<name>`               | a job parameter                                                    |
-| `step.<id>.affectedRows`   | rows affected (update) or returned (query) by an earlier step      |
-| `step.<id>.status` / `step.<id>.body` / `step.<id>.headers` | an earlier `httpCall` step's response |
-| `step.<id>.eventId`        | the outbox event id an earlier `notify:` step enqueued             |
-| `step.<id>.transferId` / `step.<id>.filename` / `step.<id>.rows` | an earlier `export:` step's produced transfer |
-| `step.<id>.target` / `step.<id>.filename` | an earlier `push:` step's delivery |
+| `params.<name>`            | a job parameter                                                    |
+| `steps.<id>.affectedRows`  | rows affected by an earlier `mode: update` step                    |
+| `steps.<id>.rows` / `.rowCount` / `.first` | an earlier read step's result — a `sql:` query or an `http:` call, the same envelope either way |
+| `steps.<id>.spool` / `.rowCount` | an earlier `mode: query-spool` step's spool reference        |
+| `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `http:` step's response, beside its rows |
+| `steps.<id>.eventId`       | the outbox event id an earlier `notify:` step enqueued             |
+| `steps.<id>.transferId` / `steps.<id>.filename` / `steps.<id>.rows` | an earlier `export:` step's produced transfer |
+| `steps.<id>.target` / `steps.<id>.filename` | an earlier `push:` step's delivery |
 | `tenant.id`                | the current tenant, on a [per-tenant job](#per-tenant-jobs)        |
 
 A SQL step names its file (relative to the job's directory) and an execution mode:
-`update` for statements that modify rows, `query` to execute and count, or `query-spool` to
-stream the result set to a temporary JSONL spool — the spool reference and row count are
-published to later steps, which keeps arbitrarily large extracts out of memory. The file
-stays runnable in a plain SQL tool; binds are marked with `/* name */ dummy` comments:
+`update` for statements that modify rows, `query` to read them, or `query-spool` to stream the
+result set to a temporary JSONL spool. The file stays runnable in a plain SQL tool; binds are
+marked with `/* name */ dummy` comments:
 
 ```yaml
 pipeline:
@@ -250,23 +248,73 @@ pipeline:
       file: deactivate-pending.sql
       mode: update
       params:
-        cutoff: job.businessDate      # bound from the step context
+        cutoff: params.businessDate      # bound from the step context
   - id: report
     notify:
       channel: audit-webhook
       payload:
-        deactivated: step.deactivate.affectedRows
+        deactivated: steps.deactivate.affectedRows
 ```
 
 The `notify:` step is the job-side twin of a command's `notify:` block — same channels, same
 outbox delivery, same per-user opt-out and declarative test cases; see
-[notifications](notifications.md). The `httpCall:` step interleaves an allow-listed
+[notifications](notifications.md). The `http:` step interleaves an allow-listed
 outbound REST call with SQL steps; see [managed connectors](connectors.md).
+
+An `http:` step is an acquisition like any other, so it publishes what any read publishes:
+`select:` names the part of the response that becomes rows, and the step's `rows` /
+`rowCount` / `first` sit beside the call's `status` / `body` / `headers`. Its `mode:` is the
+one a call has — `query` (default, the rows are held) or `query-spool` (they are streamed to a
+spool, [below](#loading-what-another-step-read)); `update` on a call is refused at build
+time, because a call reads.
+
+```yaml
+pipeline:
+  - id: headcount
+    http:
+      url: https://api.directory.example/v1/headcount
+      select: units
+      credential: directory
+  - id: record
+    sql:
+      file: record-headcount.sql
+      mode: update
+      params:
+        total: steps.headcount.first.total    # a response row, bound like a query's
+```
+
+### Enriching a step's rows
+
+A reading step folds keyed references into its rows before any later step binds them, with the
+same `enrich:` block a route source and a chunk reader carry ([lookups](lookups.md)) — an
+enrichment is about the rows, whatever fetched them. The reference is `sql:` (fetch by key),
+`http:` (call by key), or `source:` (a result the job already has, joined without a fetch):
+
+```yaml
+pipeline:
+  - id: partner
+    http: { url: https://api.partner.example/v1/companies, select: companies }
+  - id: orders
+    sql:
+      file: open-orders.sql
+      mode: query
+    enrich:
+      partnerName:
+        source: steps.partner          # a sibling result, named by its context path
+        on: { partner_code: code }
+        merge: [name]
+```
+
+`source:` names a **context path**, so on a job it is `steps.<id>` — a route's sources sit at
+the root and are named directly. Only a step that reads has rows to fold into: `enrich:` on a
+write, on a sequence allocation, or on a `query-spool` extract is a build error, and a chunk
+step declares its `enrich:` on the reader, where it runs per window. A sibling that spooled
+publishes no rows by design; load it into a table with a `chunk:` step and reference that.
 
 ## The chunk step
 
 A per-row rewrite too large for one transaction — revalue a million orders, anonymize
-inactive accounts — needs what a single `sql:` step cannot give: intermediate commits, a
+inactive accounts — needs what a single SQL step cannot give: intermediate commits, a
 restart that does not start over, and a policy for the one bad row
 ([batch platform](batch-platform.md) track C):
 
@@ -274,8 +322,8 @@ restart that does not start over, and a policy for the one bad row
 pipeline:
   - id: revalue
     chunk:
-      reader: { file: unprocessed-orders.sql }   # SELECT, keyset-ordered
-      writer: { file: revalue-order.sql }        # runs once per row
+      reader: { sql: { file: unprocessed-orders.sql } }  # SELECT, keyset-ordered
+      writer: { sql: { file: revalue-order.sql } }       # runs once per row
       key: id                                    # the reader column checkpoints track
       commitEvery: 1000                          # default 500
       onError: skip                              # default: fail
@@ -285,7 +333,7 @@ pipeline:
 **Two connections.** The reader streams its SELECT on one connection (a fetch-sized
 cursor); the writer runs once per row on a second connection that commits every
 `commitEvery` handled rows. The writer's binds are the reader's row (**`row.<column>`**)
-plus the ambient `batch.*`/`job.*` context.
+plus the ambient `batch.*` context and the job's `params.*`.
 
 **Checkpoint restart.** After each committed chunk, the last handled `key` value lands in
 the managed `tql_job_checkpoint` table (one row per job, step, and business date). A rerun
@@ -318,6 +366,72 @@ point would be undefined), and a reader that never binds `chunk.after` is a warn
 survives). The `key` column's values must be unique and ascending under the reader's
 `order by`; the gallery's `user.anonymizeInactive` job is the runnable reference.
 
+### Loading what another step read
+
+A reader declares **`spool:`** instead of `sql:` to load an earlier step's spool. That is what
+makes a copy between two databases expressible: the extract runs on one connector, the load on
+the job's, and neither side holds the result.
+
+```yaml
+kind: job
+datasource: erp_b                                  # the load side
+pipeline:
+  - id: extract
+    sql:
+      file: extract-orders.sql
+      mode: query-spool
+      datasource: erp_a                            # the extract side
+  - id: load
+    chunk:
+      reader: { spool: steps.extract.spool }
+      writer: { sql: { file: upsert-order.sql } }
+      key: id
+```
+
+A batch step may name its own `datasource:` **only for a read**: each batch step owns its
+transaction, so an extract elsewhere splits nothing, while a write on another connector would be
+a second transaction the job does not own (`TQL-YAML-1037`). There is still no distributed
+transaction — the copy is eventual, explicit and restartable, which is
+[the stance](multi-datasource.md) the whole surface takes.
+
+Two consequences worth knowing before you rely on it:
+
+- **The spool is the snapshot.** A rerun re-reads exactly the rows the extract saw, which a
+  SQL-reading chunk cannot offer — its source table has moved on. Spool retention has to cover
+  the rerun window.
+- **Values round-trip through JSON.** A writer binding a date or a decimal casts in SQL, the
+  same rule `chunk.after` carries. It matters more here, because a JSON number landing in a
+  numeric column is the common case rather than the exception.
+
+Anything that fills a spool can feed a chunk, not only SQL. Spooling is not a SQL feature — it
+is what a large result does on its way to a consumer that reads it once — so `mode:
+query-spool` means the same thing on an `http:` acquisition, and the same reader loads it:
+
+```yaml
+pipeline:
+  - id: fetch
+    http:
+      url: https://directory.example/companies
+      select: companies
+      mode: query-spool                  # the rows land in the spool, not in memory
+  - id: load
+    chunk:
+      reader: { spool: steps.fetch.spool }
+      writer: { sql: { file: upsert-company.sql } }
+      key: code
+```
+
+That closes a gap the surface would otherwise leave: fetching a large result from an API and
+writing it into the database had no expressible shape — a single statement bound to a call's
+response holds every row, and the only alternative was a file round trip through `push:` and a
+poll trigger. Routing it through the spool rather than teaching the chunk reader an `http:` arm
+keeps paging and retries on the acquisition side, and leaves the reader with one thing to
+understand: a spool is a spool, whoever filled it.
+
+One honest limit: the gateway buffers the response body, so the spool bounds what the *rest of
+the job* holds, not the call itself. A result too large for one response wants the API's own
+paging, one call per page.
+
 ## The export step
 
 The scheduled "close the day, write the report" move: an `export:` step is the
@@ -341,8 +455,8 @@ pipeline:
     notify:
       channel: reports
       payload:
-        rows: step.report.rows
-        transferId: step.report.transferId
+        rows: steps.report.rows
+        transferId: steps.report.transferId
 ```
 
 - **Same machinery, synchronous shape.** The extraction streams through the format codec
@@ -350,7 +464,7 @@ pipeline:
   `file-export` records — the step just runs it inline, on the job's thread, and fails
   the step on error instead of leaving a status to poll. The transfer's route id is
   `<jobId>#<stepId>`, so the console tells job-produced files from route-produced ones.
-- **The extraction SQL renders like a `sql:` step's**: the dialect variant beside the
+- **The extraction SQL renders like any step's**: the dialect variant beside the
   file, ambient `batch.*` binds, file placeholders against the job's datasource. On a
   `duckdb` datasource this is the analytics report in one step — `report.sql` reads
   Parquet, lake tables, or an attach, and the codec writes CSV, Excel, or PDF.
@@ -365,8 +479,8 @@ pipeline:
   `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under `ops.batch.view`. The
   step publishes `transferId`, `rows`, and `filename` into the step context, so a
   follow-up `notify:` carries the pointer — or, on a mail channel, the file itself:
-  `attach: step.report.transferId` sends the produced file as a mail attachment
-  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `httpCall:`
+  `attach: steps.report.transferId` sends the produced file as a mail attachment
+  ([notifications](notifications.md#the-notify-step-on-a-job)) — and an `http:`
   can tell a partner system the drop is ready.
 
 ## The push step
@@ -388,7 +502,7 @@ pipeline:
       host: partner.example.com
       path: /drop/incoming
       credential: partner-sftp         # tesseraql.connectors.push.credentials
-      file: step.report.transferId
+      file: steps.report.transferId
       as: prices-{batch.businessDate}.csv   # optional; default: the transfer's filename
 ```
 
@@ -407,7 +521,7 @@ pipeline:
   locally, a dot-name remotely) and renamed into place, so a partner never reads a
   partial file.
 - **`file:` names the transfer** — typically the export step's
-  `step.<id>.transferId`, but any transfer id the context can supply. Reading it
+  `steps.<id>.transferId`, but any transfer id the context can supply. Reading it
   counts as the transfer's first download. `as:` renames the delivery
   (`{dotted.path}` placeholders resolve against the job context; a bare filename
   only — separators are refused at build time, `TQL-YAML-1042`).
@@ -550,7 +664,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-5315` | a `push:` delivery failed — connect, authenticate, write, or rename |
 | `TQL-SEC-4141` | a `push:` target host outside `tesseraql.connectors.push.allowedHosts` (deny by default) |
 
-The `notify:` and `httpCall:` step families report their own codes in the same domain
+The `notify:` and `http:` step families report their own codes in the same domain
 (channels `TQL-BATCH-5301`…, outbound HTTP `TQL-BATCH-5305`…); see
 [notifications](notifications.md), [managed connectors](connectors.md), and the
 [error-code reference](reference-error-codes.md).
@@ -559,7 +673,7 @@ Lint checks jobs statically:
 
 | Finding | Code |
 | --- | --- |
-| A step not declaring exactly one of `sql:` / `notify:` / `httpCall:` / `chunk:` / `export:` / `push:` | `TQL-FIELD-2004` |
+| A step declaring no work at all, two bindings, or a `chunk:` beside a binding | `TQL-FIELD-2004` |
 | A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
 | A malformed `export:` step: no extraction query, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
 | A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1005` |
@@ -572,7 +686,7 @@ Lint checks jobs statically:
 
 - [guide-integration.md](guide-integration.md) — the reading order for an integration or batch application.
 
-- [Managed connectors](connectors.md) — `httpCall` steps, the `poll:` trigger, egress policy
+- [Managed connectors](connectors.md) — `http:` steps, the `poll:` trigger, egress policy
 - [Notifications](notifications.md) — the `notify:` step, channels, alerts, notify test cases
 - [Transactional writes](transactional-writes.md) — the command-side transaction model jobs deliberately differ from
 - [Deployment](deployment.md) — multi-node semantics and operations permissions

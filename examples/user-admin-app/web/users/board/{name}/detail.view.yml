@@ -12,11 +12,13 @@ fields:
     label: Status
   - name: created_at
     label: Created
+
 children:
   - source: groups
     title: Groups
     columns:
       - name: display_name
         label: Group
+
 slots:
   header: board-frags.html::backLink

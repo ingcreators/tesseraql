@@ -166,21 +166,34 @@
       "additionalProperties": true,
       "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md."
     },
-    "sql": {
-      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/sql"
-    },
     "steps": {
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlBinding"
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The step's name: what later steps and the response bind against (`steps.<id>`)."
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        ]
       },
-      "description": "Named statements executed in order inside one transaction (command recipes). Each result binds under `steps.<name>`. Documented in transactional-writes.md."
+      "description": "The command's ordered statements, executed inside one transaction (command recipes). Each item carries an id: and one binding arm; each result binds under `steps.<id>`. Documented in transactional-writes.md."
     },
-    "queries": {
+    "sources": {
       "type": "object",
-      "description": "Additional named queries executed after sql, each bound into the execution context under its name.",
+      "description": "Every named read acquisition, in authored order: each entry names its own mechanism (sql | contract | service | http) and publishes rows/rowCount/first under its name, so a response, a view or a later source refers to one without knowing how it was fetched. Documented in unified-sources.md.",
       "additionalProperties": {
-        "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlBinding"
+        "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding"
       }
     },
     "validate": {
@@ -357,42 +370,6 @@
             "statusWhen": {
               "$ref": "tesseraql-defs-v1.schema.json#/$defs/statusWhen",
               "description": "Conditional statuses: the first entry whose expression matches decides the status."
-            },
-            "nest": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "into": {
-                    "type": "string",
-                    "description": "The parent collection the children are nested into."
-                  },
-                  "children": {
-                    "type": "string",
-                    "description": "The named query under `queries:` supplying the child rows."
-                  },
-                  "as": {
-                    "type": "string",
-                    "description": "The property name the children appear under on each parent row; one of `as` or `merge` composes the match."
-                  },
-                  "merge": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Columns of the single matching child row to copy onto each parent row, for a many-to-one reference; the alternative to `as`."
-                  },
-                  "on": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "description": "The join: each parent property to the child property it matches, one entry per key column."
-                  }
-                },
-                "additionalProperties": true
-              },
-              "description": "Compose the rows of a named query into the parent rows, so one request answers a parent-and-children shape without a second endpoint."
             }
           },
           "additionalProperties": true,
@@ -581,133 +558,6 @@
     },
     "datasource": {
       "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/datasource"
-    },
-    "http": {
-      "type": "object",
-      "description": "Named HTTP sources on a query route (docs/connectors.md, \"HTTP sources\"): each is a body-less GET against an external JSON API, executed through the outbound gateway (deny-by-default allowedHosts, named credentials, timeouts, circuit breaker) and composed with the SQL results in the response or view as <name>.rows / <name>.body. Query recipes only (TQL-YAML-1022).",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "method": {
-            "type": "string",
-            "description": "The HTTP method, defaulting to GET. A reference API that takes a key list or a query document (POST .../search, JSON-RPC, GraphQL) declares its own; a non-GET method is written out, never inferred from `body`."
-          },
-          "url": {
-            "type": "string",
-            "description": "Absolute http(s) URL; config placeholders resolve. The host must be in tesseraql.http.outbound.allowedHosts (TQL-SEC-4070)."
-          },
-          "body": {
-            "type": "string",
-            "description": "A source expression resolving to the JSON request body. Declaring it beside a method that carries no body (GET, HEAD) is a build error (TQL-YAML-1049)."
-          },
-          "headers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Static request headers sent with the call. Credential material belongs in a named credential, never here."
-          },
-          "query": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Query-string bindings, each an expression over the execution context."
-          },
-          "credential": {
-            "type": "string",
-            "description": "A named credential under tesseraql.http.outbound.credentials (TQL-SEC-4072)."
-          },
-          "expectStatus": {
-            "type": "integer",
-            "description": "The HTTP status the response must carry; any other status fails the call."
-          },
-          "connectTimeout": {
-            "type": "string",
-            "description": "How long to wait for the connection (duration string such as `2s`)."
-          },
-          "requestTimeout": {
-            "type": "string",
-            "description": "How long to wait for the complete response (duration string such as `10s`)."
-          },
-          "select": {
-            "type": "string",
-            "description": "Dotted path into the response JSON naming the rows array or object the source exposes."
-          },
-          "readOnly": {
-            "type": "boolean",
-            "description": "The author's assertion that the call has no side effect. Required on a transactional recipe (TQL-YAML-1050): the call is made before the transaction and a rollback cannot un-make it."
-          },
-          "onError": {
-            "type": "string",
-            "enum": [
-              "fail",
-              "empty"
-            ],
-            "description": "fail (default) or empty: the source degrades to zero rows and the page still renders."
-          }
-        },
-        "additionalProperties": true
-      }
-    },
-    "enrich": {
-      "type": "object",
-      "description": "Reference lookups folded into a result set's rows (docs/lookups.md): the rows of `into` carry a key, the reference behind that key is fetched in batches of distinct keys, and the match is composed into each row. One statement per `batchSize` keys rather than one per row.",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "into": {
-            "type": "string",
-            "description": "The result set to enrich: `sql` (the default) or one of the route's `queries:` (TQL-YAML-1045)."
-          },
-          "on": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "The join, one entry per key column: each row column to the reference column it matches. The row side is the key that is looked up; the reference side names the columns bound as `keys`."
-          },
-          "sql": {
-            "$ref": "tesseraql-defs-v1.schema.json#/$defs/sqlBinding",
-            "description": "The reference query. The distinct keys bind as `keys`: a value list for a single-column key, a list of rows keyed by the reference column names for a composite one. The file must bind them (TQL-YAML-1048). Exactly one of `sql` or `http` is the reference."
-          },
-          "http": {
-            "type": "object",
-            "description": "The reference call, in the vocabulary every outbound call shares, plus `select` and `onError`. Exactly one of `sql` or `http` is the reference. A `perRow` call may key its url with `{key.<column>}` placeholders, percent-encoded per path segment; a `batch` call carries the whole key set as `keys`.",
-            "additionalProperties": true
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "perRow",
-              "batch"
-            ],
-            "description": "How an HTTP reference is fetched: `perRow` (the default — one request per distinct key, for a resource keyed per URL) or `batch` (one request per `batchSize` keys, for an endpoint that accepts a key list). A SQL reference is always batched."
-          },
-          "as": {
-            "type": "string",
-            "description": "Attach the matching reference rows as a list under this field; exactly one of `as` or `merge` composes the match (TQL-YAML-1047)."
-          },
-          "merge": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Copy these columns of the single matching reference row onto each row, for a many-to-one reference; the alternative to `as`."
-          },
-          "batchSize": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "Distinct keys per statement. Defaults from the dialect and the key arity, under Oracle's 1000-expression IN limit and SQL Server's 2100 parameters."
-          },
-          "maxKeys": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "The ceiling on distinct keys, beyond which the enrichment fails (TQL-SQL-2114) rather than issuing an unbounded number of round trips. Defaults to 10000."
-          }
-        },
-        "additionalProperties": true
-      }
     },
     "cache": {
       "type": "object",

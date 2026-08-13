@@ -18,8 +18,10 @@ class CacheSpecParseTest {
                   maxAge: 30s
                   visibility: public
                   staleWhileRevalidate: 60s
-                sql:
-                  file: x.sql
+                sources:
+                  main:
+                    sql:
+                      file: x.sql
                 response:
                   json:
                     status: 200

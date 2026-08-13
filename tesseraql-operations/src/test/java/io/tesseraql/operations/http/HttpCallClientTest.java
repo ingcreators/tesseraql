@@ -87,11 +87,11 @@ class HttpCallClientTest {
                 "allowedHosts", List.of("localhost"),
                 "credentials", Map.of("partner", Map.of("type", "bearer", "token", "t0p"))));
         Map<String, Object> context = Map.of(
-                "job", Map.of("date", "2026-06-14"),
-                "step", Map.of("prev", Map.of("id", 7)));
+                "params", Map.of("date", "2026-06-14"),
+                "steps", Map.of("prev", Map.of("id", 7)));
         HttpCallSpec spec = new HttpCallSpec("POST", "http://localhost:" + port + "/orders",
-                Map.of("X-Source", "tesseraql"), Map.of("date", "job.date"), "partner",
-                "step.prev", 200, null, null);
+                Map.of("X-Source", "tesseraql"), Map.of("date", "params.date"), "partner",
+                "steps.prev", 200, null, null);
 
         Map<String, Object> result = client.call(spec, context, null);
 

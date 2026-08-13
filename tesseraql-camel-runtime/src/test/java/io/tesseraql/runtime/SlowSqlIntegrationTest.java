@@ -248,14 +248,16 @@ class SlowSqlIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: ping.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: ping.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(pingDir.resolve("ping.sql"), "select 1 as ok\n");
 
@@ -269,14 +271,16 @@ class SlowSqlIntegrationTest {
                 security:
                   auth: bearer
                   policy: users.read
-                sql:
-                  file: secure.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: secure.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(secureDir.resolve("secure.sql"), "select 1 as ok\n");
         return target;

@@ -320,9 +320,9 @@ final class RouteReloader {
         Map<String, String> paths = new LinkedHashMap<>();
         for (io.tesseraql.yaml.manifest.WorkflowFile workflow : manifest.workflows()) {
             io.tesseraql.yaml.model.WorkflowDefinition def = workflow.definition();
-            String basePath = def.http() == null || def.http().basePath() == null
+            String basePath = def.basePath() == null
                     ? "/" + def.id()
-                    : def.http().basePath();
+                    : def.basePath();
             for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
                 paths.put(def.id() + "." + transition.id(),
                         basePath + "/{key}/" + transition.id());

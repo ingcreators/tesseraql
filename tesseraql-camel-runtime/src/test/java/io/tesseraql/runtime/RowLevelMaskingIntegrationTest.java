@@ -178,14 +178,16 @@ class RowLevelMaskingIntegrationTest {
                 recipe: query-json
                 security:
                   auth: bearer
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      data: sql.rows
+                      data: main.rows
                     fields:
                       salary:
                         mask: fixed

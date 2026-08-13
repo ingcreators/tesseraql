@@ -28,8 +28,8 @@ class JobParamBindingTest {
 
     private static JobFile job(Map<String, InputField> params) {
         return new JobFile(Path.of("batch/probe/job.yml"),
-                new JobDefinition("tesseraql/v1", "probe", "job", "batch-tasklet", null, params,
-                        null, null, false));
+                new JobDefinition("tesseraql/v1", "probe", "job", "batch-pipeline", null, null,
+                        params, null, false, null));
     }
 
     private static InputField param(String type, boolean required) {

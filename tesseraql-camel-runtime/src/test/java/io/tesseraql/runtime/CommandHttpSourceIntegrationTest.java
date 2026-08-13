@@ -155,18 +155,20 @@ class CommandHttpSourceIntegrationTest {
                 recipe: command-json
                 input:
                   partnerCode: { type: string, required: true }
-                http:
-                  partner:
-                    url: http://localhost:%d/partner
-                    readOnly: true
-                    connectTimeout: 1s
-                    requestTimeout: 1s
                 steps:
-                  header:
-                    file: insert.sql
-                    params:
-                      partnerCode: body.partnerCode
-                      partnerName: partner.body.name
+                  - id: header
+                    sql:
+                      file: insert.sql
+                      params:
+                        partnerCode: body.partnerCode
+                        partnerName: partner.body.name
+                sources:
+                  partner:
+                    http:
+                      url: http://localhost:%d/partner
+                      readOnly: true
+                      connectTimeout: 1s
+                      requestTimeout: 1s
                 response:
                   json:
                     status: 201

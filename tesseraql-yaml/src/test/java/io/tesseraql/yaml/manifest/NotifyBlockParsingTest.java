@@ -46,16 +46,18 @@ class NotifyBlockParsingTest {
                     payload:
                       email: body.email
                       actor: principal.loginId
-                sql:
-                  file: insert-member.sql
-                  mode: update
-                  params:
-                    email: body.email
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
+                      params:
+                        email: body.email
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -95,7 +97,7 @@ class NotifyBlockParsingTest {
                     notify:
                       channel: ops-mail
                       payload:
-                        purged: step.purge.affectedRows
+                        purged: steps.purge.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);
@@ -107,7 +109,7 @@ class NotifyBlockParsingTest {
         assertThat(job.pipeline().get(1).sql()).isNull();
         assertThat(job.pipeline().get(1).notification().channel()).isEqualTo("ops-mail");
         assertThat(job.pipeline().get(1).notification().payload())
-                .containsEntry("purged", "step.purge.affectedRows");
+                .containsEntry("purged", "steps.purge.affectedRows");
     }
 
     @Test
@@ -121,14 +123,16 @@ class NotifyBlockParsingTest {
                 id: members.register
                 kind: route
                 recipe: command-json
-                sql:
-                  file: insert-member.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-member.sql
+                      mode: update
                 response:
                   json:
                     status: 201
                     body:
-                      affected: sql.affectedRows
+                      affected: steps.main.affectedRows
                 """);
 
         AppManifest manifest = new ManifestLoader().load(dir);

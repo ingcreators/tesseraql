@@ -3,8 +3,8 @@ package io.tesseraql.test;
 import io.tesseraql.test.TestSuite.TestCase;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,7 +73,7 @@ public final class CrossReferenceIndex {
      * @param definition the route, tool, resource, or UI-resource definition to test
      */
     public boolean exercises(Path routeDir, RouteDefinition definition) {
-        for (SqlBinding binding : bindings(definition)) {
+        for (Binding binding : bindings(definition)) {
             if (binding.file() != null
                     && testedSqlPaths.contains(routeDir.resolve(binding.file()).normalize())) {
                 return true;
@@ -106,7 +106,7 @@ public final class CrossReferenceIndex {
     public List<TestCase> casesFor(String routeId, Path routeDir, RouteDefinition definition) {
         Set<Path> boundPaths = new LinkedHashSet<>();
         Set<String> boundContracts = new LinkedHashSet<>();
-        for (SqlBinding binding : bindings(definition)) {
+        for (Binding binding : bindings(definition)) {
             if (binding.file() != null) {
                 boundPaths.add(routeDir.resolve(binding.file()).normalize());
             }
@@ -153,23 +153,16 @@ public final class CrossReferenceIndex {
      * {@code queries}, and the {@code import}/{@code export} (and export {@code after}) SQL of a
      * file-transfer route.
      */
-    public static List<SqlBinding> bindings(RouteDefinition definition) {
-        List<SqlBinding> bindings = new ArrayList<>();
-        if (definition.sql() != null) {
-            bindings.add(definition.sql());
-        }
+    public static List<Binding> bindings(RouteDefinition definition) {
+        List<Binding> bindings = new ArrayList<>();
+        // `main` is an entry of sources: like any other, so listing it separately counted the
+        // document's primary result twice (docs/unified-sources.md decision 3).
         bindings.addAll(definition.steps().values());
-        bindings.addAll(definition.queries().values());
-        if (definition.fileImport() != null && definition.fileImport().sql() != null) {
-            bindings.add(definition.fileImport().sql());
-        }
+        bindings.addAll(definition.sources().values());
         if (definition.fileExport() != null) {
-            if (definition.fileExport().sql() != null) {
-                bindings.add(definition.fileExport().sql());
-            }
             if (definition.fileExport().after() != null
                     && definition.fileExport().after().sql() != null) {
-                bindings.add(definition.fileExport().after().sql());
+                bindings.add(Binding.sql(definition.fileExport().after().sql()));
             }
         }
         return bindings;

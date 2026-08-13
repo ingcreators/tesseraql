@@ -77,8 +77,10 @@ class ScaffoldCommandsTest {
                 recipe: query-html
                 security:
                   auth: public
-                sql:
-                  file: board.sql
+                sources:
+                  main:
+                    sql:
+                      file: board.sql
                 response:
                   html:
                     view: board
@@ -98,7 +100,7 @@ class ScaffoldCommandsTest {
         Path template = board.resolve("board.html");
         assertThat(template).exists();
         assertThat(Files.readString(template)).contains("tesseraql-scaffold-checksum")
-                .contains("th:each=\"row : ${sql.rows}\"");
+                .contains("th:each=\"row : ${main.rows}\"");
         assertThat(Files.readString(board.resolve("get.yml")))
                 .contains("template: board.html").doesNotContain("view: board");
 

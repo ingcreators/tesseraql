@@ -14,18 +14,19 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.pageBuilder
-  params:
-    roles: principal.roles
-    path: query.path
-
+sources:
+  main:
+    service:
+      name: studio.pageBuilder
+      params:
+        roles: principal.roles
+        path: query.path
 response:
   html:
     status: 200
     template: builder.html
     model:
-      cmp: sql
+      cmp: main
       saved: params.saved
       applied: params.applied
     headers:

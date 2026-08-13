@@ -11,15 +11,16 @@ input:
     type: string
     required: true
 
-sql:
-  service: docs.table
-  params:
-    ds: query.ds
-    name: query.name
-
+sources:
+  main:
+    service:
+      name: docs.table
+      params:
+        ds: query.ds
+        name: query.name
 response:
   html:
     status: 200
     template: table.html
     model:
-      tbl: sql
+      tbl: main

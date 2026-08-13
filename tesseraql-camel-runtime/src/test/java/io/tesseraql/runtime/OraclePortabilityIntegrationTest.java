@@ -146,13 +146,15 @@ class OraclePortabilityIntegrationTest {
                 id: users.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(route.resolve("list.sql"),
                 "select name, status from users order by name\n;\n");

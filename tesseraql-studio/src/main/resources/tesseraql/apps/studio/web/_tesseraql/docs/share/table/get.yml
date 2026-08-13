@@ -23,17 +23,18 @@ input:
 security:
   auth: public
 
-sql:
-  service: docs.shareTable
-  params:
-    ds: query.ds
-    name: query.name
-    exp: query.exp
-    sig: query.sig
-
+sources:
+  main:
+    service:
+      name: docs.shareTable
+      params:
+        ds: query.ds
+        name: query.name
+        exp: query.exp
+        sig: query.sig
 response:
   html:
     status: 200
     template: share-table.html
     model:
-      tbl: sql
+      tbl: main

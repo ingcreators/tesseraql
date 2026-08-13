@@ -14,18 +14,19 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.source
-  params:
-    roles: principal.roles
-    path: query.path
-
+sources:
+  main:
+    service:
+      name: studio.source
+      params:
+        roles: principal.roles
+        path: query.path
 response:
   html:
     status: 200
     template: source.html
     model:
-      src: sql
+      src: main
       saved: params.saved
       applied: params.applied
     headers:

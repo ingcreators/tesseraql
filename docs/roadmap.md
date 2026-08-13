@@ -228,23 +228,23 @@ kind and config lint (`TQL-SEC-4060..4065`) keep it machine-checkable. **Phase 2
 ### Phase 26 — managed connectors (files and HTTP)
 
 - Polling triggers (SFTP/FTPS/local directory) feeding `file-import` pipelines.
-- An `httpCall` step for outbound REST in pipelines and jobs: secret-managed credentials,
+- An `http:` step for outbound REST in pipelines and jobs: secret-managed credentials,
   timeouts, circuit breaking, recorded in traces.
 - An inbound webhook recipe: signature verification and replay protection in front of a SQL
   pipeline.
 - All of it surfaces as recipes under the existing governance (route modes, allowlists,
   risk scoring) — Camel's component catalog stays an implementation detail, not user API.
 
-**Outbound `httpCall`** (delivered, see [docs/connectors.md](connectors.md)): a batch-pipeline
-`httpCall` step issues one synchronous outbound REST request and publishes the response
-(`step.<id>.status`/`.body`/`.headers`) to later SQL steps. It is a job step, not a transactional
+**Outbound `http:`** (delivered, see [docs/connectors.md](connectors.md)): a batch-pipeline
+`http:` step issues one synchronous outbound REST request and publishes the response
+(`steps.<id>.status`/`.body`/`.headers`) to later SQL steps. It is a job step, not a transactional
 `command-json` step — a synchronous call cannot be rolled back, so a command's outbound
 integration keeps riding the Phase 20 outbox webhook. All outbound HTTP is governed by
 `tesseraql.http.outbound`: deny-by-default egress allow-list (exact or `*.wildcard` hosts),
 SecretResolver-backed credentials resolved at call time, config timeouts with per-step overrides,
 and a per-host circuit breaker that fails fast on systemic failures. Each call is a
 `tesseraql.http.call` trace span. Lint (`TQL-SEC-4070..4072`) checks egress statically and an
-`httpCall` coverage kind tracks the steps suites plan. Polling triggers and the inbound webhook
+`http:` coverage kind tracks the steps suites plan. Polling triggers and the inbound webhook
 recipe remain for later slices.
 
 **Polling file triggers** (delivered, see [docs/connectors.md](connectors.md)): a `file-import`
@@ -367,7 +367,7 @@ objects outside the database and addressed from SQL. The full design is in
   download authorization is the metadata `SELECT` under the route's `policy:` and the Phase 29
   `/*%scope ... */` directive — no second access-control path. The non-transactional blob write is
   reconciled by orphan GC, the same "commit the record, reconcile the side effect" discipline as the
-  Phase 26 `httpCall` and Phase 27 outbox.
+  Phase 26 `http:` and Phase 27 outbox.
 - An opt-in **`tesseraql-s3` leaf module** — `S3BlobStore` on AWS SDK for Java v2 (Apache-2.0,
   confined to the module like `tesseraql-pdf`'s engine), self-installing via `RuntimeExtension` when
   `provider: s3`. One module covers AWS and every S3-compatible store (R2, Ceph, B2) via

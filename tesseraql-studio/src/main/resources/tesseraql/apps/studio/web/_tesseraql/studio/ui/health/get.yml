@@ -13,15 +13,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.health
-  params:
-    severity: params.severity
-    q: params.q
-
+sources:
+  main:
+    service:
+      name: studio.health
+      params:
+        severity: params.severity
+        q: params.q
 response:
   html:
     status: 200
     template: health.html
     model:
-      health: sql
+      health: main

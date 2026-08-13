@@ -24,9 +24,9 @@ import io.tesseraql.yaml.manifest.MigrationFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.menu.MenuSpec;
 import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
+import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
-import io.tesseraql.yaml.model.SqlBinding;
 import io.tesseraql.yaml.scaffold.CrudScaffolder;
 import io.tesseraql.yaml.scaffold.ScaffoldChecksum;
 import io.tesseraql.yaml.scaffold.ScaffoldWriter;
@@ -452,7 +452,7 @@ public final class StudioService {
      *       read as the template's top-level variables;</li>
      *   <li>a <b>web route</b> ({@code web/**}/{@code <method>.yml}) renders its {@code response}
      *       against {@code sampleModel} read as the execution context (e.g. {@code params},
-     *       {@code sql.rows}): a {@code query-html}/{@code page} route resolves
+     *       {@code main.rows}): a {@code query-html}/{@code page} route resolves
      *       {@code response.html.model} and renders the route's template, a {@code query-json} route
      *       resolves {@code response.json.body} and pretty-prints it.</li>
      * </ul>
@@ -616,7 +616,7 @@ public final class StudioService {
 
     /**
      * Renders a {@code query-export} {@code format: pdf} route to a {@code data:} URL preview (Studio
-     * backlog A1 follow-up): the sample's {@code sql.rows} feed the route's PDF, produced by the
+     * backlog A1 follow-up): the sample's {@code main.rows} feed the route's PDF, produced by the
      * runtime-provided {@link PdfRender} over the canonical PDF codec. Degrades to a clear message
      * when no PDF renderer/codec is available (the optional {@code tesseraql-pdf} module is absent).
      */
@@ -640,11 +640,11 @@ public final class StudioService {
                 + java.util.Base64.getEncoder().encodeToString(pdf));
     }
 
-    /** The sample's {@code sql.rows} as the export route's query rows, or empty. */
+    /** The sample's {@code main.rows} as the export route's query rows, or empty. */
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> sampleRows(Map<String, Object> context) {
-        if (context.get("sql") instanceof Map<?, ?> sql
-                && sql.get("rows") instanceof List<?> rows) {
+        if (context.get(io.tesseraql.yaml.model.RouteDefinition.MAIN) instanceof Map<?, ?> main
+                && main.get("rows") instanceof List<?> rows) {
             return (List<Map<String, Object>>) (List<?>) rows;
         }
         return List.of();
@@ -754,7 +754,7 @@ public final class StudioService {
      * (e.g. {@code .../table.html} → {@code .../table.sample.yml}, {@code .../get.yml} →
      * {@code .../get.sample.yml}), or null when the file is not renderable or no fixture exists. The
      * fixture is a YAML map: the template's variables for a template, or the execution context
-     * ({@code params}, {@code sql.rows}, …) for a route. The manifest loader ignores it (only
+     * ({@code params}, {@code main.rows}, …) for a route. The manifest loader ignores it (only
      * HTTP-method {@code *.yml} files under {@code web/} are routes), so it lives beside its file.
      */
     public String sampleModel(String relativePath) {
@@ -1904,7 +1904,7 @@ public final class StudioService {
             return out;
         }
         out.put("routeId", match.definition().id());
-        SqlBinding sql = match.definition().sql();
+        Binding sql = match.definition().main();
         if (sql == null || sql.file() == null
                 || (sql.mode() != null && !"query".equals(sql.mode()))) {
             out.put("recordable", false);
@@ -1935,12 +1935,12 @@ public final class StudioService {
     /** The matched route's main SQL file as an app-relative path (Track J3), else null. */
     public String recordedSqlFile(String method, String path) {
         RouteFile match = routeFor(method, path);
-        if (match == null || match.definition().sql() == null
-                || match.definition().sql().file() == null) {
+        if (match == null || match.definition().main() == null
+                || match.definition().main().file() == null) {
             return null;
         }
         Path routeDir = match.source().getParent();
-        return appHome.relativize(routeDir.resolve(match.definition().sql().file()))
+        return appHome.relativize(routeDir.resolve(match.definition().main().file()))
                 .toString().replace('\\', '/');
     }
 
@@ -1953,11 +1953,11 @@ public final class StudioService {
     public Map<String, Object> recordedCaseParams(String method, String path,
             Map<String, String> query, Map<String, Object> body) {
         RouteFile match = routeFor(method, path);
-        if (match == null || match.definition().sql() == null) {
+        if (match == null || match.definition().main() == null) {
             return Map.of();
         }
         Map<String, Object> out = new LinkedHashMap<>();
-        Map<String, String> mapping = match.definition().sql().params();
+        Map<String, String> mapping = match.definition().main().params();
         if (mapping == null) {
             return out;
         }
@@ -2525,16 +2525,18 @@ public final class StudioService {
                         security:
                           auth: bearer
 
-                        sql:
-                          file: query.sql
-                          mode: query
+                        sources:
+                          main:
+                            sql:
+                              file: query.sql
+                              mode: query
 
                         response:
                           html:
                             status: 200
                             template: page.html
                             model:
-                              rows: sql.rows
+                              rows: main.rows
                             headers:
                               Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
                               X-Content-Type-Options: nosniff
@@ -2551,15 +2553,17 @@ public final class StudioService {
                     security:
                       auth: bearer
 
-                    sql:
-                      file: command.sql
-                      mode: update
+                    steps:
+                      - id: main
+                        sql:
+                          file: command.sql
+                          mode: update
 
                     response:
                       json:
                         status: 200
                         body:
-                          affected: sql.affectedRows
+                          affected: steps.main.affectedRows
                     """.formatted(id);
             default -> """
                     version: tesseraql/v1
@@ -2570,15 +2574,17 @@ public final class StudioService {
                     security:
                       auth: bearer
 
-                    sql:
-                      file: query.sql
-                      mode: query
+                    sources:
+                      main:
+                        sql:
+                          file: query.sql
+                          mode: query
 
                     response:
                       json:
                         status: 200
                         body:
-                          data: sql.rows
+                          data: main.rows
                     """.formatted(id);
         };
     }

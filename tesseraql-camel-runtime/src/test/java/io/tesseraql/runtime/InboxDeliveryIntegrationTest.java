@@ -288,9 +288,11 @@ class InboxDeliveryIntegrationTest {
                 security:
                   auth: browser
                   csrf: true
-                sql:
-                  file: decide.sql
-                  mode: update
+                steps:
+                  - id: main
+                    sql:
+                      file: decide.sql
+                      mode: update
                 notify:
                   outcome:
                     channel: approvals

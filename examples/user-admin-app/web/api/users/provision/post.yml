@@ -64,15 +64,16 @@ outbox:
     name.givenName: body.givenName
     name.familyName: body.familyName
 
-sql:
-  file: provision.sql
-  mode: update
-  params:
-    userName: body.userName
-
+steps:
+  - id: main
+    sql:
+      file: provision.sql
+      mode: update
+      params:
+        userName: body.userName
 response:
   json:
     status: 200
     body:
-      affected: sql.affectedRows
-      eventId: sql.eventId
+      affected: steps.main.affectedRows
+      eventId: main.eventId

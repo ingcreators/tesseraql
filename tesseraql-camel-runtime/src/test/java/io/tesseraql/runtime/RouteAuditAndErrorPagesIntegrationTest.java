@@ -262,15 +262,17 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 security:
                   auth: bearer
                   policy: things.read
-                sql:
-                  file: things.sql
-                  mode: query
-                  params:
-                    q: query.q
+                sources:
+                  main:
+                    sql:
+                      file: things.sql
+                      mode: query
+                      params:
+                        q: query.q
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(things.resolve("things.sql"),
                 "select /* q */ 'x' as q_echo, 1 as value\n");
@@ -284,13 +286,15 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 recipe: query-json
                 security:
                   auth: public
-                sql:
-                  file: broken.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: broken.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(broken.resolve("broken.sql"),
                 "select * from no_such_table_anywhere\n");

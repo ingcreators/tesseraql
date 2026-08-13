@@ -181,13 +181,15 @@ class AppMigrationIntegrationTest {
                 id: items.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: list.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                      mode: query
                 response:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """);
         Files.writeString(route.resolve("list.sql"), "select name from items order by id\n;\n");
         Path job = home.resolve("batch/touch-items");

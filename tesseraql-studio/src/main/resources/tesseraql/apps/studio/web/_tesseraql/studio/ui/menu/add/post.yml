@@ -22,17 +22,18 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.menu.add
-  params:
-    label: params.label
-    href: params.href
-    icon: params.icon
-    roles: params.roles
-    permissions: params.permissions
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.menu.add
+      params:
+        label: params.label
+        href: params.href
+        icon: params.icon
+        roles: params.roles
+        permissions: params.permissions
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/menu?added=1

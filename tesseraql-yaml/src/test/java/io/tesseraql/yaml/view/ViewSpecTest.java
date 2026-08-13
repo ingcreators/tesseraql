@@ -33,7 +33,7 @@ class ViewSpecTest {
                 """));
         assertThat(spec.view()).isEqualTo(ViewSpec.LIST);
         assertThat(spec.id()).isEqualTo("items");
-        assertThat(spec.source()).isEqualTo("sql");
+        assertThat(spec.source()).isEqualTo("main");
         assertThat(spec.columns()).hasSize(2);
         assertThat(spec.columns().get(0).link()).isEqualTo("/items/{id}");
         assertThat(spec.columns().get(1).label()).isEqualTo("Due");
@@ -44,7 +44,6 @@ class ViewSpecTest {
         ViewSpec spec = ViewSpec.parse(write(dir, "new.view.yml", """
                 version: tesseraql/v1
                 id: items.new
-                version: tesseraql/v1
                 kind: view
                 recipe: form
                 action: /items/create
@@ -364,7 +363,7 @@ class ViewSpecTest {
                 kind: view
                 recipe: dashboard
                 panels:
-                  - { type: view, source: sql }
+                  - { type: view, source: main }
                 """)))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("view panel requires view:");
@@ -373,7 +372,7 @@ class ViewSpecTest {
                 kind: view
                 recipe: dashboard
                 panels:
-                  - { type: stat, source: sql, column: total, view: recent }
+                  - { type: stat, source: main, column: total, view: recent }
                 """)))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("view-panel key");
@@ -447,7 +446,7 @@ class ViewSpecTest {
                 kind: view
                 recipe: dashboard
                 panels:
-                  - { type: stat, source: sql, column: total, label: Total }
+                  - { type: stat, source: main, column: total, label: Total }
                 """);
         assertThatThrownBy(() -> ViewSpec.parse(file))
                 .isInstanceOf(TqlException.class).hasMessageContaining("TQL-VIEW-3314")

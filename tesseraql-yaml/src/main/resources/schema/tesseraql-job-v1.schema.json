@@ -22,9 +22,8 @@
       "description": "Batch job documents (batch/**/job.yml)."
     },
     "recipe": {
-      "description": "What the job does: batch-tasklet (a single statement) or batch-pipeline (an ordered pipeline: of steps).",
+      "description": "What the job does: batch-pipeline runs an ordered pipeline: of steps.",
       "enum": [
-        "batch-tasklet",
         "batch-pipeline"
       ]
     },
@@ -135,15 +134,46 @@
     "input": {
       "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/input"
     },
-    "sql": {
-      "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/sql"
-    },
     "pipeline": {
       "type": "array",
-      "description": "A batch-pipeline job's ordered steps (exactly one of sql, notify, httpCall, chunk, export, or push per step), each publishing its result to the step context. Documented in jobs.md.",
+      "description": "The job's ordered steps. A step is a binding with an id (sql: or http:) plus its output blocks (export:, push:, notify:) or a chunk:, each publishing its result to the step context. Documented in jobs.md.",
       "items": {
-        "type": "object",
-        "additionalProperties": true
+        "allOf": [
+          {
+            "$ref": "tesseraql-defs-v1.schema.json#/$defs/binding"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "The step's name: what later steps bind against (`steps.<id>`) and what the execution record reports."
+              },
+              "notify": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Enqueue one notification on the transactional outbox at this position in the pipeline. Documented in notifications.md."
+              },
+              "chunk": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Process the step's work as a reader/writer chunk loop with committed checkpoints, so a restart resumes where it stopped. A chunk step's work is its reader:/writer:, so it declares no arm of its own. Documented in jobs.md."
+              },
+              "export": {
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/export"
+              },
+              "push": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Deliver a produced transfer to a local or SFTP/FTPS drop under the push policy block. Documented in file-transfers.md."
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": true
+          }
+        ]
       }
     },
     "perTenant": {

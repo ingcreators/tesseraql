@@ -18,7 +18,7 @@ import io.tesseraql.test.TestSuite.TestCase;
 import io.tesseraql.test.TestSuiteLoader;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
-import io.tesseraql.yaml.model.SqlBinding;
+import io.tesseraql.yaml.model.Binding;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -137,7 +137,7 @@ public final class ReportGenerator {
             Map<String, SqlCoverageReport> sqlReports) {
         Path routeDir = route.source().getParent();
         Set<String> keys = new LinkedHashSet<>();
-        for (SqlBinding binding : CrossReferenceIndex.bindings(route.definition())) {
+        for (Binding binding : CrossReferenceIndex.bindings(route.definition())) {
             if (binding.file() != null) {
                 keys.add(appHome.relativize(routeDir.resolve(binding.file()).normalize())
                         .toString().replace('\\', '/'));

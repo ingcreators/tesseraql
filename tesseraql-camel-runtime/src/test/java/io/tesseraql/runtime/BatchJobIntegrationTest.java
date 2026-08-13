@@ -51,9 +51,12 @@ class BatchJobIntegrationTest {
 
     static TesseraqlRuntime runtime;
     static Path appHome;
+    static com.sun.net.httpserver.HttpServer partnerApi;
+    static int partnerPort;
 
     @BeforeAll
     static void start() throws Exception {
+        startPartnerApi();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
         seedDatabase();
@@ -64,9 +67,35 @@ class BatchJobIntegrationTest {
         if (runtime != null) {
             runtime.close();
         }
+        if (partnerApi != null) {
+            partnerApi.stop(0);
+        }
         if (appHome != null) {
             deleteRecursively(appHome);
         }
+    }
+
+    /**
+     * The partner directory an {@code http:} step calls: six companies under a {@code companies}
+     * key, so {@code select:} has something to select and the spool has something to hold.
+     */
+    private static void startPartnerApi() throws IOException {
+        partnerApi = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress("localhost", 0), 0);
+        partnerApi.createContext("/companies", exchange -> {
+            StringBuilder companies = new StringBuilder("{\"companies\":[");
+            for (int i = 1; i <= 6; i++) {
+                companies.append(i == 1 ? "" : ",")
+                        .append("{\"item_key\":\"h%02d\",\"payload\":\"%d\"}".formatted(i, i));
+            }
+            byte[] body = companies.append("]}").toString().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        partnerApi.start();
+        partnerPort = partnerApi.getAddress().getPort();
     }
 
     @Test
@@ -341,6 +370,82 @@ class BatchJobIntegrationTest {
         }
     }
 
+    /**
+     * Decision 19: an extract spools, and the chunk loads the spool. This is the shape that
+     * makes a cross-datasource copy expressible — both halves stream, and the spool is the
+     * consistent snapshot a rerun re-reads, which a SQL-reading chunk cannot have.
+     */
+    @Test
+    void aChunkLoadsWhatAnEarlierStepSpooled() throws Exception {
+        JobExecution execution = runtime.runJob("user.chunkSpooled",
+                Map.of("businessDate", "2026-08-01"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_e")).isEqualTo(6);
+        // The extract publishes a count and a reference, never rows: holding them is the one
+        // thing spooling exists to avoid.
+        List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
+        assertThat(steps).extracting(StepExecution::stepId).containsExactly("extract", "load");
+    }
+
+    @Test
+    void aChunkLoadsWhatAnApiReturned() throws Exception {
+        // docs/unified-sources.md decision 19a: spooling is not a SQL feature. The call
+        // acquires, mode: query-spool streams the rows out, and the chunk reader loads them
+        // without knowing an API was involved — the shape "fetch a large result and write it
+        // to the database" that had no spelling before.
+        JobExecution execution = runtime.runJob("user.chunkHttpSpooled",
+                Map.of("businessDate", "2026-08-04"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_h")).isEqualTo(6);
+        List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
+        assertThat(steps).extracting(StepExecution::stepId).containsExactly("fetch", "load");
+        // A spooled acquisition reports what it spooled, whichever arm filled it.
+        assertThat(steps.get(0).affectedRows()).isEqualTo(6);
+    }
+
+    @Test
+    void anHttpStepPublishesTheEnvelopeEveryReadPublishes() {
+        // Decision 10: rows / rowCount / first, under the step's own name, beside the call's
+        // status and body. The step used to publish status/body/headers only, so binding a
+        // response row meant walking the raw body by index.
+        JobExecution execution = runtime.runJob("user.httpEnvelope",
+                Map.of("businessDate", "2026-08-05"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(rowsOf("select count(*) from http_envelope where first_key = 'h01'"))
+                .isEqualTo(1);
+        assertThat(rowsOf("select count(*) from http_envelope where row_count = 6")).isEqualTo(1);
+    }
+
+    @Test
+    void aStepFoldsAReferenceIntoItsOwnRows() {
+        // Two holes closed at once (docs/unified-sources.md decision 5). A step's enrich: was
+        // dropped at parse time — declared, never run, never reported. And source: was read as
+        // a root key, which no job result is: a job publishes under steps.<id>, so the sibling
+        // arm was unaddressable on the whole job side rather than unsupported there.
+        JobExecution execution = runtime.runJob("user.stepEnriched",
+                Map.of("businessDate", "2026-08-06"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        // h01's payload came from the API step's rows, merged on item_key, and reached a later
+        // step's bind through the enriched context.
+        assertThat(rowsOf("select count(*) from step_enriched"
+                + " where label = '1' and row_count = 2")).isEqualTo(1);
+    }
+
+    private static long rowsOf(String query) {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(query)) {
+            return rs.next() ? rs.getLong(1) : -1;
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
     @Test
     void chunkStepResumesFromTheCheckpointAfterAFailure() throws Exception {
         // skipLimit 0 (the default): the poison row at b08 fails the step after the first
@@ -453,9 +558,13 @@ class BatchJobIntegrationTest {
                 version: tesseraql/v1
                 id: user.slaWatch
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 sla: { completeBy: "00:00", runningLongerThan: 1s }
-                sql: { file: noop.sql, mode: update }
+                pipeline:
+                  - id: main
+                    sql:
+                      file: noop.sql
+                      mode: update
                 """);
         Files.writeString(slaDir.resolve("noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -747,8 +856,12 @@ class BatchJobIntegrationTest {
                 version: tesseraql/v1
                 id: user.stampBusinessDate
                 kind: job
-                recipe: batch-tasklet
-                sql: { file: stamp.sql, mode: update }
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: stamp.sql
+                      mode: update
                 """);
         Files.writeString(target.resolve("batch/stamp/stamp.sql"),
                 "update users set status = 'ASOF-' || cast(cast(/* batch.businessDate */"
@@ -766,16 +879,18 @@ class BatchJobIntegrationTest {
                     export:
                       format: csv
                       filename: users-{batch.businessDate}.csv
-                      sql: { file: report.sql, mode: query }
                       columns:
-                        - { name: name, label: Name }
-                        - { name: status, label: Status }
+                      - { name: name, label: Name }
+                      - { name: status, label: Status }
+                    sql:
+                      file: report.sql
+                      mode: query
                   - id: stamp
                     sql:
                       file: stamp-transfer.sql
                       mode: update
                       params:
-                        exported: step.extract.rows
+                        exported: steps.extract.rows
                 """);
         Files.writeString(target.resolve("batch/report/report.sql"),
                 "select name, status from users order by name\n");
@@ -792,14 +907,16 @@ class BatchJobIntegrationTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: extract
+                    sql:
+                      file: report.sql
+                      mode: query
                     export:
                       format: csv
-                      sql: { file: report.sql, mode: query }
                   - id: drop
                     push:
                       transport: local
                       path: outbox/partner
-                      file: step.extract.transferId
+                      file: steps.extract.transferId
                       as: users-{batch.businessDate}.csv
                 """);
         Files.writeString(target.resolve("batch/deliver/report.sql"),
@@ -832,10 +949,14 @@ class BatchJobIntegrationTest {
                             version: tesseraql/v1
                             id: %s
                             kind: job
-                            recipe: batch-tasklet
+                            recipe: batch-pipeline
                             trigger:
                               schedule: { fixedDelay: 1s, calendar: %s }
-                            sql: { file: noop.sql, mode: update }
+                            pipeline:
+                              - id: main
+                                sql:
+                                  file: noop.sql
+                                  mode: update
                             """.formatted(job.getKey(), job.getValue()));
         }
         Files.writeString(target.resolve("batch/calendar/noop.sql"),
@@ -852,8 +973,12 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-a.sql }
-                      writer: { file: writer-a.sql }
+                      reader:
+                        sql:
+                          file: reader-a.sql
+                      writer:
+                        sql:
+                          file: writer-a.sql
                       key: item_key
                       commitEvery: 5
                       onError: skip
@@ -867,8 +992,12 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-b.sql }
-                      writer: { file: writer-b.sql }
+                      reader:
+                        sql:
+                          file: reader-b.sql
+                      writer:
+                        sql:
+                          file: writer-b.sql
                       key: item_key
                       commitEvery: 5
                 """);
@@ -880,14 +1009,19 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-d.sql }
-                      writer: { file: writer-d.sql }
+                      reader:
+                        sql:
+                          file: reader-d.sql
+                      writer:
+                        sql:
+                          file: writer-d.sql
                       key: item_key
                       commitEvery: 10
                       enrich:
                         kind:
                           on: { kind: code }
-                          sql: { file: kinds.sql }
+                          sql:
+                            file: kinds.sql
                           batchSize: 2
                           merge: [label]
                 """);
@@ -939,19 +1073,27 @@ class BatchJobIntegrationTest {
                 version: tesseraql/v1
                 id: user.calShifted
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule: { fixedDelay: 1s, calendar: shift-cal, dayOfMonth: %d }
-                sql: { file: noop.sql, mode: update }
+                pipeline:
+                  - id: main
+                    sql:
+                      file: noop.sql
+                      mode: update
                 """.formatted(nominal.getDayOfMonth()));
         Files.writeString(target.resolve("batch/shifted/gated.yml"), """
                 version: tesseraql/v1
                 id: user.calShiftedGated
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   schedule: { fixedDelay: 1s, calendar: shift-cal, dayOfMonth: %d }
-                sql: { file: noop.sql, mode: update }
+                pipeline:
+                  - id: main
+                    sql:
+                      file: noop.sql
+                      mode: update
                 """.formatted(java.time.LocalDate.now().plusDays(1).getDayOfMonth()));
         Files.writeString(target.resolve("batch/shifted/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -962,17 +1104,25 @@ class BatchJobIntegrationTest {
                 version: tesseraql/v1
                 id: user.chainExtract
                 kind: job
-                recipe: batch-tasklet
-                sql: { file: noop.sql, mode: update }
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: noop.sql
+                      mode: update
                 """);
         Files.writeString(target.resolve("batch/chain/send.yml"), """
                 version: tesseraql/v1
                 id: user.chainSend
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 trigger:
                   after: user.chainExtract
-                sql: { file: noop.sql, mode: update }
+                pipeline:
+                  - id: main
+                    sql:
+                      file: noop.sql
+                      mode: update
                 """);
         Files.writeString(target.resolve("batch/chain/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -983,9 +1133,13 @@ class BatchJobIntegrationTest {
                 version: tesseraql/v1
                 id: user.overlapSkip
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 overlap: skip
-                sql: { file: noop.sql, mode: update }
+                pipeline:
+                  - id: main
+                    sql:
+                      file: noop.sql
+                      mode: update
                 """);
         Files.writeString(target.resolve("batch/overlap/noop.sql"),
                 "update users set name = name where name = '___none___'\n");
@@ -1018,18 +1172,144 @@ class BatchJobIntegrationTest {
             chunkFixtures.append("insert into chunk_items_d values ('d%02d', '%s');%n"
                     .formatted(i, i == 4 ? "K9" : (i % 2 == 1 ? "K1" : "K2")));
         }
+        // The spool-fed chunk (docs/unified-sources.md decision 19): one step extracts to a
+        // spool, the next loads it. Six rows so the commit cadence turns over.
+        chunkFixtures.append("create table chunk_items_e"
+                + " (item_key varchar(32) primary key, payload varchar(32) not null);\n")
+                .append("create table chunk_results_e"
+                        + " (item_key varchar(32) primary key, val integer not null);\n");
+        for (int i = 1; i <= 6; i++) {
+            chunkFixtures.append("insert into chunk_items_e values ('e%02d', '1');%n"
+                    .formatted(i));
+        }
         // The cooperative-stop chunk (docs/jobs.md "Stopping a run"): each row sleeps a
         // little, so the test can request the cancel while the chunk is mid-stream.
         chunkFixtures.append("create table chunk_items_c"
                 + " (item_key varchar(32) primary key, payload varchar(32) not null);\n")
                 .append("create table chunk_results_c"
-                        + " (item_key varchar(32) primary key, val integer not null);\n");
+                        + " (item_key varchar(32) primary key, val integer not null);\n")
+                // What an http: acquisition spooled, and what its envelope bound.
+                .append("create table chunk_results_h"
+                        + " (item_key varchar(32) primary key, val integer not null);\n")
+                .append("create table http_envelope"
+                        + " (first_key varchar(32) primary key, row_count integer not null);\n")
+                // A step's own enrich:, whose reference is a sibling step's rows.
+                .append("create table enrich_items (item_key varchar(32) primary key);\n")
+                .append("insert into enrich_items values ('h01'), ('h02');\n")
+                .append("create table step_enriched"
+                        + " (label varchar(32) primary key, row_count integer not null);\n");
         for (int i = 1; i <= 60; i++) {
             chunkFixtures.append("insert into chunk_items_c values ('c%02d', '1');%n"
                     .formatted(i));
         }
         Files.writeString(target.resolve("db/migration/V3__chunk_fixtures.sql"),
                 chunkFixtures.toString());
+        Files.writeString(target.resolve("batch/chunk/extract-e.sql"),
+                "select item_key, payload from chunk_items_e order by item_key\n");
+        Files.writeString(target.resolve("batch/chunk/writer-e.sql"), """
+                insert into chunk_results_e (item_key, val)
+                values (/* row.item_key */'x', cast(/* row.payload */'1' as integer))
+                """);
+        Files.writeString(target.resolve("batch/chunk/spooled.yml"), """
+                version: tesseraql/v1
+                id: user.chunkSpooled
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: extract
+                    sql:
+                      file: extract-e.sql
+                      mode: query-spool
+                  - id: load
+                    chunk:
+                      reader:
+                        spool: steps.extract.spool
+                      writer:
+                        sql:
+                          file: writer-e.sql
+                      key: item_key
+                      commitEvery: 2
+                """);
+        Files.writeString(target.resolve("batch/chunk/writer-h.sql"), """
+                insert into chunk_results_h (item_key, val)
+                values (/* row.item_key */'x', cast(/* row.payload */'1' as integer))
+                """);
+        Files.writeString(target.resolve("batch/chunk/http-spooled.yml"), """
+                version: tesseraql/v1
+                id: user.chunkHttpSpooled
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: fetch
+                    http:
+                      url: http://localhost:%d/companies
+                      select: companies
+                      mode: query-spool
+                  - id: load
+                    chunk:
+                      reader:
+                        spool: steps.fetch.spool
+                      writer:
+                        sql:
+                          file: writer-h.sql
+                      key: item_key
+                      commitEvery: 2
+                """.formatted(partnerPort));
+        Files.writeString(target.resolve("batch/chunk/record-envelope.sql"), """
+                insert into http_envelope (first_key, row_count)
+                values (/* firstKey */'x', /* rowCount */0)
+                """);
+        Files.writeString(target.resolve("batch/chunk/envelope.yml"), """
+                version: tesseraql/v1
+                id: user.httpEnvelope
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: fetch
+                    http:
+                      url: http://localhost:%d/companies
+                      select: companies
+                  - id: record
+                    sql:
+                      file: record-envelope.sql
+                      mode: update
+                      params:
+                        firstKey: steps.fetch.first.item_key
+                        rowCount: steps.fetch.rowCount
+                """.formatted(partnerPort));
+        Files.writeString(target.resolve("batch/chunk/items-h.sql"),
+                "select item_key from enrich_items order by item_key\n");
+        Files.writeString(target.resolve("batch/chunk/record-enriched.sql"), """
+                insert into step_enriched (label, row_count)
+                values (/* label */'x', /* rowCount */0)
+                """);
+        Files.writeString(target.resolve("batch/chunk/step-enriched.yml"), """
+                version: tesseraql/v1
+                id: user.stepEnriched
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: partner
+                    http:
+                      url: http://localhost:%d/companies
+                      select: companies
+                  - id: items
+                    sql:
+                      file: items-h.sql
+                      mode: query
+                    enrich:
+                      payload:
+                        source: steps.partner
+                        on: { item_key: item_key }
+                        merge: [payload]
+                  - id: record
+                    sql:
+                      file: record-enriched.sql
+                      mode: update
+                      params:
+                        label: steps.items.first.payload
+                        rowCount: steps.items.rowCount
+                """.formatted(partnerPort));
         Files.writeString(target.resolve("batch/chunk/slow.yml"), """
                 version: tesseraql/v1
                 id: user.chunkSlow
@@ -1038,8 +1318,12 @@ class BatchJobIntegrationTest {
                 pipeline:
                   - id: load
                     chunk:
-                      reader: { file: reader-c.sql }
-                      writer: { file: writer-c.sql }
+                      reader:
+                        sql:
+                          file: reader-c.sql
+                      writer:
+                        sql:
+                          file: writer-c.sql
                       key: item_key
                       commitEvery: 5
                 """);
@@ -1064,9 +1348,13 @@ class BatchJobIntegrationTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: selfCancel
-                    sql: { file: self-cancel.sql, mode: update }
+                    sql:
+                      file: self-cancel.sql
+                      mode: update
                   - id: never
-                    sql: { file: never.sql, mode: update }
+                    sql:
+                      file: never.sql
+                      mode: update
                 """);
         Files.writeString(target.resolve("batch/stop/self-cancel.sql"),
                 "update tql_job_execution set cancel_requested = now()"

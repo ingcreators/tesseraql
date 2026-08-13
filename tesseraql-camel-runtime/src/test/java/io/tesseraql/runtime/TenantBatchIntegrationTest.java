@@ -130,11 +130,13 @@ class TenantBatchIntegrationTest {
                 version: tesseraql/v1
                 id: items.seed
                 kind: job
-                recipe: batch-tasklet
+                recipe: batch-pipeline
                 perTenant: true
-                sql:
-                  file: seed.sql
-                  mode: update
+                pipeline:
+                  - id: main
+                    sql:
+                      file: seed.sql
+                      mode: update
                 """);
         Files.writeString(jobDir.resolve("seed.sql"),
                 "insert into items (name) values ('seeded')\n");

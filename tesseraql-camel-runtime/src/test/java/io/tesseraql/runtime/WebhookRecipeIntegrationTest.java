@@ -173,12 +173,14 @@ class WebhookRecipeIntegrationTest {
                   amount:
                     type: number
                     required: false
-                sql:
-                  file: insert-event.sql
-                  mode: update
-                  params:
-                    eventId: body.eventId
-                    amount: body.amount
+                steps:
+                  - id: main
+                    sql:
+                      file: insert-event.sql
+                      mode: update
+                      params:
+                        eventId: body.eventId
+                        amount: body.amount
                 response:
                   json:
                     status: 202

@@ -3,8 +3,10 @@ id: tql.studio.docs.export.openapi
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.openapi
+sources:
+  main:
+    service:
+      name: docs.openapi
 
 response:
   file:
@@ -12,4 +14,4 @@ response:
     contentType: "application/json; charset=utf-8"
     filename: openapi.json
     model:
-      openapi: sql
+      openapi: main

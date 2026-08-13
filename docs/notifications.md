@@ -76,17 +76,19 @@ notify:
       userName: body.userName
       actor: principal.loginId
 
-sql:
-  file: provision.sql
-  mode: update
-  params:
-    userName: body.userName
+sources:
+  main:
+    sql:
+      file: provision.sql
+      mode: update
+      params:
+        userName: body.userName
 
 response:
   json:
     status: 200
     body:
-      affected: sql.affectedRows
+      affected: steps.main.affectedRows
       auditEventId: notify.audit.eventId   # each fired notification publishes its event id
 ```
 
@@ -106,7 +108,7 @@ pipeline:
     notify:
       channel: audit-webhook
       payload:
-        deactivated: step.deactivatePending.affectedRows
+        deactivated: steps.deactivatePending.affectedRows
 ```
 
 A pipeline step declares exactly one of `sql:` or `notify:` (or the other step bodies —
@@ -125,9 +127,9 @@ On a **mail** channel, a notify step can carry a produced file with it — the
   - id: send
     notify:
       channel: reports              # a mail channel
-      attach: step.report.transferId
+      attach: steps.report.transferId
       payload:
-        rows: step.report.rows
+        rows: steps.report.rows
 ```
 
 `attach:` resolves at enqueue to a transfer id that rides the outbox envelope; the

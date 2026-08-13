@@ -22,14 +22,15 @@ class AppLinterAmbientPrincipalTest {
                 kind: route
                 recipe: query-json
                 %s
-                sql:
-                  file: search.sql
-                  mode: query
-                %s
-                response:
+                sources:
+                  main:
+                    sql:
+                      file: search.sql
+                      mode: query
+                %sresponse:
                   json:
                     body:
-                      data: sql.rows
+                      data: main.rows
                 """.formatted(security, params));
         Files.writeString(dir.resolve("web/api/items/search.sql"), sql);
         return dir;
@@ -59,7 +60,7 @@ class AppLinterAmbientPrincipalTest {
         List<LintFinding> findings = new AppLinter().lint(app(dir,
                 "security:\n  auth: bearer",
                 "select 1 where owner = /* actor */'x'\n",
-                "  params:\n    actor: principal.loginId"));
+                "      params:\n        actor: principal.loginId\n"));
 
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4137") && !f.isError()
                 && f.message().contains("/* principal.loginId */"));
@@ -77,10 +78,12 @@ class AppLinterAmbientPrincipalTest {
                 recipe: command-json
                 security:
                   auth: bearer
-                sql:
-                  service: account.app.save
-                  params:
-                    subject: principal.subject
+                steps:
+                  - id: main
+                    service:
+                      name: account.app.save
+                      params:
+                        subject: principal.subject
                 response:
                   json:
                     body:

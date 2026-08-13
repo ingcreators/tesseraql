@@ -80,6 +80,51 @@ class SchemaSyncTest {
                         yamlNames(io.tesseraql.yaml.model.JobDefinition.class));
     }
 
+    /**
+     * The binding definition documents the <em>authoring</em> form, which is the creator's
+     * parameters — not the record's components.
+     *
+     * <p>{@link io.tesseraql.yaml.model.Binding} stays flat while the surface nests
+     * (docs/unified-sources.md): a document writes {@code sql: {file: …}}, and the record holds
+     * {@code file}. Nothing checked the schema against the creator, so after the arms landed the
+     * shipped definition still offered a bare {@code file:} and a string {@code contract:} — keys
+     * the parser ignores. The published reference is generated from this file, so a reader
+     * authoring from it wrote documents that silently did nothing.
+     */
+    @Test
+    void theBindingSchemaDocumentsTheAuthoringForm() throws Exception {
+        JsonNode schema = new ObjectMapper().readTree(
+                getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
+        List<String> documented = new ArrayList<>();
+        schema.path("$defs").path("binding").path("properties").fieldNames()
+                .forEachRemaining(documented::add);
+
+        assertThat(documented)
+                .as("the binding definition documents the keys the @JsonCreator reads, and only"
+                        + " those")
+                .containsExactlyInAnyOrderElementsOf(creatorProperties(
+                        io.tesseraql.yaml.model.Binding.class, "of"));
+    }
+
+    /** The {@code @JsonProperty} names of a model's {@code @JsonCreator} factory. */
+    private static List<String> creatorProperties(Class<?> model, String factory) {
+        for (var method : model.getDeclaredMethods()) {
+            if (!method.getName().equals(factory)
+                    || method.getAnnotation(
+                            com.fasterxml.jackson.annotation.JsonCreator.class) == null) {
+                continue;
+            }
+            List<String> names = new ArrayList<>();
+            for (var parameter : method.getParameters()) {
+                var property = parameter.getAnnotation(
+                        com.fasterxml.jackson.annotation.JsonProperty.class);
+                names.add(property == null ? parameter.getName() : property.value());
+            }
+            return names;
+        }
+        throw new IllegalStateException("no @JsonCreator " + factory + " on " + model);
+    }
+
     /** The root property names of one shipped schema. */
     private List<String> rootProperties(String resource) throws Exception {
         JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));
@@ -224,7 +269,7 @@ class SchemaSyncTest {
                 .containsAll(AppLinter.knownRouteRecipes())
                 .contains("queue-consume");
         assertThat(enumOf("/schema/tesseraql-job-v1.schema.json", "recipe"))
-                .containsExactlyInAnyOrder("batch-tasklet", "batch-pipeline");
+                .containsExactlyInAnyOrder("batch-pipeline");
         assertThat(enumOf("/schema/tesseraql-view-v1.schema.json", "recipe"))
                 .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.recipes());
     }

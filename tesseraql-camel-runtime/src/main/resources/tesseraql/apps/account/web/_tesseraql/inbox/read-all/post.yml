@@ -5,12 +5,13 @@ recipe: command-json
 
 # Marks all of the caller's messages read (roadmap Phase 49). Idempotent by design.
 
-sql:
-  service: account.inbox.readAll
-  params:
-    subject: principal.subject
-    tenantId: principal.tenantId
-
+steps:
+  - id: main
+    service:
+      name: account.inbox.readAll
+      params:
+        subject: principal.subject
+        tenantId: principal.tenantId
 response:
   redirect:
     status: 303

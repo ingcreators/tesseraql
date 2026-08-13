@@ -59,11 +59,13 @@ The names available to bind are the ones the route declares under `params:`, eac
 dotted source path:
 
 ```yaml
-sql:
-  file: search.sql
-  params:
-    q: query.q
-    limit: query.limit
+sources:
+  main:
+    sql:
+      file: search.sql
+      params:
+        q: query.q
+        limit: query.limit
 ```
 
 Sources resolve against the request context:

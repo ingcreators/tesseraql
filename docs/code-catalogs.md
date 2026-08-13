@@ -217,7 +217,7 @@ The choice is **size**, not key arity.
 
 A master of tens or hundreds of rows that barely changes is a catalog: loaded once,
 resolved from memory, no query per request. A master of thousands that moves is a
-reference, fetched by key with [`enrich:`](response-shaping.md#enrichment-enrich).
+reference, fetched by key with [`enrich:`](response-shaping.md#fetching-a-reference-by-key).
 
 Both resolve composite keys, and both read the same at the call site.
 

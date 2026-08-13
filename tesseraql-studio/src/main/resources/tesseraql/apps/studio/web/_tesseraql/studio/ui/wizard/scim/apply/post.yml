@@ -17,19 +17,20 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.wizard.scim.apply
-  params:
-    groups: params.groups
-    outbound: params.outbound
-    outboundUrl: params.outboundUrl
-    tokenRef: params.tokenRef
-    roles: principal.roles
-    actor: principal.loginId
-
+sources:
+  main:
+    service:
+      name: studio.wizard.scim.apply
+      params:
+        groups: params.groups
+        outbound: params.outbound
+        outboundUrl: params.outboundUrl
+        tokenRef: params.tokenRef
+        roles: principal.roles
+        actor: principal.loginId
 response:
   html:
     status: 200
     template: applied.html
     model:
-      result: sql
+      result: main

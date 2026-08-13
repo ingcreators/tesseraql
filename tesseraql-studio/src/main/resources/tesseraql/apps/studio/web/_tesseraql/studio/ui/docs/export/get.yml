@@ -3,12 +3,14 @@ id: tql.studio.docs.export
 kind: route
 recipe: query-html
 
-sql:
-  service: docs.export
+sources:
+  main:
+    service:
+      name: docs.export
 
 response:
   html:
     status: 200
     template: export.html
     model:
-      docs: sql
+      docs: main

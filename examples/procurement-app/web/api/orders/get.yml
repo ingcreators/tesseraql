@@ -6,14 +6,15 @@ recipe: query-json
 security:
   policy: rfq.read
 
-sql:
-  file: orders.sql
-  mode: query
-
+sources:
+  main:
+    sql:
+      file: orders.sql
+      mode: query
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows
       meta:
-        count: sql.rowCount
+        count: main.rowCount

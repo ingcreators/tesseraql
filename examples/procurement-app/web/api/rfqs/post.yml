@@ -26,15 +26,17 @@ validate:
 
 # The cross-document write (docs/procurement-demo.md "composition probes"): the RFQ's
 # title comes straight from the requisition row, in one statement, one transaction.
-sql:
-  file: create-rfq.sql
-  mode: update
-  params:
-    requisitionId: params.requisitionId
-    quoteDueDate: params.quoteDueDate
 
+steps:
+  - id: main
+    sql:
+      file: create-rfq.sql
+      mode: update
+      params:
+        requisitionId: params.requisitionId
+        quoteDueDate: params.quoteDueDate
 response:
   json:
     status: 201
     body:
-      created: sql.affectedRows
+      created: steps.main.affectedRows

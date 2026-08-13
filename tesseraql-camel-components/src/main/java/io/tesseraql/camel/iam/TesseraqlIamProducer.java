@@ -53,7 +53,7 @@ public class TesseraqlIamProducer extends DefaultProducer {
 
         Map<String, Object> context = exchange.getProperty(TesseraqlProperties.CONTEXT, Map.class);
         if (context != null) {
-            context.put(endpoint.getResultKey(), result);
+            io.tesseraql.camel.ContextResults.put(context, endpoint.getResultKey(), result);
         }
         exchange.getMessage().setBody(result);
     }

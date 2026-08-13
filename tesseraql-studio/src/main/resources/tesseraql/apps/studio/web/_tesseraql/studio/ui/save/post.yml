@@ -11,13 +11,14 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.save
-  params:
-    path: params.path
-    content: params.content
-    roles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.save
+      params:
+        path: params.path
+        content: params.content
+        roles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/source?path={params.path}&saved=1

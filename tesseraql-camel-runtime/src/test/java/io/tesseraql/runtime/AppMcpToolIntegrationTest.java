@@ -338,11 +338,13 @@ class AppMcpToolIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: find.sql
-                  mode: query
-                  params:
-                    q: query.q
+                sources:
+                  main:
+                    sql:
+                      file: find.sql
+                      mode: query
+                      params:
+                        q: query.q
                 """);
         Files.writeString(mcp.resolve("find.sql"), """
                 select u.id, u.name, u.status
@@ -370,11 +372,13 @@ class AppMcpToolIntegrationTest {
                   auth: bearer
                   policy: users.write
 
-                sql:
-                  file: deactivate.sql
-                  mode: update
-                  params:
-                    name: query.name
+                steps:
+                  - id: main
+                    sql:
+                      file: deactivate.sql
+                      mode: update
+                      params:
+                        name: query.name
                 """);
         Files.writeString(mcp.resolve("deactivate.sql"), """
                 update users set status = 'INACTIVE'
@@ -396,9 +400,11 @@ class AppMcpToolIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: active-users.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: active-users.sql
+                      mode: query
                 """);
         Files.writeString(mcp.resolve("active-users.sql"), """
                 select u.id, u.name
@@ -422,15 +428,16 @@ class AppMcpToolIntegrationTest {
                   auth: bearer
                   policy: users.read
 
-                sql:
-                  file: users-board.sql
-                  mode: query
-
+                sources:
+                  main:
+                    sql:
+                      file: users-board.sql
+                      mode: query
                 response:
                   html:
                     template: users-board.html
                     model:
-                      users: sql.rows
+                      users: main.rows
 
                 ui:
                   prefersBorder: true

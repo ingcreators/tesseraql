@@ -12,6 +12,10 @@ trigger:
 # week, then remove the Parquet files no surviving snapshot references.
 pipeline:
   - id: expire
-    sql: { file: expire-snapshots.sql, mode: query }
+    sql:
+      file: expire-snapshots.sql
+      mode: query
   - id: cleanup
-    sql: { file: cleanup-files.sql, mode: query }
+    sql:
+      file: cleanup-files.sql
+      mode: query

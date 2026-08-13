@@ -15,15 +15,16 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.flagsSet
-  params:
-    name: params.name
-    value: params.value
-    type: params.type
-    actor: principal.loginId
-    principalRoles: principal.roles
-
+steps:
+  - id: main
+    service:
+      name: studio.flagsSet
+      params:
+        name: params.name
+        value: params.value
+        type: params.type
+        actor: principal.loginId
+        principalRoles: principal.roles
 response:
   redirect:
     location: /_tesseraql/studio/ui/flags?saved=1

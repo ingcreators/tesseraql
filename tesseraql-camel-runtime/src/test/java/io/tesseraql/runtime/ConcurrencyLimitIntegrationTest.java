@@ -135,14 +135,16 @@ class ConcurrencyLimitIntegrationTest {
                         admission:
                           concurrency:
                             maxInFlight: 1
-                        sql:
-                          file: slow.sql
-                          mode: query
+                        sources:
+                          main:
+                            sql:
+                              file: slow.sql
+                              mode: query
                         response:
                           json:
                             status: 200
                             body:
-                              ok: sql.rowCount
+                              ok: main.rowCount
                         """);
         Files.writeString(slowDir.resolve("slow.sql"), "select pg_sleep(0.5) as slept\n");
 
@@ -163,14 +165,16 @@ class ConcurrencyLimitIntegrationTest {
                   rateLimit:
                     requestsPerSecond: 1
                     burst: 1
-                sql:
-                  file: rated.sql
-                  mode: query
+                sources:
+                  main:
+                    sql:
+                      file: rated.sql
+                      mode: query
                 response:
                   json:
                     status: 200
                     body:
-                      ok: sql.rowCount
+                      ok: main.rowCount
                 """);
         Files.writeString(ratedDir.resolve("rated.sql"), "select 1 as ok\n");
         return target;

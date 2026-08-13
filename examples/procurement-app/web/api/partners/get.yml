@@ -6,12 +6,13 @@ recipe: query-json
 security:
   policy: rfq.read
 
-sql:
-  file: partners.sql
-  mode: query
-
+sources:
+  main:
+    sql:
+      file: partners.sql
+      mode: query
 response:
   json:
     status: 200
     body:
-      data: sql.rows
+      data: main.rows

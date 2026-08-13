@@ -20,16 +20,17 @@ input:
 security:
   auth: public
 
-sql:
-  service: docs.share
-  params:
-    id: query.id
-    exp: query.exp
-    sig: query.sig
-
+sources:
+  main:
+    service:
+      name: docs.share
+      params:
+        id: query.id
+        exp: query.exp
+        sig: query.sig
 response:
   html:
     status: 200
     template: share.html
     model:
-      doc: sql
+      doc: main

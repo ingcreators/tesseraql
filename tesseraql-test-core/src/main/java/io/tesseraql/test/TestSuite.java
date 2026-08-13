@@ -26,19 +26,24 @@ public record TestSuite(String version, List<TestCase> tests) {
 
     /**
      * A single test case (design ch. 13.2). Exactly one of {@code sql}, {@code contract},
-     * {@code validate}, {@code notify}, {@code messages}, or {@code httpCall} is set.
+     * {@code validate}, {@code notify}, {@code messages}, or {@code http} is set.
+     *
+     * <p>A target is named after the document key it points at, so a case reads like the thing it
+     * exercises. That is why {@code httpCall:} became {@code http:} when the binding union
+     * absorbed the job step's arm (docs/unified-sources.md decision 12): a target naming a key
+     * the surface no longer has would send a reader looking for it.
      *
      * @param name     human-readable case name
      * @param sql      a SQL file target
      * @param contract an Identity SQL Contract name
-     * @param params   bind parameters; for a validation, notify, or httpCall case, the execution
+     * @param params   bind parameters; for a validation, notify, or http case, the execution
      *                 context the declarations see (typically a {@code body:} or {@code job:} map)
      * @param expect   the expectation
      * @param validate a route's validation rules as the target (roadmap Phase 19)
      * @param notifications the {@code notify:} target — a route's or job's notifications
      *                 (roadmap Phase 20; "notify" itself is not a legal record component)
      * @param messages a message-catalog target (roadmap Phase 22)
-     * @param httpCall an {@code httpCall:} target — a job's outbound REST steps (roadmap Phase 26)
+     * @param httpCall an {@code http:} target — a job's or route's outbound calls (Phase 26)
      * @param decide   a decision-table target (docs/decision-tables.md): the case evaluates one
      *                 declared decision against the params as input values
      * @param verify   read-back steps of a {@code sql} case, run on the case's transaction after
@@ -52,7 +57,7 @@ public record TestSuite(String version, List<TestCase> tests) {
             Map<String, Object> params, Expectation expect, ValidateTarget validate,
             @com.fasterxml.jackson.annotation.JsonProperty("notify") NotifyTarget notifications,
             MessagesTarget messages,
-            HttpCallTarget httpCall,
+            @com.fasterxml.jackson.annotation.JsonProperty("http") HttpCallTarget httpCall,
             DecideTarget decide, List<VerifyStep> verify, PrincipalSpec principal,
             TransitionTarget transition, DispatchTarget dispatch, List<GivenStep> given) {
 

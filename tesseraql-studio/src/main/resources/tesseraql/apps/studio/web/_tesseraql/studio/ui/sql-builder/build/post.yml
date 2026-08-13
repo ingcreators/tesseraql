@@ -14,16 +14,17 @@ input:
     type: string
     required: false
 
-sql:
-  service: studio.sqlBuilder.build
-  params:
-    table: params.table
-    operation: params.operation
-    column: params.column
-
+sources:
+  main:
+    service:
+      name: studio.sqlBuilder.build
+      params:
+        table: params.table
+        operation: params.operation
+        column: params.column
 response:
   html:
     status: 200
     template: build.html
     model:
-      b: sql
+      b: main
