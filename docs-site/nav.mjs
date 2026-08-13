@@ -145,6 +145,7 @@ export const EXCLUDED = [
   'development-environment.md',
   'app-developer-distribution.md',
   // Design documents that precede implementation; published once the feature ships.
+  'lint-restructure.md',
   'field-domains.md',
   'route-defaults.md',
   'ambient-params.md',
