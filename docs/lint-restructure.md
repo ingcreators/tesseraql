@@ -41,12 +41,20 @@ decided.
 
 ## Decisions
 
-1. **A rule family is a class.** `lint/rules/<Family>Rules.java`, package-private, one per
-   existing test file, implementing one interface:
+1. **A rule family is a class.** `<Family>Rules.java`, package-private, one per existing test
+   file, implementing one interface:
    `interface LintRule { void lint(LintContext context, AppManifest manifest, List<LintFinding> findings); }`.
    `AppLinter.lint()` keeps its signature and becomes: build `LintContext`, run the registry
-   list in today's order, return findings. The registry is a `List.of(...)` in `AppLinter` —
+   in today's order, return findings. The registry is a `List.of(...)` in `AppLinter` —
    explicit, ordered, diff-reviewable; no ServiceLoader, no annotations.
+
+   *Amended during slice 1–3 (the sketch said `lint/rules/`).* A package-private class in
+   `io.tesseraql.yaml.lint.rules` is invisible to `AppLinter`, so the registry could not name
+   it; publishing fifty rule classes to buy the subpackage contradicts "no SPI surface, rules
+   are framework-internal". The families live beside `AppLinter` in `io.tesseraql.yaml.lint`.
+   The registry is also **built per run** rather than held in a `static final` list: a family
+   holds its run's `LintContext` in a field, and one shared list would leak that context
+   between concurrent lints (two Studio requests, or a build linting several apps).
 2. **Bodies move verbatim.** This is code motion along the test fault line, not a rewrite:
    each family method moves with its private helpers; helpers shared by two families move to
    `LintContext` or a small `LintSupport`. Findings stay byte-identical — code, severity,
@@ -94,6 +102,15 @@ decided.
    `LintSupport`), then routes/webhooks/consumers.
 3. **Final third + registry pin** — unknown-keys, mcp, views, jobs; the order-pinning test;
    `AppLinter` ends as context construction + registry (~200 lines).
+
+   *Slices 1–3 shipped as one commit* — the extraction is a single mechanical pass whose
+   oracle is the untouched 37-file suite, and splitting it into three PRs would have bought
+   review granularity nobody used at the cost of two extra rebase-and-CI cycles over a
+   6,000-line move. `AppLinter` ended at 117 lines. Order is preserved exactly: the per-route
+   fan-out cannot become separate registry entries (that would run an all-routes rule before a
+   per-route one), so families like `HttpCacheRules` and `ExportRules` are classes on the test
+   fault line called in place rather than registered — 36 registry entries, 13 shared rule
+   classes.
 4. **Unknown-key generalization** (decision 3) — the recursive walk, prompt key set, deletion
    of the registration maps and `SimpleYamlParser` hand sets; gallery apps re-linted for new
    true positives before merge.

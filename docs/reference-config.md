@@ -55,7 +55,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.connectors.push.knownHostsFile` | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) | — |
+| `tesseraql.connectors.push.knownHostsFile` | [PushStepRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/PushStepRules.java) | — |
 
 ## tesseraql.console
 
@@ -111,7 +111,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.files.locale` | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) | [code-catalogs](code-catalogs.md), [file-transfers](file-transfers.md) |
+| `tesseraql.files.locale` | [CatalogLocaleRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/CatalogLocaleRules.java) | [code-catalogs](code-catalogs.md), [file-transfers](file-transfers.md) |
 
 ## tesseraql.framework
 
@@ -138,7 +138,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.i18n.defaultLocale` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) | — |
+| `tesseraql.i18n.defaultLocale` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | — |
 
 ## tesseraql.identity
 
@@ -208,7 +208,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.object-storage.provider` | [BlobStores.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/blob/BlobStores.java), [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java) | [deployment](deployment.md) |
+| `tesseraql.object-storage.provider` | [BlobStores.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/blob/BlobStores.java), [ObjectStorageEgressRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ObjectStorageEgressRules.java) | [deployment](deployment.md) |
 
 ## tesseraql.oidc
 
@@ -234,7 +234,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.orgunit.mode` | [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java), [OrgUnitSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/org/OrgUnitSettings.java) | [data-scoping](data-scoping.md) |
+| `tesseraql.orgunit.mode` | [OrgUnitRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/OrgUnitRules.java), [OrgUnitSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/org/OrgUnitSettings.java) | [data-scoping](data-scoping.md) |
 
 ## tesseraql.otel
 
@@ -383,5 +383,5 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.workflow.mode` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [WorkflowCases.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-test-core/src/main/java/io/tesseraql/test/WorkflowCases.java), [AppLinter.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/AppLinter.java), +1 more | [approval-workflow](approval-workflow.md) |
+| `tesseraql.workflow.mode` | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java), [WorkflowCases.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-test-core/src/main/java/io/tesseraql/test/WorkflowCases.java), [WorkflowRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/WorkflowRules.java), +1 more | [approval-workflow](approval-workflow.md) |
 | `tesseraql.workflow.sweep.interval` | [WorkflowSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/workflow/WorkflowSettings.java) | [approval-workflow](approval-workflow.md) |
