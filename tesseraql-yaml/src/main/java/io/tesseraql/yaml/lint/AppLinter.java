@@ -2,7 +2,6 @@ package io.tesseraql.yaml.lint;
 
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionParser;
-import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
@@ -110,9 +109,11 @@ public final class AppLinter {
         appHome = appHome.toAbsolutePath().normalize();
         AppManifest manifest = new ManifestLoader().load(appHome);
         List<LintFinding> findings = new ArrayList<>();
-        catalogTables = io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values().stream()
-                .flatMap(spec -> spec.sourceTables().stream())
-                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        context = new LintContext(appHome, findings,
+                io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values().stream()
+                        .flatMap(spec -> spec.sourceTables().stream())
+                        .collect(java.util.stream.Collectors
+                                .toCollection(java.util.LinkedHashSet::new)));
         for (RouteFile route : manifest.routes()) {
             lintRoute(appHome, manifest.config(), route, findings);
         }
@@ -290,12 +291,10 @@ public final class AppLinter {
     private final Map<Class<?>, Set<String>> acceptedKeyCache = new java.util.HashMap<>();
 
     /**
-     * The source tables the app's code catalogs read, for the {@code invalidates:} check.
-     * Held for the run rather than threaded through every route-shaped surface: the check
-     * belongs beside {@code lintEmit}, which those surfaces already share, and this campaign
-     * has already paid once for a capability that reached routes and nothing else.
+     * The run's memoized IO and cross-rule state (catalog tables for {@code invalidates:}),
+     * built afresh at the top of every {@link #lint(Path)} — see {@link LintContext}.
      */
-    private Set<String> catalogTables = Set.of();
+    private LintContext context;
 
     /**
      * The YAML keys a record accepts — a document-family root, a fixed-shape block, or a
@@ -393,11 +392,9 @@ public final class AppLinter {
      */
     private void lintUnknownKeys(Path appHome, Path file, Class<?> recordClass,
             Set<String> extraKeys, List<LintFinding> findings) {
-        Map<String, Object> tree;
-        try {
-            tree = new io.tesseraql.yaml.SimpleYamlParser().parseTree(file);
-        } catch (RuntimeException malformed) {
-            // A malformed document already failed the manifest load before lint ran; skip it.
+        // A malformed document already failed the manifest load before lint ran; skip it.
+        Map<String, Object> tree = context.tree(file);
+        if (tree == null) {
             return;
         }
         Set<String> accepted = acceptedKeys(recordClass);
@@ -550,17 +547,15 @@ public final class AppLinter {
             if (route.definition().main() != null && route.definition().main().file() != null) {
                 Path sqlFile = route.source().getParent()
                         .resolve(route.definition().main().file()).normalize();
-                try {
-                    if (java.nio.file.Files.isRegularFile(sqlFile) && java.nio.file.Files
-                            .readString(sqlFile).toLowerCase(java.util.Locale.ROOT)
-                            .matches("(?s).*\\b(limit|fetch)\\b.*")) {
-                        findings.add(new LintFinding("TQL-YAML-1018", "warning", source,
-                                "page: appends the pagination clause — the authored SQL should"
-                                        + " not carry its own LIMIT/FETCH",
-                                lineOf(route.source(), "page:"), null));
-                    }
-                } catch (java.io.IOException ignored) {
-                    // unreadable SQL surfaces through other lint rules
+                String sql = java.nio.file.Files.isRegularFile(sqlFile)
+                        ? context.content(sqlFile)
+                        : null;
+                if (sql != null && sql.toLowerCase(java.util.Locale.ROOT)
+                        .matches("(?s).*\\b(limit|fetch)\\b.*")) {
+                    findings.add(new LintFinding("TQL-YAML-1018", "warning", source,
+                            "page: appends the pagination clause — the authored SQL should"
+                                    + " not carry its own LIMIT/FETCH",
+                            lineOf(route.source(), "page:"), null));
                 }
             }
         }
@@ -646,6 +641,7 @@ public final class AppLinter {
                             + " catalogs after"));
             return;
         }
+        Set<String> catalogTables = context.catalogTables();
         for (String table : definition.invalidates()) {
             if (table == null || table.isBlank()) {
                 findings.add(new LintFinding("TQL-FIELD-4620", "error", source,
@@ -1220,13 +1216,9 @@ public final class AppLinter {
         try (java.util.stream.Stream<Path> files = Files.list(dir)) {
             files.filter(f -> f.getFileName().toString().endsWith(".yml")).sorted()
                     .forEach(file -> {
-                        Map<String, Object> tree;
-                        try {
-                            tree = new io.tesseraql.yaml.SimpleYamlParser().parseTree(file);
-                        } catch (RuntimeException malformed) {
-                            return;
-                        }
-                        if (!(tree.get("decisions") instanceof Map<?, ?> decisions)) {
+                        Map<String, Object> tree = context.tree(file);
+                        if (tree == null
+                                || !(tree.get("decisions") instanceof Map<?, ?> decisions)) {
                             return;
                         }
                         String source = relative(appHome, file);
@@ -1570,6 +1562,18 @@ public final class AppLinter {
 
     /** The distinct {@code decision.*} bind expressions across a document's parseable SQL files. */
     private Set<String> decisionBinds(Path source, RouteDefinition def) {
+        return ambientBinds(source, def, expression -> expression
+                .startsWith(io.tesseraql.core.sql.AmbientBinds.DECISION + ".")
+                && expression.split("\\.").length >= 2);
+    }
+
+    /**
+     * The distinct bind expressions matching {@code matches} across a document's parseable SQL
+     * files — its steps, named sources, and validation rules. Unparseable SQL is its own lint's
+     * concern and contributes nothing here.
+     */
+    private Set<String> ambientBinds(Path source, RouteDefinition def,
+            java.util.function.Predicate<String> matches) {
         Set<String> found = new LinkedHashSet<>();
         Path dir = source.getParent();
         List<String> files = new ArrayList<>();
@@ -1593,35 +1597,25 @@ public final class AppLinter {
             if (!Files.isRegularFile(sqlFile)) {
                 continue;
             }
-            try {
-                collectDecisionBinds(Sql2WayParser.parse(Files.readString(sqlFile)), found);
-            } catch (Exception ignored) {
-                // Unparseable SQL is its own lint's concern.
+            List<SqlNode> nodes = context.sqlNodes(sqlFile);
+            if (nodes == null) {
+                continue;
             }
+            SqlNode.walk(nodes, node -> {
+                String expressionSource = switch (node) {
+                    case SqlNode.Bind bind -> bind.expressionSource();
+                    case SqlNode.ListBind bind -> bind.expressionSource();
+                    default -> null;
+                };
+                if (expressionSource != null) {
+                    String expression = expressionSource.trim();
+                    if (matches.test(expression)) {
+                        found.add(expression);
+                    }
+                }
+            });
         }
         return found;
-    }
-
-    private static void collectDecisionBinds(List<SqlNode> nodes, Set<String> found) {
-        for (SqlNode node : nodes) {
-            switch (node) {
-                case SqlNode.Bind bind -> addIfDecision(bind.expressionSource(), found);
-                case SqlNode.ListBind bind -> addIfDecision(bind.expressionSource(), found);
-                case SqlNode.If cond -> cond.branches()
-                        .forEach(branch -> collectDecisionBinds(branch.body(), found));
-                case SqlNode.For loop -> collectDecisionBinds(loop.body(), found);
-                default -> {
-                }
-            }
-        }
-    }
-
-    private static void addIfDecision(String expressionSource, Set<String> found) {
-        String expression = expressionSource == null ? "" : expressionSource.trim();
-        if (expression.startsWith(io.tesseraql.core.sql.AmbientBinds.DECISION + ".")
-                && expression.split("\\.").length >= 2) {
-            found.add(expression);
-        }
     }
 
     /**
@@ -1775,62 +1769,13 @@ public final class AppLinter {
         return maps;
     }
 
-    /** The distinct {@code principal.*} bind expressions across a document's parseable SQL files. */
+    /**
+     * The distinct {@code principal.*} bind expressions across a document's parseable SQL files
+     * — the principal half of the ambient set; the framework owns the list, not this linter.
+     */
     private Set<String> principalBinds(Path source, RouteDefinition def) {
-        Set<String> found = new LinkedHashSet<>();
-        Path dir = source.getParent();
-        List<String> files = new ArrayList<>();
-        def.steps().values().forEach(step -> {
-            if (step.file() != null) {
-                files.add(step.file());
-            }
-        });
-        def.sources().values().forEach(query -> {
-            if (query.file() != null) {
-                files.add(query.file());
-            }
-        });
-        def.validate().values().forEach(rule -> {
-            if (rule.file() != null) {
-                files.add(rule.file());
-            }
-        });
-        for (String file : files) {
-            Path sqlFile = dir.resolve(file).normalize();
-            if (!Files.isRegularFile(sqlFile)) {
-                continue;
-            }
-            try {
-                collectPrincipalBinds(Sql2WayParser.parse(Files.readString(sqlFile)), found);
-            } catch (Exception ignored) {
-                // Unparseable SQL is its own lint's concern.
-            }
-        }
-        return found;
-    }
-
-    /** The principal half of the ambient set; the framework owns the list, not this linter. */
-    private static void addIfAmbientPrincipal(String expressionSource, Set<String> found) {
-        String expression = expressionSource == null ? "" : expressionSource.trim();
-        if (expression.startsWith("principal.")
-                && io.tesseraql.core.sql.AmbientBinds.isAmbient(expression)) {
-            found.add(expression);
-        }
-    }
-
-    private static void collectPrincipalBinds(List<SqlNode> nodes, Set<String> found) {
-        for (SqlNode node : nodes) {
-            switch (node) {
-                case SqlNode.Bind bind -> addIfAmbientPrincipal(bind.expressionSource(), found);
-                case SqlNode.ListBind bind ->
-                    addIfAmbientPrincipal(bind.expressionSource(), found);
-                case SqlNode.If cond -> cond.branches()
-                        .forEach(branch -> collectPrincipalBinds(branch.body(), found));
-                case SqlNode.For loop -> collectPrincipalBinds(loop.body(), found);
-                default -> {
-                }
-            }
-        }
+        return ambientBinds(source, def, expression -> expression.startsWith("principal.")
+                && io.tesseraql.core.sql.AmbientBinds.isAmbient(expression));
     }
 
     /**
@@ -2784,13 +2729,19 @@ public final class AppLinter {
         if (!Files.isRegularFile(sqlFile)) {
             return; // missing-file is reported separately
         }
-        Set<String> placeholders = new LinkedHashSet<>();
-        try {
-            collectEmbeddedPlaceholders(Sql2WayParser.parse(Files.readString(sqlFile)),
-                    placeholders);
-        } catch (Exception ignored) {
+        List<SqlNode> nodes = context.sqlNodes(sqlFile);
+        if (nodes == null) {
             return; // SQL syntax / IO errors surface through other checks
         }
+        Set<String> placeholders = new LinkedHashSet<>();
+        SqlNode.walk(nodes, node -> {
+            if (node instanceof SqlNode.Embedded embedded) {
+                Matcher matcher = EMBEDDED_PLACEHOLDER.matcher(embedded.template());
+                while (matcher.find()) {
+                    placeholders.add(matcher.group(1).trim());
+                }
+            }
+        });
         Map<String, String> params = sql.params() == null ? Map.of() : sql.params();
         Map<String, InputField> inputs = definition.input() == null ? Map.of() : definition.input();
         for (String placeholder : placeholders) {
@@ -2821,25 +2772,6 @@ public final class AppLinter {
             }
         }
         return null;
-    }
-
-    private static void collectEmbeddedPlaceholders(List<SqlNode> nodes, Set<String> out) {
-        for (SqlNode node : nodes) {
-            switch (node) {
-                case SqlNode.Embedded embedded -> {
-                    Matcher matcher = EMBEDDED_PLACEHOLDER.matcher(embedded.template());
-                    while (matcher.find()) {
-                        out.add(matcher.group(1).trim());
-                    }
-                }
-                case SqlNode.If conditional -> conditional.branches()
-                        .forEach(branch -> collectEmbeddedPlaceholders(branch.body(), out));
-                case SqlNode.For loop -> collectEmbeddedPlaceholders(loop.body(), out);
-                default -> {
-                    // Text/Bind/ListBind/Scope hold no embedded placeholders.
-                }
-            }
-        }
     }
 
     /**
@@ -2875,7 +2807,8 @@ public final class AppLinter {
             return;
         }
         Path sqlFile = documentSource.getParent().resolve(definition.main().file());
-        if (Files.isRegularFile(sqlFile) && readQuietly(sqlFile).toLowerCase().contains("tenant")) {
+        String sql = Files.isRegularFile(sqlFile) ? context.content(sqlFile) : null;
+        if (sql != null && sql.toLowerCase().contains("tenant")) {
             return;
         }
         findings.add(new LintFinding("TQL-TENANT-3001", "warning", source,
@@ -2931,8 +2864,8 @@ public final class AppLinter {
             String source = relative(appHome, job.source());
             for (String file : jobSqlFiles(job)) {
                 Path sqlFile = dir.resolve(file);
-                if (Files.isRegularFile(sqlFile)
-                        && SCOPE_DIRECTIVE.matcher(readQuietly(sqlFile)).find()) {
+                String sql = Files.isRegularFile(sqlFile) ? context.content(sqlFile) : null;
+                if (sql != null && SCOPE_DIRECTIVE.matcher(sql).find()) {
                     findings.add(new LintFinding("TQL-SCOPE-3014", "error", source,
                             "batch job '" + job.definition().id() + "' uses a /*%scope … */"
                                     + " directive in " + file + ", but a job runs with no"
@@ -2988,8 +2921,9 @@ public final class AppLinter {
         Set<String> scopedTables = new HashSet<>();
         for (RouteFile route : allScopeRoutes(manifest)) {
             for (Path sqlFile : routeSqlFiles(route)) {
-                if (Files.isRegularFile(sqlFile)) {
-                    collectScopedTables(readQuietly(sqlFile), scopedTables);
+                String sql = Files.isRegularFile(sqlFile) ? context.content(sqlFile) : null;
+                if (sql != null) {
+                    collectScopedTables(sql, scopedTables);
                 }
             }
         }
@@ -3004,7 +2938,10 @@ public final class AppLinter {
                 if (!Files.isRegularFile(sqlFile)) {
                     continue;
                 }
-                String sql = readQuietly(sqlFile);
+                String sql = context.content(sqlFile);
+                if (sql == null) {
+                    continue;
+                }
                 Matcher target = WRITE_TARGET.matcher(sql);
                 if (!target.find()) {
                     continue; // not an UPDATE/DELETE (an INSERT adds rows, nothing to over-reach)
@@ -3232,7 +3169,11 @@ public final class AppLinter {
             if (!Files.isRegularFile(sqlFile)) {
                 continue;
             }
-            Matcher matcher = SCOPE_DIRECTIVE.matcher(readQuietly(sqlFile));
+            String sql = context.content(sqlFile);
+            if (sql == null) {
+                continue;
+            }
+            Matcher matcher = SCOPE_DIRECTIVE.matcher(sql);
             while (matcher.find()) {
                 String content = stripAsBoolean(matcher.group(1).trim());
                 String name = content;
@@ -3327,10 +3268,8 @@ public final class AppLinter {
             try (java.util.stream.Stream<Path> files = Files.walk(dir)) {
                 for (Path file : files
                         .filter(f -> f.getFileName().toString().endsWith(".sql")).toList()) {
-                    String sql;
-                    try {
-                        sql = Files.readString(file);
-                    } catch (java.io.IOException unreadable) {
+                    String sql = context.content(file);
+                    if (sql == null) {
                         continue;
                     }
                     if (!sql.contains("tql_workflow_instance")) {
@@ -3788,7 +3727,11 @@ public final class AppLinter {
             if (!Files.isRegularFile(file)) {
                 return;
             }
-            String sql = readQuietly(file).toLowerCase();
+            String text = context.content(file);
+            if (text == null) {
+                return;
+            }
+            String sql = text.toLowerCase();
             boolean isUpdate = sql.stripLeading().startsWith("update");
             boolean versionPredicate = sql.contains("version");
             if (isUpdate && binding.expect() != null && !versionPredicate) {
@@ -3840,8 +3783,10 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-SQL-2103", "error", source,
                         "Validation rule '" + id + "' references a missing SQL file: "
                                 + rule.file()));
-            } else if (!io.tesseraql.core.validation.ValidationRules
-                    .isSelect(readQuietly(sqlFile))) {
+                return;
+            }
+            String sql = context.content(sqlFile);
+            if (sql != null && !io.tesseraql.core.validation.ValidationRules.isSelect(sql)) {
                 findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
                         "Validation rule '" + id + "': validation SQL must be a SELECT"
                                 + " returning violations - it must not write"));
@@ -4397,16 +4342,17 @@ public final class AppLinter {
             return; // missing-file is reported separately
         }
         boolean duckDb = duckDbDatasource(config, datasource);
-        String text;
-        List<SqlNode> nodes;
-        try {
-            text = Files.readString(sqlFile);
-            nodes = Sql2WayParser.parse(text);
-        } catch (Exception ignored) {
+        String text = context.content(sqlFile);
+        List<SqlNode> nodes = text == null ? null : context.sqlNodes(sqlFile);
+        if (nodes == null) {
             return; // SQL syntax / IO errors surface through other checks
         }
         List<SqlNode.FilePath> filePaths = new ArrayList<>();
-        collectFilePaths(nodes, filePaths);
+        SqlNode.walk(nodes, node -> {
+            if (node instanceof SqlNode.FilePath filePath) {
+                filePaths.add(filePath);
+            }
+        });
         for (SqlNode.FilePath filePath : filePaths) {
             String reference = "${" + filePath.channel() + "." + filePath.name() + "}";
             if (!duckDb) {
@@ -4461,20 +4407,6 @@ public final class AppLinter {
                             "A file-reading function on a duckdb datasource must take a"
                                     + " ${scope.*} file placeholder, not a raw argument",
                             lineAt(text, matcher.start()), null));
-                }
-            }
-        }
-    }
-
-    private static void collectFilePaths(List<SqlNode> nodes, List<SqlNode.FilePath> out) {
-        for (SqlNode node : nodes) {
-            switch (node) {
-                case SqlNode.FilePath filePath -> out.add(filePath);
-                case SqlNode.If conditional -> conditional.branches()
-                        .forEach(branch -> collectFilePaths(branch.body(), out));
-                case SqlNode.For loop -> collectFilePaths(loop.body(), out);
-                default -> {
-                    // Text/Bind/ListBind/Embedded/Scope carry no file placeholders.
                 }
             }
         }
@@ -4971,10 +4903,8 @@ public final class AppLinter {
         if (!java.nio.file.Files.isRegularFile(readerPath)) {
             return; // the missing file is its own finding where SQL files are checked
         }
-        String readerSql;
-        try {
-            readerSql = java.nio.file.Files.readString(readerPath);
-        } catch (java.io.IOException unreadable) {
+        String readerSql = context.content(readerPath);
+        if (readerSql == null) {
             return;
         }
         String lower = readerSql.toLowerCase(java.util.Locale.ROOT);
@@ -5458,31 +5388,21 @@ public final class AppLinter {
     }
 
     /** Whether a reference query mentions the {@code keys} bind, as a value list or a loop. */
-    private static boolean bindsKeys(Path sqlFile) {
-        try {
-            return mentionsKeys(Sql2WayParser.parse(Files.readString(sqlFile)));
-        } catch (Exception ignored) {
+    private boolean bindsKeys(Path sqlFile) {
+        List<SqlNode> nodes = context.sqlNodes(sqlFile);
+        if (nodes == null) {
             // Unparseable SQL is its own lint's concern; do not double-report it here.
             return true;
         }
-    }
-
-    private static boolean mentionsKeys(List<SqlNode> nodes) {
-        for (SqlNode node : nodes) {
-            boolean found = switch (node) {
-                case SqlNode.Bind bind -> isKeys(bind.expressionSource());
-                case SqlNode.ListBind bind -> isKeys(bind.expressionSource());
-                case SqlNode.For loop -> isKeys(loop.listExpressionSource())
-                        || mentionsKeys(loop.body());
-                case SqlNode.If cond -> cond.branches().stream()
-                        .anyMatch(branch -> mentionsKeys(branch.body()));
-                default -> false;
-            };
-            if (found) {
-                return true;
-            }
-        }
-        return false;
+        // The walk visits a loop's body itself, so the For case only checks the list source.
+        boolean[] found = {false};
+        SqlNode.walk(nodes, node -> found[0] = found[0] || switch (node) {
+            case SqlNode.Bind bind -> isKeys(bind.expressionSource());
+            case SqlNode.ListBind bind -> isKeys(bind.expressionSource());
+            case SqlNode.For loop -> isKeys(loop.listExpressionSource());
+            default -> false;
+        });
+        return found[0];
     }
 
     /** {@code keys} itself, or a path rooted at it. */
@@ -6020,12 +5940,11 @@ public final class AppLinter {
         if (sql == null || !Files.isRegularFile(sql)) {
             return;
         }
-        String text;
-        try {
-            text = Files.readString(sql).toLowerCase(java.util.Locale.ROOT);
-        } catch (java.io.IOException ex) {
+        String content = context.content(sql);
+        if (content == null) {
             return;
         }
+        String text = content.toLowerCase(java.util.Locale.ROOT);
         int orderBy = text.lastIndexOf("order by");
         if (orderBy >= 0
                 && text.substring(orderBy).contains(column.toLowerCase(java.util.Locale.ROOT))) {
@@ -6078,21 +5997,16 @@ public final class AppLinter {
         }
     }
 
-    private static String readQuietly(Path file) {
-        try {
-            return Files.readString(file);
-        } catch (java.io.IOException ex) {
-            return "";
-        }
-    }
-
     /**
      * The 1-based line of {@code token}'s first occurrence in {@code source} (authoring
      * feedback, roadmap Phase 43) — a best-effort position for document rules, so editors can
      * jump near the offending key; null when the file is unreadable or the token is absent.
      */
-    private static Integer lineOf(Path source, String token) {
-        String text = readQuietly(source);
+    private Integer lineOf(Path source, String token) {
+        String text = context.content(source);
+        if (text == null) {
+            return null;
+        }
         int at = text.indexOf(token);
         if (at < 0) {
             return null;

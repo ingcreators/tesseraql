@@ -11,6 +11,24 @@ import java.util.List;
  */
 public sealed interface SqlNode {
 
+    /**
+     * Walks {@code nodes} depth-first, visiting every node — descending into {@link If}
+     * branches and {@link For} bodies — so a caller inspecting one node kind does not
+     * re-implement the recursion. The visitor sees a container node before its body.
+     */
+    static void walk(List<SqlNode> nodes, java.util.function.Consumer<SqlNode> visitor) {
+        for (SqlNode node : nodes) {
+            visitor.accept(node);
+            switch (node) {
+                case If conditional -> conditional.branches()
+                        .forEach(branch -> walk(branch.body(), visitor));
+                case For loop -> walk(loop.body(), visitor);
+                default -> {
+                }
+            }
+        }
+    }
+
     /** Literal SQL text emitted verbatim. {@code startLine} is the 1-based source line. */
     record Text(String text, int startLine) implements SqlNode {
     }
