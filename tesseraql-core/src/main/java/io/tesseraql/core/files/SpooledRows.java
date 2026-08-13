@@ -127,6 +127,37 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
         return new SpooledRows(store, writer.toRef(), List.copyOf(columns), count, firstRow);
     }
 
+    /**
+     * Re-opens rows an earlier {@link #drain} spooled, from the reference it published. This is
+     * how a consumer in another step reaches the rows — a batch {@code chunk:} reader loading a
+     * {@code query-spool} extract — when all that crossed the step boundary was the
+     * {@link SpoolRef}. The header answers {@link #columns()} and the reference carries
+     * {@link #size()}; {@link #firstRow()} is {@code null} here, because this shape exists for a
+     * consumer that walks the rows, not one that peeks.
+     */
+    public static SpooledRows open(TempStore store, SpoolRef ref) {
+        try (DataInputStream in = new DataInputStream(
+                new BufferedInputStream(store.openInput(ref)))) {
+            int count = in.readInt();
+            List<String> names = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                names.add(in.readUTF());
+            }
+            return new SpooledRows(store, ref, List.copyOf(names), ref.rows(), null);
+        } catch (IOException ex) {
+            throw new TqlException(SPOOL_FAILED,
+                    "Could not read spooled rows: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * The reference the rows live under — what a step publishes so a later step can
+     * {@link #open} the same spool without holding this instance across the boundary.
+     */
+    public SpoolRef ref() {
+        return ref;
+    }
+
     /** The column names, in the order the first row carried them. */
     public List<String> columns() {
         return columns;

@@ -151,20 +151,6 @@ public final class JobExecutor {
         return this;
     }
 
-    /**
-     * A step's export queries, rendered here because the executor already owns dialect-variant
-     * resolution and the file placeholders (docs/export-pipeline.md, decision 2). The service then
-     * only executes them, on the extraction's connection and before the extraction.
-     */
-    private Map<String, io.tesseraql.core.sql.BoundSql> renderStepExportQueries(
-            io.tesseraql.yaml.manifest.JobFile jobFile, io.tesseraql.yaml.model.ExportSpec export,
-            javax.sql.DataSource dataSource, Map<String, Object> context,
-            io.tesseraql.core.sql.FilePathResolver filePathResolver) {
-        // A step has one arm and it is the rows; a template's other data belongs to a job that
-        // declares it, which no pipeline step does yet (docs/unified-sources.md, decision 7).
-        return Map.of();
-    }
-
     /** The ceiling a step's export declares; whether it applies is the codec's answer. */
     private io.tesseraql.core.files.ExportRowCap declaredExportRowCap(
             io.tesseraql.yaml.model.ExportSpec export) {
@@ -629,9 +615,9 @@ public final class JobExecutor {
         // The dialect variant beside the file, the way every other executor picks it: a step
         // declaring `x.sql` with an `x.postgresql.sql` next to it ran the generic one, silently,
         // because this executor resolved the path itself and never asked.
+        String dialect = dialectOf(dataSource);
         Path sqlPath = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                jobFile.source().getParent().resolve(step.sql().file()).normalize(),
-                dialectOf(dataSource));
+                jobFile.source().getParent().resolve(step.sql().file()).normalize(), dialect);
         String source = read(sqlPath);
         Map<String, Object> sqlParams = resolveParams(step.sql(), context);
         // File placeholders (docs/duckdb.md) resolve against the job's datasource; the job
@@ -657,8 +643,8 @@ public final class JobExecutor {
             }
             bind(statement, bound);
             Map<String, Object> result = switch (mode) {
-                case "query-spool" -> spool(statement);
-                case "query" -> query(step, statement);
+                case "query-spool" -> spool(statement, dialect);
+                case "query" -> query(step, statement, dialect);
                 default -> Map.of("affectedRows", statement.executeUpdate());
             };
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
@@ -668,7 +654,7 @@ public final class JobExecutor {
             slowSqlLog.record(new io.tesseraql.core.diag.SqlExecution(
                     sqlPath.toString(), mode, durationMs, rows, startedAt));
             return result;
-        } catch (SQLException | IOException ex) {
+        } catch (SQLException ex) {
             TqlException failure = TqlException.builder(STEP_ERROR)
                     .message("Step '" + step.id() + "' failed: " + ex.getMessage())
                     .source(sqlPath.toString())
@@ -723,8 +709,10 @@ public final class JobExecutor {
                         export.format(), writeSpec,
                         interpolate(export.filename(), context), query, afterExtract,
                         declaredExportRowCap(export),
-                        renderStepExportQueries(jobFile, export, dataSource, context,
-                                filePathResolver)),
+                        // No per-step export queries: a step has one arm and it is the rows; a
+                        // template's other data belongs to a job that declares it, which no
+                        // pipeline step does yet (docs/unified-sources.md, decision 7).
+                        Map.of()),
                         dataSource);
         Map<String, Object> stepResult = new LinkedHashMap<>();
         stepResult.put("affectedRows", (int) result.rows());
@@ -1046,7 +1034,7 @@ public final class JobExecutor {
                 boolean stopRequested = false;
                 try (ChunkRows rows = spooled
                         ? ChunkRows.of(tempStore, spoolRef(step, chunk, context), mapper)
-                        : ChunkRows.of(select.executeQuery())) {
+                        : ChunkRows.of(select.executeQuery(), dialect)) {
                     // The reader is read a window at a time so an enrichment can fold its
                     // reference in before the writer sees a row (docs/lookups.md, slice 14).
                     // With no enrichment the window is one row and the loop is what it was.
@@ -1191,19 +1179,17 @@ public final class JobExecutor {
                 .build();
     }
 
-    /** The checkpoint key of one reader row; a reader that never selects it is misdeclared. */
+    /**
+     * The checkpoint key of one reader row; a reader that never selects it is misdeclared.
+     *
+     * <p>One key, exactly: reader rows carry {@link io.tesseraql.core.dialect.ResultRows}
+     * -normalized labels now, so {@code chunk.key} names the same label a writer bind does and
+     * the tri-case probing that papered over raw Oracle labels is gone.
+     */
     private static Object keyOf(Map<String, Object> row, String key, String stepId,
             String readerId) {
         if (row.containsKey(key)) {
             return row.get(key);
-        }
-        String lower = key.toLowerCase(java.util.Locale.ROOT);
-        if (row.containsKey(lower)) {
-            return row.get(lower);
-        }
-        String upper = key.toUpperCase(java.util.Locale.ROOT);
-        if (row.containsKey(upper)) {
-            return row.get(upper);
         }
         throw TqlException.builder(STEP_ERROR)
                 .message("Step '" + stepId + "': the reader's rows carry no '" + key
@@ -1223,8 +1209,8 @@ public final class JobExecutor {
      * protection; the bound keeps that protection while the rows become usable, and an extract
      * too large to hold is what {@code query-spool} is for.
      */
-    private Map<String, Object> query(PipelineStep step, PreparedStatement statement)
-            throws SQLException {
+    private Map<String, Object> query(PipelineStep step, PreparedStatement statement,
+            String dialect) throws SQLException {
         int cap = step.sql().materialize() != null && step.sql().materialize().maxRows() != null
                 ? step.sql().materialize().maxRows()
                 : maxRows;
@@ -1250,7 +1236,10 @@ public final class JobExecutor {
                 }
                 Map<String, Object> row = new LinkedHashMap<>();
                 for (int col = 1; col <= columns; col++) {
-                    row.put(metaData.getColumnLabel(col), rs.getObject(col));
+                    // The one label answer every JDBC path asks (ResultRows): the same
+                    // `select … as total` publishes `total` on Oracle and PostgreSQL alike.
+                    row.put(io.tesseraql.core.dialect.ResultRows.label(dialect,
+                            metaData.getColumnLabel(col)), rs.getObject(col));
                 }
                 rows.add(row);
             }
@@ -1263,41 +1252,91 @@ public final class JobExecutor {
     }
 
     /**
-     * Streams the result set to a JSONL spool, exposing the {@link SpoolRef} to later steps
-     * (ch. 28.6).
+     * Streams the result set to a tagged-binary {@link io.tesseraql.core.files.SpooledRows}
+     * spool, exposing the {@link SpoolRef} to later steps (ch. 28.6).
+     *
+     * <p>The encoding is the export pipeline's, for the export pipeline's reason: a JSON round
+     * trip is lossy exactly where a SQL extract cares — a decimal's scale, a temporal's type —
+     * and a chunk writer binds what comes back. Labels are normalized through
+     * {@link io.tesseraql.core.dialect.ResultRows}, so the spooled keys are the ones a writer
+     * bind or {@code chunk.key} names on every dialect. HTTP-sourced rows keep JSONL
+     * ({@link #spool(PipelineStep, List)}): that data was JSON, so JSON is faithful there.
      */
-    private Map<String, Object> spool(PreparedStatement statement)
-            throws SQLException, IOException {
-        SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);
-        try (writer; ResultSet rs = statement.executeQuery()) {
+    private Map<String, Object> spool(PreparedStatement statement, String dialect)
+            throws SQLException {
+        try (ResultSet rs = statement.executeQuery()) {
             ResultSetMetaData metaData = rs.getMetaData();
             int columns = metaData.getColumnCount();
-            while (rs.next()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                for (int col = 1; col <= columns; col++) {
-                    row.put(metaData.getColumnLabel(col), rs.getObject(col));
-                }
-                writer.write(
-                        (mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
-                writer.incrementRows(1);
+            SpoolRef ref;
+            try {
+                ref = io.tesseraql.core.files.SpooledRows
+                        .drain(tempStore, new java.util.Iterator<Map<String, Object>>() {
+
+                            private Boolean advanced;
+
+                            @Override
+                            public boolean hasNext() {
+                                if (advanced == null) {
+                                    try {
+                                        advanced = rs.next();
+                                    } catch (SQLException ex) {
+                                        throw new UncheckedSqlException(ex);
+                                    }
+                                }
+                                return advanced;
+                            }
+
+                            @Override
+                            public Map<String, Object> next() {
+                                if (!hasNext()) {
+                                    throw new java.util.NoSuchElementException();
+                                }
+                                advanced = null;
+                                try {
+                                    Map<String, Object> row = new LinkedHashMap<>();
+                                    for (int col = 1; col <= columns; col++) {
+                                        row.put(io.tesseraql.core.dialect.ResultRows.label(
+                                                dialect, metaData.getColumnLabel(col)),
+                                                rs.getObject(col));
+                                    }
+                                    return row;
+                                } catch (SQLException ex) {
+                                    throw new UncheckedSqlException(ex);
+                                }
+                            }
+                        })
+                        .ref();
+            } catch (UncheckedSqlException ex) {
+                throw ex.cause;
             }
+            Map<String, Object> result = new LinkedHashMap<>();
+            // A spool has a count and a reference, and no `rows` — the point of spooling is that
+            // the rows were never held. `rows` means a list on every other surface (decision 10),
+            // so publishing the count under that name was the envelope contradicting itself.
+            result.put("rowCount", (int) ref.rows());
+            result.put("spool", ref);
+            return result;
         }
-        // toRef() is only valid after close, which the try-with-resources performed.
-        SpoolRef ref = writer.toRef();
-        Map<String, Object> result = new LinkedHashMap<>();
-        // A spool has a count and a reference, and no `rows` — the point of spooling is that the
-        // rows were never held. `rows` means a list on every other surface (decision 10), so
-        // publishing the count under that name was the envelope contradicting itself.
-        result.put("rowCount", (int) ref.rows());
-        result.put("spool", ref);
-        return result;
+    }
+
+    /** Carries a {@link SQLException} across the drain's iterator boundary, unwrapped above. */
+    private static final class UncheckedSqlException extends RuntimeException {
+
+        private final SQLException cause;
+
+        UncheckedSqlException(SQLException cause) {
+            super(cause);
+            this.cause = cause;
+        }
     }
 
     /**
-     * The same spool, filled from rows already in hand — what an {@code http:} acquisition has
-     * after the gateway parsed the response. The spool file is the only thing a chunk reader
-     * understands, which is what lets one reader load a SQL extract and an API result without
-     * knowing the difference (docs/unified-sources.md decision 19a).
+     * The JSONL spool an {@code http:} acquisition fills from rows already in hand — the one
+     * JSONL write loop left, because the response was JSON and JSON round-trips it faithfully;
+     * a SQL extract spools tagged binary ({@link #spool(PreparedStatement, String)}) for the
+     * same fidelity reason. A spool reference is the only thing a chunk reader takes, which is
+     * what lets one reader load a SQL extract and an API result without knowing the difference
+     * (docs/unified-sources.md decision 19a).
      */
     private SpoolRef spool(PipelineStep step, List<Map<String, Object>> rows) {
         SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);

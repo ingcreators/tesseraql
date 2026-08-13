@@ -238,8 +238,9 @@ steps bind from:
 
 A SQL step names its file (relative to the job's directory) and an execution mode:
 `update` for statements that modify rows, `query` to read them, or `query-spool` to stream the
-result set to a temporary JSONL spool. The file stays runnable in a plain SQL tool; binds are
-marked with `/* name */ dummy` comments:
+result set to a temporary spool in a type-faithful binary encoding. A decimal keeps its scale
+and a timestamp stays a timestamp when a later `chunk:` step binds the rows. The file stays
+runnable in a plain SQL tool; binds are marked with `/* name */ dummy` comments:
 
 ```yaml
 pipeline:
