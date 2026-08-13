@@ -30,6 +30,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A file the linter cannot read is a finding, not a clean report.** The lint rules each read
+  their files quietly and treated a read failure as empty content, so a file that became
+  unreadable mid-run passed every rule that inspects SQL — the tenant-predicate, write-scope,
+  and ambient-bind checks simply saw nothing to object to. All reads now go through one
+  per-run context that reads and parses each file once instead of once per rule, and a read
+  failure surfaces once as `TQL-YAML-1053` (warning), naming the file and saying that every
+  content lint on it was skipped.
 - **A source is mounted once per route again.** The unified source model merged the disjoint
   `queries:` and `http:` maps into one `sources:` map, and two compiler loops that used to
   iterate different maps quietly began iterating the same one. A command's `http:` source ran a
