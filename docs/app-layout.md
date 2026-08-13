@@ -20,6 +20,9 @@ web/                    routes; the directory tree mirrors the URL space one-to-
     get.yml             response.html.view references the document below by its id
     list.view.yml       kind: view document, colocated; id-unique app-wide
 batch/                  job definitions (yml + colocated sql)
+mcp/                    MCP tools, resources, UI resources and prompts (app-mcp.md), each
+                        with its colocated sql or template. Sub-folders organize the files
+                        and name nothing: a tool is its declared id, a resource its uri
 domains/                field domains (declarative-validation.md): named field knowledge
                         (type, bounds, classification, widget) referenced from input
                         fields with domain:, plus the app constraint catalog
@@ -77,6 +80,19 @@ Distinctions are URL conventions, not folder rules:
 - `/_tesseraql/...` — reserved for the framework and its system apps
 - `/assets/...` — static assets (`/assets/_tesseraql/*` framework files, `/assets/vendor/*`
   self-hosted WebJars at version-less paths)
+
+## Where a folder names something, and where it does not
+
+`web/` is the exception, not the rule. A URL *is* a path, so the tree spells it; a message
+catalog *is* its locale, so the file name spells it; a migration set *is* its directory. Every
+other name a document carries is declared inside the document, because other documents
+reference it and a folder move must not rename it: a view's `id:`, a job's, a workflow's, a
+domain's, a decision table's, an MCP tool's.
+
+So `mcp/sales/orders/tool.yml` and `mcp/tool.yml` publish the same tool if both declare
+`id: orders.list` — the folders only keep the files tidy. Two documents claiming one name is
+`TQL-MCP-1014` at build time, because a flat namespace makes it a collision wherever the files
+sit.
 
 ## Route folders are the unit of work
 
