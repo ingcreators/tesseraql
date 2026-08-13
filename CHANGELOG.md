@@ -4,7 +4,17 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.14.0 - 2026-08-13
+
+The unified source model: how a document acquires rows had five spellings, and now it has
+one. Every named read is an entry in `sources:` whose arm says by what means — `sql`,
+`contract`, `service` or `http` — every read publishes the same envelope under its own name,
+and the reserved name `main` is what the defaults resolve to. Routes and jobs speak one
+context vocabulary. **Includes many pre-1.0 breaking changes** — read Changed before
+upgrading. Twelve latent defects surfaced along the way and are listed under Fixed; the ones
+worth knowing about are a job `query` step that discarded its rows, a `query-spool` reference
+nothing could read, and a shipped JSON Schema that described a shape the parser no longer
+accepted — which the generated YAML surface reference had been publishing to readers.
 
 ### Changed
 
