@@ -114,6 +114,20 @@ decided.
 4. **Unknown-key generalization** (decision 3) — the recursive walk, prompt key set, deletion
    of the registration maps and `SimpleYamlParser` hand sets; gallery apps re-linted for new
    true positives before merge.
+
+   *Shipped.* The derivation moved to `model/AcceptedKeys` — creator parameters first, record
+   components otherwise — because three packages read it (the lint, the domains/catalogs
+   loader, the view loader) and only the model can be the one place it lives. The walk descends
+   into a record, into the entries of a collection of records, and into the values of a map of
+   records: an author names the keys of that map, so the names are not checked but what hangs
+   under each one is, which is what covers a source's binding and a rule set's rules. It stops
+   at scalars, at containers of non-records, and wherever the authored YAML shape is not the
+   declared one (a shorthand string where a record is declared) — that is the loader's error to
+   report. A sequence item is named for what it is rather than for the collection holding it
+   (`step 'report' push.pth`), which is the message the pinned tests already carried.
+   `kind: prompt` got a real `PromptDefinition` the loader reads, not a key list beside it: a
+   shape nothing loads is a shape that drifts. The gallery and the bundled apps produced no new
+   findings — the previous campaigns had already fixed the interiors this would have caught.
 5. **Codes and severities** (decisions 4–5) — enum, constants, the 2004 split, guard-test
    extension, reference regeneration.
 

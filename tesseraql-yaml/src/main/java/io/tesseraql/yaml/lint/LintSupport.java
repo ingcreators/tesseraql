@@ -111,4 +111,24 @@ final class LintSupport {
     static String relative(Path appHome, Path source) {
         return appHome.relativize(source).toString().replace('\\', '/');
     }
+
+    /**
+     * The {@code *.yml} documents of one app directory, in the order its loader reads them —
+     * for the families whose loader hands back a merged namespace rather than the files it built
+     * it from, and which therefore need the file itself to lint its keys.
+     */
+    static List<Path> documents(Path appHome, String directory) {
+        Path dir = appHome.resolve(directory);
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+        try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+            return files.filter(file -> file.getFileName().toString().endsWith(".yml"))
+                    .sorted()
+                    .toList();
+        } catch (java.io.IOException unreadable) {
+            // An unreadable directory is the loader's problem to report; the lint stays quiet.
+            return List.of();
+        }
+    }
 }

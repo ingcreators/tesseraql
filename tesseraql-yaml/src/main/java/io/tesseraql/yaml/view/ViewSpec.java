@@ -21,7 +21,13 @@ import java.util.Map;
  * only select, order, and decorate. A list view with no {@code columns:} renders the result set's
  * own columns in authored SQL order.
  */
-public record ViewSpec(String id, String view, String title, String action, String source,
+public record ViewSpec(String id,
+        // The authored key is recipe:, as on every other document family; the component cannot
+        // be called that here because the value is the view kind, and `view` is what every
+        // reader of this record asks it for. The rename is declared rather than described so
+        // the strict key vocabulary below reads it instead of restating it.
+        @com.fasterxml.jackson.annotation.JsonProperty("recipe") String view,
+        String title, String action, String source,
         String search, List<Field> fields, List<Column> columns, List<Child> children,
         List<Panel> panels, Map<String, String> slots, String template, String refreshOn) {
 
@@ -73,21 +79,40 @@ public record ViewSpec(String id, String view, String title, String action, Stri
     public static final java.util.Set<String> WIDGETS = java.util.Set.of("text", "textarea",
             "number", "date", "datetime-local", "checkbox", "select", "hidden");
 
-    /** The strict key vocabulary per nesting level (TQL-VIEW-3314). */
-    private static final java.util.Set<String> DOCUMENT_KEYS = java.util.Set.of("version",
-            "kind", "id", "recipe", "title", "action", "source", "search", "fields", "columns",
-            "children", "panels", "slots", "template", "refreshOn");
-    private static final java.util.Set<String> FIELD_KEYS = java.util.Set.of("name", "label",
-            "widget", "column", "domain");
-    private static final java.util.Set<String> COLUMN_KEYS = java.util.Set.of("name", "label",
-            "link", "sortable", "text", "domain");
-    private static final java.util.Set<String> CHILD_KEYS = java.util.Set.of("source", "title",
-            "columns", "view");
-    private static final java.util.Set<String> PANEL_KEYS = java.util.Set.of("title", "type",
-            "source", "column", "x", "y", "chart", "series", "xType", "height", "legend",
-            "yLabel", "columns", "view");
-    private static final java.util.Set<String> SERIES_KEYS = java.util.Set.of("column", "label",
-            "mark");
+    /**
+     * The envelope every document family carries. It is not part of this record — the parsed
+     * view is what a view <em>is</em>, and the discriminators are what the parse checked — but
+     * it is part of what an author writes, so the strict vocabulary admits it.
+     */
+    private static final java.util.Set<String> ENVELOPE_KEYS = java.util.Set.of("version", "kind");
+
+    /**
+     * The strict key vocabulary per nesting level (TQL-VIEW-3314), read from the records each
+     * level parses into (docs/lint-restructure.md decision 3): one derivation answers "what keys
+     * does this accept" for the view loader, the domains loader and the unknown-key lint alike.
+     * A key added to {@link Panel} or {@link Column} is accepted the day it lands, instead of
+     * being refused by a list nobody remembered to extend.
+     */
+    private static final java.util.Set<String> DOCUMENT_KEYS = keysOf(ViewSpec.class,
+            ENVELOPE_KEYS);
+    private static final java.util.Set<String> FIELD_KEYS = keysOf(Field.class);
+    private static final java.util.Set<String> COLUMN_KEYS = keysOf(Column.class);
+    private static final java.util.Set<String> CHILD_KEYS = keysOf(Child.class);
+    private static final java.util.Set<String> PANEL_KEYS = keysOf(Panel.class);
+    private static final java.util.Set<String> SERIES_KEYS = keysOf(Series.class);
+
+    /** One nesting level's accepted keys: the record it parses into. */
+    private static java.util.Set<String> keysOf(Class<?> level) {
+        return keysOf(level, java.util.Set.of());
+    }
+
+    /** One level's accepted keys, plus what the parse reads beside the record it builds. */
+    private static java.util.Set<String> keysOf(Class<?> level, java.util.Set<String> extra) {
+        java.util.Set<String> keys = new java.util.TreeSet<>(
+                io.tesseraql.yaml.model.AcceptedKeys.of(level));
+        keys.addAll(extra);
+        return java.util.Collections.unmodifiableSet(keys);
+    }
 
     /**
      * The keys a view document may declare, for the guard that keeps the shipped JSON Schema
@@ -170,7 +195,9 @@ public record ViewSpec(String id, String view, String title, String action, Stri
      * as the kit's data attributes), or an embedded {@code table}.
      */
     public record Panel(String title, String type, String source, String column, String x,
-            String y, String kind, List<Series> series, String xType, Integer height,
+            // The authored key is chart:; `kind` is what the compiler asks the panel for.
+            String y, @com.fasterxml.jackson.annotation.JsonProperty("chart") String kind,
+            List<Series> series, String xType, Integer height,
             Boolean legend, String yLabel, List<Column> columns, String view) {
         public Panel {
             columns = columns == null ? List.of() : List.copyOf(columns);

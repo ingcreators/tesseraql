@@ -52,6 +52,16 @@ public record InputField(
         // route's readOnly behavior) and mirrored by the rendered form, which omits the field.
         String policy) {
 
+    /**
+     * The keys that belong to a route's <em>use</em> of a field rather than to the field itself
+     * (docs/field-domains.md). A shared domain describes what an SKU is; whether this operation
+     * requires one, defaults it, lets the request supply it, or gates it behind a policy is the
+     * operation's business — so a {@code domains/} document declaring one of these is refused
+     * (TQL-FIELD-4602), and the remaining keys are exactly what a domain may carry.
+     */
+    public static final java.util.Set<String> OPERATIONAL_KEYS = java.util.Set.of("required",
+            "requiredWhen", "default", "writable", "policy", "domain");
+
     /** The semantic string formats {@code format:} validates (roadmap Phase 40). */
     public static final java.util.Set<String> STRING_FORMATS = java.util.Set.of("email", "uuid",
             "url");

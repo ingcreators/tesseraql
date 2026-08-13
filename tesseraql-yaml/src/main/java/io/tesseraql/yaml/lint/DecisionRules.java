@@ -40,6 +40,12 @@ final class DecisionRules implements LintRule {
      * nothing references.
      */
     void lintDecisions(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        // A decisions document parses into ignoreUnknown records, so a `hitPolcy:` fell back to
+        // the default hit policy with nothing to say it had (docs/lint-restructure.md decision 3).
+        for (Path document : LintSupport.documents(appHome, "decisions")) {
+            UnknownKeyRules.lintUnknownKeys(context, appHome, document,
+                    io.tesseraql.yaml.model.DecisionsDocument.class, Set.of(), findings);
+        }
         Set<String> referenced = new HashSet<>();
         for (Map.Entry<Path, RouteDefinition> document : LintSupport.authoringDocuments(manifest)) {
             RouteDefinition def = document.getValue();

@@ -26,6 +26,12 @@ final class ToolRules implements LintRule {
         for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
             lintTool(appHome, manifest.config(), tool, findings);
         }
+        // A prompt is the one mcp document family that is not a route, so it was the one whose
+        // keys nothing checked (docs/lint-restructure.md decision 3).
+        for (io.tesseraql.yaml.manifest.PromptFile prompt : manifest.prompts()) {
+            UnknownKeyRules.lintUnknownKeys(context, appHome, prompt.source(),
+                    io.tesseraql.yaml.model.PromptDefinition.class, Set.of(), findings);
+        }
     }
 
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */

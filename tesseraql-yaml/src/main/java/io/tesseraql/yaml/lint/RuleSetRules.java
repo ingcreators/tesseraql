@@ -32,6 +32,12 @@ final class RuleSetRules implements LintRule {
      * contracts on both sides, and duplicates already failed the load (TQL-FIELD-4604..4609).
      */
     void lintRuleSets(Path appHome, AppManifest manifest, List<LintFinding> findings) {
+        // A rule set parses into an ignoreUnknown record, so until the walk reached here a
+        // `mesage:` on a shared rule dropped the text and nothing said so.
+        for (Path document : LintSupport.documents(appHome, "rules")) {
+            UnknownKeyRules.lintUnknownKeys(context, appHome, document,
+                    io.tesseraql.yaml.model.RuleSetsDocument.class, Set.of(), findings);
+        }
         io.tesseraql.yaml.rules.ValidationRuleSets sets = io.tesseraql.yaml.rules.ValidationRuleSets
                 .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
         if (sets.isEmpty()) {
