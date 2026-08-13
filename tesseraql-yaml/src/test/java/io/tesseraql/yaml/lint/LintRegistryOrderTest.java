@@ -31,7 +31,7 @@ class LintRegistryOrderTest {
                         "ResourceRules",
                         "UiResourceRules",
                         "ConsumerRules",
-                        "DuplicateResourceUriRules",
+                        "DuplicateMcpNameRules",
                         "ToolUiLinkRules",
                         "I18nRules",
                         // Security and shared definitions, which need every document loaded.

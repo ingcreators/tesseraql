@@ -41,7 +41,7 @@ public final class AppLinter {
                 new ResourceRules(),
                 new UiResourceRules(),
                 new ConsumerRules(),
-                new DuplicateResourceUriRules(),
+                new DuplicateMcpNameRules(),
                 new ToolUiLinkRules(),
                 new I18nRules(),
                 new JwtConfigRules(),

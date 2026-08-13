@@ -10,6 +10,13 @@ AI-enabled. This page is for building MCP features *into* the app you ship; for 
 development-time tooling — the `tesseraql mcp` server a coding agent uses to lint, test, and
 scaffold the app itself — see [AI-assisted development (MCP)](ai-mcp.md).
 
+Sub-folders under `mcp/` are for tidiness only. Unlike `web/`, where the directory path *is*
+the URL, an MCP document is addressed by the name it declares — a tool by its `id:`, a
+resource by its `uri:` — so moving a file between folders changes nothing a client sees, and
+two documents declaring one name collide wherever they sit (`TQL-MCP-1014`). Colocated files
+resolve beside their document, so `mcp/sales/orders/tool.yml` reads
+`mcp/sales/orders/list.sql`.
+
 ## Tools
 
 A tool is a `query-json` or `command-json` definition placed under `mcp/` instead of `web/`:
@@ -191,7 +198,7 @@ So:
   comes back as a `resources/read` JSON-RPC error. Discovery is open.
 - **Read-only by construction, governed like a read.** Lint keeps a UI resource
   HTML-rendering and uri-addressed (`TQL-MCP-1008`/`1009`/`1011`), warns on a missing
-  description (`TQL-MCP-1010`), and rejects a tool whose `ui:` link dangles
+  description (`TQL-MCP-1014`), and rejects a tool whose `ui:` link dangles
   (`TQL-MCP-1012`). The governance gate scores a UI resource like a read route — never
   `advanced`, since it cannot write. An `mcp-ui` coverage kind tracks which UI resources your
   declarative suites exercise.
@@ -278,9 +285,10 @@ Lint findings:
 | `TQL-MCP-1007` | two application MCP resources declare the same `uri` (UI resources share the namespace) |
 | `TQL-MCP-1008` | an MCP Apps UI resource does not render HTML (use `query-html` or `page`) |
 | `TQL-MCP-1009` | an MCP Apps UI resource declares no `ui://` uri |
-| `TQL-MCP-1010` | (warning) an MCP Apps UI resource has no `description` |
+| `TQL-MCP-1014` | (warning) an MCP Apps UI resource has no `description` |
 | `TQL-MCP-1011` | an MCP Apps UI resource declares `input:` (a UI resource takes no arguments) |
 | `TQL-MCP-1012` | a tool's `ui:` link resolves to no declared UI resource |
+| `TQL-MCP-1014` | two application MCP tools, or two prompts, declare the same `id` (the folders name nothing) |
 | `TQL-MCP-4030` | a write MCP tool declares no authorization policy |
 
 At runtime, a tool call that fails (a bad argument, an unauthorized write) comes back as an
