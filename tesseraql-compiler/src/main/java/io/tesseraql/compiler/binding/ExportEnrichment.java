@@ -39,21 +39,16 @@ final class ExportEnrichment {
     }
 
     /**
-     * The window every enrichment shares: the smallest {@code batchSize} declared.
+     * The window every enrichment shares: the smallest {@code batchSize} declared, and zero
+     * when the route declares no enrichment at all.
      *
-     * <p>The smallest, because a window larger than an enrichment's batch would make that one
-     * fetch twice per window — the batching is the thing that keeps the reference query count
-     * proportional to keys rather than to rows.
+     * <p>The rule is {@link io.tesseraql.yaml.enrich.KeyedReference#window}'s, because a batch
+     * chunk step windows its reader by exactly the same reasoning; it used to be written out
+     * here and again in the executor, one rule in two modules.
      */
     static int window(List<EnrichProcessor> enrichments) {
-        if (enrichments.isEmpty()) {
-            return 0;
-        }
-        int smallest = Integer.MAX_VALUE;
-        for (EnrichProcessor enrichment : enrichments) {
-            smallest = Math.min(smallest, enrichment.window());
-        }
-        return smallest;
+        return io.tesseraql.yaml.enrich.KeyedReference.window(enrichments,
+                EnrichProcessor::window, 0);
     }
 
     /** The composed enrichment, or {@code null} when the route declares none. */
