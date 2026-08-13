@@ -70,6 +70,18 @@ So making a prompt a recipe is not new machinery. It is deleting a branch.
    deny-by-default rule a write tool already lives under (`TQL-MCP-4030`).
 6. **Everything cross-cutting follows for free** — telemetry, audit, governance scoring, and an
    `mcp-prompt` coverage kind — because they attach to the route, and now there is one.
+7. **One dispatch, three wrappers.** The protocol methods are untouched: `prompts/list` and
+   `prompts/get` are already two arms of `McpServer`'s single method switch, and this design
+   adds no method. One layer down, though, `AppMcpServer` already carries two near-identical
+   senders — `read` (empty body, returns the body string, throws on 4xx) for resources and UI
+   resources, and `invoke` (arguments as body, returns an `McpToolResult`) for tools — which
+   agree on everything except what they send and how they wrap what comes back. Routing
+   prompts through a third copy is the obvious thing and the wrong one. The two collapse into
+   one `call(producer, endpoint, body, context)` returning the exchange's outcome, and each
+   primitive wraps it: a tool as `McpToolResult`, a resource as its body string, a prompt as
+   `McpPromptResult.user(body)`. Prompts then reach the wire through the same sender as
+   everything else — which is also how decision 5 is implemented, since today's `renderPrompt`
+   passes no `Authorization` at all, having no route to pass it to.
 
 ## What this deliberately does not do
 
@@ -91,8 +103,9 @@ steps, per rule 10.
 ## Slices
 
 1. **The recipe** — `prompt-text` in the compiler, the `text:` response arm, `buildMcpPrompt`,
-   and the MCP handler dispatching `prompts/get` to the route. `kind: prompt` still parses the
-   old way; both paths exist for exactly this slice.
+   the one `call(...)` sender `read`/`invoke` collapse into (decision 7), and the prompt
+   handler wrapping it. `kind: prompt` still parses the old way; both paths exist for exactly
+   this slice.
 2. **The model** — `kind: prompt` moves to the route parser, `PromptDefinition`/`parsePrompt`/
    the `promptFile` tree-reading are deleted, `PromptFile` carries the route definition like
    `ToolFile` does, and the `UNWIRED` registration for `Argument#type` goes with them.
