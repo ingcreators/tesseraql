@@ -376,15 +376,22 @@ class StudioIntegrationTest {
         String sqlPath = "web/api/extra/extra.sql";
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc(sqlPath),
                 "select 1 as value\n", true).statusCode()).isEqualTo(200);
-        assertThat(post("/_tesseraql/studio/apply?path=" + enc(sqlPath), "", true)
-                .statusCode()).isEqualTo(200);
+        // The JSON API honors confirm-before-apply exactly like the UI (it used to be
+        // exempt, which made the policy a suggestion for automation).
+        HttpResponse<String> unconfirmed = post(
+                "/_tesseraql/studio/apply?path=" + enc(sqlPath), "", true);
+        assertThat(unconfirmed.statusCode()).isEqualTo(422);
+        assertThat(unconfirmed.body()).contains("TQL-STUDIO-4223");
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(sqlPath) + "&confirm=true", "",
+                true).statusCode()).isEqualTo(200);
 
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), newRoute, true)
                 .statusCode()).isEqualTo(200);
 
         // The instant loop (roadmap Phase 42): apply reloads, and the reload now MOUNTS the
         // brand-new route, so the endpoint serves immediately — no restart.
-        HttpResponse<String> apply = post("/_tesseraql/studio/apply?path=" + enc(path), "", true);
+        HttpResponse<String> apply = post(
+                "/_tesseraql/studio/apply?path=" + enc(path) + "&confirm=true", "", true);
         assertThat(apply.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(apply.body()).get("added"))
                 .anySatisfy(id -> assertThat(id.asText()).isEqualTo("extra.list"));
@@ -433,9 +440,10 @@ class StudioIntegrationTest {
         // A concurrent change to the source under the draft.
         Files.writeString(appHome.resolve(path), "select 3 as changed\n");
 
-        // Apply without force is a 409 conflict; the source is left untouched.
-        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path), "", true).statusCode())
-                .isEqualTo(409);
+        // Apply without force is a 409 conflict; the source is left untouched. (confirm
+        // acknowledges the gate; only force acknowledges the conflict.)
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path) + "&confirm=true", "",
+                true).statusCode()).isEqualTo(409);
         assertThat(Files.readString(appHome.resolve(path))).contains("changed");
 
         // force applies the draft over the changed source.
@@ -460,8 +468,8 @@ class StudioIntegrationTest {
                 .doesNotContain("data-state=\"removed\"");
 
         // Applying the no-op draft leaves the source LF (no CRLF written back).
-        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path), "", true).statusCode())
-                .isEqualTo(200);
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path) + "&confirm=true", "",
+                true).statusCode()).isEqualTo(200);
         assertThat(Files.readString(appHome.resolve(path))).isEqualTo("select 1\nselect 2\n");
     }
 
@@ -558,8 +566,8 @@ class StudioIntegrationTest {
         Files.writeString(appHome.resolve(path), "select 1\n");
         assertThat(post("/_tesseraql/studio/drafts?path=" + enc(path), "select 2\n", true)
                 .statusCode()).isEqualTo(200);
-        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path), "", true).statusCode())
-                .isEqualTo(200);
+        assertThat(post("/_tesseraql/studio/apply?path=" + enc(path) + "&confirm=true", "",
+                true).statusCode()).isEqualTo(200);
 
         // The audit trail records the apply with the authenticated caller as the actor.
         assertThat(MAPPER.readTree(get("/_tesseraql/studio/audit", true).body()))
@@ -2235,7 +2243,9 @@ class StudioIntegrationTest {
         assertThat(draft).contains("domain:").contains("formed.q");
 
         HttpResponse<String> apply = post(
-                "/_tesseraql/studio/apply?path=" + enc("web/api/formed/get.yml"), "", true);
+                "/_tesseraql/studio/apply?path=" + enc("web/api/formed/get.yml")
+                        + "&confirm=true",
+                "", true);
         assertThat(apply.statusCode()).isEqualTo(200);
         String applied = Files.readString(appHome.resolve("web/api/formed/get.yml"));
         assertThat(applied).contains("policy").contains("app.read").contains("maxLength: 40")

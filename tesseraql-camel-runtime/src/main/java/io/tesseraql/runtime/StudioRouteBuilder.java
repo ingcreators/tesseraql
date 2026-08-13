@@ -144,6 +144,12 @@ final class StudioRouteBuilder extends RouteBuilder {
                 .to(AUTH).process(json(exchange -> {
                     studioAccess.requireEdit(roles(exchange));
                     String path = requirePath(exchange);
+                    // The confirm-before-apply gate applies to every apply surface, not only the
+                    // editor: an automation that promotes drafts under confirmApply passes
+                    // confirm=true (force counts, as it does in the UI). The API used to be
+                    // exempt, which made the policy a suggestion.
+                    studioAccess.requireConfirm(
+                            flag(exchange, "confirm") || flag(exchange, "force"));
                     // force=true overwrites a source that changed under the draft (backlog D5); the
                     // caller is recorded to the audit trail (backlog D6).
                     studio.applyDraft(path, flag(exchange, "force"), actor(exchange));

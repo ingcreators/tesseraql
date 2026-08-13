@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`confirmApply` gates every apply, not only the editor's.** The JSON `studio.apply` API was
+  exempt from the review-before-apply gate, which made the policy a suggestion for exactly the
+  callers most likely to promote drafts unattended. The API now requires `confirm=true` (or
+  `force=true`, which also acknowledges a conflict) when the gate is on — the same contract the
+  editor's compare panel enforces.
+- **A job step's blocks must form one executable unit.** The lint said "a step may declare one
+  of each" while the executor dispatches exactly one unit per step — so `sql:` beside `notify:`
+  built and then failed on its first firing, and `sql:` beside `push:`, an `http:` arm beside
+  `export:`, or a second output block were dropped in silence. All are now `TQL-FIELD-2008` at
+  build time; the plain `sql:` arm feeding `export:` its extraction stays the one designed
+  pair.
 - **The ops console and the ops API list the same recent-event window.** The console's outbox
   and queue-event pages showed the most recent 100 rows while the JSON API returned 200 — a
   drift, not a decision. The two faces now share one handler core, and both list 200.
