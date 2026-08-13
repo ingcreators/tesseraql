@@ -444,10 +444,10 @@ pipeline:
   - id: refresh
     sql: { file: load-summary.sql, mode: update }
   - id: report
-    export:
+    sql: { file: report.sql, mode: query }   # the step's own arm reads
+    export:                                  # export: only says how the rows are written
       format: excel
       filename: price-summary-{batch.businessDate}.xlsx
-      sql: { file: report.sql, mode: query }
       columns:
         - { name: category, label: Category }
         - { name: total, label: Total, type: number, format: "#,##0" }
@@ -492,10 +492,10 @@ trigger](connectors.md#the-poll-trigger-for-file-import), under the mirrored pol
 ```yaml
 pipeline:
   - id: report
+    sql: { file: report.sql, mode: query }
     export:
       format: csv
       filename: price-summary-{batch.businessDate}.csv
-      sql: { file: report.sql, mode: query }
   - id: deliver
     push:
       transport: sftp                  # local | sftp | ftps
@@ -675,7 +675,7 @@ Lint checks jobs statically:
 | --- | --- |
 | A step declaring no work at all, two bindings, or a `chunk:` beside a binding | `TQL-FIELD-2004` |
 | A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
-| A malformed `export:` step: no extraction query, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
+| A malformed `export:` step: no arm to read the rows, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
 | A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1005` |
 | A poll job without its `import:` block | `TQL-YAML-1006` |
 | Non-allow-listed poll or HTTP egress | `TQL-SEC-4070`, `TQL-SEC-4080` |

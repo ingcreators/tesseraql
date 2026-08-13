@@ -81,14 +81,16 @@ use.
 
 ### `TQL-SQL-2103` — referenced SQL file is missing
 
-`sql.file:` resolves **relative to the route document's own directory**, not the app root. A
-route at `web/orders/get.yml` naming `search.sql` looks for `web/orders/search.sql`.
+A source's `sql.file:` resolves **relative to the route document's own directory**, not the app
+root. A route at `web/orders/get.yml` naming `search.sql` looks for `web/orders/search.sql`.
 
 ### `TQL-YAML-1004` and friends — a key is refused on this recipe
 
-Keys are recipe-scoped. `notify:` is command-only, `cache:` and `http:` are query-only,
-`refreshOn:` is not a form-view key. The [YAML surface reference](reference-yaml-surface.md)
-lists which root properties apply to which `kind` and `recipe`.
+Keys are recipe-scoped. `notify:` is command-only, `cache:` is query-only, `refreshOn:` is not a
+form-view key. A source with an `http:` arm has its own rule (`TQL-YAML-1022`): query recipes and
+transactional ones, where the call runs before the write's transaction. The [YAML surface
+reference](reference-yaml-surface.md) lists which root properties apply to which `kind` and
+`recipe`.
 
 ### `TQL-VIEW-3304` / `3308` / `3309` — a view names something the route does not declare
 

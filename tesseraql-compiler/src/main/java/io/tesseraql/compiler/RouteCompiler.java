@@ -38,7 +38,7 @@ import org.apache.camel.model.rest.RestDefinition;
 public final class RouteCompiler {
 
     private static final TqlErrorCode UNSUPPORTED_RECIPE = new TqlErrorCode(TqlDomain.CAMEL, 3100);
-    /** TQL-CAMEL-3101: a query-export route declares export blocks only file-export supports. */
+    /** TQL-CAMEL-3101: a query-export route declares an after: hook, which needs file-export. */
     private static final TqlErrorCode INVALID_EXPORT = new TqlErrorCode(TqlDomain.CAMEL, 3101);
     /** TQL-CAMEL-3112: a non-main command transaction cannot carry main-anchored features. */
     private static final TqlErrorCode MAIN_ANCHORED = new TqlErrorCode(TqlDomain.CAMEL, 3112);
@@ -775,8 +775,9 @@ public final class RouteCompiler {
      * query-export (design ch. 28.10): a synchronous file download streaming the route's query
      * through the same codec/column-mapping machinery as {@code file-export}. The optional
      * {@code export:} block declares format, columns, filename, and locale/timezone; the
-     * extraction query stays in the route's {@code sql:} block, and follow-up statements
-     * ({@code after:}) need the asynchronous {@code file-export} recipe.
+     * extraction is {@code sources.main} on either recipe (docs/unified-sources.md decision 7),
+     * and follow-up statements ({@code after:}) need the asynchronous {@code file-export}
+     * recipe.
      */
     private void buildQueryExport(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();

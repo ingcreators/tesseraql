@@ -5,9 +5,10 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * The {@code export:} block of a {@code file-export} route (design ch. 28): the query whose rows
- * stream into a generated file, the format, filename and column layout, and an optional
- * follow-up statement.
+ * The {@code export:} block of a {@code file-export} route (design ch. 28): how the rows stream
+ * into a generated file - the format, filename and column layout - and an optional follow-up
+ * statement. It never says what to read: the rows come from {@code sources.main} beside it, on
+ * this recipe as on every other (docs/unified-sources.md decision 7).
  *
  * <p>Workbook output has three modes, keeping the column correspondence in the YAML wherever
  * possible: no template renders a plain grid; a template plus {@code startCell} is placement
@@ -25,12 +26,15 @@ import java.util.List;
  *   columns:
  *     - { name: order_no, column: B }
  *     - { name: qty,      column: D }
- *   sql:
- *     file: select-orders.sql
  *   after:
  *     timing: extract          # same transaction as the query, or 'download' (first fetch)
  *     sql:
  *       file: mark-extracted.sql
+ *
+ * sources:                     # the extraction, beside the output block
+ *   main:
+ *     sql:
+ *       file: select-orders.sql
  * </pre>
  *
  * @param format    the file format key ({@code csv}, {@code excel}, ...)
@@ -39,7 +43,8 @@ import java.util.List;
  * @param sheet     for workbook formats, the sheet to write
  * @param startCell where data rows start (placement mode), e.g. {@code B5}
  * @param columns   column selection/order, header labels and placement positions
- * @param sql       the extraction query
+ * @param locale    the locale date and number patterns render in
+ * @param timezone  the zone date and time values render in
  * @param after     optional follow-up statement and its timing
  * @param maxRows    the ceiling for a format that holds every row before it writes (pdf, and the
  *                   workbook template modes); defaults to
@@ -52,10 +57,6 @@ import java.util.List;
  *                   (docs/export-pipeline.md, decision 12)
  * @param groupBy    a column the rows are grouped by, exposed to the template as {@code groups};
  *                   the extraction must be ordered by it (docs/export-pipeline.md, decision 3)
- * @param queries    named queries a template composes around the rows — the order header, the
- *                   totals, the master data. They run on the extraction's connection, inside its
- *                   transaction and before it, so a document reads the state its rows came from
- *                   (docs/export-pipeline.md, decision 2)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExportSpec(String format, String filename, String template, String sheet,

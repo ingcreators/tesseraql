@@ -199,11 +199,13 @@ class FileTransferIntegrationTest {
     /**
      * A file-export's {@code params:} reach its query.
      *
-     * <p>They did not. {@code resolveSqlParams} read {@code route.main()}, which is null for a
-     * file-export — its binding lives at {@code export.sql} — so every declared param resolved
-     * to a silent null bind and the export returned whatever "column >= null" returns. The
-     * confusing part was that a *route-level* {@code sql: {params:}} on the same route did
-     * reach the query, because nothing rejected it: two spellings, one of them working.
+     * <p>They did not. {@code resolveSqlParams} read {@code route.main()}, which was null for a
+     * file-export back when its binding lived at {@code export.sql} — so every declared param
+     * resolved to a silent null bind and the export returned whatever "column >= null" returns.
+     * The confusing part was that a *route-level* {@code sql: {params:}} on the same route did
+     * reach the query, because nothing rejected it: two spellings, one of them working. The
+     * extraction has one home now (docs/unified-sources.md decision 7), which is what actually
+     * retired the second spelling.
      */
     @Test
     void aFileExportsDeclaredParamsReachItsQuery() throws Exception {
@@ -476,8 +478,8 @@ class FileTransferIntegrationTest {
         Files.writeString(variantExport.resolve("pick.postgresql.sql"),
                 "select name from events order by name\n");
 
-        // A file-export whose query takes a bind. The binding lives at export.sql, which is the
-        // only place a file-export can declare it.
+        // A file-export whose query takes a bind. The binding is sources.main, the one place any
+        // recipe declares its extraction.
         Path filtered = home.resolve("web/api/events/export-filtered");
         Files.createDirectories(filtered);
         Files.writeString(filtered.resolve("post.yml"), """

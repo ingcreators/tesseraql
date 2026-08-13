@@ -170,8 +170,10 @@ export:
   template: invoice.html
   filename: invoice-{key}.pdf
   splitBy: customer_id      # one invoice per customer, bundled as a ZIP
-  queries:
-    header:
+
+sources:
+  header:
+    sql:
       file: select-customer.sql
 ```
 

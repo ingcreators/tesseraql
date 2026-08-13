@@ -9,10 +9,10 @@ asynchronous extraction by changing the recipe, not the column layout.
 
 ## Choosing a recipe
 
-- **`query-export`** — synchronous. `GET` the route, get the file. The extraction query lives in
-  the route's ordinary `sql:` block, and rows stream from a database cursor through the codec
-  into the response, so even large results never buffer in memory. Use it for downloads a user
-  clicks. It cannot run follow-up statements.
+- **`query-export`** — synchronous. `GET` the route, get the file. The extraction is the route's
+  `sources.main`, and rows stream from a database cursor through the codec into the response, so
+  even large results never buffer in memory. Use it for downloads a user clicks. It cannot run
+  follow-up statements.
 - **`file-export`** — asynchronous. The request returns `202 Accepted` with a transfer id; the
   extraction runs in the background and the finished file is fetched later. Use it for large or
   slow extractions, and whenever you need an `after:` follow-up statement (for example, marking
@@ -54,9 +54,9 @@ like any other query route. The response carries the file with a `Content-Dispos
 filename. The whole `export:` block is optional — without it you get CSV, every query column,
 column names as headers, and `<route id>.csv` as the filename.
 
-Two things are compile-time errors on `query-export` (`TQL-CAMEL-3101`): an `export.sql` block
-(the query belongs in the route's `sql:` block) and an `export.after` block (follow-up
-statements need `file-export`).
+Every recipe reads the same way: `export:` says how rows are written and never what to read, so
+the extraction is a source like any other. An `export.after` block on `query-export` is a
+compile-time error (`TQL-CAMEL-3101`) — follow-up statements need `file-export`.
 
 ## The export: block
 
@@ -76,15 +76,23 @@ export:
   maxRows: 5000               # formats that hold every row: the ceiling (see below)
   groupBy: department         # template reads the rows as groups (see below)
   splitBy: customer_id        # one document per value, bundled as a ZIP (see below)
-  queries:                    # other data the template composes around the rows
-    header:
-      file: select-order.sql
-  sql:                        # file-export only: the extraction query
-    file: select-orders.sql
   after:                      # file-export only: the follow-up statement
     timing: extract           # extract (default) | download
     sql:
       file: mark-extracted.sql
+```
+
+The rows come from `sources:` beside it, never from inside `export:` — the extraction on every
+recipe, and the other data a template composes around it, are sources with names:
+
+```yaml
+sources:
+  main:
+    sql:
+      file: select-orders.sql   # the extraction
+  header:
+    sql:
+      file: select-order.sql    # the template reads header.first.customer
 ```
 
 - `columns:` selects and orders the exported columns; omit it to export every query column with
@@ -107,22 +115,27 @@ export:
 
 ## What a template can see
 
-An export's template reads the extraction's `rows`, and whatever else the export declares:
+An export's template reads the extraction's `rows`, and whatever else the route declares beside it:
 
 ```yaml
 export:
   format: pdf
   template: order.html
-  queries:
-    header:
-      file: select-order.sql    # the template reads header.rows[0].customer
-  http:                         # declared on the route, beside export:
-    rates:
+
+sources:
+  main:
+    sql:
+      file: select-orders.sql
+  header:
+    sql:
+      file: select-order.sql    # the template reads header.first.customer
+  rates:
+    http:
       url: https://rates.example/today
 ```
 
-An export's template sees the same shapes a route's template sees: the extraction under `sql`, and
-each named query under its own name, all carrying `rows`, `rowCount` and `first`.
+An export's template sees the same shapes a route's template sees: every source under its own
+name — the extraction under `main` — all carrying `rows`, `rowCount` and `first`.
 
 ```html
 <h1 th:text="${header.first.customer}">Customer</h1>
@@ -188,7 +201,7 @@ One file still leaves the export, so downloads, push destinations and mail attac
 unchanged. One group still produces a ZIP and no rows produce an empty one — the output shape is
 a property of the route, not of today's data.
 
-**Each document reads its own values.** A named query whose rows carry the split column is narrowed
+**Each document reads its own values.** A source whose rows carry the split column is narrowed
 to that document; one that does not is shared by all of them. The author states which is which by
 selecting the column:
 
@@ -196,13 +209,16 @@ selecting the column:
 export:
   splitBy: customer_id
   filename: invoice-{key}.pdf
-  queries:
-    customer: { file: select-customers.sql }   # selects customer_id → this invoice's customer
-    company:  { file: select-company.sql }     # does not → the same on every invoice
+
+sources:
+  customer:
+    sql: { file: select-customers.sql }   # selects customer_id → this invoice's customer
+  company:
+    sql: { file: select-company.sql }     # does not → the same on every invoice
 ```
 
-One query runs for the whole export, not one per document. A narrowed query inherits the ordering
-contract, and unordered rows fail with the query named.
+One source runs for the whole export, not one per document. A narrowed source inherits the ordering
+contract, and unordered rows fail with the source named.
 
 **Both require the extraction to be ordered by the column.** Group boundaries are found on a
 single pass, so unordered rows fail with `TQL-LD-2851` rather than writing one group as several;
@@ -210,9 +226,10 @@ a missing `order by` is a build warning (`TQL-LD-5311`).
 
 ## Asynchronous export: file-export
 
-A `file-export` route (typically `post.yml`) keeps its query inside the `export:` block, as
-above. Bound request parameters are captured at start and feed the extraction query. The start
-request answers `202` with the transfer URLs, and the route owns its subtree:
+A `file-export` route (typically `post.yml`) declares its extraction as `sources.main`, exactly
+as the synchronous recipe does. Bound request parameters are captured at start and feed the
+extraction query. The start request answers `202` with the transfer URLs, and the route owns its
+subtree:
 
 - `POST {path}` → `{ "transferId": ..., "statusUrl": "{path}/{transferId}", "fileUrl": "{path}/{transferId}/file" }`
 - `GET {path}/{transferId}` — the transfer state: `status` (`RUNNING`, then `COMPLETED` or
@@ -271,7 +288,8 @@ the `onError:` choice:
 - `skip` — clean rows commit. The transfer ends `COMPLETED`, `rowCount` counts the applied
   rows, and the rejected rows are listed the same way.
 
-Import-side `import:` keys beyond `format`, `columns`, `onError`, and `sql`:
+Import-side `import:` keys beyond `format`, `columns`, and `onError` (the per-row statement is a
+`steps:` entry, not an `import:` key):
 
 - `headerRow:` (default `true`) — whether the table starts with a header row. With a header,
   simple-form columns match by header label; `label:` matches a localized label to a SQL
@@ -310,7 +328,7 @@ queries like any other query.
 
 | Code | Meaning |
 | --- | --- |
-| `TQL-CAMEL-3101` | A `query-export` route declares `export:` keys only `file-export` supports (`sql:`, `after:`) |
+| `TQL-CAMEL-3101` | A `query-export` route declares an `export.after:` block, which only `file-export` supports |
 | `TQL-LD-2801` | No codec for the declared format (the module is not installed) |
 | `TQL-LD-2810` | The transfer bookkeeping schema could not be created |
 | `TQL-LD-2820` | `file-import` received an empty request body |
@@ -326,7 +344,7 @@ queries like any other query.
 | `TQL-LD-2856` | A codec asked for a row source its streaming declaration does not match |
 | `TQL-LD-2857` | Two `splitBy:` keys name the same file once made safe for a filesystem |
 | `TQL-LD-2858` | A `splitBy:` export's `filename:` carries no `{key}` |
-| `TQL-YAML-1041` | A malformed `export:` **pipeline step** — no extraction query, no format, or a `download`-timed follow-up ([the export step](jobs.md#the-export-step)) |
+| `TQL-YAML-1041` | A malformed `export:` **pipeline step** — no arm to read the rows, no format, or a `download`-timed follow-up ([the export step](jobs.md#the-export-step)) |
 
 A scheduled job can produce a file through the same vocabulary — the
 [`export:` pipeline step](jobs.md#the-export-step) runs the extraction inline on the

@@ -120,10 +120,10 @@ On a **mail** channel, a notify step can carry a produced file with it — the
 
 ```yaml
   - id: report
+    sql: { file: report.sql, mode: query }
     export:
       format: csv
       filename: price-summary-{batch.businessDate}.csv
-      sql: { file: report.sql, mode: query }
   - id: send
     notify:
       channel: reports              # a mail channel

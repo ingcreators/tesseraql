@@ -31,12 +31,13 @@ renders it.
 
 ## Where SQL files live
 
-SQL files are colocated with the route that uses them and referenced relatively via
-`sql.file:` (or a step's / validation rule's `file:`) — see [app-layout.md](app-layout.md):
+SQL files are colocated with the route that uses them and referenced relatively via the `file:`
+of a source's `sql:` arm (or a step's / validation rule's `file:`) — see
+[app-layout.md](app-layout.md):
 
 ```text
 web/api/users/
-  get.yml          # sql: { file: search.sql, params: { q: query.q } }
+  get.yml          # sources: { main: { sql: { file: search.sql, params: { q: query.q } } } }
   search.sql
 ```
 

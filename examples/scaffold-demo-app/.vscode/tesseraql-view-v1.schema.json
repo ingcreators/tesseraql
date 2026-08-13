@@ -44,7 +44,7 @@
     },
     "source": {
       "type": "string",
-      "description": "The model key a view reads its rows from - the route's `sql` result by default, or one of its `queries:`."
+      "description": "The model key a view reads its rows from - a name in the route's `sources:`, whatever arm it declares, defaulting to `main`."
     },
     "search": {
       "type": "string",

@@ -621,7 +621,8 @@ public final class AppLinter {
                 if (!declaresViewSource(route.definition(), child.source())) {
                     findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
                             "view " + spec.id() + ": children source " + child.source()
-                                    + " is not a named query or http source of the route"));
+                                    + " is not a source of the route"
+                                    + " (a sources: entry, or main)"));
                 }
             }
             for (io.tesseraql.yaml.view.ViewSpec.Panel panel : spec.panels()) {
@@ -631,7 +632,8 @@ public final class AppLinter {
                 if (!declaresViewSource(route.definition(), panelSource)) {
                     findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
                             "view " + spec.id() + ": panel source " + panelSource
-                                    + " is not a named query or http source of the route"));
+                                    + " is not a source of the route"
+                                    + " (a sources: entry, or main)"));
                 }
             }
             if (io.tesseraql.yaml.view.ViewSpec.LIST.equals(spec.view())) {
@@ -766,9 +768,9 @@ public final class AppLinter {
     }
 
     /**
-     * A child/panel {@code source:} must be {@code sql} or one of the route's {@code queries:}
-     * or {@code http:} sources (TQL-VIEW-3308) — both publish the {@code {rows}} shape the
-     * view model reads.
+     * A child/panel {@code source:} must name one of the route's {@code sources:}, or
+     * {@code main} (TQL-VIEW-3308) — whatever arm a source declares, it publishes the
+     * {@code {rows}} shape the view model reads.
      */
     private static boolean declaresViewSource(RouteDefinition definition, String source) {
         if (RouteDefinition.MAIN.equals(source)) {
@@ -5166,9 +5168,11 @@ public final class AppLinter {
      * whole table once per batch and still returns the right answer, which is why only the build
      * can catch it.
      *
-     * <p>{@code TQL-YAML-1045} retired with {@code into:}: an enrichment nests under the source
-     * it transforms (docs/unified-sources.md decision 5), so there is no back-reference left to
-     * point at a result the document does not publish.
+     * <p>The {@code into:} placement lint retired with {@code into:} itself: an enrichment nests
+     * under the source it transforms (docs/unified-sources.md decision 5), so there is no
+     * back-reference left to point at a result the document does not publish. Its code is not
+     * named here — the error index scans these sources for literal codes, and a retired one
+     * mentioned in prose is republished as a live code with no meaning.
      */
     private void lintEnrich(AppConfig config, Path file, RouteDefinition definition,
             String source, List<LintFinding> findings) {

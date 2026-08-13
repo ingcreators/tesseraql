@@ -138,10 +138,10 @@ trigger:
   after: pricing.loadSummary
 pipeline:
   - id: report
-    export:
+    sql: { file: price-report.sql, mode: query }   # the step's arm reads
+    export:                                        # export: says how it is written
       format: csv                                  # or excel / pdf
       filename: price-summary-{batch.businessDate}.csv
-      sql: { file: price-report.sql, mode: query }
   - id: deliver
     push:
       transport: local                             # or sftp / ftps, allow-listed

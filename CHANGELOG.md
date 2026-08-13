@@ -4,6 +4,23 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **The documentation caught up with the unified source model.** Eight published pages still
+  taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
+  `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown
+  keys, and a pipeline step declaring only an output block passes lint. Following those pages
+  produced an export that silently wrote nothing.
+- **A view's `source:` is described the way the loader reads it.** The shipped view schema still
+  said "the route's `sql` result, or one of its `queries:`", and the generated YAML surface
+  reference published that verbatim — the same class of drift as 0.14.0's `binding` `$def`. The
+  two `TQL-VIEW-3308` messages named the retired vocabulary too.
+- **A retired lint stopped being republished as a live one.** The error index scans the sources
+  for literal codes, so `TQL-YAML-1045` — named only in a comment recording its retirement —
+  appeared in the published index as a code with no meaning.
+
 ## 0.14.0 - 2026-08-13
 
 The unified source model: how a document acquires rows had five spellings, and now it has
@@ -24,9 +41,10 @@ accepted — which the generated YAML surface reference had been publishing to r
   that lived at route level on one export recipe and inside `export:` on the other. They are now
   one `sources:` map whose entries each name their own mechanism arm (`sql` | `contract` |
   `service` | `http`). The map no longer encodes the mechanism, so an HTTP source is a source
-  like any other: named, enrichable, composable. `TQL-YAML-1022` (http placement) and
-  `TQL-CAMEL-3101` (which of the two homes an extraction used) retire with the shapes they
-  policed.
+  like any other: named, enrichable, composable. Two lints narrow to what is left of them:
+  `TQL-YAML-1022` keeps the recipe rule for an `http:` source and loses the shadowing check a
+  separate map needed, and `TQL-CAMEL-3101` stops policing which of two homes an extraction used
+  and now says only that `after:` needs `file-export`.
 - **BREAKING: the top-level `sql:` key is deleted, on routes and on jobs.** It was a role
   wearing a mechanism's name — a route whose `sql:` declared `service:` contained no SQL at all.
   The primary is now the reserved source name `main`, which is a naming convention rather than a

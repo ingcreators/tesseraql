@@ -334,7 +334,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | `title` | string | The heading this view renders. A message key resolves through the app bundles; anything else renders literally. |
 | `template` | string | The pattern override this view renders through instead of its bundled `tql/view/*` pattern (customization ladder L2). Resolved beside the view document, then under the app template root. Documented in declarative-views.md. |
 | `action` | string | The id of the command route a form view submits to; its `input:` block is where the form's fields come from. |
-| `source` | string | The model key a view reads its rows from - the route's `sql` result by default, or one of its `queries:`. |
+| `source` | string | The model key a view reads its rows from - a name in the route's `sources:`, whatever arm it declares, defaulting to `main`. |
 | `search` | string | The route input a list view binds its search box to; it must be declared on the route. |
 | `fields` | array of any | The fields a form or detail view renders, in order. Documented in declarative-views.md. |
 | `columns` | array of any | The columns a list view renders, in order. Documented in declarative-views.md. |
