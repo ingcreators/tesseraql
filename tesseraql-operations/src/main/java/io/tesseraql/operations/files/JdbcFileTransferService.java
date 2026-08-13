@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.ExportQuery;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileCodecs;
@@ -32,13 +31,11 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -222,12 +219,15 @@ public final class JdbcFileTransferService implements FileTransferService {
                         PreparedStatement statement = prepareExtraction(connection,
                                 request.query(), extractionDialect);
                         ResultSet results = statement.executeQuery();
-                        OutputStream out = new SpoolOutputStream(writer)) {
-                    RowIterator iterator = new RowIterator(results, extractionDialect,
-                            effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename,
-                            request.enricher(), request.enrichWindow());
-                    rows = iterator.count;
+                        OutputStream out = new io.tesseraql.core.spool.SpoolOutput(writer)) {
+                    io.tesseraql.core.files.ResultSetRows iterator = new io.tesseraql.core.files.ResultSetRows(
+                            results, extractionDialect,
+                            effectiveCap(codec, request.writeSpec(), request.rowCap()),
+                            TRANSFER_ERROR);
+                    io.tesseraql.core.files.ExportWrite.write(codec, request.writeSpec(),
+                            tempStore, iterator, request.enricher(), request.enrichWindow(),
+                            values, filename, out);
+                    rows = iterator.count();
                     writer.incrementRows(rows);
                 }
                 if (request.afterExtract() != null) {
@@ -475,12 +475,15 @@ public final class JdbcFileTransferService implements FileTransferService {
                         PreparedStatement statement = prepareExtraction(connection, bound,
                                 vendor());
                         ResultSet results = statement.executeQuery();
-                        OutputStream out = new SpoolOutputStream(writer)) {
-                    RowIterator iterator = new RowIterator(results, vendor(),
-                            effectiveCap(codec, request.writeSpec(), request.rowCap()));
-                    writeThrough(codec, out, request.writeSpec(), iterator, values, filename,
-                            request.enricher(), request.enrichWindow());
-                    rows = iterator.count;
+                        OutputStream out = new io.tesseraql.core.spool.SpoolOutput(writer)) {
+                    io.tesseraql.core.files.ResultSetRows iterator = new io.tesseraql.core.files.ResultSetRows(
+                            results, vendor(),
+                            effectiveCap(codec, request.writeSpec(), request.rowCap()),
+                            TRANSFER_ERROR);
+                    io.tesseraql.core.files.ExportWrite.write(codec, request.writeSpec(),
+                            tempStore, iterator, request.enricher(), request.enrichWindow(),
+                            values, filename, out);
+                    rows = iterator.count();
                     writer.incrementRows(rows);
                 }
                 if (AFTER_EXTRACT.equals(request.afterTiming())
@@ -530,39 +533,6 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
     }
 
-    /**
-     * Hands the codec the row source its streaming declaration asks for
-     * (docs/export-pipeline.md, decision 1): the cursor itself when it writes rows through, and a
-     * spooled re-readable set when it holds them, so a template may walk the rows more than once
-     * without the result set living in memory. The row cap fires during the drain either way.
-     */
-    private void writeThrough(FileCodec codec, OutputStream out, FileWriteSpec writeSpec,
-            Iterator<Map<String, Object>> source, Map<String, Object> values, String filename,
-            io.tesseraql.core.files.RowEnricher enricher, int enrichWindow) throws IOException {
-        // Wrapping the iterator rather than any one branch: a streaming codec then sees a
-        // sliding window, a buffering one spools what comes out, and a splitBy: bundle spools it
-        // too — none of them learns that an enrichment happened (docs/lookups.md, slice 13b).
-        Iterator<Map<String, Object>> rows = io.tesseraql.core.files.EnrichingRows.of(source,
-                enricher, enrichWindow);
-        if (writeSpec.splitBy() != null && !writeSpec.splitBy().isBlank()) {
-            // One document per group, bundled (docs/export-pipeline.md, decision 12). The rows are
-            // spooled whatever the codec declared: splitting is a deliberate choice, and holding
-            // one group at a time is what it buys.
-            try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
-                io.tesseraql.core.files.SplitExport.write(codec, writeSpec, spooled, values,
-                        writeSpec.splitBy(), filename, out);
-            }
-            return;
-        }
-        if (codec.streams(writeSpec)) {
-            codec.write(out, writeSpec, ExportModel.streaming(rows, values));
-            return;
-        }
-        try (SpooledRows spooled = SpooledRows.drain(tempStore, rows)) {
-            codec.write(out, writeSpec, ExportModel.repeatable(spooled, values));
-        }
-    }
-
     /** The inline shape: a batch step pre-renders its named queries, so only execution is left. */
     private Map<String, Object> renderedValues(Connection connection,
             Map<String, BoundSql> queries, io.tesseraql.core.files.ExportRowCap cap,
@@ -588,10 +558,10 @@ public final class JdbcFileTransferService implements FileTransferService {
             List<SpooledRows> spools) throws SQLException {
         try (PreparedStatement statement = prepare(connection, bound);
                 ResultSet results = statement.executeQuery()) {
-            SpooledRows spooled = SpooledRows.drain(tempStore,
-                    new RowIterator(results, vendor(), cap));
-            spools.add(spooled);
-            return ExportModel.result(spooled, spooled.size());
+            return io.tesseraql.core.files.ExportWrite.namedResult(tempStore,
+                    new io.tesseraql.core.files.ResultSetRows(results, vendor(), cap,
+                            TRANSFER_ERROR),
+                    spools);
         }
     }
 
@@ -624,9 +594,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private static io.tesseraql.core.files.ExportRowCap effectiveCap(FileCodec codec,
             FileWriteSpec writeSpec,
             io.tesseraql.core.files.ExportRowCap declared) {
-        return codec.streams(writeSpec)
-                ? io.tesseraql.core.files.ExportRowCap.unbounded()
-                : declared;
+        return io.tesseraql.core.files.ExportWrite.effectiveCap(codec, writeSpec, declared);
     }
 
     private PreparedStatement prepare(Connection connection, BoundSql bound)
@@ -682,84 +650,6 @@ public final class JdbcFileTransferService implements FileTransferService {
             return Sql2WayParser.parse(Files.readString(resolved, StandardCharsets.UTF_8));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
-        }
-    }
-
-    /** Streams a result set as column-name-to-value maps, counting rows as they pass. */
-    private static final class RowIterator implements Iterator<Map<String, Object>> {
-
-        private final ResultSet results;
-        private final io.tesseraql.core.files.ExportRowCap cap;
-        private final List<String> labels;
-        private Boolean hasNext;
-        private long count;
-
-        RowIterator(ResultSet results, String vendor,
-                io.tesseraql.core.files.ExportRowCap cap) throws SQLException {
-            this.results = results;
-            this.cap = cap;
-            ResultSetMetaData metaData = results.getMetaData();
-            List<String> columnLabels = new ArrayList<>();
-            for (int i = 1; i <= metaData.getColumnCount(); i++) {
-                columnLabels.add(io.tesseraql.core.dialect.Labels.normalize(
-                        vendor, metaData.getColumnLabel(i)));
-            }
-            this.labels = List.copyOf(columnLabels);
-        }
-
-        @Override
-        public boolean hasNext() {
-            if (hasNext == null) {
-                try {
-                    hasNext = results.next();
-                } catch (SQLException ex) {
-                    throw new TqlException(TRANSFER_ERROR,
-                            "Export query failed: " + ex.getMessage());
-                }
-            }
-            // Asked before the row is handed over: warn mode truncates cleanly, fail mode raises
-            // before the codec has accepted a row it cannot hold.
-            return hasNext && cap.admits(count);
-        }
-
-        @Override
-        public Map<String, Object> next() {
-            if (!hasNext()) {
-                throw new java.util.NoSuchElementException();
-            }
-            hasNext = null;
-            count++;
-            Map<String, Object> row = new LinkedHashMap<>();
-            try {
-                for (int i = 0; i < labels.size(); i++) {
-                    row.put(labels.get(i), results.getObject(i + 1));
-                }
-            } catch (SQLException ex) {
-                throw new TqlException(TRANSFER_ERROR, "Export query failed: " + ex.getMessage());
-            }
-            return row;
-        }
-    }
-
-    /** Adapts the SpoolWriter byte sink to an OutputStream for codecs. */
-    private static final class SpoolOutputStream extends OutputStream {
-
-        private final SpoolWriter writer;
-
-        SpoolOutputStream(SpoolWriter writer) {
-            this.writer = writer;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            writer.write(new byte[]{(byte) b});
-        }
-
-        @Override
-        public void write(byte[] data, int offset, int length) throws IOException {
-            byte[] chunk = new byte[length];
-            System.arraycopy(data, offset, chunk, 0, length);
-            writer.write(chunk);
         }
     }
 
