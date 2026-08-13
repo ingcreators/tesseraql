@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -13,6 +15,8 @@ import java.util.Map;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class BearerConfigRules implements LintRule {
+
+    private static final String BEARER_AUTH_UNCONFIGURED = "TQL-SEC-4047";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -60,7 +64,7 @@ final class BearerConfigRules implements LintRule {
                 continue;
             }
             String source = appHome.relativize(document.getKey()).toString().replace('\\', '/');
-            findings.add(new LintFinding("TQL-SEC-4047", "warning", source,
+            findings.add(new LintFinding(BEARER_AUTH_UNCONFIGURED, WARNING, source,
                     "'" + document.getValue().id() + "' declares auth: bearer but no"
                             + " tesseraql.security.jwt is configured — no token can be verified,"
                             + " so every call fails as a server fault"));

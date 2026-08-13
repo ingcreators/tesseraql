@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -24,6 +27,20 @@ import java.util.regex.Pattern;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class DocumentRules {
+
+    private static final String INVALID_INVALIDATES = "TQL-FIELD-4620";
+
+    private static final String EMBEDDED_VARIABLE_INTERPOLATES_INPUT = "TQL-SQL-2109";
+
+    private static final String SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE = "TQL-TENANT-3001";
+
+    private static final String UPDATE_WITHOUT_VERSION_PREDICATE = "TQL-SQL-2104";
+
+    private static final String VERSION_PREDICATE_WITHOUT_EXPECT = "TQL-SQL-2105";
+
+    private static final String INVALID_VALIDATION_RULE = "TQL-FIELD-2003";
+
+    private static final String DATASOURCE_ROUTE_UNSUPPORTED_KEY = "TQL-YAML-1036";
 
     private DocumentRules() {
     }
@@ -57,7 +74,7 @@ final class DocumentRules {
             return;
         }
         if (!"command-json".equals(definition.recipe())) {
-            findings.add(new LintFinding("TQL-FIELD-4620", "error", source,
+            findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
                     "invalidates: is only supported on command-json routes, not '"
                             + definition.recipe() + "' — there is no commit to invalidate"
                             + " catalogs after"));
@@ -66,10 +83,10 @@ final class DocumentRules {
         Set<String> catalogTables = context.catalogTables();
         for (String table : definition.invalidates()) {
             if (table == null || table.isBlank()) {
-                findings.add(new LintFinding("TQL-FIELD-4620", "error", source,
+                findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
                         "invalidates: carries an empty table name"));
             } else if (!catalogTables.contains(table)) {
-                findings.add(new LintFinding("TQL-FIELD-4620", "warning", source,
+                findings.add(new LintFinding(INVALID_INVALIDATES, WARNING, source,
                         "invalidates: names table '" + table + "', which no catalog reads —"
                                 + " the declaration drops nothing"
                                 + (catalogTables.isEmpty()
@@ -124,7 +141,7 @@ final class DocumentRules {
             }
             InputField field = inputs.get(input);
             if (field == null || field.enumValues() == null || field.enumValues().isEmpty()) {
-                findings.add(new LintFinding("TQL-SQL-2109", "error", source,
+                findings.add(new LintFinding(EMBEDDED_VARIABLE_INTERPOLATES_INPUT, ERROR, source,
                         "Embedded variable '{" + placeholder + "}' interpolates request input '"
                                 + input + "' into SQL; constrain it with an 'enum' allowlist to "
                                 + "prevent injection"));
@@ -182,7 +199,7 @@ final class DocumentRules {
         if (sql != null && sql.toLowerCase().contains("tenant")) {
             return;
         }
-        findings.add(new LintFinding("TQL-TENANT-3001", "warning", source,
+        findings.add(new LintFinding(SHARED_SCHEMA_WITHOUT_TENANT_PREDICATE, WARNING, source,
                 "Shared-schema route '" + definition.id()
                         + "' has no tenant predicate; bind tenant.id or filter by a tenant column"));
     }
@@ -227,13 +244,13 @@ final class DocumentRules {
             boolean isUpdate = sql.stripLeading().startsWith("update");
             boolean versionPredicate = sql.contains("version");
             if (isUpdate && binding.expect() != null && !versionPredicate) {
-                findings.add(new LintFinding("TQL-SQL-2104", "warning", source,
+                findings.add(new LintFinding(UPDATE_WITHOUT_VERSION_PREDICATE, WARNING, source,
                         "Step '" + name + "': UPDATE declares expect.rows but has no"
                                 + " version-column predicate; a concurrent edit is only detected"
                                 + " when the row vanishes - add `and version = ...`"));
             }
             if (isUpdate && binding.expect() == null && versionPredicate) {
-                findings.add(new LintFinding("TQL-SQL-2105", "warning", source,
+                findings.add(new LintFinding(VERSION_PREDICATE_WITHOUT_EXPECT, WARNING, source,
                         "Step '" + name + "': UPDATE has a version predicate but no expect.rows;"
                                 + " a stale edit silently affects zero rows - declare"
                                 + " expect: { rows: 1 }"));
@@ -256,13 +273,13 @@ final class DocumentRules {
         }
         definition.validate().forEach((id, rule) -> {
             if (rule.isExpression() == rule.isSql()) {
-                findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
+                findings.add(new LintFinding(INVALID_VALIDATION_RULE, ERROR, source,
                         "Validation rule '" + id
                                 + "' must declare exactly one of rule: or file:"));
                 return;
             }
             if (rule.field() == null || rule.field().isBlank()) {
-                findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
+                findings.add(new LintFinding(INVALID_VALIDATION_RULE, ERROR, source,
                         "Validation rule '" + id + "' needs a field: to report violations"
                                 + " against"));
             }
@@ -273,14 +290,14 @@ final class DocumentRules {
             }
             Path sqlFile = file.getParent().resolve(rule.file());
             if (!Files.isRegularFile(sqlFile)) {
-                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                         "Validation rule '" + id + "' references a missing SQL file: "
                                 + rule.file()));
                 return;
             }
             String sql = context.content(sqlFile);
             if (sql != null && !io.tesseraql.core.validation.ValidationRules.isSelect(sql)) {
-                findings.add(new LintFinding("TQL-FIELD-2003", "error", source,
+                findings.add(new LintFinding(INVALID_VALIDATION_RULE, ERROR, source,
                         "Validation rule '" + id + "': validation SQL must be a SELECT"
                                 + " returning violations - it must not write"));
             }
@@ -309,7 +326,7 @@ final class DocumentRules {
                         findings);
             } else if (TRANSACTIONAL_DATASOURCE_RECIPES.contains(definition.recipe())) {
                 if (mainAnchored(definition)) {
-                    findings.add(new LintFinding("TQL-YAML-1036", "error", source,
+                    findings.add(new LintFinding(DATASOURCE_ROUTE_UNSUPPORTED_KEY, ERROR, source,
                             "a 'datasource: " + definition.datasource() + "' route cannot declare"
                                     + " notify:/publish:/outbox: or sequence allocation - they"
                                     + " ride the main connector; project through main instead",
@@ -319,7 +336,7 @@ final class DocumentRules {
                             findings);
                 }
             } else {
-                findings.add(new LintFinding("TQL-YAML-1036", "error", source,
+                findings.add(new LintFinding(DATASOURCE_ROUTE_UNSUPPORTED_KEY, ERROR, source,
                         "datasource: is not supported on the '" + definition.recipe()
                                 + "' recipe - its pipeline runs on main",
                         context.lineOf(sourceFile, "datasource:"), null));
@@ -330,7 +347,7 @@ final class DocumentRules {
             if (read) {
                 lintDatasourceName(context, config, sourceFile, sql.datasource(), source, findings);
             } else {
-                findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+                findings.add(new LintFinding(LintCodes.DATASOURCE_SPLITS_TRANSACTION, ERROR, source,
                         "sql.datasource on the '" + definition.recipe() + "' recipe would split"
                                 + " the command transaction - a transactional pipeline runs on"
                                 + " one connection"));
@@ -338,7 +355,7 @@ final class DocumentRules {
         }
         definition.steps().forEach((name, step) -> {
             if (declaredDatasource(step.datasource())) {
-                findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+                findings.add(new LintFinding(LintCodes.DATASOURCE_SPLITS_TRANSACTION, ERROR, source,
                         "Step '" + name + "' declares datasource: - a transactional pipeline is"
                                 + " one transaction on one connection and cannot pick a connector"
                                 + " per step"));
@@ -352,13 +369,13 @@ final class DocumentRules {
         });
         if (definition.fileImport() != null && definition.rowStep() != null
                 && declaredDatasource(definition.rowStep().datasource())) {
-            findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+            findings.add(new LintFinding(LintCodes.DATASOURCE_SPLITS_TRANSACTION, ERROR, source,
                     "an import's per-row step cannot declare datasource: - the import pipeline"
                             + " runs on main"));
         }
         if (definition.fileExport() != null && definition.main() != null
                 && declaredDatasource(definition.main().datasource())) {
-            findings.add(new LintFinding("TQL-YAML-1037", "error", source,
+            findings.add(new LintFinding(LintCodes.DATASOURCE_SPLITS_TRANSACTION, ERROR, source,
                     "an exporting route's main source cannot declare datasource: - the export"
                             + " pipeline runs on main"));
         }
@@ -385,7 +402,7 @@ final class DocumentRules {
         if ("main".equals(name) || config.navigate("tesseraql.datasources." + name) != null) {
             return;
         }
-        findings.add(new LintFinding("TQL-YAML-1035", "error", source,
+        findings.add(new LintFinding(LintCodes.UNDECLARED_DATASOURCE, ERROR, source,
                 "datasource '" + name + "' is not declared under tesseraql.datasources",
                 context.lineOf(sourceFile, "datasource:"), null));
     }
@@ -398,7 +415,7 @@ final class DocumentRules {
         try {
             io.tesseraql.core.expr.ExpressionParser.parse(expression);
         } catch (RuntimeException ex) {
-            findings.add(new LintFinding("TQL-SQL-2101", "error", source,
+            findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
                     "Validation rule '" + ruleId + "' has a malformed expression: "
                             + ex.getMessage()));
         }

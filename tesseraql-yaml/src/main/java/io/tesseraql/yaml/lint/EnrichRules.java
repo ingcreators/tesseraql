@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -15,6 +17,12 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class EnrichRules {
+
+    private static final String INVALID_ENRICH_REFERENCE = "TQL-YAML-1046";
+
+    private static final String INVALID_ENRICH_JOIN = "TQL-YAML-1047";
+
+    private static final String ENRICH_NEVER_BINDS_KEYS = "TQL-YAML-1048";
 
     private EnrichRules() {
     }
@@ -52,7 +60,7 @@ final class EnrichRules {
             if (spec.composesSource()
                     && (!definition.sources().containsKey(spec.source())
                             || spec.source().equals(sourceName))) {
-                findings.add(new LintFinding("TQL-YAML-1046", "error", source,
+                findings.add(new LintFinding(INVALID_ENRICH_REFERENCE, ERROR, source,
                         "enrich '" + name + "': source: '" + spec.source()
                                 + "' is not another source of this document",
                         context.lineOf(file, "enrich:"), null));
@@ -64,7 +72,7 @@ final class EnrichRules {
                     && !spec.http().url().isBlank();
             int arms = (hasSql ? 1 : 0) + (hasHttp ? 1 : 0) + (spec.composesSource() ? 1 : 0);
             if (arms != 1) {
-                findings.add(new LintFinding("TQL-YAML-1046", "error", source,
+                findings.add(new LintFinding(INVALID_ENRICH_REFERENCE, ERROR, source,
                         "enrich '" + name + "': needs exactly one reference — sql: with a"
                                 + " file:, http: with a url:, or source: naming a sibling",
                         context.lineOf(file, "enrich:"), null));
@@ -74,7 +82,7 @@ final class EnrichRules {
             boolean merges = spec.merges()
                     && spec.merge().stream().noneMatch(c -> c == null || c.isBlank());
             if (spec.on().isEmpty() || attaches == merges) {
-                findings.add(new LintFinding("TQL-YAML-1047", "error", source,
+                findings.add(new LintFinding(INVALID_ENRICH_JOIN, ERROR, source,
                         "enrich '" + name + "': needs a non-empty on: parentColumn: childColumn"
                                 + " map and exactly one of as: (attach a list) or merge: (copy"
                                 + " columns onto each row)",
@@ -87,7 +95,7 @@ final class EnrichRules {
             if (hasSql) {
                 Path sqlFile = file.getParent().resolve(spec.sql().file()).normalize();
                 if (Files.isRegularFile(sqlFile) && !bindsKeys(context, sqlFile)) {
-                    findings.add(new LintFinding("TQL-YAML-1048", "error", source,
+                    findings.add(new LintFinding(ENRICH_NEVER_BINDS_KEYS, ERROR, source,
                             "enrich '" + name + "': " + spec.sql().file() + " never binds"
                                     + " 'keys' — the reference would be read whole once per"
                                     + " batch instead of by the keys being looked up",
@@ -96,7 +104,7 @@ final class EnrichRules {
             } else if (!usesKeys(spec)) {
                 // The HTTP twin of the same defect: a call that mentions neither the key set
                 // nor the key sends the identical request every time and answers plausibly.
-                findings.add(new LintFinding("TQL-YAML-1048", "error", source,
+                findings.add(new LintFinding(ENRICH_NEVER_BINDS_KEYS, ERROR, source,
                         "enrich '" + name + "': the " + spec.effectiveMode() + " reference never"
                                 + " uses " + (spec.batches() ? "'keys'" : "'key.<column>'")
                                 + " — every request would be identical",

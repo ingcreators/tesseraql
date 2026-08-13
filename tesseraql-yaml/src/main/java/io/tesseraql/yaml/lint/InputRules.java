@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import java.nio.file.Path;
@@ -13,6 +16,24 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class InputRules implements LintRule {
+
+    private static final String UNSERVABLE_ROUTE_FILE = "TQL-YAML-1011";
+
+    private static final String PAGE_ON_UNSUPPORTED_RECIPE = "TQL-YAML-1015";
+
+    private static final String INVALID_PAGE_STRATEGY = "TQL-YAML-1016";
+
+    private static final String INVALID_PAGE_SIZE = "TQL-YAML-1017";
+
+    private static final String PAGED_SQL_DECLARES_LIMIT = "TQL-YAML-1018";
+
+    private static final String INVALID_STATUS_WHEN = "TQL-YAML-1020";
+
+    private static final String INVALID_INPUT_PATTERN = "TQL-YAML-1012";
+
+    private static final String UNKNOWN_INPUT_FORMAT = "TQL-YAML-1013";
+
+    private static final String INVALID_REQUIRED_WHEN = "TQL-YAML-1014";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -39,7 +60,7 @@ final class InputRules implements LintRule {
         String source = appHome.relativize(route.source()).toString().replace('\\', '/');
         String method = route.httpMethod();
         if ("HEAD".equalsIgnoreCase(method) || "OPTIONS".equalsIgnoreCase(method)) {
-            findings.add(new LintFinding("TQL-YAML-1011", "error", source,
+            findings.add(new LintFinding(UNSERVABLE_ROUTE_FILE, ERROR, source,
                     "HEAD/OPTIONS route files are not servable — remove " + source));
         }
         if (route.definition().input() == null) {
@@ -49,23 +70,23 @@ final class InputRules implements LintRule {
         if (page != null) {
             String recipe = route.definition().recipe();
             if (!"query-json".equals(recipe) && !"query-html".equals(recipe)) {
-                findings.add(new LintFinding("TQL-YAML-1015", "error", source,
+                findings.add(new LintFinding(PAGE_ON_UNSUPPORTED_RECIPE, ERROR, source,
                         "page: is a query-json/query-html key (recipe is " + recipe + ")"));
             }
             if (io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())
                     && (page.by() == null || page.by().isBlank())) {
-                findings.add(new LintFinding("TQL-YAML-1016", "error", source,
+                findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
                         "page: strategy keyset requires by: (the cursor column)"));
             }
             if (!io.tesseraql.yaml.model.PageSpec.OFFSET.equals(page.effectiveStrategy())
                     && !io.tesseraql.yaml.model.PageSpec.KEYSET.equals(page.effectiveStrategy())) {
-                findings.add(new LintFinding("TQL-YAML-1016", "error", source,
+                findings.add(new LintFinding(INVALID_PAGE_STRATEGY, ERROR, source,
                         "page: unknown strategy " + page.strategy() + " (offset or keyset)",
                         context.lineOf(route.source(), "page:"), null));
             }
             if (page.effectiveSize() < 1
                     || (page.maxSize() != null && page.maxSize() < page.effectiveSize())) {
-                findings.add(new LintFinding("TQL-YAML-1017", "error", source,
+                findings.add(new LintFinding(INVALID_PAGE_SIZE, ERROR, source,
                         "page: size must be >= 1 and maxSize >= size",
                         context.lineOf(route.source(), "page:"), null));
             }
@@ -77,7 +98,7 @@ final class InputRules implements LintRule {
                         : null;
                 if (sql != null && sql.toLowerCase(java.util.Locale.ROOT)
                         .matches("(?s).*\\b(limit|fetch)\\b.*")) {
-                    findings.add(new LintFinding("TQL-YAML-1018", "warning", source,
+                    findings.add(new LintFinding(PAGED_SQL_DECLARES_LIMIT, WARNING, source,
                             "page: appends the pagination clause — the authored SQL should"
                                     + " not carry its own LIMIT/FETCH",
                             context.lineOf(route.source(), "page:"), null));
@@ -89,12 +110,12 @@ final class InputRules implements LintRule {
             try {
                 io.tesseraql.core.expr.ExpressionParser.parse(arm.when());
             } catch (RuntimeException ex) {
-                findings.add(new LintFinding("TQL-YAML-1020", "error", source,
+                findings.add(new LintFinding(INVALID_STATUS_WHEN, ERROR, source,
                         "statusWhen: condition does not parse: " + ex.getMessage(),
                         context.lineOf(route.source(), "statusWhen:"), null));
             }
             if (arm.status() < 100 || arm.status() > 599) {
-                findings.add(new LintFinding("TQL-YAML-1020", "error", source,
+                findings.add(new LintFinding(INVALID_STATUS_WHEN, ERROR, source,
                         "statusWhen: status " + arm.status() + " is not an HTTP status"));
             }
         }
@@ -103,7 +124,7 @@ final class InputRules implements LintRule {
                 try {
                     java.util.regex.Pattern.compile(field.pattern());
                 } catch (java.util.regex.PatternSyntaxException ex) {
-                    findings.add(new LintFinding("TQL-YAML-1012", "error", source,
+                    findings.add(new LintFinding(INVALID_INPUT_PATTERN, ERROR, source,
                             "input " + name + ": pattern does not compile: " + ex.getMessage(),
                             context.lineOf(route.source(), name + ":"), null));
                 }
@@ -111,7 +132,7 @@ final class InputRules implements LintRule {
             if ((field.type() == null || "string".equals(field.type())) && field.format() != null
                     && !io.tesseraql.yaml.model.InputField.STRING_FORMATS
                             .contains(field.format())) {
-                findings.add(new LintFinding("TQL-YAML-1013", "error", source,
+                findings.add(new LintFinding(UNKNOWN_INPUT_FORMAT, ERROR, source,
                         "input " + name + ": unknown string format " + field.format()
                                 + " (known: "
                                 + io.tesseraql.yaml.model.InputField.STRING_FORMATS + ")"));
@@ -120,7 +141,7 @@ final class InputRules implements LintRule {
                 try {
                     io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen());
                 } catch (RuntimeException ex) {
-                    findings.add(new LintFinding("TQL-YAML-1014", "error", source,
+                    findings.add(new LintFinding(INVALID_REQUIRED_WHEN, ERROR, source,
                             "input " + name + ": requiredWhen does not parse: "
                                     + ex.getMessage()));
                 }

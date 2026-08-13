@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.util.List;
@@ -10,6 +13,16 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class OidcSamlRules implements LintRule {
+
+    private static final String OIDC_WITHOUT_DISCOVERY_URI = "TQL-SEC-4050";
+
+    private static final String OIDC_DISCOVERY_URI_NOT_HTTPS = "TQL-SEC-4051";
+
+    private static final String OIDC_WITHOUT_CLIENT_ID = "TQL-SEC-4052";
+
+    private static final String OIDC_WITHOUT_REDIRECT_URI = "TQL-SEC-4053";
+
+    private static final String SAML_WITHOUT_ACS_URL = "TQL-SEC-4092";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -33,19 +46,19 @@ final class OidcSamlRules implements LintRule {
         }
         String discoveryUri = rawString(config, "tesseraql.oidc.discoveryUri");
         if (discoveryUri == null) {
-            findings.add(new LintFinding("TQL-SEC-4050", "error", "config",
+            findings.add(new LintFinding(OIDC_WITHOUT_DISCOVERY_URI, ERROR, "config",
                     "OIDC is enabled but tesseraql.oidc.discoveryUri is not configured"));
         } else if (!discoveryUri.contains("${") && !isHttpsOrLoopback(discoveryUri)) {
-            findings.add(new LintFinding("TQL-SEC-4051", "error", "config",
+            findings.add(new LintFinding(OIDC_DISCOVERY_URI_NOT_HTTPS, ERROR, "config",
                     "OIDC tesseraql.oidc.discoveryUri must be https"
                             + " (loopback http is allowed for development)"));
         }
         if (rawString(config, "tesseraql.oidc.clientId") == null) {
-            findings.add(new LintFinding("TQL-SEC-4052", "error", "config",
+            findings.add(new LintFinding(OIDC_WITHOUT_CLIENT_ID, ERROR, "config",
                     "OIDC is enabled but tesseraql.oidc.clientId is not configured"));
         }
         if (rawString(config, "tesseraql.oidc.redirectUri") == null) {
-            findings.add(new LintFinding("TQL-SEC-4053", "error", "config",
+            findings.add(new LintFinding(OIDC_WITHOUT_REDIRECT_URI, ERROR, "config",
                     "OIDC is enabled but tesseraql.oidc.redirectUri is not configured"));
         }
     }
@@ -64,7 +77,7 @@ final class OidcSamlRules implements LintRule {
             return;
         }
         if (rawString(config, "tesseraql.saml.sp.acsUrl") == null) {
-            findings.add(new LintFinding("TQL-SEC-4092", "warning", "config",
+            findings.add(new LintFinding(SAML_WITHOUT_ACS_URL, WARNING, "config",
                     "SAML is enabled but declares no tesseraql.saml.sp.acsUrl; the assertion's"
                             + " SubjectConfirmation recipient is not checked, and neither the login"
                             + " route nor the SP metadata endpoint is published"));

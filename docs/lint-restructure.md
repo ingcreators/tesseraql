@@ -80,6 +80,10 @@ decided.
    binding — one question: "what is this step's work?") and the command-step `enrich:` misuse
    moves to its own code, next free in FIELD. Renumbering follows the campaign rule: the
    documented meaning keeps the number.
+
+   *Shipped in slice 5 as TQL-FIELD-2009*, documented in
+   [transactional-writes.md](transactional-writes.md) — it had no published meaning to keep,
+   which is exactly why it was the one that moved.
 6. **Order is preserved, then pinned.** The registry runs in today's order. One new test
    asserts the registry's family order explicitly, so a future insertion is a reviewed
    decision instead of an accident of where a method landed in a 6,000-line file.

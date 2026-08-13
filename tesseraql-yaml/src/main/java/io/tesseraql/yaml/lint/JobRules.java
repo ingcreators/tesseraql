@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.JobDefinition;
@@ -14,6 +17,14 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class JobRules implements LintRule {
+
+    private static final String STEP_RUNS_ONE_UNIT = "TQL-FIELD-2008";
+
+    private static final String POLL_SOURCE_WITHOUT_ALLOWED_PATHS = "TQL-SEC-4086";
+
+    private static final String POLL_HOST_NOT_ALLOWED = "TQL-SEC-4080";
+
+    private static final String POLL_UNDECLARED_CREDENTIAL = "TQL-SEC-4081";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -60,19 +71,19 @@ final class JobRules implements LintRule {
                     + (step.push() == null ? 0 : 1);
             boolean processing = step.chunk() != null;
             if (!arm && !processing && outputs == 0) {
-                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
+                findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source, "Step '"
                         + step.id() + "' declares no work - a step needs a binding (sql:, http:),"
                         + " an output (export:, push:, notify:), or chunk:"));
                 continue;
             }
             if (writes && calls) {
-                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
+                findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source, "Step '"
                         + step.id() + "' declares two bindings - sql: and http: are both the"
                         + " step's own work, and a step does one thing"));
                 continue;
             }
             if (processing && arm) {
-                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '"
+                findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source, "Step '"
                         + step.id() + "' declares chunk: beside a binding - a chunk step's work"
                         + " is its reader:/writer:, so the step has no arm of its own"));
                 continue;
@@ -83,28 +94,28 @@ final class JobRules implements LintRule {
             // sql arm consumed by export: as its extraction. Everything else is refused here,
             // where the author is still looking (TQL-FIELD-2008, one rule).
             if (outputs > 1) {
-                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                findings.add(new LintFinding(STEP_RUNS_ONE_UNIT, ERROR, source, "Step '"
                         + step.id() + "' declares " + outputs + " output blocks - the executor"
                         + " runs one unit per step, and the others would be dropped in silence."
                         + " Split them into steps"));
                 continue;
             }
             if (step.sql() != null && step.notification() != null) {
-                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                findings.add(new LintFinding(STEP_RUNS_ONE_UNIT, ERROR, source, "Step '"
                         + step.id() + "' declares sql: beside notify: - a notify step carries"
                         + " no binding (the executor refuses it at run time). Compute in a"
                         + " prior step and reference its result from the notification"));
                 continue;
             }
             if (step.sql() != null && step.push() != null) {
-                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                findings.add(new LintFinding(STEP_RUNS_ONE_UNIT, ERROR, source, "Step '"
                         + step.id() + "' declares sql: beside push: - a push delivers an"
                         + " earlier transfer (file: steps.<id>.transferId), and the binding"
                         + " would never run. Split them into steps"));
                 continue;
             }
             if (calls && step.export() != null) {
-                findings.add(new LintFinding("TQL-FIELD-2008", "error", source, "Step '"
+                findings.add(new LintFinding(STEP_RUNS_ONE_UNIT, ERROR, source, "Step '"
                         + step.id() + "' declares an http: arm beside export: - an export's"
                         + " extraction is a plain sql: arm, and the export would be dropped in"
                         + " silence. Spool the acquisition and export from a later step"));
@@ -150,18 +161,18 @@ final class JobRules implements LintRule {
             List<LintFinding> findings) {
         io.tesseraql.yaml.model.PollSpec poll = job.definition().trigger().poll();
         if (job.definition().trigger().schedule() != null) {
-            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
                     "Job '" + job.definition().id()
                             + "' declares both a schedule and a poll trigger; declare one"));
         }
         String kind = poll.effectiveTransport();
         if (!List.of("local", "sftp", "ftps").contains(kind)) {
-            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
                     "Poll trigger transport must be local, sftp, or ftps (was '"
                             + poll.transport() + "')"));
         }
         if (poll.path() == null || poll.path().isBlank()) {
-            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
                     "Poll trigger needs a path: (the directory to poll)"));
         }
         // Values that reach the endpoint URI. delay throws inside wire() where the failure is
@@ -171,31 +182,36 @@ final class JobRules implements LintRule {
             try {
                 io.tesseraql.core.util.Durations.toMillis(poll.delay());
             } catch (RuntimeException ex) {
-                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR,
+                        source,
                         "Poll trigger delay '" + poll.delay() + "' is not a duration — the job"
                                 + " would be dropped at startup, leaving the app healthy with"
                                 + " nothing arriving"));
             }
         }
         if (poll.port() != null && (poll.port() < 1 || poll.port() > 65535)) {
-            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
                     "Poll trigger port " + poll.port() + " is outside 1-65535"));
         }
         if (!poll.isRemote()) {
             // Keys that belong to a remote source parse cleanly and are then discarded, so an
             // author converting a job between kinds gets no signal that they now mean nothing.
             if (poll.host() != null && !poll.host().isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1005", "warning", source,
-                        "Poll trigger source '" + kind + "' ignores host: — remove it or use a"
-                                + " remote source"));
+                findings.add(
+                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, WARNING, source,
+                                "Poll trigger source '" + kind
+                                        + "' ignores host: — remove it or use a"
+                                        + " remote source"));
             }
             if (poll.credential() != null && !poll.credential().isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1005", "warning", source,
-                        "Poll trigger source '" + kind + "' ignores credential: — remove it or"
-                                + " use a remote source"));
+                findings.add(
+                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, WARNING, source,
+                                "Poll trigger source '" + kind
+                                        + "' ignores credential: — remove it or"
+                                        + " use a remote source"));
             }
             if (config.navigate("tesseraql.connectors.poll.allowedPaths") == null) {
-                findings.add(new LintFinding("TQL-SEC-4086", "error", source,
+                findings.add(new LintFinding(POLL_SOURCE_WITHOUT_ALLOWED_PATHS, ERROR, source,
                         "Local poll source has no tesseraql.connectors.poll.allowedPaths root:"
                                 + " without one the job can read — and move — files anywhere the"
                                 + " process can reach"));
@@ -203,8 +219,9 @@ final class JobRules implements LintRule {
         }
         if (poll.isRemote()) {
             if (poll.host() == null || poll.host().isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
-                        "Poll trigger source '" + kind + "' needs a host:"));
+                findings.add(
+                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+                                "Poll trigger source '" + kind + "' needs a host:"));
             } else {
                 List<String> allowedHosts = new java.util.ArrayList<>();
                 if (config
@@ -212,7 +229,7 @@ final class JobRules implements LintRule {
                     h.forEach(value -> allowedHosts.add(String.valueOf(value)));
                 }
                 if (!io.tesseraql.yaml.http.HttpOutbound.hostAllowed(allowedHosts, poll.host())) {
-                    findings.add(new LintFinding("TQL-SEC-4080", "error", source,
+                    findings.add(new LintFinding(POLL_HOST_NOT_ALLOWED, ERROR, source,
                             "Poll trigger targets host '" + poll.host() + "' which is not in"
                                     + " tesseraql.connectors.poll.allowedHosts (deny by default)"));
                 }
@@ -220,13 +237,13 @@ final class JobRules implements LintRule {
             if (poll.credential() != null && !poll.credential().isBlank()
                     && config.navigate(
                             "tesseraql.connectors.poll.credentials." + poll.credential()) == null) {
-                findings.add(new LintFinding("TQL-SEC-4081", "warning", source,
+                findings.add(new LintFinding(POLL_UNDECLARED_CREDENTIAL, WARNING, source,
                         "Poll trigger references undeclared credential '" + poll.credential()
                                 + "'"));
             }
             if ("sftp".equals(kind)
                     && config.navigate("tesseraql.connectors.poll.knownHostsFile") == null) {
-                findings.add(new LintFinding("TQL-SEC-4084", "warning", source,
+                findings.add(new LintFinding(LintCodes.SFTP_HOST_KEY_UNVERIFIED, WARNING, source,
                         "SFTP poll source does not verify the server's SSH host key; set"
                                 + " tesseraql.connectors.poll.knownHostsFile to pin it"));
             }
@@ -236,7 +253,7 @@ final class JobRules implements LintRule {
             // the place the author finds out.
             if ("ftps".equals(kind)
                     && config.navigate("tesseraql.connectors.poll.trustStore") == null) {
-                findings.add(new LintFinding("TQL-SEC-4085", "error", source,
+                findings.add(new LintFinding(LintCodes.FTPS_SERVER_UNVERIFIED, ERROR, source,
                         "FTPS poll source does not verify the server certificate; set"
                                 + " tesseraql.connectors.poll.trustStore (file:, password:) to"
                                 + " pin the CA that signs it"));
@@ -245,12 +262,14 @@ final class JobRules implements LintRule {
         io.tesseraql.yaml.model.ImportSpec importSpec = job.definition().fileImport();
         io.tesseraql.yaml.model.Binding rowStep = job.definition().rowStep();
         if (importSpec == null || rowStep == null || rowStep.file() == null) {
-            findings.add(new LintFinding("TQL-YAML-1006", "error", source, "Poll-triggered job '"
-                    + job.definition().id() + "' needs an import: block saying how to parse the"
-                    + " file, and a pipeline step saying what to write per row"));
+            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+                    "Poll-triggered job '"
+                            + job.definition().id()
+                            + "' needs an import: block saying how to parse the"
+                            + " file, and a pipeline step saying what to write per row"));
         } else if (!Files.isRegularFile(
                 job.source().getParent().resolve(rowStep.file()))) {
-            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+            findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                     "Referenced SQL file is missing: " + rowStep.file()));
         }
     }

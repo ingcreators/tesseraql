@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Files;
@@ -12,6 +15,14 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ExportRules {
+
+    private static final String INCOMPLETE_EXPORT_STEP = "TQL-YAML-1041";
+
+    private static final String EXPORT_GROUPS_WITHOUT_TEMPLATE = "TQL-LD-5312";
+
+    private static final String EXPORT_GROUPS_WITHOUT_ORDER = "TQL-LD-5311";
+
+    private static final String EXPORT_WITHOUT_MAX_ROWS = "TQL-LD-5310";
 
     private ExportRules() {
     }
@@ -29,37 +40,39 @@ final class ExportRules {
         // The rows come from the step's own arm, never from inside export: — an output block
         // says how to write, not what to read (docs/unified-sources.md, decision 7).
         if (step.sql() == null || step.sql().file() == null || step.sql().file().isBlank()) {
-            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
                     + "': an export step needs the rows to write — declare the step's own"
                     + " sql: { file: … }"));
             return;
         }
         if (export.format() == null || export.format().isBlank()) {
-            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
                     + "': export needs format: (csv, excel, or pdf)"));
         }
         if (export.after() != null && io.tesseraql.core.files.FileTransferService.AFTER_DOWNLOAD
                 .equals(export.after().effectiveTiming())) {
-            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
                     + "': after.timing: download is route vocabulary — an export step supports"
                     + " timing: extract only"));
         }
         if ("pdf".equals(export.format())) {
             if (export.sheet() != null || export.startCell() != null) {
-                findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+                findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR,
+                        source,
                         "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
                                 + " through its template, not cell placement"));
             }
             if (export.template() != null && !export.template().endsWith(".html")) {
-                findings.add(new LintFinding("TQL-YAML-1006", "error", source,
-                        "pdf export template '" + export.template()
-                                + "' must be an .html file (it renders through the template"
-                                + " engine before PDF conversion)"));
+                findings.add(
+                        new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+                                "pdf export template '" + export.template()
+                                        + "' must be an .html file (it renders through the template"
+                                        + " engine before PDF conversion)"));
             }
         }
         if (!"pdf".equals(export.format()) && export.startCell() != null
                 && export.template() == null) {
-            findings.add(new LintFinding("TQL-YAML-1041", "error", source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
                     + "': startCell: places data into a template, but none is declared - add"
                     + " template:, or drop startCell: for a plain grid"));
         }
@@ -67,8 +80,9 @@ final class ExportRules {
                 || export.template().endsWith(".html"))
                 && !Files.isRegularFile(
                         job.source().getParent().resolve(export.template()))) {
-            findings.add(new LintFinding("TQL-YAML-1006", "error", source, "Step '" + step.id()
-                    + "': export references a missing template: " + export.template()));
+            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+                    "Step '" + step.id()
+                            + "': export references a missing template: " + export.template()));
         }
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
         lintExportSources(context, export, java.util.Map.of(),
@@ -100,12 +114,12 @@ final class ExportRules {
         }
         boolean pdf = "pdf".equals(spec.format());
         if (pdf && (spec.sheet() != null || spec.startCell() != null)) {
-            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
                     "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
                             + " through its template, not cell placement"));
         }
         if (!pdf && spec.startCell() != null && spec.template() == null) {
-            findings.add(new LintFinding("TQL-YAML-1005", "error", source,
+            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
                     "export: startCell: places data into a template, but none is declared -"
                             + " add template:, or drop startCell: for a plain grid"));
         }
@@ -113,14 +127,14 @@ final class ExportRules {
             return;
         }
         if (pdf && !spec.template().endsWith(".html")) {
-            findings.add(new LintFinding("TQL-YAML-1006", "error", source,
+            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
                     "pdf export template '" + spec.template()
                             + "' must be an .html file (it renders through the template"
                             + " engine before PDF conversion)"));
             return;
         }
         if (!Files.isRegularFile(route.source().getParent().resolve(spec.template()))) {
-            findings.add(new LintFinding("TQL-YAML-1006", "error", source,
+            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
                     "export references a missing template: " + spec.template()));
         }
     }
@@ -152,26 +166,29 @@ final class ExportRules {
         });
         httpSources.forEach((name, http) -> {
             if (http != null && http.degradesToEmpty()) {
-                findings.add(new LintFinding("TQL-YAML-1006", "error", source, label
-                        + "http: source '" + name + "' declares onError: empty on an export -"
-                        + " a document that is archived and mailed would look complete with a"
-                        + " section missing, so an export whose source failed should fail"));
+                findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR,
+                        source, label
+                                + "http: source '" + name
+                                + "' declares onError: empty on an export -"
+                                + " a document that is archived and mailed would look complete with a"
+                                + " section missing, so an export whose source failed should fail"));
             }
         });
         if (spec.splitBy() != null && !spec.splitBy().isBlank()) {
             String filename = spec.filename();
             if (filename == null || !filename.contains("{key}")) {
-                findings.add(new LintFinding("TQL-YAML-1006", "error", source, label
-                        + "splitBy: writes one document per group, so filename: must carry {key}"
-                        + " - otherwise every group would be written to the same name and only"
-                        + " the last would survive"));
+                findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR,
+                        source, label
+                                + "splitBy: writes one document per group, so filename: must carry {key}"
+                                + " - otherwise every group would be written to the same name and only"
+                                + " the last would survive"));
             }
             lintGroupOrdering(context, spec, extractionSql, spec.splitBy(), label, source,
                     findings);
         }
         if (spec.groupBy() != null && !spec.groupBy().isBlank()) {
             if (spec.template() == null) {
-                findings.add(new LintFinding("TQL-LD-5312", "warning", source, label
+                findings.add(new LintFinding(EXPORT_GROUPS_WITHOUT_TEMPLATE, WARNING, source, label
                         + "export declares groupBy: but no template: - a " + spec.format()
                         + " export writes rows and nothing else, so the groups have no reader"));
             }
@@ -182,7 +199,7 @@ final class ExportRules {
         if (templated || composed.isEmpty()) {
             return;
         }
-        findings.add(new LintFinding("TQL-LD-5312", "warning", source, label
+        findings.add(new LintFinding(EXPORT_GROUPS_WITHOUT_TEMPLATE, WARNING, source, label
                 + "the document declares sources beside main: but the export has no template: -"
                 + " a " + spec.format() + " export writes the main rows and nothing else, so"
                 + " they would run to be discarded"));
@@ -221,7 +238,7 @@ final class ExportRules {
                 && text.substring(orderBy).contains(column.toLowerCase(java.util.Locale.ROOT))) {
             return;
         }
-        findings.add(new LintFinding("TQL-LD-5311", "warning", source, label
+        findings.add(new LintFinding(EXPORT_GROUPS_WITHOUT_ORDER, WARNING, source, label
                 + "export groups by '" + column + "' but its query has no order by"
                 + " naming that column - the runtime detects group boundaries on a single pass,"
                 + " so unordered rows fail rather than writing one group as several"));
@@ -247,7 +264,7 @@ final class ExportRules {
         if (!buffers) {
             return;
         }
-        findings.add(new LintFinding("TQL-LD-5310", "warning", source, label
+        findings.add(new LintFinding(EXPORT_WITHOUT_MAX_ROWS, WARNING, source, label
                 + "export holds every row before it writes (" + spec.format()
                 + (spec.template() == null ? "" : " through a template")
                 + ") and declares no maxRows:, so it runs under the app-wide default - declare"

@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.List;
@@ -11,6 +13,12 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class CalendarRules implements LintRule {
+
+    private static final String CALENDAR_HOLIDAYS_TWO_HOMES = "TQL-BATCH-4203";
+
+    private static final String UNKNOWN_CALENDAR = "TQL-BATCH-4201";
+
+    private static final String INVALID_CALENDAR_SCHEDULE = "TQL-BATCH-4202";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -43,14 +51,14 @@ final class CalendarRules implements LintRule {
             calendars = io.tesseraql.yaml.calendar.Calendars.load(appHome,
                     new io.tesseraql.yaml.SimpleYamlParser());
         } catch (io.tesseraql.core.error.TqlException ex) {
-            findings.add(new LintFinding(ex.code().toString(), "error", "calendars/",
+            findings.add(new LintFinding(ex.code().toString(), ERROR, "calendars/",
                     ex.getMessage()));
             return io.tesseraql.yaml.calendar.Calendars.empty();
         }
         calendars.calendars().forEach((name, calendar) -> {
             if (calendar.holidays() != null && !calendar.holidays().dates().isEmpty()
                     && calendar.holidays().source() != null) {
-                findings.add(new LintFinding("TQL-BATCH-4203", "error",
+                findings.add(new LintFinding(CALENDAR_HOLIDAYS_TWO_HOMES, ERROR,
                         calendars.sourceOf(name), "Calendar '" + name
                                 + "' declares both dates: and source: — holiday rows have"
                                 + " exactly one home"));
@@ -72,19 +80,19 @@ final class CalendarRules implements LintRule {
         String jobId = job.definition().id();
         boolean hasCalendar = schedule.calendar() != null && !schedule.calendar().isBlank();
         if (hasCalendar && !calendars.calendars().containsKey(schedule.calendar())) {
-            findings.add(new LintFinding("TQL-BATCH-4201", "error", source,
+            findings.add(new LintFinding(UNKNOWN_CALENDAR, ERROR, source,
                     "Job '" + jobId + "' schedule names unknown calendar '"
                             + schedule.calendar()
                             + "' — declare it under calendars/ or fix the reference"));
         }
         if (schedule.runOn() != null) {
             if (!hasCalendar) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule declares runOn: without calendar: —"
                                 + " runOn qualifies a business-day calendar"));
             }
             if (!io.tesseraql.yaml.calendar.Calendars.RUN_ON.contains(schedule.runOn())) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule runOn '" + schedule.runOn()
                                 + "' is not one of "
                                 + new java.util.TreeSet<>(
@@ -93,29 +101,29 @@ final class CalendarRules implements LintRule {
         }
         if (schedule.dayOfMonth() != null) {
             if (!hasCalendar) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule declares dayOfMonth: without calendar:"
                                 + " — the shift needs a business-day calendar"));
             }
             if (schedule.dayOfMonth() < 1 || schedule.dayOfMonth() > 31) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule dayOfMonth " + schedule.dayOfMonth()
                                 + " is outside 1-31"));
             }
             if (schedule.runOn() != null) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule declares both runOn: and dayOfMonth: —"
                                 + " one qualifier decides which firings count"));
             }
         }
         if (schedule.shift() != null) {
             if (schedule.dayOfMonth() == null) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule declares shift: without dayOfMonth: —"
                                 + " a shift moves a nominal day"));
             }
             if (!io.tesseraql.yaml.calendar.Calendars.SHIFTS.contains(schedule.shift())) {
-                findings.add(new LintFinding("TQL-BATCH-4202", "error", source,
+                findings.add(new LintFinding(INVALID_CALENDAR_SCHEDULE, ERROR, source,
                         "Job '" + jobId + "' schedule shift '" + schedule.shift()
                                 + "' is not one of "
                                 + new java.util.TreeSet<>(

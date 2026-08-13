@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -14,6 +16,10 @@ import java.util.Map;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class SecurityDefaultRules implements LintRule {
+
+    private static final String REPLACED_SECURITY_DEFAULTS = "TQL-SEC-4130";
+
+    private static final String PUBLIC_ROUTE_UNDER_DEFAULT_POLICY = "TQL-SEC-4131";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -37,7 +43,7 @@ final class SecurityDefaultRules implements LintRule {
         Object legacy = config.navigate("tesseraql.security.defaults");
         if (legacy instanceof Map<?, ?> map && (map.containsKey("api")
                 || map.containsKey("htmx"))) {
-            findings.add(new LintFinding("TQL-SEC-4130", "warning", "config",
+            findings.add(new LintFinding(REPLACED_SECURITY_DEFAULTS, WARNING, "config",
                     "tesseraql.security.defaults.api/htmx is replaced by the path-matched"
                             + " security.defaults.routes rules and has no effect"));
         }
@@ -54,7 +60,7 @@ final class SecurityDefaultRules implements LintRule {
             }
             defaults.matchedRule(route.urlPath()).ifPresent(rule -> {
                 if (rule.policy() != null) {
-                    findings.add(new LintFinding("TQL-SEC-4131", "warning",
+                    findings.add(new LintFinding(PUBLIC_ROUTE_UNDER_DEFAULT_POLICY, WARNING,
                             appHome.relativize(route.source()).toString(),
                             "Route '" + route.definition().id() + "' is public, but the security"
                                     + " default rule '" + rule.match() + "' declares policy '"

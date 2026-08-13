@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import java.nio.file.Path;
 import java.util.List;
 
@@ -9,6 +12,10 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ChunkRules {
+
+    private static final String CHUNK_READER_WITHOUT_ORDER = "TQL-BATCH-4207";
+
+    private static final String CHUNK_READER_WITHOUT_CHECKPOINT_BIND = "TQL-BATCH-4208";
 
     private ChunkRules() {
     }
@@ -24,9 +31,11 @@ final class ChunkRules {
             List<LintFinding> findings) {
         String[] path = reference.split("\\.");
         if (path.length < 2 || !"steps".equals(path[0])) {
-            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': reader spool: '" + reference + "' must name an earlier step's spool"
-                    + " (steps.<id>.spool)"));
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': reader spool: '" + reference
+                            + "' must name an earlier step's spool"
+                            + " (steps.<id>.spool)"));
             return;
         }
         String referenced = path[1];
@@ -39,14 +48,18 @@ final class ChunkRules {
             }
             if (earlier.sql() == null
                     || !"query-spool".equals(earlier.sql().effectiveMode())) {
-                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
-                        + step.id() + "': step '" + referenced + "' publishes no spool - only a"
-                        + " mode: query-spool step does"));
+                findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                        "Step '"
+                                + step.id() + "': step '" + referenced
+                                + "' publishes no spool - only a"
+                                + " mode: query-spool step does"));
             }
             return;
         }
-        findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                + "': reader spool: names '" + referenced + "', which is not an earlier step"));
+        findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                "Step '" + step.id()
+                        + "': reader spool: names '" + referenced
+                        + "', which is not an earlier step"));
     }
 
     /**
@@ -67,33 +80,39 @@ final class ChunkRules {
                 && !chunk.reader().file().isBlank();
         boolean readsSpool = chunk.reader() != null && chunk.reader().isSpool();
         if (readsSql == readsSpool) {
-            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk needs exactly one reader - sql: { file: … }, or spool: naming an"
-                    + " earlier step's spool"));
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': chunk needs exactly one reader - sql: { file: … }, or spool: naming an"
+                            + " earlier step's spool"));
             return;
         }
         if (chunk.writer() == null || chunk.writer().file() == null
                 || chunk.writer().file().isBlank()) {
-            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk needs writer: { sql: { file: … } }"));
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': chunk needs writer: { sql: { file: … } }"));
             return;
         }
         if (readsSpool) {
             lintSpoolReference(job, step, chunk.reader().spool(), source, findings);
         }
         if (chunk.commitEvery() != null && chunk.commitEvery() < 1) {
-            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk commitEvery must be at least 1 (was " + chunk.commitEvery()
-                    + ")"));
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': chunk commitEvery must be at least 1 (was " + chunk.commitEvery()
+                            + ")"));
         }
         if (chunk.onError() != null && !List.of("fail", "skip").contains(chunk.onError())) {
-            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk onError must be fail or skip (was '" + chunk.onError() + "')"));
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': chunk onError must be fail or skip (was '" + chunk.onError()
+                            + "')"));
         }
         if (chunk.skipLimit() != null && chunk.skipLimit() < 0) {
-            findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '" + step.id()
-                    + "': chunk skipLimit must not be negative (was " + chunk.skipLimit()
-                    + ")"));
+            findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                    "Step '" + step.id()
+                            + "': chunk skipLimit must not be negative (was " + chunk.skipLimit()
+                            + ")"));
         }
         chunk.enrich().forEach((name, enrich) -> {
             if (enrich.sql() == null || enrich.sql().file() == null
@@ -102,9 +121,11 @@ final class ChunkRules {
             }
             Path file = job.source().getParent().resolve(enrich.sql().file()).normalize();
             if (!java.nio.file.Files.isRegularFile(file)) {
-                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
-                        + step.id() + "': chunk enrich '" + name + "' references a missing SQL"
-                        + " file: " + enrich.sql().file()));
+                findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                        "Step '"
+                                + step.id() + "': chunk enrich '" + name
+                                + "' references a missing SQL"
+                                + " file: " + enrich.sql().file()));
             }
         });
         if (readsSpool) {
@@ -123,15 +144,17 @@ final class ChunkRules {
         }
         String lower = readerSql.toLowerCase(java.util.Locale.ROOT);
         if (!lower.contains("order by")) {
-            findings.add(new LintFinding("TQL-BATCH-4207", "error", source, "Step '" + step.id()
-                    + "': the chunk reader has no order by — without a deterministic order"
-                    + " the checkpoint cannot say where to resume"));
+            findings.add(new LintFinding(CHUNK_READER_WITHOUT_ORDER, ERROR, source,
+                    "Step '" + step.id()
+                            + "': the chunk reader has no order by — without a deterministic order"
+                            + " the checkpoint cannot say where to resume"));
         }
         if (!readerSql.contains("chunk.after")) {
-            findings.add(new LintFinding("TQL-BATCH-4208", "warning", source, "Step '"
-                    + step.id() + "': the chunk reader never binds chunk.after — a restart"
-                    + " reprocesses from the top, which is only safe for an idempotent"
-                    + " writer"));
+            findings.add(new LintFinding(CHUNK_READER_WITHOUT_CHECKPOINT_BIND, WARNING, source,
+                    "Step '"
+                            + step.id() + "': the chunk reader never binds chunk.after — a restart"
+                            + " reprocesses from the top, which is only safe for an idempotent"
+                            + " writer"));
         }
     }
 }

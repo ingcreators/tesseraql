@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.InputField;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -16,6 +18,10 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class FieldDomainRules implements LintRule {
+
+    private static final String DOMAIN_LOOSENED = "TQL-FIELD-4610";
+
+    private static final String UNREFERENCED_DOMAIN = "TQL-FIELD-4611";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -53,14 +59,14 @@ final class FieldDomainRules implements LintRule {
                     return;
                 }
                 loosened(name, field, domain).forEach(what -> findings.add(new LintFinding(
-                        "TQL-FIELD-4610", "warning", source,
+                        DOMAIN_LOOSENED, WARNING, source,
                         "Field '" + name + "' loosens domain '" + field.domain() + "': " + what
                                 + " — a loosened copy is the drift domains exist to prevent")));
             });
         }
         domains.domains().keySet().stream()
                 .filter(name -> !referenced.contains(name))
-                .forEach(name -> findings.add(new LintFinding("TQL-FIELD-4611", "warning",
+                .forEach(name -> findings.add(new LintFinding(UNREFERENCED_DOMAIN, WARNING,
                         "domains",
                         "Domain '" + name + "' is declared but never referenced")));
     }

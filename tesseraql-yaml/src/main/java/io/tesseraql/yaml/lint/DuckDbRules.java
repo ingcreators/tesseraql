@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.core.sql.SqlNode;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
@@ -21,6 +23,10 @@ import java.util.regex.Pattern;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class DuckDbRules implements LintRule {
+
+    private static final String DUCKDB_UNSUPPORTED_USE = "TQL-YAML-1040";
+
+    private static final String INVALID_FILE_REFERENCE = "TQL-SQL-2111";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -45,7 +51,7 @@ final class DuckDbRules implements LintRule {
         AppConfig config = manifest.config();
         String configSource = "config/tesseraql.yml";
         if (duckDbDatasource(config, "main")) {
-            findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+            findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                     "tesseraql.datasources.main cannot be a duckdb datasource - the engine holds"
                             + " nothing durable and framework tables live on main"));
         }
@@ -58,7 +64,7 @@ final class DuckDbRules implements LintRule {
                 lintFileScopes(config, name, configSource, findings);
                 lintDuckDbEngineConfig(config, name, configSource, findings);
                 if (Files.isDirectory(appHome.resolve("db").resolve(name).resolve("migration"))) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error",
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR,
                             "db/" + name + "/migration",
                             "a duckdb datasource is a query engine with nothing durable to"
                                     + " migrate - remove db/" + name + "/migration"));
@@ -77,7 +83,7 @@ final class DuckDbRules implements LintRule {
                     && !"main".equals(job.definition().datasource())
                     && config.navigate(
                             "tesseraql.datasources." + job.definition().datasource()) == null) {
-                findings.add(new LintFinding("TQL-YAML-1035", "error", source,
+                findings.add(new LintFinding(LintCodes.UNDECLARED_DATASOURCE, ERROR, source,
                         "datasource '" + job.definition().datasource()
                                 + "' is not declared under tesseraql.datasources"));
             }
@@ -92,7 +98,7 @@ final class DuckDbRules implements LintRule {
             String datasource = consumer.definition().datasource();
             if (DocumentRules.declaredDatasource(datasource)
                     && duckDbDatasource(config, datasource)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error",
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR,
                         appHome.relativize(consumer.source()).toString().replace('\\', '/'),
                         "a duckdb datasource is not a projection target - it holds nothing"
                                 + " durable; project into a server datasource instead"));
@@ -113,18 +119,18 @@ final class DuckDbRules implements LintRule {
                     + ".";
             String root = config.getString(prefix + "root").orElse(null);
             if (root == null || root.isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "file scope '" + scopeName + "' on datasource '" + name
                                 + "' declares no root: directory"));
             } else if (root.contains("..") || root.indexOf('\'') >= 0 || root.indexOf('\\') >= 0) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "file scope '" + scopeName + "' on datasource '" + name
                                 + "' must declare a plain directory root without '..', quotes,"
                                 + " or backslashes"));
             }
             String partitionBy = config.getString(prefix + "partitionBy").orElse(null);
             if (partitionBy != null && !"tenant".equals(partitionBy)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "file scope '" + scopeName + "' on datasource '" + name
                                 + "' partitionBy must be 'tenant', not '" + partitionBy + "'"));
             }
@@ -141,7 +147,7 @@ final class DuckDbRules implements LintRule {
                 : "main";
         if (duckDbDatasource(config, routeDatasource)
                 && !DocumentRules.READ_DATASOURCE_RECIPES.contains(definition.recipe())) {
-            findings.add(new LintFinding("TQL-YAML-1040", "error", source,
+            findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, source,
                     "a duckdb datasource serves reads - the '" + definition.recipe()
                             + "' recipe carries durable state and belongs on a server"
                             + " datasource"));
@@ -164,7 +170,7 @@ final class DuckDbRules implements LintRule {
         if (extensions instanceof java.util.List<?> list) {
             for (Object entry : list) {
                 if (!String.valueOf(entry).matches("[a-z0-9_]+")) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "duckdb extension '" + entry + "' on datasource '" + name
                                     + "' is not a plain extension name"));
                 }
@@ -179,40 +185,40 @@ final class DuckDbRules implements LintRule {
             String alias = config.getString(prefix + "as").orElse("lake");
             String mode = config.getString(prefix + "mode").orElse("readonly");
             if (data == null || data.isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake on datasource '" + name + "' declares no data: directory"));
             } else if (data.contains("..") || data.indexOf('\'') >= 0 || data.indexOf('\\') >= 0) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake data: on datasource '" + name + "' must be a plain"
                                 + " directory path without '..', quotes, or backslashes"));
             }
             if (!"main".equals(catalog)
                     && config.navigate("tesseraql.datasources." + catalog) == null) {
-                findings.add(new LintFinding("TQL-YAML-1035", "error", configSource,
+                findings.add(new LintFinding(LintCodes.UNDECLARED_DATASOURCE, ERROR, configSource,
                         "datasource '" + catalog + "' is not declared under"
                                 + " tesseraql.datasources"));
             }
             if (duckDbDatasource(config, catalog)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake catalog '" + catalog + "' must be a PostgreSQL datasource"
                                 + " holding the lake metadata"));
             }
             if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(schema)
                     || !io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(alias)
                     || "main".equals(alias)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake schema/as on datasource '" + name + "' must be plain"
                                 + " identifiers, and as: never 'main'"));
             }
             if (!"readonly".equals(mode) && !"readwrite".equals(mode)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake mode must be readonly or readwrite, not '" + mode + "'"));
             }
             Object lakeExtensions = config.navigate(
                     "tesseraql.datasources." + name + ".duckdb.extensions");
             if (!(lakeExtensions instanceof java.util.List<?> lakeList)
                     || !lakeList.contains("ducklake") || !lakeList.contains("postgres")) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake on datasource '" + name + "' needs extensions:"
                                 + " [ducklake, postgres] declared, so offline cache provisioning"
                                 + " covers them"));
@@ -220,12 +226,12 @@ final class DuckDbRules implements LintRule {
             if (data != null && data.startsWith("s3://")) {
                 if (!(lakeExtensions instanceof java.util.List<?> remoteList)
                         || !remoteList.contains("httpfs")) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "a remote duckdb lake on datasource '" + name
                                     + "' needs httpfs in extensions:"));
                 }
                 if (!data.endsWith("/")) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "duckdb lake data: on datasource '" + name + "' must be an s3://"
                                     + " prefix ending in '/' (the scoped secret covers exactly"
                                     + " this prefix)"));
@@ -238,20 +244,20 @@ final class DuckDbRules implements LintRule {
                         "tesseraql.datasources." + name + ".duckdb.lake.credentials")
                         .orElse(null));
                 if (!keyed && !chain) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "a remote duckdb lake on datasource '" + name + "' needs"
                                     + " credentials: {keyId, secret} secret references or"
                                     + " 'instance' for the AWS credential chain"));
                 }
                 if (config.navigate("tesseraql.datasources." + name
                         + ".duckdb.fileScopes") instanceof java.util.Map<?, ?>) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "datasource '" + name + "' declares a remote lake and fileScopes:"
                                     + " - a remote-lake datasource has no governed local-file"
                                     + " surface; compose across two duckdb datasources"));
                 }
             } else if (data != null && data.contains("://")) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb lake data: on datasource '" + name + "' must be a local"
                                 + " directory or an s3:// prefix (S3-compatible stores use"
                                 + " s3:// plus endpoint:)"));
@@ -264,7 +270,7 @@ final class DuckDbRules implements LintRule {
                         + remoteName + ".";
                 String url = config.getString(prefix + "url").orElse("");
                 if (!url.startsWith("s3://") || !url.endsWith("/")) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "duckdb remote '" + remoteName + "' on datasource '" + name
                                     + "' needs url: an s3:// prefix ending in '/'"));
                 }
@@ -274,7 +280,7 @@ final class DuckDbRules implements LintRule {
                 boolean chain = "instance".equals(
                         config.getString(prefix + "credentials").orElse(null));
                 if (!keyed && !chain) {
-                    findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                    findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                             "duckdb remote '" + remoteName + "' on datasource '" + name
                                     + "' needs credentials: {keyId, secret} or 'instance'"));
                 }
@@ -283,7 +289,7 @@ final class DuckDbRules implements LintRule {
                     "tesseraql.datasources." + name + ".duckdb.extensions");
             if (!(remoteExtensions instanceof java.util.List<?> extList)
                     || !extList.contains("httpfs")) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb remotes: on datasource '" + name
                                 + "' need httpfs in extensions:"));
             }
@@ -294,7 +300,7 @@ final class DuckDbRules implements LintRule {
         }
         for (int i = 0; i < entries.size(); i++) {
             if (!(entries.get(i) instanceof java.util.Map<?, ?> entry)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb attach entry " + i + " on datasource '" + name
                                 + "' must be a mapping with datasource:"));
                 continue;
@@ -309,31 +315,31 @@ final class DuckDbRules implements LintRule {
                     ? "readonly"
                     : config.resolve(String.valueOf(entry.get("mode")));
             if (target == null || target.isBlank()) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb attach entry " + i + " on datasource '" + name
                                 + "' declares no datasource:"));
                 continue;
             }
             if (!"main".equals(target)
                     && config.navigate("tesseraql.datasources." + target) == null) {
-                findings.add(new LintFinding("TQL-YAML-1035", "error", configSource,
+                findings.add(new LintFinding(LintCodes.UNDECLARED_DATASOURCE, ERROR, configSource,
                         "datasource '" + target + "' is not declared under"
                                 + " tesseraql.datasources"));
             }
             if (duckDbDatasource(config, target)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb attach target '" + target + "' is itself a duckdb datasource;"
                                 + " attach targets are server datasources"));
             }
             if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(alias)
                     || "main".equals(alias)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb attach '" + target + "' on datasource '" + name
                                 + "' needs as: a plain identifier other than 'main' (DuckDB's"
                                 + " own default schema is named main)"));
             }
             if (!"readonly".equals(mode) && !"readwrite".equals(mode)) {
-                findings.add(new LintFinding("TQL-YAML-1040", "error", configSource,
+                findings.add(new LintFinding(DUCKDB_UNSUPPORTED_USE, ERROR, configSource,
                         "duckdb attach '" + target + "' mode must be readonly or readwrite,"
                                 + " not '" + mode + "'"));
             }
@@ -370,14 +376,14 @@ final class DuckDbRules implements LintRule {
         for (SqlNode.FilePath filePath : filePaths) {
             String reference = "${" + filePath.channel() + "." + filePath.name() + "}";
             if (!duckDb) {
-                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                         "File placeholder " + reference + " only resolves on a duckdb datasource;"
                                 + " this SQL runs on '" + datasource + "'",
                         filePath.sourceLine(), null));
             } else if ("dataset".equals(filePath.channel())) {
                 Map<String, String> params = sql.params() == null ? Map.of() : sql.params();
                 if (!params.containsKey(filePath.name())) {
-                    findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                    findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                             "${dataset." + filePath.name() + "} needs a params: entry named '"
                                     + filePath.name() + "' binding the dataset reference",
                             filePath.sourceLine(), null));
@@ -386,7 +392,7 @@ final class DuckDbRules implements LintRule {
                     && (!(config.navigate("tesseraql.datasources." + datasource
                             + ".duckdb.fileScopes") instanceof java.util.Map<?, ?> scopeMap)
                             || !scopeMap.containsKey(filePath.name()))) {
-                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                         "File scope '" + filePath.name() + "' is not declared under"
                                 + " tesseraql.datasources." + datasource + ".duckdb.fileScopes",
                         filePath.sourceLine(), null));
@@ -398,14 +404,14 @@ final class DuckDbRules implements LintRule {
                     if (!(config.navigate("tesseraql.datasources." + datasource
                             + ".duckdb.remotes") instanceof java.util.Map<?, ?> remoteMap)
                             || !remoteMap.containsKey(filePath.name())) {
-                        findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                        findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                                 "Remote '" + filePath.name() + "' is not declared under"
                                         + " tesseraql.datasources." + datasource
                                         + ".duckdb.remotes",
                                 filePath.sourceLine(), null));
                     }
                 } else if (remoteTier(config, datasource)) {
-                    findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                    findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                             "A remote-tier datasource has no governed local-file surface;"
                                     + " ${scope.*}/${dataset.*} resolve on a local duckdb"
                                     + " datasource - compose across two datasources",
@@ -417,7 +423,7 @@ final class DuckDbRules implements LintRule {
             while (matcher.find()) {
                 // A placeholder site starts with the 2-way comment: `read_parquet(/* ${...} */ ...`.
                 if (!"/".equals(matcher.group(1))) {
-                    findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                    findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                             "A file-reading function on a duckdb datasource must take a"
                                     + " ${scope.*} file placeholder, not a raw argument",
                             lineAt(text, matcher.start()), null));
@@ -449,7 +455,7 @@ final class DuckDbRules implements LintRule {
                     || stripped.matches("CREATE\\s+(OR\\s+REPLACE\\s+)?(PERSISTENT\\s+)?SECRET.*")
                     || stripped.startsWith("DROP SECRET");
             if (management) {
-                findings.add(new LintFinding("TQL-SQL-2111", "error", source,
+                findings.add(new LintFinding(INVALID_FILE_REFERENCE, ERROR, source,
                         "App SQL on a duckdb datasource must be plain queries -"
                                 + " ATTACH/DETACH/INSTALL/LOAD/CREATE SECRET/SET/PRAGMA are"
                                 + " init-time concerns the runtime owns (docs/duckdb.md)",

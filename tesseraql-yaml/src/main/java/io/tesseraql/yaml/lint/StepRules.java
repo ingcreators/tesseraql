@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.config.AppConfig;
 import java.nio.file.Path;
 import java.util.List;
@@ -34,10 +36,11 @@ final class StepRules {
                 ? !"query-spool".equals(mode)
                 : step.sql().isSql() && "query".equals(mode);
         if (!reads) {
-            findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '" + step.id()
-                    + "' declares enrich: but holds no rows - only a step that reads (mode:"
-                    + " query, or an http: call) has rows to fold a reference into; a chunk"
-                    + " step declares its enrich: on the reader"));
+            findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source,
+                    "Step '" + step.id()
+                            + "' declares enrich: but holds no rows - only a step that reads (mode:"
+                            + " query, or an http: call) has rows to fold a reference into; a chunk"
+                            + " step declares its enrich: on the reader"));
             return;
         }
         step.sql().enrich().forEach((name, enrich) -> {
@@ -47,9 +50,11 @@ final class StepRules {
             }
             Path file = job.source().getParent().resolve(enrich.sql().file()).normalize();
             if (!java.nio.file.Files.isRegularFile(file)) {
-                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
-                        + step.id() + "': enrich '" + name + "' references a missing SQL file: "
-                        + enrich.sql().file()));
+                findings.add(new LintFinding(LintCodes.STEP_REFERENCE_UNRESOLVED, ERROR, source,
+                        "Step '"
+                                + step.id() + "': enrich '" + name
+                                + "' references a missing SQL file: "
+                                + enrich.sql().file()));
             }
         });
     }
@@ -68,7 +73,7 @@ final class StepRules {
                 || "query-spool".equals(mode)) {
             return;
         }
-        findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '" + step.id()
+        findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source, "Step '" + step.id()
                 + "': http: mode '" + mode + "' is not a mode a call has - an outbound call"
                 + " reads, so it is query (the rows are held) or query-spool (they are streamed"
                 + " to a spool a chunk: step reads)"));
@@ -89,16 +94,18 @@ final class StepRules {
         }
         String mode = step.sql().effectiveMode();
         if (!"query".equals(mode) && !"query-spool".equals(mode)) {
-            findings.add(new LintFinding("TQL-YAML-1037", "error", source, "Step '" + step.id()
-                    + "': only a read step may declare datasource: - a write on another"
-                    + " connector would be a second transaction the job does not own"));
+            findings.add(new LintFinding(LintCodes.DATASOURCE_SPLITS_TRANSACTION, ERROR, source,
+                    "Step '" + step.id()
+                            + "': only a read step may declare datasource: - a write on another"
+                            + " connector would be a second transaction the job does not own"));
             return;
         }
         if (!"main".equals(declared)
                 && config.navigate("tesseraql.datasources." + declared) == null) {
-            findings.add(new LintFinding("TQL-YAML-1035", "error", source, "Step '" + step.id()
-                    + "': datasource '" + declared
-                    + "' is not declared under tesseraql.datasources"));
+            findings.add(new LintFinding(LintCodes.UNDECLARED_DATASOURCE, ERROR, source,
+                    "Step '" + step.id()
+                            + "': datasource '" + declared
+                            + "' is not declared under tesseraql.datasources"));
         }
     }
 

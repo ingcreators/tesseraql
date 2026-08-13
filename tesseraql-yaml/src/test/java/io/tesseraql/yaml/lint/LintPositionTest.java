@@ -74,9 +74,9 @@ class LintPositionTest {
                 });
 
         // Position-less findings render the bare source (the pre-positions shape).
-        assertThat(new LintFinding("X", "warning", "web/a.yml", "m").location())
+        assertThat(new LintFinding("X", LintFinding.Severity.WARNING, "web/a.yml", "m").location())
                 .isEqualTo("web/a.yml");
-        assertThat(new LintFinding("X", "warning", "web/a.yml", "m", 7, 3).location())
-                .isEqualTo("web/a.yml:7:3");
+        assertThat(new LintFinding("X", LintFinding.Severity.WARNING, "web/a.yml", "m", 7, 3)
+                .location()).isEqualTo("web/a.yml:7:3");
     }
 }

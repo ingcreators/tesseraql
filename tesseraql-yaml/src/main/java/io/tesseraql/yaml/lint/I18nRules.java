@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -13,6 +16,12 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class I18nRules implements LintRule {
+
+    private static final String UNREADABLE_MESSAGE_CATALOG = "TQL-YAML-1007";
+
+    private static final String DECLARED_LOCALE_WITHOUT_CATALOG = "TQL-YAML-1103";
+
+    private static final String UNRESOLVED_MESSAGE_KEY = "TQL-FIELD-2005";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -43,7 +52,7 @@ final class I18nRules implements LintRule {
             try {
                 catalog = io.tesseraql.yaml.i18n.MessageCatalog.load(appHome.resolve("messages"));
             } catch (io.tesseraql.core.error.TqlException ex) {
-                findings.add(new LintFinding("TQL-YAML-1007", "error", "messages",
+                findings.add(new LintFinding(UNREADABLE_MESSAGE_CATALOG, ERROR, "messages",
                         ex.getMessage()));
                 return;
             }
@@ -63,9 +72,10 @@ final class I18nRules implements LintRule {
                         .forLanguageTag(String.valueOf(tag)).toLanguageTag();
                 if (!normalized.equals(defaultTag)
                         && catalog.forLocale(normalized).isEmpty()) {
-                    findings.add(new LintFinding("TQL-YAML-1103", "warning", "messages",
-                            "Declared locale '" + tag + "' has no messages/" + normalized
-                                    + ".yml catalog"));
+                    findings.add(
+                            new LintFinding(DECLARED_LOCALE_WITHOUT_CATALOG, WARNING, "messages",
+                                    "Declared locale '" + tag + "' has no messages/" + normalized
+                                            + ".yml catalog"));
                 }
             }
         }
@@ -80,7 +90,8 @@ final class I18nRules implements LintRule {
                     .sorted()
                     .toList();
             if (!missing.isEmpty()) {
-                findings.add(new LintFinding("TQL-YAML-1008", "warning", "messages",
+                findings.add(new LintFinding(LintCodes.INVALID_WEBHOOK_OR_TRANSLATION, WARNING,
+                        "messages",
                         "Catalog '" + tag + "' is missing " + missing.size()
                                 + " key(s) present in the default locale '" + defaultTag
                                 + "' (first: " + missing.get(0) + ")"));
@@ -119,7 +130,7 @@ final class I18nRules implements LintRule {
             return;
         }
         if (catalog.resolve(defaultTag, key) == null) {
-            findings.add(new LintFinding("TQL-FIELD-2005", "warning", source,
+            findings.add(new LintFinding(UNRESOLVED_MESSAGE_KEY, WARNING, source,
                     owner + " declares message key '" + key + "' that no messages/" + defaultTag
                             + ".yml entry resolves"));
         }

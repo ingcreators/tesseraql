@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
 import java.util.List;
@@ -10,6 +12,16 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class AttachmentRules implements LintRule {
+
+    private static final String ATTACHMENT_KIND_MISSING = "TQL-ATTACH-3401";
+
+    private static final String ATTACHMENT_BASE_PATH_MISSING = "TQL-ATTACH-3402";
+
+    private static final String ATTACHMENT_RECORD_MISSING = "TQL-ATTACH-3403";
+
+    private static final String ATTACHMENT_BASE_PATH_WITHOUT_KEY = "TQL-ATTACH-3404";
+
+    private static final String ATTACHMENT_MAX_BYTES_MISSING = "TQL-ATTACH-3405";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -34,12 +46,12 @@ final class AttachmentRules implements LintRule {
         io.tesseraql.yaml.model.AttachmentDefinition def = attachment.definition();
         String id = def.id();
         if (!"attachment".equals(def.kind())) {
-            findings.add(new LintFinding("TQL-ATTACH-3401", "error", source,
+            findings.add(new LintFinding(ATTACHMENT_KIND_MISSING, ERROR, source,
                     "attachment '" + id + "' must declare kind: attachment"));
         }
         boolean hasBasePath = def.basePath() != null && !def.basePath().isBlank();
         if (!hasBasePath) {
-            findings.add(new LintFinding("TQL-ATTACH-3402", "error", source,
+            findings.add(new LintFinding(ATTACHMENT_BASE_PATH_MISSING, ERROR, source,
                     "attachment '" + id + "' must declare a basePath"));
         }
         io.tesseraql.yaml.model.AttachmentDefinition.RecordSpec record = def.record();
@@ -47,16 +59,16 @@ final class AttachmentRules implements LintRule {
                 && !record.entity().isBlank();
         boolean hasKey = record != null && record.key() != null && !record.key().isBlank();
         if (!hasEntity || !hasKey) {
-            findings.add(new LintFinding("TQL-ATTACH-3403", "error", source,
+            findings.add(new LintFinding(ATTACHMENT_RECORD_MISSING, ERROR, source,
                     "attachment '" + id + "' must declare record.entity and record.key"));
         } else if (hasBasePath && !def.basePath().contains("{" + record.key() + "}")) {
-            findings.add(new LintFinding("TQL-ATTACH-3404", "error", source,
+            findings.add(new LintFinding(ATTACHMENT_BASE_PATH_WITHOUT_KEY, ERROR, source,
                     "attachment '" + id + "' basePath must contain the record key '{"
                             + record.key() + "}' as a path parameter"));
         }
         io.tesseraql.yaml.model.AttachmentDefinition.Limits limits = def.limits();
         if (limits == null || limits.maxBytesValue() <= 0) {
-            findings.add(new LintFinding("TQL-ATTACH-3405", "error", source,
+            findings.add(new LintFinding(ATTACHMENT_MAX_BYTES_MISSING, ERROR, source,
                     "attachment '" + id + "' must declare a positive limits.maxBytes (e.g. 25MB)"));
         }
     }

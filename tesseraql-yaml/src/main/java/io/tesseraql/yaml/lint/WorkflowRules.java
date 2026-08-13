@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.yaml.config.AppConfig;
@@ -28,6 +31,36 @@ import java.util.Set;
  */
 final class WorkflowRules implements LintRule {
 
+    private static final String INVALID_WORKFLOW_MODE = "TQL-WORKFLOW-3110";
+
+    private static final String UNKNOWN_DOC_TYPE_LITERAL = "TQL-WORKFLOW-3114";
+
+    private static final String UNKNOWN_STATE_LITERAL = "TQL-WORKFLOW-3115";
+
+    private static final String UNDECLARED_STATE = "TQL-WORKFLOW-3101";
+
+    private static final String INVALID_INITIAL_STATE = "TQL-WORKFLOW-3102";
+
+    private static final String MISSING_TRANSITION_REFERENCE = "TQL-WORKFLOW-3104";
+
+    private static final String INVALID_DISPATCH = "TQL-WORKFLOW-3112";
+
+    private static final String UNREACHABLE_DISPATCH_MEMBER = "TQL-WORKFLOW-3113";
+
+    private static final String STATE_TRANSITION_DEAD_END = "TQL-WORKFLOW-3105";
+
+    private static final String ESCALATION_FROM_WRONG_STATE = "TQL-WORKFLOW-3107";
+
+    private static final String INVALID_STAMP = "TQL-WORKFLOW-3111";
+
+    private static final String INVALID_GUARD_DECLARATION = "TQL-WORKFLOW-3108";
+
+    private static final String GUARD_FILE_WRITES = "TQL-WORKFLOW-3109";
+
+    private static final String INVALID_GUARD_EXPRESSION = "TQL-WORKFLOW-3103";
+
+    private static final String INCOMPLETE_WORKFLOW_DOCUMENT = "TQL-WORKFLOW-3106";
+
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
 
@@ -45,7 +78,7 @@ final class WorkflowRules implements LintRule {
     void lintWorkflowConfig(AppConfig config, List<LintFinding> findings) {
         String mode = config.getString("tesseraql.workflow.mode").orElse(null);
         if (mode != null && !"managed".equalsIgnoreCase(mode) && !"app".equalsIgnoreCase(mode)) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3110", "error", "config",
+            findings.add(new LintFinding(INVALID_WORKFLOW_MODE, ERROR, "config",
                     "tesseraql.workflow.mode must be 'managed' or 'app', not '" + mode + "'"));
         }
     }
@@ -135,7 +168,7 @@ final class WorkflowRules implements LintRule {
                         if (declared.contains(literal)) {
                             pinnedTypes.add(literal);
                         } else {
-                            findings.add(new LintFinding("TQL-WORKFLOW-3114", "warning",
+                            findings.add(new LintFinding(UNKNOWN_DOC_TYPE_LITERAL, WARNING,
                                     LintSupport.relative(appHome, file),
                                     "doc_type literal '" + literal
                                             + "' names no declared workflow document type"
@@ -151,7 +184,7 @@ final class WorkflowRules implements LintRule {
                     while (stateLiterals.find()) {
                         String literal = stateLiterals.group(1);
                         if (!states.contains(literal)) {
-                            findings.add(new LintFinding("TQL-WORKFLOW-3115", "warning",
+                            findings.add(new LintFinding(UNKNOWN_STATE_LITERAL, WARNING,
                                     LintSupport.relative(appHome, file),
                                     "current_state literal '" + literal
                                             + "' names no declared workflow state"
@@ -191,11 +224,11 @@ final class WorkflowRules implements LintRule {
             }
         }
         if (def.initial() != null && !states.contains(def.initial())) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source, "workflow '" + id
+            findings.add(new LintFinding(UNDECLARED_STATE, ERROR, source, "workflow '" + id
                     + "' initial state '" + def.initial() + "' is not declared in states"));
         }
         if (initialMarked > 1) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3102", "error", source,
+            findings.add(new LintFinding(INVALID_INITIAL_STATE, ERROR, source,
                     "workflow '" + id + "' declares more than one initial state"));
         }
 
@@ -209,24 +242,24 @@ final class WorkflowRules implements LintRule {
             }
             String where = "workflow '" + id + "' transition '" + t.id() + "'";
             if (t.from() == null || !states.contains(t.from())) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
+                findings.add(new LintFinding(UNDECLARED_STATE, ERROR, source,
                         where + " from-state '" + t.from() + "' is not declared in states"));
             } else {
                 outgoing.computeIfAbsent(t.from(), k -> new ArrayList<>()).add(t.to());
             }
             if (t.to() == null || !states.contains(t.to())) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
+                findings.add(new LintFinding(UNDECLARED_STATE, ERROR, source,
                         where + " to-state '" + t.to() + "' is not declared in states"));
             }
             lintGuard(t.guard(), dir, where, source, findings);
             lintStamp(t, where, source, findings);
             if (t.commandFile() != null && !Files.isRegularFile(dir.resolve(t.commandFile()))) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                         where + " references missing command '" + t.commandFile() + "'"));
             }
             if (t.assign() != null && t.assign().file() != null
                     && !Files.isRegularFile(dir.resolve(t.assign().file()))) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                         where + " references missing assignee file '" + t.assign().file() + "'"));
             }
         }
@@ -235,7 +268,7 @@ final class WorkflowRules implements LintRule {
             Set<String> reachable = reachableStates(def.initial(), outgoing);
             for (StateSpec state : def.states()) {
                 if (state.id() != null && !reachable.contains(state.id())) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3102", "error", source,
+                    findings.add(new LintFinding(INVALID_INITIAL_STATE, ERROR, source,
                             "workflow '" + id + "' state '" + state.id()
                                     + "' is unreachable from the initial state"));
                 }
@@ -248,11 +281,11 @@ final class WorkflowRules implements LintRule {
             String where = "workflow '" + id + "' dispatch '" + dispatch.id() + "'";
             if (dispatch.id() != null && def.transitions().stream()
                     .anyMatch(t -> dispatch.id().equals(t.id()))) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                findings.add(new LintFinding(INVALID_DISPATCH, ERROR, source,
                         where + " collides with a transition of the same id"));
             }
             if (dispatch.oneOf().size() < 2) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                findings.add(new LintFinding(INVALID_DISPATCH, ERROR, source,
                         where + " needs at least two member transitions"));
             }
             String sharedFrom = null;
@@ -263,14 +296,14 @@ final class WorkflowRules implements LintRule {
                 io.tesseraql.yaml.model.TransitionSpec found = def.transitions().stream()
                         .filter(t -> member.equals(t.id())).findFirst().orElse(null);
                 if (found == null) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                    findings.add(new LintFinding(INVALID_DISPATCH, ERROR, source,
                             where + " names unknown transition '" + member + "'"));
                     continue;
                 }
                 if (sharedFrom == null) {
                     sharedFrom = found.from();
                 } else if (!sharedFrom.equals(found.from())) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                    findings.add(new LintFinding(INVALID_DISPATCH, ERROR, source,
                             where + " members start from different states ('" + sharedFrom
                                     + "' vs '" + found.from() + "')"));
                 }
@@ -284,11 +317,11 @@ final class WorkflowRules implements LintRule {
                     sharedSecurity = effective;
                     securitySeen = true;
                 } else if (!java.util.Objects.equals(sharedSecurity, effective)) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                    findings.add(new LintFinding(INVALID_DISPATCH, ERROR, source,
                             where + " members carry different security specs"));
                 }
                 if (found.guard() == null && i < dispatch.oneOf().size() - 1) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3113", "warning", source,
+                    findings.add(new LintFinding(UNREACHABLE_DISPATCH_MEMBER, WARNING, source,
                             where + " member '" + member + "' has no guard and is not last -"
                                     + " the members after it are unreachable"));
                 }
@@ -296,7 +329,7 @@ final class WorkflowRules implements LintRule {
                 // alias shadowing a dispatch-level alias could only confuse.
                 for (String alias : dispatch.decide().keySet()) {
                     if (found.decide().containsKey(alias)) {
-                        findings.add(new LintFinding("TQL-WORKFLOW-3112", "error", source,
+                        findings.add(new LintFinding(INVALID_DISPATCH, ERROR, source,
                                 where + " decide alias '" + alias + "' collides with member '"
                                         + member + "' declaring its own '" + alias + "'"));
                     }
@@ -306,12 +339,12 @@ final class WorkflowRules implements LintRule {
         for (StateSpec state : def.states()) {
             boolean hasOutgoing = outgoing.containsKey(state.id());
             if (state.isTerminal() && hasOutgoing) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3105", "warning", source,
+                findings.add(new LintFinding(STATE_TRANSITION_DEAD_END, WARNING, source,
                         "workflow '" + id + "' terminal state '" + state.id()
                                 + "' has an outgoing transition"));
             }
             if (!state.isTerminal() && !hasOutgoing) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3105", "warning", source,
+                findings.add(new LintFinding(STATE_TRANSITION_DEAD_END, WARNING, source,
                         "workflow '" + id + "' non-terminal state '" + state.id()
                                 + "' has no outgoing transition (dead end)"));
             }
@@ -320,21 +353,21 @@ final class WorkflowRules implements LintRule {
         for (DeadlineSpec deadline : def.deadlines()) {
             String where = "workflow '" + id + "' deadline on '" + deadline.state() + "'";
             if (deadline.state() != null && !states.contains(deadline.state())) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3101", "error", source,
+                findings.add(new LintFinding(UNDECLARED_STATE, ERROR, source,
                         where + " names a state not declared in states"));
             }
             DeadlineSpec.OnBreachSpec onBreach = deadline.onBreach();
             if (onBreach != null) {
                 if (onBreach.escalate() != null && !onBreach.escalate().isBlank()) {
                     if (!transitionIds.contains(onBreach.escalate())) {
-                        findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                        findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                                 where + " escalate '" + onBreach.escalate()
                                         + "' is not a declared transition"));
                     } else if (!java.util.Objects.equals(transitionFrom.get(onBreach.escalate()),
                             deadline.state())) {
                         // The sweeper auto-fires it from the deadline's state, so it could never
                         // advance from a different from-state.
-                        findings.add(new LintFinding("TQL-WORKFLOW-3107", "error", source,
+                        findings.add(new LintFinding(ESCALATION_FROM_WRONG_STATE, ERROR, source,
                                 where + " escalate '" + onBreach.escalate()
                                         + "' starts from '"
                                         + transitionFrom.get(onBreach.escalate())
@@ -343,7 +376,7 @@ final class WorkflowRules implements LintRule {
                 }
                 if (onBreach.reassign() != null && onBreach.reassign().file() != null
                         && !Files.isRegularFile(dir.resolve(onBreach.reassign().file()))) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source, where
+                    findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source, where
                             + " references missing reassign file '"
                             + onBreach.reassign().file() + "'"));
                 }
@@ -364,19 +397,19 @@ final class WorkflowRules implements LintRule {
             String source, List<LintFinding> findings) {
         transition.stamp().forEach((column, value) -> {
             if (!io.tesseraql.core.sql.SqlIdentifiers.isIdentifier(column)) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3111", "error", source,
+                findings.add(new LintFinding(INVALID_STAMP, ERROR, source,
                         where + " stamp column '" + column + "' is not a plain identifier"));
             }
             if (value instanceof String path) {
                 if (path.startsWith("decision.")) {
                     String alias = path.split("\\.").length > 1 ? path.split("\\.")[1] : "";
                     if (!transition.decide().containsKey(alias)) {
-                        findings.add(new LintFinding("TQL-WORKFLOW-3111", "error", source,
+                        findings.add(new LintFinding(INVALID_STAMP, ERROR, source,
                                 where + " stamps '" + path + "' but declares no decide: entry '"
                                         + alias + "'"));
                     }
                 } else if (path.matches("(task|params|body|query|path|audit)\\..+")) {
-                    findings.add(new LintFinding("TQL-WORKFLOW-3111", "warning", source,
+                    findings.add(new LintFinding(INVALID_STAMP, WARNING, source,
                             where + " stamp value '" + path + "' is outside the "
                                     + "decision/document/principal whitelist and will be "
                                     + "stamped as a literal string"));
@@ -399,14 +432,14 @@ final class WorkflowRules implements LintRule {
         boolean hasExpression = guard.expression() != null && !guard.expression().isBlank();
         boolean hasFile = guard.file() != null && !guard.file().isBlank();
         if (hasExpression == hasFile) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3108", "error", source,
+            findings.add(new LintFinding(INVALID_GUARD_DECLARATION, ERROR, source,
                     where + " guard must declare exactly one of an expression or a file"));
             return;
         }
         if (hasFile) {
             Path file = dir.resolve(guard.file());
             if (!Files.isRegularFile(file)) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                         where + " references missing guard file '" + guard.file() + "'"));
                 return;
             }
@@ -414,7 +447,7 @@ final class WorkflowRules implements LintRule {
             try {
                 sql = Files.readString(file);
             } catch (java.io.IOException unreadable) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3104", "error", source,
+                findings.add(new LintFinding(MISSING_TRANSITION_REFERENCE, ERROR, source,
                         where + " guard file '" + guard.file() + "' is unreadable: "
                                 + unreadable.getMessage()));
                 return;
@@ -423,7 +456,7 @@ final class WorkflowRules implements LintRule {
                     .replaceAll("(?m)^\\s*--.*$", " ").strip()
                     .toLowerCase(java.util.Locale.ROOT);
             if (!head.startsWith("select") && !head.startsWith("with")) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3109", "error", source,
+                findings.add(new LintFinding(GUARD_FILE_WRITES, ERROR, source,
                         where + " guard file '" + guard.file()
                                 + "' must be a query - a guard never writes"));
             }
@@ -433,7 +466,7 @@ final class WorkflowRules implements LintRule {
         try {
             expr = ExpressionParser.parse(guard.expression());
         } catch (RuntimeException ex) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3103", "error", source,
+            findings.add(new LintFinding(INVALID_GUARD_EXPRESSION, ERROR, source,
                     where + " guard is not a valid expression: " + ex.getMessage()));
             return;
         }
@@ -441,7 +474,7 @@ final class WorkflowRules implements LintRule {
         LintSupport.collectGuardPaths(expr, paths);
         for (List<String> path : paths) {
             if (!path.isEmpty() && !GUARD_ROOTS.contains(path.get(0))) {
-                findings.add(new LintFinding("TQL-WORKFLOW-3103", "error", source,
+                findings.add(new LintFinding(INVALID_GUARD_EXPRESSION, ERROR, source,
                         where + " guard references '" + String.join(".", path)
                                 + "'; allowed roots are document, task, principal, decision"));
             }
@@ -474,7 +507,7 @@ final class WorkflowRules implements LintRule {
         boolean managed = "managed".equalsIgnoreCase(mode);
         WorkflowDefinition.DocumentSpec doc = def.document();
         if (doc == null) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3106", "error", source,
+            findings.add(new LintFinding(INCOMPLETE_WORKFLOW_DOCUMENT, ERROR, source,
                     "workflow '" + def.id() + "' declares no document"));
             return;
         }
@@ -493,7 +526,7 @@ final class WorkflowRules implements LintRule {
             missing.add("document.stateColumn");
         }
         if (!missing.isEmpty()) {
-            findings.add(new LintFinding("TQL-WORKFLOW-3106", "error", source,
+            findings.add(new LintFinding(INCOMPLETE_WORKFLOW_DOCUMENT, ERROR, source,
                     "workflow '" + def.id() + "' in " + (managed ? "managed" : "app")
                             + " mode requires " + String.join(", ", missing)));
         }

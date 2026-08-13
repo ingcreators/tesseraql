@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -14,6 +17,28 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ViewRules implements LintRule {
+
+    private static final String INVALID_SHELL_MODE = "TQL-VIEW-3317";
+
+    private static final String INVALID_VIEW_BINDING = "TQL-VIEW-3302";
+
+    private static final String VIEW_SOURCE_NOT_A_ROUTE_SOURCE = "TQL-VIEW-3308";
+
+    private static final String VIEW_INPUT_NOT_DECLARED = "TQL-VIEW-3309";
+
+    private static final String SORTABLE_WITHOUT_SORT_INPUTS = "TQL-VIEW-3310";
+
+    private static final String EMBEDDED_VIEW_EMBEDS = "TQL-VIEW-3318";
+
+    private static final String UNKNOWN_SLOT = "TQL-VIEW-3306";
+
+    private static final String INVALID_VIEW_ACTION = "TQL-VIEW-3303";
+
+    private static final String ACTION_FIELD_NOT_DECLARED = "TQL-VIEW-3304";
+
+    private static final String UNKNOWN_WIDGET = "TQL-VIEW-3305";
+
+    private static final String INVALID_VIEW_PATTERN_OVERRIDE = "TQL-VIEW-3307";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -49,20 +74,20 @@ final class ViewRules implements LintRule {
                     .replace('\\', '/');
             if (!java.util.Set.of("auto", "always", "never")
                     .contains(html.effectiveShell())) {
-                findings.add(new LintFinding("TQL-VIEW-3317", "error", routeSource,
+                findings.add(new LintFinding(INVALID_SHELL_MODE, ERROR, routeSource,
                         "response.html.shell must be 'auto', 'always' or 'never', got: "
                                 + html.shell()));
             }
             // views: binds declarative parts to a template: route (wave 2c): each id must
             // resolve, and a view: route embeds through its own document instead.
             if (!html.views().isEmpty() && html.view() != null) {
-                findings.add(new LintFinding("TQL-VIEW-3302", "error", routeSource,
+                findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, routeSource,
                         "response.html.views binds declarative parts to a template: route — a"
                                 + " view: route embeds through its own document instead"));
             }
             for (String bound : html.views()) {
                 if (manifest.viewById(bound) == null) {
-                    findings.add(new LintFinding("TQL-VIEW-3302", "error", routeSource,
+                    findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, routeSource,
                             "views: " + bound + " does not resolve to a view document id"));
                 }
             }
@@ -71,13 +96,13 @@ final class ViewRules implements LintRule {
             }
             String source = routeSource;
             if (html.template() != null) {
-                findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, source,
                         "response.html declares both template: and view: — they are mutually"
                                 + " exclusive"));
             }
             io.tesseraql.yaml.manifest.ViewFile viewFile = manifest.viewById(html.view());
             if (viewFile == null) {
-                findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, source,
                         "view: " + html.view() + " does not resolve to a view document id"
                                 + " (ids come from *.view.yml under web/ or templates/)"));
                 continue;
@@ -85,7 +110,7 @@ final class ViewRules implements LintRule {
             io.tesseraql.yaml.view.ViewSpec spec = viewFile.spec();
             for (io.tesseraql.yaml.view.ViewSpec.Child child : spec.children()) {
                 if (!declaresViewSource(route.definition(), child.source())) {
-                    findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
+                    findings.add(new LintFinding(VIEW_SOURCE_NOT_A_ROUTE_SOURCE, ERROR, source,
                             "view " + spec.id() + ": children source " + child.source()
                                     + " is not a source of the route"
                                     + " (a sources: entry, or main)"));
@@ -96,7 +121,7 @@ final class ViewRules implements LintRule {
                         ? RouteDefinition.MAIN
                         : panel.source();
                 if (!declaresViewSource(route.definition(), panelSource)) {
-                    findings.add(new LintFinding("TQL-VIEW-3308", "error", source,
+                    findings.add(new LintFinding(VIEW_SOURCE_NOT_A_ROUTE_SOURCE, ERROR, source,
                             "view " + spec.id() + ": panel source " + panelSource
                                     + " is not a source of the route"
                                     + " (a sources: entry, or main)"));
@@ -106,7 +131,7 @@ final class ViewRules implements LintRule {
                 var inputs = route.definition().input();
                 if (spec.search() != null
                         && (inputs == null || !inputs.containsKey(spec.search()))) {
-                    findings.add(new LintFinding("TQL-VIEW-3309", "error", source,
+                    findings.add(new LintFinding(VIEW_INPUT_NOT_DECLARED, ERROR, source,
                             "view " + spec.id() + ": search: " + spec.search()
                                     + " is not a declared input of the route"));
                 }
@@ -114,7 +139,7 @@ final class ViewRules implements LintRule {
                         .anyMatch(io.tesseraql.yaml.view.ViewSpec.Column::isSortable);
                 if (sortable && (inputs == null || !inputs.containsKey("sort")
                         || !inputs.containsKey("dir"))) {
-                    findings.add(new LintFinding("TQL-VIEW-3310", "error", source,
+                    findings.add(new LintFinding(SORTABLE_WITHOUT_SORT_INPUTS, ERROR, source,
                             "view " + spec.id() + ": sortable columns need the route to declare"
                                     + " sort and dir inputs its SQL applies"));
                 }
@@ -152,7 +177,7 @@ final class ViewRules implements LintRule {
                         try {
                             appDomains.require(name, "view " + spec.id());
                         } catch (io.tesseraql.core.error.TqlException ex) {
-                            findings.add(new LintFinding(ex.code().toString(), "error", source,
+                            findings.add(new LintFinding(ex.code().toString(), ERROR, source,
                                     ex.getMessage()));
                         }
                     });
@@ -166,7 +191,7 @@ final class ViewRules implements LintRule {
             for (String embedId : embeds) {
                 io.tesseraql.yaml.manifest.ViewFile embedded = manifest.viewById(embedId);
                 if (embedded == null) {
-                    findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                    findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, source,
                             "view " + spec.id() + ": embedded view " + embedId
                                     + " does not resolve to a view document id"));
                     continue;
@@ -176,7 +201,7 @@ final class ViewRules implements LintRule {
                         || embedded.spec().panels().stream()
                                 .anyMatch(panel -> panel.view() != null);
                 if (embedsFurther) {
-                    findings.add(new LintFinding("TQL-VIEW-3318", "error", source,
+                    findings.add(new LintFinding(EMBEDDED_VIEW_EMBEDS, ERROR, source,
                             "view " + spec.id() + ": embedded view " + embedId
                                     + " embeds views itself — embedding depth is 1"));
                 }
@@ -186,7 +211,7 @@ final class ViewRules implements LintRule {
                 java.util.Set<String> allowed = io.tesseraql.yaml.view.ViewSpec
                         .slotsFor(spec.view());
                 if (!allowed.contains(slotName)) {
-                    findings.add(new LintFinding("TQL-VIEW-3306", "error", source,
+                    findings.add(new LintFinding(UNKNOWN_SLOT, ERROR, source,
                             "view " + spec.id() + ": unknown slot " + slotName + " (a "
                                     + spec.view() + " view offers " + allowed + ")"));
                     continue;
@@ -201,7 +226,7 @@ final class ViewRules implements LintRule {
                         ? slotColocated
                         : appHome.resolve("templates").resolve(template).normalize();
                 if (separator < 1 || !Files.isRegularFile(slotFile)) {
-                    findings.add(new LintFinding("TQL-VIEW-3302", "error", source,
+                    findings.add(new LintFinding(INVALID_VIEW_BINDING, ERROR, source,
                             "view " + spec.id() + ": slot " + slotName + " reference " + ref
                                     + " does not resolve ('<template> :: <fragment>')"));
                 }
@@ -223,7 +248,7 @@ final class ViewRules implements LintRule {
                             try {
                                 io.tesseraql.yaml.view.ViewSpec.parse(file);
                             } catch (io.tesseraql.core.error.TqlException ex) {
-                                findings.add(new LintFinding(ex.code().toString(), "error",
+                                findings.add(new LintFinding(ex.code().toString(), ERROR,
                                         source, ex.getMessage()));
                             }
                         });
@@ -258,27 +283,27 @@ final class ViewRules implements LintRule {
             }
         }
         if (action == null) {
-            findings.add(new LintFinding("TQL-VIEW-3303", "error", source,
+            findings.add(new LintFinding(INVALID_VIEW_ACTION, ERROR, source,
                     "view " + spec.id() + ": action " + spec.action()
                             + " matches no POST route"));
             return;
         }
         var inputs = action.definition().input();
         if (inputs == null || inputs.isEmpty()) {
-            findings.add(new LintFinding("TQL-VIEW-3303", "error", source,
+            findings.add(new LintFinding(INVALID_VIEW_ACTION, ERROR, source,
                     "view " + spec.id() + ": action route " + action.definition().id()
                             + " declares no input: block to derive fields from"));
             return;
         }
         for (io.tesseraql.yaml.view.ViewSpec.Field field : spec.fields()) {
             if (!inputs.containsKey(field.name())) {
-                findings.add(new LintFinding("TQL-VIEW-3304", "error", source,
+                findings.add(new LintFinding(ACTION_FIELD_NOT_DECLARED, ERROR, source,
                         "view " + spec.id() + ": field " + field.name()
                                 + " is not declared by the action route's input: block"));
             }
             if (field.widget() != null
                     && !io.tesseraql.yaml.view.ViewSpec.WIDGETS.contains(field.widget())) {
-                findings.add(new LintFinding("TQL-VIEW-3305", "error", source,
+                findings.add(new LintFinding(UNKNOWN_WIDGET, ERROR, source,
                         "view " + spec.id() + ": unknown widget " + field.widget()
                                 + " (known: " + io.tesseraql.yaml.view.ViewSpec.WIDGETS + ")"));
             }
@@ -304,15 +329,16 @@ final class ViewRules implements LintRule {
                         : "th:fragment=\"view(v)\"";
                 String content = java.nio.file.Files.readString(file);
                 if (!content.contains(expected)) {
-                    findings.add(new LintFinding("TQL-VIEW-3307", "warning",
+                    findings.add(new LintFinding(INVALID_VIEW_PATTERN_OVERRIDE, WARNING,
                             appHome.relativize(file).toString().replace('\\', '/'),
                             "view pattern override lacks the expected " + expected
                                     + " signature (docs/declarative-views.md)"));
                 }
             }
         } catch (java.io.IOException ex) {
-            findings.add(new LintFinding("TQL-VIEW-3307", "warning", "templates/tql/view",
-                    "view pattern overrides could not be read: " + ex.getMessage()));
+            findings.add(
+                    new LintFinding(INVALID_VIEW_PATTERN_OVERRIDE, WARNING, "templates/tql/view",
+                            "view pattern overrides could not be read: " + ex.getMessage()));
         }
     }
 }

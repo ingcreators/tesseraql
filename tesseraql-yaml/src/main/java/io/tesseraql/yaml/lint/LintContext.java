@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import java.io.IOException;
@@ -25,6 +27,8 @@ import java.util.Set;
  * where it loads, or by the lint that owns the SQL, and the context never double-reports it.
  */
 final class LintContext {
+
+    private static final String UNREADABLE_FILE = "TQL-YAML-1053";
 
     private final Path appHome;
     private final List<LintFinding> findings;
@@ -107,7 +111,7 @@ final class LintContext {
             try {
                 return Optional.of(Files.readString(f));
             } catch (IOException unreadable) {
-                findings.add(new LintFinding("TQL-YAML-1053", "warning", source(f),
+                findings.add(new LintFinding(UNREADABLE_FILE, WARNING, source(f),
                         "The file could not be read (" + unreadable.getMessage()
                                 + ") — every lint that reads its content was skipped, so fix"
                                 + " its readability before trusting this report"));

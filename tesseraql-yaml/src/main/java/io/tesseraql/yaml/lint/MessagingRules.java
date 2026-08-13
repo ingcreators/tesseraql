@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.util.List;
@@ -12,6 +15,16 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class MessagingRules {
+
+    private static final String WEBHOOK_WITHOUT_PROVIDER = "TQL-SEC-4082";
+
+    private static final String UNCONFIGURED_WEBHOOK_VERIFIER = "TQL-SEC-4083";
+
+    private static final String INVALID_PUBLISH_CHANNEL = "TQL-SEC-4091";
+
+    private static final String NOTIFY_ON_UNSUPPORTED_RECIPE = "TQL-YAML-1004";
+
+    private static final String INBOX_NOTIFICATION_WITHOUT_RECIPIENT = "TQL-YAML-1034";
 
     private MessagingRules() {
     }
@@ -31,27 +44,30 @@ final class MessagingRules {
             List<LintFinding> findings) {
         if (!"webhook".equals(definition.recipe())) {
             if (definition.webhook() != null) {
-                findings.add(new LintFinding("TQL-YAML-1008", "error", source,
-                        "webhook: is only supported on the webhook recipe, not '"
-                                + definition.recipe() + "'"));
+                findings.add(
+                        new LintFinding(LintCodes.INVALID_WEBHOOK_OR_TRANSLATION, ERROR, source,
+                                "webhook: is only supported on the webhook recipe, not '"
+                                        + definition.recipe() + "'"));
             }
             return;
         }
         String provider = definition.webhook() == null ? null : definition.webhook().provider();
         if (provider == null || provider.isBlank()) {
-            findings.add(new LintFinding("TQL-SEC-4082", "error", source,
+            findings.add(new LintFinding(WEBHOOK_WITHOUT_PROVIDER, ERROR, source,
                     "webhook route '" + definition.id() + "' needs a webhook.provider"));
         } else if (config.navigate("tesseraql.connectors.webhooks." + provider) == null) {
-            findings.add(new LintFinding("TQL-SEC-4083", "error", source, "webhook route '"
-                    + definition.id() + "' references verifier '" + provider
-                    + "' not configured under tesseraql.connectors.webhooks"));
+            findings.add(new LintFinding(UNCONFIGURED_WEBHOOK_VERIFIER, ERROR, source,
+                    "webhook route '"
+                            + definition.id() + "' references verifier '" + provider
+                            + "' not configured under tesseraql.connectors.webhooks"));
         }
         // A webhook always compiles through the transactional command processor, which refuses
         // an empty steps: at build. `sources.main` used to satisfy this check (the deleted "a
         // sql: or steps: pipeline" vocabulary), so the document passed lint and failed startup.
         if (definition.steps().isEmpty()) {
-            findings.add(new LintFinding("TQL-YAML-1008", "error", source, "webhook route '"
-                    + definition.id() + "' needs a steps: pipeline"));
+            findings.add(new LintFinding(LintCodes.INVALID_WEBHOOK_OR_TRANSLATION, ERROR, source,
+                    "webhook route '"
+                            + definition.id() + "' needs a steps: pipeline"));
         }
     }
 
@@ -68,16 +84,17 @@ final class MessagingRules {
             return;
         }
         if (!PUBLISH_RECIPES.contains(definition.recipe())) {
-            findings.add(new LintFinding("TQL-YAML-1010", "error", source, "publish: is only"
-                    + " supported on command routes (command-json, webhook, queue-consume), not '"
-                    + definition.recipe() + "'"));
+            findings.add(new LintFinding(LintCodes.MESSAGING_KEY_ON_WRONG_RECIPE, ERROR, source,
+                    "publish: is only"
+                            + " supported on command routes (command-json, webhook, queue-consume), not '"
+                            + definition.recipe() + "'"));
             return;
         }
         if (publish.channel() == null || publish.channel().isBlank()) {
-            findings.add(new LintFinding("TQL-SEC-4091", "error", source,
+            findings.add(new LintFinding(INVALID_PUBLISH_CHANNEL, ERROR, source,
                     "publish: of '" + definition.id() + "' needs a channel"));
         } else if (config.navigate("tesseraql.messaging.channels." + publish.channel()) == null) {
-            findings.add(new LintFinding("TQL-SEC-4091", "error", source, "publish: of '"
+            findings.add(new LintFinding(INVALID_PUBLISH_CHANNEL, ERROR, source, "publish: of '"
                     + definition.id() + "' references channel '" + publish.channel()
                     + "' not configured under tesseraql.messaging.channels"));
         }
@@ -94,7 +111,7 @@ final class MessagingRules {
             return;
         }
         if (!"command-json".equals(definition.recipe())) {
-            findings.add(new LintFinding("TQL-YAML-1004", "error", source,
+            findings.add(new LintFinding(NOTIFY_ON_UNSUPPORTED_RECIPE, ERROR, source,
                     "notify: is only supported on command-json routes, not '"
                             + definition.recipe() + "'"));
         }
@@ -105,20 +122,21 @@ final class MessagingRules {
     static void lintNotifySpec(AppConfig config, String id,
             io.tesseraql.yaml.model.NotifySpec spec, String source, List<LintFinding> findings) {
         if (spec.channel() == null || spec.channel().isBlank()) {
-            findings.add(new LintFinding("TQL-FIELD-2004", "error", source,
+            findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source,
                     "Notification '" + id + "' needs a channel:"));
         } else if (config
                 .navigate("tesseraql.notifications.channels." + spec.channel()) == null) {
             // A warning, not an error: another environment's config may declare the channel.
-            findings.add(new LintFinding("TQL-YAML-1102", "warning", source,
-                    "Notification '" + id + "' references undeclared channel '"
-                            + spec.channel() + "'"));
+            findings.add(
+                    new LintFinding(LintCodes.UNDECLARED_CHANNEL_OR_CREDENTIAL, WARNING, source,
+                            "Notification '" + id + "' references undeclared channel '"
+                                    + spec.channel() + "'"));
         }
         if (spec.when() != null && !spec.when().isBlank()) {
             try {
                 io.tesseraql.core.expr.ExpressionParser.parse(spec.when());
             } catch (RuntimeException ex) {
-                findings.add(new LintFinding("TQL-SQL-2101", "error", source,
+                findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
                         "Notification '" + id + "' has a malformed when: expression: "
                                 + ex.getMessage()));
             }
@@ -129,7 +147,7 @@ final class MessagingRules {
                 "tesseraql.notifications.channels." + spec.channel() + ".type")
                 .orElse(null))
                 && (spec.recipient() == null || spec.recipient().isBlank())) {
-            findings.add(new LintFinding("TQL-YAML-1034", "error", source,
+            findings.add(new LintFinding(INBOX_NOTIFICATION_WITHOUT_RECIPIENT, ERROR, source,
                     "Notification '" + id + "' delivers to inbox channel '" + spec.channel()
                             + "' but declares no recipient:"));
         }
@@ -141,7 +159,7 @@ final class MessagingRules {
             String type = config.getString("tesseraql.notifications.channels."
                     + spec.channel() + ".type").orElse(null);
             if (type != null && !"mail".equals(type)) {
-                findings.add(new LintFinding("TQL-FIELD-2004", "error", source,
+                findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source,
                         "Notification '" + id + "' declares attach: but channel '"
                                 + spec.channel() + "' is type " + type
                                 + " — attachments ride mail channels only"));

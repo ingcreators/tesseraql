@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -14,6 +17,12 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class ToolRules implements LintRule {
+
+    private static final String TOOL_RECIPE_UNSUPPORTED = "TQL-MCP-1001";
+
+    private static final String TOOL_WITHOUT_DESCRIPTION = "TQL-MCP-1002";
+
+    private static final String WRITE_TOOL_WITHOUT_POLICY = "TQL-MCP-4030";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -53,12 +62,12 @@ final class ToolRules implements LintRule {
                 Set.of("description", "ui"), findings);
 
         if (!KNOWN_TOOL_RECIPES.contains(definition.recipe())) {
-            findings.add(new LintFinding("TQL-MCP-1001", "error", source,
+            findings.add(new LintFinding(TOOL_RECIPE_UNSUPPORTED, ERROR, source,
                     "MCP tool '" + definition.id() + "' has recipe '" + definition.recipe()
                             + "'; only query-json and command-json are supported"));
         }
         if (tool.description() == null || tool.description().isBlank()) {
-            findings.add(new LintFinding("TQL-MCP-1002", "warning", source,
+            findings.add(new LintFinding(TOOL_WITHOUT_DESCRIPTION, WARNING, source,
                     "MCP tool '" + definition.id() + "' has no description; it is the hint the"
                             + " model uses to decide when to call the tool"));
         }
@@ -66,20 +75,20 @@ final class ToolRules implements LintRule {
                 && definition.main().file() != null
                 && !Files.isRegularFile(
                         tool.source().getParent().resolve(definition.main().file()))) {
-            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+            findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                     "Referenced SQL file is missing: " + definition.main().file()));
         }
         definition.steps().forEach((name, step) -> {
             if (step.file() != null
                     && !Files.isRegularFile(tool.source().getParent().resolve(step.file()))) {
-                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                         "Step '" + name + "' references a missing SQL file: " + step.file()));
             }
         });
         definition.sources().forEach((name, query) -> {
             if (query.file() != null
                     && !Files.isRegularFile(tool.source().getParent().resolve(query.file()))) {
-                findings.add(new LintFinding("TQL-SQL-2103", "error", source,
+                findings.add(new LintFinding(LintCodes.MISSING_SQL_FILE, ERROR, source,
                         "Query '" + name + "' references a missing SQL file: " + query.file()));
             }
         });
@@ -89,12 +98,12 @@ final class ToolRules implements LintRule {
                         && "update".equals(definition.main().effectiveMode()));
         String policy = definition.security() == null ? null : definition.security().policy();
         if (write && (policy == null || policy.isBlank())) {
-            findings.add(new LintFinding("TQL-MCP-4030", "error", source,
+            findings.add(new LintFinding(WRITE_TOOL_WITHOUT_POLICY, ERROR, source,
                     "Write MCP tool '" + definition.id() + "' must declare a security.policy: an AI"
                             + " agent must not mutate data without authorization (deny by default)"));
         }
         if (policy != null && !policy.isBlank() && !DocumentRules.policyDefined(config, policy)) {
-            findings.add(new LintFinding("TQL-SEC-4030", "warning", source,
+            findings.add(new LintFinding(LintCodes.UNDEFINED_POLICY, WARNING, source,
                     "MCP tool references undefined policy '" + policy + "' (deny by default)"));
         }
         // A tool's validate: runs through the same transactional pipeline a route's does.
@@ -104,7 +113,7 @@ final class ToolRules implements LintRule {
         // emit: is a command-json route key. A tool may legally carry that recipe, so the route
         // check would pass it while the compiled tool pipeline broadcasts nothing — say so.
         if (!definition.emit().isEmpty()) {
-            findings.add(new LintFinding("TQL-YAML-1038", "error", source,
+            findings.add(new LintFinding(LintCodes.EMIT_UNSUPPORTED, ERROR, source,
                     "emit: has no effect on an MCP tool — the compiled tool pipeline does not"
                             + " broadcast live-view topics"));
         }

@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -13,6 +16,12 @@ import java.util.List;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class CatalogLocaleRules implements LintRule {
+
+    private static final String EXPORT_WITHOUT_LOCALE = "TQL-FIELD-4622";
+
+    private static final String CATALOG_FILE_OUTSIDE_CATALOGS = "TQL-FIELD-4621";
+
+    private static final String CATALOG_LANGUAGE_IN_SINGLE_LOCALE_APP = "TQL-FIELD-4619";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -52,7 +61,7 @@ final class CatalogLocaleRules implements LintRule {
             if (spec == null || (spec.locale() != null && !spec.locale().isBlank())) {
                 continue;
             }
-            findings.add(new LintFinding("TQL-FIELD-4622", "error", route.source().toString(),
+            findings.add(new LintFinding(EXPORT_WITHOUT_LOCALE, ERROR, route.source().toString(),
                     "Export '" + route.definition().id() + "' declares no locale:, and the app"
                             + " has catalogs with per-language names — declare the export's"
                             + " locale: or tesseraql.files.locale; an export has no request to"
@@ -75,7 +84,7 @@ final class CatalogLocaleRules implements LintRule {
             Path dir = appHome.resolve("catalogs");
             Path file = dir.resolve(spec.file()).normalize();
             if (!file.startsWith(dir) || !Files.isRegularFile(file)) {
-                findings.add(new LintFinding("TQL-FIELD-4621", "error", "catalogs/",
+                findings.add(new LintFinding(CATALOG_FILE_OUTSIDE_CATALOGS, ERROR, "catalogs/",
                         "Catalog '" + name + "': file '" + spec.file() + "' is not a SQL file"
                                 + " under catalogs/"));
             }
@@ -108,11 +117,12 @@ final class CatalogLocaleRules implements LintRule {
             if (spec.language() == null || spec.language().isBlank()) {
                 return;
             }
-            findings.add(new LintFinding("TQL-FIELD-4619", "warning", "catalogs/",
-                    "Catalog '" + name + "' declares language: " + spec.language()
-                            + " but the app supports one locale (" + i18n.defaultTag()
-                            + ") — every request resolves to it, so the other languages"
-                            + " never render; declare tesseraql.i18n.locales"));
+            findings.add(
+                    new LintFinding(CATALOG_LANGUAGE_IN_SINGLE_LOCALE_APP, WARNING, "catalogs/",
+                            "Catalog '" + name + "' declares language: " + spec.language()
+                                    + " but the app supports one locale (" + i18n.defaultTag()
+                                    + ") — every request resolves to it, so the other languages"
+                                    + " never render; declare tesseraql.i18n.locales"));
         });
     }
 }

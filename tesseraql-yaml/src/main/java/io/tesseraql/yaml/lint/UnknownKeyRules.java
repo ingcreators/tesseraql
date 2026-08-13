@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.model.AcceptedKeys;
 import io.tesseraql.yaml.model.ExportSpec;
 import io.tesseraql.yaml.model.ImportSpec;
@@ -26,6 +29,10 @@ import java.util.Set;
  * nested block the day its record lands.
  */
 final class UnknownKeyRules {
+
+    private static final String MOVED_OR_RENAMED_KEY = "TQL-YAML-1044";
+
+    private static final String UNKNOWN_KEY = "TQL-YAML-1043";
 
     private UnknownKeyRules() {
     }
@@ -223,15 +230,15 @@ final class UnknownKeyRules {
     private static void reportUnknownKey(String path, String renamed, String moved,
             Set<String> accepted, String source, List<LintFinding> findings) {
         if (moved != null) {
-            findings.add(new LintFinding("TQL-YAML-1044", "error", source,
+            findings.add(new LintFinding(MOVED_OR_RENAMED_KEY, ERROR, source,
                     "'" + path + ":' moved to '" + moved + ":' before v1 and is now"
                             + " silently dropped — declare it there"));
         } else if (renamed != null) {
-            findings.add(new LintFinding("TQL-YAML-1044", "error", source,
+            findings.add(new LintFinding(MOVED_OR_RENAMED_KEY, ERROR, source,
                     "'" + path + ":' was renamed to '" + renamed + ":' before v1 and is now "
                             + "silently dropped — rename it"));
         } else {
-            findings.add(new LintFinding("TQL-YAML-1043", "warning", source,
+            findings.add(new LintFinding(UNKNOWN_KEY, WARNING, source,
                     "Unknown key '" + path + ":' (accepted: " + accepted
                             + ") — it is silently ignored"));
         }

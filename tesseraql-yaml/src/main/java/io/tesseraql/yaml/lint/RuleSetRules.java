@@ -1,5 +1,7 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.nio.file.Path;
@@ -14,6 +16,10 @@ import java.util.Set;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class RuleSetRules implements LintRule {
+
+    private static final String RULE_REPEATS_SHARED_RULE = "TQL-FIELD-4613";
+
+    private static final String UNREFERENCED_RULE_SET = "TQL-FIELD-4612";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -52,14 +58,14 @@ final class RuleSetRules implements LintRule {
                     return;
                 }
                 duplicateOf(rule, sets).ifPresent(shared -> findings.add(new LintFinding(
-                        "TQL-FIELD-4613", "warning", source,
+                        RULE_REPEATS_SHARED_RULE, WARNING, source,
                         "Validation rule '" + id + "' repeats shared rule '" + shared
                                 + "' — reference it with use: so the two cannot drift apart")));
             });
         }
         sets.rules().keySet().stream()
                 .filter(name -> !referenced.contains(name))
-                .forEach(name -> findings.add(new LintFinding("TQL-FIELD-4612", "warning",
+                .forEach(name -> findings.add(new LintFinding(UNREFERENCED_RULE_SET, WARNING,
                         "rules", "Rule '" + name + "' is declared but never referenced")));
     }
 

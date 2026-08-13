@@ -1,5 +1,8 @@
 package io.tesseraql.yaml.lint;
 
+import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
+import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
+
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Files;
@@ -17,6 +20,12 @@ import java.util.regex.Pattern;
  * <p>Extracted verbatim from {@code AppLinter} (docs/lint-restructure.md decision 1).
  */
 final class MailRules implements LintRule {
+
+    private static final String INVALID_MAIL_CHANNEL = "TQL-BATCH-5304";
+
+    private static final String UNKNOWN_MAIL_FRAGMENT = "TQL-TPL-2002";
+
+    private static final String UNRESOLVED_MAIL_EXPRESSION = "TQL-TPL-2003";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
@@ -81,7 +90,7 @@ final class MailRules implements LintRule {
             // No default recipient: delivery fails at send unless every notification's
             // payload carries a to key — legal, but worth saying at build time.
             if (channel.get("to") == null) {
-                findings.add(new LintFinding("TQL-BATCH-5304", "warning", configSource,
+                findings.add(new LintFinding(INVALID_MAIL_CHANNEL, WARNING, configSource,
                         "Mail channel '" + name + "' declares no to: — delivery fails"
                                 + " unless every notification payload carries a to key"));
             }
@@ -91,7 +100,7 @@ final class MailRules implements LintRule {
             }
             Path resolved = appHome.resolve(template).normalize();
             if (!resolved.startsWith(appHome) || !Files.isRegularFile(resolved)) {
-                findings.add(new LintFinding("TQL-BATCH-5304", "error", configSource,
+                findings.add(new LintFinding(INVALID_MAIL_CHANNEL, ERROR, configSource,
                         "Mail channel '" + name + "': template '" + template
                                 + "' is not a file inside the app home"));
                 continue;
@@ -100,7 +109,7 @@ final class MailRules implements LintRule {
             try {
                 body = Files.readString(resolved);
             } catch (java.io.IOException ex) {
-                findings.add(new LintFinding("TQL-BATCH-5304", "warning", template,
+                findings.add(new LintFinding(INVALID_MAIL_CHANNEL, WARNING, template,
                         "Mail channel '" + name + "': template could not be read: "
                                 + ex.getMessage()));
                 continue;
@@ -113,7 +122,7 @@ final class MailRules implements LintRule {
                     Set<String> declared = io.tesseraql.yaml.template.EmailFragments
                             .signatures(appHome, library).keySet();
                     if (!declared.contains(fragment)) {
-                        findings.add(new LintFinding("TQL-TPL-2002", "error", template,
+                        findings.add(new LintFinding(UNKNOWN_MAIL_FRAGMENT, ERROR, template,
                                 "Mail channel '" + name + "': unknown fragment '" + fragment
                                         + "' — tql/email/" + library + " declares "
                                         + declared));
@@ -157,7 +166,7 @@ final class MailRules implements LintRule {
             if (MAIL_ROOTS.contains(root) || aliases.contains(root) || !reported.add(root)) {
                 continue;
             }
-            findings.add(new LintFinding("TQL-TPL-2003", "warning", source,
+            findings.add(new LintFinding(UNRESOLVED_MAIL_EXPRESSION, WARNING, source,
                     "Mail channel '" + channel + "' " + where + ": '${" + root
                             + "…}' does not resolve — the mail model carries payload and"
                             + " event"));
