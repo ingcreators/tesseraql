@@ -34,8 +34,8 @@ import org.apache.camel.Processor;
  */
 public final class EnrichProcessor implements Processor {
 
-    /** TQL-CAMEL-3114: the target of an enrich: is not a result set with rows. */
-    static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.CAMEL, 3114);
+    /** TQL-CAMEL-3115: the target of an enrich: is not a result set with rows. */
+    static final TqlErrorCode NO_TARGET = new TqlErrorCode(TqlDomain.CAMEL, 3115);
 
     /** The source whose rows this enrichment folds into: the one it is declared on. */
     private final String into;

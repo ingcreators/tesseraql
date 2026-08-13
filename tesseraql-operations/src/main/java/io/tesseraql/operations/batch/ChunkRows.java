@@ -33,8 +33,8 @@ import java.util.Map;
  */
 interface ChunkRows extends AutoCloseable {
 
-    /** TQL-BATCH-5002: the step could not read its input. */
-    TqlErrorCode READ_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5002);
+    /** TQL-BATCH-5003: the step could not read its input. */
+    TqlErrorCode READ_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5003);
 
     /** Advances to the next row, returning false at the end. */
     boolean next();

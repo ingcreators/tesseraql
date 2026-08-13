@@ -24,7 +24,7 @@ public final class IdempotencyProcessors {
     public static final String REPLAY_PROPERTY = "TqlIdemReplay";
     private static final String KEY_HEADER = "Idempotency-Key";
     private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.IDEM, 4090);
-    private static final TqlErrorCode KEY_REQUIRED = new TqlErrorCode(TqlDomain.FIELD, 2003);
+    private static final TqlErrorCode KEY_REQUIRED = new TqlErrorCode(TqlDomain.FIELD, 2007);
 
     private IdempotencyProcessors() {
     }

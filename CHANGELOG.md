@@ -62,6 +62,17 @@ All notable changes to TesseraQL are documented here. The format follows
   all), a group releases its reader the moment the rows move past it, and the database store
   registers each staging copy with a cleaner so even an abandoned reader is eventually
   reclaimed.
+- **One error code, one rule.** Nothing stopped two campaigns from allocating the same
+  `TQL-*` number to different problems, and nine collisions had shipped — `TQL-LD-2857` meant
+  both "two `splitBy:` keys name the same file" and "an export's enrichment failed",
+  `TQL-CAMEL-3114` both "a spooled sibling cannot be enriched from" and "`into:` is not a
+  result set", `TQL-BATCH-5002` both a failed step and an unreadable chunk input, and the
+  generated reference merged each pair into one indistinguishable row. The nine newer rules
+  are renumbered (`TQL-LD-2859`, `TQL-CAMEL-3115`, `TQL-BATCH-5003`, `TQL-FIELD-2007`,
+  `TQL-STUDIO-4242`, `TQL-STUDIO-4243`, `TQL-REPORT-2008`, `TQL-WORKFLOW-3224`,
+  `TQL-SQL-2603`), and a build guard now refuses a code declared at two sites unless it is on
+  the reviewed list of deliberate shares (a unique violation is one meaning wherever it is
+  mapped).
 - **The documentation caught up with the unified source model.** Eight published pages still
   taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
   `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown

@@ -661,6 +661,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 | `TQL-BATCH-4210` | an unknown `overlap:` policy, or an `sla:` that is empty or does not parse (lint) |
 | `TQL-BATCH-5001` | the execution store could not record a run |
 | `TQL-BATCH-5002` | a step failed (its SQL raised an error), a chunk step exceeded its `skipLimit`, or a step is misdeclared |
+| `TQL-BATCH-5003` | a chunk step could not read its spooled or file input |
 | `TQL-BATCH-5315` | a `push:` delivery failed — connect, authenticate, write, or rename |
 | `TQL-SEC-4141` | a `push:` target host outside `tesseraql.connectors.push.allowedHosts` (deny by default) |
 

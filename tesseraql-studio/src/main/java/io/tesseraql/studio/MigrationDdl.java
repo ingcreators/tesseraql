@@ -22,7 +22,7 @@ import java.util.List;
  */
 public final class MigrationDdl {
 
-    private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.STUDIO, 4224);
+    private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.STUDIO, 4243);
 
     private MigrationDdl() {
     }
