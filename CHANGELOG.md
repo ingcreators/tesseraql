@@ -27,6 +27,24 @@ All notable changes to TesseraQL are documented here. The format follows
   the generator followed `$ref` and `items` but not `allOf`. The most important shape on a job
   document was the one the page did not show. A `$ref`-only property also takes its description
   from the target rather than rendering an em dash.
+- **A batch step's rows answer to one key — the same label a route's rows carry.** The batch
+  executor was the last JDBC reader that never asked the shared label normalizer: on Oracle a
+  `mode: query` step published UPPERCASE keys into the step context, the chunk reader
+  compensated by doubling every row with lowercase-alias keys, and the checkpoint key probed
+  three casings. All three batch readers (`query`, `query-spool`, `chunk:`) now normalize
+  labels the one way routes and commands do, and the compensations are gone — so
+  `steps.<id>.rows` keys, `row.*` binds and `chunk.key` name the same label on every dialect.
+  On Oracle, the case of the keys a later step sees changes (an unquoted label comes back
+  lowercase, as it does everywhere else); on lowercase-normalizing dialects rows are unchanged,
+  except that a quoted mixed-case alias no longer drags a lowercase duplicate along with it.
+- **A SQL `query-spool` extract keeps its types through the spool.** The batch spool wrote
+  JSONL while the export spool's own javadoc rejects JSON as lossy exactly where it matters —
+  a decimal's scale, a temporal's type — and the chunk reader shrugged the mismatch off as a
+  documented caveat: writer binds had to cast in SQL what the round trip had flattened. A SQL
+  extract now drains into the export pipeline's tagged-binary row spool, so a chunk writer
+  binds what the extract read; a value the encoding cannot carry fails with the column named
+  instead of degrading to text. HTTP-sourced rows keep JSONL, because that data was JSON to
+  begin with and JSON is faithful there.
 
 ### Fixed
 

@@ -12,7 +12,8 @@ package io.tesseraql.core.dialect;
  * driver's temporal happens to have on the other. A response binding written against one path
  * broke on the other, and nothing said why.
  *
- * <p>Both paths ask here now, so there is one answer to change.
+ * <p>All the JDBC row readers ask here now — routes, commands, and the batch executor's
+ * query/spool/chunk readers — so there is one answer to change.
  */
 public final class ResultRows {
 

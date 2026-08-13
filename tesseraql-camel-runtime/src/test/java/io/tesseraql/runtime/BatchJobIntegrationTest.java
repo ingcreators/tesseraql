@@ -130,20 +130,20 @@ class BatchJobIntegrationTest {
         assertThat(step.stepId()).isEqualTo("extract");
         assertThat(step.affectedRows()).isEqualTo(2); // sato + pending-user
 
-        // The rows were spooled to a JSONL file on disk rather than materialized in memory.
+        // The rows were spooled to disk rather than materialized in memory — as the tagged
+        // binary encoding, the one that keeps a decimal's scale and a temporal's type.
         Path spoolDir = appHome.resolve("work/tmp/tesseraql");
         try (Stream<Path> files = Files.walk(spoolDir)) {
-            long jsonlLines = files.filter(p -> p.toString().endsWith(".jsonl"))
-                    .flatMap(BatchJobIntegrationTest::lines)
-                    .filter(line -> !line.isBlank())
-                    .count();
-            assertThat(jsonlLines).isGreaterThanOrEqualTo(2);
+            long spooledBytes = files.filter(p -> p.toString().endsWith(".bin"))
+                    .mapToLong(BatchJobIntegrationTest::size)
+                    .sum();
+            assertThat(spooledBytes).isGreaterThan(0);
         }
     }
 
-    private static Stream<String> lines(Path file) {
+    private static long size(Path file) {
         try {
-            return Files.readAllLines(file).stream();
+            return Files.size(file);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

@@ -1,9 +1,12 @@
 package io.tesseraql.operations.batch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.core.dialect.ResultRows;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.files.SpooledRows;
+import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
 import io.tesseraql.core.spool.TempStore;
 import java.io.BufferedReader;
@@ -15,8 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -28,8 +31,8 @@ import java.util.Map;
  * a spool is a spool, whoever filled it — a cross-datasource extract, or a paged API the
  * acquisition side already knows how to walk.
  *
- * <p>Both shapes stream. Neither holds the result: the cursor is a held cursor and the spool is
- * read line by line, so the chunk's memory is its window, not its input.
+ * <p>All shapes stream. None holds the result: the cursor is a held cursor and a spool is read
+ * a row at a time, so the chunk's memory is its window, not its input.
  */
 interface ChunkRows extends AutoCloseable {
 
@@ -39,14 +42,17 @@ interface ChunkRows extends AutoCloseable {
     /** Advances to the next row, returning false at the end. */
     boolean next();
 
-    /** The current row, keyed by column name (lowercase aliases included). */
+    /**
+     * The current row, keyed by its {@link ResultRows}-normalized column label — the one key a
+     * writer bind or {@code chunk.key} names, the same label a route's rows carry.
+     */
     Map<String, Object> row();
 
     @Override
     void close();
 
-    /** The rows of a held JDBC cursor. */
-    static ChunkRows of(ResultSet rows) {
+    /** The rows of a held JDBC cursor, labels normalized per dialect ({@link ResultRows}). */
+    static ChunkRows of(ResultSet rows, String dialect) {
         return new ChunkRows() {
 
             @Override
@@ -64,11 +70,8 @@ interface ChunkRows extends AutoCloseable {
                     ResultSetMetaData metaData = rows.getMetaData();
                     Map<String, Object> row = new LinkedHashMap<>();
                     for (int col = 1; col <= metaData.getColumnCount(); col++) {
-                        String label = metaData.getColumnLabel(col);
-                        Object value = rows.getObject(col);
-                        row.put(label, value);
-                        // Oracle answers uppercase labels; binds are written lowercase.
-                        row.putIfAbsent(label.toLowerCase(Locale.ROOT), value);
+                        row.put(ResultRows.label(dialect, metaData.getColumnLabel(col)),
+                                rows.getObject(col));
                     }
                     return row;
                 } catch (SQLException ex) {
@@ -88,15 +91,19 @@ interface ChunkRows extends AutoCloseable {
     }
 
     /**
-     * The rows of an earlier step's spool, read as JSONL.
+     * The rows of an earlier step's spool, whichever encoding filled it.
      *
      * <p>The spool is the consistent snapshot a rerun re-reads — a property a SQL-reading chunk
-     * cannot have, since the source table moves on. Values round-trip through JSON, so a writer
-     * binding a date or a decimal casts in SQL, the same rule {@code chunk.after} already
-     * carries; the caveat bites harder here because a JSON number reaching a numeric column is
-     * the common case rather than the exception.
+     * cannot have, since the source table moves on. A SQL extract arrives as
+     * {@link SpooledRows}' tagged binary, so a decimal keeps its scale and a temporal its type;
+     * an {@code http:} acquisition arrives as JSONL, faithful there because the data was JSON to
+     * begin with. Closing releases the reader only — the spool itself outlives the step, which
+     * is what lets a rerun hand it to the load step unchanged.
      */
     static ChunkRows of(TempStore tempStore, SpoolRef ref, ObjectMapper mapper) {
+        if (ref.kind() == SpoolKind.BINARY) {
+            return of(SpooledRows.open(tempStore, ref).iterator());
+        }
         InputStream stream;
         try {
             stream = tempStore.openInput(ref);
@@ -124,11 +131,7 @@ interface ChunkRows extends AutoCloseable {
                         current = null;
                         return false;
                     }
-                    Map<String, Object> parsed = mapper.readValue(line, Map.class);
-                    Map<String, Object> row = new LinkedHashMap<>(parsed);
-                    parsed.forEach(
-                            (name, value) -> row.putIfAbsent(name.toLowerCase(Locale.ROOT), value));
-                    current = row;
+                    current = mapper.readValue(line, Map.class);
                     return true;
                 } catch (IOException ex) {
                     throw TqlException.builder(READ_ERROR)
@@ -149,6 +152,44 @@ interface ChunkRows extends AutoCloseable {
                     lines.close();
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
+                }
+            }
+        };
+    }
+
+    /** The rows of an open iterator; closing releases the iterator's stream, never the spool. */
+    private static ChunkRows of(Iterator<Map<String, Object>> rows) {
+        return new ChunkRows() {
+
+            private Map<String, Object> current;
+
+            @Override
+            public boolean next() {
+                if (rows.hasNext()) {
+                    current = rows.next();
+                    return true;
+                }
+                current = null;
+                return false;
+            }
+
+            @Override
+            public Map<String, Object> row() {
+                return current;
+            }
+
+            @Override
+            public void close() {
+                if (rows instanceof AutoCloseable closeable) {
+                    try {
+                        closeable.close();
+                    } catch (Exception ex) {
+                        throw TqlException.builder(READ_ERROR)
+                                .message("the step's spool reader could not be released: "
+                                        + ex.getMessage())
+                                .cause(ex)
+                                .build();
+                    }
                 }
             }
         };
