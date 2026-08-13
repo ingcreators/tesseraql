@@ -382,7 +382,7 @@ public final class RouteCompiler {
         // http: sources run before the command, which is the whole point of allowing them here:
         // the connection is not taken until the fetch is done, so the transaction never waits on
         // a third party (docs/lookups.md, decision 19).
-        step = commandHttpSources(step, definition);
+        step = httpSourcesFirst(step, definition);
         step = step.process(commandProcessor(routeFile, workflow));
         // Live-view topics broadcast only after a successful commit: an exception in the
         // command processor (rollback) bypasses this step (docs/realtime.md). The catalog
@@ -397,7 +397,13 @@ public final class RouteCompiler {
                     definition.invalidates()));
         }
         // Named queries still run after the command (outside its transaction), in authored order.
+        // http: sources are skipped here — they already ran before the command, and mounting
+        // them again would call the partner a second time after the commit, where a flake turns
+        // a committed write into an error response.
         for (var entry : definition.sources().entrySet()) {
+            if (entry.getValue().isHttp()) {
+                continue;
+            }
             step = source(step, routeFile, entry.getKey(), entry.getValue());
         }
         applySessionRotation(step, definition).process(responseRenderer(definition));
@@ -405,13 +411,16 @@ public final class RouteCompiler {
     }
 
     /**
-     * A command's {@code http:} sources, ordered before its transaction. The same ordering the
-     * export pipeline uses for the same reason: a network call inside the window where a
-     * connection and a transaction are held pins them for however long the partner takes. A
-     * failure here fails the command before a row is written, which is the semantics a value
-     * the write depends on should have.
+     * A document's {@code http:} sources, ordered before the work that holds a connection. A
+     * command fetches before its transaction opens (docs/lookups.md, decision 19) and an export
+     * fetches before its extraction (docs/export-pipeline.md, decision 2), for the same reason:
+     * a network call inside the window where a connection, a transaction or a cursor is held
+     * pins them for however long the partner takes, and a failure here fails the request before
+     * a row is written or streamed. The mounting site owes the matching guard: whichever loop
+     * mounts the remaining sources afterwards must skip the {@code http:} entries, or each
+     * partner is called twice per request.
      */
-    private static ProcessorDefinition<?> commandHttpSources(ProcessorDefinition<?> step,
+    private static ProcessorDefinition<?> httpSourcesFirst(ProcessorDefinition<?> step,
             RouteDefinition definition) {
         ProcessorDefinition<?> fetched = step;
         for (var entry : definition.sources().entrySet()) {
@@ -826,7 +835,7 @@ public final class RouteCompiler {
                 .process(new io.tesseraql.compiler.binding.CatalogBinder(
                         formatDeclaration(spec == null ? null : spec.locale(),
                                 "tesseraql.files.locale")));
-        step = exportHttpSources(step, definition);
+        step = httpSourcesFirst(step, definition);
         step.process(new io.tesseraql.compiler.binding.QueryExportBinder(codec, writeSpec,
                 formatDeclaration(spec == null ? null : spec.locale(),
                         "tesseraql.files.locale"),
@@ -896,7 +905,7 @@ public final class RouteCompiler {
                 // numbers and dates in another.
                 .process(new io.tesseraql.compiler.binding.CatalogBinder(
                         formatDeclaration(spec.locale(), "tesseraql.files.locale")));
-        exportStep = exportHttpSources(exportStep, definition);
+        exportStep = httpSourcesFirst(exportStep, definition);
         exportStep.process(new io.tesseraql.compiler.binding.FileExportStartProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toWriteSpec(template, appHome),
@@ -1177,8 +1186,9 @@ public final class RouteCompiler {
                 .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
 
-        if (usesTransactionalCommand(definition)) {
-            step = commandHttpSources(step, definition);
+        boolean transactional = usesTransactionalCommand(definition);
+        if (transactional) {
+            step = httpSourcesFirst(step, definition);
             String datasource = definition.effectiveDatasource();
             requirePlainSqlOffMain(definition);
             String dialect = datasourceDialect(datasource);
@@ -1206,9 +1216,18 @@ public final class RouteCompiler {
             step = step.process(new io.tesseraql.compiler.binding.CatalogInvalidateProcessor(
                     definition.invalidates()));
         }
-        for (var entry : definition.sources().entrySet()) {
-            step = source(step, toolDir, entry.getKey(), entry.getValue(),
-                    definition.effectiveDatasource());
+        // The read pipeline already mounted every source above; only a transactional tool still
+        // owes its named queries, and its http: sources already ran before the command. Without
+        // both guards every source here mounted twice — a read tool executed its whole pipeline
+        // two times per invocation, and a command tool called its partner again after the commit.
+        if (transactional) {
+            for (var entry : definition.sources().entrySet()) {
+                if (entry.getValue().isHttp()) {
+                    continue;
+                }
+                step = source(step, toolDir, entry.getKey(), entry.getValue(),
+                        definition.effectiveDatasource());
+            }
         }
         step = enrichments(step, toolDir, definition);
         step.process(mcpToolRenderer(definition));
@@ -1605,24 +1624,6 @@ public final class RouteCompiler {
                 .orElse("fail");
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds(
                 timeout, maxRows, onOverflow);
-    }
-
-    /**
-     * An export's {@code http:} sources run before its extraction, which reverses the read-route
-     * order (docs/export-pipeline.md, decision 2): the export holds a connection, an open
-     * transaction and a cursor for the whole write, so a network call inside that window pins them
-     * for however long the partner takes.
-     */
-    private static ProcessorDefinition<?> exportHttpSources(ProcessorDefinition<?> step,
-            RouteDefinition definition) {
-        ProcessorDefinition<?> current = step;
-        for (var entry : definition.sources().entrySet()) {
-            if (entry.getValue().isHttp()) {
-                current = current.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
-                        entry.getKey(), entry.getValue().http()));
-            }
-        }
-        return current;
     }
 
     /**

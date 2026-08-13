@@ -30,6 +30,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A source is mounted once per route again.** The unified source model merged the disjoint
+  `queries:` and `http:` maps into one `sources:` map, and two compiler loops that used to
+  iterate different maps quietly began iterating the same one. A command's `http:` source ran a
+  second time *after* the commit — a partner flake at that point returned an error for a write
+  that had already happened, and the response read the second fetch, not the value the command
+  bound — and a non-transactional MCP tool executed its entire read pipeline twice per
+  invocation. A repeated SQL read is idempotent, which is why no behavioral test noticed;
+  the compiled Camel model is now asserted directly: every declared source mounts exactly once,
+  and `http:` sources mount before the transaction they feed.
 - **The documentation caught up with the unified source model.** Eight published pages still
   taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
   `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown
