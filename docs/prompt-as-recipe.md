@@ -19,12 +19,14 @@ recipe", and this document is about what that sentence cost.
 - **A prompt cannot read data.** `sources:` is unavailable, so "draft a welcome for customer
   4711" cannot look 4711 up. The author's workaround is a tool that returns prose, which is a
   tool pretending to be a prompt.
-- **A prompt has no `security:`.** The MCP endpoint takes no transport-level gate by design —
+- **A prompt cannot declare `security:` even where it wants to.** The MCP endpoint takes no
+  transport-level gate by design —
   [McpRouteBuilder](../tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/McpRouteBuilder.java)
   says so: "each tool runs its own route security, so there is no transport-level auth gate".
-  A prompt therefore has *no* gate at all, and not because prompts are public by decision:
-  because there is no route to hang a policy on. A prompt that interpolates data (see above)
-  would need one.
+  A prompt is therefore ungated, and not because prompts were decided to be public: because
+  there is no route to hang a policy on. Most prompts want nothing here — the gap only matters
+  for one that interpolates data (see above) or whose template carries something not everyone
+  should read.
 - **Its `input:` is a near-copy that does less.** A prompt argument accepts `type:`,
   `required:` and `description:`, of which only the last two are read — `type:` is documented
   in the guide, consumed by nothing, and is registered today as a known-dead component. The
@@ -65,9 +67,26 @@ So making a prompt a recipe is not new machinery. It is deleting a branch.
    act on (`policy:`, `writable:`, `domain:`, `codes:`, `widget:`, `classification:`, `mask:`)
    are refused by lint on a prompt document rather than silently accepted — the same "wire it
    or don't declare it" rule the surface guard enforces on the Java side.
-5. **`security:` applies.** A prompt declares `auth:`/`policy:` like any route; a prompt that
-   reads data through `sources:` and declares no policy is a lint error, mirroring the
-   deny-by-default rule a write tool already lives under (`TQL-MCP-4030`).
+5. **`security:` becomes available, and stays optional.** A prompt may declare `auth:`/`policy:`
+   like any route, which matters once it can read data or when the template itself carries
+   something not everyone should see. It is not required, and a prompt that declares nothing
+   behaves exactly as it does today.
+
+   The sketch had a prompt with `sources:` *require* a policy, by analogy with the write-tool
+   rule (`TQL-MCP-4030`). That analogy is wrong twice. The write rule exists because an agent
+   must not mutate data unauthorized — an irreversible act, which reading is not; and the
+   framework's own read primitive already settles the question, since `kind: resource` reads
+   data with no policy requirement anywhere in `TQL-MCP-1003`–`1007`. Requiring it on prompts
+   would make them the strictest read surface in the framework for no reason.
+
+   It is worth being clear about what is normal here, because the framework is unusual. In the
+   MCP ecosystem authorization sits at the transport (OAuth 2.1 over the HTTP transport), so
+   prompts are behind *a* gate as a matter of course while per-prompt policy is not a thing
+   anyone declares. TesseraQL has no transport gate on purpose — discovery is open and each
+   primitive carries its own security — so "a prompt may declare a policy" is this framework's
+   spelling of the same idea, not a new demand on authors. Discovery stays open: `prompts/list`
+   advertises every prompt, and a declared policy is enforced on `prompts/get`, exactly as a
+   tool's is on `tools/call`.
 6. **Everything cross-cutting follows for free** — telemetry, audit, governance scoring, and an
    `mcp-prompt` coverage kind — because they attach to the route, and now there is one.
 7. **One dispatch, three wrappers.** The protocol methods are untouched: `prompts/list` and
@@ -110,7 +129,7 @@ steps, per rule 10.
    the `promptFile` tree-reading are deleted, `PromptFile` carries the route definition like
    `ToolFile` does, and the `UNWIRED` registration for `Argument#type` goes with them.
 3. **The rules** — lint for the refused `InputField` keys, the read-only refusal, the
-   policy-when-it-reads rule, the `mcp-prompt` coverage kind; `docs/app-mcp.md` rewritten for
+   `mcp-prompt` coverage kind; `docs/app-mcp.md` rewritten for
    the recipe, with a worked example that reads data.
 
 Each slice is a PR with the yaml, compiler and runtime suites green; slices 2 and 3 carry the
