@@ -39,6 +39,19 @@ All notable changes to TesseraQL are documented here. The format follows
   invocation. A repeated SQL read is idempotent, which is why no behavioral test noticed;
   the compiled Camel model is now asserted directly: every declared source mounts exactly once,
   and `http:` sources mount before the transaction they feed.
+- **A `publish:` with no pipeline is refused, not dropped.** `publish:` is a transactional-outbox
+  write exactly like `notify:`, but it was missing from the compiler's is-this-a-command test —
+  a command-json route declaring `publish:` with no transactional step compiled down the read
+  path and the publish was silently dropped. The messaging cookbook itself taught that shape.
+  `publish:` now forces the command pipeline (whose processor refuses the missing `steps:` out
+  loud), lint `TQL-YAML-1052` says the same at authoring time, and the cookbook's examples
+  declare their writes as `steps:`.
+- **The lint and the compiler agree on what a consumer and a webhook are.** A `queue-consume` or
+  `webhook` document whose only pipeline was `sources.main` passed lint — the check still spoke
+  the deleted "a `sql:` or `steps:` pipeline" vocabulary — and then failed at startup, where the
+  command processor refuses an empty `steps:`. Both lints now require `steps:`, and a consumer
+  declaring `sources:` at all is refused (`TQL-YAML-1051`, with a compile-time backstop) instead
+  of the sources compiling to nothing.
 - **The documentation caught up with the unified source model.** Eight published pages still
   taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
   `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown

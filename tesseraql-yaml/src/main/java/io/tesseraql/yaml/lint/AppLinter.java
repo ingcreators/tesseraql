@@ -2686,6 +2686,16 @@ public final class AppLinter {
         lintNotify(config, definition, source, findings);
         lintWebhook(config, definition, source, findings);
         lintPublish(config, definition, source, findings);
+        // Everything that rides the command transaction needs the command: publish:, notify:,
+        // outbox: and validate: make a command-json route transactional, and the command
+        // processor refuses an empty steps: at build — say it at authoring time instead.
+        if ("command-json".equals(definition.recipe()) && definition.steps().isEmpty()
+                && (definition.publish() != null || !definition.notifications().isEmpty()
+                        || definition.outbox() != null || !definition.validate().isEmpty())) {
+            findings.add(new LintFinding("TQL-YAML-1052", "error", source, "route '"
+                    + definition.id() + "' declares publish:/notify:/outbox:/validate: but no"
+                    + " steps: pipeline — these ride the command transaction"));
+        }
         if (definition.consume() != null) {
             findings.add(new LintFinding("TQL-YAML-1010", "error", source, "consume: is only"
                     + " supported on a queue-consume route under consume/, not the '"
@@ -3858,9 +3868,12 @@ public final class AppLinter {
                     + definition.id() + "' references verifier '" + provider
                     + "' not configured under tesseraql.connectors.webhooks"));
         }
-        if (definition.main() == null && definition.steps().isEmpty()) {
+        // A webhook always compiles through the transactional command processor, which refuses
+        // an empty steps: at build. `sources.main` used to satisfy this check (the deleted "a
+        // sql: or steps: pipeline" vocabulary), so the document passed lint and failed startup.
+        if (definition.steps().isEmpty()) {
             findings.add(new LintFinding("TQL-YAML-1008", "error", source, "webhook route '"
-                    + definition.id() + "' needs a sql: or steps: pipeline"));
+                    + definition.id() + "' needs a steps: pipeline"));
         }
     }
 
@@ -3920,14 +3933,20 @@ public final class AppLinter {
                     + definition.id() + "' references channel '" + consume.channel()
                     + "' not configured under tesseraql.messaging.channels"));
         }
-        if (definition.main() == null && definition.steps().isEmpty()) {
+        // The compiled pipeline is the steps: array — TransactionalCommandProcessor refuses an
+        // empty one at build, and a consumer passes no workflow: that could make it state-only.
+        // `sources.main` used to satisfy this check ("a sql: or steps: pipeline", in the deleted
+        // vocabulary), which let a consumer pass lint and then fail at startup.
+        if (definition.steps().isEmpty()) {
             findings.add(new LintFinding("TQL-YAML-1009", "error", source, "queue-consume route '"
-                    + definition.id() + "' needs a sql: or steps: pipeline"));
+                    + definition.id() + "' needs a steps: pipeline"));
         }
-        if (definition.main() != null && definition.main().file() != null && !Files.isRegularFile(
-                consumer.source().getParent().resolve(definition.main().file()))) {
-            findings.add(new LintFinding("TQL-SQL-2103", "error", source,
-                    "Referenced SQL file is missing: " + definition.main().file()));
+        // A consumer mounts no sources: nothing runs before its transaction, and nothing reads a
+        // result after it — there is no response. Refusing the key beats compiling it to nothing.
+        if (!definition.sources().isEmpty()) {
+            findings.add(new LintFinding("TQL-YAML-1051", "error", source, "queue-consume route '"
+                    + definition.id() + "' declares sources: — a consumer's pipeline is its"
+                    + " steps:, and a declared source compiles to nothing here"));
         }
         definition.steps().forEach((name, step) -> {
             if (step.file() != null && !Files.isRegularFile(
