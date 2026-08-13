@@ -23,8 +23,8 @@ import org.apache.camel.Exchange;
  */
 final class ExportEnrichment {
 
-    /** TQL-LD-2857: an export's enrichment failed while its rows were being written. */
-    private static final TqlErrorCode ENRICH_FAILED = new TqlErrorCode(TqlDomain.LD, 2857);
+    /** TQL-LD-2859: an export's enrichment failed while its rows were being written. */
+    private static final TqlErrorCode ENRICH_FAILED = new TqlErrorCode(TqlDomain.LD, 2859);
 
     private ExportEnrichment() {
     }

@@ -27,7 +27,7 @@ import javax.sql.DataSource;
  */
 final class StudioScaffoldService {
 
-    private static final TqlErrorCode INTROSPECT_ERROR = new TqlErrorCode(TqlDomain.STUDIO, 4223);
+    private static final TqlErrorCode INTROSPECT_ERROR = new TqlErrorCode(TqlDomain.STUDIO, 4242);
 
     private final Function<String, DataSource> datasources;
     private final String datasource;

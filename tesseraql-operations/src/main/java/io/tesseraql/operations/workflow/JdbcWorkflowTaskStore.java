@@ -24,8 +24,8 @@ import javax.sql.DataSource;
  */
 public final class JdbcWorkflowTaskStore implements WorkflowTaskStore {
 
-    /** TQL-WORKFLOW-3222: the workflow task store could not complete a JDBC operation. */
-    private static final TqlErrorCode STORE_ERROR = new TqlErrorCode(TqlDomain.WORKFLOW, 3222);
+    /** TQL-WORKFLOW-3224: the workflow task store could not complete a JDBC operation. */
+    private static final TqlErrorCode STORE_ERROR = new TqlErrorCode(TqlDomain.WORKFLOW, 3224);
 
     private final DataSource dataSource;
 

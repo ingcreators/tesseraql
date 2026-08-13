@@ -18,7 +18,7 @@ import java.util.Map;
  */
 final class OutboxEvents {
 
-    private static final TqlErrorCode SERIALIZE_ERROR = new TqlErrorCode(TqlDomain.SQL, 2600);
+    private static final TqlErrorCode SERIALIZE_ERROR = new TqlErrorCode(TqlDomain.SQL, 2603);
 
     private final OutboxSpec outbox;
     private final String appName;
