@@ -33,6 +33,8 @@ final class LintContext {
     private final Map<Path, Optional<String>> contents = new HashMap<>();
     private final Map<Path, Optional<Map<String, Object>>> trees = new HashMap<>();
     private final Map<Path, Optional<List<SqlNode>>> sqlNodes = new HashMap<>();
+    private io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
+            .empty();
 
     LintContext(Path appHome, List<LintFinding> findings, Set<String> catalogTables) {
         this.appHome = appHome;
@@ -40,6 +42,51 @@ final class LintContext {
         // Not Set.copyOf: the declaration order feeds finding messages, and copyOf randomizes it.
         this.catalogTables = java.util.Collections
                 .unmodifiableSet(new java.util.LinkedHashSet<>(catalogTables));
+    }
+
+    /**
+     * The app home every rule resolves its documents against, absolutized and normalized by
+     * {@link AppLinter#lint(Path)} before the run starts.
+     */
+    Path appHome() {
+        return appHome;
+    }
+
+    /**
+     * The app's business-day calendars, loaded once by the calendar family and read by the job
+     * family that checks schedules against them — the second piece of cross-rule state, held
+     * here for the same reason {@link #catalogTables()} is: two families, one load.
+     */
+    io.tesseraql.yaml.calendar.Calendars calendars() {
+        return calendars;
+    }
+
+    /** Publishes the loaded calendars to the families that check schedules against them. */
+    void calendars(io.tesseraql.yaml.calendar.Calendars loaded) {
+        this.calendars = loaded;
+    }
+
+    /**
+     * The 1-based line of {@code token}'s first occurrence in {@code source} (authoring
+     * feedback, roadmap Phase 43) — a best-effort position for document rules, so editors can
+     * jump near the offending key; null when the file is unreadable or the token is absent.
+     */
+    Integer lineOf(Path source, String token) {
+        String text = content(source);
+        if (text == null) {
+            return null;
+        }
+        int at = text.indexOf(token);
+        if (at < 0) {
+            return null;
+        }
+        int line = 1;
+        for (int i = 0; i < at; i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
     }
 
     /**
