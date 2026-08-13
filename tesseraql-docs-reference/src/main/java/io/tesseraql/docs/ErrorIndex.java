@@ -434,7 +434,7 @@ final class ErrorIndex {
             "unicode-identifiers.md", "view-composition.md", "silent-tolerance.md",
             "documentation-ia.md", "style-guide.md", "app-isolation-model.md", "base-path.md",
             "export-pipeline.md", "lookups.md", "unified-sources.md",
-            "lint-restructure.md");
+            "lint-restructure.md", "prompt-as-recipe.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
