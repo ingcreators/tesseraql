@@ -10,11 +10,8 @@ import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
-import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
-import io.tesseraql.yaml.flags.FlagsSpec;
-import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
 import io.tesseraql.yaml.manifest.AppManifest;
@@ -22,7 +19,6 @@ import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.MigrationFile;
 import io.tesseraql.yaml.manifest.RouteFile;
-import io.tesseraql.yaml.menu.MenuSpec;
 import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ResponseSpec;
@@ -59,39 +55,25 @@ import java.util.stream.Stream;
  */
 public final class StudioService {
 
-    private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4002);
-    private static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.STUDIO, 4030);
-    private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4040);
-    private static final TqlErrorCode INVALID_DRAFT = new TqlErrorCode(TqlDomain.STUDIO, 4221);
+    static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.STUDIO, 4030);
+    static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4040);
     private static final TqlErrorCode ROUTE_FORM = new TqlErrorCode(TqlDomain.STUDIO, 4230);
-    private static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
+    static final TqlErrorCode CONNECTORS = new TqlErrorCode(TqlDomain.STUDIO, 4231);
     private static final TqlErrorCode RECORDER = new TqlErrorCode(TqlDomain.STUDIO, 4233);
     /** Capturing a baseline without a schema sidecar to copy (409). */
     private static final TqlErrorCode NO_SCHEMA = new TqlErrorCode(TqlDomain.STUDIO, 4236);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
             .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
-    private static final java.util.regex.Pattern EGRESS_HOST = java.util.regex.Pattern
-            .compile("(\\*\\.)?[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?");
-    private static final java.util.regex.Pattern CONNECTOR_NAME = java.util.regex.Pattern
-            .compile("[a-z][a-z0-9-]*");
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
-    private static final TqlErrorCode MENU = new TqlErrorCode(TqlDomain.STUDIO, 4225);
-    private static final TqlErrorCode POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4226);
-    private static final TqlErrorCode MESSAGE = new TqlErrorCode(TqlDomain.STUDIO, 4227);
-    private static final TqlErrorCode CONFIG = new TqlErrorCode(TqlDomain.STUDIO, 4228);
-    private static final TqlErrorCode FLAG = new TqlErrorCode(TqlDomain.STUDIO, 4229);
     /** A decision-rows grid save that cannot even reach the decision compile (shape/target). */
     private static final TqlErrorCode DECISION_ROWS = new TqlErrorCode(TqlDomain.STUDIO, 4237);
     /** TQL-STUDIO-4238: a calendar edit that cannot mean anything (docs/jobs.md). */
     private static final TqlErrorCode CALENDAR_EDIT = new TqlErrorCode(TqlDomain.STUDIO, 4238);
     /** TQL-STUDIO-4239: a job-policy edit that cannot mean anything (docs/jobs.md). */
     private static final TqlErrorCode JOB_POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4239);
-    private static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
+    static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
     private static final Pattern LEADING_DIGITS = Pattern.compile("^\\d+");
-    private static final Pattern POLICY_ID = Pattern.compile("[A-Za-z0-9_.-]+");
-    private static final Pattern LOCALE_TAG = Pattern.compile("[A-Za-z0-9-]+");
-    private static final Pattern MESSAGE_KEY = Pattern.compile("[A-Za-z0-9._-]+");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z0-9_-]+");
     private static final Pattern MIGRATION_PATH = Pattern
             .compile("db/(?:[^/]+/)?migration(?:-[^/]+)?/[^/]+\\.sql");
@@ -100,9 +82,17 @@ public final class StudioService {
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "patch", "delete",
             "head", "options");
 
+    /** Where a source-writing operation records who did what ({@link #recordAudit}). */
+    @FunctionalInterface
+    interface AuditRecorder {
+        void record(String actor, String action, String target);
+    }
+
     private final SimpleYamlParser parser = new SimpleYamlParser();
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final boolean readOnly;
+    private final DraftStore draftStore;
+    private final OverlayEditor overlayEditor;
     private AppManifest manifest;
     private Path appHome;
 
@@ -110,6 +100,12 @@ public final class StudioService {
         this.manifest = manifest;
         this.appHome = manifest.appHome();
         this.readOnly = readOnly;
+        // The collaborators read the app home through a supplier — reload() reassigns the field,
+        // and a captured value would pin them to a stale manifest.
+        this.draftStore = new DraftStore(() -> appHome, readOnly, this::preview,
+                this::recordAudit);
+        this.overlayEditor = new OverlayEditor(() -> appHome, readOnly, draftStore::resolve,
+                this::recordAudit);
     }
 
     public boolean isReadOnly() {
@@ -176,15 +172,7 @@ public final class StudioService {
      * case of a draft for a not-yet-applied new file, where there is no source to compare against.
      */
     public String sourceIfExists(String relativePath) {
-        Path file = resolve(relativePath);
-        if (!Files.isRegularFile(file)) {
-            return null;
-        }
-        try {
-            return Files.readString(file);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
+        return draftStore.sourceIfExists(relativePath);
     }
 
     /**
@@ -192,29 +180,7 @@ public final class StudioService {
      * the source of truth (design ch. 16.7). Rejected in read-only mode.
      */
     public Path saveDraft(String relativePath, String content) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; drafts are disabled");
-        }
-        // A browser normalizes a <textarea>'s newlines to CRLF on submit, so a draft saved from the
-        // editor arrives with \r\n even when nothing was edited. Store LF so a no-op save matches the
-        // (LF) source — otherwise every line reads as changed in the diff, and applying the draft
-        // would silently rewrite the source's line endings.
-        content = content == null ? "" : content.replace("\r\n", "\n").replace('\r', '\n');
-        resolve(relativePath); // validate the target path before writing the draft
-        Path draft = draftPath(relativePath);
-        // The first save records the source the edit is based on, so a later apply can detect that
-        // the source changed underneath it (concurrent-edit conflict, Studio backlog D5).
-        boolean firstSave = !Files.isRegularFile(draft);
-        try {
-            Files.createDirectories(draft.getParent());
-            Files.writeString(draft, content);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        if (firstSave) {
-            writeBaseMeta(relativePath, sourceIfExists(relativePath));
-        }
-        return draft;
+        return draftStore.saveDraft(relativePath, content);
     }
 
     /**
@@ -225,17 +191,7 @@ public final class StudioService {
      * @return whether a draft was actually removed
      */
     public boolean deleteDraft(String relativePath) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; drafts are disabled");
-        }
-        resolve(relativePath); // validate the target path before touching the draft
-        try {
-            boolean removed = Files.deleteIfExists(draftPath(relativePath));
-            Files.deleteIfExists(draftMetaPath(relativePath));
-            return removed;
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
+        return draftStore.deleteDraft(relativePath);
     }
 
     /**
@@ -244,17 +200,7 @@ public final class StudioService {
      * when there is no draft or no recorded base (e.g. a draft from before base tracking).
      */
     public boolean draftConflicts(String relativePath) {
-        if (readDraft(relativePath) == null) {
-            return false;
-        }
-        BaseMeta meta = readBaseMeta(relativePath);
-        if (meta == null) {
-            // A present-but-unreadable sidecar is treated as a conflict — concurrent-edit
-            // detection must fail closed, not silently clobber another author's change; a
-            // genuinely absent sidecar is a pre-tracking draft and stays non-conflicting.
-            return Files.isRegularFile(draftMetaPath(relativePath));
-        }
-        return !java.util.Objects.equals(meta.base(), sourceIfExists(relativePath));
+        return draftStore.draftConflicts(relativePath);
     }
 
     /**
@@ -950,7 +896,7 @@ public final class StudioService {
      * members with commas. Reads the pending draft when one exists, like the route form.
      */
     public DecisionGrid decisionGrid(String name) {
-        LocatedDecision located = locateDecision(name);
+        LocatedDeclaration located = locateDecision(name);
         if (located == null) {
             return new DecisionGrid(name, null, false, false, false, List.of(), List.of(),
                     "No decision named '" + name + "' is declared under decisions/");
@@ -1010,7 +956,7 @@ public final class StudioService {
             throw new TqlException(READ_ONLY, "Studio is read-only; editing decisions is"
                     + " disabled");
         }
-        LocatedDecision located = locateDecision(name);
+        LocatedDeclaration located = locateDecision(name);
         if (located == null) {
             throw new TqlException(NOT_FOUND,
                     "No decision named '" + name + "' is declared under decisions/");
@@ -1100,18 +1046,24 @@ public final class StudioService {
     public record GridColumn(String key, String kind, String hint) {
     }
 
-    /** A decision located in its declaring decisions document (draft preferred, route-form style). */
-    private record LocatedDecision(String path, boolean fromDraft, Map<String, Object> tree,
+    /**
+     * A named declaration located in its declaring document (draft preferred, route-form style):
+     * the app-relative file, whether the text came from a pending draft, the parsed document
+     * tree, and the declaration's own node within it.
+     */
+    private record LocatedDeclaration(String path, boolean fromDraft, Map<String, Object> tree,
             Map<String, Object> node) {
     }
 
     /**
-     * Finds the {@code decisions/*.yml} document declaring {@code name} and parses it as a
-     * tree, preferring a pending draft of the file — the same read the route form does, so a
-     * second grid edit sees the first. Returns null when no document declares the decision.
+     * Finds the {@code <directory>/*.yml} document declaring {@code name} under its top-level
+     * {@code <topKey>:} map and parses it as a tree, preferring a pending draft of the file — the
+     * same read the route form does, so a second edit sees the first. Returns null when no
+     * document declares the name. Shared by the decisions grid and the calendars form (the
+     * declaration directories all follow this shape, docs/app-layout.md).
      */
-    private LocatedDecision locateDecision(String name) {
-        Path dir = appHome.resolve("decisions");
+    private LocatedDeclaration locateDeclaration(String directory, String topKey, String name) {
+        Path dir = appHome.resolve(directory);
         if (name == null || name.isBlank() || !Files.isDirectory(dir)) {
             return null;
         }
@@ -1123,20 +1075,30 @@ public final class StudioService {
             throw new UncheckedIOException(ex);
         }
         for (Path file : files) {
-            String relative = "decisions/" + file.getFileName();
+            String relative = directory + "/" + file.getFileName();
             String draft = readDraft(relative);
             String text = draft != null ? draft : sourceIfExists(relative);
             if (text == null) {
                 continue;
             }
             Map<String, Object> tree = parser.parseTree(text);
-            Map<String, Object> declared = anyMap(tree.get("decisions"));
+            Map<String, Object> declared = anyMap(tree.get(topKey));
             if (declared.get(name) instanceof Map) {
-                return new LocatedDecision(relative, draft != null, tree,
+                return new LocatedDeclaration(relative, draft != null, tree,
                         anyMap(declared.get(name)));
             }
         }
         return null;
+    }
+
+    /** The draft-aware locate over {@code decisions/*.yml} ({@code decisions:} documents). */
+    private LocatedDeclaration locateDecision(String name) {
+        return locateDeclaration("decisions", "decisions", name);
+    }
+
+    /** The draft-aware locate over {@code calendars/*.yml} ({@code calendars:} documents). */
+    private LocatedDeclaration locateCalendar(String name) {
+        return locateDeclaration("calendars", "calendars", name);
     }
 
     /**
@@ -1377,7 +1339,7 @@ public final class StudioService {
             }
             cleanDates.add(trimmed);
         }
-        LocatedCalendar located = locateCalendar(name);
+        LocatedDeclaration located = locateCalendar(name);
         Map<String, Object> tree;
         String relative;
         Map<String, Object> node;
@@ -1411,10 +1373,6 @@ public final class StudioService {
         return draft;
     }
 
-    private record LocatedCalendar(String path, Map<String, Object> tree,
-            Map<String, Object> node) {
-    }
-
     /**
      * The edit card's draft-aware view of a calendar (docs/studio-ux-refresh.md slice 6):
      * weekend and holiday dates as the PENDING draft has them when one exists, else as the
@@ -1422,7 +1380,7 @@ public final class StudioService {
      * {@code null} when no such calendar is declared.
      */
     public CalendarEditState calendarEditState(String name) {
-        LocatedCalendar located = locateCalendar(name);
+        LocatedDeclaration located = locateCalendar(name);
         if (located == null) {
             return null;
         }
@@ -1470,35 +1428,6 @@ public final class StudioService {
             dates.sort(null);
         }
         return saveCalendar(name, current.weekend(), dates, actor);
-    }
-
-    /** The draft-aware locate (the decisions pattern): the file declaring {@code name}. */
-    private LocatedCalendar locateCalendar(String name) {
-        Path dir = appHome.resolve("calendars");
-        if (name == null || name.isBlank() || !Files.isDirectory(dir)) {
-            return null;
-        }
-        List<Path> files;
-        try (Stream<Path> listed = Files.list(dir)) {
-            files = listed.filter(file -> file.getFileName().toString().endsWith(".yml"))
-                    .sorted().toList();
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        for (Path file : files) {
-            String relative = "calendars/" + file.getFileName();
-            String draft = readDraft(relative);
-            String text = draft != null ? draft : sourceIfExists(relative);
-            if (text == null) {
-                continue;
-            }
-            Map<String, Object> tree = parser.parseTree(text);
-            Map<String, Object> declared = anyMap(tree.get("calendars"));
-            if (declared.get(name) instanceof Map) {
-                return new LocatedCalendar(relative, tree, anyMap(declared.get(name)));
-            }
-        }
-        return null;
     }
 
     /**
@@ -1830,11 +1759,11 @@ public final class StudioService {
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> anyMap(Object value) {
+    static Map<String, Object> anyMap(Object value) {
         return value instanceof Map ? (Map<String, Object>) value : new LinkedHashMap<>();
     }
 
-    private static String scalar(Object value) {
+    static String scalar(Object value) {
         return value == null ? null : String.valueOf(value);
     }
 
@@ -1846,7 +1775,7 @@ public final class StudioService {
                 .joining(", "));
     }
 
-    private static void putOrRemove(Map<String, Object> map, String key, Object value) {
+    static void putOrRemove(Map<String, Object> map, String key, Object value) {
         if (value == null) {
             map.remove(key);
         } else {
@@ -2074,7 +2003,7 @@ public final class StudioService {
         return clean == null ? null : requireSecretReference(field, clean);
     }
 
-    private static String requireSecretReference(String field, String value) {
+    static String requireSecretReference(String field, String value) {
         if (!isSecretReference(value)) {
             throw new TqlException(CONNECTORS, field + " must be a secret reference like "
                     + "${secret.env.NAME} — literal secret values are never written from Studio");
@@ -2088,7 +2017,7 @@ public final class StudioService {
      * call site — this method only makes the write durable and audited.
      */
     public void setOverlayPath(String dottedKey, Object value, String action, String actor) {
-        writeOverlaySection(Map.of(dottedKey, value == null ? REMOVE : value), action, actor);
+        overlayEditor.setOverlayPath(dottedKey, value, action, actor);
     }
 
     /** Sentinel accepted by {@link #writeOverlaySection}: remove the leaf instead of setting it. */
@@ -2107,42 +2036,12 @@ public final class StudioService {
      * the note now.
      */
     public void writeOverlaySection(Map<String, Object> values, String action, String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing config is disabled");
-        }
-        Path overlay = resolve("config/overlay.yml");
-        Map<String, Object> tree = Files.isRegularFile(overlay)
-                ? mutableCopy(parser.parseTree(overlay))
-                : new LinkedHashMap<>();
-        values.forEach((dottedKey, value) -> {
-            String[] segments = dottedKey.split("\\.");
-            Map<String, Object> parent = tree;
-            for (int i = 0; i < segments.length - 1; i++) {
-                parent = childMap(parent, segments[i]);
-            }
-            if (value == REMOVE) {
-                parent.remove(segments[segments.length - 1]);
-            } else {
-                parent.put(segments[segments.length - 1], value);
-            }
-        });
-        try {
-            Files.createDirectories(overlay.getParent());
-            Files.writeString(overlay, parser.write(tree));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, action, "config/overlay.yml");
+        overlayEditor.writeOverlaySection(values, action, actor);
     }
 
     /** The effective (merged, overlay-included) string list at {@code dottedKey}; empty when absent. */
     public List<String> effectiveStringList(String dottedKey) {
-        // A fresh load so a just-written overlay value is visible without a full Studio reload.
-        Object value = new ManifestLoader().load(appHome).config().navigate(dottedKey);
-        if (!(value instanceof List<?> list)) {
-            return List.of();
-        }
-        return list.stream().map(String::valueOf).toList();
+        return overlayEditor.effectiveStringList(dottedKey);
     }
 
     /**
@@ -2151,28 +2050,7 @@ public final class StudioService {
      * The caller gates this behind the confirm dialog (egress changes widen the app's reach).
      */
     public void updateEgressHosts(String scope, String host, boolean remove, String actor) {
-        String key = egressKey(scope);
-        String clean = trimToNull(host);
-        if (clean == null || !EGRESS_HOST.matcher(clean).matches()) {
-            throw new TqlException(CONNECTORS,
-                    "An egress host is a hostname or *.wildcard: " + host);
-        }
-        List<String> full = new ArrayList<>(effectiveStringList(key));
-        if (remove) {
-            full.remove(clean);
-        } else if (!full.contains(clean)) {
-            full.add(clean);
-        }
-        writeOverlaySection(Map.of(key, full), "egress", actor);
-    }
-
-    private static String egressKey(String scope) {
-        return switch (String.valueOf(scope)) {
-            case "outbound" -> "tesseraql.http.outbound.allowedHosts";
-            case "poll" -> "tesseraql.connectors.poll.allowedHosts";
-            default -> throw new TqlException(CONNECTORS,
-                    "Unknown egress scope (outbound|poll): " + scope);
-        };
+        overlayEditor.updateEgressHosts(scope, host, remove, actor);
     }
 
     /**
@@ -2181,24 +2059,8 @@ public final class StudioService {
      */
     public void writeWebhookVerifier(String name, String secretRef, String signatureHeader,
             String timestampHeader, String idHeader, String tolerance, String actor) {
-        String clean = requireConnectorName(name);
-        Map<String, Object> verifier = new LinkedHashMap<>();
-        verifier.put("secret", requireSecretReference("The webhook secret", secretRef));
-        putOrRemove(verifier, "signatureHeader", trimToNull(signatureHeader));
-        putOrRemove(verifier, "timestampHeader", trimToNull(timestampHeader));
-        putOrRemove(verifier, "idHeader", trimToNull(idHeader));
-        String cleanTolerance = trimToNull(tolerance);
-        if (cleanTolerance != null) {
-            try {
-                java.time.Duration.parse(cleanTolerance);
-            } catch (java.time.format.DateTimeParseException ex) {
-                throw new TqlException(CONNECTORS,
-                        "tolerance must be an ISO-8601 duration like PT5M: " + tolerance);
-            }
-            verifier.put("tolerance", cleanTolerance);
-        }
-        writeOverlaySection(Map.of("tesseraql.connectors.webhooks." + clean, verifier),
-                "connectors", actor);
+        overlayEditor.writeWebhookVerifier(name, secretRef, signatureHeader, timestampHeader,
+                idHeader, tolerance, actor);
     }
 
     /**
@@ -2208,50 +2070,8 @@ public final class StudioService {
      */
     public void writeConnectorCredential(String scope, String name, String type, String token,
             String username, String password, String header, String value, String actor) {
-        String prefix = switch (String.valueOf(scope)) {
-            case "outbound" -> "tesseraql.http.outbound.credentials.";
-            case "poll" -> "tesseraql.connectors.poll.credentials.";
-            default -> throw new TqlException(CONNECTORS,
-                    "Unknown credential scope (outbound|poll): " + scope);
-        };
-        String clean = requireConnectorName(name);
-        Map<String, Object> credential = new LinkedHashMap<>();
-        switch (String.valueOf(type)) {
-            case "bearer" -> {
-                credential.put("type", "bearer");
-                credential.put("token", requireSecretReference("The bearer token", token));
-            }
-            case "basic" -> {
-                credential.put("type", "basic");
-                String user = trimToNull(username);
-                if (user == null) {
-                    throw new TqlException(CONNECTORS, "A basic credential needs a username");
-                }
-                credential.put("username", user);
-                credential.put("password", requireSecretReference("The password", password));
-            }
-            case "header" -> {
-                credential.put("type", "header");
-                String headerName = trimToNull(header);
-                if (headerName == null) {
-                    throw new TqlException(CONNECTORS, "A header credential needs a header name");
-                }
-                credential.put("header", headerName);
-                credential.put("value", requireSecretReference("The header value", value));
-            }
-            default -> throw new TqlException(CONNECTORS,
-                    "Unknown credential type (bearer|basic|header): " + type);
-        }
-        writeOverlaySection(Map.of(prefix + clean, credential), "connectors", actor);
-    }
-
-    private static String requireConnectorName(String name) {
-        String clean = trimToNull(name);
-        if (clean == null || !CONNECTOR_NAME.matcher(clean).matches()) {
-            throw new TqlException(CONNECTORS,
-                    "A connector name is lowercase letters, digits and dashes: " + name);
-        }
-        return clean;
+        overlayEditor.writeConnectorCredential(scope, name, type, token, username, password,
+                header, value, actor);
     }
 
     /**
@@ -2261,61 +2081,7 @@ public final class StudioService {
      * elided; a non-reference literal is never echoed.
      */
     public Map<String, Object> connectorsView() {
-        var config = new ManifestLoader().load(appHome).config();
-        Map<String, Object> model = new LinkedHashMap<>();
-        model.put("outboundHosts", stringList(config.navigate(
-                "tesseraql.http.outbound.allowedHosts")));
-        model.put("pollHosts", stringList(config.navigate(
-                "tesseraql.connectors.poll.allowedHosts")));
-        model.put("outboundCredentials", credentialRows(config.navigate(
-                "tesseraql.http.outbound.credentials")));
-        model.put("pollCredentials", credentialRows(config.navigate(
-                "tesseraql.connectors.poll.credentials")));
-        model.put("webhooks", webhookRows(config.navigate("tesseraql.connectors.webhooks")));
-        return model;
-    }
-
-    private static List<String> stringList(Object value) {
-        return value instanceof List<?> list
-                ? list.stream().map(String::valueOf).toList()
-                : List.of();
-    }
-
-    private static List<Map<String, Object>> credentialRows(Object value) {
-        List<Map<String, Object>> rows = new ArrayList<>();
-        anyMap(value).forEach((name, spec) -> {
-            Map<String, Object> credential = anyMap(spec);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", name);
-            row.put("type", scalar(credential.get("type")));
-            row.put("target", credential.get("header") != null
-                    ? scalar(credential.get("header"))
-                    : scalar(credential.get("username")));
-            Object secret = credential.get("token") != null
-                    ? credential.get("token")
-                    : credential.get("password") != null
-                            ? credential.get("password")
-                            : credential.get("value");
-            row.put("secret", redactedReference(scalar(secret)));
-            rows.add(row);
-        });
-        return rows;
-    }
-
-    private static List<Map<String, Object>> webhookRows(Object value) {
-        List<Map<String, Object>> rows = new ArrayList<>();
-        anyMap(value).forEach((name, spec) -> {
-            Map<String, Object> verifier = anyMap(spec);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", name);
-            row.put("secret", redactedReference(scalar(verifier.get("secret"))));
-            row.put("signatureHeader", scalar(verifier.get("signatureHeader")));
-            row.put("timestampHeader", scalar(verifier.get("timestampHeader")));
-            row.put("idHeader", scalar(verifier.get("idHeader")));
-            row.put("tolerance", scalar(verifier.get("tolerance")));
-            rows.add(row);
-        });
-        return rows;
+        return overlayEditor.connectorsView();
     }
 
     /**
@@ -2323,19 +2089,7 @@ public final class StudioService {
      * reference with a literal fallback elides the fallback, anything else is masked entirely.
      */
     static String redactedReference(String value) {
-        if (value == null) {
-            return null;
-        }
-        if (isSecretReference(value)) {
-            return value;
-        }
-        java.util.regex.Matcher withDefault = java.util.regex.Pattern
-                .compile("\\$\\{(secret\\.[A-Za-z0-9_.-]+):.*\\}")
-                .matcher(value.trim());
-        if (withDefault.matches()) {
-            return "${" + withDefault.group(1) + ":\u2026}";
-        }
-        return "\u2022\u2022\u2022";
+        return OverlayEditor.redactedReference(value);
     }
 
     /** The next versioned-migration number for a datasource/vendor (the Flyway {@code V<n>} prefix). */
@@ -2704,33 +2458,7 @@ public final class StudioService {
      * (last-apply-wins).
      */
     public Path applyDraft(String relativePath, boolean force, String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; apply is disabled");
-        }
-        String draft = readDraft(relativePath);
-        if (draft == null) {
-            throw new TqlException(NOT_FOUND, "No draft to apply for: " + relativePath);
-        }
-        if (!force && draftConflicts(relativePath)) {
-            throw new TqlException(CONFLICT,
-                    "The saved source changed since this draft was started;"
-                            + " review the diff and re-apply to overwrite, or discard the draft.");
-        }
-        PreviewResult preview = preview(relativePath, draft);
-        if (!preview.valid()) {
-            throw new TqlException(INVALID_DRAFT, "Draft does not compile: " + preview.error());
-        }
-        Path target = resolve(relativePath);
-        try {
-            Files.createDirectories(target.getParent());
-            Files.writeString(target, draft);
-            Files.deleteIfExists(draftPath(relativePath));
-            Files.deleteIfExists(draftMetaPath(relativePath));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, "apply", relativePath);
-        return target;
+        return draftStore.applyDraft(relativePath, force, actor);
     }
 
     /**
@@ -2751,21 +2479,7 @@ public final class StudioService {
      * a new file (no source yet). Sorted by path; the base sidecars are skipped.
      */
     public List<DraftSummary> drafts() {
-        Path draftsDir = appHome.resolve("work/studio/drafts").normalize();
-        if (!Files.isDirectory(draftsDir)) {
-            return List.of();
-        }
-        try (Stream<Path> walk = Files.walk(draftsDir)) {
-            return walk.filter(Files::isRegularFile)
-                    .filter(file -> !file.getFileName().toString().endsWith(".meta"))
-                    .map(file -> draftsDir.relativize(file).toString().replace('\\', '/'))
-                    .sorted()
-                    .map(path -> new DraftSummary(path, draftConflicts(path),
-                            sourceIfExists(path) == null))
-                    .toList();
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
+        return draftStore.drafts();
     }
 
     /** The outcome of applying every clean pending draft at once (Studio Drafts bulk actions). */
@@ -2779,37 +2493,12 @@ public final class StudioService {
      * any applied draft created a not-yet-served route file. Callers reload routes afterwards.
      */
     public BulkApplyResult applyAllDrafts(String actor) {
-        int applied = 0;
-        int skipped = 0;
-        boolean needsRestart = false;
-        for (DraftSummary draft : drafts()) {
-            if (draft.conflict()) {
-                skipped++;
-                continue;
-            }
-            boolean isNew = draft.isNew();
-            try {
-                applyDraft(draft.path(), false, actor);
-                applied++;
-                needsRestart = needsRestart || isNew;
-            } catch (RuntimeException ex) {
-                // Best-effort: a draft that will not apply cleanly (e.g. a conflict that appeared
-                // between the snapshot and here) is left for manual review, not fatal to the batch.
-                skipped++;
-            }
-        }
-        return new BulkApplyResult(applied, skipped, needsRestart);
+        return draftStore.applyAllDrafts(actor);
     }
 
     /** Discards every pending draft, returning how many were removed (Studio Drafts bulk actions). */
     public int discardAllDrafts() {
-        int discarded = 0;
-        for (DraftSummary draft : drafts()) {
-            if (deleteDraft(draft.path())) {
-                discarded++;
-            }
-        }
-        return discarded;
+        return draftStore.discardAllDrafts();
     }
 
     /**
@@ -2982,7 +2671,7 @@ public final class StudioService {
 
     /** The app's current declarative sidebar menu items ({@code config/menu.yml}); empty if none. */
     public List<MenuItem> menuItems() {
-        return MenuSpec.load(appHome).items();
+        return overlayEditor.menuItems();
     }
 
     /** Lints the app home for the Studio health dashboard (the same engine as the CLI/Maven lint). */
@@ -3097,17 +2786,12 @@ public final class StudioService {
 
     /** The app's message-catalog locale tags ({@code messages/<tag>.yml}), tag-sorted. */
     public List<String> messageLocales() {
-        return new ArrayList<>(MessageCatalog.load(appHome.resolve("messages")).tags());
+        return overlayEditor.messageLocales();
     }
 
     /** Each locale's flat key→value message entries (dotted keys), for the i18n editor table. */
     public Map<String, Map<String, String>> messageCatalogs() {
-        MessageCatalog catalog = MessageCatalog.load(appHome.resolve("messages"));
-        Map<String, Map<String, String>> out = new LinkedHashMap<>();
-        for (String tag : catalog.tags()) {
-            out.put(tag, catalog.entries(tag));
-        }
-        return out;
+        return overlayEditor.messageCatalogs();
     }
 
     /**
@@ -3116,28 +2800,7 @@ public final class StudioService {
      * audited; the message resolver reads the catalog live, so the change is served immediately.
      */
     public void setMessage(String locale, String key, String value, String actor) {
-        String tag = requireLocaleTag(locale);
-        String messageKey = requireMessageKey(key);
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing messages is disabled");
-        }
-        Path file = resolve("messages/" + tag + ".yml");
-        Map<String, Object> tree = Files.isRegularFile(file)
-                ? mutableCopy(parser.parseTree(file))
-                : new LinkedHashMap<>();
-        String[] segments = messageKey.split("\\.");
-        Map<String, Object> node = tree;
-        for (int i = 0; i < segments.length - 1; i++) {
-            node = childMap(node, segments[i]);
-        }
-        node.put(segments[segments.length - 1], value == null ? "" : value);
-        try {
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, parser.write(tree));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, "message", "messages/" + tag + ".yml");
+        overlayEditor.setMessage(locale, key, value, actor);
     }
 
     /**
@@ -3147,71 +2810,12 @@ public final class StudioService {
      * reference.
      */
     public List<Map<String, Object>> effectiveConfig() {
-        Map<String, Object> root = new ManifestLoader().load(appHome).config().root();
-        java.util.TreeMap<String, Object> flat = new java.util.TreeMap<>();
-        flattenConfig("", root, flat);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        flat.forEach((key, value) -> {
-            String rendered = value == null ? "" : String.valueOf(value);
-            boolean secret = isSecretKey(key) && !rendered.startsWith("${");
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("key", key);
-            row.put("value", secret ? "••••••" : rendered);
-            row.put("secret", secret);
-            rows.add(row);
-        });
-        return rows;
+        return overlayEditor.effectiveConfig();
     }
-
-    private static void flattenConfig(String prefix, Object node, Map<String, Object> out) {
-        if (node instanceof Map<?, ?> map) {
-            map.forEach((k, v) -> flattenConfig(
-                    prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, v, out));
-        } else if (node instanceof List<?> list) {
-            out.put(prefix, list.toString());
-        } else {
-            out.put(prefix, node);
-        }
-    }
-
-    /** One editable configuration setting: its dotted key, label, input type, and help text. */
-    public record ConfigSetting(String key, String label, String type, String help) {
-    }
-
-    /**
-     * The curated set of settings the Studio config editor may change. Deliberately limited to safe,
-     * scalar, restart-to-apply keys — engine-critical sections (datasources, camel, security auth)
-     * are never editable here.
-     */
-    private static final List<ConfigSetting> EDITABLE_SETTINGS = List.of(
-            new ConfigSetting("tesseraql.app.name", "App name", "string",
-                    "Shown in the app chrome."),
-            new ConfigSetting("tesseraql.i18n.defaultLocale", "Default locale", "string",
-                    "BCP-47 tag, e.g. en."),
-            new ConfigSetting("tesseraql.outbox.dispatch.fixedDelay", "Outbox dispatch delay",
-                    "string", "e.g. 5s; empty disables the dispatcher."),
-            new ConfigSetting("tesseraql.outbox.dispatch.maxAttempts", "Outbox max attempts",
-                    "integer", "Delivery attempts before an outbox row is parked."),
-            new ConfigSetting("tesseraql.retention.sweep", "Retention sweep interval", "string",
-                    "e.g. 1h; empty disables retention."),
-            new ConfigSetting("tesseraql.retention.outbox", "Outbox retention", "string",
-                    "e.g. 30d."),
-            new ConfigSetting("tesseraql.retention.jobs", "Job retention", "string", "e.g. 90d."));
 
     /** The curated editable settings with their current effective values, for the config editor. */
     public List<Map<String, Object>> editableSettings() {
-        AppConfig config = new ManifestLoader().load(appHome).config();
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (ConfigSetting setting : EDITABLE_SETTINGS) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("key", setting.key());
-            row.put("label", setting.label());
-            row.put("type", setting.type());
-            row.put("help", setting.help());
-            row.put("value", config.getString(setting.key()).orElse(""));
-            out.add(row);
-        }
-        return out;
+        return overlayEditor.editableSettings();
     }
 
     /**
@@ -3220,71 +2824,12 @@ public final class StudioService {
      * audited; applied on the next restart (the setting is read at startup).
      */
     public void setConfigValue(String key, String value, String actor) {
-        ConfigSetting setting = EDITABLE_SETTINGS.stream().filter(s -> s.key().equals(key))
-                .findFirst().orElseThrow(() -> new TqlException(CONFIG,
-                        "Not an editable setting: " + key));
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing config is disabled");
-        }
-        String trimmed = value == null ? "" : value.strip();
-        if ("integer".equals(setting.type()) && !trimmed.isEmpty()) {
-            try {
-                Long.parseLong(trimmed);
-            } catch (NumberFormatException ex) {
-                throw new TqlException(CONFIG, setting.label() + " must be a whole number");
-            }
-        }
-        Path overlay = resolve("config/overlay.yml");
-        Map<String, Object> tree = Files.isRegularFile(overlay)
-                ? mutableCopy(parser.parseTree(overlay))
-                : new LinkedHashMap<>();
-        String[] segments = key.split("\\.");
-        if (trimmed.isEmpty()) {
-            removePath(tree, segments, 0);
-        } else {
-            Map<String, Object> node = tree;
-            for (int i = 0; i < segments.length - 1; i++) {
-                node = childMap(node, segments[i]);
-            }
-            node.put(segments[segments.length - 1], trimmed);
-        }
-        try {
-            Files.createDirectories(overlay.getParent());
-            Files.writeString(overlay, parser.write(tree));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, "config", "config/overlay.yml");
-    }
-
-    /** Removes the leaf at the dotted path from {@code node}, pruning any emptied ancestor maps. */
-    @SuppressWarnings("unchecked")
-    private static void removePath(Map<String, Object> node, String[] segments, int index) {
-        if (index == segments.length - 1) {
-            node.remove(segments[index]);
-            return;
-        }
-        if (node.get(segments[index]) instanceof Map<?, ?> child) {
-            Map<String, Object> childMap = (Map<String, Object>) child;
-            removePath(childMap, segments, index + 1);
-            if (childMap.isEmpty()) {
-                node.remove(segments[index]);
-            }
-        }
-    }
-
-    /** Whether a dotted config key names a secret whose literal value should be redacted. */
-    private static boolean isSecretKey(String key) {
-        String lower = key.toLowerCase(java.util.Locale.ROOT);
-        return lower.contains("password") || lower.contains("passphrase")
-                || lower.contains("secret") || lower.contains("token")
-                || lower.contains("credential") || lower.contains("apikey")
-                || lower.contains("privatekey");
+        overlayEditor.setConfigValue(key, value, actor);
     }
 
     /** The app's live feature flags ({@code config/flags.yml}) — name to (typed) value. */
     public Map<String, Object> flags() {
-        return FlagsSpec.load(appHome).values();
+        return overlayEditor.flags();
     }
 
     /**
@@ -3293,73 +2838,12 @@ public final class StudioService {
      * request binder reads flags live), so the change takes effect on the next request.
      */
     public void setFlag(String name, String value, String type, String actor) {
-        String key = requireFlagName(name);
-        Object typed = coerceFlag(type, value);
-        Map<String, Object> values = new LinkedHashMap<>(FlagsSpec.load(appHome).values());
-        values.put(key, typed);
-        writeFlags(values, actor);
+        overlayEditor.setFlag(name, value, type, actor);
     }
 
     /** Removes a feature flag; a no-op when it is not set. */
     public void removeFlag(String name, String actor) {
-        Map<String, Object> values = new LinkedHashMap<>(FlagsSpec.load(appHome).values());
-        if (values.remove(name) != null) {
-            writeFlags(values, actor);
-        }
-    }
-
-    private void writeFlags(Map<String, Object> values, String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing flags is disabled");
-        }
-        Path file = resolve("config/flags.yml");
-        try {
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, FlagsSpec.toYaml(values));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, "flag", "config/flags.yml");
-    }
-
-    private static String requireFlagName(String name) {
-        String trimmed = trimToNull(name);
-        if (trimmed == null || !POLICY_ID.matcher(trimmed).matches()) {
-            throw new TqlException(FLAG, "Invalid flag name: " + name);
-        }
-        return trimmed;
-    }
-
-    private static Object coerceFlag(String type, String value) {
-        String raw = value == null ? "" : value.strip();
-        return switch (type == null ? "string" : type) {
-            case "boolean" -> Boolean.parseBoolean(raw);
-            case "number" -> {
-                try {
-                    yield raw.contains(".") ? Double.parseDouble(raw) : Long.parseLong(raw);
-                } catch (NumberFormatException ex) {
-                    throw new TqlException(FLAG, "Flag value must be a number: " + value);
-                }
-            }
-            default -> raw;
-        };
-    }
-
-    private static String requireLocaleTag(String locale) {
-        String trimmed = trimToNull(locale);
-        if (trimmed == null || !LOCALE_TAG.matcher(trimmed).matches()) {
-            throw new TqlException(MESSAGE, "Invalid locale tag: " + locale);
-        }
-        return trimmed;
-    }
-
-    private static String requireMessageKey(String key) {
-        String trimmed = trimToNull(key);
-        if (trimmed == null || !MESSAGE_KEY.matcher(trimmed).matches()
-                || trimmed.startsWith(".") || trimmed.endsWith(".")) {
-            throw new TqlException(MESSAGE, "Invalid message key: " + key);
-        }
-        return trimmed;
+        overlayEditor.removeFlag(name, actor);
     }
 
     /**
@@ -3446,21 +2930,7 @@ public final class StudioService {
      * the security engine so the change is live.
      */
     public void addPolicyRule(String policyId, String kind, String value, String actor) {
-        String id = requirePolicyId(policyId);
-        String ruleKind = requireRuleKind(kind);
-        String ruleValue = trimToNull(value);
-        if (ruleValue == null) {
-            throw new TqlException(POLICY, "A policy rule needs a " + ruleKind + " value");
-        }
-        List<Map<String, Object>> rules = effectivePolicyRules(id);
-        boolean present = rules.stream()
-                .anyMatch(r -> ruleValue.equals(String.valueOf(r.get(ruleKind))));
-        if (!present) {
-            Map<String, Object> rule = new LinkedHashMap<>();
-            rule.put(ruleKind, ruleValue);
-            rules.add(rule);
-            writeOverlayPolicy(id, rules, actor);
-        }
+        overlayEditor.addPolicyRule(policyId, kind, value, actor);
     }
 
     /**
@@ -3469,77 +2939,11 @@ public final class StudioService {
      * that grants no one (deny-by-default). A base-only policy cannot be deleted via the overlay.
      */
     public void removePolicyRule(String policyId, String kind, String value, String actor) {
-        String id = requirePolicyId(policyId);
-        String ruleKind = requireRuleKind(kind);
-        String ruleValue = trimToNull(value);
-        List<Map<String, Object>> rules = effectivePolicyRules(id);
-        boolean removed = rules.removeIf(
-                r -> ruleValue != null && ruleValue.equals(String.valueOf(r.get(ruleKind))));
-        if (removed) {
-            writeOverlayPolicy(id, rules, actor);
-        }
-    }
-
-    /** The effective {@code anyOf} rule maps of a policy from the current merged config. */
-    private List<Map<String, Object>> effectivePolicyRules(String policyId) {
-        Object policies = new ManifestLoader().load(appHome).config()
-                .navigate("tesseraql.security.policies");
-        List<Map<String, Object>> out = new ArrayList<>();
-        if (policies instanceof Map<?, ?> byId && byId.get(policyId) instanceof Map<?, ?> spec
-                && spec.get("anyOf") instanceof List<?> rules) {
-            for (Object rule : rules) {
-                if (rule instanceof Map<?, ?> map) {
-                    Map<String, Object> copy = new LinkedHashMap<>();
-                    map.forEach((k, v) -> copy.put(String.valueOf(k), v));
-                    out.add(copy);
-                }
-            }
-        }
-        return out;
-    }
-
-    /** Writes {@code tesseraql.security.policies.<id>.anyOf} into overlay.yml, other keys preserved. */
-    private void writeOverlayPolicy(String policyId, List<Map<String, Object>> rules,
-            String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing policies is disabled");
-        }
-        Path overlay = resolve("config/overlay.yml");
-        Map<String, Object> tree = Files.isRegularFile(overlay)
-                ? mutableCopy(parser.parseTree(overlay))
-                : new LinkedHashMap<>();
-        Map<String, Object> policies = childMap(childMap(childMap(tree, "tesseraql"),
-                "security"), "policies");
-        Map<String, Object> policy = new LinkedHashMap<>();
-        policy.put("anyOf", rules);
-        policies.put(policyId, policy);
-        try {
-            Files.createDirectories(overlay.getParent());
-            Files.writeString(overlay, parser.write(tree));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, "policy", "config/overlay.yml");
-    }
-
-    private static String requirePolicyId(String id) {
-        String trimmed = trimToNull(id);
-        if (trimmed == null || !POLICY_ID.matcher(trimmed).matches()) {
-            throw new TqlException(POLICY, "Invalid policy id: " + id);
-        }
-        return trimmed;
-    }
-
-    private static String requireRuleKind(String kind) {
-        String trimmed = trimToNull(kind);
-        if (!"role".equals(trimmed) && !"permission".equals(trimmed)) {
-            throw new TqlException(POLICY, "A policy rule kind must be 'role' or 'permission'");
-        }
-        return trimmed;
+        overlayEditor.removePolicyRule(policyId, kind, value, actor);
     }
 
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> mutableCopy(Map<String, Object> source) {
+    static Map<String, Object> mutableCopy(Map<String, Object> source) {
         Map<String, Object> copy = new LinkedHashMap<>();
         source.forEach((key, value) -> copy.put(key,
                 value instanceof Map ? mutableCopy((Map<String, Object>) value) : value));
@@ -3548,7 +2952,7 @@ public final class StudioService {
 
     /** Returns {@code parent}'s child map at {@code key}, creating a mutable one when absent. */
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> childMap(Map<String, Object> parent, String key) {
+    static Map<String, Object> childMap(Map<String, Object> parent, String key) {
         Object child = parent.get(key);
         if (child instanceof Map) {
             Map<String, Object> mutable = mutableCopy((Map<String, Object>) child);
@@ -3567,15 +2971,7 @@ public final class StudioService {
      */
     public void addMenuItem(String label, String href, String icon, String rolesCsv,
             String permsCsv, String actor) {
-        String cleanLabel = trimToNull(label);
-        String cleanHref = trimToNull(href);
-        if (cleanLabel == null || cleanHref == null) {
-            throw new TqlException(MENU, "A menu item needs a label and an href");
-        }
-        List<MenuItem> items = new ArrayList<>(menuItems());
-        items.add(new MenuItem(cleanLabel, cleanHref, trimToNull(icon), csv(rolesCsv),
-                csv(permsCsv)));
-        writeMenu(items, actor);
+        overlayEditor.addMenuItem(label, href, icon, rolesCsv, permsCsv, actor);
     }
 
     /**
@@ -3586,10 +2982,7 @@ public final class StudioService {
      * never happened and left no audit record to contradict it (docs/silent-tolerance.md O10).
      */
     public void removeMenuItem(int index, String actor) {
-        List<MenuItem> items = new ArrayList<>(menuItems());
-        requireIndex(index, items.size());
-        items.remove(index);
-        writeMenu(items, actor);
+        overlayEditor.removeMenuItem(index, actor);
     }
 
     /**
@@ -3598,44 +2991,10 @@ public final class StudioService {
      * the item is already where it was asked to go — but an index outside the list is refused.
      */
     public void moveMenuItem(int index, int delta, String actor) {
-        List<MenuItem> items = new ArrayList<>(menuItems());
-        requireIndex(index, items.size());
-        int target = index + Integer.signum(delta);
-        if (target < 0 || target >= items.size()) {
-            return;
-        }
-        items.add(target, items.remove(index));
-        writeMenu(items, actor);
+        overlayEditor.moveMenuItem(index, delta, actor);
     }
 
-    /** TQL-STUDIO-4241: the menu index names no item, so the edit cannot be applied. */
-    private static final TqlErrorCode UNKNOWN_MENU_INDEX = new TqlErrorCode(TqlDomain.STUDIO,
-            4241);
-
-    private static void requireIndex(int index, int size) {
-        if (index < 0 || index >= size) {
-            throw new TqlException(UNKNOWN_MENU_INDEX,
-                    "Menu index " + index + " names no item; the menu has " + size + " item"
-                            + (size == 1 ? "" : "s"));
-        }
-    }
-
-    /** Serializes the menu back to {@code config/menu.yml} (edit-gated) and records the change. */
-    private void writeMenu(List<MenuItem> items, String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing the menu is disabled");
-        }
-        Path target = resolve("config/menu.yml");
-        try {
-            Files.createDirectories(target.getParent());
-            Files.writeString(target, MenuSpec.toYaml(items));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        recordAudit(actor, "menu", "config/menu.yml");
-    }
-
-    private static String trimToNull(String value) {
+    static String trimToNull(String value) {
         if (value == null) {
             return null;
         }
@@ -3644,7 +3003,7 @@ public final class StudioService {
     }
 
     /** Splits a comma-separated field into a trimmed, blank-free list. */
-    private static List<String> csv(String value) {
+    static List<String> csv(String value) {
         if (value == null || value.isBlank()) {
             return List.of();
         }
@@ -3675,15 +3034,7 @@ public final class StudioService {
 
     /** Reads a previously saved draft, or null if none exists. */
     public String readDraft(String relativePath) {
-        Path draft = draftPath(relativePath);
-        if (!Files.isRegularFile(draft)) {
-            return null;
-        }
-        try {
-            return Files.readString(draft);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
+        return draftStore.readDraft(relativePath);
     }
 
     /**
@@ -3713,59 +3064,7 @@ public final class StudioService {
     }
 
     private Path resolve(String relativePath) {
-        Path resolved = appHome.resolve(relativePath).normalize();
-        if (!resolved.startsWith(appHome)) {
-            throw new TqlException(TRAVERSAL,
-                    "Path escapes app home: " + relativePath);
-        }
-        return resolved;
-    }
-
-    private Path draftPath(String relativePath) {
-        Path drafts = appHome.resolve("work/studio/drafts").normalize();
-        Path resolved = drafts.resolve(relativePath).normalize();
-        if (!resolved.startsWith(drafts)) {
-            throw new TqlException(TRAVERSAL, "Draft path escapes drafts dir: " + relativePath);
-        }
-        return resolved;
-    }
-
-    /** The sidecar recording the source a draft is based on (Studio backlog D5). */
-    private Path draftMetaPath(String relativePath) {
-        Path draft = draftPath(relativePath);
-        return draft.resolveSibling(draft.getFileName().toString() + ".meta");
-    }
-
-    /** Records the source content a draft is based on ({@code null} when the source did not exist). */
-    private void writeBaseMeta(String relativePath, String base) {
-        Path meta = draftMetaPath(relativePath);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("base", base);
-        try {
-            Files.createDirectories(meta.getParent());
-            Files.writeString(meta, jsonMapper.writeValueAsString(data));
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-    }
-
-    /** Reads the recorded base for a draft, or {@code null} when none was recorded. */
-    private BaseMeta readBaseMeta(String relativePath) {
-        Path meta = draftMetaPath(relativePath);
-        if (!Files.isRegularFile(meta)) {
-            return null;
-        }
-        try {
-            JsonNode node = jsonMapper.readTree(Files.readString(meta));
-            JsonNode base = node.get("base");
-            return new BaseMeta(base == null || base.isNull() ? null : base.asText());
-        } catch (IOException ex) {
-            return null;
-        }
-    }
-
-    /** The source a draft was based on ({@code base} is null when the source did not exist). */
-    private record BaseMeta(String base) {
+        return draftStore.resolve(relativePath);
     }
 
     private RouteSummary routeSummary(RouteFile route) {
