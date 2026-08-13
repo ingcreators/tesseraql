@@ -104,12 +104,34 @@ public final class ExportModel {
      * wants the third row wants a query that returns it.
      */
     public static Map<String, Object> result(Iterable<Map<String, Object>> rows, long rowCount) {
+        return result(rows, rowCount, firstOf(rows));
+    }
+
+    /**
+     * The same, with {@code first} already in hand — for a caller whose counting walk saw it go
+     * by. Opening an iterator just to read one row abandons the other rows unread, and an
+     * abandoned spool reader holds its stream (and, on a staging store, a whole on-disk copy)
+     * until a walk that never comes.
+     */
+    public static Map<String, Object> result(Iterable<Map<String, Object>> rows, long rowCount,
+            Map<String, Object> first) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("rows", rows);
         result.put("rowCount", rowCount);
-        Iterator<Map<String, Object>> first = rows.iterator();
-        result.put("first", first.hasNext() ? first.next() : null);
+        result.put("first", first);
         return result;
+    }
+
+    /**
+     * A spool answers from the row it captured while draining; only an in-memory result opens
+     * (and fully abandons — a list iterator holds nothing) an iterator for its first row.
+     */
+    private static Map<String, Object> firstOf(Iterable<Map<String, Object>> rows) {
+        if (rows instanceof SpooledRows spooled) {
+            return spooled.firstRow();
+        }
+        Iterator<Map<String, Object>> first = rows.iterator();
+        return first.hasNext() ? first.next() : null;
     }
 
     private static long count(Iterable<Map<String, Object>> rows) {

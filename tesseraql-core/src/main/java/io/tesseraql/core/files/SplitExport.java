@@ -134,11 +134,18 @@ public final class SplitExport {
             }
             Map<Object, Object> byKey = new LinkedHashMap<>();
             for (ExportGroups.Group group : groups) {
+                // One walk answers both the count and the first row: opening a second reader
+                // just to peek at row one would abandon it mid-spool, and an abandoned reader
+                // keeps its stream (and its staging copy) until a walk that never comes.
                 long count = 0;
-                for (Map<String, Object> ignored : group.rows()) {
+                Map<String, Object> first = null;
+                for (Map<String, Object> row : group.rows()) {
+                    if (count == 0) {
+                        first = row;
+                    }
                     count++;
                 }
-                byKey.put(group.key(), ExportModel.result(group.rows(), count));
+                byKey.put(group.key(), ExportModel.result(group.rows(), count, first));
             }
             perDocument.put(value.getKey(), byKey);
         }

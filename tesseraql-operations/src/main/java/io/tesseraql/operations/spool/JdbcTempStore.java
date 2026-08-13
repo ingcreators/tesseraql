@@ -39,6 +39,14 @@ public final class JdbcTempStore implements TempStore {
     /** Default per-spool size cap; override with tesseraql.temp.maxBytes. */
     public static final long DEFAULT_MAX_BYTES = 64L * 1024 * 1024;
 
+    /**
+     * Deletes a read's staging copy even when its reader is abandoned instead of closed: a
+     * dropped stream is eventually collected, and the registered action closes the file and
+     * removes the copy. Close still deletes eagerly — this is the backstop that keeps an
+     * abandoned reader from stranding a full on-disk copy of the spool until the JVM exits.
+     */
+    private static final java.lang.ref.Cleaner CLEANER = java.lang.ref.Cleaner.create();
+
     private final DataSource dataSource;
     private final Path scratchDir;
     private final long maxBytes;
@@ -116,13 +124,36 @@ public final class JdbcTempStore implements TempStore {
             Files.deleteIfExists(staging);
             throw new IOException("Spool read failed: " + ex.getMessage(), ex);
         }
-        return new java.io.FilterInputStream(Files.newInputStream(staging)) {
+        InputStream content = Files.newInputStream(staging);
+        // The action holds the inner stream and the path — never the wrapper, which must stay
+        // collectable for the cleaner to ever run.
+        StagingCopy copy = new StagingCopy(content, staging);
+        var wrapper = new java.io.FilterInputStream(content) {
+            private final java.lang.ref.Cleaner.Cleanable cleanable = CLEANER.register(this, copy);
+
             @Override
-            public void close() throws IOException {
-                super.close();
-                Files.deleteIfExists(staging);
+            public void close() {
+                cleanable.clean();
             }
         };
+        return wrapper;
+    }
+
+    /** Closes and deletes one read's staging copy; runs once, on close or on collection. */
+    private record StagingCopy(InputStream content, Path staging) implements Runnable {
+        @Override
+        public void run() {
+            try {
+                content.close();
+            } catch (IOException ignored) {
+                // Closing a file stream does not fail in practice; deletion is what matters.
+            }
+            try {
+                Files.deleteIfExists(staging);
+            } catch (IOException ignored) {
+                // Retention on the scratch directory is the last resort, as for the file store.
+            }
+        }
     }
 
     @Override
