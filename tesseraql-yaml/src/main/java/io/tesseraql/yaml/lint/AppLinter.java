@@ -2726,7 +2726,6 @@ public final class AppLinter {
             }
         }
         lintInputPolicy(definition, source, findings);
-        lintInputPolicy(definition, source, findings);
         lintTenantPredicate(config, route.source(), definition, source, findings);
     }
 
