@@ -9,7 +9,7 @@ import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileWriteSpec;
 import io.tesseraql.core.files.RowHandler;
-import io.tesseraql.core.files.Tables;
+import io.tesseraql.core.files.TabularReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -79,43 +79,33 @@ public final class JxlsFileCodec implements FileCodec {
                                     "No sheet named '" + spec.sheet() + "'"));
             try (java.util.stream.Stream<org.dhatim.fastexcel.reader.Row> rows = sheet
                     .openStream()) {
-                java.util.Iterator<org.dhatim.fastexcel.reader.Row> iterator = rows.iterator();
-                for (int skip = 1; skip < spec.startRow() && iterator.hasNext(); skip++) {
-                    iterator.next();
-                }
-                List<String> header = null;
-                if (spec.headerRow() && iterator.hasNext()) {
-                    org.dhatim.fastexcel.reader.Row headerRow = iterator.next();
-                    header = new ArrayList<>();
-                    for (int i = 0; i < headerRow.getCellCount(); i++) {
-                        header.add(text(headerRow.getCell(i)));
-                    }
-                }
-                boolean declared = !spec.columns().isEmpty();
-                List<ColumnMapping> columns = declared || header == null
-                        ? spec.columns()
-                        : header.stream().map(ColumnMapping::of).toList();
-                int[] positions = Tables.positions(columns, header);
-                if (declared) {
-                    Tables.requireDeclaredHeadersMatched(columns, header, positions);
-                }
-                long rowNumber = 0;
-                while (iterator.hasNext()) {
-                    org.dhatim.fastexcel.reader.Row row = iterator.next();
-                    rowNumber++;
-                    Map<String, Object> values = new LinkedHashMap<>();
-                    for (int i = 0; i < columns.size(); i++) {
-                        org.dhatim.fastexcel.reader.Cell cell = positions[i] < 0
-                                || positions[i] >= row.getCellCount()
-                                        ? null
-                                        : row.getCell(positions[i]);
-                        values.put(columns.get(i).name(), value(columns.get(i), cell));
-                    }
-                    handler.row(rowNumber, values);
-                }
+                TabularReader.read(rows.iterator(), spec, CELLS, handler);
             }
         }
     }
+
+    /** Workbook cell access: header labels read as text, data cells per the column's type. */
+    private static final TabularReader.Cells<org.dhatim.fastexcel.reader.Row> CELLS = new TabularReader.Cells<org.dhatim.fastexcel.reader.Row>() {
+
+        @Override
+        public List<String> header(org.dhatim.fastexcel.reader.Row row) {
+            List<String> header = new ArrayList<>();
+            for (int i = 0; i < row.getCellCount(); i++) {
+                header.add(text(row.getCell(i)));
+            }
+            return header;
+        }
+
+        @Override
+        public Object value(org.dhatim.fastexcel.reader.Row row, int position,
+                ColumnMapping column) {
+            org.dhatim.fastexcel.reader.Cell cell = position < 0
+                    || position >= row.getCellCount()
+                            ? null
+                            : row.getCell(position);
+            return JxlsFileCodec.value(column, cell);
+        }
+    };
 
     /** A typed column reads native cells natively; everything else surfaces as text. */
     private static Object value(ColumnMapping column,
@@ -221,9 +211,7 @@ public final class JxlsFileCodec implements FileCodec {
             int firstOccupiedBelow = firstOccupiedRowBelow(sheet, start.row());
             while (rows.hasNext()) {
                 Map<String, Object> row = rows.next();
-                if (columns.isEmpty()) {
-                    row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-                }
+                ColumnMapping.deriveIfAbsent(columns, row);
                 if (positions == null) {
                     positions = placementPositions(columns, start.col());
                     styles = columnStyles(workbook, columns,
@@ -392,9 +380,7 @@ public final class JxlsFileCodec implements FileCodec {
             int rowIndex = 0;
             while (rows.hasNext()) {
                 Map<String, Object> row = rows.next();
-                if (columns.isEmpty()) {
-                    row.keySet().forEach(key -> columns.add(ColumnMapping.of(key)));
-                }
+                ColumnMapping.deriveIfAbsent(columns, row);
                 if (rowIndex == 0) {
                     for (int i = 0; i < columns.size(); i++) {
                         sheet.value(rowIndex, i, columns.get(i).effectiveHeader());
