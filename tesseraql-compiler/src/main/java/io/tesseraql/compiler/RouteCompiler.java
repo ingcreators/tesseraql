@@ -63,9 +63,10 @@ public final class RouteCompiler {
     private String appName;
 
     /**
-     * Sets the app name routes are attributed to (e.g. outbox events). Mounted apps share the
-     * main app's config, so their name cannot come from {@code tesseraql.app.name} and the host
-     * sets it explicitly; unset, the config value applies.
+     * Sets the app name routes are attributed to (e.g. outbox events). One runtime serves one
+     * user application; the bundled system apps mounted beside it (Studio, the consoles) share
+     * that application's config, so their name cannot come from {@code tesseraql.app.name} and
+     * the host sets it explicitly. Unset, the config value applies.
      */
     public RouteCompiler appName(String appName) {
         this.appName = appName;
@@ -444,15 +445,30 @@ public final class RouteCompiler {
      */
     private io.tesseraql.compiler.binding.TransactionalCommandProcessor commandProcessor(
             RouteFile routeFile, io.tesseraql.compiler.binding.WorkflowBinding workflow) {
-        RouteDefinition definition = routeFile.definition();
-        Path routeDir = routeFile.source().getParent();
+        return commandProcessor(routeFile.definition().id(), routeFile.definition(),
+                routeFile.source().getParent(), workflow);
+    }
+
+    /**
+     * The same construction for a document that carries its own route id and source directory:
+     * a queue consumer ({@code queue.<id>}) and an MCP tool ({@code mcp.<id>}) run the command
+     * pipeline under a synthesized id, off their own declaring directory.
+     *
+     * @param routeId    the id the processor reports and its outbox events carry
+     * @param definition the command document
+     * @param sourceDir  the directory the document's step and rule files resolve against
+     * @param workflow   the workflow binding for a synthesized transition route, or null
+     */
+    private io.tesseraql.compiler.binding.TransactionalCommandProcessor commandProcessor(
+            String routeId, RouteDefinition definition, Path sourceDir,
+            io.tesseraql.compiler.binding.WorkflowBinding workflow) {
         String datasource = definition.effectiveDatasource();
         requirePlainSqlOffMain(definition);
         String dialect = datasourceDialect(datasource);
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
-                .resolve(routeDir.resolve(file).normalize(), dialect);
+                .resolve(sourceDir.resolve(file).normalize(), dialect);
         return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                definition.id(), definition.steps(), definition.validate(),
+                routeId, definition.steps(), definition.validate(),
                 definition.decide(), definition.notifications(), stepFile, datasource,
                 dialect, definition.outbox(), definition.publish(), definition.errors(),
                 appName, workflow, commandBounds());
@@ -664,13 +680,9 @@ public final class RouteCompiler {
         if (transition.assign() == null || transition.assign().file() == null) {
             return null;
         }
-        Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(workflowFile.source()
-                .getParent().resolve(transition.assign().file()).normalize(), datasourceDialect());
-        try {
-            return io.tesseraql.core.sql.Sql2WayParser.parse(java.nio.file.Files.readString(file));
-        } catch (java.io.IOException ex) {
-            throw new java.io.UncheckedIOException(ex);
-        }
+        return parseSql(io.tesseraql.core.dialect.DialectSqlResolver.resolve(workflowFile.source()
+                .getParent().resolve(transition.assign().file()).normalize(),
+                datasourceDialect()));
     }
 
     /** A synthesized transition's response: 200 with a small confirmation body. */
@@ -758,16 +770,6 @@ public final class RouteCompiler {
             throw new TqlException(UNSUPPORTED_RECIPE, "Route '" + definition.id()
                     + "': queue-consume mounts no sources: — the pipeline is its steps:");
         }
-        Path routeDir = routeFile.source().getParent();
-        // The projection pattern (docs/multi-datasource.md): the consumer's apply transaction may
-        // run on a named connector, while the channel, its claim, and the dedup records stay on
-        // main - only where the SQL commits moves.
-        String datasource = definition.effectiveDatasource();
-        requirePlainSqlOffMain(definition);
-        String dialect = datasourceDialect(datasource);
-        java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
-                .resolve(routeDir.resolve(file).normalize(), dialect);
-
         String routeId = "queue." + definition.id();
         String direct = "direct:" + routeId;
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
@@ -784,11 +786,11 @@ public final class RouteCompiler {
                         .equals(exchange.getProperty(TesseraqlProperties.QUEUE_DUPLICATE)))
                 .stop()
                 .end();
-        route.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                routeId, definition.steps(), definition.validate(),
-                definition.decide(), definition.notifications(), stepFile, datasource, dialect,
-                definition.outbox(), definition.publish(), definition.errors(), appName,
-                commandBounds()));
+        // The projection pattern (docs/multi-datasource.md): the consumer's apply transaction may
+        // run on a named connector, while the channel, its claim, and the dedup records stay on
+        // main - only where the SQL commits moves.
+        route.process(commandProcessor(routeId, definition,
+                routeFile.source().getParent(), null));
     }
 
     /**
@@ -1200,16 +1202,7 @@ public final class RouteCompiler {
         boolean transactional = usesTransactionalCommand(definition);
         if (transactional) {
             step = httpSourcesFirst(step, definition);
-            String datasource = definition.effectiveDatasource();
-            requirePlainSqlOffMain(definition);
-            String dialect = datasourceDialect(datasource);
-            java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
-                    .resolve(toolDir.resolve(file).normalize(), dialect);
-            step = step.process(new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                    routeId, definition.steps(), definition.validate(),
-                    definition.decide(), definition.notifications(), stepFile, datasource,
-                    dialect, definition.outbox(), definition.publish(), definition.errors(),
-                    appName, commandBounds()));
+            step = step.process(commandProcessor(routeId, definition, toolDir, null));
         } else {
             for (var entry : definition.sources().entrySet()) {
                 step = source(step, toolDir, entry.getKey(), entry.getValue(),
@@ -1395,6 +1388,14 @@ public final class RouteCompiler {
         if (binding.timeoutSeconds() != null) {
             return Math.max(0, binding.timeoutSeconds());
         }
+        return defaultTimeoutSeconds();
+    }
+
+    /**
+     * The app-wide statement timeout: {@code tesseraql.sql.timeoutSeconds}, else 30. The one
+     * resolution, so a binding's endpoint and a command's own bounds cannot default apart.
+     */
+    private int defaultTimeoutSeconds() {
         return config.getString("tesseraql.sql.timeoutSeconds")
                 .map(Integer::parseInt)
                 .map(value -> Math.max(0, value))
@@ -1623,18 +1624,14 @@ public final class RouteCompiler {
      * transaction with no transaction manager to bound it, so it reads the same config keys the
      * route-level SQL path does rather than running unbounded (docs/route-governance-parity.md).
      */
-    private io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds commandBounds() {
-        int timeout = config.getString("tesseraql.sql.timeoutSeconds")
-                .map(Integer::parseInt)
-                .map(value -> Math.max(0, value))
-                .orElse(30);
+    private io.tesseraql.compiler.binding.ExecutionBounds commandBounds() {
         int maxRows = config.getString("tesseraql.resultMaterialization.maxRows")
                 .map(Integer::parseInt)
                 .orElse(DEFAULT_MAX_ROWS);
         String onOverflow = config.getString("tesseraql.resultMaterialization.onOverflow")
                 .orElse("fail");
-        return new io.tesseraql.compiler.binding.TransactionalCommandProcessor.Bounds(
-                timeout, maxRows, onOverflow);
+        return new io.tesseraql.compiler.binding.ExecutionBounds(
+                defaultTimeoutSeconds(), maxRows, onOverflow);
     }
 
     /**

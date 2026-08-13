@@ -20,7 +20,7 @@ import org.apache.camel.Processor;
 
 /**
  * Renders an HTML page or fragment response from a Thymeleaf template and model (design ch. 6.4,
- * 12). The template path resolves like {@code sql.file}: first relative to the route's own
+ * 12). The template path resolves like a source's {@code file:}: first relative to the route's own
  * directory (the colocated yml + sql + html unit), falling back to the app's shared
  * {@code templates/} directory for cross-route fragments and layouts. Existence is verified at
  * build time (fail-fast); at request time the model expressions are resolved against the execution
@@ -136,10 +136,8 @@ public final class HtmlResponseRenderer implements Processor {
             }
             compiledModel.put(key, compiled);
         });
-        this.statusWhen = response.statusWhen().stream()
-                .map(arm -> new JsonResponseRenderer.CompiledStatus(
-                        ExpressionParser.parse(arm.when()), arm.status()))
-                .toList();
+        this.statusWhen = JsonResponseRenderer.CompiledStatus
+                .compileAll(response.statusWhen());
         // Pre-compile each header's optional guard expression so a syntax error fails the build.
         this.headerGuards = new LinkedHashMap<>();
         response.headersWhen().forEach((name, when) -> {
@@ -264,13 +262,8 @@ public final class HtmlResponseRenderer implements Processor {
             html = Templates.render(appHome, templateName, model, locale);
         }
 
-        int status = response.effectiveStatus();
-        for (JsonResponseRenderer.CompiledStatus arm : statusWhen) {
-            if (arm.when().evalBoolean(evaluation)) {
-                status = arm.status();
-                break;
-            }
-        }
+        int status = JsonResponseRenderer.CompiledStatus.resolve(statusWhen,
+                response.effectiveStatus(), evaluation);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
         applyHeaders(exchange, evaluation);

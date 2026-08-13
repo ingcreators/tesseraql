@@ -36,15 +36,39 @@ public final class JsonResponseRenderer implements Processor {
 
     /** A pre-compiled statusWhen arm (roadmap Phase 41): first truthy condition wins. */
     record CompiledStatus(io.tesseraql.core.expr.Expr when, int status) {
+
+        /**
+         * The declared arms, pre-compiled so a syntax error fails the build. Shared with
+         * {@link HtmlResponseRenderer}: both response kinds carry the same block.
+         */
+        static List<CompiledStatus> compileAll(
+                List<ResponseSpec.StatusWhen> arms) {
+            return arms.stream()
+                    .map(arm -> new CompiledStatus(
+                            io.tesseraql.core.expr.ExpressionParser.parse(arm.when()),
+                            arm.status()))
+                    .toList();
+        }
+
+        /**
+         * The response status: the first arm whose condition is truthy against this request,
+         * else the response's declared status.
+         */
+        static int resolve(List<CompiledStatus> arms, int declared,
+                EvaluationContext evaluation) {
+            for (CompiledStatus arm : arms) {
+                if (arm.when().evalBoolean(evaluation)) {
+                    return arm.status();
+                }
+            }
+            return declared;
+        }
     }
 
     public JsonResponseRenderer(ResponseSpec.JsonResponse response) {
         this.response = response;
         this.compiledBody = compile(response.body());
-        this.statusWhen = response.statusWhen().stream()
-                .map(arm -> new CompiledStatus(
-                        io.tesseraql.core.expr.ExpressionParser.parse(arm.when()), arm.status()))
-                .toList();
+        this.statusWhen = CompiledStatus.compileAll(response.statusWhen());
     }
 
     /**
@@ -103,13 +127,7 @@ public final class JsonResponseRenderer implements Processor {
                     "Failed to serialize JSON response: " + ex.getMessage());
         }
 
-        int status = response.effectiveStatus();
-        for (CompiledStatus arm : statusWhen) {
-            if (arm.when().evalBoolean(evaluation)) {
-                status = arm.status();
-                break;
-            }
-        }
+        int status = CompiledStatus.resolve(statusWhen, response.effectiveStatus(), evaluation);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(json);

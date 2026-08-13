@@ -212,8 +212,7 @@ class TransactionalCommandProcessorTest {
     }
 
     /** These tests cover construction and step compilation, not execution bounds. */
-    private static final TransactionalCommandProcessor.Bounds UNBOUNDED = new TransactionalCommandProcessor.Bounds(
-            0, -1, "fail");
+    private static final ExecutionBounds UNBOUNDED = new ExecutionBounds(0, -1, "fail");
 
     private TransactionalCommandProcessor processor(Map<String, Binding> steps) {
         return processor(steps, Map.of());

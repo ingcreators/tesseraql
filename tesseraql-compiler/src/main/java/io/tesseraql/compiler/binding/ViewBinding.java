@@ -89,7 +89,7 @@ public final class ViewBinding {
      * Resolves and validates a route's view reference at build time. {@code viewRef} is the
      * view document's app-wide {@code id} (docs/view-composition.md wave 1), resolved through
      * {@code viewById} — the manifest's view registry. {@code route} is the declaring route
-     * (its {@code queries:} keys anchor a detail view's {@code children:});
+     * (its {@code sources:} keys anchor a detail view's {@code children:});
      * {@code postRouteByPath} looks up the POST route serving a path (the form's
      * {@code action:}). Slot and {@code template:} references inside the document resolve
      * against the view file's own directory, then {@code templates/} — a shared document
@@ -106,19 +106,48 @@ public final class ViewBinding {
         }
         Path viewDir = file.getParent();
         ViewSpec spec = ViewSpec.parse(file);
-        List<ViewFields.FieldDef> fields = List.of();
-        if (ViewSpec.FORM.equals(spec.view())) {
-            RouteDefinition action = postRouteByPath.apply(spec.action());
-            if (action == null) {
-                throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action "
-                        + spec.action() + " matches no POST route");
-            }
-            if (action.input() == null || action.input().isEmpty()) {
-                throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action route "
-                        + action.id() + " declares no input: block to derive fields from");
-            }
-            fields = ViewFields.derive(viewRef, spec, action.input());
+        List<ViewFields.FieldDef> fields = ViewSpec.FORM.equals(spec.view())
+                ? formFields(viewRef, spec, postRouteByPath)
+                : List.of();
+        Map<Integer, Embed> childEmbeds = childEmbeds(home, viewRef, spec, route,
+                postRouteByPath, viewById);
+        Map<Integer, Embed> panelEmbeds = panelEmbeds(home, viewRef, spec, route,
+                postRouteByPath, viewById);
+        ReadSide readSide = readSide(home, viewRef, spec, childEmbeds, panelEmbeds);
+        String entry = spec.template() != null
+                ? TemplateResolution.resolve(home, viewDir, spec.template())
+                : "tql/view/" + spec.view();
+        return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
+                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), readSide.policies(),
+                readSide.catalogs());
+    }
+
+    /**
+     * A form's fields, derived from the {@code action:} route's {@code input:} block — the same
+     * declaration {@link InputBinder} enforces server-side, so the rendered constraints and the
+     * enforced ones can never differ.
+     */
+    private static List<ViewFields.FieldDef> formFields(String viewRef, ViewSpec spec,
+            Function<String, RouteDefinition> postRouteByPath) {
+        RouteDefinition action = postRouteByPath.apply(spec.action());
+        if (action == null) {
+            throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action "
+                    + spec.action() + " matches no POST route");
         }
+        if (action.input() == null || action.input().isEmpty()) {
+            throw new TqlException(UNKNOWN_ACTION, "View " + viewRef + ": action route "
+                    + action.id() + " declares no input: block to derive fields from");
+        }
+        return ViewFields.derive(viewRef, spec, action.input());
+    }
+
+    /**
+     * The detail view's {@code children:} entries that embed a view, by index — and, along the
+     * way, the guard that every child reading data names a source the route declares.
+     */
+    private static Map<Integer, Embed> childEmbeds(Path home, String viewRef, ViewSpec spec,
+            RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
+            Function<String, Path> viewById) {
         Map<Integer, Embed> childEmbeds = new LinkedHashMap<>();
         for (int index = 0; index < spec.children().size(); index++) {
             ViewSpec.Child child = spec.children().get(index);
@@ -135,6 +164,13 @@ public final class ViewBinding {
                         + " (a sources: entry, or main)");
             }
         }
+        return childEmbeds;
+    }
+
+    /** The same for a dashboard's {@code panels:}: the embedding ones, and the source guard. */
+    private static Map<Integer, Embed> panelEmbeds(Path home, String viewRef, ViewSpec spec,
+            RouteDefinition route, Function<String, RouteDefinition> postRouteByPath,
+            Function<String, Path> viewById) {
         Map<Integer, Embed> panelEmbeds = new LinkedHashMap<>();
         for (int index = 0; index < spec.panels().size(); index++) {
             ViewSpec.Panel panel = spec.panels().get(index);
@@ -152,11 +188,27 @@ public final class ViewBinding {
                         + " (a sources: entry, or main)");
             }
         }
-        // Read-side domain references (docs/view-composition.md wave 3a): an explicit
-        // `domain:` on a column or field must name a declared domain, and the domain's
-        // classification/mask become the column's output policy (wave 3b) — the same
-        // vocabulary the JSON renderer applies, so one row can never render masked in JSON
-        // and raw in HTML.
+        return panelEmbeds;
+    }
+
+    /**
+     * What the view's {@code domain:} references contribute to the read side: the output
+     * policies to apply before assembly, and the catalog each coded column resolves names
+     * through.
+     */
+    private record ReadSide(
+            Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> policies,
+            Map<String, String> catalogs) {
+    }
+
+    /**
+     * Read-side domain references (docs/view-composition.md wave 3a): an explicit
+     * {@code domain:} on a column or field must name a declared domain, and the domain's
+     * classification/mask become the column's output policy (wave 3b) — the same vocabulary the
+     * JSON renderer applies, so one row can never render masked in JSON and raw in HTML.
+     */
+    private static ReadSide readSide(Path home, String viewRef, ViewSpec spec,
+            Map<Integer, Embed> childEmbeds, Map<Integer, Embed> panelEmbeds) {
         Map<String, io.tesseraql.yaml.model.ResponseSpec.FieldPolicy> readPolicies = new LinkedHashMap<>();
         Map<String, String> catalogByColumn = new LinkedHashMap<>();
         Map<String, String> domainByColumn = new LinkedHashMap<>();
@@ -201,12 +253,7 @@ public final class ViewBinding {
         for (Embed embedded : panelEmbeds.values()) {
             readPolicies.putAll(embedded.binding().readPolicies);
         }
-        String entry = spec.template() != null
-                ? TemplateResolution.resolve(home, viewDir, spec.template())
-                : "tql/view/" + spec.view();
-        return new ViewBinding(spec, entry, fields, resolveSlots(home, viewDir, spec), home,
-                Map.copyOf(childEmbeds), Map.copyOf(panelEmbeds), Map.copyOf(readPolicies),
-                Map.copyOf(catalogByColumn));
+        return new ReadSide(Map.copyOf(readPolicies), Map.copyOf(catalogByColumn));
     }
 
     /**
@@ -279,9 +326,9 @@ public final class ViewBinding {
     }
 
     /**
-     * A child/panel {@code source:} must be {@code sql} or one of the route's {@code queries:}
-     * or {@code http:} sources (TQL-VIEW-3308) — both publish the {@code {rows}} shape the
-     * model assembly reads.
+     * A child/panel {@code source:} must be {@code main} or one of the route's other
+     * {@code sources:} entries (TQL-VIEW-3308) — every source publishes the {@code {rows}}
+     * shape the model assembly reads.
      */
     private static boolean declaresSource(RouteDefinition route, String source) {
         return io.tesseraql.yaml.model.RouteDefinition.MAIN.equals(source)
@@ -365,198 +412,256 @@ public final class ViewBinding {
         v.put("slots", slots);
         Map<String, Object> data = sourceOf(context, spec.source());
         if (ViewSpec.FORM.equals(spec.view())) {
-            // A per-record action (/items/{id}/update) resolves its placeholders against the
-            // request's path and coerced params, so one form view serves every record.
-            v.put("action", interpolateAction(spec.action(), context));
-            v.put("formId", spec.id().replace('.', '-') + "-form");
-            Map<String, Object> row = firstRow(data);
-            v.put("row", row);
-            v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
-            List<Map<String, Object>> rendered = new ArrayList<>();
-            for (ViewFields.FieldDef field : fields) {
-                // A field whose write policy: the principal fails never renders (wave 4) —
-                // hiding it is derived from the same declaration the binder enforces.
-                if (field.policy() != null && !permits.test(field.policy())) {
-                    continue;
-                }
-                Map<String, Object> f = new LinkedHashMap<>();
-                f.put("name", field.name());
-                f.put("label", message(catalog, locale, field.labelKey(), field.labelFallback()));
-                f.put("widget", field.widget());
-                f.put("required", field.required());
-                f.put("maxLength", field.maxLength());
-                f.put("min", field.min());
-                f.put("max", field.max());
-                f.put("options", options(field, context));
-                f.put("step", field.step());
-                Object value = field.valueFrom(row);
-                f.put("value", value == null ? "" : String.valueOf(value));
-                rendered.add(f);
-            }
-            v.put("fields", rendered);
+            formModel(v, catalog, locale, context, data, permits);
         } else if (ViewSpec.DETAIL.equals(spec.view())) {
-            Map<String, Object> row = firstRow(data);
-            v.put("row", row);
-            v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
-            v.put("fields", detailFields(catalog, locale, context, row));
-            List<Map<String, Object>> children = new ArrayList<>();
-            for (int index = 0; index < spec.children().size(); index++) {
-                ViewSpec.Child child = spec.children().get(index);
-                Map<String, Object> c = new LinkedHashMap<>();
-                Embed embedded = childEmbeds.get(index);
-                if (embedded != null) {
-                    c.put("embed", embedded.binding().model(
-                            embedContext(context, embedded), locale, pagePath, permits));
-                    c.put("embedTemplate", embedded.binding().entryTemplate());
-                    children.add(c);
-                    continue;
-                }
-                List<Map<String, Object>> childRows = rows(sourceOf(context, child.source()));
-                List<ViewSpec.Column> columns = columnsOf(child.columns(), childRows);
-                c.put("title", message(catalog, locale,
-                        child.title() != null
-                                ? child.title()
-                                : "view." + spec.id() + "." + child.source(),
-                        child.title() != null ? child.title() : humanize(child.source())));
-                c.put("columns", renderedColumns(catalog, locale, columns));
-                c.put("rows", cellMatrix(context, columns, childRows));
-                children.add(c);
-            }
-            v.put("children", children);
-            live(v, pagePath, spec.id() + "-view", false);
+            detailModel(v, catalog, locale, context, data, pagePath, permits);
         } else if (ViewSpec.DASHBOARD.equals(spec.view())) {
-            List<Map<String, Object>> panels = new ArrayList<>();
-            for (int index = 0; index < spec.panels().size(); index++) {
-                ViewSpec.Panel panel = spec.panels().get(index);
-                List<Map<String, Object>> rows = rows(sourceOf(context, panelSource(panel)));
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("index", index);
-                m.put("type", panel.type());
-                String title = message(catalog, locale,
-                        panel.title() != null
-                                ? panel.title()
-                                : "view." + spec.id() + ".panel" + (index + 1),
-                        panel.title() != null ? panel.title() : humanize(panelSource(panel)));
-                m.put("title", title);
-                switch (panel.type()) {
-                    case "stat" -> {
-                        Object value = rows.isEmpty() ? null : rows.get(0).get(panel.column());
-                        m.put("value", value == null ? "\u2014" : String.valueOf(value));
-                    }
-                    case "sparkline" -> {
-                        List<Double> values = numbers(rows, panel.column());
-                        // Not "values": OGNL resolves map.values to Map#values(), not the key.
-                        m.put("series", values.stream().map(ViewBinding::plain)
-                                .reduce((a, c) -> a + "," + c).orElse(""));
-                        m.put("min", "0");
-                        m.put("max", plain(values.stream().mapToDouble(Double::doubleValue)
-                                .max().orElse(1)));
-                    }
-                    case "chart" -> {
-                        // The kit's data-hc-chart recipe (docs/analytics-experience.md track 2):
-                        // the server emits the source table — the data, the no-JS fallback, and
-                        // the screen-reader representation in one — and the kit's installChart
-                        // draws the Observable Plot SVG client-side. Column one is x; every
-                        // series column follows, marked per column under kind: combo.
-                        List<ViewSpec.Series> series = panel.effectiveSeries();
-                        m.put("chartKind", panel.kind() == null ? "bar" : panel.kind());
-                        m.put("xType", panel.xType());
-                        m.put("height", panel.height());
-                        m.put("legend", panel.legend() == null
-                                ? null
-                                : String.valueOf(panel.legend()));
-                        m.put("yLabel", panel.yLabel());
-                        m.put("xLabel", message(catalog, locale,
-                                "view." + spec.id() + "." + panel.x(), humanize(panel.x())));
-                        List<Map<String, Object>> seriesHeads = new ArrayList<>();
-                        for (ViewSpec.Series charted : series) {
-                            Map<String, Object> head = new LinkedHashMap<>();
-                            head.put("label", message(catalog, locale,
-                                    charted.label() != null
-                                            ? charted.label()
-                                            : "view." + spec.id() + "." + charted.column(),
-                                    charted.label() != null
-                                            ? charted.label()
-                                            : humanize(charted.column())));
-                            head.put("mark", charted.mark());
-                            seriesHeads.add(head);
-                        }
-                        m.put("series", seriesHeads);
-                        List<List<String>> chartRows = new ArrayList<>();
-                        for (Map<String, Object> row : rows) {
-                            List<String> cells = new ArrayList<>(series.size() + 1);
-                            Object x = row.get(panel.x());
-                            cells.add(x == null ? "" : String.valueOf(x));
-                            for (ViewSpec.Series charted : series) {
-                                Object value = row.get(charted.column());
-                                cells.add(value == null ? "" : String.valueOf(value));
-                            }
-                            chartRows.add(cells);
-                        }
-                        m.put("chartRows", chartRows);
-                    }
-                    case "table" -> {
-                        List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
-                        m.put("columns", renderedColumns(catalog, locale, columns));
-                        m.put("rows", cellMatrix(context, columns, rows));
-                    }
-                    case "view" -> {
-                        // An embedded view (docs/view-composition.md wave 2b): the sub-model
-                        // rides the panel; the pattern inserts the embedded document's own
-                        // entry fragment, which brings its own card.
-                        Embed embedded = panelEmbeds.get(index);
-                        m.put("embed", embedded.binding().model(
-                                embedContext(context, embedded), locale, pagePath, permits));
-                        m.put("embedTemplate", embedded.binding().entryTemplate());
-                    }
-                    default -> throw new IllegalStateException(panel.type());
-                }
-                panels.add(m);
-            }
-            v.put("panels", panels);
-            // The chart scripts (the Plot bundle + the installChart module) load only where a
-            // chart panel renders — pages without charts ship not a byte of charting.
-            v.put("hasChart", spec.panels().stream()
-                    .anyMatch(panel -> "chart".equals(panel.type())));
-            live(v, pagePath, spec.id() + "-view", false);
+            dashboardModel(v, catalog, locale, context, pagePath, permits);
         } else {
-            List<Map<String, Object>> rows = rows(data);
-            List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
-            Map<String, Object> params = params(context);
-            v.put("path", pagePath);
-            live(v, pagePath, spec.id() + "-table", true);
-            v.put("page", pager(context, params, pagePath));
-            String sort = str(params.get("sort"));
-            String dir = str(params.get("dir"));
-            v.put("sort", sort);
-            v.put("dir", dir);
-            if (spec.search() != null) {
-                Map<String, Object> search = new LinkedHashMap<>();
-                search.put("param", spec.search());
-                search.put("value", str(params.get(spec.search())));
-                v.put("search", search);
-            }
-            List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
-            for (int i = 0; i < columns.size(); i++) {
-                ViewSpec.Column column = columns.get(i);
-                if (!column.isSortable()) {
-                    continue;
-                }
-                Map<String, Object> c = rendered.get(i);
-                boolean active = column.name().equals(sort);
-                boolean descending = active && "desc".equals(dir);
-                c.put("sortable", true);
-                c.put("ariaSort", active ? (descending ? "descending" : "ascending") : "none");
-                c.put("sortHref", pagePath + "?sort=" + column.name() + "&dir="
-                        + (active && !descending ? "desc" : "asc"));
-            }
-            v.put("columns", rendered);
-            v.put("rows", cellMatrix(context, columns, rows));
+            listModel(v, catalog, locale, context, data, pagePath);
         }
         return v;
     }
 
-    /** A panel's context source: its {@code source:} or the main {@code sql} result. */
+    /**
+     * A form's model: the resolved action, the prefill row, and the derived fields this
+     * principal may write.
+     */
+    private void formModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, Map<String, Object> data,
+            java.util.function.Predicate<String> permits) {
+        // A per-record action (/items/{id}/update) resolves its placeholders against the
+        // request's path and coerced params, so one form view serves every record.
+        v.put("action", interpolateAction(spec.action(), context));
+        v.put("formId", spec.id().replace('.', '-') + "-form");
+        Map<String, Object> row = firstRow(data);
+        v.put("row", row);
+        v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
+        List<Map<String, Object>> rendered = new ArrayList<>();
+        for (ViewFields.FieldDef field : fields) {
+            // A field whose write policy: the principal fails never renders (wave 4) —
+            // hiding it is derived from the same declaration the binder enforces.
+            if (field.policy() != null && !permits.test(field.policy())) {
+                continue;
+            }
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("name", field.name());
+            f.put("label", message(catalog, locale, field.labelKey(), field.labelFallback()));
+            f.put("widget", field.widget());
+            f.put("required", field.required());
+            f.put("maxLength", field.maxLength());
+            f.put("min", field.min());
+            f.put("max", field.max());
+            f.put("options", options(field, context));
+            f.put("step", field.step());
+            Object value = field.valueFrom(row);
+            f.put("value", value == null ? "" : String.valueOf(value));
+            rendered.add(f);
+        }
+        v.put("fields", rendered);
+    }
+
+    /** A detail's model: the record's labelled values, then its children (tables or embeds). */
+    private void detailModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, Map<String, Object> data, String pagePath,
+            java.util.function.Predicate<String> permits) {
+        Map<String, Object> row = firstRow(data);
+        v.put("row", row);
+        v.put("notFound", context.containsKey(spec.source()) && rows(data).isEmpty());
+        v.put("fields", detailFields(catalog, locale, context, row));
+        List<Map<String, Object>> children = new ArrayList<>();
+        for (int index = 0; index < spec.children().size(); index++) {
+            ViewSpec.Child child = spec.children().get(index);
+            Map<String, Object> c = new LinkedHashMap<>();
+            Embed embedded = childEmbeds.get(index);
+            if (embedded != null) {
+                c.put("embed", embedded.binding().model(
+                        embedContext(context, embedded), locale, pagePath, permits));
+                c.put("embedTemplate", embedded.binding().entryTemplate());
+                children.add(c);
+                continue;
+            }
+            List<Map<String, Object>> childRows = rows(sourceOf(context, child.source()));
+            List<ViewSpec.Column> columns = columnsOf(child.columns(), childRows);
+            c.put("title", message(catalog, locale,
+                    child.title() != null
+                            ? child.title()
+                            : "view." + spec.id() + "." + child.source(),
+                    child.title() != null ? child.title() : humanize(child.source())));
+            c.put("columns", renderedColumns(catalog, locale, columns));
+            c.put("rows", cellMatrix(context, columns, childRows));
+            children.add(c);
+        }
+        v.put("children", children);
+        live(v, pagePath, spec.id() + "-view", false);
+    }
+
+    /** A dashboard's model: one entry per declared panel, in authored order. */
+    private void dashboardModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, String pagePath,
+            java.util.function.Predicate<String> permits) {
+        List<Map<String, Object>> panels = new ArrayList<>();
+        for (int index = 0; index < spec.panels().size(); index++) {
+            panels.add(panelModel(index, spec.panels().get(index), catalog, locale, context,
+                    pagePath, permits));
+        }
+        v.put("panels", panels);
+        // The chart scripts (the Plot bundle + the installChart module) load only where a
+        // chart panel renders — pages without charts ship not a byte of charting.
+        v.put("hasChart", spec.panels().stream()
+                .anyMatch(panel -> "chart".equals(panel.type())));
+        live(v, pagePath, spec.id() + "-view", false);
+    }
+
+    /** One panel: the head every type carries (index, type, title), then its own shape. */
+    private Map<String, Object> panelModel(int index, ViewSpec.Panel panel,
+            MessageCatalog catalog, Locale locale, Map<String, Object> context, String pagePath,
+            java.util.function.Predicate<String> permits) {
+        List<Map<String, Object>> rows = rows(sourceOf(context, panelSource(panel)));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("index", index);
+        m.put("type", panel.type());
+        String title = message(catalog, locale,
+                panel.title() != null
+                        ? panel.title()
+                        : "view." + spec.id() + ".panel" + (index + 1),
+                panel.title() != null ? panel.title() : humanize(panelSource(panel)));
+        m.put("title", title);
+        switch (panel.type()) {
+            case "stat" -> statPanel(m, panel, rows);
+            case "sparkline" -> sparklinePanel(m, panel, rows);
+            case "chart" -> chartPanel(m, panel, catalog, locale, rows);
+            case "table" -> tablePanel(m, panel, catalog, locale, context, rows);
+            case "view" -> embedPanel(m, index, context, locale, pagePath, permits);
+            default -> throw new IllegalStateException(panel.type());
+        }
+        return m;
+    }
+
+    /** A stat panel: the column's value on the first row, an em dash when there is none. */
+    private static void statPanel(Map<String, Object> m, ViewSpec.Panel panel,
+            List<Map<String, Object>> rows) {
+        Object value = rows.isEmpty() ? null : rows.get(0).get(panel.column());
+        m.put("value", value == null ? "\u2014" : String.valueOf(value));
+    }
+
+    /** A sparkline panel: the column's numeric series and the scale it draws against. */
+    private static void sparklinePanel(Map<String, Object> m, ViewSpec.Panel panel,
+            List<Map<String, Object>> rows) {
+        List<Double> values = numbers(rows, panel.column());
+        // Not "values": OGNL resolves map.values to Map#values(), not the key.
+        m.put("series", values.stream().map(ViewBinding::plain)
+                .reduce((a, c) -> a + "," + c).orElse(""));
+        m.put("min", "0");
+        m.put("max", plain(values.stream().mapToDouble(Double::doubleValue)
+                .max().orElse(1)));
+    }
+
+    /**
+     * A chart panel, following the kit's data-hc-chart recipe (docs/analytics-experience.md
+     * track 2): the server emits the source table — the data, the no-JS fallback, and the
+     * screen-reader representation in one — and the kit's installChart draws the Observable
+     * Plot SVG client-side. Column one is x; every series column follows, marked per column
+     * under kind: combo.
+     */
+    private void chartPanel(Map<String, Object> m, ViewSpec.Panel panel, MessageCatalog catalog,
+            Locale locale, List<Map<String, Object>> rows) {
+        List<ViewSpec.Series> series = panel.effectiveSeries();
+        m.put("chartKind", panel.kind() == null ? "bar" : panel.kind());
+        m.put("xType", panel.xType());
+        m.put("height", panel.height());
+        m.put("legend", panel.legend() == null
+                ? null
+                : String.valueOf(panel.legend()));
+        m.put("yLabel", panel.yLabel());
+        m.put("xLabel", message(catalog, locale,
+                "view." + spec.id() + "." + panel.x(), humanize(panel.x())));
+        List<Map<String, Object>> seriesHeads = new ArrayList<>();
+        for (ViewSpec.Series charted : series) {
+            Map<String, Object> head = new LinkedHashMap<>();
+            head.put("label", message(catalog, locale,
+                    charted.label() != null
+                            ? charted.label()
+                            : "view." + spec.id() + "." + charted.column(),
+                    charted.label() != null
+                            ? charted.label()
+                            : humanize(charted.column())));
+            head.put("mark", charted.mark());
+            seriesHeads.add(head);
+        }
+        m.put("series", seriesHeads);
+        List<List<String>> chartRows = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            List<String> cells = new ArrayList<>(series.size() + 1);
+            Object x = row.get(panel.x());
+            cells.add(x == null ? "" : String.valueOf(x));
+            for (ViewSpec.Series charted : series) {
+                Object value = row.get(charted.column());
+                cells.add(value == null ? "" : String.valueOf(value));
+            }
+            chartRows.add(cells);
+        }
+        m.put("chartRows", chartRows);
+    }
+
+    /** A table panel: the same column/cell assembly a list view and a detail child use. */
+    private void tablePanel(Map<String, Object> m, ViewSpec.Panel panel, MessageCatalog catalog,
+            Locale locale, Map<String, Object> context, List<Map<String, Object>> rows) {
+        List<ViewSpec.Column> columns = columnsOf(panel.columns(), rows);
+        m.put("columns", renderedColumns(catalog, locale, columns));
+        m.put("rows", cellMatrix(context, columns, rows));
+    }
+
+    /**
+     * An embedded view (docs/view-composition.md wave 2b): the sub-model rides the panel; the
+     * pattern inserts the embedded document's own entry fragment, which brings its own card.
+     */
+    private void embedPanel(Map<String, Object> m, int index, Map<String, Object> context,
+            Locale locale, String pagePath, java.util.function.Predicate<String> permits) {
+        Embed embedded = panelEmbeds.get(index);
+        m.put("embed", embedded.binding().model(
+                embedContext(context, embedded), locale, pagePath, permits));
+        m.put("embedTemplate", embedded.binding().entryTemplate());
+    }
+
+    /** A list's model: the pager, the sort/search state, and the column/cell matrix. */
+    private void listModel(Map<String, Object> v, MessageCatalog catalog, Locale locale,
+            Map<String, Object> context, Map<String, Object> data, String pagePath) {
+        List<Map<String, Object>> rows = rows(data);
+        List<ViewSpec.Column> columns = columnsOf(spec.columns(), rows);
+        Map<String, Object> params = params(context);
+        v.put("path", pagePath);
+        live(v, pagePath, spec.id() + "-table", true);
+        v.put("page", pager(context, params, pagePath));
+        String sort = str(params.get("sort"));
+        String dir = str(params.get("dir"));
+        v.put("sort", sort);
+        v.put("dir", dir);
+        if (spec.search() != null) {
+            Map<String, Object> search = new LinkedHashMap<>();
+            search.put("param", spec.search());
+            search.put("value", str(params.get(spec.search())));
+            v.put("search", search);
+        }
+        List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
+        for (int i = 0; i < columns.size(); i++) {
+            ViewSpec.Column column = columns.get(i);
+            if (!column.isSortable()) {
+                continue;
+            }
+            Map<String, Object> c = rendered.get(i);
+            boolean active = column.name().equals(sort);
+            boolean descending = active && "desc".equals(dir);
+            c.put("sortable", true);
+            c.put("ariaSort", active ? (descending ? "descending" : "ascending") : "none");
+            c.put("sortHref", pagePath + "?sort=" + column.name() + "&dir="
+                    + (active && !descending ? "desc" : "asc"));
+        }
+        v.put("columns", rendered);
+        v.put("rows", cellMatrix(context, columns, rows));
+    }
+
+    /** A panel's context source: its {@code source:} or the document's {@code main} result. */
     private static String panelSource(ViewSpec.Panel panel) {
         return panel.source() == null || panel.source().isBlank()
                 ? io.tesseraql.yaml.model.RouteDefinition.MAIN
@@ -756,7 +861,7 @@ public final class ViewBinding {
         return cells;
     }
 
-    /** A context entry carrying a {@code {rows, rowCount}} result (main {@code sql} or named). */
+    /** A context entry carrying a {@code {rows, rowCount}} result ({@code main} or a named source). */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> sourceOf(Map<String, Object> context, String name) {
         Object raw = context.get(name);

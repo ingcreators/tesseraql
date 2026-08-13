@@ -114,7 +114,7 @@ public final class TransactionalCommandProcessor implements Processor {
     private final io.tesseraql.core.decision.DecisionTables decisions;
     private final List<io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify> notifications;
     private final io.tesseraql.yaml.messaging.PublishEvents.CompiledPublish publish;
-    private final Bounds defaultBounds;
+    private final ExecutionBounds defaultBounds;
     private static final System.Logger LOG = System
             .getLogger(TransactionalCommandProcessor.class.getName());
     private final String datasourceName;
@@ -126,28 +126,12 @@ public final class TransactionalCommandProcessor implements Processor {
     private final WorkflowBinding workflow;
 
     /**
-     * The execution bounds a command's statements inherit, resolved by the compiler from the
-     * same config keys the route-level SQL path uses. A command opens its own JDBC transaction
-     * and has no transaction manager to bound it, so without these a step can hold a pool
-     * connection open indefinitely and materialize an unbounded result set inside an open write
-     * transaction.
-     *
-     * @param timeoutSeconds statement timeout; {@code 0} disables it, as at route level
-     * @param maxRows        row cap for {@code mode: query} steps; negative disables it
-     * @param onOverflow     {@code fail} (default) or {@code warn} to truncate with a log line
+     * A compiled step: a parsed 2-way SQL statement or a managed sequence allocation. Its result
+     * publishes under {@code steps.<name>}.
      */
-    public record Bounds(int timeoutSeconds, int maxRows, String onOverflow) {
-    }
-
-    /**
-     * A compiled step: a parsed 2-way SQL statement or a managed sequence allocation.
-     *
-     * @param contextKey where the result is published: {@code sql} for the single-statement
-     *                   form, the step name (under {@code steps.}) otherwise
-     */
-    private record Step(String name, String contextKey, List<SqlNode> nodes, String sourcePath,
+    private record Step(String name, List<SqlNode> nodes, String sourcePath,
             String mode, Map<String, String> params, List<String> keys, Binding.Expect expect,
-            String sequence, Bounds bounds, io.tesseraql.core.expr.Expr when) {
+            String sequence, ExecutionBounds bounds, io.tesseraql.core.expr.Expr when) {
 
         boolean isSequence() {
             return sequence != null;
@@ -173,7 +157,7 @@ public final class TransactionalCommandProcessor implements Processor {
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
-            String appName, Bounds defaultBounds) {
+            String appName, ExecutionBounds defaultBounds) {
         this(routeId, declaredSteps, validate, decide, notify, stepFile, datasourceName,
                 dialect, outbox, publish, errors, appName, null, defaultBounds);
     }
@@ -190,7 +174,7 @@ public final class TransactionalCommandProcessor implements Processor {
             java.util.function.Function<String, Path> stepFile,
             String datasourceName, String dialect, OutboxSpec outbox,
             io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
-            String appName, WorkflowBinding workflow, Bounds defaultBounds) {
+            String appName, WorkflowBinding workflow, ExecutionBounds defaultBounds) {
         this.defaultBounds = defaultBounds;
         this.workflow = workflow;
         this.routeId = routeId;
@@ -255,12 +239,11 @@ public final class TransactionalCommandProcessor implements Processor {
             String name = entry.getKey();
             Binding binding = entry.getValue();
             validate(name, binding, seen);
-            String contextKey = name;
             io.tesseraql.core.expr.Expr when = binding.when() == null || binding.when().isBlank()
                     ? null
                     : io.tesseraql.core.expr.ExpressionParser.parse(binding.when());
             if (binding.isSequence()) {
-                compiled.add(new Step(name, contextKey, null, null, "sequence",
+                compiled.add(new Step(name, null, null, "sequence",
                         binding.params(), List.of(), null, binding.sequence(),
                         boundsFor(binding), when));
             } else {
@@ -275,7 +258,7 @@ public final class TransactionalCommandProcessor implements Processor {
                     throw invalid("step '" + name + "': expect/keys need an update statement -"
                             + " declare mode: update");
                 }
-                compiled.add(new Step(name, contextKey, Sql2WayParser.parse(read(file)),
+                compiled.add(new Step(name, Sql2WayParser.parse(read(file)),
                         file.toString(), mode,
                         binding.params(), binding.keys(), binding.expect(), null,
                         boundsFor(binding), when));
@@ -290,9 +273,9 @@ public final class TransactionalCommandProcessor implements Processor {
      * declared, otherwise the app-wide defaults the compiler resolved — the same precedence the
      * route-level SQL path applies.
      */
-    private Bounds boundsFor(Binding binding) {
+    private ExecutionBounds boundsFor(Binding binding) {
         if (defaultBounds == null) {
-            return new Bounds(0, -1, "fail");
+            return new ExecutionBounds(0, -1, "fail");
         }
         int timeout = binding.timeoutSeconds() != null
                 ? Math.max(0, binding.timeoutSeconds())
@@ -304,7 +287,7 @@ public final class TransactionalCommandProcessor implements Processor {
                 && binding.materialize().onOverflow() != null
                         ? binding.materialize().onOverflow()
                         : defaultBounds.onOverflow();
-        return new Bounds(timeout, maxRows, onOverflow);
+        return new ExecutionBounds(timeout, maxRows, onOverflow);
     }
 
     /** Fail-fast validation of one step declaration (runs at route build time). */
@@ -765,7 +748,8 @@ public final class TransactionalCommandProcessor implements Processor {
     }
 
     private static Map<String, Object> executeQuery(Connection connection, BoundSql bound,
-            String label, String sourcePath, Bounds bounds, String dialect) throws SQLException {
+            String label, String sourcePath, ExecutionBounds bounds, String dialect)
+            throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
             applyTimeout(statement, bounds);
             bind(statement, bound);
@@ -807,7 +791,7 @@ public final class TransactionalCommandProcessor implements Processor {
     }
 
     /** Bounds one statement, so a runaway query cannot pin this transaction's connection. */
-    private static void applyTimeout(PreparedStatement statement, Bounds bounds)
+    private static void applyTimeout(PreparedStatement statement, ExecutionBounds bounds)
             throws SQLException {
         int seconds = bounds == null ? 0 : bounds.timeoutSeconds();
         if (seconds > 0) {

@@ -37,20 +37,9 @@ public final class FileExportStartProcessor implements Processor {
     private final java.util.List<EnrichProcessor> enrichments;
 
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
-            FileWriteSpec writeSpec, String localeDeclaration, String timezoneDeclaration,
-            String filename, Path querySqlFile, String afterTiming, Path afterSqlFile,
-            io.tesseraql.core.files.ExportRowCap rowCap,
-            java.util.List<io.tesseraql.core.files.ExportQuery> queries,
-            java.util.Set<String> httpSources) {
-        this(routeId, urlPath, appName, format, writeSpec, localeDeclaration, timezoneDeclaration,
-                filename, querySqlFile, afterTiming, afterSqlFile, rowCap, queries, httpSources,
-                java.util.List.of());
-    }
-
-    public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
-            io.tesseraql.core.files.FileWriteSpec writeSpec, String localeDeclaration,
-            String timezoneDeclaration, String filename, java.nio.file.Path querySqlFile,
-            String afterTiming, java.nio.file.Path afterSqlFile,
+            FileWriteSpec writeSpec, String localeDeclaration,
+            String timezoneDeclaration, String filename, Path querySqlFile,
+            String afterTiming, Path afterSqlFile,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
             java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
