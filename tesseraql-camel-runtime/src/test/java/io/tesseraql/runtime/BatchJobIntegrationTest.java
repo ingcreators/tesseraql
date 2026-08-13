@@ -419,6 +419,22 @@ class BatchJobIntegrationTest {
         assertThat(rowsOf("select count(*) from http_envelope where row_count = 6")).isEqualTo(1);
     }
 
+    @Test
+    void aStepFoldsAReferenceIntoItsOwnRows() {
+        // Two holes closed at once (docs/unified-sources.md decision 5). A step's enrich: was
+        // dropped at parse time — declared, never run, never reported. And source: was read as
+        // a root key, which no job result is: a job publishes under steps.<id>, so the sibling
+        // arm was unaddressable on the whole job side rather than unsupported there.
+        JobExecution execution = runtime.runJob("user.stepEnriched",
+                Map.of("businessDate", "2026-08-06"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        // h01's payload came from the API step's rows, merged on item_key, and reached a later
+        // step's bind through the enriched context.
+        assertThat(rowsOf("select count(*) from step_enriched"
+                + " where label = '1' and row_count = 2")).isEqualTo(1);
+    }
+
     private static long rowsOf(String query) {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -1176,7 +1192,12 @@ class BatchJobIntegrationTest {
                 .append("create table chunk_results_h"
                         + " (item_key varchar(32) primary key, val integer not null);\n")
                 .append("create table http_envelope"
-                        + " (first_key varchar(32) primary key, row_count integer not null);\n");
+                        + " (first_key varchar(32) primary key, row_count integer not null);\n")
+                // A step's own enrich:, whose reference is a sibling step's rows.
+                .append("create table enrich_items (item_key varchar(32) primary key);\n")
+                .append("insert into enrich_items values ('h01'), ('h02');\n")
+                .append("create table step_enriched"
+                        + " (label varchar(32) primary key, row_count integer not null);\n");
         for (int i = 1; i <= 60; i++) {
             chunkFixtures.append("insert into chunk_items_c values ('c%02d', '1');%n"
                     .formatted(i));
@@ -1255,6 +1276,39 @@ class BatchJobIntegrationTest {
                       params:
                         firstKey: steps.fetch.first.item_key
                         rowCount: steps.fetch.rowCount
+                """.formatted(partnerPort));
+        Files.writeString(target.resolve("batch/chunk/items-h.sql"),
+                "select item_key from enrich_items order by item_key\n");
+        Files.writeString(target.resolve("batch/chunk/record-enriched.sql"), """
+                insert into step_enriched (label, row_count)
+                values (/* label */'x', /* rowCount */0)
+                """);
+        Files.writeString(target.resolve("batch/chunk/step-enriched.yml"), """
+                version: tesseraql/v1
+                id: user.stepEnriched
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: partner
+                    http:
+                      url: http://localhost:%d/companies
+                      select: companies
+                  - id: items
+                    sql:
+                      file: items-h.sql
+                      mode: query
+                    enrich:
+                      payload:
+                        source: steps.partner
+                        on: { item_key: item_key }
+                        merge: [payload]
+                  - id: record
+                    sql:
+                      file: record-enriched.sql
+                      mode: update
+                      params:
+                        label: steps.items.first.payload
+                        rowCount: steps.items.rowCount
                 """.formatted(partnerPort));
         Files.writeString(target.resolve("batch/chunk/slow.yml"), """
                 version: tesseraql/v1

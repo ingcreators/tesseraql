@@ -218,16 +218,28 @@ public final class KeyedReference {
      * <p>There is no key set to send anywhere, which is the whole point: {@code nest:} existed
      * because joining two results the document already had needed no fetch, and it was a second
      * vocabulary for that reason alone.
+     *
+     * <p>The name is a <em>context path</em>, not a root key. A route's sources sit at the root,
+     * so {@code source: rates} reads the same either way; a job's results sit under
+     * {@code steps}, and a root lookup could never reach one — which made the arm unaddressable
+     * on the whole job side rather than unsupported there.
      */
     @SuppressWarnings("unchecked")
     private Map<Object, List<Map<String, Object>>> fromSibling(Map<String, Object> context,
             List<String> matchColumns) {
-        Object sibling = context.get(spec.source());
+        Object sibling = new io.tesseraql.core.expr.EvaluationContext(context)
+                .resolve(java.util.Arrays.asList(spec.source().split("\\.")));
         if (!(sibling instanceof Map<?, ?> result)
                 || !(((Map<String, Object>) result).get("rows") instanceof List<?> siblingRows)) {
             throw TqlException.builder(NO_SIBLING)
                     .message("enrich '" + name + "': source: '" + spec.source()
-                            + "' is not a result set with rows")
+                            + "' is not a result set with rows"
+                            + (sibling instanceof Map<?, ?> spooled
+                                    && ((Map<String, Object>) spooled).containsKey("spool")
+                                            ? " - it spooled its rows instead of holding them,"
+                                                    + " so load the spool into a table with a"
+                                                    + " chunk: step and reference that"
+                                            : ""))
                     .source(sourcePath)
                     .build();
         }

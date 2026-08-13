@@ -1008,6 +1008,73 @@ class AppLinterTest {
     }
 
     @Test
+    void aStepsEnrichNeedsRowsToFoldInto(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                """);
+        Files.createDirectories(dir.resolve("batch/sync"));
+        Files.writeString(dir.resolve("batch/sync/orders.sql"), "select id, code from orders\n");
+        Files.writeString(dir.resolve("batch/sync/close.sql"), "update orders set closed = 1\n");
+        Files.writeString(dir.resolve("batch/sync/names.sql"),
+                "select code, name from codes where code in /* keys */('A')\n");
+        Files.writeString(dir.resolve("batch/sync/job.yml"), """
+                version: tesseraql/v1
+                id: orders.sync
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: read
+                    sql:
+                      file: orders.sql
+                      mode: query
+                    enrich:
+                      name:
+                        on: { code: code }
+                        sql:
+                          file: names.sql
+                        merge: [name]
+                  - id: close
+                    sql:
+                      file: close.sql
+                      mode: update
+                    enrich:
+                      name:
+                        on: { code: code }
+                        sql:
+                          file: names.sql
+                        merge: [name]
+                  - id: missing
+                    sql:
+                      file: orders.sql
+                      mode: query
+                    enrich:
+                      name:
+                        on: { code: code }
+                        sql:
+                          file: ghost.sql
+                        merge: [name]
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // A write holds no rows, so there is nothing for a reference to fold into.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-FIELD-2004") && f.isError())
+                .singleElement()
+                .matches(f -> f.message().contains("'close'")
+                        && f.message().contains("holds no rows"));
+        // A reading step's references are checked like a chunk's: the file has to exist.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-BATCH-4206") && f.isError())
+                .singleElement()
+                .matches(f -> f.message().contains("'missing'")
+                        && f.message().contains("ghost.sql"));
+    }
+
+    @Test
     void anHttpArmsModesAreTheOnesACallHas(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

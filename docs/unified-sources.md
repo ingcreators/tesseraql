@@ -630,11 +630,24 @@ Each lands green on its own; boundaries may re-cut at implementation.
 Former questions 1 (`sequence` placement) and 2 (`sources:` on jobs) are resolved — decisions 1
 and 17. Remaining:
 
-1. `enrich.source` composition when the sibling is spooled: the direction is the `SpooledRows`
-   re-read the export pipeline already has, and the memory bound is what needs the design.
-   Until then the attempt fails loudly rather than quietly — a spooled result publishes no
-   `rows`, and `source:` naming one raises `TQL-CAMEL-3114` ("not a result set with rows")
-   instead of composing zero rows.
+1. `enrich.source` composition when the sibling is spooled — **deliberately not built**, and the
+   reason is worth recording rather than leaving as a to-do.
+
+   Two defects had to be cleared before the question was even askable, and both are fixed: a
+   step's `enrich:` was dropped at parse time, and `source:` was read as a root key, which no
+   job result is. With those closed, the remaining problem is the memory bound. `fromSibling`
+   builds the whole `Map<key, List<row>>` index, and a spooled sibling is spooled precisely
+   because it is large — so a naive read gives back what spooling bought. The shape that would
+   work is a key-to-offset index over the spool (memory proportional to distinct keys, not
+   rows), on top of the re-readable `SpooledRows`; the encodings differ too, since a job spool
+   is JSONL and `SpooledRows` is the tagged binary form.
+
+   It is not built because the framework already has a better answer for a large keyed
+   reference, and decision 19a is what made it expressible: spool the extract, load it into a
+   table with a `chunk:` step, and reference that table with `enrich: { sql: … }`. The database
+   does the join, the load is restartable, and no join engine has to grow on top of the spool.
+   The attempt fails loudly rather than quietly — `TQL-CAMEL-3114` names the spooled sibling and
+   points at that path.
 2. The spool's second consumer — an `http` step body streaming spooled rows (NDJSON or a JSON
    array) to a partner API. Deferred until a real integration asks; the consumer contract from
    decision 19 is the foundation it would build on.

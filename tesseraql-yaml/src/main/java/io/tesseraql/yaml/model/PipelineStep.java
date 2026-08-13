@@ -24,6 +24,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *       {@code writer:} role slots.</li>
  * </ul>
  *
+ * <p>{@code enrich:} sits beside the arm as it does on a route source: it is about the rows,
+ * whatever fetched them (docs/unified-sources.md decision 5). A step that reads — {@code mode:
+ * query} or an {@code http:} call — can fold keyed references into its rows before later steps
+ * bind them. A step that holds no rows cannot, and says so at build time rather than dropping
+ * the declaration.
+ *
  * <pre>{@code
  * - id: report
  *   sql: { file: report.sql, mode: query }
@@ -64,22 +70,24 @@ public record PipelineStep(String id, Binding sql,
             @JsonProperty("notify") NotifySpec notification,
             @JsonProperty("chunk") ChunkSpec chunk,
             @JsonProperty("export") ExportSpec export,
-            @JsonProperty("push") PushSpec push) {
-        Binding binding = sql == null && http == null && when == null
+            @JsonProperty("push") PushSpec push,
+            @JsonProperty("enrich") java.util.Map<String, EnrichSpec> enrich) {
+        Binding binding = sql == null && http == null && when == null && enrich == null
                 ? null
-                : binding(sql, http, when);
+                : binding(sql, http, when, enrich);
         return new PipelineStep(id, binding, notification, chunk, export, push);
     }
 
-    private static Binding binding(Binding.SqlArm sql, HttpSourceSpec http, String when) {
+    private static Binding binding(Binding.SqlArm sql, HttpSourceSpec http, String when,
+            java.util.Map<String, EnrichSpec> enrich) {
         Binding armed = Binding.sql(sql);
         return armed == null
                 ? new Binding(null, null, http == null ? null : http.mode(), null, null, http,
-                        null, null, null, null, null, null, null, when, null)
+                        null, null, null, null, null, null, null, when, enrich)
                 : new Binding(armed.file(), armed.contract(), armed.mode(), armed.params(),
                         armed.service(), http, armed.materialize(), armed.sequence(),
                         armed.keys(), armed.expect(), armed.timeoutSeconds(), armed.datasource(),
-                        null, when, null);
+                        null, when, enrich);
     }
 
     /** Convenience constructor for a SQL step (the pre-Phase-20 shape). */

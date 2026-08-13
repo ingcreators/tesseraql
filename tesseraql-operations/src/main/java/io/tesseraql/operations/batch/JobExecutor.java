@@ -454,6 +454,7 @@ public final class JobExecutor {
                 result = runStep(jobFile, step, stepDataSource(step, dataSource), context,
                         stepContext);
             }
+            result = enrichStepRows(jobFile, step, dataSource, context, result);
             stepResults.put(step.id(), result);
             if (Boolean.TRUE.equals(result.get("stopped"))) {
                 // The chunk stopped on a committed checkpoint: counts are real, a rerun
@@ -809,6 +810,40 @@ public final class JobExecutor {
     }
 
     /**
+     * A reading step's own {@code enrich:} folded into its rows before any later step binds them
+     * (docs/unified-sources.md decision 5). An enrichment is about the rows, whatever fetched
+     * them, so a step's arm gets the same treatment a route source's does — the declaration used
+     * to be dropped at parse time, which is the failure mode where the document says one thing
+     * and the runtime does another.
+     *
+     * <p>It runs after the step's own connection is closed, so a reference on the same pool never
+     * waits on the connection the step just used.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> enrichStepRows(JobFile jobFile, PipelineStep step,
+            DataSource jobPool, Map<String, Object> context, Map<String, Object> result) {
+        if (step.sql() == null || step.sql().enrich().isEmpty()) {
+            return result;
+        }
+        if (!(result.get("rows") instanceof List<?> rows)) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "' declares enrich: but holds no rows - only"
+                            + " a step that reads (mode: query, or an http: call) has rows to"
+                            + " fold a reference into")
+                    .build();
+        }
+        DataSource pool = stepDataSource(step, jobPool);
+        List<Map<String, Object>> enriched = enrichWindow(
+                enrichments(jobFile, step.sql().enrich(), dialectOf(pool)), step, context, pool,
+                (List<Map<String, Object>>) rows);
+        Map<String, Object> updated = new LinkedHashMap<>(result);
+        updated.put("rows", enriched);
+        updated.put("rowCount", enriched.size());
+        updated.put("first", enriched.isEmpty() ? null : enriched.get(0));
+        return updated;
+    }
+
+    /**
      * The chunk's {@code enrich:} entries, built once per step (docs/lookups.md, slice 14).
      *
      * <p>The algorithm is {@link io.tesseraql.yaml.enrich.KeyedReference}'s — the same one a
@@ -818,8 +853,18 @@ public final class JobExecutor {
      */
     private List<io.tesseraql.yaml.enrich.KeyedReference> chunkEnrichments(JobFile jobFile,
             PipelineStep step, io.tesseraql.yaml.model.ChunkSpec chunk, String dialect) {
+        return enrichments(jobFile, chunk.enrich(), dialect);
+    }
+
+    /**
+     * The references one {@code enrich:} map declares, in authored order — a chunk reader's, or
+     * a reading step's own. Both are the rows of an acquisition, so both fold references in the
+     * same way; only where the rows came from differs.
+     */
+    private List<io.tesseraql.yaml.enrich.KeyedReference> enrichments(JobFile jobFile,
+            Map<String, io.tesseraql.yaml.model.EnrichSpec> declared, String dialect) {
         List<io.tesseraql.yaml.enrich.KeyedReference> references = new java.util.ArrayList<>();
-        chunk.enrich().forEach((name, spec) -> {
+        declared.forEach((name, spec) -> {
             if (spec.sql() == null) {
                 references.add(new io.tesseraql.yaml.enrich.KeyedReference(name, spec,
                         List.of(), null, null, dialect,
@@ -859,7 +904,7 @@ public final class JobExecutor {
             } catch (SQLException ex) {
                 throw TqlException.builder(STEP_ERROR)
                         .message("Step '" + step.id() + "': enrich '" + reference.name()
-                                + "' failed for a window of " + window.size() + " rows")
+                                + "' failed for " + window.size() + " rows")
                         .cause(ex)
                         .build();
             }

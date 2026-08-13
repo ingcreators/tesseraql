@@ -2455,6 +2455,16 @@ public final class AppLinter {
                 findings.add(new LintFinding("TQL-YAML-1021", "error", source,
                         "Step '" + name + "' timeoutSeconds must be >= 0"));
             }
+            // A route step is a write — the transactional arms only (decision 9) — so it
+            // publishes affectedRows and keys, never rows. An enrichment folds into rows, so
+            // there is nothing here for one to fold into, and the compiler builds enrichment
+            // processors from sources: alone. Declared here it was accepted and dropped.
+            if (!step.enrich().isEmpty()) {
+                findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '" + name
+                        + "' declares enrich: but a command step writes - it publishes"
+                        + " affectedRows and keys, not rows. An enrichment nests under the"
+                        + " source whose rows it folds into."));
+            }
         });
         definition.sources().forEach((name, query) -> {
             if (query.timeoutSeconds() != null && query.timeoutSeconds() < 0) {
@@ -4422,6 +4432,7 @@ public final class AppLinter {
                 lintHttpCall(config, step.id(), step.sql().http().call(), source, findings);
                 lintHttpMode(step, source, findings);
             }
+            lintStepEnrich(job, step, source, findings);
             if (step.chunk() != null) {
                 lintChunk(job, step, source, findings);
             }
@@ -4432,6 +4443,45 @@ public final class AppLinter {
                 lintPushStep(config, step, source, findings);
             }
         }
+    }
+
+    /**
+     * A step's own {@code enrich:} folds references into the rows the step read, so the step has
+     * to have rows: {@code mode: query} or an {@code http:} call. A write, a sequence allocation
+     * and a {@code query-spool} extract hold none — spooling is the declaration that the rows
+     * were never held — and a chunk step folds its references on the reader, per window.
+     *
+     * <p>Each reference's SQL file is checked here too, the way a chunk's are: a missing lookup
+     * discovered at 3am is a build error that was available all along.
+     */
+    private void lintStepEnrich(io.tesseraql.yaml.manifest.JobFile job,
+            io.tesseraql.yaml.model.PipelineStep step, String source, List<LintFinding> findings) {
+        if (step.sql() == null || step.sql().enrich().isEmpty()) {
+            return;
+        }
+        String mode = step.sql().effectiveMode();
+        boolean reads = step.sql().declaresHttp()
+                ? !"query-spool".equals(mode)
+                : step.sql().isSql() && "query".equals(mode);
+        if (!reads) {
+            findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '" + step.id()
+                    + "' declares enrich: but holds no rows - only a step that reads (mode:"
+                    + " query, or an http: call) has rows to fold a reference into; a chunk"
+                    + " step declares its enrich: on the reader"));
+            return;
+        }
+        step.sql().enrich().forEach((name, enrich) -> {
+            if (enrich.sql() == null || enrich.sql().file() == null
+                    || enrich.sql().file().isBlank()) {
+                return;
+            }
+            Path file = job.source().getParent().resolve(enrich.sql().file()).normalize();
+            if (!java.nio.file.Files.isRegularFile(file)) {
+                findings.add(new LintFinding("TQL-BATCH-4206", "error", source, "Step '"
+                        + step.id() + "': enrich '" + name + "' references a missing SQL file: "
+                        + enrich.sql().file()));
+            }
+        });
     }
 
     /**

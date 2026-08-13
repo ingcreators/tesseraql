@@ -283,6 +283,34 @@ pipeline:
         total: steps.headcount.first.total    # a response row, bound like a query's
 ```
 
+### Enriching a step's rows
+
+A reading step folds keyed references into its rows before any later step binds them, with the
+same `enrich:` block a route source and a chunk reader carry ([lookups](lookups.md)) — an
+enrichment is about the rows, whatever fetched them. The reference is `sql:` (fetch by key),
+`http:` (call by key), or `source:` (a result the job already has, joined without a fetch):
+
+```yaml
+pipeline:
+  - id: partner
+    http: { url: https://api.partner.example/v1/companies, select: companies }
+  - id: orders
+    sql:
+      file: open-orders.sql
+      mode: query
+    enrich:
+      partnerName:
+        source: steps.partner          # a sibling result, named by its context path
+        on: { partner_code: code }
+        merge: [name]
+```
+
+`source:` names a **context path**, so on a job it is `steps.<id>` — a route's sources sit at
+the root and are named directly. Only a step that reads has rows to fold into: `enrich:` on a
+write, on a sequence allocation, or on a `query-spool` extract is a build error, and a chunk
+step declares its `enrich:` on the reader, where it runs per window. A sibling that spooled
+publishes no rows by design; load it into a table with a `chunk:` step and reference that.
+
 ## The chunk step
 
 A per-row rewrite too large for one transaction — revalue a million orders, anonymize

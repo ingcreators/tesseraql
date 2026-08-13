@@ -122,8 +122,22 @@ All notable changes to TesseraQL are documented here. The format follows
   gateway still buffers the response body, so the spool bounds what the rest of the job holds,
   not the call. `update` on an `http:` arm is refused at build time: a call reads.
 
+- **A reading step folds references into its own rows** (docs/unified-sources.md decision 5).
+  A job step's `enrich:` was read by nothing: the key was dropped at parse time, so the
+  declaration was accepted, never run, and never reported — the failure mode where the document
+  says one thing and the runtime does another. A step that reads (`mode: query`, or an `http:`
+  call) now enriches like a route source and a chunk reader do; a step that holds no rows says
+  so at build time instead of dropping the block, and so does a command step, whose writes
+  publish `affectedRows` and keys rather than rows.
+
 ### Fixed
 
+- **An enrichment's `source:` could not name a job result.** It was read as a root context key,
+  and a job publishes under `steps.<id>` — so the sibling arm was unaddressable on the whole job
+  side rather than unsupported there, and the error blamed the wrong thing. It resolves as a
+  context path now, which is what a route's `source: rates` already was, one segment long. A
+  sibling that spooled still refuses (`TQL-CAMEL-3114`), and now says what to do instead: load
+  the spool into a table with a `chunk:` step and reference that.
 - **The shipped `binding` schema described a shape the parser no longer reads.** After the arms
   landed, the definition still offered a bare `file:` and a string `contract:` — the flat
   record, not the nested authoring form — and the published YAML surface reference is generated
