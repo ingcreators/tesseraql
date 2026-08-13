@@ -300,8 +300,8 @@ Beyond SQL lines and branches, the run derives *item coverage* — covered-of-de
 - `route` / `security` — declared routes, and the subset declaring `security:`, whose SQL the
   suites exercise; `api-key`, `mtls`, `webhook`, `view`, `page`, and `document` narrow the
   same idea to routes of those shapes.
-- `validation` / `notification` / `http:` — every `validate:` rule, `notify:` declaration,
-  and outbound HTTP step, covered by the cases that evaluate it.
+- `validation` / `notification` / `http` — every `validate:` rule, `notify:` declaration,
+  and outbound call, covered by the cases that evaluate it.
 - `message` — every message catalog, covered by the `messages` cases that read it.
 - `file-poll`, `queue-consume`, `data-scope`, `workflow`, `mcp`, `mcp-resource`, `mcp-ui` —
   the corresponding declarations, covered by the cases exercising their SQL.

@@ -74,8 +74,8 @@ public record PipelineStep(String id, Binding sql,
     private static Binding binding(Binding.SqlArm sql, HttpSourceSpec http, String when) {
         Binding armed = Binding.sql(sql);
         return armed == null
-                ? new Binding(null, null, null, null, null, http, null, null, null, null, null,
-                        null, null, when, null)
+                ? new Binding(null, null, http == null ? null : http.mode(), null, null, http,
+                        null, null, null, null, null, null, null, when, null)
                 : new Binding(armed.file(), armed.contract(), armed.mode(), armed.params(),
                         armed.service(), http, armed.materialize(), armed.sequence(),
                         armed.keys(), armed.expect(), armed.timeoutSeconds(), armed.datasource(),

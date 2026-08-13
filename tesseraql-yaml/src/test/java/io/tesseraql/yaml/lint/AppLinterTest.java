@@ -1008,6 +1008,59 @@ class AppLinterTest {
     }
 
     @Test
+    void anHttpArmsModesAreTheOnesACallHas(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  http:
+                    outbound:
+                      allowedHosts:
+                        - api.partner.example
+                """);
+        Files.createDirectories(dir.resolve("batch/sync"));
+        Files.writeString(dir.resolve("batch/sync/writer.sql"),
+                "insert into c values (/* row.code */'x')\n");
+        Files.writeString(dir.resolve("batch/sync/job.yml"), """
+                version: tesseraql/v1
+                id: orders.sync
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: fetch
+                    http:
+                      url: https://api.partner.example/v1/companies
+                      select: companies
+                      mode: query-spool
+                  - id: written
+                    http:
+                      url: https://api.partner.example/v1/orders
+                      mode: update
+                  - id: load
+                    chunk:
+                      reader:
+                        spool: steps.fetch.spool
+                      writer:
+                        sql:
+                          file: writer.sql
+                      key: code
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        // A call reads, so update is a SQL mode written on a call.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-FIELD-2004") && f.isError())
+                .singleElement()
+                .matches(f -> f.message().contains("'written'")
+                        && f.message().contains("http: mode 'update'"));
+        // ...and the spool a call filled is a spool: the reader's reference resolves
+        // (docs/unified-sources.md decision 19a), where before only a SQL step could fill one.
+        assertThat(findings).noneMatch(f -> f.code().equals("TQL-BATCH-4206"));
+    }
+
+    @Test
     void lintsInboundWebhookRoutes(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """

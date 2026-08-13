@@ -497,7 +497,7 @@ class ManifestCoverageTest {
                                                                 "https://api.partner.example/v1/orders",
                                                                 Map.of(), Map.of(), "partner",
                                                                 null, 201, null, null),
-                                                        null, null, null)))),
+                                                        null, null, null, null)))),
                         false, null));
     }
 
@@ -517,7 +517,7 @@ class ManifestCoverageTest {
                 List.of(httpCallSuite("orders.sync", null)));
         ItemCoverage none = ManifestCoverage.httpCall(manifest, List.of());
 
-        assertThat(all.kind()).isEqualTo("httpCall");
+        assertThat(all.kind()).isEqualTo("http");
         // The surrounding SQL step is not an http-call and is not declared.
         assertThat(all.declared()).containsExactly("orders.sync.push");
         assertThat(all.covered()).containsExactly("orders.sync.push");

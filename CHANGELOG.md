@@ -102,9 +102,38 @@ All notable changes to TesseraQL are documented here. The format follows
   step and a route source spoke two vocabularies for one mechanism. A suite case names its target
   after the document key it points at — as `sql:`, `contract:` and `notify:` already do — so the
   case key moved with it. After this, every place an outbound call is declared or targeted spells
-  it `http:`.
+  it `http:` — including the coverage kind, which gates on `coverage.thresholds.http`.
+
+- **An `http:` step publishes the envelope every read publishes** (docs/unified-sources.md
+  decision 10). `select:` names the part of the response that becomes rows, exactly as it does
+  on a route's `http:` source, and the step's `rows` / `rowCount` / `first` sit beside the
+  call's `status` / `body` / `headers`. Before, a job step published the response only, so
+  binding one row of it meant walking the raw body — the arm meant two different things
+  depending on which document declared it. `onError: empty` degrades a failed call the same way
+  it does on a route, logged and metered rather than silently.
+
+- **An `http:` acquisition can spool, so a chunk loads what an API returned**
+  (docs/unified-sources.md decision 19a). Spooling is not a SQL feature — it is what a large
+  result does on its way to a consumer that reads it once — so `mode: query-spool` means the
+  same thing on a call, and the same `reader: { spool: … }` loads it. This closes a gap the
+  campaign would otherwise have left: fetching a large result from an API and writing it into
+  the database had no expressible shape, since a statement bound to a response holds every row
+  and the only alternative was a file round trip through `push:` and a poll trigger. The
+  gateway still buffers the response body, so the spool bounds what the rest of the job holds,
+  not the call. `update` on an `http:` arm is refused at build time: a call reads.
 
 ### Fixed
+
+- **The shipped `binding` schema described a shape the parser no longer reads.** After the arms
+  landed, the definition still offered a bare `file:` and a string `contract:` — the flat
+  record, not the nested authoring form — and the published YAML surface reference is generated
+  from it, so a reader authoring from the reference wrote documents that silently did nothing.
+  The definition now documents the arms, and a test compares it against the creator's
+  parameters so the next added key cannot drift the same way.
+- **Linting an app whose chunk reader took a spool crashed the linter.** The reader's SQL file
+  was resolved before asking whether there was one, so `reader: { spool: … }` — the shape the
+  cross-connector copy introduced — threw a `NullPointerException` out of `lint`. A spooled
+  reader has no SQL to inspect: its order is the order the spool was written in.
 
 - **`query-spool` stopped promising a result nothing could reach.** The mode published a spool
   reference that no pipeline vocabulary read: the only consumers of `tempStore.openInput` were

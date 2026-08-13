@@ -1,12 +1,16 @@
 # The unified source model
 
-Status: **designed 2026-08-12; slices 1-9 and 11-12 implemented 2026-08-12.**
+Status: **designed 2026-08-12; all twelve slices implemented 2026-08-12/13.**
 Pre-1.0 breaking change (rule 10): the replaced spellings are deleted, not aliased; the
 CHANGELOG records what changed and why.
 
-Still open: the Studio/portal half of slice 10 — the editor extension and the generated
-references are caught up — and decision 19a's second half: the chunk reader takes a spool from
-whoever filled it, and today only `mode: query-spool` fills one.
+One pivot, in decision 19a: the sketch put `mode: query-spool` on the step, beside the `http:`
+arm. It is authored **inside the arm** instead. Decision 9 places binding attributes in the arm
+that owns them, and `sql:`, `contract:` and `service:` already carry a `mode:` — so the arm is
+where a reader looks for one, and a step-level `mode:` would have been a second home for a key
+the `sql` arm already has. What 19a actually asks for — that spooling not be SQL-specific — is
+satisfied by the binding exposing one `mode()` whichever arm answered: every arm carries a
+`mode:`, and the legal values are the mechanism's (`update` on a call is refused at build time).
 
 How a document acquires data is spelled five different ways: a privileged top-level `sql:`, a
 `queries:` map, a parallel `http:` map, a `sql:`/`http:` pair inside every `enrich:` entry, and an
@@ -601,7 +605,11 @@ Each lands green on its own; boundaries may re-cut at implementation.
 9. **Alignment sweep** — `httpCall:` → `http:`, workflow `command:`/`basePath:`, vocabulary
    notes.
 10. **Tooling catch-up** — extension, Studio, portal, scaffolder, docs regen; one slice so the
-    editors flip to the new surface atomically.
+    editors flip to the new surface atomically. Its largest find was the shared `binding`
+    definition: it still described the pre-nesting flat record, so the editor and the generated
+    reference offered a bare `file:` and a string `contract:` — keys the parser silently ignores.
+    A test now compares that definition against the creator's parameters, because the drift was
+    invisible to every check the schema had.
 
 ## Out of scope
 
@@ -623,7 +631,10 @@ Former questions 1 (`sequence` placement) and 2 (`sources:` on jobs) are resolve
 and 17. Remaining:
 
 1. `enrich.source` composition when the sibling is spooled: the direction is the `SpooledRows`
-   re-read the export pipeline already has; the memory bound gets its own look in slice 7.
+   re-read the export pipeline already has, and the memory bound is what needs the design.
+   Until then the attempt fails loudly rather than quietly — a spooled result publishes no
+   `rows`, and `source:` naming one raises `TQL-CAMEL-3114` ("not a result set with rows")
+   instead of composing zero rows.
 2. The spool's second consumer — an `http` step body streaming spooled rows (NDJSON or a JSON
    array) to a partner API. Deferred until a real integration asks; the consumer contract from
    decision 19 is the foundation it would build on.

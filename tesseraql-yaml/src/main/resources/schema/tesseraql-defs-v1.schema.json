@@ -26,10 +26,6 @@
         "type": "string",
         "description": "The named connector under tesseraql.datasources the route's SQL runs on, defaulting to main. The name must be declared (TQL-YAML-1035); a non-main route cannot declare notify:/publish:/outbox: or sequence allocation - they ride the main connector (TQL-YAML-1036)."
       },
-      "sql": {
-        "$ref": "#/$defs/binding",
-        "description": "The document's single statement: a colocated 2-way SQL file, a named IAM contract, or a service call. Its result binds as `rows`."
-      },
       "import": {
         "type": "object",
         "additionalProperties": true,
@@ -217,109 +213,236 @@
     "binding": {
       "type": "object",
       "properties": {
-        "file": {
-          "type": "string",
-          "description": "A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). One of the mechanism arms: file | contract | service | http, plus the write-side sequence."
+        "sql": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "A colocated 2-way SQL file, relative to the declaring document (must exist; TQL-SQL-2103). This arm's acquisition target, the role `url` plays for `http`."
+            },
+            "mode": {
+              "type": "string",
+              "examples": [
+                "query",
+                "query-one",
+                "update",
+                "query-spool"
+              ],
+              "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (rows streamed to a spool a later chunk: step reads, never held)."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`."
+            },
+            "keys": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<id>.keys.<column>`."
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
+            },
+            "datasource": {
+              "type": "string",
+              "description": "The named connector this read runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037)."
+            },
+            "materialize": {
+              "type": "object",
+              "properties": {
+                "maxRows": {
+                  "type": "integer",
+                  "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
+                },
+                "onOverflow": {
+                  "type": "string",
+                  "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
+                }
+              },
+              "additionalProperties": true,
+              "description": "Bounds on how much of the result is held in memory."
+            },
+            "expect": {
+              "type": "object",
+              "properties": {
+                "rowCount": {
+                  "type": "integer",
+                  "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
+                },
+                "onMismatch": {
+                  "type": "string",
+                  "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
+                }
+              },
+              "additionalProperties": true,
+              "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The SQL arm: a colocated 2-way SQL file and how it is run. The keys of the mechanism nest inside the arm that owns them, so there is nowhere to write a call's `select:` on a statement and no lint has to say it is wrong."
         },
         "contract": {
-          "type": "string",
-          "description": "A named IAM SQL contract to execute instead of a colocated file, so an app can reuse the identity schema statements. Documented in authentication.md."
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The named IAM SQL contract to execute instead of a colocated file, so an app reuses the identity schema's statements. Documented in authentication.md."
+            },
+            "mode": {
+              "type": "string",
+              "examples": [
+                "query",
+                "query-one",
+                "update"
+              ],
+              "description": "How the contract runs and what it binds, exactly as it means on the `sql` arm."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`."
+            },
+            "expect": {
+              "type": "object",
+              "properties": {
+                "rowCount": {
+                  "type": "integer",
+                  "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
+                },
+                "onMismatch": {
+                  "type": "string",
+                  "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
+                }
+              },
+              "additionalProperties": true,
+              "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The contract arm: a statement the identity schema owns, called by name. It reads or writes like any other statement, so it carries the same `mode`, `params` and `expect`."
         },
         "service": {
-          "type": "string",
-          "description": "A named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows."
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The named runtime service provider to call instead of running SQL (docs/extending.md): non-SQL runtime state (lanes, traces, file trees, …) read as rows."
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Each bind name to the bindable path supplying its value, such as `path.id`, `params.unit` or `principal.claim.tenant_id`."
+            }
+          },
+          "additionalProperties": true,
+          "description": "The service arm: a runtime provider answering rows from process state. It takes only its arguments — there is no statement to run, so no mode and no row-count expectation."
         },
         "http": {
           "type": "object",
-          "additionalProperties": true,
-          "description": "An outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares (method, url, headers, query, body, credential, expectStatus, timeouts) plus `select` and `onError`. Rides the outbound gateway: the host must be allow-listed (TQL-SEC-4070) and credentials are named, never inline."
-        },
-        "mode": {
-          "type": "string",
-          "examples": [
-            "query",
-            "query-one",
-            "update",
-            "query-spool"
-          ],
-          "description": "How the statement runs and what it binds: `query` (rows), `query-one` (a single row), `update` (an affected-row count), or `query-spool` (a streamed result)."
-        },
-        "timeoutSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Per-binding SQL statement timeout override; 0 disables. Default: tesseraql.sql.timeoutSeconds, else 30s."
-        },
-        "datasource": {
-          "type": "string",
-          "description": "The named connector this read binding runs on, overriding the document's. Legal on a read only: a batch step owns its own transaction so an extract elsewhere splits nothing, while a write on another connector would be a second transaction nothing owns (TQL-YAML-1037)."
-        },
-        "when": {
-          "type": "string",
-          "description": "Guard expression on a command step: a falsy guard skips the step, recording steps.<id>.skipped. The declared branch point for decision.* outputs (docs decision-tables)."
-        },
-        "spool": {
-          "type": "string",
-          "description": "A context path resolving to an earlier step's spool reference (steps.<id>.spool), read as this binding's rows. A chunk reader declares it instead of sql: to load what another step extracted, possibly from another connector; both halves stream, and the spool is the snapshot a rerun re-reads. Documented in jobs.md."
-        },
-        "enrich": {
-          "type": "object",
-          "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a sibling source, already fetched) — plus the on: join and one of as:/merge:.",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        },
-        "params": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
+          "properties": {
+            "method": {
+              "type": "string",
+              "description": "The HTTP method. Default GET; a source is not restricted to GET, because JSON-RPC, GraphQL and `POST …/search` batch lookups are reads."
+            },
+            "url": {
+              "type": "string",
+              "description": "The absolute http/https URL. Its host must be allow-listed under tesseraql.http.outbound.allowedHosts — egress is deny by default (TQL-SEC-4070)."
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Static request headers; values may carry ${…} config or secret placeholders, resolved on send."
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Query-string parameters, each a bindable path resolved against the execution context."
+            },
+            "credential": {
+              "type": "string",
+              "description": "A named credential the SecretResolver supplies at call time, so a document never carries a secret."
+            },
+            "body": {
+              "type": "string",
+              "description": "A bindable path whose value is serialized as the request body."
+            },
+            "expectStatus": {
+              "type": "integer",
+              "description": "The exact status that counts as success; the default is any 2xx. A mismatch fails the call without tripping the circuit breaker — it is a deterministic rejection, not a sign the dependency is down."
+            },
+            "connectTimeout": {
+              "type": "string",
+              "description": "Connect timeout for this call (e.g. 2s), overriding tesseraql.http.outbound.connectTimeout."
+            },
+            "requestTimeout": {
+              "type": "string",
+              "description": "Request timeout for this call (e.g. 10s), overriding tesseraql.http.outbound.requestTimeout."
+            },
+            "select": {
+              "type": "string",
+              "description": "A dotted path into the response JSON naming the part that becomes rows. Default: the whole body."
+            },
+            "onError": {
+              "type": "string",
+              "examples": [
+                "fail",
+                "empty"
+              ],
+              "description": "`fail` (default) fails the request or step; `empty` degrades to zero rows and an `error` entry, and the page still renders. The degradation is logged and metered — it is not silent."
+            },
+            "readOnly": {
+              "type": "boolean",
+              "description": "The author's assertion that the call has no side effect, required on a command route: the write can roll back and the request cannot."
+            },
+            "mode": {
+              "type": "string",
+              "examples": [
+                "query",
+                "query-spool"
+              ],
+              "description": "How the acquired rows are delivered: `query` (default — held and published as rows) or `query-spool` (streamed to a spool a later chunk: step loads, so an API result can be written to the database without holding it). A call reads, so the SQL write modes are not modes it has."
+            }
           },
-          "description": "Arguments for a `service:` or `contract:` call: each name to the bindable path supplying its value."
+          "additionalProperties": true,
+          "description": "The http arm: an outbound call whose response becomes this binding's rows, in the vocabulary every outbound call shares. Rides the outbound gateway — allow-listed hosts, named credentials, timeouts, and a per-host circuit breaker."
         },
         "sequence": {
           "type": "string",
-          "description": "Allocate the next value of a managed document-number sequence instead of running SQL; it binds as `steps.<name>.value`. Documented in transactional-writes.md."
+          "description": "Allocate the next value of a managed document-number sequence instead of running a statement; it binds as `steps.<id>.value`. It has no body beyond its name, which is why it sits beside the arms rather than being one. Documented in transactional-writes.md."
         },
-        "keys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Columns whose database-generated values are captured after an insert; they bind as `steps.<name>.keys.<column>`."
+        "spool": {
+          "type": "string",
+          "description": "A context path resolving to an earlier step's spool reference (`steps.<id>.spool`), read as this binding's rows. A chunk reader declares it instead of `sql:` to load what another step extracted — from another connector, or from an API — because a spool is a spool whoever filled it. Documented in jobs.md."
         },
-        "materialize": {
+        "when": {
+          "type": "string",
+          "description": "Guard expression on a step: a falsy guard skips it, recording `steps.<id>.skipped` instead of a result. A guard is about whether the step runs at all, not a question for the mechanism, so it sits beside the arm. The declared branch point for decision.* outputs (docs decision-tables)."
+        },
+        "enrich": {
           "type": "object",
-          "properties": {
-            "maxRows": {
-              "type": "integer",
-              "description": "Largest number of rows materialized. Default: `tesseraql.resultMaterialization.maxRows`."
-            },
-            "onOverflow": {
-              "type": "string",
-              "description": "`fail` (the default) refuses a result past `maxRows`; `warn` truncates it and logs."
-            }
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
           },
-          "additionalProperties": true,
-          "description": "Bounds on how much of the result is held in memory."
-        },
-        "expect": {
-          "type": "object",
-          "properties": {
-            "rowCount": {
-              "type": "integer",
-              "description": "The exact number of rows the statement must affect (rows is a list of records everywhere else)."
-            },
-            "onMismatch": {
-              "type": "string",
-              "description": "`conflict` (the default) answers 409, so a stale edit is refused honestly; `error` answers 500."
-            }
-          },
-          "additionalProperties": true,
-          "description": "The row count this statement must affect, and what happens when it does not — the declarative optimistic-locking check on an update or delete."
+          "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a sibling source, already fetched) — plus the on: join and one of as:/merge:."
         }
       },
       "additionalProperties": true,
-      "description": "One acquisition or one statement. Exactly one mechanism arm says by what means - file (a 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call), or the write-side sequence - and the remaining keys say how it is invoked, which is the same question whichever arm answered. Documented in unified-sources.md."
+      "description": "One acquisition or one statement. Exactly one mechanism arm names the means — sql (a colocated 2-way SQL file), contract (a named identity contract), service (a runtime provider), http (an outbound call) — or the write-side sequence, and that arm nests the keys the mechanism owns. Beside the arms sit the three questions no mechanism answers: the when: guard, the enrich: folded into the rows, and the spool: another step filled. Documented in unified-sources.md."
     }
   }
 }

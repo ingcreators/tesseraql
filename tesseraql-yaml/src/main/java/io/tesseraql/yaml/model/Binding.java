@@ -108,7 +108,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
         return new Binding(
                 sql == null ? null : sql.file(),
                 contract == null ? null : contract.name(),
-                sql != null ? sql.mode() : (call == null ? null : call.mode()),
+                mode(sql, call, http),
                 sql != null ? sql.params() : (call == null ? null : call.params()),
                 service == null ? null : service.name(),
                 http,
@@ -121,6 +121,23 @@ public record Binding(String file, String contract, String mode, Map<String, Str
                 spool,
                 when,
                 enrich);
+    }
+
+    /**
+     * The mode the declared arm carries. Every arm has one — the legal values are the
+     * mechanism's ({@code query} / {@code query-one} / {@code update} / {@code query-spool} for
+     * SQL, {@code query} / {@code query-spool} for a call) — and the binding exposes the single
+     * answer, so a reader asks "how does this acquisition deliver its rows" once rather than per
+     * mechanism (docs/unified-sources.md decision 19a).
+     */
+    private static String mode(SqlArm sql, NamedCall call, HttpSourceSpec http) {
+        if (sql != null) {
+            return sql.mode();
+        }
+        if (call != null) {
+            return call.mode();
+        }
+        return http == null ? null : http.mode();
     }
 
     /**

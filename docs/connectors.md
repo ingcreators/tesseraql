@@ -48,15 +48,20 @@ pipeline:
         rate: steps.fetch.body.rate                  # the parsed JSON response feeds the SQL step
 ```
 
-The response is published as:
+A call is an acquisition, so it publishes the envelope every read publishes, plus what is
+particular to a call:
 
 | Context path             | Value                                                         |
 | ------------------------ | ------------------------------------------------------------- |
+| `steps.<id>.rows` / `.rowCount` / `.first` | the response as rows — the part `select:` names, or the whole body |
 | `steps.<id>.status`       | the HTTP status code (an integer)                             |
-| `steps.<id>.body`         | the parsed JSON (a map/list) when the response is JSON, else the raw text |
+| `steps.<id>.body`         | the selected JSON (a map/list) when the response is JSON, else the raw text |
 | `steps.<id>.headers`      | the response headers (first value per name)                   |
+| `steps.<id>.spool` / `.rowCount` | under `mode: query-spool`: the spool the rows were streamed to, for a later `chunk:` step ([jobs](jobs.md#loading-what-another-step-read)) |
 
-A step declares exactly one of `sql:`, `notify:`, or `httpCall:`. The `query:` values and
+A step declares at most one binding arm — `sql:` or `http:` — beside any output blocks
+(`export:`, `push:`, `notify:`); see [pipeline steps](jobs.md#pipeline-steps-and-the-step-context).
+The `query:` values and
 `body:` are source expressions bound from the step context exactly like a SQL step's params;
 static `headers:` values may carry `${...}` config or secret placeholders, resolved at call
 time. `body:` resolves a single context expression and is sent as JSON. `expectStatus:` pins
@@ -75,12 +80,13 @@ subsequent steps; use a webhook notification for fire-and-forget delivery.
 
 ## HTTP sources on query routes
 
-The read-side counterpart of `http:`: a query route can compose an external JSON API with
-its SQL result **in one screen or one JSON response**, declaratively. Each named `http:`
-source is one call executed after the route's SQL, landing in the execution context exactly
-like a named query. It carries the same call vocabulary a job step does — `method`, `url`,
-`headers`, `query`, `body`, `credential`, `expectStatus`, and the timeouts — plus `select:`
-and `onError:`, which are the read side's own:
+The read-side counterpart of the `http:` step: a query route can compose an external JSON API
+with its SQL result **in one screen or one JSON response**, declaratively. An outbound call is
+a source like any other — an entry in `sources:` whose arm is `http:` instead of `sql:` — so it
+lands in the execution context exactly like a query, and everything downstream refers to it by
+name without knowing how it was fetched. It carries the same call vocabulary a job step does —
+`method`, `url`, `headers`, `query`, `body`, `credential`, `expectStatus`, and the timeouts —
+plus `select:` and `onError:`, which are the read side's own:
 
 ```yaml
 # web/orders/get.yml
@@ -92,14 +98,14 @@ sources:
   main:
     sql:
       file: orders.sql
-http:
   rates:
-    url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
-    query:
-      base: query.currency          # expressions over the execution context
-    credential: fx-api              # tesseraql.http.outbound.credentials.fx-api
-    select: rates                   # dotted path to the rows array inside the JSON
-    onError: empty                  # a dead upstream degrades to zero rows
+    http:
+      url: ${tesseraql.connectors.fx.baseUrl}/v1/rates
+      query:
+        base: query.currency        # expressions over the execution context
+      credential: fx-api            # tesseraql.http.outbound.credentials.fx-api
+      select: rates                 # dotted path to the rows array inside the JSON
+      onError: empty                # a dead upstream degrades to zero rows
 response:
   json:
     status: 200
@@ -115,29 +121,32 @@ response:
   `<name>.status` carries the upstream status.
 - **`onError: empty`** (default `fail`) keeps a widget-shaped source from taking the page
   down: the source yields zero rows plus `<name>.error`, and everything else renders.
-- **The same discipline as `http:`**: sources execute through the one outbound gateway —
-  the deny-by-default `allowedHosts` list, named secret-managed credentials, connect/request
-  timeouts, and the per-host circuit breaker. Lint enforces the surface: query recipes only
-  and no shadowing of SQL result keys (`TQL-YAML-1022`), plus the same host/url/credential
-  checks as a job step (`TQL-SEC-4070/4071/4072`).
+- **The same discipline as an `http:` step**: sources execute through the one outbound gateway
+  — the deny-by-default `allowedHosts` list, named secret-managed credentials, connect/request
+  timeouts, and the per-host circuit breaker. Lint enforces the surface: read and transactional
+  recipes only (`TQL-YAML-1022`), plus the same host/url/credential checks as a job step
+  (`TQL-SEC-4070/4071/4072`). There is no name-collision check to make: sources share one
+  namespace, so two of them cannot shadow each other.
 - **The method is not the guarantee**: a source declares `method:` and `body:` like any other
   call, because a reference API is as often `POST …/search` with a list of keys as it is a
   `GET`. A non-GET method is written out rather than inferred from `body:`, and a `body:`
   beside a method that carries none is a build error (`TQL-YAML-1049`), not a body silently
   dropped.
+
 ### A command's sources run before its transaction
 
 A write often needs a value only the partner has — the name behind a code, as of this
-transaction. `http:` is available on the transactional recipes (`command-json`, `webhook`,
-`queue-consume`) and its sources run **before the connection is acquired**, so the transaction
-never waits on a third party:
+transaction. An `http:` source is available on the transactional recipes (`command-json`,
+`webhook`, `queue-consume`) and `sources:` run **before the connection is acquired**, so the
+transaction never waits on a third party:
 
 ```yaml
 recipe: command-json
-http:
+sources:
   partner:
-    url: https://crm.example.com/partners/{...}
-    readOnly: true              # required here — see below
+    http:
+      url: https://crm.example.com/partners/{...}
+      readOnly: true            # required here — see below
 steps:
   - id: header
     sql:
@@ -158,10 +167,10 @@ steps:
 Calling a partner **after** the write is the outbox's job, not this one: a `notify:` webhook is
 written in the same transaction and delivered at-least-once afterwards. Its response decides
 success, never data — a command that must *store* the partner's answer writes a pending row and
-lets a job's `httpCall:` step complete it.
+lets a job's `http:` step complete it.
 
 - An `http:` **test case** plans a route's sources like a job's steps, without a network
-  request: `httpCall: {route: orders.list}` rows carry the resolved url, host, allow-list
+  request: `http: {route: orders.list}` rows carry the resolved url, host, allow-list
   verdict, and credential — and `send: true` performs the call for real against the runner's
   capture server ([testing](testing.md#real-send-cases)).
 
@@ -243,7 +252,7 @@ tests:
   - name: the refresh job calls the allow-listed partner API
     http:
       job: rates.refresh
-      id: fetch                       # optional; omit to plan every httpCall step of the job
+      id: fetch                       # optional; omit to plan every http: step of the job
     params:
       job: { base: "USD" }
     expect:
@@ -255,7 +264,7 @@ tests:
           url: https://api.partner.example/v1/rates?base=USD
 ```
 
-Gate coverage with `coverage.thresholds.httpCall` like any other kind.
+Gate coverage with `coverage.thresholds.http` like any other kind.
 
 ## The `poll:` trigger for `file-import`
 

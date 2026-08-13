@@ -514,9 +514,21 @@ public final class JobExecutor {
     }
 
     /**
-     * Issues the step's outbound REST call (roadmap Phase 26) and publishes the response as
-     * {@code steps.<id>.status} / {@code steps.<id>.body} for later steps to bind. The call is
-     * synchronous and observable in the trace tree; failures fail the step (and so the job).
+     * Issues the step's outbound REST call (roadmap Phase 26) and publishes what every read
+     * publishes: {@code rows} / {@code rowCount} / {@code first}, plus the call's own
+     * {@code status} / {@code body} / {@code headers} (docs/unified-sources.md decision 10).
+     * {@code select:} names the part of the response the rows come from, exactly as it does on
+     * a route's {@code http:} source — the arm is one mechanism, so it answers one way wherever
+     * it is declared. The call is synchronous and observable in the trace tree.
+     *
+     * <p>{@code mode: query-spool} streams those rows to a spool instead of holding them, so a
+     * later {@code chunk:} step loads what an API returned (decision 19a). The gateway buffers
+     * the response body either way — the spool bounds what the <em>rest of the job</em> holds,
+     * not the call — so a genuinely large export still wants the API's own paging.
+     *
+     * <p>{@code onError: empty} degrades a failed call to zero rows and an {@code error} entry
+     * rather than failing the step, the same declaration a route source makes; without it a
+     * failure fails the step, and so the job.
      */
     private Map<String, Object> runHttpStep(PipelineStep step, Map<String, Object> context,
             io.tesseraql.core.telemetry.SpanContext parentContext) {
@@ -526,15 +538,44 @@ public final class JobExecutor {
                             + " outbound HTTP client")
                     .build();
         }
-        return httpCallClient.call(step.sql().http().call(), context, parentContext);
+        io.tesseraql.yaml.model.HttpSourceSpec source = step.sql().http();
+        Map<String, Object> response;
+        try {
+            response = httpCallClient.call(source.call(), context, parentContext);
+        } catch (RuntimeException failure) {
+            if (!source.degradesToEmpty()) {
+                throw failure;
+            }
+            LOG.warn("Job step {} http: call failed; degrading to zero rows (onError: empty): {}",
+                    step.id(), failure.getMessage());
+            Map<String, Object> degraded = new LinkedHashMap<>();
+            degraded.put("rows", List.of());
+            degraded.put("rowCount", 0);
+            degraded.put("first", null);
+            degraded.put("body", null);
+            degraded.put("status", 0);
+            degraded.put("error", failure.getMessage());
+            return degraded;
+        }
+        Object body = io.tesseraql.yaml.http.HttpRows.select(response.get("body"),
+                source.select());
+        List<Map<String, Object>> rows = io.tesseraql.yaml.http.HttpRows.rows(body);
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (source.spools()) {
+            SpoolRef ref = spool(step, rows);
+            result.put("rowCount", (int) ref.rows());
+            result.put("spool", ref);
+        } else {
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+            result.put("first", rows.isEmpty() ? null : rows.get(0));
+            result.put("body", body);
+        }
+        result.put("status", response.get("status"));
+        result.put("headers", response.get("headers"));
+        return result;
     }
 
-    /**
-     * The datasource's dialect id, resolved once per pool and cached.
-     *
-     * <p>Reading the vendor asks the pool for a connection, too expensive to repeat per step, and
-     * a datasource does not change vendor while the process runs.
-     */
     /**
      * The row count the execution record carries: what the step wrote, or — for a read — what it
      * produced. A read publishes {@code rowCount} and a write {@code affectedRows}
@@ -571,6 +612,12 @@ public final class JobExecutor {
         return pool;
     }
 
+    /**
+     * The datasource's dialect id, resolved once per pool and cached.
+     *
+     * <p>Reading the vendor asks the pool for a connection, too expensive to repeat per step, and
+     * a datasource does not change vendor while the process runs.
+     */
     private String dialectOf(DataSource dataSource) {
         return dialects.computeIfAbsent(dataSource,
                 pool -> io.tesseraql.core.util.DatabaseVendors.vendor(pool).orElse(""));
@@ -1120,7 +1167,6 @@ public final class JobExecutor {
                 .build();
     }
 
-    /** Streams the result set to a JSONL spool, exposing the SpoolRef to later steps (ch. 28.6). */
     /**
      * A {@code mode: query} step publishes the envelope every read publishes —
      * {@code rows} / {@code rowCount} / {@code first} — bounded by the step's
@@ -1171,6 +1217,10 @@ public final class JobExecutor {
         return result;
     }
 
+    /**
+     * Streams the result set to a JSONL spool, exposing the {@link SpoolRef} to later steps
+     * (ch. 28.6).
+     */
     private Map<String, Object> spool(PreparedStatement statement)
             throws SQLException, IOException {
         SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);
@@ -1196,6 +1246,31 @@ public final class JobExecutor {
         result.put("rowCount", (int) ref.rows());
         result.put("spool", ref);
         return result;
+    }
+
+    /**
+     * The same spool, filled from rows already in hand — what an {@code http:} acquisition has
+     * after the gateway parsed the response. The spool file is the only thing a chunk reader
+     * understands, which is what lets one reader load a SQL extract and an API result without
+     * knowing the difference (docs/unified-sources.md decision 19a).
+     */
+    private SpoolRef spool(PipelineStep step, List<Map<String, Object>> rows) {
+        SpoolWriter writer = tempStore.createWriter(SpoolKind.JSONL);
+        try (writer) {
+            for (Map<String, Object> row : rows) {
+                writer.write(
+                        (mapper.writeValueAsString(row) + "\n").getBytes(StandardCharsets.UTF_8));
+                writer.incrementRows(1);
+            }
+        } catch (IOException ex) {
+            throw TqlException.builder(STEP_ERROR)
+                    .message("Step '" + step.id() + "': spooling the response failed: "
+                            + ex.getMessage())
+                    .cause(ex)
+                    .build();
+        }
+        // toRef() is only valid after close, which the try-with-resources performed.
+        return writer.toRef();
     }
 
     private static Map<String, Object> resolveParams(io.tesseraql.yaml.model.Binding binding,

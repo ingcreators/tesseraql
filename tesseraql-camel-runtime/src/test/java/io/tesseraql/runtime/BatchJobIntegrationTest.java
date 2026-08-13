@@ -51,9 +51,12 @@ class BatchJobIntegrationTest {
 
     static TesseraqlRuntime runtime;
     static Path appHome;
+    static com.sun.net.httpserver.HttpServer partnerApi;
+    static int partnerPort;
 
     @BeforeAll
     static void start() throws Exception {
+        startPartnerApi();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
         seedDatabase();
@@ -64,9 +67,35 @@ class BatchJobIntegrationTest {
         if (runtime != null) {
             runtime.close();
         }
+        if (partnerApi != null) {
+            partnerApi.stop(0);
+        }
         if (appHome != null) {
             deleteRecursively(appHome);
         }
+    }
+
+    /**
+     * The partner directory an {@code http:} step calls: six companies under a {@code companies}
+     * key, so {@code select:} has something to select and the spool has something to hold.
+     */
+    private static void startPartnerApi() throws IOException {
+        partnerApi = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress("localhost", 0), 0);
+        partnerApi.createContext("/companies", exchange -> {
+            StringBuilder companies = new StringBuilder("{\"companies\":[");
+            for (int i = 1; i <= 6; i++) {
+                companies.append(i == 1 ? "" : ",")
+                        .append("{\"item_key\":\"h%02d\",\"payload\":\"%d\"}".formatted(i, i));
+            }
+            byte[] body = companies.append("]}").toString().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        partnerApi.start();
+        partnerPort = partnerApi.getAddress().getPort();
     }
 
     @Test
@@ -357,6 +386,48 @@ class BatchJobIntegrationTest {
         // thing spooling exists to avoid.
         List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
         assertThat(steps).extracting(StepExecution::stepId).containsExactly("extract", "load");
+    }
+
+    @Test
+    void aChunkLoadsWhatAnApiReturned() throws Exception {
+        // docs/unified-sources.md decision 19a: spooling is not a SQL feature. The call
+        // acquires, mode: query-spool streams the rows out, and the chunk reader loads them
+        // without knowing an API was involved — the shape "fetch a large result and write it
+        // to the database" that had no spelling before.
+        JobExecution execution = runtime.runJob("user.chunkHttpSpooled",
+                Map.of("businessDate", "2026-08-04"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_h")).isEqualTo(6);
+        List<StepExecution> steps = runtime.jobRepository().findSteps(execution.id());
+        assertThat(steps).extracting(StepExecution::stepId).containsExactly("fetch", "load");
+        // A spooled acquisition reports what it spooled, whichever arm filled it.
+        assertThat(steps.get(0).affectedRows()).isEqualTo(6);
+    }
+
+    @Test
+    void anHttpStepPublishesTheEnvelopeEveryReadPublishes() {
+        // Decision 10: rows / rowCount / first, under the step's own name, beside the call's
+        // status and body. The step used to publish status/body/headers only, so binding a
+        // response row meant walking the raw body by index.
+        JobExecution execution = runtime.runJob("user.httpEnvelope",
+                Map.of("businessDate", "2026-08-05"));
+
+        assertThat(execution.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(rowsOf("select count(*) from http_envelope where first_key = 'h01'"))
+                .isEqualTo(1);
+        assertThat(rowsOf("select count(*) from http_envelope where row_count = 6")).isEqualTo(1);
+    }
+
+    private static long rowsOf(String query) {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(query)) {
+            return rs.next() ? rs.getLong(1) : -1;
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     @Test
@@ -1100,7 +1171,12 @@ class BatchJobIntegrationTest {
         chunkFixtures.append("create table chunk_items_c"
                 + " (item_key varchar(32) primary key, payload varchar(32) not null);\n")
                 .append("create table chunk_results_c"
-                        + " (item_key varchar(32) primary key, val integer not null);\n");
+                        + " (item_key varchar(32) primary key, val integer not null);\n")
+                // What an http: acquisition spooled, and what its envelope bound.
+                .append("create table chunk_results_h"
+                        + " (item_key varchar(32) primary key, val integer not null);\n")
+                .append("create table http_envelope"
+                        + " (first_key varchar(32) primary key, row_count integer not null);\n");
         for (int i = 1; i <= 60; i++) {
             chunkFixtures.append("insert into chunk_items_c values ('c%02d', '1');%n"
                     .formatted(i));
@@ -1133,6 +1209,53 @@ class BatchJobIntegrationTest {
                       key: item_key
                       commitEvery: 2
                 """);
+        Files.writeString(target.resolve("batch/chunk/writer-h.sql"), """
+                insert into chunk_results_h (item_key, val)
+                values (/* row.item_key */'x', cast(/* row.payload */'1' as integer))
+                """);
+        Files.writeString(target.resolve("batch/chunk/http-spooled.yml"), """
+                version: tesseraql/v1
+                id: user.chunkHttpSpooled
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: fetch
+                    http:
+                      url: http://localhost:%d/companies
+                      select: companies
+                      mode: query-spool
+                  - id: load
+                    chunk:
+                      reader:
+                        spool: steps.fetch.spool
+                      writer:
+                        sql:
+                          file: writer-h.sql
+                      key: item_key
+                      commitEvery: 2
+                """.formatted(partnerPort));
+        Files.writeString(target.resolve("batch/chunk/record-envelope.sql"), """
+                insert into http_envelope (first_key, row_count)
+                values (/* firstKey */'x', /* rowCount */0)
+                """);
+        Files.writeString(target.resolve("batch/chunk/envelope.yml"), """
+                version: tesseraql/v1
+                id: user.httpEnvelope
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: fetch
+                    http:
+                      url: http://localhost:%d/companies
+                      select: companies
+                  - id: record
+                    sql:
+                      file: record-envelope.sql
+                      mode: update
+                      params:
+                        firstKey: steps.fetch.first.item_key
+                        rowCount: steps.fetch.rowCount
+                """.formatted(partnerPort));
         Files.writeString(target.resolve("batch/chunk/slow.yml"), """
                 version: tesseraql/v1
                 id: user.chunkSlow

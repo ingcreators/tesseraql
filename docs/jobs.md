@@ -228,9 +228,9 @@ steps bind from:
 | -------------------------- | ------------------------------------------------------------------ |
 | `params.<name>`            | a job parameter                                                    |
 | `steps.<id>.affectedRows`  | rows affected by an earlier `mode: update` step                    |
-| `steps.<id>.rows` / `.rowCount` / `.first` | an earlier `mode: query` step's result             |
+| `steps.<id>.rows` / `.rowCount` / `.first` | an earlier read step's result — a `sql:` query or an `http:` call, the same envelope either way |
 | `steps.<id>.spool` / `.rowCount` | an earlier `mode: query-spool` step's spool reference        |
-| `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `http:` step's response |
+| `steps.<id>.status` / `steps.<id>.body` / `steps.<id>.headers` | an earlier `http:` step's response, beside its rows |
 | `steps.<id>.eventId`       | the outbox event id an earlier `notify:` step enqueued             |
 | `steps.<id>.transferId` / `steps.<id>.filename` / `steps.<id>.rows` | an earlier `export:` step's produced transfer |
 | `steps.<id>.target` / `steps.<id>.filename` | an earlier `push:` step's delivery |
@@ -260,6 +260,28 @@ The `notify:` step is the job-side twin of a command's `notify:` block — same 
 outbox delivery, same per-user opt-out and declarative test cases; see
 [notifications](notifications.md). The `http:` step interleaves an allow-listed
 outbound REST call with SQL steps; see [managed connectors](connectors.md).
+
+An `http:` step is an acquisition like any other, so it publishes what any read publishes:
+`select:` names the part of the response that becomes rows, and the step's `rows` /
+`rowCount` / `first` sit beside the call's `status` / `body` / `headers`. Its `mode:` is the
+one a call has — `query` (default, the rows are held) or `query-spool` (they are streamed to a
+spool, [below](#loading-what-another-step-read)); `update` on a call is refused at build
+time, because a call reads.
+
+```yaml
+pipeline:
+  - id: headcount
+    http:
+      url: https://api.directory.example/v1/headcount
+      select: units
+      credential: directory
+  - id: record
+    sql:
+      file: record-headcount.sql
+      mode: update
+      params:
+        total: steps.headcount.first.total    # a response row, bound like a query's
+```
 
 ## The chunk step
 
@@ -353,8 +375,34 @@ Two consequences worth knowing before you rely on it:
   same rule `chunk.after` carries. It matters more here, because a JSON number landing in a
   numeric column is the common case rather than the exception.
 
-Anything that fills a spool can feed a chunk, not only SQL: an acquisition that pages a large
-result out of an API spools the same way, and the reader neither knows nor needs to.
+Anything that fills a spool can feed a chunk, not only SQL. Spooling is not a SQL feature — it
+is what a large result does on its way to a consumer that reads it once — so `mode:
+query-spool` means the same thing on an `http:` acquisition, and the same reader loads it:
+
+```yaml
+pipeline:
+  - id: fetch
+    http:
+      url: https://directory.example/companies
+      select: companies
+      mode: query-spool                  # the rows land in the spool, not in memory
+  - id: load
+    chunk:
+      reader: { spool: steps.fetch.spool }
+      writer: { sql: { file: upsert-company.sql } }
+      key: code
+```
+
+That closes a gap the surface would otherwise leave: fetching a large result from an API and
+writing it into the database had no expressible shape — a single statement bound to a call's
+response holds every row, and the only alternative was a file round trip through `push:` and a
+poll trigger. Routing it through the spool rather than teaching the chunk reader an `http:` arm
+keeps paging and retries on the acquisition side, and leaves the reader with one thing to
+understand: a spool is a spool, whoever filled it.
+
+One honest limit: the gateway buffers the response body, so the spool bounds what the *rest of
+the job* holds, not the call itself. A result too large for one response wants the API's own
+paging, one call per page.
 
 ## The export step
 

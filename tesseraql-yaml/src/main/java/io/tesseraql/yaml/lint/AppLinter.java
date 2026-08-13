@@ -4420,6 +4420,7 @@ public final class AppLinter {
             }
             if (calls) {
                 lintHttpCall(config, step.id(), step.sql().http().call(), source, findings);
+                lintHttpMode(step, source, findings);
             }
             if (step.chunk() != null) {
                 lintChunk(job, step, source, findings);
@@ -4431,6 +4432,26 @@ public final class AppLinter {
                 lintPushStep(config, step, source, findings);
             }
         }
+    }
+
+    /**
+     * An arm's {@code mode:} values are the mechanism's (docs/unified-sources.md decision 19a).
+     * A call reads: it either holds its rows ({@code query}) or spools them
+     * ({@code query-spool}). {@code update} or {@code query-one} on an {@code http:} arm is a
+     * SQL mode written on a call — accepted silently it would run as a plain query, so the
+     * author's mistaken expectation about what the step publishes survives to production.
+     */
+    private void lintHttpMode(io.tesseraql.yaml.model.PipelineStep step, String source,
+            List<LintFinding> findings) {
+        String mode = step.sql().http().mode();
+        if (mode == null || mode.isBlank() || "query".equals(mode)
+                || "query-spool".equals(mode)) {
+            return;
+        }
+        findings.add(new LintFinding("TQL-FIELD-2004", "error", source, "Step '" + step.id()
+                + "': http: mode '" + mode + "' is not a mode a call has - an outbound call"
+                + " reads, so it is query (the rows are held) or query-spool (they are streamed"
+                + " to a spool a chunk: step reads)"));
     }
 
     /**
@@ -4694,6 +4715,12 @@ public final class AppLinter {
                         + " file: " + enrich.sql().file()));
             }
         });
+        if (readsSpool) {
+            // The restart contract of a spooled reader is not in any SQL this document owns:
+            // the spool is a snapshot, replayed in the order it was written, and the checkpoint
+            // is a position in that file. There is nothing to read for an order by.
+            return;
+        }
         Path readerPath = job.source().getParent().resolve(chunk.reader().file()).normalize();
         if (!java.nio.file.Files.isRegularFile(readerPath)) {
             return; // the missing file is its own finding where SQL files are checked

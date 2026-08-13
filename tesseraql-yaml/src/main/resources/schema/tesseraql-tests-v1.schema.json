@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tesseraql.io/schema/tesseraql-tests-v1.schema.json",
   "title": "TesseraQL test suite (tests/*.yml)",
-  "$comment": "Deliberately open (additionalProperties: true): newer keys never break older editors. Each case sets exactly one target - sql, contract, validate, notify, messages, httpCall, or decide - stated as prose rather than a oneOf so editors report missing keys, not opaque union failures.",
+  "$comment": "Deliberately open (additionalProperties: true): newer keys never break older editors. Each case sets exactly one target - sql, contract, validate, notify, messages, http, or decide - stated as prose rather than a oneOf so editors report missing keys, not opaque union failures.",
   "type": "object",
   "required": ["version", "tests"],
   "properties": {
@@ -73,7 +73,7 @@
             },
             "additionalProperties": true
           },
-          "httpCall": {
+          "http": {
             "type": "object",
             "properties": {
               "route": { "type": "string" },
@@ -81,7 +81,8 @@
               "id": { "type": "string" },
               "send": { "type": "boolean" }
             },
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Plans the outbound calls of a route's http: sources or a job's http: steps - the resolved url, host and allow-list verdict as rows - without leaving the process. Name one with id:, or omit it to plan every call the document declares. The target is spelled like the key it exercises."
           },
           "messages": {
             "type": "object",

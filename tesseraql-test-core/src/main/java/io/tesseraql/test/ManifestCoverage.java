@@ -445,7 +445,7 @@ public final class ManifestCoverage {
      * connector is exercised before it ships.
      */
     public static ItemCoverage httpCall(AppManifest manifest, List<TestSuite> suites) {
-        ItemCoverage coverage = new ItemCoverage("httpCall");
+        ItemCoverage coverage = new ItemCoverage("http");
         for (io.tesseraql.yaml.manifest.JobFile job : manifest.jobs()) {
             if (job.definition().id() == null) {
                 continue;
