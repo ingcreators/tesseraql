@@ -304,16 +304,36 @@ public final class SimpleYamlParser {
         return job;
     }
 
-    /** Parses a {@code kind: prompt} mcp document (Studio backlog G follow-on). */
+    /**
+     * Parses a {@code kind: prompt} mcp document (Studio backlog G follow-on).
+     *
+     * <p>The envelope is checked the way every other document family checks it. A prompt used to
+     * be read straight out of the tree, so it was the one family whose {@code version:} nobody
+     * validated and whose {@code id:} could be absent — a prompt that named nothing was listed
+     * as a prompt with a null name.
+     */
     public io.tesseraql.yaml.model.PromptDefinition parsePrompt(Path file) {
         String content = readFile(file);
+        io.tesseraql.yaml.model.PromptDefinition prompt;
         try {
-            return mapper.readValue(content, io.tesseraql.yaml.model.PromptDefinition.class);
+            prompt = mapper.readValue(content, io.tesseraql.yaml.model.PromptDefinition.class);
         } catch (TqlException ex) {
             throw ex;
         } catch (IOException | RuntimeException ex) {
             throw schemaError("prompt", file.toString(), ex);
         }
+        String source = file.toString();
+        if (prompt == null) {
+            throw error("Empty prompt document", source);
+        }
+        requireField(prompt.version(), "version", source);
+        if (!EXPECTED_VERSION.equals(prompt.version())) {
+            throw error("Unsupported version '" + prompt.version() + "', expected "
+                    + EXPECTED_VERSION, source);
+        }
+        requireField(prompt.id(), "id", source);
+        requireField(prompt.kind(), "kind", source);
+        return prompt;
     }
 
     /** Parses a scope YAML file (roadmap Phase 29). */
