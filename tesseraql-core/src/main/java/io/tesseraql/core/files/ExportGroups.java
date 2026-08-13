@@ -147,7 +147,16 @@ public final class ExportGroups implements Iterable<ExportGroups.Group> {
                     pending = row;
                     seen = true;
                 } else if (seen) {
-                    // Ordered rows mean this group is behind us; stop rather than scan the rest.
+                    // Ordered rows mean this group is behind us; stop rather than scan the rest
+                    // — and release the reader, which would otherwise stay open on its stream
+                    // (and its staging copy) for every group but the last.
+                    if (source instanceof AutoCloseable closeable) {
+                        try {
+                            closeable.close();
+                        } catch (Exception ex) {
+                            throw new IllegalStateException(ex);
+                        }
+                    }
                     return false;
                 }
             }

@@ -80,18 +80,22 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
     private final SpoolRef ref;
     private final List<String> columns;
     private final long rows;
+    private final Map<String, Object> firstRow;
 
-    private SpooledRows(TempStore store, SpoolRef ref, List<String> columns, long rows) {
+    private SpooledRows(TempStore store, SpoolRef ref, List<String> columns, long rows,
+            Map<String, Object> firstRow) {
         this.store = store;
         this.ref = ref;
         this.columns = columns;
         this.rows = rows;
+        this.firstRow = firstRow;
     }
 
     /** Drains {@code source} into a spool; the iterator is exhausted when this returns. */
     public static SpooledRows drain(TempStore store, Iterator<Map<String, Object>> source) {
         SpoolWriter writer = store.createWriter(SpoolKind.BINARY);
         List<String> columns = new ArrayList<>();
+        Map<String, Object> firstRow = null;
         long count = 0;
         // The writer takes whole byte arrays, so each row is encoded on its own and handed over:
         // bounded memory, one row at a time, whatever the store does with it.
@@ -101,6 +105,7 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
                 Map<String, Object> row = source.next();
                 if (first) {
                     columns.addAll(row.keySet());
+                    firstRow = row;
                     writer.write(header(columns));
                     first = false;
                 } else if (!row.keySet().equals(new java.util.LinkedHashSet<>(columns))) {
@@ -119,7 +124,7 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
         } catch (IOException ex) {
             throw new TqlException(SPOOL_FAILED, "Could not spool rows: " + ex.getMessage());
         }
-        return new SpooledRows(store, writer.toRef(), List.copyOf(columns), count);
+        return new SpooledRows(store, writer.toRef(), List.copyOf(columns), count, firstRow);
     }
 
     /** The column names, in the order the first row carried them. */
@@ -130,6 +135,16 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
     /** How many rows were spooled. */
     public long size() {
         return rows;
+    }
+
+    /**
+     * The first row, captured while the spool was drained — or {@code null} for an empty one.
+     * Answering from here is what keeps a result's {@code first} from opening a reader it would
+     * read one row of and abandon: an abandoned reader holds its stream until the walk that
+     * never comes, and on a staging {@link TempStore} it strands a full on-disk copy.
+     */
+    public Map<String, Object> firstRow() {
+        return firstRow;
     }
 
     @Override
@@ -264,8 +279,16 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
         }
     }
 
-    /** Reads rows back until the end marker; one open stream per iteration. */
-    private static final class SpoolIterator implements Iterator<Map<String, Object>> {
+    /**
+     * Reads rows back until the end marker; one open stream per iteration. Walking to the end
+     * releases the stream on its own; a consumer that stops early owes a {@link #close()} — the
+     * framework's own early-stopper is {@code ExportGroups.KeyedRows}, which closes the reader
+     * the moment the ordered rows move past its group.
+     */
+    private static final class SpoolIterator
+            implements
+                Iterator<Map<String, Object>>,
+                AutoCloseable {
 
         private final DataInputStream in;
         private final List<String> columns;
@@ -275,6 +298,12 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
         SpoolIterator(DataInputStream in, List<String> columns) {
             this.in = in;
             this.columns = columns;
+        }
+
+        /** Releases the reader without walking the remaining rows; safe to call twice. */
+        @Override
+        public void close() {
+            finish();
         }
 
         @Override
@@ -323,6 +352,9 @@ public final class SpooledRows implements Iterable<Map<String, Object>>, AutoClo
         }
 
         private void finish() {
+            if (done) {
+                return;
+            }
             done = true;
             try {
                 in.close();

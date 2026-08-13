@@ -52,6 +52,16 @@ All notable changes to TesseraQL are documented here. The format follows
   command processor refuses an empty `steps:`. Both lints now require `steps:`, and a consumer
   declaring `sources:` at all is refused (`TQL-YAML-1051`, with a compile-time backstop) instead
   of the sources compiling to nothing.
+- **An abandoned spool reader no longer strands its stream — or its on-disk copy.** Three
+  consumers walked away from spool readers mid-stream: the `first` peek of every result
+  envelope, a group's early stop on ordered rows, and the split export's per-document
+  narrowing, which did both once per group. A reader was only released by walking it to the
+  end, and on `tesseraql.temp.store: db` — whose reads stage through a scratch file deleted on
+  close — every abandoned reader stranded a full on-disk copy of the spool, O(groups) copies
+  per grouped export. `first` is now captured while the spool drains (no reader is opened at
+  all), a group releases its reader the moment the rows move past it, and the database store
+  registers each staging copy with a cleaner so even an abandoned reader is eventually
+  reclaimed.
 - **The documentation caught up with the unified source model.** Eight published pages still
   taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
   `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown
