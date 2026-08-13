@@ -31,7 +31,8 @@ import org.apache.camel.Processor;
  */
 public final class HtmlResponseRenderer implements Processor {
 
-    private static final TqlErrorCode RENDER_ERROR = new TqlErrorCode(TqlDomain.TPL, 2001);
+    // TQL-TPL-2001 is declared once, on TemplateResolution (the guard refuses a second site).
+    private static final TqlErrorCode RENDER_ERROR = TemplateResolution.RENDER_ERROR;
 
     /** TQL-VIEW-3317: response.html.shell must be auto, always, or never. */
     static final TqlErrorCode INVALID_SHELL = new TqlErrorCode(TqlDomain.VIEW, 3317);
