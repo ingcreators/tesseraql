@@ -141,6 +141,28 @@ public final class KeyedReference {
         return batchSize;
     }
 
+    /**
+     * The window several enrichments share: the smallest {@code batchSize} any of them declared,
+     * or {@code whenNone} when there are none at all.
+     *
+     * <p>The smallest, because a window larger than an enrichment's batch would make that one
+     * fetch twice per window — the batching is the thing that keeps the reference query count
+     * proportional to keys rather than to rows.
+     *
+     * <p>Stated once, beside the {@code batchSize} it reads, because every surface that reads
+     * rows a window at a time asks it: an export writing a cursor through its codec, and a batch
+     * chunk step feeding its writer. They hold their enrichments in different types — hence the
+     * mapper — and disagree only on what "none" means, which is why that is the caller's word.
+     */
+    public static <T> int window(java.util.Collection<T> enrichments,
+            java.util.function.ToIntFunction<T> batchSize, int whenNone) {
+        int smallest = Integer.MAX_VALUE;
+        for (T enrichment : enrichments) {
+            smallest = Math.min(smallest, batchSize.applyAsInt(enrichment));
+        }
+        return smallest == Integer.MAX_VALUE ? whenNone : smallest;
+    }
+
     /** The enrichment's declared name, for a message that has to say which one. */
     public String name() {
         return name;
