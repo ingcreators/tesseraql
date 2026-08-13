@@ -77,6 +77,12 @@ All notable changes to TesseraQL are documented here. The format follows
   input-policy lint twice in a row, so every `TQL-FIELD-2006` finding appeared twice in the
   CLI, the editor and Studio. The lint suite now also asserts app-wide that no finding is ever
   reported twice.
+- **mcp documents get the unknown-key lint every other surface has.** Tools, resources and UI
+  resources reuse the route record — which ignores unknown properties — plus keys the loader
+  reads from the raw tree, and no unknown-key check ever reached them: a typo'd `securty:` on
+  a tool dropped the auth declaration in silence while the same typo on a route was flagged.
+  All three now run the same `TQL-YAML-1043`/`1044` check, with the loader-read keys
+  (`description`, `uri`, `mimeType`, `ui`) accepted.
 - **The documentation caught up with the unified source model.** Eight published pages still
   taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
   `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown
