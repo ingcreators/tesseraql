@@ -1076,15 +1076,14 @@ public final class StudioService {
         }
         for (Path file : files) {
             String relative = directory + "/" + file.getFileName();
-            String draft = readDraft(relative);
-            String text = draft != null ? draft : sourceIfExists(relative);
-            if (text == null) {
+            DraftRead read = draftRead(relative);
+            if (read.text() == null) {
                 continue;
             }
-            Map<String, Object> tree = parser.parseTree(text);
+            Map<String, Object> tree = parser.parseTree(read.text());
             Map<String, Object> declared = anyMap(tree.get(topKey));
             if (declared.get(name) instanceof Map) {
-                return new LocatedDeclaration(relative, draft != null, tree,
+                return new LocatedDeclaration(relative, read.fromDraft(), tree,
                         anyMap(declared.get(name)));
             }
         }
@@ -1640,8 +1639,7 @@ public final class StudioService {
                 continue;
             }
             String relative = appHome.relativize(job.source()).toString().replace('\\', '/');
-            String draft = readDraft(relative);
-            String text = draft != null ? draft : sourceIfExists(relative);
+            String text = draftRead(relative).text();
             if (text == null) {
                 return null;
             }
@@ -1653,10 +1651,9 @@ public final class StudioService {
     /** Loads the structured form model for a route document (Track J1). */
     public RouteForm routeForm(String relativePath) {
         requireRouteDoc(relativePath);
-        String draft = readDraft(relativePath);
-        String text = draft != null ? draft : source(relativePath);
+        DraftRead read = requiredDraftRead(relativePath);
         try {
-            Map<String, Object> tree = parser.parseTree(text);
+            Map<String, Object> tree = parser.parseTree(read.text());
             Map<String, Object> security = anyMap(tree.get("security"));
             List<FormInput> inputs = new ArrayList<>();
             anyMap(tree.get("input")).forEach((name, spec) -> {
@@ -1669,10 +1666,10 @@ public final class StudioService {
             });
             return new RouteForm(relativePath, scalar(tree.get("id")), scalar(tree.get("recipe")),
                     scalar(security.get("auth")), scalar(security.get("policy")),
-                    scalar(security.get("csrf")), inputs, draft != null, null);
+                    scalar(security.get("csrf")), inputs, read.fromDraft(), null);
         } catch (RuntimeException ex) {
             return new RouteForm(relativePath, null, null, null, null, null, List.of(),
-                    draft != null, rootMessage(ex));
+                    read.fromDraft(), rootMessage(ex));
         }
     }
 
@@ -1689,8 +1686,7 @@ public final class StudioService {
             throw new TqlException(READ_ONLY, "Studio is read-only; editing routes is disabled");
         }
         requireRouteDoc(relativePath);
-        String draft = readDraft(relativePath);
-        String text = draft != null ? draft : source(relativePath);
+        String text = requiredDraftRead(relativePath).text();
         Map<String, Object> tree;
         try {
             tree = parser.parseTree(text);
@@ -3035,6 +3031,40 @@ public final class StudioService {
     /** Reads a previously saved draft, or null if none exists. */
     public String readDraft(String relativePath) {
         return draftStore.readDraft(relativePath);
+    }
+
+    /**
+     * What a draft-aware read saw: the text an authoring surface works from, and whether it came
+     * from a pending draft (the surfaces report that, and a save keeps building on it).
+     *
+     * @param text the draft, the saved source, or null when neither exists
+     * @param fromDraft whether {@code text} is a pending draft
+     */
+    private record DraftRead(String text, boolean fromDraft) {
+    }
+
+    /**
+     * The draft-preferring read of {@code relativePath}: its pending draft when one exists,
+     * otherwise the saved source — so a second edit sees the first. The text is null when the file
+     * has neither.
+     */
+    private DraftRead draftRead(String relativePath) {
+        String draft = readDraft(relativePath);
+        return draft != null
+                ? new DraftRead(draft, true)
+                : new DraftRead(sourceIfExists(relativePath), false);
+    }
+
+    /**
+     * The draft-preferring read where the file must exist: same as {@link #draftRead}, but a path
+     * with neither a draft nor a source raises the not-found a plain source read does.
+     */
+    private DraftRead requiredDraftRead(String relativePath) {
+        DraftRead read = draftRead(relativePath);
+        if (read.text() == null) {
+            source(relativePath);
+        }
+        return read;
     }
 
     /**
