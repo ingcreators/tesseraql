@@ -150,22 +150,16 @@
                 "description": "The step's name: what later steps bind against (`steps.<id>`) and what the execution record reports."
               },
               "notify": {
-                "type": "object",
-                "additionalProperties": true,
-                "description": "Enqueue one notification on the transactional outbox at this position in the pipeline. Documented in notifications.md."
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/notification"
               },
               "chunk": {
-                "type": "object",
-                "additionalProperties": true,
-                "description": "Process the step's work as a reader/writer chunk loop with committed checkpoints, so a restart resumes where it stopped. A chunk step's work is its reader:/writer:, so it declares no arm of its own. Documented in jobs.md."
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/chunk"
               },
               "export": {
                 "$ref": "tesseraql-defs-v1.schema.json#/$defs/shared/export"
               },
               "push": {
-                "type": "object",
-                "additionalProperties": true,
-                "description": "Deliver a produced transfer to a local or SFTP/FTPS drop under the push policy block. Documented in file-transfers.md."
+                "$ref": "tesseraql-defs-v1.schema.json#/$defs/push"
               }
             },
             "required": [

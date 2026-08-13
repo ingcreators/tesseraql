@@ -4,6 +4,45 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- **A block whose shape is fixed says so, and refuses a key it does not have.** `export:`,
+  `import:`, `outbox:`, `errors:`, and a pipeline step's `notify:`, `chunk:` and `push:` were
+  `additionalProperties: true` with no properties at all — a schema that describes nothing and
+  validates nothing — and the unknown-key lint stopped at a document's own keys. So an
+  `export.sql:` was dropped in silence, and the export wrote an empty file. All of them now carry
+  their real keys, closed to the rest, and the lint checks them the way it checks the document,
+  a pipeline step's own keys included: an unknown key is `TQL-YAML-1043`, and one the unified
+  source model moved is `TQL-YAML-1044` naming where it went (`export.sql:` → `sources:`,
+  `import.sql:` → `steps:`).
+- **One shape, one home, for the shapes a step and a route share.** A notification, a push
+  target, a chunk loop, an enrichment and a file-transfer column are shared definitions now,
+  referenced from the four places that used to describe them separately or not at all. A
+  step's blocks and a route's `notify:` entries are the same declarations, and the published
+  reference documents each once.
+- **The YAML surface reference documents a pipeline step.** It rendered as `array of any`,
+  because a step is composed with `allOf` — the binding's arms plus the step's own keys — and
+  the generator followed `$ref` and `items` but not `allOf`. The most important shape on a job
+  document was the one the page did not show. A `$ref`-only property also takes its description
+  from the target rather than rendering an em dash.
+
+### Fixed
+
+- **The documentation caught up with the unified source model.** Eight published pages still
+  taught the retired shapes — an extraction inside `export:`, a `queries:` map, a map-shaped
+  `steps:`, a top-level `sql:` — and none of it was caught by a build: `export:` ignores unknown
+  keys, and a pipeline step declaring only an output block passes lint. Following those pages
+  produced an export that silently wrote nothing.
+- **A view's `source:` is described the way the loader reads it.** The shipped view schema still
+  said "the route's `sql` result, or one of its `queries:`", and the generated YAML surface
+  reference published that verbatim — the same class of drift as 0.14.0's `binding` `$def`. The
+  two `TQL-VIEW-3308` messages named the retired vocabulary too.
+- **A retired lint stopped being republished as a live one.** The error index scans the sources
+  for literal codes, so `TQL-YAML-1045` — named only in a comment recording its retirement —
+  appeared in the published index as a code with no meaning.
+
 ## 0.14.0 - 2026-08-13
 
 The unified source model: how a document acquires rows had five spellings, and now it has
@@ -24,9 +63,10 @@ accepted — which the generated YAML surface reference had been publishing to r
   that lived at route level on one export recipe and inside `export:` on the other. They are now
   one `sources:` map whose entries each name their own mechanism arm (`sql` | `contract` |
   `service` | `http`). The map no longer encodes the mechanism, so an HTTP source is a source
-  like any other: named, enrichable, composable. `TQL-YAML-1022` (http placement) and
-  `TQL-CAMEL-3101` (which of the two homes an extraction used) retire with the shapes they
-  policed.
+  like any other: named, enrichable, composable. Two lints narrow to what is left of them:
+  `TQL-YAML-1022` keeps the recipe rule for an `http:` source and loses the shadowing check a
+  separate map needed, and `TQL-CAMEL-3101` stops policing which of two homes an extraction used
+  and now says only that `after:` needs `file-export`.
 - **BREAKING: the top-level `sql:` key is deleted, on routes and on jobs.** It was a role
   wearing a mechanism's name — a route whose `sql:` declared `service:` contained no SQL at all.
   The primary is now the reserved source name `main`, which is a naming convention rather than a

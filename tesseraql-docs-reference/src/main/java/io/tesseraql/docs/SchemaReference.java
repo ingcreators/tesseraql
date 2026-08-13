@@ -2,6 +2,8 @@ package io.tesseraql.docs;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -120,7 +122,12 @@ final class SchemaReference {
             String name = names.next();
             JsonNode property = shared(properties.get(name), root);
             String childTitle = childTitle(title, name);
+            // A property that is nothing but a $ref carries its description at the target; the
+            // reader wants the sentence in the row, not only behind the link.
             String description = property.path("description").asText("");
+            if (description.isBlank() && property.has("$ref")) {
+                description = resolve(property, root).path("description").asText("");
+            }
             md.append("| `").append(name).append('`')
                     .append(required.contains(name) ? " \\*" : "").append(" | ")
                     .append(typeOf(property, childTitle, children, name)).append(" | ")
@@ -155,14 +162,17 @@ final class SchemaReference {
     }
 
     /**
-     * Follows the schemas' only indirections: {@code $ref}, array items, map values. A
-     * cross-file {@code $ref} into the shared definitions resolves against that file, which
-     * is the {@code defs} root every render call carries.
+     * Follows the schemas' only indirections: {@code $ref}, {@code allOf}, array items, map
+     * values. A cross-file {@code $ref} into the shared definitions resolves against that file,
+     * which is the {@code defs} root every render call carries.
      */
     private static JsonNode resolve(JsonNode node, JsonNode defs) {
         if (node.has("$ref")) {
             String ref = node.get("$ref").asText();
             return defs.at(ref.substring(ref.indexOf('#') + 1));
+        }
+        if (node.has("allOf")) {
+            return merged(node.get("allOf"), defs);
         }
         if (node.has("items")) {
             return resolve(node.get("items"), defs);
@@ -171,6 +181,35 @@ final class SchemaReference {
             return resolve(node.get("additionalProperties"), defs);
         }
         return node;
+    }
+
+    /**
+     * One object from an {@code allOf}'s branches, so a shape composed of several renders as the
+     * shape an author writes.
+     *
+     * <p>A pipeline step is `allOf: [binding, {id, output blocks}]` — two branches because the
+     * arms are shared with every other binding and the outputs are the step's own. The reader
+     * writes one map, and the page said `array of any`: the most important shape on a job
+     * document was the one it did not document.
+     */
+    private static JsonNode merged(JsonNode branches, JsonNode defs) {
+        ObjectNode flattened = MAPPER.createObjectNode();
+        ObjectNode properties = flattened.putObject("properties");
+        ArrayNode required = flattened.putArray("required");
+        flattened.put("type", "object");
+        for (JsonNode branch : branches) {
+            JsonNode resolved = resolve(branch, defs);
+            JsonNode branchProperties = resolved.path("properties");
+            for (Iterator<String> names = branchProperties.fieldNames(); names.hasNext();) {
+                String name = names.next();
+                properties.set(name, branchProperties.get(name));
+            }
+            resolved.path("required").forEach(required::add);
+        }
+        // No description: a merged shape's own is the property's, which the reader has just
+        // read in the row that linked here. A branch's would describe one half as if it were
+        // the whole.
+        return flattened;
     }
 
     /**
@@ -197,7 +236,7 @@ final class SchemaReference {
             if (items.has("$ref")) {
                 return "array of " + defLink(items);
             }
-            if (items.has("properties")) {
+            if (items.has("properties") || items.has("allOf")) {
                 children.add(new String[]{name, childTitle});
                 return "array of [object](#" + ReferenceGenerator.slug(childTitle) + ")";
             }

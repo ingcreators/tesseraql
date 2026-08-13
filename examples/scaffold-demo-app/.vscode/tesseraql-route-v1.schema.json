@@ -163,7 +163,28 @@
     },
     "outbox": {
       "type": "object",
-      "additionalProperties": true,
+      "properties": {
+        "eventType": {
+          "type": "string",
+          "description": "The event's type, e.g. `USER_DISABLED` — what a consumer subscribes by."
+        },
+        "aggregateType": {
+          "type": "string",
+          "description": "The kind of thing the event is about, e.g. `User`."
+        },
+        "aggregateId": {
+          "type": "string",
+          "description": "A bindable path resolving to the id of the thing the event is about, e.g. `body.name`."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Each payload key to the bindable path supplying its value. A dotted key builds a nested object (`name.givenName`) and a `[]` key builds an array — of scalars (`members[]`), or, zipped by index, of objects (`members[].value`)."
+        }
+      },
+      "additionalProperties": false,
       "description": "Transactional outbox event recorded with the command and delivered at-least-once after commit. Documented in notifications.md and messaging.md."
     },
     "steps": {
@@ -273,14 +294,38 @@
     "notify": {
       "type": "object",
       "additionalProperties": {
-        "type": "object",
-        "additionalProperties": true
+        "$ref": "tesseraql-defs-v1.schema.json#/$defs/notification"
       },
       "description": "Notifications enqueued with the command on the transactional outbox, keyed by notification id; each entry names its channel: (a workflow reminder is the separate reminders: key). Documented in notifications.md."
     },
     "errors": {
       "type": "object",
-      "additionalProperties": true,
+      "properties": {
+        "constraints": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "The input field the violation is reported against, so the caller sees a field error rather than a 500."
+              },
+              "code": {
+                "type": "string",
+                "description": "A stable application error code, defaulting to the violation kind (`duplicate` for a unique violation)."
+              },
+              "message": {
+                "type": "string",
+                "description": "A message key resolved through the app bundles; unset, the framework's `tql.constraint.<code>` texts apply."
+              }
+            },
+            "additionalProperties": false,
+            "description": "How one constraint violation is reported."
+          },
+          "description": "Database constraint name, as declared in the schema, to the field-level error a violation of it becomes."
+        }
+      },
+      "additionalProperties": false,
       "description": "Per-route error mapping: constraint codes and statuses onto response fields and messages. Documented in declarative-validation.md."
     },
     "import": {

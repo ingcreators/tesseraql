@@ -28,14 +28,345 @@
       },
       "import": {
         "type": "object",
-        "additionalProperties": true,
+        "properties": {
+          "format": {
+            "type": "string",
+            "examples": [
+              "csv",
+              "excel"
+            ],
+            "description": "The tabular format the uploaded file is parsed as. `csv` is built in; `excel` needs the tesseraql-excel module (TQL-LD-2801 when the codec is absent)."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/fileColumn"
+            },
+            "description": "How the file's columns map to the per-row statement's bind names. Omit it to use the header labels as bind names."
+          },
+          "headerRow": {
+            "type": "boolean",
+            "description": "Whether the table starts with a header row (default `true`). With a header, simple-form columns match by label rather than by position."
+          },
+          "startRow": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The 1-based row the table starts at, for files carrying title rows above the data (default 1)."
+          },
+          "sheet": {
+            "type": "string",
+            "description": "For workbook formats, the sheet to read (default: the first)."
+          },
+          "locale": {
+            "type": "string",
+            "description": "The locale `type:`/`format:` columns parse dates and numbers in. A literal, or a request source such as `principal.claim.locale`; unset, `tesseraql.files.locale` applies."
+          },
+          "onError": {
+            "type": "string",
+            "examples": [
+              "rollback",
+              "skip"
+            ],
+            "description": "What a failing row does: `rollback` (default) fails the whole import, `skip` records the row and commits the rest. Either way the rejected rows are reported with their row numbers."
+          }
+        },
+        "additionalProperties": false,
         "description": "file-import parsing and column-to-bind mapping (headerRow, startRow, columns, onError: rollback|skip). It says how to parse, never what to write: the per-row statement is the document's one steps:/pipeline: entry. Documented in file-transfers.md."
       },
       "export": {
         "type": "object",
-        "additionalProperties": true,
-        "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. Documented in file-transfers.md."
+        "properties": {
+          "format": {
+            "type": "string",
+            "examples": [
+              "csv",
+              "excel",
+              "pdf"
+            ],
+            "description": "The format the rows are written as. `csv` is built in; `excel` and `pdf` need their modules (TQL-LD-2801 when the codec is absent)."
+          },
+          "filename": {
+            "type": "string",
+            "description": "The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`."
+          },
+          "template": {
+            "type": "string",
+            "description": "A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid."
+          },
+          "sheet": {
+            "type": "string",
+            "description": "For workbook formats, the sheet to write."
+          },
+          "startCell": {
+            "type": "string",
+            "description": "Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template, and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/fileColumn"
+            },
+            "description": "The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name."
+          },
+          "locale": {
+            "type": "string",
+            "description": "The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`."
+          },
+          "after": {
+            "type": "object",
+            "properties": {
+              "timing": {
+                "type": "string",
+                "examples": [
+                  "extract",
+                  "download"
+                ],
+                "description": "`extract` (default) runs the statement in the extraction's transaction, so rows are marked exactly when they are extracted; `download` runs it once on the first successful file fetch. A job's export step supports `extract` only (TQL-YAML-1041)."
+              },
+              "sql": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The follow-up statement, written as a source's `sql:` arm is — `file:`, `params:`, and the rest of the arm's keys."
+              }
+            },
+            "additionalProperties": false,
+            "description": "A statement run once after the extraction, typically to mark the extracted rows. `file-export` only: on `query-export` it is a build error (TQL-CAMEL-3101), because a synchronous download has no transaction to hang it on."
+          },
+          "maxRows": {
+            "type": "integer",
+            "description": "The ceiling for a format that holds every row before it writes (pdf, and the workbook template modes), defaulting to `tesseraql.resultMaterialization.maxRows`; a negative value opts out. A streaming format is never capped."
+          },
+          "onOverflow": {
+            "type": "string",
+            "examples": [
+              "fail",
+              "warn"
+            ],
+            "description": "`fail` (default) refuses an export past `maxRows` (TQL-LD-2850); `warn` truncates it at the cap and logs."
+          },
+          "groupBy": {
+            "type": "string",
+            "description": "A column the rows are read as ordered groups by, each exposed to the template as a `key` and its own `rows`. The rows must be ordered by it (TQL-LD-2851)."
+          },
+          "splitBy": {
+            "type": "string",
+            "description": "A column that splits the export into one document per value, delivered as a single ZIP; `filename:` must carry `{key}`. The rows must be ordered by it (TQL-LD-2851)."
+          }
+        },
+        "additionalProperties": false,
+        "description": "query-export / file-export output: format (csv, excel, pdf), filename, columns with headers and format patterns, locale/timezone. It says how the rows are written and never what to read - the rows come from sources.main on a route, or the step's own arm in a pipeline. Documented in file-transfers.md."
       }
+    },
+    "enrichment": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The join: each column of the rows being enriched to the column of the reference it matches. Several pairs make a composite key, compared by the framework's canonical normalization (INTEGER 1 matches BIGINT 1)."
+        },
+        "sql": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Fetch the reference by key, written as a source's `sql:` arm is. The statement must bind `keys` — one that never mentions it reads the whole table once per batch and still returns the right answer, which is why only the build can catch it (TQL-YAML-1048)."
+        },
+        "http": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Call the reference by key, written as a source's `http:` arm is, plus `select:` and `onError:`. How the keys reach it is `mode:`."
+        },
+        "source": {
+          "type": "string",
+          "description": "A result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as `steps.<id>`. A spooled sibling is refused (TQL-CAMEL-3114) — load it into a table and enrich from there."
+        },
+        "mode": {
+          "type": "string",
+          "examples": [
+            "perRow",
+            "batch"
+          ],
+          "description": "For an `http:` reference: `perRow` (default) makes one request per distinct key, `batch` one request per `batchSize` keys. A `sql:` reference is always batched — a statement takes a key list by construction."
+        },
+        "as": {
+          "type": "string",
+          "description": "Attach the matched rows as a list under this name. Exactly one of `as:` or `merge:` (TQL-YAML-1047)."
+        },
+        "merge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Copy these columns of the matched row onto each row instead of attaching a list. Exactly one of `as:` or `merge:` (TQL-YAML-1047)."
+        },
+        "batchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many distinct keys one fetch carries."
+        },
+        "maxKeys": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The ceiling on distinct keys collected for one enrichment, past which the reference is refused rather than read unboundedly."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One keyed reference folded into a binding's rows: where the keys are (`on:`), what answers them (`sql:`, `http:` or `source:` — exactly one), and how the answer lands (`as:` or `merge:`). Documented in lookups.md."
+    },
+    "notification": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The declared channel this notification is enqueued on, which decides the transport (mail, webhook, queue) and its configuration. It must exist (TQL-FIELD-2004)."
+        },
+        "when": {
+          "type": "string",
+          "description": "A core expression over the result context; the notification is enqueued only when it holds, so a conditional send is a declaration rather than a branch."
+        },
+        "recipient": {
+          "type": "string",
+          "description": "A bindable path resolving to the address this notification goes to, overriding the channel's configured recipients."
+        },
+        "attach": {
+          "type": "string",
+          "description": "A bindable path resolving to a transfer id — typically an export step's `steps.<id>.transferId` — whose file rides along. Mail channels only (TQL-FIELD-2004)."
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Each payload key to the bindable path supplying its value; the template or transport reads them by name."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One notification enqueued on the transactional outbox, so it is sent if and only if the write commits. Documented in notifications.md."
+    },
+    "push": {
+      "type": "object",
+      "properties": {
+        "transport": {
+          "type": "string",
+          "examples": [
+            "local",
+            "sftp",
+            "ftps"
+          ],
+          "description": "Where the file goes: `local` writes under the work directory, `sftp`/`ftps` reach an allow-listed remote host."
+        },
+        "host": {
+          "type": "string",
+          "description": "The remote server, which must be allow-listed under `tesseraql.connectors.push.hosts`. Required on a remote transport (TQL-YAML-1042)."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The remote port, defaulting to the transport's."
+        },
+        "path": {
+          "type": "string",
+          "description": "The destination directory. The file is staged and renamed into place, so a poller on the far side never reads a partial file."
+        },
+        "credential": {
+          "type": "string",
+          "description": "The named credential under `tesseraql.connectors.push.credentials`. Required on a remote transport (TQL-YAML-1042)."
+        },
+        "file": {
+          "type": "string",
+          "description": "A bindable path resolving to the transfer id of the file to deliver, typically an earlier export step's `steps.<id>.transferId`."
+        },
+        "as": {
+          "type": "string",
+          "description": "The name the file lands under, defaulting to the transfer's own filename. `{dotted.path}` interpolates a context value."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Delivery of a produced transfer to a local or remote drop — the outbound mirror of the poll trigger, under the same policy block. Documented in file-transfers.md."
+    },
+    "chunk": {
+      "type": "object",
+      "properties": {
+        "reader": {
+          "$ref": "#/$defs/binding",
+          "description": "What the loop reads, a window at a time: its own `sql:`, or `spool:` naming an earlier step's spool. A chunk step's work is its reader and writer, so the step declares no arm of its own (TQL-FIELD-2004)."
+        },
+        "writer": {
+          "$ref": "#/$defs/binding",
+          "description": "What runs for each row the reader produced, binding that row's columns."
+        },
+        "key": {
+          "type": "string",
+          "description": "The reader column checkpoints track, defaulting to `id`. A restart resumes after the last committed key, which is why the reader must be ordered by it."
+        },
+        "commitEvery": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many rows one committed slice holds. A checkpoint lands with each commit, so this is also how much a restart repeats."
+        },
+        "onError": {
+          "type": "string",
+          "examples": [
+            "fail",
+            "skip"
+          ],
+          "description": "`fail` (default) fails the step on the first writer error; `skip` records the row in `tql_job_skips` and continues, up to `skipLimit`."
+        },
+        "skipLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many skipped rows the step tolerates before failing anyway, so a systematically broken load does not run to completion looking fine."
+        },
+        "enrich": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/enrichment"
+          },
+          "description": "Keyed references folded into each window before the writer sees it, so a writer may bind a column the reader's query never selected. A reference failure fails the window, not the row."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Restartable per-row processing: a reader, a writer, and committed checkpoints, so a job that stops resumes where it left off instead of starting over. Documented in jobs.md."
+    },
+    "fileColumn": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The bind name on import, the row column on export. The simple form `- name` is this key and nothing else."
+        },
+        "label": {
+          "type": "string",
+          "description": "The heading in the file — the same word a view column uses, and a message key resolves through the app bundles. Defaults to `name`."
+        },
+        "column": {
+          "type": "string",
+          "description": "An explicit position instead of matching by header: a column letter (`D`) or a 1-based number."
+        },
+        "type": {
+          "type": "string",
+          "examples": [
+            "date",
+            "datetime",
+            "number"
+          ],
+          "description": "Parses the file's text into a typed bind on import, and writes a typed cell on export. Omit it for plain text."
+        },
+        "format": {
+          "type": "string",
+          "description": "The parse/render pattern the `type:` uses, e.g. `yyyy/MM/dd` or `#,##0.00` — and, for workbooks, the matching cell format."
+        }
+      },
+      "additionalProperties": false,
+      "description": "One column of a file transfer, in either form: the bare name, or an object adding the file-side heading, an explicit position, and a type with its pattern. Documented in file-transfers.md."
     },
     "inputField": {
       "type": "object",
@@ -435,8 +766,7 @@
         "enrich": {
           "type": "object",
           "additionalProperties": {
-            "type": "object",
-            "additionalProperties": true
+            "$ref": "#/$defs/enrichment"
           },
           "description": "Keyed references folded into this binding's rows before anything reads them (docs/lookups.md), keyed by enrichment name and applied in authored order. An enrichment nests under the source it transforms, so any arm's rows can be enriched. Each entry names one reference — sql: (fetch by key), http: (call by key), or source: (a result already in the context, joined without a fetch, named by its context path: a route source by name, a job step as steps.&lt;id&gt;) — plus the on: join and one of as:/merge:. Only a binding that holds rows can carry one: a write publishes affectedRows, and a query-spool extract never held its rows."
         }

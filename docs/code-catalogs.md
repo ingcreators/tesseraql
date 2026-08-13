@@ -188,7 +188,8 @@ that reads that table, so the next screen shows what was just saved:
 ```yaml
 # web/admin/codes/post.yml
 steps:
-  upsert: { file: upsert-code.sql }
+  - id: upsert
+    sql: { file: upsert-code.sql }
 invalidates: [code_master]
 ```
 

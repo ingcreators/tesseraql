@@ -131,7 +131,8 @@ public final class ViewBinding {
             }
             if (!declaresSource(route, child.source())) {
                 throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": children source "
-                        + child.source() + " is not a named query or http source of the route");
+                        + child.source() + " is not a source of the route"
+                        + " (a sources: entry, or main)");
             }
         }
         Map<Integer, Embed> panelEmbeds = new LinkedHashMap<>();
@@ -147,7 +148,8 @@ public final class ViewBinding {
             String panelSource = panelSource(panel);
             if (!declaresSource(route, panelSource)) {
                 throw new TqlException(UNKNOWN_SOURCE, "View " + viewRef + ": panel source "
-                        + panelSource + " is not a named query or http source of the route");
+                        + panelSource + " is not a source of the route"
+                        + " (a sources: entry, or main)");
             }
         }
         // Read-side domain references (docs/view-composition.md wave 3a): an explicit
