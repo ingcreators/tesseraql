@@ -24,8 +24,8 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # The JDK in the tag is a deliberate choice (Java 21 baseline; CI checks 25
-      # compatibility) and the tags are not semver, so this image is updated manually.
+      # The JDK in the tag is the declared baseline (docs/jvm-baseline.md) and the tags are
+      # not semver, so this image is updated manually.
       - dependency-name: mcr.microsoft.com/devcontainers/java
 
   - package-ecosystem: docker
@@ -33,7 +33,7 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # The JDK in these tags is a deliberate choice (build targets --release 21, runtime
-      # stays on the 21 LTS baseline) and the tags are not semver: updated manually.
+      # The JDK in these tags is the declared baseline (docs/jvm-baseline.md) and the tags are
+      # not semver: updated manually.
       - dependency-name: maven
       - dependency-name: eclipse-temurin

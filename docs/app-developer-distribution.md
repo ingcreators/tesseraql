@@ -41,7 +41,7 @@ Prerequisites the developer installs once:
 
 | Item | Required? | Notes |
 | --- | --- | --- |
-| JDK 21+ | Yes (JVM channels) | Not needed on host if the CLI ships as a native/jpackage image or container. |
+| JDK 25+ | Yes (JVM channels) | Not needed on host if the CLI ships as a native/jpackage image or container. |
 | TesseraQL CLI | Yes | The only TesseraQL-specific tool. Studio and the pdf/excel codecs ride inside it. |
 | A reachable PostgreSQL | Yes | Docker is a convenience, not a requirement — a natively installed PostgreSQL works; point `DB_HOST`/`DB_USER`/`DB_PASSWORD` (or `config/application.yml`) at it. |
 | Docker | Optional | Convenience DB, Testcontainers (framework dev only), container image builds. |

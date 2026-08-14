@@ -6,8 +6,7 @@ mvn -B -ntp verify
 
 TesseraQL 1.x build policy:
 
-- baseline: Java 21
-- compatibility: Java 25
+- baseline: Java 25 ([jvm-baseline.md](jvm-baseline.md))
 - Maven multi-module
 - Maven plugin first
 - Gradle plugin later

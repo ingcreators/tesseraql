@@ -6,7 +6,7 @@ TesseraQL itself.
 
 ## Preconditions
 
-- All work merged to `main`; CI green on Java 21 and 25.
+- All work merged to `main`; CI green.
 - The direct pushes below rely on the `main-protection` ruleset's repository-admin bypass
   (non-admins must go through a PR). Release tags (`v*`) are immutable by ruleset: they can
   be created but not moved or deleted.

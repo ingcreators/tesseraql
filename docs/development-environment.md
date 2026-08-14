@@ -7,7 +7,7 @@ Use:
 - WSL 2 on Windows
 - Docker Desktop with WSL integration
 - VS Code Dev Containers
-- Java 21 baseline
+- Java 25 baseline
 - Maven
 - Docker/Testcontainers
 - Codex / Claude Code inside the Dev Container when possible

@@ -13,7 +13,7 @@ from your installed CLI, it is newer than that release — check the release not
 
 | Item | Required? | Notes |
 | --- | --- | --- |
-| JDK 21+ | For the JVM channels | Not needed on the host if you use the jpackage image (bundled JVM) or a container. |
+| JDK 25+ | For the JVM channels | Not needed on the host if you use the jpackage image (bundled JVM) or a container. |
 | TesseraQL CLI | Yes | The only TesseraQL-specific tool. Studio and the pdf/excel codecs ride inside it. |
 | A reachable PostgreSQL | Yes — or none, with `--embedded-db` | `docker compose up -d` (the scaffold ships a `compose.yaml`), point `DB_USER`/`DB_PASSWORD` (or `config/application.yml`) at an existing server, or run with an [embedded database](#try-it-without-a-database). |
 | Docker | Optional | Convenience database and container image builds. |
@@ -29,7 +29,7 @@ from your installed CLI, it is newer than that release — check the release not
   JDK required.
 - **Distribution archive** — download `tesseraql-cli-<version>-dist.zip` (or `.tar.gz`) from a
   [GitHub release](https://github.com/ingcreators/tesseraql/releases), unpack it, and put its
-  `bin/` on your `PATH`. It is a fat jar plus `tesseraql`/`tesseraql.cmd` launchers (JDK 21+ on
+  `bin/` on your `PATH`. It is a fat jar plus `tesseraql`/`tesseraql.cmd` launchers (JDK 25+ on
   `PATH`).
 - **Native image** — the release / CI also builds a jpackage app image per OS (a launcher with a
   bundled JVM; no separate JDK needed).
