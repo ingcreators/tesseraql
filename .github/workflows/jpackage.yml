@@ -64,13 +64,44 @@ jobs:
           # flag is Windows-only (jpackage rejects it on Linux/macOS), so add it conditionally.
           console=()
           [ "$RUNNER_OS" = "Windows" ] && console=(--win-console)
+          # The JVM defaults the launchers apply (docs/jvm-baseline.md decision 4), plus the
+          # class-data-sharing setup this channel needs. jlink's runtime ships without a base
+          # CDS archive, and without one the JVM silently declines to build an application
+          # archive at all — so --generate-cds-archive creates it here. That also means
+          # --strip-native-commands has to go: generating the archive runs the runtime's own
+          # bin/java (228 KB, which stays).
+          #
+          # $APPDIR is substituted by the jpackage launcher at run time, so the application
+          # archive is written and validated against the installed path. It cannot be built
+          # here: an archive records the classpath it saw, and this build path is not where
+          # the application ends up.
           jpackage --type app-image --name tesseraql \
             --input build/jpackage-input --main-jar tesseraql.jar \
             --main-class io.tesseraql.cli.TesseraqlCli \
+            --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive" \
+            --java-options -XX:+UseCompactObjectHeaders \
+            --java-options --sun-misc-unsafe-memory-access=allow \
+            --java-options -XX:+AutoCreateSharedArchive \
+            --java-options '-XX:SharedArchiveFile=$APPDIR/app-cds.jsa' \
+            --java-options -Xlog:cds=error:stderr \
             --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
             --app-version "$APPVER" \
             "${console[@]}" \
             --dest build/jpackage
+
+      - name: Give the runtime a compact-object-headers base archive
+        shell: bash
+        run: |
+          # jlink generates classes.jsa, and the launchers run with compact object headers, for
+          # which the JVM looks for classes_coh.jsa instead. Without this step the generated
+          # archive is the wrong layout and is never used. Dumping it needs the runtime's own
+          # java, which is why the jlink step keeps bin/.
+          JAVA=$(find build/jpackage -type f -path '*bin*' \( -name java -o -name java.exe \) | head -1)
+          "$JAVA" -XX:+UseCompactObjectHeaders -Xshare:dump
+          # Only the compact-object-headers archive is ever mapped, and each is ~15 MB of
+          # download: drop the layouts this launcher cannot use.
+          find build/jpackage \( -name classes.jsa -o -name classes_nocoops.jsa \) -delete
+          find build/jpackage -name '*.jsa' -exec ls -l {} +
 
       - name: Smoke-test the native launcher
         shell: bash

@@ -46,6 +46,18 @@ All notable changes to TesseraQL are documented here. The format follows
   alone executes nothing a case could exercise, so it is not declared — an item nothing can
   cover is a gate nobody can pass, not a gap worth showing.
 
+### Fixed
+
+- **`deploy/Dockerfile` could not be built.** The builder stage ran `package`, so the following
+  `dependency:copy-dependencies` could not resolve the reactor's own modules and the build failed
+  on the `io.tesseraql:*` coordinates. `Dockerfile.demo` had already hit this and moved to
+  `install`; the image that `deployment.md` documents as the default shipping pattern had not,
+  and nothing in CI built it. It is built and exercised by CI now.
+- **The deployment images depended on what the building machine had lying around.** There was no
+  `.dockerignore`, so local `target/` trees entered the build context and
+  `COPY target/tesseraql-cli-*.jar` matched both the thin jar and a stale shaded one, putting two
+  copies of the framework on one classpath.
+
 ### Removed
 
 - **BREAKING: the Spring runtime adapter** (docs/jvm-baseline.md, decision 1).
@@ -65,6 +77,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The launchers and images ship JVM settings instead of documenting them**
+  (docs/jvm-baseline.md, decision 4). Measured on JDK 25, a class-data-sharing archive takes 25%
+  off `serve`'s time to ready and 20% off resident memory, and 20% off a short CLI command;
+  `-XX:+UseCompactObjectHeaders` takes a further 7–9% off live heap. Both are applied by
+  `bin/tesseraql`, the two deployment images and the jpackage app images, ahead of
+  `TESSERAQL_JAVA_OPTS` so an operator can still override any of them — there is nothing new for
+  a reader to configure. The launchers keep the archive in the user cache directory and skip it
+  when that cannot be written; the images train it at build time against the baked app; the
+  jpackage app images write theirs on first run, which costs ~25 MB of artifact for the base
+  archive the jlink runtime does not ship and takes 25% off every run after the first.
+- **JDK 25 no longer prints Netty's `sun.misc.Unsafe` warning at every start.** Three `WARNING`
+  lines came from library code the framework does not own;
+  `--sun-misc-unsafe-memory-access=allow` removes them and keeps Netty working when a future JDK
+  denies that access by default.
 - **BREAKING: Java 25 is the baseline** (docs/jvm-baseline.md, decision 3). The build targets
   `--release 25`, the enforcer requires `[25,)`, and CI runs one JVM instead of two. Every
   channel where TesseraQL supplies the JVM moves with it — the Dev Container, both deployment
