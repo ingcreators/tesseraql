@@ -46,7 +46,8 @@ public final class MenuSpec {
         }
     }
 
-    private static final TqlErrorCode WRITE_ERROR = new TqlErrorCode(TqlDomain.YAML, 1010);
+    /** TQL-YAML-1110: config/menu.yml is mis-shaped, or could not be written. */
+    private static final TqlErrorCode INVALID_DOCUMENT = new TqlErrorCode(TqlDomain.YAML, 1110);
 
     /** Writes clean block YAML with no leading document marker, matching hand-authored menus. */
     private static final ObjectMapper YAML = new ObjectMapper(
@@ -84,7 +85,7 @@ public final class MenuSpec {
         if (!(raw instanceof List<?> list)) {
             // A present-but-mis-shaped menu: (e.g. authored as a map) used to yield an empty menu
             // silently — the navigation vanished on every page with no error.
-            throw new io.tesseraql.core.error.TqlException(WRITE_ERROR,
+            throw new io.tesseraql.core.error.TqlException(INVALID_DOCUMENT,
                     "config/menu.yml: menu: must be a list of items, not "
                             + raw.getClass().getSimpleName());
         }
@@ -159,7 +160,7 @@ public final class MenuSpec {
         try {
             return YAML.writeValueAsString(doc);
         } catch (JsonProcessingException ex) {
-            throw new TqlException(WRITE_ERROR, "Failed to serialize menu.yml");
+            throw new TqlException(INVALID_DOCUMENT, "Failed to serialize menu.yml");
         }
     }
 

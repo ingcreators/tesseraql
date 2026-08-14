@@ -33,7 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class FlagsSpec {
 
-    private static final TqlErrorCode WRITE_ERROR = new TqlErrorCode(TqlDomain.YAML, 1011);
+    /** TQL-YAML-1111: config/flags.yml is mis-shaped, or could not be written. */
+    private static final TqlErrorCode INVALID_DOCUMENT = new TqlErrorCode(TqlDomain.YAML, 1111);
 
     private static final ObjectMapper YAML = new ObjectMapper(
             new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
@@ -70,7 +71,7 @@ public final class FlagsSpec {
             // A present-but-mis-shaped flags: (e.g. authored as a list) used to yield no flags
             // silently, so every flags.* expression resolved null and the feature was off
             // everywhere with no error.
-            throw new io.tesseraql.core.error.TqlException(WRITE_ERROR,
+            throw new io.tesseraql.core.error.TqlException(INVALID_DOCUMENT,
                     "config/flags.yml: flags: must be a map of name → value, not "
                             + raw.getClass().getSimpleName());
         }
@@ -125,7 +126,7 @@ public final class FlagsSpec {
         try {
             return YAML.writeValueAsString(doc);
         } catch (JsonProcessingException ex) {
-            throw new TqlException(WRITE_ERROR, "Failed to serialize flags.yml");
+            throw new TqlException(INVALID_DOCUMENT, "Failed to serialize flags.yml");
         }
     }
 }

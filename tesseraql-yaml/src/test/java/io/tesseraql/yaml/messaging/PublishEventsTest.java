@@ -44,10 +44,10 @@ class PublishEventsTest {
         assertThatThrownBy(() -> PublishEvents.compile("orders.create",
                 new PublishSpec(null, "t", null, Map.of())))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-FIELD-2005");
+                .hasMessageContaining("TQL-FIELD-2010");
         assertThatThrownBy(() -> PublishEvents.compile("orders.create",
                 new PublishSpec("events", " ", null, Map.of())))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-FIELD-2005");
+                .hasMessageContaining("TQL-FIELD-2010");
     }
 }

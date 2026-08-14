@@ -30,8 +30,8 @@ public final class PublishEvents {
     /** The aggregate type tagged on published events. */
     public static final String AGGREGATE_TYPE = "Event";
 
-    /** TQL-FIELD-2005: an invalid publish declaration (fails fast at build time). */
-    public static final TqlErrorCode INVALID_PUBLISH = new TqlErrorCode(TqlDomain.FIELD, 2005);
+    /** TQL-FIELD-2010: an invalid publish declaration (fails fast at build time). */
+    public static final TqlErrorCode INVALID_PUBLISH = new TqlErrorCode(TqlDomain.FIELD, 2010);
     private static final TqlErrorCode ENCODE_ERROR = new TqlErrorCode(TqlDomain.BATCH, 5312);
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
