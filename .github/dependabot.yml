@@ -14,6 +14,23 @@ updates:
           - minor
           - patch
 
+  # The documentation site's JavaScript. Without this entry nothing updates it: the nanoid
+  # advisory (GHSA-2v37-7h3g-55p8) sat open because Dependabot was watching Maven, Actions and
+  # Docker only, and a security alert with no ecosystem behind it never becomes a pull request.
+  - package-ecosystem: npm
+    directory: /docs-site
+    schedule:
+      interval: weekly
+    groups:
+      # The site is a build-time dependency tree: astro and its Starlight plugins move
+      # together, and reviewing them one at a time buys nothing.
+      docs-site:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
