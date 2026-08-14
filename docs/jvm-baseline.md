@@ -121,8 +121,8 @@ of them.
 
 Nothing in the last three rows is adopted on argument. The slice measures `serve` start-up
 time and resident memory on JDK 25 with and without each flag, and only what the numbers
-support ships. Measuring is possible only after decision 3, because the Dev Container is on
-JDK 21 today.
+support ships. Measuring wants decision 3 first, so the Dev Container is running the JVM the
+numbers are about.
 
 ## Non-goals
 

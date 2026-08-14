@@ -6,14 +6,14 @@
 # .tqlapp distribution patterns (B / multi-server), bake no app and mount or fetch instead
 # (tesseraql.apps.<name>.url + sha256 fetches hash-pinned packages at boot).
 
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
 COPY . .
 RUN ./mvnw -ntp -DskipTests -pl tesseraql-cli -am package \
     && ./mvnw -ntp -DskipTests -pl tesseraql-cli dependency:copy-dependencies \
          -DincludeScope=runtime -DoutputDirectory=target/dependency
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 RUN useradd --system --home /opt/tesseraql tesseraql
 WORKDIR /opt/tesseraql
 COPY --from=build /build/tesseraql-cli/target/tesseraql-cli-*.jar lib/

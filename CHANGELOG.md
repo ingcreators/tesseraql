@@ -65,6 +65,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: Java 25 is the baseline** (docs/jvm-baseline.md, decision 3). The build targets
+  `--release 25`, the enforcer requires `[25,)`, and CI runs one JVM instead of two. Every
+  channel where TesseraQL supplies the JVM moves with it — the Dev Container, both deployment
+  images, and the jpackage app images. The two places that ask a JDK of someone else now ask for
+  25: the fat-jar launchers, and the Maven surface (`tesseraql-maven-plugin` on a consumer's CI).
+  The reason is not Java 25 language features, which this codebase has no use for; it is that a
+  framework which owns its process should have one JVM story rather than a compatibility matrix.
+  1.x will be declared on this baseline.
 - **Apache Camel 4.18.0 → 4.22.0** (docs/jvm-baseline.md, decision 2). 4.18 leaves support in
   February 2027 and claims Java 17 and 21; 4.22 runs to August 2027 and adds Java 25 — which the
   Java 25 CI job was already exercising against a Camel that did not claim to support it. Two

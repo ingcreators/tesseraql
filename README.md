@@ -52,7 +52,7 @@ tesseraql package --app .            # build a .tqlapp
 
 ### Develop the framework
 
-Requirements: JDK 21+ and Docker (for Testcontainers). The repository ships a Dev Container
+Requirements: JDK 25+ and Docker (for Testcontainers). The repository ships a Dev Container
 with everything preinstalled.
 
 ```bash
@@ -163,8 +163,9 @@ browsable here under [docs/](docs/).
 
 ## Java policy
 
-TesseraQL uses Java 21 as the baseline and tests Java 25 compatibility in CI
-(build target `--release 21`; virtual threads are used on the Java 21 baseline).
+TesseraQL targets Java 25 (`--release 25`), the baseline for 1.x. The framework runs its own
+process on every documented deployment, so it picks the JVM rather than fitting into someone
+else's — see [docs/jvm-baseline.md](docs/jvm-baseline.md).
 
 ## License
 

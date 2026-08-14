@@ -10,7 +10,7 @@
 # volume keeps the seeded data across restarts. This image is for demos and evaluation —
 # production deploys use deploy/Dockerfile with a real database (docs/deployment.md).
 
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /src
 COPY . .
 # install (not package): the second invocation resolves the reactor's own modules
@@ -19,7 +19,7 @@ COPY . .
 RUN ./mvnw -B -ntp -pl tesseraql-cli -am -DskipTests install \
     && ./mvnw -B -ntp -pl tesseraql-cli dependency:copy-dependencies -DoutputDirectory=target/dependency -DskipTests
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 RUN useradd --system --create-home tesseraql
 WORKDIR /home/tesseraql
 COPY --from=build /src/tesseraql-cli/target/*.jar lib/
