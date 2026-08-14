@@ -27,6 +27,12 @@ final class McpInputSchema {
         inputs.forEach((name, field) -> {
             ObjectNode property = properties.putObject(name);
             property.put("type", jsonType(field.type()));
+            // What the argument is, in the author's words. JSON Schema's own key, and the hint a
+            // model reads when it decides what to send: a declared description that stopped at
+            // the manifest left the model guessing from the field name alone.
+            if (field.description() != null && !field.description().isBlank()) {
+                property.put("description", field.description());
+            }
             if ("date".equals(field.type())) {
                 property.put("format", "date");
             } else if ("datetime".equals(field.type())) {

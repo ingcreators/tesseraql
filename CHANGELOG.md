@@ -27,6 +27,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`kind: prompt` is a route document, full stop** (docs/prompt-as-recipe.md, slice 2). A prompt
+  declares `recipe: prompt-text`; a document without one no longer loads, and says so the way
+  every other family says it — `Missing required field 'recipe'`. The second parse path is gone
+  with it: `PromptDefinition` and its `Argument`, `SimpleYamlParser.parsePrompt`, the loader's
+  raw-tree reading, and the root-level `template:` key it read. A prompt renders its message from
+  `response.text:` like the recipe it now is, and `PromptFile` carries the route definition the
+  way `ToolFile` does. What follows for free is everything that attaches to a route: an argument
+  is an `InputField`, so its `type:` is coerced and validated rather than documented and ignored;
+  the unknown-key walk checks a prompt against the route model at every depth; and `security:`
+  and `sources:` are its keys.
+- **An input field declares `description:`, and both MCP surfaces carry it.** An MCP prompt
+  argument is name/description/required and a tool's `inputSchema` is JSON Schema, whose
+  `description` is the hint a model follows when it chooses a value — and neither had one to
+  carry, because `input:` had nowhere to write it. It is one key on `InputField`, so a prompt's
+  arguments, a tool's input schema and a route's emitted OpenAPI all advertise it, a field domain
+  can declare it once for every field that references the domain, and the argument `type:` that
+  was registered as a known-dead component is retired along with the record that carried it.
+- **Two apps may not claim one prompt name.** Every app's MCP surface is served from one
+  `/_tesseraql/mcp` endpoint, so the startup conflict check covers prompt names and
+  `mcp.prompt.<id>` route ids alongside tool names and resource uris. A tool and a prompt may
+  still share a name — they are separate namespaces, as the within-app lint already said.
 - **A lint severity is an enum and a lint code is a constant.** The linter's ~360 findings
   spelled their severity as the string `"error"` or `"warning"` and their code as a string
   literal, so a typo in either was a finding nobody could filter and a number two rule families

@@ -21,7 +21,7 @@ class McpInputSchemaTest {
 
     private static InputField array(InputField.InputItems items) {
         return new InputField("array", false, null, null, null, null, null, null, null, null,
-                null, items, null, null, null, null, null, null, null);
+                null, items, null, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -40,5 +40,29 @@ class McpInputSchemaTest {
         ObjectNode items = (ObjectNode) schema.path("properties").path("codes").path("items");
         assertThat(items.path("type").asText()).isEqualTo("string");
         assertThat(items.path("enum").toString()).isEqualTo("[\"A\",\"B\"]");
+    }
+
+    /**
+     * {@code description:} is JSON Schema's own key and the hint a model reads when it chooses a
+     * value, so a field that declares one says so on the wire rather than at the manifest.
+     */
+    @Test
+    void aFieldDescriptionIsTheSchemaDescription() {
+        InputField sku = new InputField("string", true, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
+                "The stock keeping unit to look up.");
+
+        ObjectNode schema = McpInputSchema.fromInputs(Map.of("sku", sku));
+
+        assertThat(schema.path("properties").path("sku").path("description").asText())
+                .isEqualTo("The stock keeping unit to look up.");
+    }
+
+    /** A field with no description carries no key, rather than a null or an empty string. */
+    @Test
+    void aFieldWithoutOneCarriesNoDescription() {
+        ObjectNode schema = McpInputSchema.fromInputs(Map.of("ids", array(null)));
+
+        assertThat(schema.path("properties").path("ids").has("description")).isFalse();
     }
 }

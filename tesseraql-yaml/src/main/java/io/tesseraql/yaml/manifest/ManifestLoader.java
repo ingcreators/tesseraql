@@ -606,10 +606,12 @@ public final class ManifestLoader {
      * Loads the {@code mcp/} tree, splitting each document by {@code kind}: a {@code resource}
      * document becomes a {@link ResourceFile} (read-only JSON context addressed by its {@code uri}),
      * a {@code ui} document a {@link UiResourceFile} (an MCP Apps UI resource that renders an
-     * {@code hc-*} fragment, addressed by its {@code ui://} uri), and everything else a
-     * {@link ToolFile} (whose {@code ui:} field, when present, links it to a UI resource). All reuse
-     * the route model (recipe, input, sql, security); the {@code description} is the model-facing
-     * hint read from the same document.
+     * {@code hc-*} fragment, addressed by its {@code ui://} uri), a {@code prompt} document a
+     * {@link PromptFile} (a parameterized message rendered from its {@code response.text:}), and
+     * everything else a {@link ToolFile} (whose {@code ui:} field, when present, links it to a UI
+     * resource). All four are read by one parser call, because all four are routes
+     * (docs/prompt-as-recipe.md decision 1) reusing the route model — recipe, input, security,
+     * sources; the {@code description} is the model-facing hint read from the same document.
      */
     private void loadMcp(Path home, List<ToolFile> tools, List<ResourceFile> resources,
             List<UiResourceFile> uiResources, List<PromptFile> prompts) {
@@ -626,27 +628,18 @@ public final class ManifestLoader {
                         Map<String, Object> tree = parser.parseTree(file);
                         String description = string(tree.get("description"));
                         Object kind = tree.get("kind");
-                        // A prompt that declares a recipe: is a route like its three siblings
-                        // (docs/prompt-as-recipe.md decision 1) and reads through the route
-                        // parser, which requires one. A prompt without a recipe: is the older
-                        // pure-text form and reads through its own model. Slice 2 deletes the
-                        // second arm, and this branch with it.
-                        if ("prompt".equals(kind)) {
-                            prompts.add(tree.get("recipe") == null
-                                    ? promptFile(file, parser.parsePrompt(file))
-                                    : promptFile(file, parser.parseRoute(file), description));
-                            return;
-                        }
                         // A non-null kind outside the legal set was silently treated as a tool —
                         // `kind: resourse` published a callable tool and dropped the resource.
                         if (kind != null && !"tool".equals(kind) && !"resource".equals(kind)
-                                && !"ui".equals(kind)) {
+                                && !"ui".equals(kind) && !"prompt".equals(kind)) {
                             throw new TqlException(MCP_UNKNOWN_KIND, "mcp document " + file
                                     + " declares kind: " + kind
                                     + " — expected tool, resource, ui or prompt");
                         }
                         RouteDefinition definition = parser.parseRoute(file);
-                        if ("resource".equals(kind)) {
+                        if ("prompt".equals(kind)) {
+                            prompts.add(promptFile(file, definition, description));
+                        } else if ("resource".equals(kind)) {
                             resources.add(new ResourceFile(file, definition, description,
                                     string(tree.get("uri")), string(tree.get("mimeType"))));
                         } else if ("ui".equals(kind)) {
@@ -663,29 +656,20 @@ public final class ManifestLoader {
         }
     }
 
-    /** Turns a parsed prompt document into a {@link PromptFile} (id, arguments, template). */
-    private static PromptFile promptFile(Path file,
-            io.tesseraql.yaml.model.PromptDefinition definition) {
-        List<PromptFile.Argument> arguments = new ArrayList<>();
-        definition.input().forEach((name, argument) -> arguments.add(new PromptFile.Argument(name,
-                argument == null ? null : argument.description(),
-                argument != null && argument.required())));
-        return new PromptFile(file, definition.id(), definition.description(), arguments,
-                definition.template(), null);
-    }
-
     /**
-     * Turns a route-parsed prompt document into a {@link PromptFile} carrying its route
-     * definition. The declared arguments are the route's {@code input:}, so {@code prompts/list}
-     * advertises what the binder actually validates; the description is read from the raw tree
-     * like every other mcp kind's.
+     * Turns a prompt document into a {@link PromptFile} carrying its route definition. The
+     * declared arguments are the route's {@code input:}, so {@code prompts/list} advertises what
+     * the binder actually validates — name, description and required, which is what an MCP prompt
+     * argument is; the document's description is read from the raw tree like every other mcp
+     * kind's.
      */
     private static PromptFile promptFile(Path file, RouteDefinition definition,
             String description) {
         List<PromptFile.Argument> arguments = new ArrayList<>();
         definition.input().forEach((name, field) -> arguments.add(new PromptFile.Argument(name,
-                null, field != null && field.required())));
-        return new PromptFile(file, definition.id(), description, arguments, null, definition);
+                field == null ? null : field.description(),
+                field != null && field.required())));
+        return new PromptFile(file, definition.id(), description, arguments, definition);
     }
 
     private static String string(Object value) {

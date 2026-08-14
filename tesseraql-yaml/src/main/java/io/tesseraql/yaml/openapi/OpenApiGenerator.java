@@ -363,9 +363,9 @@ public final class OpenApiGenerator {
 
     /**
      * An input's full parameter/property schema (roadmap Phase 40): the declared constraints
-     * ride into the contract — enum, length and value bounds, the regex pattern, and the
-     * semantic string formats ({@code url} maps to OpenAPI's {@code uri}). Deterministic key
-     * order.
+     * ride into the contract — its {@code description}, enum, length and value bounds, the regex
+     * pattern, and the semantic string formats ({@code url} maps to OpenAPI's {@code uri}).
+     * Deterministic key order.
      *
      * <p>Package-private rather than private for its test: the gallery declares no array input,
      * and reaching this through a whole manifest to assert one node would test the fixture more
@@ -374,6 +374,11 @@ public final class OpenApiGenerator {
     static Map<String, Object> fieldSchema(InputField field) {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", schemaType(field));
+        // What the field is, in the author's words — JSON Schema's own key, so the published
+        // contract says it wherever the framework's other input-derived schemas do.
+        if (field.description() != null && !field.description().isBlank()) {
+            schema.put("description", field.description());
+        }
         if (field.enumValues() != null && !field.enumValues().isEmpty()) {
             schema.put("enum", field.enumValues());
         }

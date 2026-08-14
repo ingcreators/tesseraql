@@ -162,14 +162,11 @@ public final class RouteCompiler {
                         buildMcpUi(this, manifest.appHome(), uiFile);
                     }
                 }
-                // Application-declared MCP prompts (docs/prompt-as-recipe.md): a prompt that
-                // declares recipe: prompt-text compiles to a read-only direct: route whose
-                // response.text: renders the message. A prompt with no recipe: is the older
-                // pure-text form the runtime renders itself, and has no route to build.
+                // Application-declared MCP prompts (docs/prompt-as-recipe.md): each compiles to a
+                // read-only direct: route whose response.text: renders the message.
                 for (io.tesseraql.yaml.manifest.PromptFile promptFile : manifest.prompts()) {
-                    if (promptFile.definition() != null
-                            && (onlyRouteIds == null
-                                    || onlyRouteIds.contains(promptFile.definition().id()))) {
+                    if (onlyRouteIds == null
+                            || onlyRouteIds.contains(promptFile.definition().id())) {
                         buildMcpPrompt(this, promptFile);
                     }
                 }

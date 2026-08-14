@@ -375,6 +375,10 @@
           "type": "string",
           "description": "Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local."
         },
+        "description": {
+          "type": "string",
+          "description": "What this field is, in the words a caller reads. A wire field on both MCP surfaces derived from input: an mcp/ prompt's argument carries it in prompts/list, and an mcp/ tool's inputSchema carries it as the JSON Schema description a model follows. Declarable on a domain, and inherited from one."
+        },
         "type": {
           "enum": [
             "string",

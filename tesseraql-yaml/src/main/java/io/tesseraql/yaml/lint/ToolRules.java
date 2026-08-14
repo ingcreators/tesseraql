@@ -35,17 +35,11 @@ final class ToolRules implements LintRule {
         for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
             lintTool(appHome, manifest.config(), tool, findings);
         }
-        // A prompt is checked against the model it was read through: the route model once it
-        // declares a recipe: (docs/prompt-as-recipe.md), its own before that. Slice 2 drops the
-        // second arm along with PromptDefinition.
+        // A prompt is a route (docs/prompt-as-recipe.md decision 1), so it is checked against the
+        // route model like a tool — plus description:, which the loader reads from the raw tree.
         for (io.tesseraql.yaml.manifest.PromptFile prompt : manifest.prompts()) {
-            if (prompt.definition() == null) {
-                UnknownKeyRules.lintUnknownKeys(context, appHome, prompt.source(),
-                        io.tesseraql.yaml.model.PromptDefinition.class, Set.of(), findings);
-            } else {
-                UnknownKeyRules.lintUnknownKeys(context, appHome, prompt.source(),
-                        RouteDefinition.class, Set.of("description"), findings);
-            }
+            UnknownKeyRules.lintUnknownKeys(context, appHome, prompt.source(),
+                    RouteDefinition.class, Set.of("description"), findings);
         }
     }
 

@@ -20,9 +20,9 @@ import java.util.Map;
  * declare it</em>.</li>
  * </ul>
  *
- * <p>{@link #DISPLAY_ONLY} is empty and {@link #UNWIRED} holds one entry — the 2026-07-25
- * audit retired or wired every dead field, and the one that arrived since came in red,
- * which is the point.
+ * <p>Both maps are empty today — the 2026-07-25 audit retired or wired every dead
+ * field, and no surviving component is consumed exclusively by display surfaces. That
+ * emptiness is the point: the next dead field arrives red.
  */
 public final class YamlSurfaceConsumers {
 
@@ -30,17 +30,7 @@ public final class YamlSurfaceConsumers {
     public static final Map<String, String> DISPLAY_ONLY = Map.of();
 
     /** {@code "Record#component" -> why it is declared but consumed nowhere (+ issue)}. */
-    public static final Map<String, String> UNWIRED = Map.of(
-            // Pre-existing, and surfaced the day a prompt got a model: docs/app-mcp.md teaches
-            // `type: string` on a prompt argument, and the raw-tree loader it replaced read only
-            // description and required. Nothing can consume it as written — an MCP prompt
-            // argument travels as name/description/required, so a type has nowhere to go on the
-            // wire and nothing to constrain. Registered rather than deleted because deleting it
-            // would refuse a key the published guide asks authors to write; whether it becomes
-            // part of the argument's description or leaves the surface is a product decision.
-            "PromptDefinition.Argument#type",
-            "documented in docs/app-mcp.md but consumed by nothing - MCP prompt arguments"
-                    + " carry name/description/required only");
+    public static final Map<String, String> UNWIRED = Map.of();
 
     private YamlSurfaceConsumers() {
     }

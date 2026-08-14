@@ -16,9 +16,6 @@ import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.ToolFile;
 import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.UiSpec;
-import io.tesseraql.yaml.template.Templates;
-import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
@@ -36,12 +33,10 @@ import org.apache.camel.ProducerTemplate;
  * by the route's error renderer) becomes an MCP tool error or, for a (UI) resource, a
  * {@code resources/read} JSON-RPC error.
  *
- * <p>A prompt that declares a {@code recipe:} is a route too (docs/prompt-as-recipe.md): its
- * handler sends to {@code direct:mcp.prompt.<id>} and wraps the rendered text as one {@code user}
- * message, so a prompt that reads data is governed like everything else here. A prompt that
- * declares none is the older pure-text form, rendered in this class from its own template. All
- * four primitives reach their route through one sender, {@code call}, and differ only in how they
- * wrap what it returns.
+ * <p>A prompt is a route too (docs/prompt-as-recipe.md): its handler sends to
+ * {@code direct:mcp.prompt.<id>} and wraps the rendered text as one {@code user} message, so a
+ * prompt that reads data is governed like everything else here. All four primitives reach their
+ * route through one sender, {@code call}, and differ only in how they wrap what it returns.
  *
  * <p>A tool that links to a UI resource (its {@code ui:} field) advertises the link as the tool's
  * {@code _meta.ui.resourceUri}, the UI resource carries its {@code _meta.ui} rendering hints, and the
@@ -126,38 +121,13 @@ final class AppMcpServer {
                 promptBuilder.argument(argument.name(), argument.description(),
                         argument.required());
             }
-            if (prompt.definition() != null) {
-                // A prompt that declares a recipe: is a route like its three siblings
-                // (docs/prompt-as-recipe.md): the message comes from the compiled route, which
-                // runs its own security, binding and SQL. Slice 2 makes this the only arm.
-                String endpoint = "direct:mcp.prompt." + prompt.definition().id();
-                promptBuilder.handler(
-                        (arguments, context) -> getPrompt(producer, endpoint, arguments, context));
-            } else {
-                Path appHome = manifest.appHome();
-                Path template = prompt.template() == null
-                        ? null
-                        : prompt.source().getParent().resolve(prompt.template()).normalize();
-                promptBuilder.handler((arguments, context) -> renderPrompt(appHome, template,
-                        arguments));
-            }
+            // A prompt is a route like its three siblings (docs/prompt-as-recipe.md): the message
+            // comes from the compiled route, which runs its own security, binding and SQL.
+            String endpoint = "direct:mcp.prompt." + prompt.definition().id();
+            promptBuilder.handler(
+                    (arguments, context) -> getPrompt(producer, endpoint, arguments, context));
             builder.prompt(promptBuilder.build());
         }
-    }
-
-    /**
-     * Renders an app prompt's colocated template (Thymeleaf TEXT mode) against the argument values as
-     * a single {@code user} message — the prompt is pure text, so this runs no SQL and needs no auth.
-     */
-    private static McpPromptResult renderPrompt(Path appHome, Path template,
-            Map<String, String> arguments) {
-        if (template == null) {
-            return McpPromptResult.user("This prompt has no template configured.");
-        }
-        Map<String, Object> model = new LinkedHashMap<>(arguments);
-        String name = appHome.toAbsolutePath().normalize().relativize(template).toString()
-                .replace('\\', '/');
-        return McpPromptResult.user(Templates.render(appHome, name, model));
     }
 
     /**

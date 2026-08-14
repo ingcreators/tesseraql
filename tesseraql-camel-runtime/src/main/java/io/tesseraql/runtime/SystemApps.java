@@ -8,6 +8,7 @@ import io.tesseraql.yaml.apps.AppSources;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.manifest.PromptFile;
 import io.tesseraql.yaml.manifest.ResourceFile;
 import io.tesseraql.yaml.manifest.RouteFile;
 import io.tesseraql.yaml.manifest.ToolFile;
@@ -104,19 +105,22 @@ final class SystemApps {
      * Rejects collisions across the main and mounted apps: duplicate HTTP route ids or method+path
      * pairs, and - since the runtime serves every app's MCP surface from one shared
      * {@code /_tesseraql/mcp} endpoint (roadmap Phase 24 mounted-app tools) - duplicate MCP tool
-     * names, resource/UI uris, or compiled MCP route ids.
+     * or prompt names, resource/UI uris, or compiled MCP route ids.
      *
-     * <p>An MCP tool's id is its tool name; resources and UI resources share a single uri namespace
-     * (the within-app duplicate-uri lint, {@code TQL-MCP-1007}, cannot see across apps). The
-     * compiled camel route ids ({@code mcp.<id>}, {@code mcp.resource.<id>}, {@code mcp.ui.<id>})
-     * are checked too, so two apps declaring the same id within one kind fail here with a clear
-     * message rather than as a raw duplicate-route-id error when the routes are added to the
-     * context.
+     * <p>An MCP tool's id is its tool name and a prompt's id is its prompt name, each in its own
+     * flat namespace (a tool and a prompt may share a name, matching the within-app lint
+     * {@code TQL-MCP-1014}); resources and UI resources share a single uri namespace (the
+     * within-app duplicate-uri lint, {@code TQL-MCP-1007}, cannot see across apps). The compiled
+     * camel route ids ({@code mcp.<id>}, {@code mcp.resource.<id>}, {@code mcp.ui.<id>},
+     * {@code mcp.prompt.<id>}) are checked too, so two apps declaring the same id within one kind
+     * fail here with a clear message rather than as a raw duplicate-route-id error when the routes
+     * are added to the context.
      */
     static void requireNoRouteConflicts(AppManifest main, List<MountedApp> mounted) {
         Map<String, Path> byRouteId = new HashMap<>();
         Map<String, Path> byEndpoint = new HashMap<>();
         Map<String, Path> byMcpToolName = new HashMap<>();
+        Map<String, Path> byMcpPromptName = new HashMap<>();
         Map<String, Path> byMcpUri = new HashMap<>();
         Map<String, Path> byMcpRouteId = new HashMap<>();
         List<AppManifest> all = new ArrayList<>();
@@ -148,6 +152,12 @@ final class SystemApps {
                         "MCP resource uri '" + ui.uri() + "'");
                 requireUnique(byMcpRouteId, "mcp.ui." + id, ui.source(),
                         "MCP route 'mcp.ui." + id + "'");
+            }
+            for (PromptFile prompt : manifest.prompts()) {
+                String id = prompt.definition().id();
+                requireUnique(byMcpPromptName, id, prompt.source(), "MCP prompt '" + id + "'");
+                requireUnique(byMcpRouteId, "mcp.prompt." + id, prompt.source(),
+                        "MCP route 'mcp.prompt." + id + "'");
             }
         }
     }
