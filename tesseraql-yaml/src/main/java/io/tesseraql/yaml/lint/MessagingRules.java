@@ -26,6 +26,9 @@ final class MessagingRules {
 
     private static final String INBOX_NOTIFICATION_WITHOUT_RECIPIENT = "TQL-YAML-1034";
 
+    // A webhook route has nowhere to put what arrives — it declares no steps:.
+    private static final String INCOMPLETE_WEBHOOK = "TQL-YAML-1056";
+
     private MessagingRules() {
     }
 
@@ -37,15 +40,16 @@ final class MessagingRules {
      * Statically checks the inbound {@code webhook} recipe (roadmap Phase 26): the route names a
      * verifier ({@code TQL-SEC-4082}) that is configured under
      * {@code tesseraql.connectors.webhooks} ({@code TQL-SEC-4083}, so a webhook is never served
-     * unverified), and runs a SQL pipeline ({@code TQL-YAML-1008}). A {@code webhook:} block on a
-     * non-webhook recipe is a misuse.
+     * unverified), and runs a pipeline ({@code TQL-YAML-1056}). A {@code webhook:} block on a
+     * non-webhook recipe is a misuse — the same one {@code notify:} and {@code publish:} make, and
+     * so the same code ({@code TQL-YAML-1010}).
      */
     static void lintWebhook(AppConfig config, RouteDefinition definition, String source,
             List<LintFinding> findings) {
         if (!"webhook".equals(definition.recipe())) {
             if (definition.webhook() != null) {
                 findings.add(
-                        new LintFinding(LintCodes.INVALID_WEBHOOK_OR_TRANSLATION, ERROR, source,
+                        new LintFinding(LintCodes.MESSAGING_KEY_ON_WRONG_RECIPE, ERROR, source,
                                 "webhook: is only supported on the webhook recipe, not '"
                                         + definition.recipe() + "'"));
             }
@@ -65,7 +69,7 @@ final class MessagingRules {
         // an empty steps: at build. `sources.main` used to satisfy this check (the deleted "a
         // sql: or steps: pipeline" vocabulary), so the document passed lint and failed startup.
         if (definition.steps().isEmpty()) {
-            findings.add(new LintFinding(LintCodes.INVALID_WEBHOOK_OR_TRANSLATION, ERROR, source,
+            findings.add(new LintFinding(INCOMPLETE_WEBHOOK, ERROR, source,
                     "webhook route '"
                             + definition.id() + "' needs a steps: pipeline"));
         }
@@ -128,7 +132,7 @@ final class MessagingRules {
                 .navigate("tesseraql.notifications.channels." + spec.channel()) == null) {
             // A warning, not an error: another environment's config may declare the channel.
             findings.add(
-                    new LintFinding(LintCodes.UNDECLARED_CHANNEL_OR_CREDENTIAL, WARNING, source,
+                    new LintFinding(LintCodes.UNDECLARED_CONFIG_REFERENCE, WARNING, source,
                             "Notification '" + id + "' references undeclared channel '"
                                     + spec.channel() + "'"));
         }

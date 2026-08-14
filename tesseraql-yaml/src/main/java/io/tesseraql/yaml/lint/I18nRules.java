@@ -21,6 +21,9 @@ final class I18nRules implements LintRule {
 
     private static final String DECLARED_LOCALE_WITHOUT_CATALOG = "TQL-YAML-1103";
 
+    // A catalog is behind the default locale — the keys it misses fall back untranslated.
+    private static final String TRANSLATION_GAP = "TQL-YAML-1008";
+
     private static final String UNRESOLVED_MESSAGE_KEY = "TQL-FIELD-2005";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
@@ -90,7 +93,7 @@ final class I18nRules implements LintRule {
                     .sorted()
                     .toList();
             if (!missing.isEmpty()) {
-                findings.add(new LintFinding(LintCodes.INVALID_WEBHOOK_OR_TRANSLATION, WARNING,
+                findings.add(new LintFinding(TRANSLATION_GAP, WARNING,
                         "messages",
                         "Catalog '" + tag + "' is missing " + missing.size()
                                 + " key(s) present in the default locale '" + defaultTag

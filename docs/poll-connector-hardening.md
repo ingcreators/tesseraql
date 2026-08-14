@@ -159,7 +159,7 @@ model below has to answer them, not because they are established.
   the job — not silent, but the app boots healthy with a missing route, so an operator sees only
   "nothing is arriving"; `host`/`credential` on a `local` source parse and are discarded with no
   feedback; a blank or missing `path` does create a directory literally named `null` in the
-  process working directory — though lint *does* error on it (`TQL-YAML-1005`), so the real gap
+  process working directory — though lint *does* error on it (`TQL-YAML-1054`), so the real gap
   there is that lint is not a boot gate.
 
 ## The model

@@ -48,6 +48,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: a code answers one question.** Four `TQL-YAML` numbers each answered two unrelated
+  ones, because a rule written in June borrowed a number allocated two days earlier — nothing was
+  documented under it yet, so it looked free, and the uniqueness guard did not exist. The older
+  meaning keeps the number and the newer one moves: a job's trigger declaration is
+  `TQL-YAML-1054` (was `1005`, which stays with an export option that cannot apply where it is
+  declared); a poll job with no `import:` block is `TQL-YAML-1055` (was `1006`, which stays with
+  an unusable export template); a webhook route with no `steps:` pipeline is `TQL-YAML-1056` (was
+  `1008`, which stays with a translation gap); and an invalid `tesseraql.http.outbound`
+  declaration is `TQL-YAML-1109` (was `1103`, which stays with a declared locale that has no
+  catalog). Two more meanings moved to say what they are: an export source declaring
+  `onError: empty` is `TQL-YAML-1057` (was `1006`), and a `webhook:` block on a non-webhook
+  recipe is `TQL-YAML-1010`, the code `notify:` and `publish:` already raise for exactly that
+  mistake. The export block's own codes now split by what the author does about them —
+  `TQL-YAML-1041` when a piece is missing, `1005` when a declared key cannot apply, `1006` when
+  the template is unusable — so `startCell:` without a template no longer reports as `1041` on a
+  job step and `1005` on a route.
 - **`kind: prompt` is a route document, full stop** (docs/prompt-as-recipe.md, slice 2). A prompt
   declares `recipe: prompt-text`; a document without one no longer loads, and says so the way
   every other family says it — `Missing required field 'recipe'`. The second parse path is gone

@@ -120,7 +120,7 @@ class AppLinterExportSourcesTest {
                 """));
 
         assertThat(findings).anySatisfy(finding -> {
-            assertThat(finding.code()).isEqualTo("TQL-YAML-1006");
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1057");
             assertThat(finding.severity()).isEqualTo("error");
             assertThat(finding.message()).contains("onError: empty", "rates");
         });
@@ -138,7 +138,7 @@ class AppLinterExportSourcesTest {
                   maxRows: 100
                 """)))
                 .noneMatch(finding -> "TQL-LD-5312".equals(finding.code())
-                        || ("TQL-YAML-1006".equals(finding.code())
+                        || ("TQL-YAML-1057".equals(finding.code())
                                 && finding.message().contains("onError")));
     }
 }

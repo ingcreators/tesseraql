@@ -65,7 +65,7 @@ class AppLinterChainingTest {
                 ""));
 
         assertThat(findings).anySatisfy(finding -> {
-            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1054");
             assertThat(finding.message()).contains("after:");
         });
     }
@@ -76,6 +76,6 @@ class AppLinterChainingTest {
                 "", "trigger:\n  after: chain.job0", "trigger:\n  after: chain.job1"));
 
         assertThat(findings).noneMatch(finding -> "TQL-BATCH-4209".equals(finding.code()));
-        assertThat(findings).noneMatch(finding -> "TQL-YAML-1005".equals(finding.code()));
+        assertThat(findings).noneMatch(finding -> "TQL-YAML-1054".equals(finding.code()));
     }
 }

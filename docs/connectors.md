@@ -209,7 +209,7 @@ tesseraql:
 
 Credential settings resolve their `${...}` placeholders **at call time**, so secrets declared
 through the SecretResolver SPI are fetched per call — never at startup, never into logs or
-generated artifacts. An unsupported credential `type:` fails at startup (`TQL-YAML-1103`).
+generated artifacts. An unsupported credential `type:` fails at startup (`TQL-YAML-1109`).
 
 ### Circuit breaker
 
@@ -397,8 +397,8 @@ app down:
 | `TQL-SEC-4080` | error    | a remote source's host is not in `tesseraql.connectors.poll.allowedHosts` |
 | `TQL-SEC-4081` | warning  | the trigger references a credential not declared under `credentials`  |
 | `TQL-SEC-4084` | warning  | an SFTP source polls without `tesseraql.connectors.poll.knownHostsFile` (host key unchecked) |
-| `TQL-YAML-1005`| error    | the transport is not local/sftp/ftps, has no path, or a remote source has no host |
-| `TQL-YAML-1006`| error    | a poll-triggered job has no `import:` block with a per-row SQL         |
+| `TQL-YAML-1054`| error    | the transport is not local/sftp/ftps, has no path, or a remote source has no host |
+| `TQL-YAML-1055`| error    | a poll-triggered job has no `import:` block with a per-row SQL         |
 
 A poll job is covered by the `file-poll` coverage kind when a declarative suite exercises its
 per-row import SQL (a plain `sql:` case), the same SQL-file basis as route and document coverage.
@@ -514,7 +514,8 @@ without a verifier would be unauthenticated. Lint catches this and the rest stat
 | -------------- | -------- | ---------------------------------------------------------------------- |
 | `TQL-SEC-4082` | error    | the route declares no `webhook.provider`                               |
 | `TQL-SEC-4083` | error    | the named verifier is not configured under `tesseraql.connectors.webhooks` |
-| `TQL-YAML-1008`| error    | the route has no `sql:`/`steps:` pipeline, or `webhook:` is on a non-webhook recipe |
+| `TQL-YAML-1056`| error    | the route has no `steps:` pipeline                                     |
+| `TQL-YAML-1010`| error    | `webhook:` rides a non-webhook recipe                                  |
 
 A webhook route is covered by the `webhook` coverage kind when a suite exercises its SQL (the same
 SQL-file basis as route coverage); gate it with `coverage.thresholds.webhook`.

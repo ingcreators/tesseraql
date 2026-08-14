@@ -22,6 +22,9 @@ final class JobRules implements LintRule {
 
     private static final String POLL_SOURCE_WITHOUT_ALLOWED_PATHS = "TQL-SEC-4086";
 
+    // A poll trigger says a file arrives; nothing says how to read it or what to write.
+    private static final String POLL_JOB_WITHOUT_IMPORT = "TQL-YAML-1055";
+
     private static final String POLL_HOST_NOT_ALLOWED = "TQL-SEC-4080";
 
     private static final String POLL_UNDECLARED_CREDENTIAL = "TQL-SEC-4081";
@@ -161,18 +164,18 @@ final class JobRules implements LintRule {
             List<LintFinding> findings) {
         io.tesseraql.yaml.model.PollSpec poll = job.definition().trigger().poll();
         if (job.definition().trigger().schedule() != null) {
-            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+            findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                     "Job '" + job.definition().id()
                             + "' declares both a schedule and a poll trigger; declare one"));
         }
         String kind = poll.effectiveTransport();
         if (!List.of("local", "sftp", "ftps").contains(kind)) {
-            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+            findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                     "Poll trigger transport must be local, sftp, or ftps (was '"
                             + poll.transport() + "')"));
         }
         if (poll.path() == null || poll.path().isBlank()) {
-            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+            findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                     "Poll trigger needs a path: (the directory to poll)"));
         }
         // Values that reach the endpoint URI. delay throws inside wire() where the failure is
@@ -182,7 +185,7 @@ final class JobRules implements LintRule {
             try {
                 io.tesseraql.core.util.Durations.toMillis(poll.delay());
             } catch (RuntimeException ex) {
-                findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR,
+                findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR,
                         source,
                         "Poll trigger delay '" + poll.delay() + "' is not a duration — the job"
                                 + " would be dropped at startup, leaving the app healthy with"
@@ -190,7 +193,7 @@ final class JobRules implements LintRule {
             }
         }
         if (poll.port() != null && (poll.port() < 1 || poll.port() > 65535)) {
-            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+            findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                     "Poll trigger port " + poll.port() + " is outside 1-65535"));
         }
         if (!poll.isRemote()) {
@@ -198,14 +201,14 @@ final class JobRules implements LintRule {
             // author converting a job between kinds gets no signal that they now mean nothing.
             if (poll.host() != null && !poll.host().isBlank()) {
                 findings.add(
-                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, WARNING, source,
+                        new LintFinding(LintCodes.INVALID_JOB_TRIGGER, WARNING, source,
                                 "Poll trigger source '" + kind
                                         + "' ignores host: — remove it or use a"
                                         + " remote source"));
             }
             if (poll.credential() != null && !poll.credential().isBlank()) {
                 findings.add(
-                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, WARNING, source,
+                        new LintFinding(LintCodes.INVALID_JOB_TRIGGER, WARNING, source,
                                 "Poll trigger source '" + kind
                                         + "' ignores credential: — remove it or"
                                         + " use a remote source"));
@@ -220,7 +223,7 @@ final class JobRules implements LintRule {
         if (poll.isRemote()) {
             if (poll.host() == null || poll.host().isBlank()) {
                 findings.add(
-                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+                        new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                                 "Poll trigger source '" + kind + "' needs a host:"));
             } else {
                 List<String> allowedHosts = new java.util.ArrayList<>();
@@ -262,7 +265,7 @@ final class JobRules implements LintRule {
         io.tesseraql.yaml.model.ImportSpec importSpec = job.definition().fileImport();
         io.tesseraql.yaml.model.Binding rowStep = job.definition().rowStep();
         if (importSpec == null || rowStep == null || rowStep.file() == null) {
-            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+            findings.add(new LintFinding(POLL_JOB_WITHOUT_IMPORT, ERROR, source,
                     "Poll-triggered job '"
                             + job.definition().id()
                             + "' needs an import: block saying how to parse the"

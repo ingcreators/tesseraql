@@ -254,7 +254,7 @@ via the existing asynchronous, off-heap, operations-tracked transfer path, movin
 done/failed sub-directory. Reaching a remote host is deny-by-default
 (`tesseraql.connectors.poll.allowedHosts`), with SecretResolver-backed credentials; the Camel
 `file`/`sftp`/`ftps` consumer stays an implementation detail. Lint (`TQL-SEC-4080..4081`,
-`TQL-YAML-1005..1006`) and a `file-poll` coverage kind keep it machine-checkable.
+`TQL-YAML-1054..1055`) and a `file-poll` coverage kind keep it machine-checkable.
 
 **Inbound webhook recipe** (delivered, see [docs/connectors.md](connectors.md)): a `webhook` route
 is an HMAC-verified, replay-protected POST endpoint in front of a SQL pipeline. It authenticates
@@ -263,7 +263,7 @@ rejects a stale timestamp outside the tolerance, and rejects a replay via a shar
 (`tql_webhook_seen`, the SAML-replay basis) — all before a row is written. The verifier is
 configured centrally (`tesseraql.connectors.webhooks`), so the route carries no secret, and an
 unknown provider fails the build (never served unverified). A bad signature maps to 401, a replay
-to 409. Lint (`TQL-SEC-4082..4083`, `TQL-YAML-1008`) and a `webhook` coverage kind keep it
+to 409. Lint (`TQL-SEC-4082..4083`, `TQL-YAML-1056`) and a `webhook` coverage kind keep it
 machine-checkable. **Phase 26 (managed connectors) is complete.**
 
 ### Phase 27 — messaging and events

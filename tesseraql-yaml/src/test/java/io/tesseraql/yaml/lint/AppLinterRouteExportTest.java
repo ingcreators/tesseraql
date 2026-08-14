@@ -69,7 +69,8 @@ class AppLinterRouteExportTest {
 
         assertThat(new AppLinter().lint(app))
                 .noneMatch(finding -> "TQL-YAML-1006".equals(finding.code())
-                        || "TQL-YAML-1005".equals(finding.code()));
+                        || "TQL-YAML-1005".equals(finding.code())
+                        || "TQL-YAML-1041".equals(finding.code()));
     }
 
     @Test
@@ -83,7 +84,7 @@ class AppLinterRouteExportTest {
                 """));
 
         assertThat(findings).anySatisfy(finding -> {
-            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
             assertThat(finding.severity()).isEqualTo("error");
             assertThat(finding.message()).contains("startCell:", "template:");
         });
@@ -98,6 +99,7 @@ class AppLinterRouteExportTest {
                     mode: query-export
                 """)))
                 .noneMatch(finding -> "TQL-YAML-1006".equals(finding.code())
-                        || "TQL-YAML-1005".equals(finding.code()));
+                        || "TQL-YAML-1005".equals(finding.code())
+                        || "TQL-YAML-1041".equals(finding.code()));
     }
 }

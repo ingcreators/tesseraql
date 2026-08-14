@@ -99,7 +99,7 @@
           },
           "startCell": {
             "type": "string",
-            "description": "Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template, and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions."
+            "description": "Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template (TQL-YAML-1041), and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions."
           },
           "columns": {
             "type": "array",
