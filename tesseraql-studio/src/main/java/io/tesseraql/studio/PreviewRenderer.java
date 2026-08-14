@@ -73,14 +73,14 @@ final class PreviewRenderer {
      *
      * <p>This used to recognize only {@code .sql}, {@code web/**.yml}, {@code .html} and
      * {@code .tpl}, and answer <em>valid</em> for everything else — so the compile-before-write
-     * gate in {@link #applyDraft} was a no-op for shared definitions, jobs, workflows, scopes,
+     * gate in {@code StudioService.applyDraft} was a no-op for shared definitions, jobs, workflows, scopes,
      * attachments, suites, and config, and a broken document was promoted to the source of truth
      * with the screen saying it compiled. Worse, the route branch matched any {@code web/**.yml},
      * so a {@code *.view.yml} was parsed as a route: the check that ran was the wrong one.
      *
      * <p>The parsers read files rather than text, so the document kinds land in a temp file whose
      * name matches the real one and whose path is scrubbed from the message — the same technique
-     * {@link #validateDecisionDraft} already used, now shared.
+     * {@code DecisionForms} already used, now shared.
      */
     PreviewResult preview(String relativePath, String content) {
         String text = content != null ? content : source.apply(relativePath);
@@ -517,7 +517,7 @@ final class PreviewRenderer {
         engine.addTemplateResolver(shared);
 
         org.thymeleaf.templateresolver.FileTemplateResolver files = new org.thymeleaf.templateresolver.FileTemplateResolver();
-        files.setPrefix(appHome.toString() + java.io.File.separator);
+        files.setPrefix(appHome.get().toString() + java.io.File.separator);
         files.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
         files.setResolvablePatterns(java.util.Set.of("*.html"));
         files.setCheckExistence(true);
