@@ -48,6 +48,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **BREAKING: a lint code and a runtime code that share a number now have to mean the same
+  thing.** The uniqueness guard counted the two idioms separately, on the reasoning that a lint
+  and the runtime error it anticipates share a number on purpose — true for eighteen pairs, and
+  the blind spot that let `TQL-YAML-1103` mean two things. Each shared number is now listed with
+  the one meaning both report, and the four that could not be written as one meaning moved: an
+  invalid `publish:` declaration is `TQL-FIELD-2010` (the message-key lint keeps `2005`), a local
+  poll source with no `allowedPaths` root is `TQL-SEC-4093` (the SAML metadata host denial keeps
+  `4086`), and the `config/menu.yml` and `config/flags.yml` document errors are `TQL-YAML-1110`
+  and `TQL-YAML-1111` — they read configuration, so they belong in the configuration band rather
+  than beside the document lints they collided with.
 - **BREAKING: a code answers one question.** Four `TQL-YAML` numbers each answered two unrelated
   ones, because a rule written in June borrowed a number allocated two days earlier — nothing was
   documented under it yet, so it looked free, and the uniqueness guard did not exist. The older

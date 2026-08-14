@@ -31,8 +31,14 @@ import org.junit.jupiter.api.Test;
  * raises, and the {@code String} constant a lint rule family raises
  * (docs/lint-restructure.md decision 4). Lint codes used to be string literals at the raise
  * site, which no guard could see; the same code in two families is now a compile-time
- * duplicate declaration this test refuses. The two idioms are counted separately, because a
- * build-time lint and the runtime error it anticipates routinely share a number on purpose.
+ * duplicate declaration this test refuses.
+ *
+ * <p>A number held by both idioms is checked too, against its own list. A build-time lint and
+ * the runtime error it anticipates share a number on purpose — {@code TQL-VIEW-3306} is an
+ * unknown slot name whether the linter says so or the binder does — but that is a claim about
+ * the two meanings, not something the idioms guarantee. {@code TQL-YAML-1103} meant both "a
+ * declared locale has no catalog" and "an invalid {@code tesseraql.http.outbound}
+ * declaration", and counting the idioms separately is exactly why nothing said so.
  */
 class ErrorCodeUniquenessTest {
 
@@ -70,6 +76,35 @@ class ErrorCodeUniquenessTest {
             Map.entry("YAML-1201", "a manifest path escapes the app home (traversal guard)"),
             Map.entry("GOV-3001", "a route needing review has no valid approval, reported by"
                     + " the CLI command and the maven goal alike"));
+
+    /**
+     * Codes a lint rule and a runtime error both hold, because the lint says at build time what
+     * the runtime would refuse — one meaning, reported twice as early as it can be.
+     */
+    private static final Map<String, String> ANTICIPATED = Map.ofEntries(
+            Map.entry("BATCH-5304", "a mail channel is misdeclared, or its template escapes the"
+                    + " app home"),
+            Map.entry("FIELD-2003", "a validation rule declaration the build refuses"),
+            Map.entry("FIELD-2004", "a declared block whose shape carries no usable work"
+                    + " (a notify: block, a pipeline step)"),
+            Map.entry("FIELD-4621", "a catalog's source declaration is contradictory or"
+                    + " incomplete"),
+            Map.entry("SEC-4132", "an invalid security.defaults declaration"),
+            Map.entry("SEC-4135", "an invalid responseHeaders defaults declaration"),
+            Map.entry("SQL-2101", "an expression that does not parse"),
+            Map.entry("SQL-2111", "a file placeholder that cannot resolve where it is written"),
+            Map.entry("VIEW-3302", "a view reference that does not resolve"),
+            Map.entry("VIEW-3303", "a form action that names no usable POST route"),
+            Map.entry("VIEW-3304", "a fields: entry the action route does not declare"),
+            Map.entry("VIEW-3305", "an unknown widget name"),
+            Map.entry("VIEW-3306", "an unknown slot name for the view kind"),
+            Map.entry("VIEW-3308", "a children: entry naming a source the route does not"
+                    + " declare"),
+            Map.entry("VIEW-3317", "response.html.shell must be auto, always, or never"),
+            Map.entry("VIEW-3318", "an embedded view that embeds further"),
+            Map.entry("YAML-1007", "a message catalog file is malformed"),
+            Map.entry("YAML-1102", "a notification channel that is not usable - invalid where"
+                    + " it is declared, or named where it is not"));
 
     private static final Pattern DECLARATION = Pattern.compile(
             "TqlErrorCode\\s+([A-Z_0-9]+)\\s*=\\s*new\\s+TqlErrorCode\\(\\s*TqlDomain\\.([A-Z]+)"
@@ -123,6 +158,32 @@ class ErrorCodeUniquenessTest {
     }
 
     /**
+     * A number both idioms hold is one rule the lint reports early — or it is a collision that
+     * reads as one rule in the published reference, where the two meanings are joined by a
+     * {@code ·} with nothing to say which rule fired.
+     */
+    @Test
+    void aNumberBothIdiomsHoldIsOneRuleReportedTwice() throws IOException {
+        Map<String, Set<String>> runtime = declarations(DECLARATION);
+        Map<String, Set<String>> lint = declarations(LINT_DECLARATION);
+
+        Map<String, Set<String>> undeclared = new TreeMap<>();
+        runtime.forEach((code, sites) -> {
+            if (lint.containsKey(code) && !ANTICIPATED.containsKey(code)) {
+                Set<String> both = new TreeSet<>(sites);
+                both.addAll(lint.get(code));
+                undeclared.put(code, both);
+            }
+        });
+
+        assertThat(undeclared)
+                .as("a lint rule and a runtime error hold the same number without a listed"
+                        + " shared meaning - renumber the newer of the two, or add an"
+                        + " ANTICIPATED entry saying the one meaning they report: %s", undeclared)
+                .isEmpty();
+    }
+
+    /**
      * The allowlist may only shrink: an entry whose code is no longer multi-declared is stale
      * and should be removed with the share it described. Either idiom keeps an entry alive.
      */
@@ -136,6 +197,11 @@ class ErrorCodeUniquenessTest {
                 lint.getOrDefault(code, Set.of()).size()))
                 .as("SHARED entry '%s' no longer names a multi-declared code", code)
                 .isGreaterThan(1));
+
+        ANTICIPATED.keySet().forEach(code -> assertThat(
+                runtime.containsKey(code) && lint.containsKey(code))
+                .as("ANTICIPATED entry '%s' no longer names a code both idioms hold", code)
+                .isTrue());
     }
 
     private static void assertOneDeclarationPerCode(Map<String, Set<String>> byCode) {

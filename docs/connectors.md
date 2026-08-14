@@ -305,7 +305,7 @@ tesseraql:
 ```
 
 The `path:` resolves under one of those roots, is normalized, and is re-checked — so `..` cannot
-climb out. Without a root the job is refused, and lint says so first (`TQL-SEC-4086`). This is
+climb out. Without a root the job is refused, and lint says so first (`TQL-SEC-4093`). This is
 not only about reading: the poll consumer **moves** what it ingests, so an unanchored path can
 relocate a live directory's contents into `.done`.
 

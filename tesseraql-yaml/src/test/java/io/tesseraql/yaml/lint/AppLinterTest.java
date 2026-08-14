@@ -1349,7 +1349,7 @@ class AppLinterTest {
         writeLocalPollJob(dir, "path: /data/inbound", "");
 
         assertThat(new AppLinter().lint(dir))
-                .anyMatch(f -> f.code().equals("TQL-SEC-4086") && f.isError());
+                .anyMatch(f -> f.code().equals("TQL-SEC-4093") && f.isError());
     }
 
     @Test
@@ -1362,7 +1362,7 @@ class AppLinterTest {
                 """);
 
         assertThat(new AppLinter().lint(dir))
-                .noneMatch(f -> f.code().equals("TQL-SEC-4086"));
+                .noneMatch(f -> f.code().equals("TQL-SEC-4093"));
     }
 
     @Test

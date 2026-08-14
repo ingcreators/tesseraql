@@ -20,7 +20,7 @@ final class JobRules implements LintRule {
 
     private static final String STEP_RUNS_ONE_UNIT = "TQL-FIELD-2008";
 
-    private static final String POLL_SOURCE_WITHOUT_ALLOWED_PATHS = "TQL-SEC-4086";
+    private static final String POLL_SOURCE_WITHOUT_ALLOWED_PATHS = "TQL-SEC-4093";
 
     // A poll trigger says a file arrives; nothing says how to read it or what to write.
     private static final String POLL_JOB_WITHOUT_IMPORT = "TQL-YAML-1055";

@@ -246,7 +246,7 @@ absolute-vs-home-relative rule, and the CHANGELOG names the behavior change per 
    be injectable, the proposed re-import payload does not re-import, and `move:` is the sharper
    edge). A local source now resolves under a declared
    `tesseraql.connectors.poll.allowedPaths` root, normalizes, and re-checks the prefix — the
-   `FileScopes` rule, deny-by-default, with `TQL-SEC-4086` saying so at lint time
+   `FileScopes` rule, deny-by-default, with `TQL-SEC-4093` saying so at lint time
    (open question 3 answered: require a root, because defaulting quietly re-creates the
    "the user believes they configured a boundary" failure).
    `include` and `username` are `RAW(...)`-wrapped so an `&` cannot bind extra consumer options.
