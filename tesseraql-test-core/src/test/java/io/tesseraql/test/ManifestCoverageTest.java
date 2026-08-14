@@ -196,6 +196,84 @@ class ManifestCoverageTest {
         assertThat(coverage.uncovered()).containsExactlyInAnyOrder("grid");
     }
 
+    private static final String WELCOME_PROMPT = """
+            version: tesseraql/v1
+            id: draft.welcome
+            kind: prompt
+            recipe: prompt-text
+            sources:
+              main:
+                sql:
+                  file: welcome.sql
+            response:
+              text:
+                template: welcome.txt.tpl
+            """;
+
+    private static final String FAREWELL_PROMPT = """
+            version: tesseraql/v1
+            id: draft.farewell
+            kind: prompt
+            recipe: prompt-text
+            sources:
+              main:
+                sql:
+                  file: farewell.sql
+            response:
+              text:
+                template: farewell.txt.tpl
+            """;
+
+    private static final String STATIC_PROMPT = """
+            version: tesseraql/v1
+            id: draft.release-note
+            kind: prompt
+            recipe: prompt-text
+            response:
+              text:
+                template: release-note.txt.tpl
+            """;
+
+    private static io.tesseraql.yaml.manifest.PromptFile prompt(String relativeYmlPath,
+            String yaml) {
+        io.tesseraql.yaml.model.RouteDefinition definition = PARSER.parseRoute(yaml,
+                relativeYmlPath);
+        return new io.tesseraql.yaml.manifest.PromptFile(APP_HOME.resolve(relativeYmlPath),
+                definition.id(), "desc", List.of(), definition);
+    }
+
+    private static AppManifest promptManifest(io.tesseraql.yaml.manifest.PromptFile... prompts) {
+        return new AppManifest(APP_HOME, new AppConfig(Map.of(), name -> null),
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(), List.of(prompts), List.of(),
+                ManifestIndex.of(Map.of(), "test"));
+    }
+
+    @Test
+    void mcpPromptCoverageDeclaresEveryReadingPromptAndCoversTheExercisedOnes() {
+        AppManifest manifest = promptManifest(
+                prompt("mcp/welcome.yml", WELCOME_PROMPT),
+                prompt("mcp/farewell.yml", FAREWELL_PROMPT));
+        ItemCoverage coverage = ManifestCoverage.prompts(manifest,
+                List.of(sqlSuite("mcp/welcome.sql")));
+
+        assertThat(coverage.kind()).isEqualTo("mcp-prompt");
+        assertThat(coverage.declared()).containsExactlyInAnyOrder("draft.welcome",
+                "draft.farewell");
+        assertThat(coverage.covered()).containsExactlyInAnyOrder("draft.welcome");
+        assertThat(coverage.uncovered()).containsExactlyInAnyOrder("draft.farewell");
+    }
+
+    /** A prompt that only renders text executes no SQL, so there is nothing to declare. */
+    @Test
+    void mcpPromptCoverageIgnoresAPromptThatReadsNothing() {
+        AppManifest manifest = promptManifest(prompt("mcp/release-note.yml", STATIC_PROMPT));
+        ItemCoverage coverage = ManifestCoverage.prompts(manifest, List.of());
+
+        assertThat(coverage.declared()).isEmpty();
+        assertThat(coverage.ratio()).isEqualTo(1.0);
+    }
+
     @Test
     void securityCoverageDeclaresOnlyRoutesWithASecurityBlock() {
         AppManifest manifest = manifest(Map.of(),

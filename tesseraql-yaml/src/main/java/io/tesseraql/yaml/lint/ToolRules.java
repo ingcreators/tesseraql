@@ -35,12 +35,6 @@ final class ToolRules implements LintRule {
         for (io.tesseraql.yaml.manifest.ToolFile tool : manifest.tools()) {
             lintTool(appHome, manifest.config(), tool, findings);
         }
-        // A prompt is a route (docs/prompt-as-recipe.md decision 1), so it is checked against the
-        // route model like a tool — plus description:, which the loader reads from the raw tree.
-        for (io.tesseraql.yaml.manifest.PromptFile prompt : manifest.prompts()) {
-            UnknownKeyRules.lintUnknownKeys(context, appHome, prompt.source(),
-                    RouteDefinition.class, Set.of("description"), findings);
-        }
     }
 
     /** Recipes an application-declared MCP tool may use (roadmap Phase 24 follow-on). */

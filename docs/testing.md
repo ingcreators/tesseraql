@@ -303,8 +303,10 @@ Beyond SQL lines and branches, the run derives *item coverage* — covered-of-de
 - `validation` / `notification` / `http` — every `validate:` rule, `notify:` declaration,
   and outbound call, covered by the cases that evaluate it.
 - `message` — every message catalog, covered by the `messages` cases that read it.
-- `file-poll`, `queue-consume`, `data-scope`, `workflow`, `mcp`, `mcp-resource`, `mcp-ui` —
-  the corresponding declarations, covered by the cases exercising their SQL.
+- `file-poll`, `queue-consume`, `data-scope`, `workflow`, `mcp`, `mcp-resource`, `mcp-ui`,
+  `mcp-prompt` — the corresponding declarations, covered by the cases exercising their SQL.
+  Only prompts that read data are declared: a prompt rendering from its arguments alone
+  executes no SQL a case could exercise.
 - `iam-contract`, `saml`, `oidc`, `scim`, `preference` — inventories of the standard identity
   and account surfaces in use; their gaps are reported as notes, not warnings.
 

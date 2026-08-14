@@ -30,6 +30,7 @@ class LintRegistryOrderTest {
                         "ToolRules",
                         "ResourceRules",
                         "UiResourceRules",
+                        "PromptRules",
                         "ConsumerRules",
                         "DuplicateMcpNameRules",
                         "ToolUiLinkRules",

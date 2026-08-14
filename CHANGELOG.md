@@ -25,6 +25,27 @@ All notable changes to TesseraQL are documented here. The format follows
   therefore carries the caller's `Authorization` to its route, which is what makes a prompt's
   `security:` mean anything.
 
+- **A prompt argument declares only what a prompt can act on** (docs/prompt-as-recipe.md,
+  slice 3). An argument is a full route `input:` field, and most of that field is live on a
+  prompt — the binder coerces and validates by `type:`, the bounds, `pattern:`, `enum:`,
+  `format:`, `codes:` and `requiredWhen:`; `description:` is what `prompts/list` advertises;
+  `classification:`/`mask:` keep the value out of the route audit trail. Three keys have nothing
+  to act on it, and are now refused instead of accepted in silence (`TQL-MCP-1015`): `widget:`,
+  because a prompt renders a message rather than a form, and `policy:`/`writable:`, because the
+  mass-assignment guard asks whether the request may supply a field on a surface where the
+  request is the only thing that can — so it can only refuse the caller. A prompt is gated by
+  its own `security.policy:`. A key a shared `domain:` supplies is not refused: the author did
+  not write it here, and a domain has to stay usable from every surface that references it.
+- **Lint says the prompt read-only rule at build time** (`TQL-MCP-1016`). The compiler already
+  refused a prompt with command steps at startup; the same refusal now lands where the other
+  recipes' shape rules do, before compilation, and covers the case the compiler missed — a
+  source declared in `mode: update`, which is a write however it is spelled.
+- **An `mcp-prompt` coverage kind.** A prompt is a route with SQL behind it now, so the report
+  counts it beside `mcp`, `mcp-resource` and `mcp-ui`: every prompt that reads is declared, and
+  covered when a declarative suite exercises its SQL. A prompt that renders from its arguments
+  alone executes nothing a case could exercise, so it is not declared — an item nothing can
+  cover is a gate nobody can pass, not a gap worth showing.
+
 ### Changed
 
 - **`kind: prompt` is a route document, full stop** (docs/prompt-as-recipe.md, slice 2). A prompt

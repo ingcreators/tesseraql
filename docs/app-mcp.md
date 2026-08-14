@@ -76,8 +76,8 @@ transactional command — and the MCP endpoint dispatches a `tools/call` to it. 
   write tool reachable without authentication is `advanced` and needs approval. An `mcp`
   coverage kind tracks which tools your declarative suites exercise.
 
-Set `tesseraql.mcp.enabled: false` to stop serving the endpoint (tools, resources, and UI
-resources alike).
+Set `tesseraql.mcp.enabled: false` to stop serving the endpoint (tools, resources, UI
+resources, and prompts alike).
 
 ## Resources
 
@@ -205,9 +205,12 @@ So:
 
 ## Prompts
 
-An app can also declare an MCP **prompt** — a parameterized, reusable message template the
-connecting agent surfaces to its model (an IDE slash command, say), the third MCP primitive
-alongside tools and resources:
+An app can also declare an MCP **prompt** — a parameterized, reusable message the connecting
+agent surfaces to its model (an IDE slash command, say). A prompt is a document under `mcp/`
+with `kind: prompt` and the `prompt-text` recipe, and it is a route exactly like the other three
+kinds: same `input:`, same `security:`, same `sources:`, ending in a `response.text:` whose
+rendered string *is* the message. So a prompt reads data — "draft a welcome for customer 4711"
+looks 4711 up instead of asking the agent to fetch it first:
 
 ```yaml
 # mcp/draft-welcome.yml
@@ -215,38 +218,77 @@ version: tesseraql/v1
 id: draft-welcome
 kind: prompt
 recipe: prompt-text
-description: Draft a welcome message for a new user.
+description: Draft a welcome message for a customer, in that customer's own context.
+
+security:
+  auth: bearer
+  policy: customers.read
 
 input:
-  name:
-    type: string
+  customerId:
+    type: integer
     required: true
-    description: The new user's name.
+    description: The customer to welcome.
   tone:
     type: string
-    required: false
+    default: warm
+    enum: [warm, formal]
+    description: How the message should read.
+
+sources:
+  main:
+    sql:
+      file: customer.sql
+      mode: query
+      params:
+        customerId: params.customerId
 
 response:
   text:
     template: draft-welcome.txt.tpl
+    model:
+      customer: main.first
+      tone: params.tone
 ```
 
 ```text
 # mcp/draft-welcome.txt.tpl  (Thymeleaf TEXT mode)
-Write a [(${tone})] welcome message for [(${name})].
+Write a [(${tone})] welcome message for [(${customer.name})],
+who joined on [(${customer.signedUpOn})] and is on the [(${customer.plan})] plan.
 ```
 
-- **A route like the others.** A prompt compiles to a route the way a tool and a resource do, so
-  `prompts/get` runs the same pipeline: the declared `input:` is bound and coerced by its types,
-  any `sources:` run, and `response.text:` renders its colocated template (Thymeleaf TEXT mode)
-  into the one `user` message. A prompt may declare `security:`; declaring none leaves it open,
-  as before. The declared `input:` also becomes the advertised arguments (name, description,
-  required).
+A prompt with nothing to look up declares no `sources:` and renders from its arguments alone —
+that is the whole document minus the two blocks.
+
+- **A route like the others.** `prompts/get` runs the same pipeline a tool call runs: telemetry
+  and the audit trail, the prompt's own `security:`, tenancy and locale resolution, input
+  binding, the declared `sources:`, then the template. The arguments arrive as strings and are
+  coerced and validated by the `input:` declaration, so `type: integer` is enforced rather than
+  documented — a caller sending `"abc"` gets an error instead of a message with `abc` in it.
+- **`security:` is available and optional.** A prompt may declare `auth:`/`policy:` like any
+  route, which is what the example above does because it reads customer data. Declaring nothing
+  leaves the prompt open, which is right for a template that only rephrases its arguments.
+  Discovery stays open either way: `prompts/list` advertises every prompt, and a declared policy
+  is enforced on `prompts/get`, exactly as a tool's is on `tools/call`.
+- **The arguments are the `input:`.** `prompts/list` advertises each declared field's name,
+  `description:` and whether it is `required:` — one declaration, so what the agent is told and
+  what the binder enforces cannot drift.
+- **A prompt is a read.** `prompts/get` is a read in the protocol's own vocabulary, so a prompt
+  declaring `steps:` or a source in `mode: update` is refused (`TQL-MCP-1016`, and
+  `TQL-CAMEL-3116` if it reaches the compiler). A prompt that writes is a tool.
+- **Only the input keys a prompt can act on.** An argument is a full route `input:` field. The
+  three keys with nothing to act on it here — `policy:`, `writable:`, `widget:` — are refused
+  (`TQL-MCP-1015`) rather than silently accepted. A prompt renders a message rather than a form,
+  and its arguments come from the caller, so the field-level write gate can only refuse the call.
+  A key a shared `domain:` supplies is not refused — the author did not write it here, and a
+  domain must stay usable from every surface that references it.
 - **Advertised like the rest.** The runtime serves prompts at the same `/_tesseraql/mcp` endpoint;
   `prompts/list` enumerates them and the `prompts` capability is negotiated in `initialize` when an
-  app declares any. This is the application-side counterpart of the dev tool's `studio_copilot`
-  prompt ([AI-assisted development](ai-mcp.md)) — TesseraQL ships the workflow, the agent's own
-  model does the reasoning, no embedded LLM.
+  app declares any. An `mcp-prompt` coverage kind tracks which prompts' SQL your declarative suites
+  exercise (a prompt that reads nothing declares no SQL, so it is not counted). This is the
+  application-side counterpart of the dev tool's `studio_copilot` prompt
+  ([AI-assisted development](ai-mcp.md)) — TesseraQL ships the workflow, the agent's own model
+  does the reasoning, no embedded LLM.
 
 ## Mounted-app tools
 
@@ -289,10 +331,13 @@ Lint findings:
 | `TQL-MCP-1007` | two application MCP resources declare the same `uri` (UI resources share the namespace) |
 | `TQL-MCP-1008` | an MCP Apps UI resource does not render HTML (use `query-html` or `page`) |
 | `TQL-MCP-1009` | an MCP Apps UI resource declares no `ui://` uri |
-| `TQL-MCP-1014` | (warning) an MCP Apps UI resource has no `description` |
+| `TQL-MCP-1010` | (warning) an MCP Apps UI resource has no `description` |
 | `TQL-MCP-1011` | an MCP Apps UI resource declares `input:` (a UI resource takes no arguments) |
 | `TQL-MCP-1012` | a tool's `ui:` link resolves to no declared UI resource |
+| `TQL-MCP-1013` | an `mcp/` document declares a `kind:` outside `tool` / `resource` / `ui` / `prompt` |
 | `TQL-MCP-1014` | two application MCP tools, or two prompts, declare the same `id` (the folders name nothing) |
+| `TQL-MCP-1015` | a prompt argument declares `policy:`, `writable:` or `widget:`, which a prompt cannot act on |
+| `TQL-MCP-1016` | a prompt declares `steps:` or a source in `mode: update` (`prompts/get` is a read) |
 | `TQL-MCP-4030` | a write MCP tool declares no authorization policy |
 
 At runtime, a tool call that fails (a bad argument, an unauthorized write) comes back as an
