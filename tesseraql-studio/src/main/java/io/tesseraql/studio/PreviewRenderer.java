@@ -45,7 +45,6 @@ import java.util.stream.Stream;
  */
 final class PreviewRenderer {
 
-    /** TQL-STUDIO-4222: a preview or render could not be produced. */
     private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
 
     private final SimpleYamlParser parser = new SimpleYamlParser();
