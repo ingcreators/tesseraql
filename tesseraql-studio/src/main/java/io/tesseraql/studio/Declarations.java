@@ -85,6 +85,19 @@ final class Declarations {
     }
 
     /**
+     * The draft-preferring read where the file must exist: a path with neither a draft nor a
+     * source raises the not-found a plain source read does.
+     */
+    Read readRequired(String relativePath) {
+        Read read = read(relativePath);
+        if (read.text() == null) {
+            throw new io.tesseraql.core.error.TqlException(StudioService.NOT_FOUND,
+                    "No such file: " + relativePath);
+        }
+        return read;
+    }
+
+    /**
      * Finds the {@code <directory>/*.yml} document declaring {@code name} under its top-level
      * {@code <topKey>:} map and parses it as a tree, preferring a pending draft of the file.
      * Returns null when no document declares the name.
