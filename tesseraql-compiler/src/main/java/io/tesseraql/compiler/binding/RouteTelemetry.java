@@ -57,11 +57,17 @@ public final class RouteTelemetry implements Processor {
         io.tesseraql.core.telemetry.SpanContext spanContext = span.context();
         if (spanContext != null) {
             exchange.setProperty(TesseraqlProperties.TRACE_CONTEXT, spanContext);
-            // Trace-id correlation for structured logs (roadmap Phase 45): every line the
-            // request produces on this thread carries the ids; Camel's MDC bridging (enabled
-            // by the runtime) carries them across async steps.
-            org.slf4j.MDC.put("traceId", spanContext.traceId());
-            org.slf4j.MDC.put("spanId", spanContext.spanId());
+            // Trace-id correlation for structured logs (roadmap Phase 45). The exchange
+            // properties are what travels: the MDC service the runtime installs copies them
+            // into the MDC around every processor, so a step that runs on an execution lane
+            // logs with the ids of the request that started it.
+            exchange.setProperty(TesseraqlProperties.TRACE_ID, spanContext.traceId());
+            exchange.setProperty(TesseraqlProperties.SPAN_ID, spanContext.spanId());
+            // The MDC service sets the context *before* a processor runs, so it cannot know
+            // about ids this processor is only now creating. Putting them here covers the rest
+            // of this processor; every later one is covered by the service.
+            org.slf4j.MDC.put(TesseraqlProperties.TRACE_ID, spanContext.traceId());
+            org.slf4j.MDC.put(TesseraqlProperties.SPAN_ID, spanContext.spanId());
         }
         exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
             @Override
@@ -99,16 +105,18 @@ public final class RouteTelemetry implements Processor {
         }
         if (accessLog) {
             // The opt-in HTTP access log (roadmap Phase 45): one line per request on the
-            // completion thread, correlated by the same ids as every other log line.
+            // completion thread, correlated by the same ids as every other log line. A
+            // completion synchronization is not a processor, so the MDC service does not wrap
+            // it — this line sets its own context and clears it below.
             Object context = exchange.getProperty(TesseraqlProperties.TRACE_CONTEXT);
             if (context instanceof io.tesseraql.core.telemetry.SpanContext ids) {
-                org.slf4j.MDC.put("traceId", ids.traceId());
-                org.slf4j.MDC.put("spanId", ids.spanId());
+                org.slf4j.MDC.put(TesseraqlProperties.TRACE_ID, ids.traceId());
+                org.slf4j.MDC.put(TesseraqlProperties.SPAN_ID, ids.spanId());
             }
             ACCESS.info(accessLine(exchange, status, durationMillis));
         }
-        org.slf4j.MDC.remove("traceId");
-        org.slf4j.MDC.remove("spanId");
+        org.slf4j.MDC.remove(TesseraqlProperties.TRACE_ID);
+        org.slf4j.MDC.remove(TesseraqlProperties.SPAN_ID);
     }
 
     /** {@code GET /api/users 200 12ms route=users.search user=alice} — the access-log line. */

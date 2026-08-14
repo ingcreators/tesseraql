@@ -164,9 +164,18 @@ the app to brand what a failed browser navigation renders — see
 
 The CLI distribution ships a JDK-only SLF4J provider: one line per event on
 stderr, plain text by default, `--log-format json` (or `-Dtesseraql.logging.format=json`) for
-structured lines, `--log-level` for the threshold. Every line carries the MDC — the runtime
-puts the request's `traceId`/`spanId` there and Camel bridges them across async steps — so a
-log aggregator correlates each line with the request that produced it.
+structured lines, `--log-level` for the threshold. Every line carries the MDC, so a log
+aggregator correlates each line with the request that produced it:
+
+| Key | What it is |
+| --- | --- |
+| `traceId`, `spanId` | The request's trace ids, set when the route starts. |
+| `camel.routeId` | The route the exchange entered on. |
+| `camel.exchangeId`, `camel.messageId` | The exchange and message being processed. |
+| `camel.contextId`, `camel.threadId` | The runtime and the thread the line was written on. |
+
+The ids travel on the exchange rather than on the thread, and are copied into the MDC around
+each step, so a step handed to an execution lane still logs under the request that started it.
 
 An **opt-in HTTP access log** rides the same correlation: `tesseraql.logging.accessLog: true`
 emits one line per request on the `tesseraql.access` logger —

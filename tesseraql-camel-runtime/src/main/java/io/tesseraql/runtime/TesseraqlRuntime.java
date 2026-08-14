@@ -178,20 +178,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /**
      * Carries the trace-correlation MDC keys across Camel's async boundaries, so a step handed
-     * to an execution lane keeps logging with the request's ids ({@code RouteTelemetry} puts
-     * them on the request thread's MDC).
+     * to an execution lane keeps logging with the ids of the request that started it.
      *
-     * <p>Camel 4.19 deprecated this in favour of the {@code camel-mdc} component, which
-     * propagates through the Exchange instead of the thread's MDC. Adopting it means moving
-     * {@code traceId}/{@code spanId} onto the exchange and declaring them as
-     * {@code camel.mdc.customExchangeProperties} — a change to what every log line carries, so
-     * it is its own slice rather than a rider on the version bump. The deprecated path is
-     * still functional in 4.22.
+     * <p>The propagation unit is the exchange, not the thread: {@code RouteTelemetry} writes
+     * {@code traceId} and {@code spanId} as exchange properties, and this service copies them
+     * into the MDC around every processor call and takes them out again afterwards. That is why
+     * a lane hop keeps them — the thread changed, the exchange did not.
+     *
+     * <p>It also contributes Camel's own identifiers ({@code camel.exchangeId},
+     * {@code camel.routeId}, {@code camel.contextId}, {@code camel.messageId},
+     * {@code camel.threadId}), so a structured log line carries the route and exchange it came
+     * from without the framework threading them through by hand.
      */
-    @SuppressWarnings("deprecation")
     private static void bridgeMdcAcrossAsyncBoundaries(DefaultCamelContext context) {
-        context.setUseMDCLogging(true);
-        context.setMDCLoggingKeysPattern("traceId,spanId");
+        org.apache.camel.mdc.MDCService mdc = new org.apache.camel.mdc.MDCService();
+        mdc.setCustomProperties(TesseraqlProperties.TRACE_ID + ","
+                + TesseraqlProperties.SPAN_ID);
+        mdc.init(context);
     }
 
     /**

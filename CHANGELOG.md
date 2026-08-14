@@ -77,6 +77,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Log lines carry their correlation on the exchange, not on the thread** (docs/jvm-baseline.md,
+  decision 2, slice 5). Camel 4.19 deprecated the MDC logic the runtime used to carry `traceId`
+  and `spanId` across async boundaries; the `camel-mdc` component replaces it, and it propagates
+  through the exchange — which is why a step handed to an execution lane still logs under the
+  request that started it, the thread having changed while the exchange did not. `traceId` and
+  `spanId` keep their names, so existing log queries are unaffected, and every line gains Camel's
+  own identifiers: `camel.routeId`, `camel.exchangeId`, `camel.messageId`, `camel.contextId` and
+  `camel.threadId`.
 - **The launchers and images ship JVM settings instead of documenting them**
   (docs/jvm-baseline.md, decision 4). Measured on JDK 25, a class-data-sharing archive takes 25%
   off `serve`'s time to ready and 20% off resident memory, and 20% off a short CLI command;

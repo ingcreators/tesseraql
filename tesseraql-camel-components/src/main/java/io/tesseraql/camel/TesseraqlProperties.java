@@ -25,6 +25,14 @@ public final class TesseraqlProperties {
     public static final String LOCALE = "TesseraqlLocale";
     public static final String ROUTE_SPAN = "TesseraqlRouteSpan";
     public static final String TRACE_CONTEXT = "TesseraqlTraceContext";
+    /**
+     * The trace and span ids as exchange properties, which is how they reach the log lines: the
+     * MDC service copies these two into the thread's MDC around every processor call, so the
+     * name here is also the key a log line carries. They are deliberately unprefixed — renaming
+     * them would rename a field in every structured log line and every log query built on it.
+     */
+    public static final String TRACE_ID = "traceId";
+    public static final String SPAN_ID = "spanId";
     /** The {@code FileCodec} a {@code query-export} route encodes its result with (ch. 28.10). */
     public static final String EXPORT_CODEC = "TesseraqlExportCodec";
     /** The {@code FileWriteSpec} (columns, formats, resolved locale/zone) for {@code query-export}. */

@@ -153,6 +153,14 @@
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-quartz</artifactId>
     </dependency>
+    <!-- Mapped Diagnostic Context (docs/jvm-baseline.md decision 2, slice 5): the replacement
+         for the MDC logic Camel 4.19 deprecated. It wraps every processor, setting the MDC from
+         the exchange before the call and restoring it after, so a step handed to an execution
+         lane logs with the ids of the request that started it. -->
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-mdc</artifactId>
+    </dependency>
     <!-- SMTP notification channels (roadmap Phase 20). -->
     <!-- Managed connectors: directory polling for file-import (roadmap Phase 26). camel-file
          drives local-directory polling; camel-ftp adds the SFTP/FTPS consumers. Both stay an
