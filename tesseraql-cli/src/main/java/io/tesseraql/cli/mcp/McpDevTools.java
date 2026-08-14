@@ -374,7 +374,7 @@ public final class McpDevTools {
                 .argument("table",
                         "The backing table, when the request is table-backed (optional).",
                         false)
-                .handler(args -> McpPromptResult.user(
+                .handler((args, ctx) -> McpPromptResult.user(
                         "Studio copilot: describe -> draft -> preview -> apply.",
                         copilotGuidance(args.get("task"), args.get("table"))))
                 .build();

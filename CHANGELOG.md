@@ -6,6 +6,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **A prompt can be a recipe, so it can read data** (docs/prompt-as-recipe.md, slice 1). An
+  `mcp/` prompt document that declares `recipe: prompt-text` is a route like its three siblings:
+  it compiles to `direct:mcp.prompt.<id>` through the head every recipe gets, binds its `input:`,
+  enforces its own `security:`, runs its `sources:`, and renders the message from a new `text:`
+  response arm — so "draft a welcome for customer 4711" can look 4711 up instead of needing a
+  tool that pretends to be a prompt. `prompts/get` is a read, so a command step is refused
+  (`TQL-CAMEL-3116`), as is a document with nothing to render (`TQL-CAMEL-3117`).
+- **`response.text:`, for when the rendered text is the answer.** It is `response.file:` without
+  `filename:` and `contentType:`, which a message has nowhere to put: the same Thymeleaf TEXT
+  rendering against the same kind of model, served as the body rather than as a download.
+- **A prompt reaches its route through the sender every other MCP primitive uses.** `read` and
+  `invoke` in the MCP endpoint were two copies of one send that agreed on everything except what
+  they sent and how they wrapped the answer; they are now one `call`, wrapped three ways — a tool
+  as a tool result, a resource as its body, a prompt as one `user` message. A served prompt
+  therefore carries the caller's `Authorization` to its route, which is what makes a prompt's
+  `security:` mean anything.
+
 ### Changed
 
 - **A lint severity is an enum and a lint code is a constant.** The linter's ~360 findings

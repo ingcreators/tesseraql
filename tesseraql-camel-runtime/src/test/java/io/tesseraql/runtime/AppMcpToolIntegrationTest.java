@@ -245,6 +245,47 @@ class AppMcpToolIntegrationTest {
                 .isEqualTo("Write a warm welcome message for sato.");
     }
 
+    @Test
+    void promptsListAdvertisesARecipePromptWithItsInputAsArguments() throws Exception {
+        JsonNode prompts = rpc(rpcBody("prompts/list", null), session, null).path("result")
+                .path("prompts");
+        JsonNode brief = stream(prompts)
+                .filter(p -> p.path("name").asText().equals("brief-user"))
+                .findFirst().orElseThrow();
+        assertThat(brief.path("description").asText()).isNotBlank();
+        // The arguments are the route's input:, so what is advertised is what the binder validates.
+        JsonNode name = stream(brief.path("arguments"))
+                .filter(a -> a.path("name").asText().equals("name")).findFirst().orElseThrow();
+        assertThat(name.path("required").asBoolean()).isTrue();
+    }
+
+    @Test
+    void promptsGetRendersARecipePromptFromItsSql() throws Exception {
+        String params = MAPPER.writeValueAsString(Map.of("name", "brief-user",
+                "arguments", Map.of("name", "tanaka")));
+        JsonNode result = rpc(rpcBody("prompts/get", params), session, token(List.of("USER_READ")))
+                .path("result");
+        JsonNode message = result.path("messages").get(0);
+        assertThat(message.path("role").asText()).isEqualTo("user");
+        // The argument bound into the SQL, and the row it returned, are both in the message.
+        assertThat(message.path("content").path("text").asText())
+                .isEqualTo("Brief on tanaka: tanaka is INACTIVE.");
+    }
+
+    @Test
+    void promptsGetEnforcesARecipePromptsPolicy() throws Exception {
+        String params = MAPPER.writeValueAsString(Map.of("name", "brief-user",
+                "arguments", Map.of("name", "tanaka")));
+
+        JsonNode noToken = rpc(rpcBody("prompts/get", params), session, null);
+        assertThat(noToken.path("result").isMissingNode()).isTrue();
+        assertThat(noToken.path("error").path("code").asInt()).isEqualTo(-32603);
+
+        JsonNode wrongRole = rpc(rpcBody("prompts/get", params), session,
+                token(List.of("SOMETHING_ELSE")));
+        assertThat(wrongRole.path("result").isMissingNode()).isTrue();
+    }
+
     // ----- MCP helpers ------------------------------------------------------
 
     private JsonNode call(String tool, Map<String, Object> arguments, String bearer)
@@ -480,6 +521,50 @@ class AppMcpToolIntegrationTest {
                 """);
         Files.writeString(mcp.resolve("draft-welcome.txt.tpl"),
                 "Write a [(${tone})] welcome message for [(${name})].");
+
+        // The app also declares a prompt as a recipe (docs/prompt-as-recipe.md): a route like the
+        // three kinds above, so it binds its input:, enforces its own security, reads through
+        // 2-way SQL, and renders the message from response.text: — a prompt that reads data.
+        Files.writeString(mcp.resolve("brief-user.yml"), """
+                version: tesseraql/v1
+                id: brief-user
+                kind: prompt
+                recipe: prompt-text
+                description: Brief the model on one user before drafting a message to them.
+
+                input:
+                  name:
+                    type: string
+                    required: true
+                    maxLength: 200
+
+                security:
+                  auth: bearer
+                  policy: users.read
+
+                sources:
+                  main:
+                    sql:
+                      file: brief-user.sql
+                      mode: query
+                      params:
+                        name: params.name
+
+                response:
+                  text:
+                    template: brief-user.txt.tpl
+                    model:
+                      who: params.name
+                      users: main.rows
+                """);
+        Files.writeString(mcp.resolve("brief-user.sql"), """
+                select u.name, u.status
+                from users u
+                where u.name = /* name */ 'sato'
+                """);
+        Files.writeString(mcp.resolve("brief-user.txt.tpl"),
+                "Brief on [(${who})]:[# th:each=\"u : ${users}\"] [(${u.name})] is"
+                        + " [(${u.status})].[/]");
         return target;
     }
 

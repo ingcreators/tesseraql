@@ -136,6 +136,54 @@ class AppLinterNestedKeysTest {
         assertThat(findings).noneMatch(f -> f.code().equals("TQL-YAML-1043"));
     }
 
+    /**
+     * A prompt that declares a recipe: is read through the route model, so it is checked against
+     * that model — {@code security:} and {@code sources:} are its keys now, and {@code filename:}
+     * under {@code response.text:} is the key it deliberately does not have
+     * (docs/prompt-as-recipe.md decision 3).
+     */
+    @Test
+    void checksARecipePromptAgainstTheRouteModel(@TempDir Path dir) throws Exception {
+        app(dir);
+        Path mcp = dir.resolve("mcp");
+        Files.createDirectories(mcp);
+        Files.writeString(mcp.resolve("brief.txt.tpl"), "Hello [(${who})]\n");
+        Files.writeString(mcp.resolve("brief.sql"), "select name from users\n");
+        Files.writeString(mcp.resolve("brief.yml"), """
+                version: tesseraql/v1
+                id: brief-user
+                kind: prompt
+                recipe: prompt-text
+                description: Brief the model on one user.
+                input:
+                  name:
+                    type: string
+                    required: true
+                security:
+                  auth: bearer
+                  policy: users.read
+                sources:
+                  main:
+                    sql:
+                      file: brief.sql
+                      mode: query
+                response:
+                  text:
+                    template: brief.txt.tpl
+                    filename: brief.txt
+                    model:
+                      who: params.name
+                """);
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-YAML-1043")
+                        && f.source().contains("brief.yml"))
+                .singleElement()
+                .matches(f -> f.message().contains("response.text.filename"));
+    }
+
     /** Decisions parse into ignoreUnknown records, so a misspelled hit policy fell back silently. */
     @Test
     void flagsATypoInADecisionsDocument(@TempDir Path dir) throws Exception {
