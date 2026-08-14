@@ -166,8 +166,7 @@ The CLI distribution ships a JDK-only SLF4J provider: one line per event on
 stderr, plain text by default, `--log-format json` (or `-Dtesseraql.logging.format=json`) for
 structured lines, `--log-level` for the threshold. Every line carries the MDC — the runtime
 puts the request's `traceId`/`spanId` there and Camel bridges them across async steps — so a
-log aggregator correlates each line with the request that produced it. The Spring distribution
-keeps Boot's Logback (add `logstash-logback-encoder` there if you want JSON).
+log aggregator correlates each line with the request that produced it.
 
 An **opt-in HTTP access log** rides the same correlation: `tesseraql.logging.accessLog: true`
 emits one line per request on the `tesseraql.access` logger —

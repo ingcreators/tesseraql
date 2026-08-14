@@ -2,7 +2,7 @@
 
 Drafted 2026-06-11, after the 0.1.0 release. 0.1.0 implements the full original design
 document (56 chapters): the 2-way SQL engine, the YAML route/job model and compiler, the
-Camel Main and Spring runtimes, security and IAM (managed and SQL-contract realms, SAML SP,
+Camel Main runtime, security and IAM (managed and SQL-contract realms, SAML SP,
 SCIM), batch and operations (console, UI, traces), large-data streaming and file transfer,
 the test/coverage/reporting stack, multi-tenancy and app packaging, dialect portability,
 the Maven plugin, supply-chain tooling, Studio, and generated OpenAPI/htmx contracts. See
@@ -1359,9 +1359,8 @@ met.**
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in
-  `.github/dependabot.yml`); Camel LTS-line upgrades; the Spring Framework 7 / Boot 4
-  migration is a deliberate project (majors are Dependabot-ignored) — schedule it alongside
-  Horizon 5 so 1.0 does not freeze on aging majors; review the JDK baseline at each LTS.
+  `.github/dependabot.yml`); Camel LTS-line upgrades; review the JDK baseline at each LTS
+  (the current position is [jvm-baseline.md](jvm-baseline.md)).
 - **Documentation**: every phase ships its cookbook entry; the example gallery stays green
   in CI.
 - **Coverage**: every new declarative surface ships its own coverage kind and thresholds.
@@ -1407,7 +1406,9 @@ None block Phase 18; flagged for the maintainer as their horizons approach.
    its protocol core factored out (`tesseraql-mcp`) so the runtime can later serve
    application-declared MCP endpoints from YAML (the Phase 24 "next step"). Deeper
    Studio-copilot features only if the MCP loop proves valuable.
-5. **Spring 7 / Boot 4 timing**: proposed alongside Horizon 5, before the 1.0 freeze.
+5. ~~**Spring 7 / Boot 4 timing**~~: **closed 2026-08-14** — the Spring adapter is retired
+   ([jvm-baseline.md](jvm-baseline.md) decision 1), so the framework has no Spring dependency
+   to schedule a major migration for.
 6. **Object-store client and test fixture** (Phase 30): the S3 client is AWS SDK for Java v2
    (Apache-2.0), confined to the opt-in `tesseraql-s3` leaf module — one module covers AWS and all
    S3-compatible stores; a JDK-only SigV4 alternative (in the spirit of the JDK-only OIDC/mTLS) stays

@@ -256,7 +256,6 @@ public final class AppScaffolder {
             tesseraql:
               app:
                 name: __APP_NAME__
-                home: ${TESSERAQL_APP_HOME:.}
                 work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
               # Environment profiles overlay this file from config/env/<profile>.yml, selected

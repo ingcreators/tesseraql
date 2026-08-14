@@ -21,8 +21,8 @@ for operational keys it is a debugging trap.
 
 ## The audit (every key the scaffolder emits, vs. its consumer)
 
-Consumed and healthy (17 paths): `server.port`, `db.main.url/username/password` (via
-placeholder into `datasources.main.*`), `app.name`, `app.home` (Spring embedding path),
+Consumed and healthy (16 paths): `server.port`, `db.main.url/username/password` (via
+placeholder into `datasources.main.*`), `app.name`,
 `datasources.main.jdbcUrl/username/password`, `identity.defaultRealm`,
 `identity.realms.local.type/datasource`, `studio.enabled/readOnly`,
 `security.defaults.routes`, `security.responseHeaders`, `security.jwt.*` (4),

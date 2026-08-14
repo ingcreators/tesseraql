@@ -1,7 +1,6 @@
 tesseraql:
   app:
     name: user-admin
-    home: ${TESSERAQL_APP_HOME:.}
     work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
   # Phase 22 internationalization: the app serves English and Japanese. The request locale

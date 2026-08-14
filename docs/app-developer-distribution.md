@@ -63,9 +63,9 @@ surface by context; neither is more capable than the other once command parity (
 - Add `distributionManagement` and a publish job. **GitHub Packages first** (covers the
   internal audience immediately), **Maven Central later** (fills the `release.md` "Publishing
   to Maven Central (later)" section, with signing).
-- Published set: `tesseraql-bom`, `tesseraql-maven-plugin`, the runtime
-  (`tesseraql-camel-runtime`, `-spring-runtime`), `tesseraql-studio`, and every module an app
-  resolves, **including the opt-in `tesseraql-pdf` / `tesseraql-excel` / `tesseraql-s3`**.
+- Published set: `tesseraql-bom`, `tesseraql-maven-plugin`, `tesseraql-camel-runtime`,
+  `tesseraql-studio`, and every module an app resolves, **including the opt-in
+  `tesseraql-pdf` / `tesseraql-excel` / `tesseraql-s3`**.
 - The BOM version-manages the opt-in codecs/connectors **and** the opt-in JDBC drivers
   (`ojdbc11`, `mssql-jdbc`, `mysql-connector-j`) so a consumer specifies only coordinates.
 

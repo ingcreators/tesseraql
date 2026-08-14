@@ -46,6 +46,23 @@ All notable changes to TesseraQL are documented here. The format follows
   alone executes nothing a case could exercise, so it is not declared — an item nothing can
   cover is a gate nobody can pass, not a gap worth showing.
 
+### Removed
+
+- **BREAKING: the Spring runtime adapter** (docs/jvm-baseline.md, decision 1).
+  `tesseraql-camel-spring-runtime` was two classes — a `@Configuration` that started the runtime
+  from a Spring `Environment` and an Actuator `HealthIndicator` — with no documentation page and
+  no caller, left over from a shape the framework has since decided against: one runtime serves
+  one application, and every documented way to ship one has TesseraQL owning the process. The
+  same health roll-up stays reachable at `/_tesseraql/health/live` and `/_tesseraql/health/ready`,
+  which is what the container `HEALTHCHECK` already probes. Spring Framework and Spring Boot are
+  no longer version-managed by the parent POM.
+- **The `tesseraql.app.home` configuration key**, which existed only so the Spring adapter could
+  locate the app home. Nothing in any `src/main` tree read it once the adapter was gone, so the
+  scaffold stops emitting it rather than leaving the emitted-but-dead key that
+  docs/config-consumers.md exists to prevent. `${TESSERAQL_APP_HOME}` remains available as a
+  placeholder inside configuration values — the manifest loader supplies it — so the scaffolded
+  `tesseraql.app.work` default is unchanged.
+
 ### Changed
 
 - **BREAKING: a lint code and a runtime code that share a number now have to mean the same

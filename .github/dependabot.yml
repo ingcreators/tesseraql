@@ -13,13 +13,6 @@ updates:
         update-types:
           - minor
           - patch
-    ignore:
-      # Spring 7 / Boot 4 is a deliberate migration (the pinned Boot 3.x actuator requires
-      # Spring 6), not a dependency bump.
-      - dependency-name: "org.springframework:*"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "org.springframework.boot:*"
-        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
