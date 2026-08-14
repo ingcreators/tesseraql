@@ -1,0 +1,15 @@
+# The deployment images build the reactor inside the builder stage, so the context needs the
+# sources and nothing a previous local build produced. Without this file a developer's target/
+# trees are copied in, and `COPY target/tesseraql-cli-*.jar` then matches both the thin jar and
+# a stale shaded one — two copies of the framework on one classpath, and an image whose contents
+# depend on what the machine happened to have built.
+target/
+**/target/
+.git/
+.github/
+docs-site/node_modules/
+docs-site/dist/
+editor/node_modules/
+editor/*.vsix
+**/work/
+*.log

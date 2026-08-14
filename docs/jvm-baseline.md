@@ -111,18 +111,92 @@ conditional does not belong to the reader. Flags belong to the launchers
 `ENTRYPOINT` — placed **before** `TESSERAQL_JAVA_OPTS` so an operator can still override any
 of them.
 
-| Tuning | Scope | Note |
-| --- | --- | --- |
-| `-XX:+UseCompactObjectHeaders` | Every channel | Opt-in in JDK 25 and 26, default in 27 (JEP 534), so the flag has a known expiry. |
-| `--enable-native-access` | Every channel | Silences the JEP 472 warning for the DuckDB JNI driver and prepares for the release that denies it. |
-| AOT cache (JEP 514) | jpackage and container only | The cache is tied to the classpath it was trained on. `--modules` and the opt-in codec cache make the fat-jar classpath vary per installation, so the cache cannot be shipped for that channel. |
-| `-XX:+AutoCreateSharedArchive` | Fat jar | The CDS equivalent that regenerates itself when the classpath changes — the property the AOT cache lacks. |
-| Garbage collector | Unchanged | G1 stays. A short-lived CLI command would prefer serial, but `serve` shares the launcher. |
+Nothing here was adopted on argument. Each candidate was measured on JDK 25.0.4 — `serve` on
+the example app (median of three boots: time to the liveness endpoint, live heap after a
+forced full GC, process RSS) and the short-lived `tesseraql routes` command (median of seven).
 
-Nothing in the last three rows is adopted on argument. The slice measures `serve` start-up
-time and resident memory on JDK 25 with and without each flag, and only what the numbers
-support ships. Measuring wants decision 3 first, so the Dev Container is running the JVM the
-numbers are about.
+| Configuration | `serve` ready | Live heap | RSS | `routes` |
+| --- | --- | --- | --- | --- |
+| Baseline | 2557 ms | 27,863 KB | 325,356 KB | 577 ms |
+| `-XX:+UseCompactObjectHeaders` | 2570 ms | 25,967 KB (−6.8%) | 310,352 KB (−4.6%) | 584 ms |
+| CDS archive | 1912 ms (−25%) | 26,883 KB | 260,388 KB (−20%) | 461 ms (−20%) |
+| Both | 1900 ms (−26%) | 25,327 KB (−9.1%) | 253,960 KB (−22%) | 458 ms (−21%) |
+
+What ships, and why:
+
+- **A CDS archive.** The largest effect measured, and it is two effects: a quarter off
+  time-to-ready and a fifth off resident memory, on both the long-running and the short-lived
+  command. Failure was tested rather than assumed: a corrupt archive, a missing one, a read-only
+  one and a changed classpath each cost at most a warning line, and the command still succeeded.
+- **`-XX:+UseCompactObjectHeaders`.** No effect on start-up, a consistent 7–9% off live heap and
+  4–5% off RSS. Opt-in in JDK 25 and 26, default in 27 (JEP 534), so the flag has a known expiry.
+- **`--sun-misc-unsafe-memory-access=allow`.** Found by measuring rather than by design: on
+  JDK 25 every boot prints three `WARNING` lines because Netty calls `sun.misc.Unsafe`, in
+  library code the framework does not own. The flag removes them at no measured cost, and keeps
+  Netty working when a future JDK flips that default to deny.
+
+What does not ship:
+
+- **The AOT cache (JEP 514).** The CDS archive delivers the same class of win with none of the
+  training-run and exact-classpath discipline the AOT cache demands.
+- **`--enable-native-access`.** Nothing was measured for it: the DuckDB JNI driver is a
+  module-channel dependency and never loaded in these runs, so no JEP 472 warning appeared.
+  It goes in when there is an observation behind it.
+- **A different garbage collector.** G1 stays. A short-lived CLI command would prefer serial,
+  but `serve` shares the launcher and would pay for it.
+
+### Where the archive comes from, per channel
+
+| Channel | Archive |
+| --- | --- |
+| Fat jar + launchers | Written on first run into the user cache (`XDG_CACHE_HOME` / `LOCALAPPDATA`); skipped silently when that cannot be written. |
+| `deploy/Dockerfile`, `Dockerfile.demo` | Trained at build time against the baked application — a container filesystem is often read-only, and every replica would otherwise pay separately. |
+| jpackage app images | Written on first run into `$APPDIR`, which the jpackage launcher substitutes to the installed path. |
+
+Four things this arrangement has to get right, each found by running it rather than by reading
+about it:
+
+- **A training run must carry the same flags as the run that reads the archive.** An archive
+  records the object-header layout it was built under, and a JVM with a different
+  `UseCompactObjectHeaders` setting refuses it — four error lines at every start and none of the
+  benefit. The container images train with the flag for that reason, and CI asserts that a
+  started image logs nothing under the `cds` tag.
+- **`-XX:+AutoCreateSharedArchive` does not rebuild an archive that no longer matches.** A newer
+  jar at the same path is not a rebuild trigger: the JVM stops using the archive, prints
+  nothing, and start-up returns to where it began — 385 ms back to 525 ms in the measurement,
+  invisibly. The launchers therefore name the file after the jar's size, so an upgrade lands on
+  a new name and builds a fresh archive, and stale files are removed when a new name appears.
+- **jpackage runtimes ship without a base CDS archive**, and without one the JVM silently
+  declines to write an application archive at all — which is why the first attempt at this
+  channel measured no improvement and produced no file. `jlink --generate-cds-archive` creates
+  one, `-Xshare:dump` under the flag converts it to the compact-object-headers layout the
+  launcher actually maps, and the layouts that cannot be used are deleted. The cost is ~25 MB
+  per platform artifact and a slower first run (941 ms); every run after it is 467 ms against
+  623 ms before.
+- **`-Xlog:cds=error`** on the launchers. Writing an archive normally reports the classes it
+  skipped; in a terminal those read as failures. Errors stay: an archive the JVM refuses still
+  says so — which is what an operator who moved an installation would need to see.
+
+### What does not disturb the archive
+
+An archive is validated against the **application** classpath, which is the one jar the
+launcher names. Two things that sound like they would invalidate it do not:
+
+- **Opt-in modules.** `--modules` and `tesseraql.modules` load through a child classloader, so
+  the application classpath is unchanged. Measured with the 30-jar codec set attached: the
+  archive is accepted with nothing logged, and `serve` still starts in 2337–2581 ms against
+  2775 ms with sharing off. The modules' own classes are not in the archive and do not become
+  faster to load — the saving is the framework's own class loading, which is a fixed amount.
+- **Several applications in one host.** `tesseraql host` runs each application in its own
+  runtime inside **one** JVM, so all of them share the one archive. Adding applications does
+  not invalidate it.
+
+The fixed nature of that saving decides where it shows. On a short CLI command it is a fifth of
+the runtime; on a single-application `serve` it is a quarter; on a two-application `host`
+(3042 ms against 3030 ms) it disappears into per-application work — compiling routes, applying
+migrations, opening pools — which is what start-up is mostly made of once there is more than
+one application. Compact object headers still pay there: 32,429 KB of live heap against
+36,285 KB.
 
 ## Non-goals
 

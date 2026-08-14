@@ -27,10 +27,24 @@ COPY --from=build /src/tesseraql-cli/target/dependency/*.jar lib/
 ARG APP_HOME=examples/inventory-app
 COPY ${APP_HOME} /app
 RUN mkdir -p /app/work && chown -R tesseraql /app
+# The same build-time class-data-sharing archive as the production image
+# (docs/jvm-baseline.md decision 4). It matters more here: the demo image is judged on how
+# quickly it comes up.
+# Same flags as the ENTRYPOINT: an archive trained under a different UseCompactObjectHeaders
+# setting is refused by the JVM that reads it.
+RUN java -XX:+UseCompactObjectHeaders \
+      -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/home/tesseraql/lib/cds.jsa \
+      -cp 'lib/*' io.tesseraql.cli.TesseraqlCli routes --app /app > /dev/null 2>&1 \
+      && chown tesseraql /home/tesseraql/lib/cds.jsa \
+    || echo 'CDS training run failed; this image starts without a shared archive'
 USER tesseraql
 VOLUME /app/work
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=90s \
   CMD curl -fsS http://localhost:8080/_tesseraql/health/live || exit 1
-ENTRYPOINT ["java", "-cp", "lib/*", "io.tesseraql.cli.TesseraqlCli"]
+ENTRYPOINT ["java", \
+  "-XX:+UseCompactObjectHeaders", \
+  "--sun-misc-unsafe-memory-access=allow", \
+  "-XX:SharedArchiveFile=/home/tesseraql/lib/cds.jsa", \
+  "-cp", "lib/*", "io.tesseraql.cli.TesseraqlCli"]
 CMD ["serve", "--app", "/app", "--embedded-db", "/app/work/pgdata", "--port", "8080"]

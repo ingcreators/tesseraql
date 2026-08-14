@@ -83,6 +83,52 @@ jobs:
           curl -sf http://localhost:8080/_tesseraql/health/live > /dev/null
           kill "$SERVE_PID"
 
+  # The default shipping pattern in docs/deployment.md is a baked image, and nothing built
+  # deploy/Dockerfile: it had been unbuildable since the copy-dependencies step started
+  # needing the reactor installed, and the failure was invisible because the demo image
+  # (built only on release tags) had already been fixed. This job builds the documented
+  # image and runs the CLI inside it, so the deployment path breaks in a pull request
+  # rather than in someone's deploy.
+  deploy-image:
+    name: Deployment image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the baked image
+        run: |
+          docker build -f deploy/Dockerfile \
+            --build-arg APP_HOME=examples/scaffold-demo-app \
+            -t tesseraql-deploy-check .
+
+      - name: Run the CLI inside the image
+        run: |
+          # No database is involved: this proves the image's classpath resolves and the app
+          # compiles, which is what the unbuildable image would have hidden.
+          #
+          # The output is asserted, not just the exit code — the same reasoning as the
+          # jpackage smoke test: a launcher that starts, prints nothing and exits 0 passes
+          # an exit-code-only check while being useless.
+          out=$(docker run --rm tesseraql-deploy-check routes --app /app)
+          printf '%s\n' "$out"
+          printf '%s' "$out" | grep -q 'items.search' \
+            || { echo "the image listed no routes" >&2; exit 1; }
+
+      - name: Assert the shared archive was trained into the image
+        run: |
+          docker run --rm --entrypoint sh tesseraql-deploy-check \
+            -c 'test -s /opt/tesseraql/lib/cds.jsa'
+          # An archive the running JVM refuses (a flag mismatch between the training run and
+          # the entrypoint) is worse than none: it costs four error lines per start and buys
+          # nothing. Assert the CDS logger stays quiet.
+          noise=$(docker run --rm tesseraql-deploy-check routes --app /app 2>&1 >/dev/null \
+                  | grep -c '\[cds\]' || true)
+          [ "${noise:-0}" = "0" ] || {
+            docker run --rm tesseraql-deploy-check routes --app /app 2>&1 >/dev/null
+            echo "the shared archive was refused at run time" >&2; exit 1; }
+
   # The documentation site (docs/docs-site.md): the same build command Cloudflare
   # Workers Builds runs, so green CI implies a clean deploy. This is also where the
   # sync's completeness guard and the links validator gate PRs: a new docs/*.md that
