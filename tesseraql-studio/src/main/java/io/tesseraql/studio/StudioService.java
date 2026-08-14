@@ -1,14 +1,9 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.core.expr.EvaluationContext;
-import io.tesseraql.core.sql.BoundSql;
-import io.tesseraql.core.sql.Sql2WayParser;
-import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
@@ -32,11 +27,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +56,6 @@ public final class StudioService {
     private static final TqlErrorCode NO_SCHEMA = new TqlErrorCode(TqlDomain.STUDIO, 4236);
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
             .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
-    private static final TqlErrorCode RENDER = new TqlErrorCode(TqlDomain.STUDIO, 4222);
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
     /** A decision-rows grid save that cannot even reach the decision compile (shape/target). */
     private static final TqlErrorCode DECISION_ROWS = new TqlErrorCode(TqlDomain.STUDIO, 4237);
@@ -93,6 +84,8 @@ public final class StudioService {
     private final boolean readOnly;
     private final DraftStore draftStore;
     private final OverlayEditor overlayEditor;
+    private final AuditTrail auditTrail;
+    private final PreviewRenderer renderer;
     private AppManifest manifest;
     private Path appHome;
 
@@ -102,6 +95,9 @@ public final class StudioService {
         this.readOnly = readOnly;
         // The collaborators read the app home through a supplier — reload() reassigns the field,
         // and a captured value would pin them to a stale manifest.
+        this.auditTrail = new AuditTrail(() -> appHome);
+        this.renderer = new PreviewRenderer(() -> appHome, () -> manifest, this::source,
+                this::sourceIfExists, this::resolve);
         this.draftStore = new DraftStore(() -> appHome, readOnly, this::preview,
                 this::recordAudit);
         this.overlayEditor = new OverlayEditor(() -> appHome, readOnly, draftStore::resolve,
@@ -204,191 +200,6 @@ public final class StudioService {
     }
 
     /**
-     * Compiles a draft (or current source) without applying it, so edits can be validated before
-     * they touch the source of truth (design ch. 16.6): every document kind is parsed by the same
-     * parser the manifest load uses, SQL is rendered, templates are processed.
-     *
-     * <p>This used to recognize only {@code .sql}, {@code web/**.yml}, {@code .html} and
-     * {@code .tpl}, and answer <em>valid</em> for everything else — so the compile-before-write
-     * gate in {@link #applyDraft} was a no-op for shared definitions, jobs, workflows, scopes,
-     * attachments, suites, and config, and a broken document was promoted to the source of truth
-     * with the screen saying it compiled. Worse, the route branch matched any {@code web/**.yml},
-     * so a {@code *.view.yml} was parsed as a route: the check that ran was the wrong one.
-     *
-     * <p>The parsers read files rather than text, so the document kinds land in a temp file whose
-     * name matches the real one and whose path is scrubbed from the message — the same technique
-     * {@link #validateDecisionDraft} already used, now shared.
-     */
-    public PreviewResult preview(String relativePath, String content) {
-        String text = content != null ? content : source(relativePath);
-        if (relativePath.endsWith(".sql")) {
-            try {
-                BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(text), Map.of());
-                return PreviewResult.valid("sql", bound.sql());
-            } catch (RuntimeException ex) {
-                return PreviewResult.invalid("sql", ex.getMessage());
-            }
-        }
-        // Before the route check: a view document also lives under web/ and is not a route.
-        if (relativePath.endsWith(".view.yml")) {
-            return previewDocument("view", relativePath, text, file -> {
-                io.tesseraql.yaml.view.ViewSpec spec = io.tesseraql.yaml.view.ViewSpec.parse(file);
-                return "id=" + spec.id() + ", recipe=" + spec.view();
-            });
-        }
-        // A consumer is a route document too — same parser, different mount.
-        if (isRouteYaml(relativePath) || isUnder(relativePath, "consume")) {
-            try {
-                RouteDefinition definition = parser.parseRoute(text, relativePath);
-                return PreviewResult.valid("route",
-                        "id=" + definition.id() + ", recipe=" + definition.recipe());
-            } catch (RuntimeException ex) {
-                return PreviewResult.invalid("route", ex.getMessage());
-            }
-        }
-        if (relativePath.endsWith(".html") || relativePath.endsWith(".tpl")) {
-            return previewTemplate(relativePath, text);
-        }
-        PreviewResult document = previewDeclaration(relativePath, text);
-        return document != null ? document : PreviewResult.valid("text", text);
-    }
-
-    /**
-     * The declaration kinds the manifest load parses per directory (docs/app-layout.md): each is
-     * validated by its own parser, so a draft that cannot load is refused where it is written.
-     * Returns null when the path is not a declaration — the caller falls back to plain text.
-     */
-    private PreviewResult previewDeclaration(String relativePath, String text) {
-        if (!relativePath.endsWith(".yml") && !relativePath.endsWith(".yaml")) {
-            return null;
-        }
-        if (isUnder(relativePath, "domains")) {
-            return previewDocument("domains", relativePath, text, file -> named("domain",
-                    parser.parseDomains(file).domains().keySet()));
-        }
-        if (isUnder(relativePath, "rules")) {
-            return previewDocument("rules", relativePath, text, file -> named("rule set",
-                    parser.parseRuleSets(file).rules().keySet()));
-        }
-        if (isUnder(relativePath, "decisions")) {
-            return previewDocument("decisions", relativePath, text, file -> {
-                io.tesseraql.yaml.model.DecisionsDocument decisions = parser.parseDecisions(file);
-                // Parsing is not enough: a decision compiles its rows, and a bad row is exactly
-                // what the author needs told here rather than at the next app load.
-                decisions.decisions().forEach(io.tesseraql.yaml.decision.DecisionSets::compile);
-                return named("decision", decisions.decisions().keySet());
-            });
-        }
-        if (isUnder(relativePath, "calendars")) {
-            return previewDocument("calendars", relativePath, text, file -> named("calendar",
-                    parser.parseCalendars(file).calendars().keySet()));
-        }
-        if (isUnder(relativePath, "batch")) {
-            return previewDocument("job", relativePath, text,
-                    file -> "id=" + parser.parseJob(file).id());
-        }
-        if (isUnder(relativePath, "workflow")) {
-            return previewDocument("workflow", relativePath, text,
-                    file -> "id=" + parser.parseWorkflow(file).id());
-        }
-        if (isUnder(relativePath, "scope")) {
-            return previewDocument("scope", relativePath, text,
-                    file -> "id=" + parser.parseScope(file).id());
-        }
-        if (isUnder(relativePath, "attachments")) {
-            return previewDocument("attachment", relativePath, text,
-                    file -> "id=" + parser.parseAttachment(file).id());
-        }
-        // Suites and config get structural validation only: the suite loader lives in
-        // tesseraql-test-core, whose GreenMail/Testcontainers dependency tree Studio does not
-        // carry, and config is merged from several documents so a single file has no schema of
-        // its own. Well-formed YAML is still a real gate — it is what "valid" claimed before.
-        if (isUnder(relativePath, "tests") || isUnder(relativePath, "config")) {
-            String kind = isUnder(relativePath, "tests") ? "suite" : "config";
-            try {
-                parser.parseTree(text);
-                return PreviewResult.valid(kind, kind + " document is well-formed YAML");
-            } catch (RuntimeException ex) {
-                return PreviewResult.invalid(kind, rootMessage(ex));
-            }
-        }
-        return null;
-    }
-
-    /** Whether the path sits under a top-level declaration directory. */
-    private static boolean isUnder(String relativePath, String directory) {
-        return relativePath.startsWith(directory + "/");
-    }
-
-    private static String named(String noun, java.util.Collection<String> names) {
-        return names.size() + " " + noun + (names.size() == 1 ? "" : "s")
-                + (names.isEmpty() ? "" : ": " + String.join(", ", names));
-    }
-
-    /**
-     * Parses draft text with a parser that reads files. The temp file keeps the real document's
-     * name so a message that quotes it still reads right, and its directory is scrubbed out of
-     * the message so the author sees their own path, not a temp one.
-     */
-    private PreviewResult previewDocument(String kind, String relativePath, String text,
-            java.util.function.Function<Path, String> parse) {
-        Path directory = null;
-        try {
-            directory = Files.createTempDirectory("tql-preview-");
-            String name = relativePath.substring(relativePath.lastIndexOf('/') + 1);
-            Path file = directory.resolve(name);
-            Files.writeString(file, text);
-            try {
-                return PreviewResult.valid(kind, parse.apply(file));
-            } catch (RuntimeException ex) {
-                return PreviewResult.invalid(kind,
-                        rootMessage(ex).replace(file.toString(), relativePath));
-            }
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        } finally {
-            deleteTemp(directory);
-        }
-    }
-
-    private static void deleteTemp(Path directory) {
-        if (directory == null) {
-            return;
-        }
-        try (Stream<Path> entries = Files.walk(directory)) {
-            entries.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException ignored) {
-                    // best-effort cleanup
-                }
-            });
-        } catch (IOException ignored) {
-            // best-effort cleanup
-        }
-    }
-
-    /**
-     * Validates a draft template by processing it with the standard engine and an empty model
-     * (design ch. 16.6): framework {@code tql/*} fragments resolve from the classpath and other
-     * app templates from the app home, so cross-references are checked too. Markup/parse errors
-     * are invalid; expression errors that need real route data still count as parsed.
-     */
-    private PreviewResult previewTemplate(String relativePath, String content) {
-        try {
-            templateEngine(relativePath).process(content, new org.thymeleaf.context.Context());
-            return PreviewResult.valid("template",
-                    "template parses and renders with an empty model");
-        } catch (RuntimeException ex) {
-            if (isDataDependent(ex)) {
-                return PreviewResult.valid("template",
-                        "template parses; full render needs route data (" + rootMessage(ex) + ")");
-            }
-            return PreviewResult.invalid("template", rootMessage(ex));
-        }
-    }
-
-    /**
      * Renders a draft (or current source) against a sample model and returns the actual output
      * (design ch. 16.6, Studio backlog A1) — the step past {@link #preview}, which only proves a
      * data-dependent template parses. Two shapes render:
@@ -441,14 +252,32 @@ public final class StudioService {
      */
     public RenderResult render(String relativePath, String content, String sampleModel,
             RowSource liveRows, FieldMask fieldMask, PdfRender pdfRender) {
-        if (isTemplate(relativePath)) {
-            return renderTemplateFile(relativePath, content, sampleModel);
-        }
-        if (isRouteYaml(relativePath)) {
-            return renderRoute(relativePath, content, sampleModel, liveRows, fieldMask, pdfRender);
-        }
-        return RenderResult.invalid("text",
-                "Rendered preview is only available for templates and web routes");
+        return renderer.render(relativePath, content, sampleModel, liveRows, fieldMask, pdfRender);
+    }
+
+    /**
+     * Whether a draft parses as what its path says it is, and what it says it declares — the
+     * gate {@link #applyDraft} runs before a draft becomes the source of truth.
+     */
+    public PreviewResult preview(String relativePath, String content) {
+        return renderer.preview(relativePath, content);
+    }
+
+    /**
+     * The parsed sample model — the Studio mail test-send renders the body through
+     * {@link #render} and needs the same {@code payload}/{@code event} maps for the
+     * subject line's inline template.
+     */
+    public Map<String, Object> sampleModelMap(String relativePath, String sampleModel) {
+        return renderer.sampleModel(relativePath, sampleModel);
+    }
+
+    /**
+     * The colocated sample-data fixture for a renderable file — {@code <base>.sample.yml} next to
+     * it — or null when the file is not renderable or no fixture exists.
+     */
+    public String sampleModel(String relativePath) {
+        return renderer.sampleFixture(relativePath);
     }
 
     /**
@@ -493,223 +322,6 @@ public final class StudioService {
          */
         Map<String, Object> rowsFor(RouteDefinition route, Path routeDir,
                 Map<String, Object> context);
-    }
-
-    /**
-     * The parsed sample model — the Studio mail test-send renders the body through
-     * {@link #render} and needs the same {@code payload}/{@code event} maps for the
-     * subject line's inline template.
-     */
-    public Map<String, Object> sampleModelMap(String relativePath, String sampleModel) {
-        return parseSample(relativePath, sampleModel);
-    }
-
-    private RenderResult renderTemplateFile(String relativePath, String content,
-            String sampleModel) {
-        String text = content != null ? content : source(relativePath);
-        Map<String, Object> model;
-        try {
-            model = parseSample(relativePath, sampleModel);
-        } catch (RuntimeException ex) {
-            return RenderResult.invalid("sample", "Sample data: " + rootMessage(ex));
-        }
-        return renderTemplateContent(relativePath, text, model);
-    }
-
-    private RenderResult renderRoute(String relativePath, String content, String sampleModel,
-            RowSource liveRows, FieldMask fieldMask, PdfRender pdfRender) {
-        String text = content != null ? content : source(relativePath);
-        RouteDefinition definition;
-        try {
-            definition = parser.parseRoute(text, relativePath);
-        } catch (RuntimeException ex) {
-            return RenderResult.invalid("route", rootMessage(ex));
-        }
-        Map<String, Object> context;
-        try {
-            // A mutable copy: live rows are injected as the `sql` key before model resolution.
-            context = new LinkedHashMap<>(parseSample(relativePath, sampleModel));
-        } catch (RuntimeException ex) {
-            return RenderResult.invalid("sample", "Sample data: " + rootMessage(ex));
-        }
-        if (liveRows != null) {
-            try {
-                Map<String, Object> live = liveRows.rowsFor(definition,
-                        resolve(relativePath).getParent(), context);
-                if (live != null) {
-                    // Each entry is a model key: the main `sql` plus every named query by its name.
-                    live.forEach(context::put);
-                }
-            } catch (RuntimeException ex) {
-                return RenderResult.invalid("route", "Live data: " + rootMessage(ex));
-            }
-        }
-        io.tesseraql.yaml.model.ExportSpec export = definition.fileExport();
-        if (export != null && "pdf".equalsIgnoreCase(export.format())) {
-            return renderPdfRoute(export, resolve(relativePath).getParent(), context, pdfRender);
-        }
-        EvaluationContext evaluation = new EvaluationContext(context);
-        ResponseSpec response = definition.response();
-        if (response != null && response.html() != null) {
-            return renderHtmlRoute(relativePath, response.html(), evaluation);
-        }
-        if (response != null && response.json() != null) {
-            return renderJsonRoute(response.json(), evaluation, context, fieldMask);
-        }
-        return RenderResult.invalid("route", "Rendered preview supports query-html/page,"
-                + " query-json, and query-export (pdf) routes only");
-    }
-
-    /**
-     * Renders a {@code query-export} {@code format: pdf} route to a {@code data:} URL preview (Studio
-     * backlog A1 follow-up): the sample's {@code main.rows} feed the route's PDF, produced by the
-     * runtime-provided {@link PdfRender} over the canonical PDF codec. Degrades to a clear message
-     * when no PDF renderer/codec is available (the optional {@code tesseraql-pdf} module is absent).
-     */
-    private RenderResult renderPdfRoute(io.tesseraql.yaml.model.ExportSpec export, Path routeDir,
-            Map<String, Object> context, PdfRender pdfRender) {
-        if (pdfRender == null) {
-            return RenderResult.invalid("pdf",
-                    "PDF preview is unavailable (the tesseraql-pdf module is not loaded).");
-        }
-        byte[] pdf;
-        try {
-            pdf = pdfRender.render(export, routeDir, sampleRows(context));
-        } catch (RuntimeException ex) {
-            return RenderResult.invalid("pdf", rootMessage(ex));
-        }
-        if (pdf == null) {
-            return RenderResult.invalid("pdf",
-                    "PDF preview needs the tesseraql-pdf module on the classpath.");
-        }
-        return RenderResult.ok("pdf", "data:application/pdf;base64,"
-                + java.util.Base64.getEncoder().encodeToString(pdf));
-    }
-
-    /** The sample's {@code main.rows} as the export route's query rows, or empty. */
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, Object>> sampleRows(Map<String, Object> context) {
-        if (context.get(io.tesseraql.yaml.model.RouteDefinition.MAIN) instanceof Map<?, ?> main
-                && main.get("rows") instanceof List<?> rows) {
-            return (List<Map<String, Object>>) (List<?>) rows;
-        }
-        return List.of();
-    }
-
-    private RenderResult renderHtmlRoute(String routePath, ResponseSpec.HtmlResponse html,
-            EvaluationContext evaluation) {
-        String templateRel;
-        try {
-            templateRel = resolveRouteTemplate(routePath, html.template());
-        } catch (RuntimeException ex) {
-            return RenderResult.invalid("html", rootMessage(ex));
-        }
-        String templateContent = sourceIfExists(templateRel);
-        if (templateContent == null) {
-            return RenderResult.invalid("html", "Template not found: " + html.template());
-        }
-        Map<String, Object> model = new LinkedHashMap<>();
-        html.model().forEach((key, expr) -> model.put(key,
-                evaluation.resolve(Arrays.asList(String.valueOf(expr).split("\\.")))));
-        return renderTemplateContent(templateRel, templateContent, model);
-    }
-
-    private RenderResult renderJsonRoute(ResponseSpec.JsonResponse json,
-            EvaluationContext evaluation, Map<String, Object> context, FieldMask fieldMask) {
-        Object body = resolveJson(json.body(), evaluation);
-        // Output-field masking (Studio backlog A1 follow-up): the runtime supplies the mask over the
-        // canonical FieldPolicyApplier, evaluated for the sample principal, so the preview shows what
-        // a caller would actually see — hidden/redacted fields included.
-        if (fieldMask != null && !json.fields().isEmpty()) {
-            try {
-                body = fieldMask.mask(json.fields(), body, context);
-            } catch (RuntimeException ex) {
-                return RenderResult.invalid("json", "Field masking: " + rootMessage(ex));
-            }
-        }
-        try {
-            return RenderResult.ok("json",
-                    jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(body));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            return RenderResult.invalid("json", "Failed to serialize JSON: " + ex.getMessage());
-        }
-    }
-
-    /**
-     * Recursively resolves a JSON body template against the context (the same walk as the compiler's
-     * {@code JsonResponseRenderer}): leaf strings are dotted-path expressions, maps and lists recurse,
-     * other scalars are literals.
-     */
-    private Object resolveJson(Object template, EvaluationContext evaluation) {
-        if (template instanceof Map<?, ?> map) {
-            Map<String, Object> resolved = new LinkedHashMap<>();
-            map.forEach((key, value) -> resolved.put(String.valueOf(key),
-                    resolveJson(value, evaluation)));
-            return resolved;
-        }
-        if (template instanceof List<?> list) {
-            List<Object> resolved = new ArrayList<>(list.size());
-            list.forEach(element -> resolved.add(resolveJson(element, evaluation)));
-            return resolved;
-        }
-        if (template instanceof String expression) {
-            return evaluation.resolve(Arrays.asList(expression.split("\\.")));
-        }
-        return template;
-    }
-
-    /** Parses the effective sample model: the given text, else the colocated fixture, else empty. */
-    private Map<String, Object> parseSample(String relativePath, String sampleModel) {
-        String effective = sampleModel != null && !sampleModel.isBlank()
-                ? sampleModel
-                : sampleModel(relativePath);
-        return parser.parseTree(effective);
-    }
-
-    private RenderResult renderTemplateContent(String templateRelPath, String content,
-            Map<String, Object> model) {
-        String kind = templateRelPath.endsWith(".html") ? "html" : "text";
-        try {
-            String output = templateEngine(templateRelPath).process(content,
-                    new org.thymeleaf.context.Context(java.util.Locale.ENGLISH, model));
-            return RenderResult.ok(kind, output);
-        } catch (RuntimeException ex) {
-            return RenderResult.invalid(kind, rootMessage(ex));
-        }
-    }
-
-    /**
-     * Resolves a route's template like the compiler's {@code TemplateResolution}: colocated next to
-     * the route first, then the shared {@code templates/} root; confined to the app home. Returns the
-     * app-home-relative path.
-     */
-    private String resolveRouteTemplate(String routePath, String template) {
-        Path routeDir = resolve(routePath).getParent();
-        Path colocated = routeDir.resolve(template).normalize();
-        Path file = Files.isRegularFile(colocated)
-                ? colocated
-                : appHome.resolve("templates").resolve(template).normalize();
-        if (!file.startsWith(appHome)) {
-            throw new TqlException(RENDER, "Template escapes app home: " + template);
-        }
-        return appHome.relativize(file).toString().replace('\\', '/');
-    }
-
-    /**
-     * The colocated sample-data fixture for a renderable file — {@code <base>.sample.yml} next to it
-     * (e.g. {@code .../table.html} → {@code .../table.sample.yml}, {@code .../get.yml} →
-     * {@code .../get.sample.yml}), or null when the file is not renderable or no fixture exists. The
-     * fixture is a YAML map: the template's variables for a template, or the execution context
-     * ({@code params}, {@code main.rows}, …) for a route. The manifest loader ignores it (only
-     * HTTP-method {@code *.yml} files under {@code web/} are routes), so it lives beside its file.
-     */
-    public String sampleModel(String relativePath) {
-        if (!isTemplate(relativePath) && !isRouteYaml(relativePath)) {
-            return null;
-        }
-        int dot = relativePath.lastIndexOf('.');
-        String fixture = relativePath.substring(0, dot) + ".sample.yml";
-        return sourceIfExists(fixture);
     }
 
     /**
@@ -2359,12 +1971,12 @@ public final class StudioService {
                 : "conflict";
     }
 
-    private static boolean isTemplate(String relativePath) {
+    static boolean isTemplate(String relativePath) {
         return relativePath.endsWith(".html") || relativePath.endsWith(".tpl");
     }
 
     /** Whether the path is a web route document ({@code web/**}/{@code <method>.yml}). */
-    private static boolean isRouteYaml(String relativePath) {
+    static boolean isRouteYaml(String relativePath) {
         if (!relativePath.startsWith("web/") || !relativePath.endsWith(".yml")) {
             return false;
         }
@@ -2373,60 +1985,7 @@ public final class StudioService {
         return HTTP_METHODS.contains(stem);
     }
 
-    /**
-     * Builds a Thymeleaf engine matching the production stack (design ch. 12) for previewing or
-     * rendering a draft string: framework {@code tql/*} fragments resolve from the classpath, sibling
-     * {@code *.html} app templates from the app home (so cross-references resolve), and the draft
-     * itself from the in-memory string — in HTML mode for {@code .html}, TEXT mode otherwise.
-     */
-    private org.thymeleaf.TemplateEngine templateEngine(String relativePath) {
-        org.thymeleaf.TemplateEngine engine = new org.thymeleaf.TemplateEngine();
-        // Shared framework templates use @{/x}; Thymeleaf's own builder refuses a
-        // context-relative link outside a web context, so every engine needs this one
-        // (docs/base-path.md).
-        engine.setLinkBuilder(new io.tesseraql.yaml.template.BasePathLinkBuilder());
-
-        org.thymeleaf.templateresolver.ClassLoaderTemplateResolver shared = new org.thymeleaf.templateresolver.ClassLoaderTemplateResolver(
-                StudioService.class.getClassLoader());
-        shared.setPrefix("tesseraql/templates/");
-        shared.setSuffix(".html");
-        shared.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
-        shared.setResolvablePatterns(java.util.Set.of("tql/*"));
-        shared.setOrder(1);
-        engine.addTemplateResolver(shared);
-
-        org.thymeleaf.templateresolver.FileTemplateResolver files = new org.thymeleaf.templateresolver.FileTemplateResolver();
-        files.setPrefix(appHome.toString() + java.io.File.separator);
-        files.setTemplateMode(org.thymeleaf.templatemode.TemplateMode.HTML);
-        files.setResolvablePatterns(java.util.Set.of("*.html"));
-        files.setCheckExistence(true);
-        files.setOrder(2);
-        engine.addTemplateResolver(files);
-
-        org.thymeleaf.templateresolver.StringTemplateResolver draft = new org.thymeleaf.templateresolver.StringTemplateResolver();
-        draft.setTemplateMode(relativePath.endsWith(".html")
-                ? org.thymeleaf.templatemode.TemplateMode.HTML
-                : org.thymeleaf.templatemode.TemplateMode.TEXT);
-        draft.setOrder(3);
-        engine.addTemplateResolver(draft);
-        return engine;
-    }
-
-    /**
-     * Whether the failure only happens because the empty preview model lacks route data (an
-     * expression evaluated over null), as opposed to a static authoring error (malformed markup,
-     * unparseable expression, unresolvable template reference).
-     */
-    private static boolean isDataDependent(Throwable ex) {
-        for (Throwable t = ex; t != null; t = t.getCause()) {
-            if (t.getClass().getName().startsWith("ognl.") || t instanceof NullPointerException) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String rootMessage(Throwable ex) {
+    static String rootMessage(Throwable ex) {
         Throwable root = ex;
         while (root.getCause() != null) {
             root = root.getCause();
@@ -2587,12 +2146,11 @@ public final class StudioService {
      * actions, not just the newest window; an empty query returns the newest {@code limit} entries.
      */
     public List<AuditEntry> auditEntries(int limit, String query) {
-        List<AuditEntry> entries = filteredAuditNewestFirst(query);
-        return entries.size() > limit ? List.copyOf(entries.subList(0, limit)) : entries;
+        return auditTrail.entries(limit, query);
     }
 
     /** The sortable columns of the audit trail (Studio platform-UX I2). */
-    public static final Set<String> AUDIT_SORT_COLS = Set.of("at", "actor", "action", "target");
+    public static final List<String> AUDIT_SORT_COLS = AuditTrail.SORT_COLUMNS;
 
     public AuditPage auditPage(String query, int page, int size) {
         return auditPage(query, null, null, page, size);
@@ -2605,64 +2163,7 @@ public final class StudioService {
      * {@code total} comes back so the view can render pagination.
      */
     public AuditPage auditPage(String query, String sort, String dir, int page, int size) {
-        int p = Math.max(1, page);
-        List<AuditEntry> all = new ArrayList<>(filteredAuditNewestFirst(query));
-        boolean explicit = sort != null && AUDIT_SORT_COLS.contains(sort);
-        String key = explicit ? sort : "at";
-        // No explicit sort means the default newest-first (at desc); an explicit column defaults asc.
-        boolean desc = explicit ? "desc".equalsIgnoreCase(dir) : true;
-        Comparator<AuditEntry> cmp = auditComparator(key);
-        all.sort(desc ? cmp.reversed() : cmp);
-        int total = all.size();
-        int from = Math.min((p - 1) * size, total);
-        int to = Math.min(from + size, total);
-        return new AuditPage(List.copyOf(all.subList(from, to)), p, size, total);
-    }
-
-    private static Comparator<AuditEntry> auditComparator(String key) {
-        return switch (key) {
-            case "actor" -> Comparator.comparing(e -> e.actor().toLowerCase(java.util.Locale.ROOT));
-            case "action" ->
-                Comparator.comparing(e -> e.action().toLowerCase(java.util.Locale.ROOT));
-            case "target" ->
-                Comparator.comparing(e -> e.target().toLowerCase(java.util.Locale.ROOT));
-            default -> Comparator.comparing(AuditEntry::at); // "at": ISO timestamps sort lexically
-        };
-    }
-
-    /** Every audit entry matching {@code query} (whole log), newest first. */
-    private List<AuditEntry> filteredAuditNewestFirst(String query) {
-        Path log = auditLog();
-        if (!Files.isRegularFile(log)) {
-            return List.of();
-        }
-        String q = query == null ? "" : query.strip().toLowerCase(java.util.Locale.ROOT);
-        List<AuditEntry> entries = new ArrayList<>();
-        try {
-            for (String line : Files.readAllLines(log)) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                JsonNode node = jsonMapper.readTree(line);
-                AuditEntry entry = new AuditEntry(node.path("at").asText(""),
-                        node.path("actor").asText(""),
-                        node.path("action").asText(""), node.path("target").asText(""));
-                if (q.isEmpty() || matchesAudit(entry, q)) {
-                    entries.add(entry);
-                }
-            }
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        java.util.Collections.reverse(entries);
-        return entries;
-    }
-
-    private static boolean matchesAudit(AuditEntry entry, String lowerQuery) {
-        return entry.actor().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
-                || entry.action().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
-                || entry.target().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery)
-                || entry.at().toLowerCase(java.util.Locale.ROOT).contains(lowerQuery);
+        return auditTrail.page(query, sort, dir, page, size);
     }
 
     /** The app's current declarative sidebar menu items ({@code config/menu.yml}); empty if none. */
@@ -3009,23 +2510,7 @@ public final class StudioService {
 
     /** Appends one audit entry for a source-writing action (Studio backlog D6). */
     private void recordAudit(String actor, String action, String target) {
-        Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("at", Instant.now().toString());
-        entry.put("actor", actor == null || actor.isBlank() ? "unknown" : actor);
-        entry.put("action", action);
-        entry.put("target", target);
-        Path log = auditLog();
-        try {
-            Files.createDirectories(log.getParent());
-            Files.writeString(log, jsonMapper.writeValueAsString(entry) + "\n",
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-    }
-
-    private Path auditLog() {
-        return appHome.resolve("work/studio/audit/audit.jsonl").normalize();
+        auditTrail.record(actor, action, target);
     }
 
     /** Reads a previously saved draft, or null if none exists. */
