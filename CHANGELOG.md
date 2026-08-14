@@ -65,6 +65,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Apache Camel 4.18.0 → 4.22.0** (docs/jvm-baseline.md, decision 2). 4.18 leaves support in
+  February 2027 and claims Java 17 and 21; 4.22 runs to August 2027 and adds Java 25 — which the
+  Java 25 CI job was already exercising against a Camel that did not claim to support it. Two
+  improvements arrive with it: `CamelObjectInputStream` now installs a JEP 290 deserialization
+  filter by default, and on JDK 25 Camel configures post-quantum hybrid named groups
+  (`X25519MLKEM768`) on every `SSLContextParameters`. The MDC bridging the runtime uses to carry
+  `traceId` / `spanId` across async boundaries is deprecated in favour of the `camel-mdc`
+  component; it still works, and migrating it is its own slice because it changes what every log
+  line carries.
+- **The `camel-test` version override is gone.** It existed because `camel-bom` 4.18 managed the
+  retired artifact at a `-SNAPSHOT` version, which Maven Central refuses in a published POM (the
+  v0.7.0 publish failure). Camel 4.19 removed the entry from the BOM, so the workaround has
+  nothing left to correct.
 - **BREAKING: a lint code and a runtime code that share a number now have to mean the same
   thing.** The uniqueness guard counted the two idioms separately, on the reasoning that a lint
   and the runtime error it anticipates share a number on purpose — true for eighteen pairs, and

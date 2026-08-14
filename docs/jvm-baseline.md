@@ -75,6 +75,15 @@ JEP 290 deserialization filter by default, and on JDK 25 Camel configures post-q
 named groups on `SSLContextParameters` — relevant to the transport-security section of
 [deployment.md](deployment.md).
 
+One deprecation needs a slice of its own. Camel 4.19 deprecated the MDC logic behind
+`setUseMDCLogging` in favour of the `camel-mdc` component, and the runtime uses exactly that
+call to carry `traceId` / `spanId` across async boundaries so a lane-dispatched step keeps
+logging with the request's ids. The component propagates through the Exchange rather than the
+thread's MDC, so adopting it means putting those ids on the exchange and declaring them as
+`camel.mdc.customExchangeProperties` — a change to what every log line carries, which does not
+belong inside a version bump. The deprecated path still works in 4.22, so slice 2 keeps it
+behind a documented suppression and slice 5 migrates it.
+
 ## Decision 3 — Java 25 is the baseline
 
 `maven.compiler.release` moves to 25, the enforcer range to `[25,)`, and CI to a single JDK.
@@ -143,6 +152,10 @@ no workflow produces blocks every subsequent pull request.
 
 **4 — Tuning.** Measure first, then ship what the numbers support into the two launchers,
 `jpackage.yml`, and the two Dockerfiles.
+
+**5 — `camel-mdc`.** Move `traceId` / `spanId` onto the exchange and adopt the component that
+replaces the deprecated MDC logic, with the log-line contract in
+[deployment.md](deployment.md) restated against what it actually carries afterwards.
 
 ## Open decisions
 

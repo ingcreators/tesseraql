@@ -177,6 +177,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * Carries the trace-correlation MDC keys across Camel's async boundaries, so a step handed
+     * to an execution lane keeps logging with the request's ids ({@code RouteTelemetry} puts
+     * them on the request thread's MDC).
+     *
+     * <p>Camel 4.19 deprecated this in favour of the {@code camel-mdc} component, which
+     * propagates through the Exchange instead of the thread's MDC. Adopting it means moving
+     * {@code traceId}/{@code spanId} onto the exchange and declaring them as
+     * {@code camel.mdc.customExchangeProperties} — a change to what every log line carries, so
+     * it is its own slice rather than a rider on the version bump. The deprecated path is
+     * still functional in 4.22.
+     */
+    @SuppressWarnings("deprecation")
+    private static void bridgeMdcAcrossAsyncBoundaries(DefaultCamelContext context) {
+        context.setUseMDCLogging(true);
+        context.setMDCLoggingKeysPattern("traceId,spanId");
+    }
+
+    /**
      * @param cookiePath the {@code Path} session cookies are issued with, supplied by whatever
      *                   starts the runtime (docs/base-path.md decision 4). Null means the
      *                   standalone answer: the application's own base path, so its cookie is not
@@ -260,8 +278,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             LOG.info("Environment profile active: {} (config/env/{}.yml)", activeProfile,
                     activeProfile);
         }
-        context.setUseMDCLogging(true);
-        context.setMDCLoggingKeysPattern("traceId,spanId");
+        bridgeMdcAcrossAsyncBoundaries(context);
         context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
         context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
 
