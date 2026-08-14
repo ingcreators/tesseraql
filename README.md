@@ -148,7 +148,6 @@ browsable here under [docs/](docs/).
 | `tesseraql-compiler` | Compiles route definitions into Camel routes (recipes, security, telemetry, transfers) |
 | `tesseraql-camel-components` | `tesseraql-sql`, `tesseraql-auth`, and related Camel components |
 | `tesseraql-camel-runtime` | Camel Main runtime: app mounting, migrations, scheduling, ops API, Studio, app MCP endpoints |
-| `tesseraql-camel-spring-runtime` | Spring Boot runtime adapter |
 | `tesseraql-security` | Policy engine, JWT/session auth, CSRF, principal model |
 | `tesseraql-identity` | Managed identity schema, Identity SQL Contracts, realm resolution |
 | `tesseraql-scim` / `tesseraql-saml` | SCIM provisioning and SAML SP federation |

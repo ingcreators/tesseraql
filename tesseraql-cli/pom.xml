@@ -15,7 +15,7 @@
 
   <dependencies>
     <!-- The CLI ships the JDK-only structured log provider (roadmap Phase 45), so the
-         standalone runtime finally has a real SLF4J backend; Spring keeps Logback. -->
+         standalone runtime finally has a real SLF4J backend. -->
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>

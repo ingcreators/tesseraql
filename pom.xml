@@ -66,7 +66,6 @@
     <module>tesseraql-compiler</module>
     <module>tesseraql-camel-components</module>
     <module>tesseraql-camel-runtime</module>
-    <module>tesseraql-camel-spring-runtime</module>
     <module>tesseraql-security</module>
     <module>tesseraql-identity</module>
     <module>tesseraql-scim</module>
@@ -117,8 +116,6 @@
     <shrinkwrap.resolver.version>3.3.7</shrinkwrap.resolver.version>
     <testcontainers.version>2.0.5</testcontainers.version>
     <opentelemetry.version>1.64.0</opentelemetry.version>
-    <spring.version>6.2.19</spring.version>
-    <spring.boot.version>3.5.16</spring.boot.version>
     <htmx.version>2.0.10</htmx.version>
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
     <commonmark.version>0.24.0</commonmark.version>
@@ -235,26 +232,6 @@
         <version>${awssdk.version}</version>
         <type>pom</type>
         <scope>import</scope>
-      </dependency>
-
-      <!-- Spring Framework (imported BOM) -->
-      <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-framework-bom</artifactId>
-        <version>${spring.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-
-      <!--
-        Spring Boot actuator (for HealthIndicator contracts) is pinned directly rather than importing
-        the spring-boot-dependencies BOM at the parent: that BOM would override reactor-wide
-        transitive versions (netty, jackson, ...) and break the Camel runtime.
-      -->
-      <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-actuator</artifactId>
-        <version>${spring.boot.version}</version>
       </dependency>
 
       <!-- Standalone third-party dependencies -->

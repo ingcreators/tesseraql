@@ -34,8 +34,6 @@ public final class ScaffoldedConfigKeys {
                     "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java"),
             Map.entry("tesseraql.app.name",
                     "tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java"),
-            Map.entry("tesseraql.app.home",
-                    "tesseraql-camel-spring-runtime/src/main/java/io/tesseraql/runtime/spring/TesseraqlRuntimeConfiguration.java"),
             Map.entry("tesseraql.app.work",
                     "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/WorkHome.java"),
             Map.entry("tesseraql.datasources.main.jdbcUrl",

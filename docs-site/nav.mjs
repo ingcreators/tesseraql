@@ -225,4 +225,6 @@ export const EXCLUDED = [
   'lookups.md',
   // The unified source model (sources:/main, binding http arm, enrich placement), 2026-08-12.
   'unified-sources.md',
+  // The JVM baseline (JDK 25, Camel 4.22 LTS, Spring adapter retired, launcher tuning), 2026-08-14.
+  'jvm-baseline.md',
 ];

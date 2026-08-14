@@ -11,8 +11,8 @@ import org.slf4j.spi.SLF4JServiceProvider;
  * The CLI distribution's SLF4J provider (roadmap Phase 45): structured JSON or plain-text
  * lines on stderr, JDK-only in the spirit of the OIDC/mTLS/Prometheus decisions. Before it,
  * the standalone runtime shipped NO provider at all — every log line fell into SLF4J's NOP
- * sink. It lives in tesseraql-cli, not the runtime, so the Spring distribution keeps Boot's
- * Logback untouched. Configure via {@code -Dtesseraql.logging.format=text|json} and
+ * sink. It lives in tesseraql-cli, not the runtime, so a host that already binds SLF4J keeps
+ * its own backend. Configure via {@code -Dtesseraql.logging.format=text|json} and
  * {@code -Dtesseraql.logging.level=trace|debug|info|warn|error} (the serve command exposes
  * them as {@code --log-format}/{@code --log-level}); MDC rides {@link BasicMDCAdapter}, so
  * the runtime's trace-id correlation shows up in every line.
