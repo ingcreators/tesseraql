@@ -144,9 +144,6 @@ public final class StudioViews {
         return model;
     }
 
-    /** The sortable columns of the audit trail, in header order (platform-UX I2). */
-    private static final List<String> AUDIT_SORT_COLS = List.of("at", "actor", "action", "target");
-
     /**
      * The paged audit model plus the hc-datagrid sort state (platform-UX I2): the per-column header
      * link and {@code aria-sort}, with the current filter {@code q} carried on each sort link and an
@@ -158,7 +155,7 @@ public final class StudioViews {
         String qParam = query == null || query.isBlank()
                 ? ""
                 : "&q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
-        SortState state = SortState.of(sort, dir, AUDIT_SORT_COLS, "at", true);
+        SortState state = SortState.of(sort, dir, StudioService.AUDIT_SORT_COLS, "at", true);
         state.putInto(model, "/_tesseraql/studio/ui/audit", qParam);
         // Static JSON (not hx-vals='js:') so the CSP-clean filter input keeps the sort on re-filter.
         model.put("hxVals",
