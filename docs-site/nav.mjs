@@ -227,4 +227,6 @@ export const EXCLUDED = [
   'unified-sources.md',
   // The JVM baseline (JDK 25, Camel 4.22 LTS, Spring adapter retired, launcher tuning), 2026-08-14.
   'jvm-baseline.md',
+  // What a DuckDB 1.5 upgrade would take (inlined writes, three-verb retention), 2026-08-14.
+  'ducklake-1.5.md',
 ];

@@ -68,7 +68,7 @@ final class SqlStepRunner {
             Map<String, Object> result = switch (mode) {
                 case "query-spool" -> spool(context, statement, dialect);
                 case "query" -> query(context, statement, dialect);
-                default -> Map.of("affectedRows", statement.executeUpdate());
+                default -> Map.of("affectedRows", update(statement));
             };
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
             long rows = ((Number) result.getOrDefault("affectedRows",
@@ -88,6 +88,23 @@ final class SqlStepRunner {
         } finally {
             span.end();
         }
+    }
+
+    /**
+     * Runs a {@code mode: update} step and reports the rows it affected.
+     *
+     * <p>Not {@code executeUpdate}: some statements do work and answer with rows rather than a
+     * count, and that call is specified to refuse them — a maintenance procedure, a DuckLake
+     * rewrite, anything with {@code RETURNING} in a dialect that reports it as a result. The
+     * step's job is to run the statement; {@code getUpdateCount} answers -1 when the driver had
+     * a result set instead of a count, which is the honest answer to "how many rows changed".
+     *
+     * <p>The result set is deliberately not read. A step that wants rows asks with
+     * {@code mode: query}.
+     */
+    private static int update(PreparedStatement statement) throws SQLException {
+        statement.execute();
+        return statement.getUpdateCount();
     }
 
     /**
