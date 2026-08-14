@@ -17,7 +17,7 @@ public final class CoverageThresholdResolver {
     private static final List<String> KINDS = List.of("assertion", "iam-contract", "route",
             "security", "api-key", "mtls", "saml", "oidc", "scim", "validation", "notification",
             "http", "file-poll", "webhook", "document", "message", "mcp", "mcp-resource",
-            "mcp-ui", "data-scope", "workflow", "view", "page");
+            "mcp-ui", "mcp-prompt", "data-scope", "workflow", "view", "page");
 
     private CoverageThresholdResolver() {
     }

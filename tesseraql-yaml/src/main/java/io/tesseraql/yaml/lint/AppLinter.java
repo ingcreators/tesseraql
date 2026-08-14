@@ -40,6 +40,7 @@ public final class AppLinter {
                 new ToolRules(),
                 new ResourceRules(),
                 new UiResourceRules(),
+                new PromptRules(),
                 new ConsumerRules(),
                 new DuplicateMcpNameRules(),
                 new ToolUiLinkRules(),

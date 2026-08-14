@@ -338,6 +338,36 @@ public final class ManifestCoverage {
     }
 
     /**
+     * MCP-prompt coverage (docs/prompt-as-recipe.md): a prompt is a route now, so the data it
+     * reads is provable — every prompt declaring {@code sources:} is declared, and one counts as
+     * covered when a suite exercises one of its SQL artifacts, the same SQL-file basis as tool
+     * and resource coverage. A prompt that reads nothing (a pure template) executes no SQL a
+     * suite could exercise, so it is not declared: an item nothing can ever cover is a gate
+     * nobody can pass, not a gap worth showing. Gated via {@code coverage.thresholds.mcp-prompt}.
+     */
+    public static ItemCoverage prompts(AppManifest manifest, List<TestSuite> suites) {
+        ItemCoverage coverage = new ItemCoverage("mcp-prompt");
+        CrossReferenceIndex index = CrossReferenceIndex.of(manifest, suites);
+        for (io.tesseraql.yaml.manifest.PromptFile prompt : manifest.prompts()) {
+            RouteDefinition definition = prompt.definition();
+            if (definition.id() == null || !readsSql(definition)) {
+                continue;
+            }
+            coverage.declare(definition.id());
+            if (index.exercises(prompt.source().getParent(), definition)) {
+                coverage.cover(definition.id());
+            }
+        }
+        return coverage;
+    }
+
+    /** Whether the definition executes SQL a declarative suite could exercise. */
+    private static boolean readsSql(RouteDefinition definition) {
+        return CrossReferenceIndex.bindings(definition).stream()
+                .anyMatch(binding -> binding.file() != null || binding.contract() != null);
+    }
+
+    /**
      * Validation coverage (roadmap Phase 19): every rule of every route's {@code validate:}
      * block is declared as {@code <routeId>.<ruleId>}, and a suite's validation case covers the
      * rules it evaluates — the targeted rule, or the route's whole block when no rule is named.
