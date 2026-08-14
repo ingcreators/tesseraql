@@ -75,14 +75,13 @@ JEP 290 deserialization filter by default, and on JDK 25 Camel configures post-q
 named groups on `SSLContextParameters` — relevant to the transport-security section of
 [deployment.md](deployment.md).
 
-One deprecation needs a slice of its own. Camel 4.19 deprecated the MDC logic behind
-`setUseMDCLogging` in favour of the `camel-mdc` component, and the runtime uses exactly that
+One deprecation needed a slice of its own. Camel 4.19 deprecated the MDC logic behind
+`setUseMDCLogging` in favour of the `camel-mdc` component, and the runtime used exactly that
 call to carry `traceId` / `spanId` across async boundaries so a lane-dispatched step keeps
-logging with the request's ids. The component propagates through the Exchange rather than the
-thread's MDC, so adopting it means putting those ids on the exchange and declaring them as
-`camel.mdc.customExchangeProperties` — a change to what every log line carries, which does not
-belong inside a version bump. The deprecated path still works in 4.22, so slice 2 keeps it
-behind a documented suppression and slice 5 migrates it.
+logging with the request's ids. The component propagates through the exchange rather than the
+thread's MDC, so adopting it meant putting those ids on the exchange — a change to what every
+log line carries, which does not belong inside a version bump. Slice 2 kept the deprecated path
+behind a documented suppression; slice 5 replaced it (see below).
 
 ## Decision 3 — Java 25 is the baseline
 
@@ -227,9 +226,25 @@ no workflow produces blocks every subsequent pull request.
 **4 — Tuning.** Measure first, then ship what the numbers support into the two launchers,
 `jpackage.yml`, and the two Dockerfiles.
 
-**5 — `camel-mdc`.** Move `traceId` / `spanId` onto the exchange and adopt the component that
-replaces the deprecated MDC logic, with the log-line contract in
-[deployment.md](deployment.md) restated against what it actually carries afterwards.
+**5 — `camel-mdc`.** `traceId` and `spanId` are exchange properties now, and `MDCService`
+copies them onto whichever thread runs the step — which is what makes them survive a lane
+handoff, since the thread changes and the exchange does not. The component also contributes
+Camel's own identifiers (`camel.routeId`, `camel.exchangeId`, `camel.messageId`,
+`camel.contextId`, `camel.threadId`), so a structured line says which route and exchange it
+came from without the framework threading that through by hand;
+[deployment.md](deployment.md) documents the full set.
+
+Two seams the component does not cover, both handled explicitly:
+
+- **The processor that creates the ids.** `MDCService` sets the context *before* a processor
+  runs, so it cannot know about ids that processor is about to create. `RouteTelemetry` puts
+  them on the thread itself as well, covering the rest of its own execution.
+- **The access log.** It is written from a completion synchronization, which is not a processor
+  and therefore not wrapped; that line sets its own context and clears it.
+
+A test asserts the property that matters rather than the wiring: a route that hands its
+exchange to another thread still reports the ids on the far side, and the assertion first
+checks that the thread really did change.
 
 ## Open decisions
 
