@@ -24,12 +24,6 @@ final class LintCodes {
 
     static final String MISSING_SQL_FILE = "TQL-SQL-2103";
 
-    static final String INVALID_TRIGGER_OR_EXPORT_OPTION = "TQL-YAML-1005";
-
-    static final String MISSING_EXPORT_TEMPLATE_OR_IMPORT = "TQL-YAML-1006";
-
-    static final String INVALID_WEBHOOK_OR_TRANSLATION = "TQL-YAML-1008";
-
     static final String MESSAGING_KEY_ON_WRONG_RECIPE = "TQL-YAML-1010";
 
     static final String UNDECLARED_DATASOURCE = "TQL-YAML-1035";
@@ -38,7 +32,10 @@ final class LintCodes {
 
     static final String EMIT_UNSUPPORTED = "TQL-YAML-1038";
 
-    static final String UNDECLARED_CHANNEL_OR_CREDENTIAL = "TQL-YAML-1102";
+    // A job's trigger declaration: the poll source, or two trigger kinds declared together.
+    static final String INVALID_JOB_TRIGGER = "TQL-YAML-1054";
+
+    static final String UNDECLARED_CONFIG_REFERENCE = "TQL-YAML-1102";
 
     private LintCodes() {
     }

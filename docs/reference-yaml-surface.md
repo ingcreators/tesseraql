@@ -264,7 +264,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `filename` | string | The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`. |
 | `template` | string | A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid. |
 | `sheet` | string | For workbook formats, the sheet to write. |
-| `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template, and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |
+| `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template (TQL-YAML-1041), and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |
 | `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
 | `locale` | string | The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
 | `timezone` | string | The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`. |
@@ -601,7 +601,7 @@ query-export / file-export output: format (csv, excel, pdf), filename, columns w
 | `filename` | string | The download filename, defaulting to the document id plus the format's extension. `{dotted.path}` interpolates a context value, and a `splitBy:` export must carry `{key}`. |
 | `template` | string | A workbook or print template colocated with the document: an .xlsx for excel, an .html for pdf. A path that does not exist fails the build rather than quietly writing a plain grid. |
 | `sheet` | string | For workbook formats, the sheet to write. |
-| `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template, and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |
+| `startCell` | string | Placement mode: where data rows start in the template, e.g. `B5`. Refused without a template (TQL-YAML-1041), and refused on pdf (TQL-YAML-1005) — a page lays out through its template, not through cell positions. |
 | `columns` | array of [fileColumn](#filecolumn) | The columns written, in order, with their headings and format patterns. Omit it to write every column the rows carry, under its own name. |
 | `locale` | string | The locale date and number patterns render in. A literal, or a request source such as `principal.claim.locale`, so the requesting user decides; unset, `tesseraql.files.locale` applies. A job has no request, so a step's is a literal. |
 | `timezone` | string | The zone date and time values render in, with the same literal / request-source / `tesseraql.files.timezone` fallback as `locale`. |

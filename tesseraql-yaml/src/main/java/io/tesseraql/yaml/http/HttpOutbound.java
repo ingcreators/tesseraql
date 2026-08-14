@@ -27,8 +27,8 @@ import java.util.Optional;
  */
 public final class HttpOutbound {
 
-    /** TQL-YAML-1103: an invalid {@code tesseraql.http.outbound} declaration (fail fast). */
-    public static final TqlErrorCode INVALID_CONFIG = new TqlErrorCode(TqlDomain.YAML, 1103);
+    /** TQL-YAML-1109: an invalid {@code tesseraql.http.outbound} declaration (fail fast). */
+    public static final TqlErrorCode INVALID_CONFIG = new TqlErrorCode(TqlDomain.YAML, 1109);
     /** TQL-BATCH-5308: an {@code http-call} step references an unconfigured credential. */
     public static final TqlErrorCode UNKNOWN_CREDENTIAL = new TqlErrorCode(TqlDomain.BATCH, 5308);
 
@@ -235,7 +235,7 @@ public final class HttpOutbound {
                     : Optional.of(config.resolve(String.valueOf(value)));
         }
 
-        /** A resolved setting value, or {@code TQL-YAML-1103} when not declared. */
+        /** A resolved setting value, or {@code TQL-YAML-1109} when not declared. */
         public String require(String key) {
             return setting(key).orElseThrow(() -> new TqlException(INVALID_CONFIG,
                     "HTTP credential '" + name + "' needs a " + key + ": setting"));

@@ -678,9 +678,10 @@ Lint checks jobs statically:
 | A step declaring no work at all, two bindings, or a `chunk:` beside a binding | `TQL-FIELD-2004` |
 | A step whose blocks are not one executable unit: `sql:` beside `notify:` or `push:`, an `http:` arm beside `export:`, or a second output block — the executor runs one unit per step, and the rest would fail at run time or be dropped in silence. A plain `sql:` arm feeding `export:` is the one designed pair | `TQL-FIELD-2008` |
 | A malformed `push:` step: no transfer reference, an unknown transport, a remote target without host or credential, or a non-bare delivered name | `TQL-YAML-1042` |
-| A malformed `export:` step: no arm to read the rows, no format, or a `download`-timed follow-up. The pdf template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
-| A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1005` |
-| A poll job without its `import:` block | `TQL-YAML-1006` |
+| An incomplete `export:` step: no arm to read the rows, no format, or `splitBy:` whose `filename:` carries no `{key}`. The template checks and the datasource refusal are shared with routes | `TQL-YAML-1041` |
+| An `export:` option that cannot apply where it is declared: a `download`-timed follow-up on a step, or a workbook option on a pdf | `TQL-YAML-1005` |
+| A job with both a schedule and a poll trigger, or a malformed poll source | `TQL-YAML-1054` |
+| A poll job without its `import:` block | `TQL-YAML-1055` |
 | Non-allow-listed poll or HTTP egress | `TQL-SEC-4070`, `TQL-SEC-4080` |
 | Calendar qualifiers that would fail open at fire time | `TQL-BATCH-4201`–`4203` |
 | A chunk step whose restart contract is broken or unstated | `TQL-BATCH-4206`–`4208` |

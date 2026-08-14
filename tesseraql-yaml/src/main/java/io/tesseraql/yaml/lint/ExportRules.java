@@ -16,7 +16,17 @@ import java.util.List;
  */
 final class ExportRules {
 
-    private static final String INCOMPLETE_EXPORT_STEP = "TQL-YAML-1041";
+    // A piece the export needs is missing — the author adds a key.
+    private static final String INCOMPLETE_EXPORT = "TQL-YAML-1041";
+
+    // A declared key cannot apply to this format or placement — the author removes one.
+    private static final String INAPPLICABLE_EXPORT_OPTION = "TQL-YAML-1005";
+
+    // The named template is missing, or is the wrong kind of file for the format.
+    private static final String UNUSABLE_EXPORT_TEMPLATE = "TQL-YAML-1006";
+
+    // A source feeding the export is allowed to fail into nothing.
+    private static final String EXPORT_SOURCE_DEGRADES_TO_EMPTY = "TQL-YAML-1057";
 
     private static final String EXPORT_GROUPS_WITHOUT_TEMPLATE = "TQL-LD-5312";
 
@@ -29,9 +39,10 @@ final class ExportRules {
 
     /**
      * Statically checks an export step (docs/analytics-experience.md track 3): the extraction
-     * query is required, and {@code after.timing: download} stays route vocabulary — a job-produced file's download is an ops action, not
-     * a business signal, so the only follow-up a step supports is the extraction-transaction
-     * one ({@code TQL-YAML-1041}).
+     * query is required ({@code TQL-YAML-1041}), and {@code after.timing: download} stays route
+     * vocabulary — a job-produced file's download is an ops action, not a business signal, so the
+     * only follow-up a step supports is the extraction-transaction one
+     * ({@code TQL-YAML-1005}).
      */
     static void lintExportStep(LintContext context, io.tesseraql.yaml.manifest.JobFile job,
             io.tesseraql.yaml.model.PipelineStep step, String source,
@@ -40,31 +51,32 @@ final class ExportRules {
         // The rows come from the step's own arm, never from inside export: — an output block
         // says how to write, not what to read (docs/unified-sources.md, decision 7).
         if (step.sql() == null || step.sql().file() == null || step.sql().file().isBlank()) {
-            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source, "Step '" + step.id()
                     + "': an export step needs the rows to write — declare the step's own"
                     + " sql: { file: … }"));
             return;
         }
         if (export.format() == null || export.format().isBlank()) {
-            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source, "Step '" + step.id()
                     + "': export needs format: (csv, excel, or pdf)"));
         }
         if (export.after() != null && io.tesseraql.core.files.FileTransferService.AFTER_DOWNLOAD
                 .equals(export.after().effectiveTiming())) {
-            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
-                    + "': after.timing: download is route vocabulary — an export step supports"
-                    + " timing: extract only"));
+            findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR, source,
+                    "Step '" + step.id()
+                            + "': after.timing: download is route vocabulary — an export step supports"
+                            + " timing: extract only"));
         }
         if ("pdf".equals(export.format())) {
             if (export.sheet() != null || export.startCell() != null) {
-                findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR,
+                findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR,
                         source,
                         "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
                                 + " through its template, not cell placement"));
             }
             if (export.template() != null && !export.template().endsWith(".html")) {
                 findings.add(
-                        new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+                        new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
                                 "pdf export template '" + export.template()
                                         + "' must be an .html file (it renders through the template"
                                         + " engine before PDF conversion)"));
@@ -72,7 +84,7 @@ final class ExportRules {
         }
         if (!"pdf".equals(export.format()) && export.startCell() != null
                 && export.template() == null) {
-            findings.add(new LintFinding(INCOMPLETE_EXPORT_STEP, ERROR, source, "Step '" + step.id()
+            findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source, "Step '" + step.id()
                     + "': startCell: places data into a template, but none is declared - add"
                     + " template:, or drop startCell: for a plain grid"));
         }
@@ -80,7 +92,7 @@ final class ExportRules {
                 || export.template().endsWith(".html"))
                 && !Files.isRegularFile(
                         job.source().getParent().resolve(export.template()))) {
-            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+            findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
                     "Step '" + step.id()
                             + "': export references a missing template: " + export.template()));
         }
@@ -114,12 +126,12 @@ final class ExportRules {
         }
         boolean pdf = "pdf".equals(spec.format());
         if (pdf && (spec.sheet() != null || spec.startCell() != null)) {
-            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+            findings.add(new LintFinding(INAPPLICABLE_EXPORT_OPTION, ERROR, source,
                     "pdf export: sheet:/startCell: are workbook options - a pdf lays out"
                             + " through its template, not cell placement"));
         }
         if (!pdf && spec.startCell() != null && spec.template() == null) {
-            findings.add(new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+            findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR, source,
                     "export: startCell: places data into a template, but none is declared -"
                             + " add template:, or drop startCell: for a plain grid"));
         }
@@ -127,14 +139,14 @@ final class ExportRules {
             return;
         }
         if (pdf && !spec.template().endsWith(".html")) {
-            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+            findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
                     "pdf export template '" + spec.template()
                             + "' must be an .html file (it renders through the template"
                             + " engine before PDF conversion)"));
             return;
         }
         if (!Files.isRegularFile(route.source().getParent().resolve(spec.template()))) {
-            findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR, source,
+            findings.add(new LintFinding(UNUSABLE_EXPORT_TEMPLATE, ERROR, source,
                     "export references a missing template: " + spec.template()));
         }
     }
@@ -144,9 +156,9 @@ final class ExportRules {
      * go. CSV and the Excel grid write rows and nothing else, so a named query or an HTTP source
      * declared beside them runs to be discarded — a cost with no reader.
      *
-     * <p>{@code onError: empty} is refused outright on an export. On a page, degrading to zero
-     * rows leaves a gap a human sees; in a document that is archived, mailed and filed, it
-     * produces something that looks complete and is not.
+     * <p>{@code onError: empty} is refused outright on an export ({@code TQL-YAML-1057}). On a
+     * page, degrading to zero rows leaves a gap a human sees; in a document that is archived,
+     * mailed and filed, it produces something that looks complete and is not.
      */
     static void lintExportSources(LintContext context, io.tesseraql.yaml.model.ExportSpec spec,
             java.util.Map<String, io.tesseraql.yaml.model.Binding> sources,
@@ -166,7 +178,7 @@ final class ExportRules {
         });
         httpSources.forEach((name, http) -> {
             if (http != null && http.degradesToEmpty()) {
-                findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR,
+                findings.add(new LintFinding(EXPORT_SOURCE_DEGRADES_TO_EMPTY, ERROR,
                         source, label
                                 + "http: source '" + name
                                 + "' declares onError: empty on an export -"
@@ -177,7 +189,7 @@ final class ExportRules {
         if (spec.splitBy() != null && !spec.splitBy().isBlank()) {
             String filename = spec.filename();
             if (filename == null || !filename.contains("{key}")) {
-                findings.add(new LintFinding(LintCodes.MISSING_EXPORT_TEMPLATE_OR_IMPORT, ERROR,
+                findings.add(new LintFinding(INCOMPLETE_EXPORT, ERROR,
                         source, label
                                 + "splitBy: writes one document per group, so filename: must carry {key}"
                                 + " - otherwise every group would be written to the same name and only"

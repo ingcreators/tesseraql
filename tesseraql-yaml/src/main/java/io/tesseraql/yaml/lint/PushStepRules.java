@@ -56,7 +56,7 @@ final class PushStepRules {
             } else if (config.navigate("tesseraql.connectors.push.credentials."
                     + push.credential()) == null) {
                 // A warning, not an error: another environment's config may declare it.
-                findings.add(new LintFinding(LintCodes.UNDECLARED_CHANNEL_OR_CREDENTIAL, WARNING,
+                findings.add(new LintFinding(LintCodes.UNDECLARED_CONFIG_REFERENCE, WARNING,
                         source, "Step '"
                                 + step.id() + "' references undeclared push credential '"
                                 + push.credential() + "'"));

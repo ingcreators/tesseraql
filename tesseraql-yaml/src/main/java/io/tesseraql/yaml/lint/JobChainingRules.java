@@ -46,7 +46,7 @@ final class JobChainingRules implements LintRule {
             String jobId = job.definition().id();
             if (trigger.schedule() != null || trigger.poll() != null) {
                 findings.add(
-                        new LintFinding(LintCodes.INVALID_TRIGGER_OR_EXPORT_OPTION, ERROR, source,
+                        new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                                 "Job '" + jobId + "' declares after: together with another trigger"
                                         + " kind; declare one"));
             }

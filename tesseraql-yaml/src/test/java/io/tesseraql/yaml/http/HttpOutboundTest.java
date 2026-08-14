@@ -89,7 +89,7 @@ class HttpOutboundTest {
         assertThatThrownBy(() -> HttpOutbound.load(config(Map.of(
                 "credentials", Map.of("bad", Map.of("type", "kerberos"))), Map.of())))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("TQL-YAML-1103");
+                .hasMessageContaining("TQL-YAML-1109");
     }
 
     @Test

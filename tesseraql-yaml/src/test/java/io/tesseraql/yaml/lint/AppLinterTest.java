@@ -1328,16 +1328,20 @@ class AppLinterTest {
                 .filteredOn(f -> f.code().equals("TQL-SEC-4083") && f.isError())
                 .singleElement()
                 .matches(f -> f.message().contains("ghost"));
-        // The bad route and the sources-only route have no steps: pipeline, and the
-        // query-json route misuses webhook:.
+        // The bad route and the sources-only route have no steps: pipeline.
         assertThat(findings)
-                .filteredOn(f -> f.code().equals("TQL-YAML-1008") && f.isError())
-                .hasSize(3);
+                .filteredOn(f -> f.code().equals("TQL-YAML-1056") && f.isError())
+                .hasSize(2);
         assertThat(findings)
-                .filteredOn(f -> f.code().equals("TQL-YAML-1008") && f.isError()
+                .filteredOn(f -> f.code().equals("TQL-YAML-1056") && f.isError()
                         && f.source().contains("sourced"))
                 .singleElement()
                 .matches(f -> f.message().contains("steps: pipeline"));
+        // The query-json route misuses webhook: — the same code notify:/publish: raise there.
+        assertThat(findings)
+                .filteredOn(f -> f.code().equals("TQL-YAML-1010") && f.isError())
+                .singleElement()
+                .matches(f -> f.message().contains("webhook:") && f.source().contains("items"));
     }
 
     @Test
@@ -1374,7 +1378,7 @@ class AppLinterTest {
         // Without this the job throws inside wire(), is logged, and dropped — so the app boots
         // healthy and the only symptom is that nothing ever arrives.
         assertThat(new AppLinter().lint(dir))
-                .anyMatch(f -> f.code().equals("TQL-YAML-1005") && f.isError()
+                .anyMatch(f -> f.code().equals("TQL-YAML-1054") && f.isError()
                         && f.message().contains("every-hour"));
     }
 
@@ -1390,7 +1394,7 @@ class AppLinterTest {
                         """);
 
         assertThat(new AppLinter().lint(dir))
-                .anyMatch(f -> f.code().equals("TQL-YAML-1005") && !f.isError()
+                .anyMatch(f -> f.code().equals("TQL-YAML-1054") && !f.isError()
                         && f.message().contains("ignores host:"));
     }
 
@@ -1502,7 +1506,7 @@ class AppLinterTest {
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4081") && !f.isError()
                 && f.message().contains("ghost"));
         // The poll job with no import block.
-        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1006") && f.isError()
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1055") && f.isError()
                 && f.message().contains("bad.intake"));
         // With knownHostsFile configured, the host-key nudge stays quiet.
         assertThat(findings).noneMatch(f -> f.code().equals("TQL-SEC-4084"));

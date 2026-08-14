@@ -101,7 +101,7 @@ class AppLinterExportStepTest {
                         + "        sql:\n          file: report.sql\n          mode: update"));
 
         assertThat(findings).anySatisfy(finding -> {
-            assertThat(finding.code()).isEqualTo("TQL-YAML-1041");
+            assertThat(finding.code()).isEqualTo("TQL-YAML-1005");
             assertThat(finding.message()).contains("timing: extract");
         });
     }

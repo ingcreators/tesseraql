@@ -162,7 +162,7 @@ request deadline bounds a partner that hangs — a background transfer has no re
 and `onError: empty` degrades failures but not hangs. It also gives the feature an honest meaning:
 the data as of when the export was requested, which is the rule `params` already follow.
 
-**`onError: empty` is rejected on exports** (`TQL-YAML-1006`). On a page, degrading to zero rows
+**`onError: empty` is rejected on exports** (`TQL-YAML-1057`). On a page, degrading to zero rows
 leaves a visible gap for a human. In a document that is archived, mailed and filed, it produces
 something that looks complete and is not. An export whose source failed should fail.
 
