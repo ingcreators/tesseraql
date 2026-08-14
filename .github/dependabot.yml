@@ -13,6 +13,13 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # DuckDB 1.5 is a DuckLake semantics migration wearing a version bump: writes of up to
+      # ten rows are inlined into the catalog until flushed, and reclaiming files needs a
+      # rewrite step that expire-then-cleanup no longer implies. docs/ducklake-1.5.md records
+      # what was measured, including one failure that is still unexplained. Unpin when that
+      # work is scheduled.
+      - dependency-name: "org.duckdb:duckdb_jdbc"
 
   # The documentation site's JavaScript. Without this entry nothing updates it: the nanoid
   # advisory (GHSA-2v37-7h3g-55p8) sat open because Dependabot was watching Maven, Actions and

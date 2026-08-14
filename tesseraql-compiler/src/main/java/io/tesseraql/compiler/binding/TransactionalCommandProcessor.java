@@ -683,7 +683,12 @@ public final class TransactionalCommandProcessor implements Processor {
         try (PreparedStatement statement = prepare(connection, bound.sql(), step.keys())) {
             applyTimeout(statement, step.bounds());
             bind(statement, bound);
-            int affected = statement.executeUpdate();
+            // execute, not executeUpdate: a statement can do work and hand back a result rather
+            // than a count, and a driver may refuse executeUpdate for it — DuckDB does, for
+            // DuckLake's maintenance calls. getUpdateCount answers -1 when there was a result
+            // set instead of a count, which is the honest answer to "how many rows changed".
+            statement.execute();
+            int affected = statement.getUpdateCount();
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("affectedRows", affected);
             if (!step.keys().isEmpty()) {

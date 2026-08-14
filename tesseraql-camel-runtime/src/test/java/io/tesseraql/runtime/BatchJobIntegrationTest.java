@@ -551,6 +551,17 @@ class BatchJobIntegrationTest {
     }
 
     @Test
+    void anUpdateStepRunsAStatementThatAnswersWithRowsRatherThanACount() {
+        // Not every statement that does work reports a row count. Maintenance calls — DuckLake's
+        // rewrite and its siblings, a PostgreSQL procedure with a result — hand back a result set
+        // instead, and executeUpdate is specified to refuse those: drivers do, so the step failed
+        // with a message about the JDBC call rather than anything the author wrote. The step runs
+        // the statement and does not insist on being told how many rows changed.
+        assertThat(runtime.runJob("user.returningUpdate", Map.of()).status())
+                .isEqualTo(JobStatus.COMPLETED);
+    }
+
+    @Test
     void slaSweepAlertsOnceOnTooLongAndMissedDeadline() throws Exception {
         // A job expecting completion by midnight (already past) and runs under a second.
         Path slaDir = Files.createDirectories(appHome.resolve("batch/sla"));
@@ -849,6 +860,21 @@ class BatchJobIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        // A mode: update step whose statement answers with rows instead of a count.
+        Files.createDirectories(target.resolve("batch/returning"));
+        Files.writeString(target.resolve("batch/returning/job.yml"), """
+                version: tesseraql/v1
+                id: user.returningUpdate
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: returns-rows.sql
+                      mode: update
+                """);
+        Files.writeString(target.resolve("batch/returning/returns-rows.sql"),
+                "select count(*) as users from users\n");
         // A job binding the batch.* ambient namespace (docs/batch-platform.md track A):
         // the business date the run is FOR lands in the row, provably.
         Files.createDirectories(target.resolve("batch/stamp"));
