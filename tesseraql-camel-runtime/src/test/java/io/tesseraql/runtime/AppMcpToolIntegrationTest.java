@@ -228,6 +228,9 @@ class AppMcpToolIntegrationTest {
                 .filter(p -> p.path("name").asText().equals("draft-welcome"))
                 .findFirst().orElseThrow();
         assertThat(draft.path("description").asText()).isNotBlank();
+        // An MCP prompt argument is name/description/required, and all three come from the route's
+        // input: — the description is the input field's own, so what is advertised is what the
+        // binder validates plus what the author said it is.
         JsonNode name = stream(draft.path("arguments"))
                 .filter(a -> a.path("name").asText().equals("name")).findFirst().orElseThrow();
         assertThat(name.path("required").asBoolean()).isTrue();
@@ -500,12 +503,16 @@ class AppMcpToolIntegrationTest {
                 """);
 
         // The app also declares an MCP prompt (kind: prompt): a parameterized, reusable message
-        // template the connecting agent surfaces to its model. It runs no SQL - its colocated TEXT
-        // template is rendered against the supplied arguments and returned by prompts/get.
+        // the connecting agent surfaces to its model. Like every mcp kind it is a route
+        // (docs/prompt-as-recipe.md), but one that reads nothing: it declares no sources:, so
+        // prompts/get binds the arguments and renders response.text: straight from them. A prompt
+        // that declares no security: is reachable to anyone who reaches the endpoint, exactly as
+        // the routeless form was.
         Files.writeString(mcp.resolve("draft-welcome.yml"), """
                 version: tesseraql/v1
                 id: draft-welcome
                 kind: prompt
+                recipe: prompt-text
                 description: Draft a welcome message for a new user.
 
                 input:
@@ -517,14 +524,19 @@ class AppMcpToolIntegrationTest {
                     type: string
                     required: false
 
-                template: draft-welcome.txt.tpl
+                response:
+                  text:
+                    template: draft-welcome.txt.tpl
+                    model:
+                      name: params.name
+                      tone: params.tone
                 """);
         Files.writeString(mcp.resolve("draft-welcome.txt.tpl"),
                 "Write a [(${tone})] welcome message for [(${name})].");
 
-        // The app also declares a prompt as a recipe (docs/prompt-as-recipe.md): a route like the
-        // three kinds above, so it binds its input:, enforces its own security, reads through
-        // 2-way SQL, and renders the message from response.text: — a prompt that reads data.
+        // A second prompt reads data: a route like the three kinds above, so it binds its input:,
+        // enforces its own security, reads through 2-way SQL, and renders the message from
+        // response.text:.
         Files.writeString(mcp.resolve("brief-user.yml"), """
                 version: tesseraql/v1
                 id: brief-user

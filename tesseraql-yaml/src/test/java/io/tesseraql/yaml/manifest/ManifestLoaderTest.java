@@ -162,6 +162,81 @@ class ManifestLoaderTest {
                 .hasMessageContaining("kind: resourse");
     }
 
+    /**
+     * A prompt is a route (docs/prompt-as-recipe.md decision 1), so the loader reads it with the
+     * same parser call as its three siblings and the arguments it advertises are the route's
+     * {@code input:} — name, description and required, which is what an MCP prompt argument is.
+     */
+    @Test
+    void loadsAPromptDocumentThroughTheRouteParser(@org.junit.jupiter.api.io.TempDir Path dir)
+            throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("mcp"));
+        java.nio.file.Files.writeString(dir.resolve("mcp/brief.txt.tpl"), "Hello [(${who})]\n");
+        java.nio.file.Files.writeString(dir.resolve("mcp/brief.yml"), """
+                version: tesseraql/v1
+                id: brief-user
+                kind: prompt
+                recipe: prompt-text
+                description: Brief the model on one user.
+                input:
+                  name:
+                    type: string
+                    required: true
+                    description: The user to brief on.
+                security:
+                  auth: bearer
+                  policy: users.read
+                response:
+                  text:
+                    template: brief.txt.tpl
+                    model:
+                      who: params.name
+                """);
+
+        AppManifest manifest = new ManifestLoader().load(dir);
+
+        assertThat(manifest.prompts()).singleElement().satisfies(prompt -> {
+            assertThat(prompt.id()).isEqualTo("brief-user");
+            assertThat(prompt.description()).isEqualTo("Brief the model on one user.");
+            assertThat(prompt.definition().recipe()).isEqualTo("prompt-text");
+            assertThat(prompt.definition().security().policy()).isEqualTo("users.read");
+            assertThat(prompt.arguments()).singleElement().satisfies(argument -> {
+                assertThat(argument.name()).isEqualTo("name");
+                assertThat(argument.required()).isTrue();
+                assertThat(argument.description()).isEqualTo("The user to brief on.");
+            });
+        });
+        assertThat(manifest.tools()).isEmpty();
+    }
+
+    /**
+     * A prompt with no {@code recipe:} is a document the route parser cannot read, and it says so
+     * the way it says so for every other family rather than loading a prompt that renders nothing.
+     */
+    @Test
+    void rejectsAPromptDocumentWithNoRecipe(@org.junit.jupiter.api.io.TempDir Path dir)
+            throws Exception {
+        java.nio.file.Files.createDirectories(dir.resolve("config"));
+        java.nio.file.Files.writeString(dir.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        java.nio.file.Files.createDirectories(dir.resolve("mcp"));
+        java.nio.file.Files.writeString(dir.resolve("mcp/brief.yml"), """
+                version: tesseraql/v1
+                id: brief-user
+                kind: prompt
+                description: Brief the model on one user.
+                template: brief.txt.tpl
+                """);
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> new ManifestLoader().load(dir))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("Missing required field 'recipe'");
+    }
+
     @Test
     void overlayDeepMergesOverConfig(@org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
         java.nio.file.Files.createDirectories(dir.resolve("config"));

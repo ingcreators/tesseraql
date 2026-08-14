@@ -57,8 +57,11 @@ class AppLinterDuplicateMcpNameTest {
                 version: tesseraql/v1
                 id: %s
                 kind: prompt
+                recipe: prompt-text
                 description: Drafts something.
-                template: draft.txt.tpl
+                response:
+                  text:
+                    template: draft.txt.tpl
                 """.formatted(id));
     }
 

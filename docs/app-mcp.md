@@ -214,6 +214,7 @@ alongside tools and resources:
 version: tesseraql/v1
 id: draft-welcome
 kind: prompt
+recipe: prompt-text
 description: Draft a welcome message for a new user.
 
 input:
@@ -225,7 +226,9 @@ input:
     type: string
     required: false
 
-template: draft-welcome.txt.tpl
+response:
+  text:
+    template: draft-welcome.txt.tpl
 ```
 
 ```text
@@ -233,11 +236,12 @@ template: draft-welcome.txt.tpl
 Write a [(${tone})] welcome message for [(${name})].
 ```
 
-- **Pure text, no SQL.** Unlike a tool or resource, a prompt is not compiled to a route and runs no
-  query — `prompts/get` renders the colocated `template` (Thymeleaf TEXT mode) against the supplied
-  argument values and returns it as one `user` message. So a prompt has no recipe and no per-prompt
-  security beyond the endpoint's own auth. The declared `input:` becomes the prompt's arguments
-  (name, optional description, required flag).
+- **A route like the others.** A prompt compiles to a route the way a tool and a resource do, so
+  `prompts/get` runs the same pipeline: the declared `input:` is bound and coerced by its types,
+  any `sources:` run, and `response.text:` renders its colocated template (Thymeleaf TEXT mode)
+  into the one `user` message. A prompt may declare `security:`; declaring none leaves it open,
+  as before. The declared `input:` also becomes the advertised arguments (name, description,
+  required).
 - **Advertised like the rest.** The runtime serves prompts at the same `/_tesseraql/mcp` endpoint;
   `prompts/list` enumerates them and the `prompts` capability is negotiated in `initialize` when an
   app declares any. This is the application-side counterpart of the dev tool's `studio_copilot`

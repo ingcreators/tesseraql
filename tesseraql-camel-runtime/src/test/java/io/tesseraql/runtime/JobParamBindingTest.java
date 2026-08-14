@@ -34,7 +34,7 @@ class JobParamBindingTest {
 
     private static InputField param(String type, boolean required) {
         return new InputField(type, required, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     @Test

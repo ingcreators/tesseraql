@@ -83,7 +83,7 @@ class AppLinterNestedKeysTest {
                 && f.message().contains("sources.main.sql.mod"));
     }
 
-    /** A prompt is not a route, which is why nothing checked it. */
+    /** A prompt used not to be a route, which is why nothing checked it. */
     @Test
     void flagsATypoInAPromptDocument(@TempDir Path dir) throws Exception {
         app(dir);
@@ -94,12 +94,15 @@ class AppLinterNestedKeysTest {
                 version: tesseraql/v1
                 id: draft-welcome
                 kind: prompt
+                recipe: prompt-text
                 description: Draft a welcome message.
                 input:
                   name:
                     type: string
                     requred: true
-                templat: welcome.txt.tpl
+                response:
+                  text:
+                    templat: welcome.txt.tpl
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);
@@ -107,11 +110,15 @@ class AppLinterNestedKeysTest {
         assertThat(findings)
                 .filteredOn(f -> f.code().equals("TQL-YAML-1043")
                         && f.source().contains("welcome.yml"))
-                .anyMatch(f -> f.message().contains("templat"))
+                .anyMatch(f -> f.message().contains("response.text.templat"))
                 .anyMatch(f -> f.message().contains("input.name.requred"));
     }
 
-    /** A clean prompt carries no findings: its keys are the ones the loader reads. */
+    /**
+     * A clean prompt carries no findings: its keys are the ones the route model declares, and
+     * {@code description:} on an argument is one of them — an MCP prompt argument travels as
+     * name/description/required, so the input field carries the description it advertises.
+     */
     @Test
     void acceptsAWellFormedPrompt(@TempDir Path dir) throws Exception {
         app(dir);
@@ -122,13 +129,18 @@ class AppLinterNestedKeysTest {
                 version: tesseraql/v1
                 id: draft-welcome
                 kind: prompt
+                recipe: prompt-text
                 description: Draft a welcome message.
                 input:
                   name:
                     type: string
                     required: true
                     description: The new user's name.
-                template: welcome.txt.tpl
+                response:
+                  text:
+                    template: welcome.txt.tpl
+                    model:
+                      name: params.name
                 """);
 
         List<LintFinding> findings = new AppLinter().lint(dir);

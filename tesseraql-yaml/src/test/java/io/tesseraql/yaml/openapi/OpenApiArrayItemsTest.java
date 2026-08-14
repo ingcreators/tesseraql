@@ -19,7 +19,7 @@ class OpenApiArrayItemsTest {
 
     private static InputField array(InputField.InputItems items) {
         return new InputField("array", false, null, null, null, null, null, null, null, null,
-                null, items, null, null, null, null, null, null, null);
+                null, items, null, null, null, null, null, null, null, null);
     }
 
     @Test
@@ -38,5 +38,21 @@ class OpenApiArrayItemsTest {
         assertThat(OpenApiGenerator.fieldSchema(array(null)))
                 .containsEntry("type", "array")
                 .doesNotContainKey("items");
+    }
+
+    /**
+     * A field's {@code description:} is JSON Schema's own key, so it rides into the published
+     * contract the way it rides into an MCP tool's input schema — one key, every surface derived
+     * from {@code input:}.
+     */
+    @Test
+    void aFieldDescriptionRidesIntoTheContract() {
+        InputField sku = new InputField("string", false, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
+                "The stock keeping unit.");
+
+        assertThat(OpenApiGenerator.fieldSchema(sku))
+                .containsEntry("description", "The stock keeping unit.");
+        assertThat(OpenApiGenerator.fieldSchema(array(null))).doesNotContainKey("description");
     }
 }

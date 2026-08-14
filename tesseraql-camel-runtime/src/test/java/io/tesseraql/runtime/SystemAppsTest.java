@@ -79,6 +79,17 @@ class SystemAppsTest {
                 template: ui.html
             """;
 
+    private static final String MCP_PROMPT = """
+            version: tesseraql/v1
+            id: %s
+            kind: prompt
+            recipe: prompt-text
+            description: A prompt.
+            response:
+              text:
+                template: prompt.txt.tpl
+            """;
+
     private Path app(String name, String routeId, String urlDir) throws Exception {
         Path home = dir.resolve(name);
         Path routeDir = home.resolve("web/" + urlDir);
@@ -95,6 +106,7 @@ class SystemAppsTest {
         Files.createDirectories(mcp);
         Files.writeString(mcp.resolve("doc.yml"), document);
         Files.writeString(mcp.resolve("tool.sql"), "select 1 as ok\n;\n");
+        Files.writeString(mcp.resolve("prompt.txt.tpl"), "Hello\n");
         return home;
     }
 
@@ -213,11 +225,40 @@ class SystemAppsTest {
                 .hasMessageContaining("MCP resource uri 'tesseraql://orders/board'");
     }
 
+    /**
+     * A prompt is a route now (docs/prompt-as-recipe.md), so two apps declaring one prompt name
+     * would both register it on the shared endpoint and compile two routes with one route id.
+     */
+    @Test
+    void duplicateMcpPromptNameAcrossAppsIsRejected() throws Exception {
+        AppManifest main = load(mcpApp("main", MCP_PROMPT.formatted("draft-welcome")));
+        AppManifest mounted = load(mcpApp("sys", MCP_PROMPT.formatted("draft-welcome")));
+
+        assertThatThrownBy(() -> SystemApps.requireNoRouteConflicts(main,
+                List.of(new SystemApps.MountedApp("sys", mounted))))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("MCP prompt 'draft-welcome'");
+    }
+
     @Test
     void distinctMcpSurfacesAcrossAppsPassConflictCheck() throws Exception {
         AppManifest main = load(mcpApp("main", MCP_TOOL.formatted("find-orders")));
         AppManifest mounted = load(mcpApp("sys",
                 MCP_RESOURCE.formatted("recent-orders", "tesseraql://orders")));
+
+        SystemApps.requireNoRouteConflicts(main,
+                List.of(new SystemApps.MountedApp("sys", mounted)));
+    }
+
+    /**
+     * A tool and a prompt live in separate flat namespaces (the within-app lint,
+     * {@code TQL-MCP-1014}, says so), and their compiled route ids differ too — so one name across
+     * the two kinds is legal across apps as well.
+     */
+    @Test
+    void aToolAndAPromptMayShareANameAcrossApps() throws Exception {
+        AppManifest main = load(mcpApp("main", MCP_TOOL.formatted("draft-welcome")));
+        AppManifest mounted = load(mcpApp("sys", MCP_PROMPT.formatted("draft-welcome")));
 
         SystemApps.requireNoRouteConflicts(main,
                 List.of(new SystemApps.MountedApp("sys", mounted)));

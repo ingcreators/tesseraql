@@ -50,7 +50,14 @@ public record InputField(
         // satisfy to supply this field. Operational like required/writable — never accepted
         // inside a domain — enforced at the binder (a failing principal's value follows the
         // route's readOnly behavior) and mirrored by the rendered form, which omits the field.
-        String policy) {
+        String policy,
+        // What this field is, in the words a caller reads (docs/prompt-as-recipe.md decision 4).
+        // It is a wire field on both MCP surfaces derived from input:: an argument of a
+        // prompts/list prompt carries name/description/required, and a tool's inputSchema is
+        // JSON Schema, whose description is the hint a model follows when choosing a value. Not
+        // operational, so a domain may carry it and a field that declares none inherits it —
+        // what an SKU is has one home, like its type and its pattern.
+        String description) {
 
     /**
      * The keys that belong to a route's <em>use</em> of a field rather than to the field itself
@@ -80,8 +87,8 @@ public record InputField(
     /**
      * This field with the referenced domain's keys merged underneath (docs/field-domains.md):
      * route-declared keys win, and the operational keys — {@code required}, {@code requiredWhen},
-     * {@code default}, {@code writable} — are never taken from the domain, which cannot declare
-     * them.
+     * {@code default}, {@code writable}, {@code policy} — are never taken from the domain, which
+     * cannot declare them.
      */
     public InputField mergedWith(InputField d) {
         return new InputField(
@@ -103,7 +110,8 @@ public record InputField(
                 domain,
                 widget != null ? widget : d.widget(),
                 codes != null ? codes : d.codes(),
-                policy);
+                policy,
+                description != null ? description : d.description());
     }
 
     /** Element type for array inputs. */

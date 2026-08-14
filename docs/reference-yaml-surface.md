@@ -855,6 +855,7 @@ One column of a file transfer, in either form: the bare name, or an object addin
 | Property | Type | Description |
 | --- | --- | --- |
 | `domain` | string | Name of a field domain declared under domains/; its type, bounds, pattern, format, enum, classification and mask merge in, and the keys declared here win. Operational keys (required, requiredWhen, default, writable) stay route-local. |
+| `description` | string | What this field is, in the words a caller reads. A wire field on both MCP surfaces derived from input: an mcp/ prompt's argument carries it in prompts/list, and an mcp/ tool's inputSchema carries it as the JSON Schema description a model follows. Declarable on a domain, and inherited from one. |
 | `type` | enum: `string` \| `integer` \| `number` \| `boolean` \| `date` \| `array` | The declared type. A supplied value is coerced to it and refused when it does not fit. |
 | `required` | boolean | Refuse the request when this field is absent. |
 | `default` | any | The value bound when the request omits the field. |
