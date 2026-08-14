@@ -2,9 +2,10 @@
 #
 #   docker build -f deploy/Dockerfile --build-arg APP_HOME=examples/user-admin-app -t myapp .
 #
-# APP_HOME is the app directory (config/, web/, db/, ...) baked into the image. For the
-# .tqlapp distribution patterns (B / multi-server), bake no app and mount or fetch instead
-# (tesseraql.apps.<name>.url + sha256 fetches hash-pinned packages at boot).
+# APP_HOME is the app directory (config/, web/, db/, ...) baked into the image. One image
+# serves one application: mounting further applications into a running runtime was removed
+# (docs/app-isolation-model.md decision 1). To run several applications on one host, install
+# them under an install root and start them with `tesseraql host` (docs/hosting.md).
 
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
