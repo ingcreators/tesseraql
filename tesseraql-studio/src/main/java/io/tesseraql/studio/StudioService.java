@@ -57,10 +57,6 @@ public final class StudioService {
     private static final java.util.regex.Pattern SECRET_REF = java.util.regex.Pattern
             .compile("\\$\\{secret\\.[A-Za-z0-9_.-]+\\}");
     private static final TqlErrorCode NEW_ROUTE = new TqlErrorCode(TqlDomain.STUDIO, 4224);
-    /** A decision-rows grid save that cannot even reach the decision compile (shape/target). */
-    private static final TqlErrorCode DECISION_ROWS = new TqlErrorCode(TqlDomain.STUDIO, 4237);
-    /** TQL-STUDIO-4238: a calendar edit that cannot mean anything (docs/jobs.md). */
-    private static final TqlErrorCode CALENDAR_EDIT = new TqlErrorCode(TqlDomain.STUDIO, 4238);
     /** TQL-STUDIO-4239: a job-policy edit that cannot mean anything (docs/jobs.md). */
     private static final TqlErrorCode JOB_POLICY = new TqlErrorCode(TqlDomain.STUDIO, 4239);
     static final TqlErrorCode CONFLICT = new TqlErrorCode(TqlDomain.STUDIO, 4090);
@@ -86,6 +82,8 @@ public final class StudioService {
     private final OverlayEditor overlayEditor;
     private final AuditTrail auditTrail;
     private final PreviewRenderer renderer;
+    private final DecisionForms decisionForms;
+    private final CalendarForms calendarForms;
     private AppManifest manifest;
     private Path appHome;
 
@@ -98,10 +96,15 @@ public final class StudioService {
         this.auditTrail = new AuditTrail(() -> appHome);
         this.renderer = new PreviewRenderer(() -> appHome, () -> manifest, this::source,
                 this::sourceIfExists, this::resolve);
+
         this.draftStore = new DraftStore(() -> appHome, readOnly, this::preview,
                 this::recordAudit);
         this.overlayEditor = new OverlayEditor(() -> appHome, readOnly, draftStore::resolve,
                 this::recordAudit);
+        Declarations declarations = new Declarations(() -> appHome, draftStore, readOnly,
+                this::recordAudit);
+        this.decisionForms = new DecisionForms(declarations);
+        this.calendarForms = new CalendarForms(declarations);
     }
 
     public boolean isReadOnly() {
@@ -477,168 +480,12 @@ public final class StudioService {
     public static final int DECISION_GRID_COLUMNS = 12;
 
     /**
-     * Declared decisions with their input contracts, for the decide-snippet builder — the
-     * contract has to travel with the name (the {@link SharedRule} reasoning): a reference must
-     * wire the inputs exactly, and the author cannot be expected to remember them.
-     */
-    public List<SharedDecision> sharedDecisions() {
-        var declared = io.tesseraql.yaml.decision.DecisionSets.load(appHome, parser);
-        List<SharedDecision> decisions = new ArrayList<>();
-        declared.decisions().forEach((name, decision) -> decisions.add(new SharedDecision(name,
-                List.copyOf(decision.inputs().keySet()),
-                decision.source() != null && !decision.source().effective().isEmpty(),
-                decision.source() == null)));
-        decisions.sort(java.util.Comparator.comparing(SharedDecision::name));
-        return decisions;
-    }
-
-    /**
      * One declared decision offered by the decide builder: its name, its input contract,
      * whether its table source is dated ({@code effective:} columns, so {@code effectiveAt:}
      * applies), and whether its rows live in YAML (the rows-grid editor's precondition).
      */
     public record SharedDecision(String name, List<String> inputs, boolean dated,
             boolean yamlBacked) {
-    }
-
-    /**
-     * Loads the rows-grid model for a YAML-backed decision (docs/decision-tables.md "Studio":
-     * the table-shaped editor): one column per input then per output, one row of cell text per
-     * authored row. A blank condition cell is the wildcard; an {@code in} cell joins its
-     * members with commas. Reads the pending draft when one exists, like the route form.
-     */
-    public DecisionGrid decisionGrid(String name) {
-        LocatedDeclaration located = locateDecision(name);
-        if (located == null) {
-            return new DecisionGrid(name, null, false, false, false, List.of(), List.of(),
-                    "No decision named '" + name + "' is declared under decisions/");
-        }
-        Map<String, io.tesseraql.yaml.model.InputField> domains = io.tesseraql.yaml.domain.FieldDomains
-                .load(appHome).domains();
-        Map<String, Object> decision = located.node();
-        boolean yamlBacked = decision.get("source") == null;
-        List<GridColumn> columns = new ArrayList<>();
-        anyMap(decision.get("inputs")).forEach((key, spec) -> {
-            Map<String, Object> field = anyMap(spec);
-            String match = scalar(field.get("match"));
-            String type = fieldType(field, domains);
-            columns.add(new GridColumn(key, "in",
-                    (match == null ? "eq" : match) + (type == null ? "" : " · " + type)));
-        });
-        anyMap(decision.get("outputs")).forEach((key, spec) -> {
-            Map<String, Object> field = anyMap(spec);
-            String enums = csvOf(field.get("enum"));
-            String type = fieldType(field, domains);
-            columns.add(new GridColumn(key, "out", enums != null ? "enum: " + enums : type));
-        });
-        List<List<String>> rows = new ArrayList<>();
-        for (Object entry : anyList(decision.get("rows"))) {
-            Map<String, Object> row = anyMap(entry);
-            Map<String, Object> when = anyMap(row.get("when"));
-            Map<String, Object> out = anyMap(row.get("outputs"));
-            List<String> cells = new ArrayList<>();
-            for (GridColumn column : columns) {
-                Object value = "in".equals(column.kind())
-                        ? when.get(column.key())
-                        : out.get(column.key());
-                cells.add(cellText(value));
-            }
-            rows.add(cells);
-        }
-        // One trailing add-row must still fit the fixed slots, so 20 authored rows already
-        // exceed the grid — refusing beats silently truncating on save.
-        boolean tooLarge = columns.size() > DECISION_GRID_COLUMNS
-                || rows.size() >= DECISION_GRID_ROWS;
-        return new DecisionGrid(name, located.path(), yamlBacked, located.fromDraft(), tooLarge,
-                columns, rows, null);
-    }
-
-    /**
-     * Rebuilds a YAML-backed decision's {@code rows:} from the posted grid and saves the
-     * re-serialized document as a draft (the {@code routeFormSave} persistence contract): the
-     * draft/apply flow supplies conflict detection and compile-before-write on apply, and the
-     * document is validated here first — {@code parseDecisions} plus
-     * {@link io.tesseraql.yaml.decision.DecisionSets#compile}, so a bad cell, an overlap, or an
-     * enum typo rejects with its {@code TQL-DECISION} code and nothing is written. Comments and
-     * hand formatting are not preserved (canonical re-serialization, like the route form).
-     */
-    public Path saveDecisionRows(String name, List<DecisionColumn> columns,
-            java.util.Set<Integer> deletes, String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing decisions is"
-                    + " disabled");
-        }
-        LocatedDeclaration located = locateDecision(name);
-        if (located == null) {
-            throw new TqlException(NOT_FOUND,
-                    "No decision named '" + name + "' is declared under decisions/");
-        }
-        Map<String, Object> decision = located.node();
-        if (decision.get("source") != null) {
-            throw new TqlException(DECISION_ROWS, "Decision '" + name + "' is table-backed —"
-                    + " its rows live in the app table (edit them in the data browser)");
-        }
-        if (columns.isEmpty()) {
-            throw new TqlException(DECISION_ROWS, "The grid posted no columns");
-        }
-        Map<String, io.tesseraql.yaml.model.InputField> domains = io.tesseraql.yaml.domain.FieldDomains
-                .load(appHome).domains();
-        Map<String, Object> inputs = anyMap(decision.get("inputs"));
-        Map<String, Object> outputs = anyMap(decision.get("outputs"));
-        int posted = columns.stream().mapToInt(column -> column.cells().size()).max().orElse(0);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (int i = 0; i < posted; i++) {
-            if (deletes.contains(i)) {
-                continue;
-            }
-            Map<String, Object> when = new LinkedHashMap<>();
-            Map<String, Object> out = new LinkedHashMap<>();
-            for (DecisionColumn column : columns) {
-                String raw = i < column.cells().size()
-                        ? trimToNull(column.cells().get(i))
-                        : null;
-                if (raw == null) {
-                    // Blank = wildcard for a condition; for an output, the compile below
-                    // rejects a half-set row (a row must set every output).
-                    continue;
-                }
-                if ("out".equals(column.kind())) {
-                    out.put(column.key(),
-                            decisionScalar(fieldType(anyMap(outputs.get(column.key())), domains),
-                                    raw));
-                } else {
-                    Map<String, Object> spec = anyMap(inputs.get(column.key()));
-                    String type = fieldType(spec, domains);
-                    if ("in".equals(scalar(spec.get("match")))) {
-                        List<Object> values = new ArrayList<>();
-                        for (String part : raw.split(",")) {
-                            String member = trimToNull(part);
-                            if (member != null) {
-                                values.add(decisionScalar(type, member));
-                            }
-                        }
-                        when.put(column.key(), values);
-                    } else {
-                        when.put(column.key(), decisionScalar(type, raw));
-                    }
-                }
-            }
-            if (when.isEmpty() && out.isEmpty()) {
-                continue; // the blank add-row (or an emptied one)
-            }
-            Map<String, Object> row = new LinkedHashMap<>();
-            if (!when.isEmpty()) {
-                row.put("when", when);
-            }
-            row.put("outputs", out);
-            rows.add(row);
-        }
-        decision.put("rows", rows);
-        String yaml = parser.write(located.tree());
-        validateDecisionDraft(name, yaml);
-        Path draft = saveDraft(located.path(), yaml);
-        recordAudit(actor, "decision-rows", name);
-        return draft;
     }
 
     /** One posted grid column: the declaration key, {@code in}/{@code out}, its cells by row. */
@@ -702,135 +549,6 @@ public final class StudioService {
         return null;
     }
 
-    /** The draft-aware locate over {@code decisions/*.yml} ({@code decisions:} documents). */
-    private LocatedDeclaration locateDecision(String name) {
-        return locateDeclaration("decisions", "decisions", name);
-    }
-
-    /** The draft-aware locate over {@code calendars/*.yml} ({@code calendars:} documents). */
-    private LocatedDeclaration locateCalendar(String name) {
-        return locateDeclaration("calendars", "calendars", name);
-    }
-
-    /**
-     * Validates the rebuilt decisions document before anything is persisted: the serialized
-     * text must parse as a decisions document, and the edited decision must compile — the
-     * exact checks the manifest load applies, so a bad row dies here with its
-     * {@code TQL-DECISION} code instead of landing in a draft that can never apply. The text
-     * is parsed from a temp file because the decisions parser reads files.
-     */
-    private void validateDecisionDraft(String name, String yaml) {
-        Path temp;
-        try {
-            temp = Files.createTempFile("tql-decisions-", ".yml");
-            Files.writeString(temp, yaml);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-        try {
-            io.tesseraql.yaml.model.DecisionsDocument document = parser.parseDecisions(temp);
-            io.tesseraql.yaml.model.DecisionsDocument.Decision rebuilt = document.decisions()
-                    .get(name);
-            if (rebuilt == null) {
-                throw new TqlException(DECISION_ROWS, "The rebuilt document no longer declares"
-                        + " decision '" + name + "'");
-            }
-            io.tesseraql.yaml.decision.DecisionSets.compile(name, rebuilt);
-        } finally {
-            try {
-                Files.deleteIfExists(temp);
-            } catch (IOException ignored) {
-                // best-effort cleanup
-            }
-        }
-    }
-
-    /** A cell's display text: absent = blank (wildcard), a list joined with commas. */
-    private static String cellText(Object value) {
-        if (value == null) {
-            return "";
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().map(String::valueOf)
-                    .collect(java.util.stream.Collectors.joining(", "));
-        }
-        return String.valueOf(value);
-    }
-
-    /**
-     * A field declaration's effective type: its inline {@code type:}, else its referenced
-     * domain's (docs/field-domains.md) — the merge {@code DecisionSets.load} applies, needed
-     * here so a cell of a domain-typed input coerces like an inline-typed one.
-     */
-    private static String fieldType(Map<String, Object> spec,
-            Map<String, io.tesseraql.yaml.model.InputField> domains) {
-        String type = scalar(spec.get("type"));
-        if (type != null) {
-            return type;
-        }
-        String domain = scalar(spec.get("domain"));
-        if (domain == null) {
-            return null;
-        }
-        io.tesseraql.yaml.model.InputField field = domains.get(domain);
-        return field == null ? null : field.type();
-    }
-
-    /**
-     * Coerces one grid cell into the YAML scalar the rows carry (the {@code routeFormSave}
-     * {@code decimalOrNull} reasoning, widened for cells): numeric- and boolean-looking text
-     * becomes a number or boolean — unless the field's declared type is {@code string}, where
-     * a numeric-looking value must stay a string. Comparator cells ({@code >= 10},
-     * {@code 1..5}) look like neither and stay text, which is what a {@code between} match
-     * parses. A value that fails its declared type survives to the compile step, which rejects
-     * it with {@code TQL-DECISION-4708}.
-     */
-    private static Object decisionScalar(String type, String value) {
-        if ("string".equals(type)) {
-            return value;
-        }
-        if ("true".equals(value) || "false".equals(value)) {
-            return Boolean.valueOf(value);
-        }
-        if (value.matches("-?\\d{1,18}")) {
-            return Long.valueOf(value);
-        }
-        if (value.matches("-?\\d+\\.\\d+")) {
-            return new java.math.BigDecimal(value);
-        }
-        return value;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<Object> anyList(Object value) {
-        return value instanceof List ? (List<Object>) value : new ArrayList<>();
-    }
-
-    /**
-     * The declared business-day calendars (docs/jobs.md "Business-day calendars"), sorted —
-     * name, declaring file, the effective weekend, and where the holidays live: a fixed
-     * {@code dates:} list the form edits, or a table the data browser owns.
-     */
-    public List<CalendarSummary> calendars() {
-        var declared = io.tesseraql.yaml.calendar.Calendars.load(appHome, parser);
-        List<CalendarSummary> out = new ArrayList<>();
-        declared.calendars().forEach((name, calendar) -> {
-            boolean tableBacked = calendar.holidays() != null
-                    && calendar.holidays().source() != null;
-            out.add(new CalendarSummary(name, declared.sourceOf(name),
-                    calendar.weekend() == null
-                            ? List.of("saturday", "sunday")
-                            : List.copyOf(calendar.weekend()),
-                    tableBacked,
-                    tableBacked ? calendar.holidays().source().table() : null,
-                    calendar.holidays() == null
-                            ? List.of()
-                            : List.copyOf(calendar.holidays().dates())));
-        });
-        out.sort(java.util.Comparator.comparing(CalendarSummary::name));
-        return out;
-    }
-
     /**
      * One declared calendar: its effective weekend (the Saturday/Sunday default made
      * explicit) and its holiday home — {@code dates} when fixed, {@code sourceTable} when
@@ -838,66 +556,6 @@ public final class StudioService {
      */
     public record CalendarSummary(String name, String source, List<String> weekend,
             boolean tableBacked, String sourceTable, List<String> dates) {
-    }
-
-    /**
-     * The month grid (docs/batch-platform.md track B, Studio): one month of the calendar with
-     * each day classified — business, weekend, holiday — and, when a nominal-day rule is
-     * being previewed, the nominal date and its shifted landing highlighted. The
-     * daily-consider model is invisible until its outcome is drawn somewhere; this is where.
-     * Table-backed holidays arrive resolved by the caller (the runtime reads the main
-     * datasource); a null set renders the grid without holiday knowledge, flagged as such.
-     */
-    public CalendarMonthGrid calendarMonth(String name, String month, Integer dayOfMonth,
-            String shift, java.util.Set<java.time.LocalDate> tableHolidays) {
-        var declared = io.tesseraql.yaml.calendar.Calendars.load(appHome, parser);
-        var calendar = declared.calendars().get(name);
-        if (calendar == null) {
-            return new CalendarMonthGrid(name, null, null, null, null, List.of(), false,
-                    dayOfMonth, shift,
-                    "No calendar named '" + name + "' is declared under calendars/");
-        }
-        boolean tableBacked = calendar.holidays() != null
-                && calendar.holidays().source() != null;
-        java.util.Set<java.time.LocalDate> holidays = tableBacked
-                ? (tableHolidays == null ? java.util.Set.of() : tableHolidays)
-                : io.tesseraql.yaml.calendar.Calendars.staticHolidays(calendar);
-        java.time.YearMonth yearMonth;
-        try {
-            yearMonth = month == null || month.isBlank()
-                    ? java.time.YearMonth.now()
-                    : java.time.YearMonth.parse(month);
-        } catch (java.time.format.DateTimeParseException badMonth) {
-            yearMonth = java.time.YearMonth.now();
-        }
-        java.time.LocalDate nominal = dayOfMonth == null
-                ? null
-                : yearMonth.atDay(Math.min(dayOfMonth, yearMonth.lengthOfMonth()));
-        java.time.LocalDate cursor = yearMonth.atDay(1);
-        while (cursor.getDayOfWeek() != java.time.DayOfWeek.MONDAY) {
-            cursor = cursor.minusDays(1);
-        }
-        List<List<CalendarDayCell>> weeks = new ArrayList<>();
-        while (!java.time.YearMonth.from(cursor).isAfter(yearMonth)) {
-            List<CalendarDayCell> week = new ArrayList<>();
-            for (int day = 0; day < 7; day++) {
-                boolean inMonth = java.time.YearMonth.from(cursor).equals(yearMonth);
-                boolean business = io.tesseraql.yaml.calendar.Calendars.counts(calendar, null,
-                        cursor, holidays);
-                boolean holiday = holidays.contains(cursor);
-                boolean lands = dayOfMonth != null
-                        && io.tesseraql.yaml.calendar.Calendars.shiftedNominal(calendar,
-                                dayOfMonth, shift, cursor, holidays) != null;
-                week.add(new CalendarDayCell(cursor.getDayOfMonth(), inMonth, business,
-                        !business && !holiday, holiday, cursor.equals(nominal), lands));
-                cursor = cursor.plusDays(1);
-            }
-            weeks.add(week);
-        }
-        return new CalendarMonthGrid(name, yearMonth.toString(), yearMonth.getMonth() + " "
-                + yearMonth.getYear(), yearMonth.minusMonths(1).toString(),
-                yearMonth.plusMonths(1).toString(), weeks, tableBacked, dayOfMonth, shift,
-                null);
     }
 
     /** One day cell of the month grid; a day outside the month renders dimmed. */
@@ -911,134 +569,9 @@ public final class StudioService {
             boolean tableBacked, Integer dayOfMonth, String shift, String error) {
     }
 
-    /**
-     * Saves a calendar's weekend and fixed holiday dates through the draft flow
-     * (docs/jobs.md). A table-backed calendar refuses the form — its rows are data, owned by
-     * the data browser — and a name not yet declared becomes a new {@code calendars/} draft.
-     * Invalid day names and dates die here with {@code TQL-STUDIO-4238} instead of landing
-     * in a draft the manifest load would reject.
-     */
-    public Path saveCalendar(String name, List<String> weekend, List<String> dates,
-            String actor) {
-        if (readOnly) {
-            throw new TqlException(READ_ONLY, "Studio is read-only; editing calendars is"
-                    + " disabled");
-        }
-        if (name == null || !name.matches("[A-Za-z0-9][A-Za-z0-9._-]*")) {
-            throw new TqlException(CALENDAR_EDIT,
-                    "Calendar name '" + name + "' is not a plain identifier");
-        }
-        for (String day : weekend) {
-            try {
-                java.time.DayOfWeek.valueOf(day.trim().toUpperCase(java.util.Locale.ROOT));
-            } catch (IllegalArgumentException ex) {
-                throw new TqlException(CALENDAR_EDIT,
-                        "Unknown weekend day '" + day + "' — use monday…sunday");
-            }
-        }
-        List<String> cleanDates = new ArrayList<>();
-        for (String date : dates) {
-            String trimmed = trimToNull(date);
-            if (trimmed == null) {
-                continue;
-            }
-            try {
-                java.time.LocalDate.parse(trimmed);
-            } catch (java.time.format.DateTimeParseException ex) {
-                throw new TqlException(CALENDAR_EDIT,
-                        "Holiday '" + trimmed + "' is not an ISO date (yyyy-MM-dd)");
-            }
-            cleanDates.add(trimmed);
-        }
-        LocatedDeclaration located = locateCalendar(name);
-        Map<String, Object> tree;
-        String relative;
-        Map<String, Object> node;
-        if (located == null) {
-            relative = "calendars/" + name + ".yml";
-            tree = new LinkedHashMap<>();
-            tree.put("version", "tesseraql/v1");
-            Map<String, Object> calendars = new LinkedHashMap<>();
-            node = new LinkedHashMap<>();
-            calendars.put(name, node);
-            tree.put("calendars", calendars);
-        } else {
-            relative = located.path();
-            tree = located.tree();
-            node = located.node();
-            if (anyMap(node.get("holidays")).get("source") != null) {
-                throw new TqlException(CALENDAR_EDIT, "Calendar '" + name + "' is table-backed"
-                        + " — its holiday rows are data (edit them in the data browser)");
-            }
-        }
-        node.put("weekend", new ArrayList<>(weekend));
-        if (cleanDates.isEmpty()) {
-            node.remove("holidays");
-        } else {
-            Map<String, Object> holidays = new LinkedHashMap<>();
-            holidays.put("dates", cleanDates);
-            node.put("holidays", holidays);
-        }
-        Path draft = saveDraft(relative, parser.write(tree));
-        recordAudit(actor, "calendar", name);
-        return draft;
-    }
-
-    /**
-     * The edit card's draft-aware view of a calendar (docs/studio-ux-refresh.md slice 6):
-     * weekend and holiday dates as the PENDING draft has them when one exists, else as the
-     * source declares them — so click-to-toggle edits accumulate visibly before the apply.
-     * {@code null} when no such calendar is declared.
-     */
-    public CalendarEditState calendarEditState(String name) {
-        LocatedDeclaration located = locateCalendar(name);
-        if (located == null) {
-            return null;
-        }
-        Map<String, Object> holidays = anyMap(located.node().get("holidays"));
-        boolean tableBacked = holidays.get("source") != null;
-        List<String> weekend = new ArrayList<>();
-        if (located.node().get("weekend") instanceof List<?> declared) {
-            declared.forEach(day -> weekend.add(String.valueOf(day)));
-        } else {
-            weekend.addAll(List.of("saturday", "sunday"));
-        }
-        List<String> dates = new ArrayList<>();
-        if (holidays.get("dates") instanceof List<?> declared) {
-            declared.forEach(date -> dates.add(String.valueOf(date)));
-        }
-        dates.sort(null);
-        return new CalendarEditState(weekend, dates, tableBacked,
-                readDraft(located.path()) != null);
-    }
-
     /** The draft-aware calendar edit state: see {@link #calendarEditState(String)}. */
     public record CalendarEditState(List<String> weekend, List<String> dates,
             boolean tableBacked, boolean draftPending) {
-    }
-
-    /**
-     * Toggles one holiday date on a calendar (slice 6, the edit card's hc-calendar
-     * click-to-toggle): present is removed, absent is added, and the result lands through
-     * {@link #saveCalendar} — the same validation and draft flow as the form save, so
-     * table-backed calendars refuse and successive toggles accumulate on the pending draft.
-     */
-    public Path toggleCalendarHoliday(String name, String date, String actor) {
-        String clean = trimToNull(date);
-        if (clean == null) {
-            throw new TqlException(CALENDAR_EDIT, "A holiday toggle needs a date");
-        }
-        CalendarEditState current = calendarEditState(name);
-        if (current == null) {
-            throw new TqlException(CALENDAR_EDIT,
-                    "No calendar named '" + name + "' is declared");
-        }
-        List<String> dates = new ArrayList<>(current.dates());
-        if (!dates.remove(clean)) {
-            dates.add(clean);
-            dates.sort(null);
-        }
-        return saveCalendar(name, current.weekend(), dates, actor);
     }
 
     /**
@@ -1375,7 +908,7 @@ public final class StudioService {
         return value == null ? null : String.valueOf(value);
     }
 
-    private static String csvOf(Object value) {
+    static String csvOf(Object value) {
         if (!(value instanceof List<?> list)) {
             return null;
         }
@@ -2147,6 +1680,48 @@ public final class StudioService {
      */
     public List<AuditEntry> auditEntries(int limit, String query) {
         return auditTrail.entries(limit, query);
+    }
+
+    /** The named decision as a rectangular grid, read the way the editor reads it. */
+    public DecisionGrid decisionGrid(String name) {
+        return decisionForms.decisionGrid(name);
+    }
+
+    /** Writes the edited decision rows back as a draft (Studio decision-table editor). */
+    public Path saveDecisionRows(String name, List<DecisionColumn> columns,
+            java.util.Set<Integer> deletes, String actor) {
+        return decisionForms.saveDecisionRows(name, columns, deletes, actor);
+    }
+
+    /** Every decision a document declares, for the pickers that reference one. */
+    public List<SharedDecision> sharedDecisions() {
+        return decisionForms.sharedDecisions();
+    }
+
+    /** Every calendar the app declares, with where it came from. */
+    public List<CalendarSummary> calendars() {
+        return calendarForms.calendars();
+    }
+
+    /** One calendar month as the grid the reader clicks (Studio calendars form). */
+    public CalendarMonthGrid calendarMonth(String name, String month, Integer dayOfMonth,
+            String shift, java.util.Set<java.time.LocalDate> tableHolidays) {
+        return calendarForms.calendarMonth(name, month, dayOfMonth, shift, tableHolidays);
+    }
+
+    /** Writes the edited calendar back as a draft. */
+    public Path saveCalendar(String name, List<String> weekend, List<String> dates, String actor) {
+        return calendarForms.saveCalendar(name, weekend, dates, actor);
+    }
+
+    /** What the calendar form shows as currently declared. */
+    public CalendarEditState calendarEditState(String name) {
+        return calendarForms.calendarEditState(name);
+    }
+
+    /** Adds or removes one holiday date, the click the month grid makes. */
+    public Path toggleCalendarHoliday(String name, String date, String actor) {
+        return calendarForms.toggleCalendarHoliday(name, date, actor);
     }
 
     /** The sortable columns of the audit trail (Studio platform-UX I2). */
