@@ -185,17 +185,17 @@ class TransactionalCommandProcessorTest {
                 new io.tesseraql.yaml.model.NotifySpec("member-mail", null,
                         Map.of("email", "body.email")));
         assertThat(new TransactionalCommandProcessor("orders.create",
-                Map.of("main", step(sql("single.sql"), Map.of())), Map.of(), Map.of(), valid,
-                file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
-                UNBOUNDED))
+                new CommandDeclaration(Map.of("main", step(sql("single.sql"), Map.of())),
+                        Map.of(), Map.of(), valid, null, null, null),
+                file -> dir.resolve(file), "main", "postgres", "orders", null, UNBOUNDED))
                 .isNotNull();
 
         Map<String, io.tesseraql.yaml.model.NotifySpec> channelless = Map.of("confirmation",
                 new io.tesseraql.yaml.model.NotifySpec(null, null, Map.of()));
         assertThatThrownBy(() -> new TransactionalCommandProcessor("orders.create",
-                Map.of("main", step(sql("single.sql"), Map.of())), Map.of(), Map.of(), channelless,
-                file -> dir.resolve(file), "main", "postgres", null, null, null, "orders",
-                UNBOUNDED))
+                new CommandDeclaration(Map.of("main", step(sql("single.sql"), Map.of())),
+                        Map.of(), Map.of(), channelless, null, null, null),
+                file -> dir.resolve(file), "main", "postgres", "orders", null, UNBOUNDED))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-FIELD-2004");
     }
@@ -220,9 +220,9 @@ class TransactionalCommandProcessorTest {
 
     private TransactionalCommandProcessor processor(Map<String, Binding> steps,
             Map<String, ValidationRule> validate) {
-        return new TransactionalCommandProcessor("orders.create", steps, validate, Map.of(),
-                Map.of(), file -> dir.resolve(file), "main", "postgres", null, null, null,
-                "orders", UNBOUNDED);
+        return new TransactionalCommandProcessor("orders.create",
+                new CommandDeclaration(steps, validate, Map.of(), Map.of(), null, null, null),
+                file -> dir.resolve(file), "main", "postgres", "orders", null, UNBOUNDED);
     }
 
     private static Binding step(String file, Map<String, String> params) {

@@ -479,11 +479,9 @@ public final class RouteCompiler {
         String dialect = datasourceDialect(datasource);
         java.util.function.Function<String, Path> stepFile = file -> io.tesseraql.core.dialect.DialectSqlResolver
                 .resolve(sourceDir.resolve(file).normalize(), dialect);
-        return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(
-                routeId, definition.steps(), definition.validate(),
-                definition.decide(), definition.notifications(), stepFile, datasource,
-                dialect, definition.outbox(), definition.publish(), definition.errors(),
-                appName, workflow, commandBounds());
+        return new io.tesseraql.compiler.binding.TransactionalCommandProcessor(routeId,
+                io.tesseraql.compiler.binding.CommandDeclaration.of(definition), stepFile,
+                datasource, dialect, appName, workflow, commandBounds());
     }
 
     /**

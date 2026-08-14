@@ -21,7 +21,6 @@ import io.tesseraql.core.workflow.WorkflowTaskStore;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ErrorsSpec;
-import io.tesseraql.yaml.model.OutboxSpec;
 import io.tesseraql.yaml.model.ValidationRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -141,66 +140,56 @@ public final class TransactionalCommandProcessor implements Processor {
     /**
      * Builds the processor for a command route.
      *
-     * @param declaredSteps the command's ordered statements, keyed by step id — the one
-     *                 spelling a command's write has (docs/unified-sources.md decision 8)
-     * @param validate the route's declarative validation rules, keyed by rule id (Phase 19)
-     * @param notify   the route's notifications, keyed by notification id (Phase 20)
-     * @param publish  the route's {@code publish:} block emitting a domain event to a messaging
-     *                 channel through the same transactional outbox (Phase 27), or null
-     * @param stepFile resolves a step's or rule's SQL file reference to its (dialect-resolved)
-     *                 path
+     * <p>{@code workflow} is non-null only for a synthesized workflow transition route (roadmap
+     * Phase 28), where it makes the processor advance the document's state, check the
+     * transition's guard, and append history inside the command's transaction.
+     *
+     * @param routeId        the route the processor serves — a document's id, or the id
+     *                       synthesized for a transition
+     * @param declared       what the command declares (its statements and the blocks that ride
+     *                       their transaction)
+     * @param stepFile       resolves a step's or rule's SQL file reference to its
+     *                       (dialect-resolved) path
+     * @param datasourceName the connector the transaction runs on
+     * @param dialect        that connector's dialect id
+     * @param appName        the app, for the outbox and notification envelopes
+     * @param workflow       the transition binding, or null for a plain command
+     * @param defaultBounds  the execution bounds a step inherits when it declares none
      */
-    public TransactionalCommandProcessor(String routeId,
-            Map<String, Binding> declaredSteps, Map<String, ValidationRule> validate,
-            Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
-            Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
-            java.util.function.Function<String, Path> stepFile,
-            String datasourceName, String dialect, OutboxSpec outbox,
-            io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
-            String appName, ExecutionBounds defaultBounds) {
-        this(routeId, declaredSteps, validate, decide, notify, stepFile, datasourceName,
-                dialect, outbox, publish, errors, appName, null, defaultBounds);
-    }
-
-    /**
-     * Builds the processor for a synthesized workflow transition route (roadmap Phase 28): the
-     * {@code workflow} binding makes the processor advance the document's state, check the
-     * transition's guard, and append history in the command's transaction.
-     */
-    public TransactionalCommandProcessor(String routeId,
-            Map<String, Binding> declaredSteps, Map<String, ValidationRule> validate,
-            Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
-            Map<String, io.tesseraql.yaml.model.NotifySpec> notify,
-            java.util.function.Function<String, Path> stepFile,
-            String datasourceName, String dialect, OutboxSpec outbox,
-            io.tesseraql.yaml.model.PublishSpec publish, ErrorsSpec errors,
-            String appName, WorkflowBinding workflow, ExecutionBounds defaultBounds) {
+    public TransactionalCommandProcessor(String routeId, CommandDeclaration declared,
+            java.util.function.Function<String, Path> stepFile, String datasourceName,
+            String dialect, String appName, WorkflowBinding workflow,
+            ExecutionBounds defaultBounds) {
         this.defaultBounds = defaultBounds;
         this.workflow = workflow;
         this.routeId = routeId;
         this.datasourceName = datasourceName;
-        this.outboxEvents = outbox == null ? null : new OutboxEvents(outbox, appName);
-        this.notifications = io.tesseraql.yaml.notify.NotifyEvents.compileAll(routeId, notify);
-        this.publish = publish == null
+        this.outboxEvents = declared.outbox() == null
                 ? null
-                : io.tesseraql.yaml.messaging.PublishEvents.compile(routeId, publish);
+                : new OutboxEvents(declared.outbox(), appName);
+        this.notifications = io.tesseraql.yaml.notify.NotifyEvents.compileAll(routeId,
+                declared.notifications());
+        this.publish = declared.publish() == null
+                ? null
+                : io.tesseraql.yaml.messaging.PublishEvents.compile(routeId, declared.publish());
         this.appName = appName;
-        this.errors = errors == null ? new ErrorsSpec(null) : errors;
+        this.errors = declared.errors() == null ? new ErrorsSpec(null) : declared.errors();
         this.dialect = dialect;
         this.generatedKeyColumns = Dialect.fromId(dialect)
                 .map(d -> d.capabilities().generatedKeyColumns())
                 .orElse(true);
         // A plain command needs a statement; a workflow transition may be state-only (the framework
         // advances the state and appends history with no author command of its own).
-        if (declaredSteps.isEmpty() && workflow == null) {
+        if (declared.steps().isEmpty() && workflow == null) {
             throw invalid("a command route needs a steps: declaration");
         }
-        this.steps = compile(declaredSteps, stepFile);
-        this.validation = compileValidation(validate, stepFile);
+        this.steps = compile(declared.steps(), stepFile);
+        this.validation = compileValidation(declared.validate(), stepFile);
         // The one decide: compile (docs/decision-tables.md), shared with the transition
         // executor — a workflow transition's decisions ride its CompiledTransition instead
         // and evaluate inside the executor's pipeline.
-        this.decisions = io.tesseraql.yaml.decision.DecisionSets.compileUses(decide, dialect);
+        this.decisions = io.tesseraql.yaml.decision.DecisionSets.compileUses(declared.decide(),
+                dialect);
     }
 
     /** Compiles the validate: block, failing fast on misdeclared rules (roadmap Phase 19). */
