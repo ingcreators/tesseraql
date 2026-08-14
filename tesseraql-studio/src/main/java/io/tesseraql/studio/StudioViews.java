@@ -11,6 +11,7 @@ import io.tesseraql.studio.StudioService.ScaffoldFile;
 import io.tesseraql.studio.StudioService.ScaffoldPreview;
 import io.tesseraql.studio.StudioService.ScaffoldResult;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
+import io.tesseraql.yaml.view.SortState;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -154,27 +155,14 @@ public final class StudioViews {
     public static Map<String, Object> audit(StudioService.AuditPage page, String query, String sort,
             String dir) {
         Map<String, Object> model = audit(page, query);
-        boolean explicit = sort != null && AUDIT_SORT_COLS.contains(sort);
-        String key = explicit ? sort : "at";
-        boolean desc = explicit ? "desc".equalsIgnoreCase(dir) : true;
-        model.put("sortKey", key);
-        model.put("sortDir", desc ? "desc" : "asc");
         String qParam = query == null || query.isBlank()
                 ? ""
                 : "&q=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
-        Map<String, String> sortHref = new LinkedHashMap<>();
-        Map<String, String> ariaSort = new LinkedHashMap<>();
-        for (String col : AUDIT_SORT_COLS) {
-            boolean active = col.equals(key);
-            String next = active && !desc ? "desc" : "asc";
-            sortHref.put(col, "/_tesseraql/studio/ui/audit?sort=" + col + "&dir=" + next + qParam);
-            ariaSort.put(col, active ? (desc ? "descending" : "ascending") : "none");
-        }
-        model.put("sortHref", sortHref);
-        model.put("ariaSort", ariaSort);
+        SortState state = SortState.of(sort, dir, AUDIT_SORT_COLS, "at", true);
+        state.putInto(model, "/_tesseraql/studio/ui/audit", qParam);
         // Static JSON (not hx-vals='js:') so the CSP-clean filter input keeps the sort on re-filter.
         model.put("hxVals",
-                "{\"sort\": \"" + key + "\", \"dir\": \"" + (desc ? "desc" : "asc") + "\"}");
+                "{\"sort\": \"" + state.key() + "\", \"dir\": \"" + state.direction() + "\"}");
         return model;
     }
 

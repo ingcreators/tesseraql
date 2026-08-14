@@ -8,6 +8,7 @@ import io.tesseraql.yaml.docs.RouteSpec;
 import io.tesseraql.yaml.docs.RouteSpecModel;
 import io.tesseraql.yaml.openapi.OpenApiDiff;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
+import io.tesseraql.yaml.view.SortState;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Types;
@@ -87,32 +88,10 @@ public final class DocViews {
     /** Sorts the route rows by the chosen column and records the sort state for the header links. */
     private static void sortRoutes(List<Map<String, Object>> routes, String sort, String dir,
             Map<String, Object> model) {
-        String key = sort != null && ROUTE_SORT_COLS.contains(sort) ? sort : "id";
-        boolean desc = "desc".equalsIgnoreCase(dir);
-        Comparator<Map<String, Object>> cmp = routeComparator(key);
-        routes.sort(desc ? cmp.reversed() : cmp);
-        putSortLinks(ROUTE_SORT_COLS, key, desc, "/_tesseraql/studio/ui/docs", model);
-    }
-
-    /**
-     * Records the sort state for an hc-datagrid: per sortable column, the header link
-     * ({@code ?sort=col&dir=<flip>}) and the {@code aria-sort} the kit renders the arrow from. The
-     * active column flips its direction on click; any other column starts ascending (platform-UX I2).
-     */
-    private static void putSortLinks(List<String> cols, String key, boolean desc, String baseUrl,
-            Map<String, Object> model) {
-        model.put("sortKey", key);
-        model.put("sortDir", desc ? "desc" : "asc");
-        Map<String, String> sortHref = new LinkedHashMap<>();
-        Map<String, String> ariaSort = new LinkedHashMap<>();
-        for (String col : cols) {
-            boolean active = col.equals(key);
-            String next = active && !desc ? "desc" : "asc";
-            sortHref.put(col, baseUrl + "?sort=" + col + "&dir=" + next);
-            ariaSort.put(col, active ? (desc ? "descending" : "ascending") : "none");
-        }
-        model.put("sortHref", sortHref);
-        model.put("ariaSort", ariaSort);
+        SortState state = SortState.of(sort, dir, ROUTE_SORT_COLS, "id", false);
+        Comparator<Map<String, Object>> cmp = routeComparator(state.key());
+        routes.sort(state.descending() ? cmp.reversed() : cmp);
+        state.putInto(model, "/_tesseraql/studio/ui/docs", null);
     }
 
     private static Comparator<Map<String, Object>> routeComparator(String key) {
@@ -317,9 +296,8 @@ public final class DocViews {
         if (!has) {
             return model;
         }
-        String key = sort != null && SCHEMA_SORT_COLS.contains(sort) ? sort : "name";
-        boolean desc = "desc".equalsIgnoreCase(dir);
-        Comparator<Map<String, Object>> cmp = schemaComparator(key);
+        SortState state = SortState.of(sort, dir, SCHEMA_SORT_COLS, "name", false);
+        Comparator<Map<String, Object>> cmp = schemaComparator(state.key());
         List<Map<String, Object>> datasources = new ArrayList<>();
         for (Map.Entry<String, CatalogSchema> entry : overlay.datasources().entrySet()) {
             Map<String, Object> ds = new LinkedHashMap<>();
@@ -335,13 +313,13 @@ public final class DocViews {
                 row.put("detailUrl", tableUrl(entry.getKey(), table.name()));
                 tables.add(row);
             }
-            tables.sort(desc ? cmp.reversed() : cmp);
+            tables.sort(state.descending() ? cmp.reversed() : cmp);
             ds.put("tables", tables);
             ds.put("tableCount", tables.size());
             datasources.add(ds);
         }
         model.put("datasources", datasources);
-        putSortLinks(SCHEMA_SORT_COLS, key, desc, "/_tesseraql/studio/ui/docs/schema", model);
+        state.putInto(model, "/_tesseraql/studio/ui/docs/schema", null);
         return model;
     }
 

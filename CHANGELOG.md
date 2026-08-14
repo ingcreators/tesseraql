@@ -74,6 +74,16 @@ All notable changes to TesseraQL are documented here. The format follows
   `TQL-YAML-1041` when a piece is missing, `1005` when a declared key cannot apply, `1006` when
   the template is unusable — so `startCell:` without a template no longer reports as `1041` on a
   job step and `1005` on a route.
+- **Every sortable grid reads one header contract.** The rule an hc-datagrid header renders from —
+  `aria-sort` of `ascending`/`descending`/`none`, and a link that flips the active column while
+  starting any other column ascending — was written out three times: the studio's route catalog
+  and schema tables, its audit trail, and a declared `view:` list. They are now one `SortState`,
+  which also settles the two questions the copies answered differently. A `sort=` naming a column
+  the grid cannot sort by falls back to the grid's default everywhere (a stale link no longer
+  leaves a view's headers all inactive), and a stated `dir=` is honored even when the request
+  names no column — the audit trail used to ignore it and open newest-first anyway, so the link
+  the page had just rendered did nothing. The studio's data browser keeps its own sort: it is a
+  filter form choosing a SQL `ORDER BY`, not a header a reader clicks.
 - **`kind: prompt` is a route document, full stop** (docs/prompt-as-recipe.md, slice 2). A prompt
   declares `recipe: prompt-text`; a document without one no longer loads, and says so the way
   every other family says it — `Missing required field 'recipe'`. The second parse path is gone

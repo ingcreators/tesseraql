@@ -644,18 +644,20 @@ public final class ViewBinding {
             v.put("search", search);
         }
         List<Map<String, Object>> rendered = renderedColumns(catalog, locale, columns);
+        // The header contract every sortable grid shares, studio tables included.
+        io.tesseraql.yaml.view.SortState state = io.tesseraql.yaml.view.SortState.of(sort, dir,
+                columns.stream().filter(ViewSpec.Column::isSortable).map(ViewSpec.Column::name)
+                        .toList(),
+                null, false);
         for (int i = 0; i < columns.size(); i++) {
             ViewSpec.Column column = columns.get(i);
             if (!column.isSortable()) {
                 continue;
             }
             Map<String, Object> c = rendered.get(i);
-            boolean active = column.name().equals(sort);
-            boolean descending = active && "desc".equals(dir);
             c.put("sortable", true);
-            c.put("ariaSort", active ? (descending ? "descending" : "ascending") : "none");
-            c.put("sortHref", pagePath + "?sort=" + column.name() + "&dir="
-                    + (active && !descending ? "desc" : "asc"));
+            c.put("ariaSort", state.ariaSort(column.name()));
+            c.put("sortHref", state.href(pagePath, column.name(), null));
         }
         v.put("columns", rendered);
         v.put("rows", cellMatrix(context, columns, rows));
