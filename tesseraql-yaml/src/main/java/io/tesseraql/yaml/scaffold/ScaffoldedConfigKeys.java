@@ -60,6 +60,8 @@ public final class ScaffoldedConfigKeys {
                     "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/ResponseHeaderDefaults.java"),
             Map.entry("tesseraql.security.jwt.secret",
                     "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java"),
+            Map.entry("tesseraql.security.jwt.audience",
+                    "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java"),
             Map.entry("tesseraql.security.jwt.rolesClaim",
                     "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java"),
             Map.entry("tesseraql.security.jwt.permissionsClaim",

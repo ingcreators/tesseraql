@@ -320,6 +320,10 @@ public final class AppScaffolder {
 
                 jwt:
                   secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+                  # Which tokens are for this application. Without it, any token the issuer
+                  # minted for any other relying party would be accepted (TQL-SEC-4048).
+                  audience:
+                    - https://__APP_NAME__.example.com
                   rolesClaim: roles
                   permissionsClaim: permissions
                   tenantClaim: tenant_id

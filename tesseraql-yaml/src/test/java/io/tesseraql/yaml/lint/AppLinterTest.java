@@ -100,6 +100,7 @@ class AppLinterTest {
                     # (TQL-SEC-4047).
                     jwt:
                       secret: dev-only-secret-change-me-in-production
+                      audience: https://app.example.com
                     policies:
                       catalog.read:
                         anyOf:
@@ -2034,6 +2035,7 @@ class AppLinterTest {
                     jwt:
                       algorithm: RS256
                       publicKey: pem
+                      audience: https://app.example.com
                       jwksUri: https://idp.example.com/jwks
                 """);
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4041") && f.isError());
@@ -2047,6 +2049,7 @@ class AppLinterTest {
                     jwt:
                       algorithm: HS256
                       secret: s
+                      audience: https://app.example.com
                       jwksUri: https://idp.example.com/jwks
                 """)).anyMatch(f -> f.code().equals("TQL-SEC-4042") && f.isError());
     }
@@ -2058,6 +2061,7 @@ class AppLinterTest {
                     jwt:
                       algorithm: RS256
                       publicKey: pem
+                      audience: https://app.example.com
                       secret: s
                 """)).anyMatch(f -> f.code().equals("TQL-SEC-4042") && f.isError());
     }
@@ -2069,6 +2073,7 @@ class AppLinterTest {
                     jwt:
                       algorithm: none
                       secret: s
+                      audience: https://app.example.com
                 """)).anyMatch(f -> f.code().equals("TQL-SEC-4043") && f.isError());
     }
 
@@ -2079,7 +2084,54 @@ class AppLinterTest {
                     jwt:
                       algorithm: RS256
                       jwksUri: https://idp.example.com/jwks
+                      audience:
+                        - https://app.example.com
                 """)).noneMatch(f -> f.code().startsWith("TQL-SEC-404") && f.isError());
+    }
+
+    /**
+     * A JWT configuration that names no audience is refused, not warned about
+     * (docs/audit-hardening.md Decision 1).
+     *
+     * <p>This is the case that made the campaign's largest blast radius worth paying: with an
+     * external jwksUri and no declared audience, a token that IdP minted for another relying party
+     * authenticates here. A warning would have left that open by default.
+     */
+    @Test
+    void flagsJwtConfigWithoutAnAudience(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      algorithm: RS256
+                      jwksUri: https://idp.example.com/jwks
+                """)).anyMatch(f -> f.code().equals("TQL-SEC-4048") && f.isError());
+    }
+
+    /** A single string is accepted where a list would be; the model holds a list either way. */
+    @Test
+    void acceptsASingleAudienceString(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      secret: s
+                      audience: https://app.example.com
+                """)).noneMatch(f -> f.code().equals("TQL-SEC-4048"));
+    }
+
+    /**
+     * A jwt block that cannot validate anything is not asked for an audience.
+     *
+     * <p>The rule keys off the same condition the runtime uses to bind a verifier at all — a secret
+     * or a key source — so a block carrying only claim mappings is left alone rather than being
+     * told to declare an audience for tokens it will never see.
+     */
+    @Test
+    void doesNotAskForAnAudienceWhenNoKeyMaterialIsConfigured(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  security:
+                    jwt:
+                      rolesClaim: roles
+                """)).noneMatch(f -> f.code().equals("TQL-SEC-4048"));
     }
 
     @Test

@@ -267,8 +267,8 @@ class QueryJsonIntegrationTest {
     private static String token(List<String> roles) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", "u001", "preferred_username", "sato", "roles", roles)));
+        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                Map.of("sub", "u001", "preferred_username", "sato", "roles", roles))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = enc.encodeToString(

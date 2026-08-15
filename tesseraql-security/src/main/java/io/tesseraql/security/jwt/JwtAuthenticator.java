@@ -24,6 +24,20 @@ public final class JwtAuthenticator {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
 
+    /**
+     * TQL-SEC-4143: the token's {@code aud} does not name this application (HTTP 401).
+     *
+     * <p>Its own code rather than the shared authentication failure, under the one-meaning-per-code
+     * rule: an operator reading it needs to know the token verified and was minted for somebody
+     * else, which is a configuration mistake at the IdP rather than a bad credential.
+     */
+    private static final io.tesseraql.core.error.TqlErrorCode AUDIENCE_MISMATCH = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4143);
+
+    /** TQL-SEC-4144: the token carries no {@code exp}, so it would never expire (HTTP 401). */
+    private static final io.tesseraql.core.error.TqlErrorCode NO_EXPIRY = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4144);
+
     private final JwtConfig config;
     private final SignatureVerifier verifier;
 
@@ -110,7 +124,14 @@ public final class JwtAuthenticator {
         long nowSeconds = System.currentTimeMillis() / 1000L;
         long skew = config.clockSkew().toSeconds();
         Long exp = epochSecondsClaim(claims.get("exp"));
-        if (exp != null && nowSeconds - skew >= exp) {
+        if (exp == null) {
+            // An absent exp is not "no expiry to check", it is a token that never expires. The
+            // previous guard read it as the former.
+            if (config.requireExpiration()) {
+                throw new TqlException(NO_EXPIRY,
+                        "JWT carries no exp claim, so it would never expire");
+            }
+        } else if (nowSeconds - skew >= exp) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT has expired");
         }
         // RS256 IdP tokens commonly carry nbf; honor it within the configured leeway.
@@ -120,6 +141,39 @@ public final class JwtAuthenticator {
         }
         if (config.issuer() != null && !config.issuer().equals(claims.get("iss"))) {
             throw new TqlException(PolicyEngine.UNAUTHORIZED, "JWT issuer mismatch");
+        }
+        requireAudience(claims.get("aud"));
+    }
+
+    /**
+     * Binds the token to this application: {@code aud} — string or array — must name one of the
+     * configured audiences.
+     *
+     * <p>Without this an {@code auth: bearer} route validating against an external IdP's JWKS
+     * accepts any token that IdP minted for any relying party, which is a confused deputy. The
+     * gap had a written rationale and it was wrong: {@code aud} was treated as OIDC-specific, but
+     * it is RFC 7519 §4.1.3, and both the OIDC and SAML paths already enforced an audience. The
+     * bearer path was the outlier, not the norm.
+     *
+     * <p>Intersection is the whole rule, and TesseraQL neither implements nor requires the RFC 8707
+     * {@code resource} request parameter: what an IdP places in {@code aud} is its own
+     * configuration, and Keycloak, Entra and Okta all differ — many emitting only the client id.
+     *
+     * <p>An empty audience skips the check, and no application-supplied configuration can reach
+     * that state: TQL-SEC-4048 refuses the build and the boot. It stays reachable for the
+     * internally-built configurations, where the caller binds the audience itself.
+     */
+    private void requireAudience(Object aud) {
+        List<String> expected = config.audience();
+        if (expected.isEmpty()) {
+            return;
+        }
+        boolean matches = aud instanceof String single && expected.contains(single)
+                || aud instanceof List<?> many
+                        && many.stream().anyMatch(one -> expected.contains(String.valueOf(one)));
+        if (!matches) {
+            throw new TqlException(AUDIENCE_MISMATCH,
+                    "JWT audience does not include this application");
         }
     }
 

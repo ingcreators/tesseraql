@@ -161,8 +161,8 @@ class ReloadContentDiffIntegrationTest {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", "reload-it", "roles", List.of("ADMIN"))));
+        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                Map.of("sub", "reload-it", "roles", List.of("ADMIN")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -190,6 +190,7 @@ class ReloadContentDiffIntegrationTest {
                   security:
                     jwt:
                       secret: dev-only-secret-change-me-in-production
+                      audience: https://app.example.com
                       rolesClaim: roles
                   studio:
                     enabled: true

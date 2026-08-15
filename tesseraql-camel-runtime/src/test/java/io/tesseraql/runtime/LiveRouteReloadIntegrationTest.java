@@ -185,7 +185,8 @@ class LiveRouteReloadIntegrationTest {
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(
-                MAPPER.writeValueAsBytes(Map.of("sub", "studio", "roles", List.of("ADMIN"))));
+                MAPPER.writeValueAsBytes(
+                        TestClaims.addressed(Map.of("sub", "studio", "roles", List.of("ADMIN")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

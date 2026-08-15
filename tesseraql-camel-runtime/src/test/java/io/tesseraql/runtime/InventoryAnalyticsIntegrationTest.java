@@ -262,8 +262,12 @@ class InventoryAnalyticsIntegrationTest {
         for (String role : roles) {
             roleList.append(roleList.isEmpty() ? "" : ",").append('"').append(role).append('"');
         }
+        // This one assembles its payload as raw JSON rather than a claim map, so it names the
+        // audience directly (docs/audit-hardening.md Decision 1) instead of going through
+        // TestClaims.
         String payload = base64Url("{\"sub\":\"" + subject + "\",\"roles\":[" + roleList
-                + "],\"exp\":" + (System.currentTimeMillis() / 1000 + 3600) + "}");
+                + "],\"aud\":\"https://inventory.example.com\",\"exp\":"
+                + (System.currentTimeMillis() / 1000 + 3600) + "}");
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = Base64.getUrlEncoder().withoutPadding().encodeToString(

@@ -197,7 +197,8 @@ class OidcLoginIntegrationTest {
         try {
             String header = ENC.encodeToString(
                     "{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-            String payload = ENC.encodeToString(MAPPER.writeValueAsBytes(claims));
+            String payload = ENC
+                    .encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(claims)));
             Signature rsa = Signature.getInstance("SHA256withRSA");
             rsa.initSign(opKey.getPrivate());
             rsa.update((header + "." + payload).getBytes(StandardCharsets.US_ASCII));

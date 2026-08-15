@@ -126,8 +126,8 @@ class WriteSidePolicyIntegrationTest {
     private static String token(String sub, List<String> roles) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", sub, "roles", roles)));
+        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                Map.of("sub", sub, "roles", roles))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = enc.encodeToString(
@@ -162,6 +162,7 @@ class WriteSidePolicyIntegrationTest {
                   security:
                     jwt:
                       secret: %s
+                      audience: https://app.example.com
                       rolesClaim: roles
                     policies:
                       emp.read:

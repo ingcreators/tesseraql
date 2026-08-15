@@ -95,6 +95,19 @@ public final class TokenCommand implements Callable<Integer> {
         }
         claims.forEach((name, value) -> payload.put(name, parseValue(value)));
         payload.put("exp", Instant.now().plusSeconds(ttlSeconds(ttl)).getEpochSecond());
+        // The app now refuses a token that is not addressed to it (docs/audit-hardening.md
+        // Decision 1), so a token minted here has to carry the audience that app declares — an
+        // aud-less token would be signed correctly and rejected on arrival, which is a confusing
+        // way to spend an afternoon. One declared audience emits the string form, several emit
+        // the array; an explicit --claim aud=... still wins, since it was applied above.
+        if (!payload.containsKey("aud")) {
+            List<String> audience = declaredAudience(config);
+            if (audience.size() == 1) {
+                payload.put("aud", audience.get(0));
+            } else if (!audience.isEmpty()) {
+                payload.put("aud", audience);
+            }
+        }
 
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString(
@@ -109,6 +122,20 @@ public final class TokenCommand implements Callable<Integer> {
                 + "): signed with the app's configured HS256 secret - development use only.");
         System.out.println(header + "." + body + "." + signature);
         return 0;
+    }
+
+    /** The audiences the app declares, written either as one string or as a list. */
+    private static List<String> declaredAudience(AppConfig config) {
+        Object declared = config.navigate("tesseraql.security.jwt.audience");
+        if (declared instanceof List<?> list) {
+            List<String> result = new ArrayList<>(list.size());
+            list.forEach(element -> result.add(String.valueOf(element)));
+            return result;
+        }
+        if (declared instanceof String single && !single.isBlank()) {
+            return List.of(single.trim());
+        }
+        return List.of();
     }
 
     /** A claim value that parses as JSON embeds structurally; anything else is a string. */

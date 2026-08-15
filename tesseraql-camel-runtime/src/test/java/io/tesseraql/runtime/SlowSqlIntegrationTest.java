@@ -205,8 +205,9 @@ class SlowSqlIntegrationTest {
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         // ops.app.* keeps full trace visibility under the per-app scope.
-        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(Map.of(
-                "sub", "ops", "roles", roles, "permissions", List.of("ops.app.*"))));
+        String payload = encoder
+                .encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(Map.of(
+                        "sub", "ops", "roles", roles, "permissions", List.of("ops.app.*")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

@@ -295,8 +295,12 @@ class CodeCatalogIntegrationTest {
         java.util.Base64.Encoder encoder = java.util.Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString(
                 "{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        // Assembled as raw JSON rather than a claim map, so it names the audience and the expiry
+        // directly (docs/audit-hardening.md Decision 1) instead of going through TestClaims.
         String payload = encoder.encodeToString(
-                "{\"sub\":\"ops-user\",\"roles\":[\"ADMIN\"]}"
+                ("{\"sub\":\"ops-user\",\"roles\":[\"ADMIN\"],\"aud\":\""
+                        + TestClaims.INLINE_FIXTURE + "\",\"exp\":"
+                        + (System.currentTimeMillis() / 1000 + 3600) + "}")
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
         mac.init(new javax.crypto.spec.SecretKeySpec(
@@ -354,6 +358,7 @@ class CodeCatalogIntegrationTest {
                   security:
                     jwt:
                       secret: dev-only-secret-change-me-in-production
+                      audience: https://app.example.com
                       rolesClaim: roles
                     policies:
                       ops.batch.view:

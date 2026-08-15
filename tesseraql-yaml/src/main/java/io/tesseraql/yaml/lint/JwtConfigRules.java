@@ -21,6 +21,8 @@ final class JwtConfigRules implements LintRule {
 
     private static final String JWT_KEY_SOURCES_CONFLICT = "TQL-SEC-4041";
 
+    private static final String JWT_AUDIENCE_MISSING = "TQL-SEC-4048";
+
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
 
@@ -51,6 +53,21 @@ final class JwtConfigRules implements LintRule {
             findings.add(new LintFinding(JWT_ALGORITHM_CONFUSION, ERROR, "config",
                     "JWT algorithm HS256 declares RS256 key material (publicKey/jwksUri); an"
                             + " algorithm-confusion risk - pick one algorithm"));
+        }
+        // A configuration that can validate a token must say which tokens are for this application
+        // (docs/audit-hardening.md Decision 1). Without it, a bearer route verifying against an
+        // external IdP's JWKS accepts any token that IdP minted for any relying party — a confused
+        // deputy. An error rather than a warning because a warning leaves the hole open by default,
+        // which is the thing being fixed; it is the one lint in the campaign that stops an existing
+        // app booting until its config gains a value, and pre-1.0 is the only time that is
+        // affordable.
+        if ((secret || keyMaterial)
+                && config.navigate("tesseraql.security.jwt.audience") == null) {
+            findings.add(new LintFinding(JWT_AUDIENCE_MISSING, ERROR, "config",
+                    "tesseraql.security.jwt is configured without an audience, so any token the"
+                            + " issuer minted for any other relying party is accepted; declare"
+                            + " tesseraql.security.jwt.audience with the identifier(s) this"
+                            + " application answers to"));
         }
         if (algorithm.equals("RS256")) {
             if (secret) {

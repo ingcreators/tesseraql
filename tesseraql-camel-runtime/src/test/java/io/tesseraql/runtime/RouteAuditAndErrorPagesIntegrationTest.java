@@ -188,9 +188,10 @@ class RouteAuditAndErrorPagesIntegrationTest {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(Map.of(
-                "sub", "audit-caller", "preferred_username", "audit-caller",
-                "roles", roles, "permissions", permissions)));
+        String payload = encoder
+                .encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(Map.of(
+                        "sub", "audit-caller", "preferred_username", "audit-caller",
+                        "roles", roles, "permissions", permissions))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -229,6 +230,7 @@ class RouteAuditAndErrorPagesIntegrationTest {
                       X-Frame-Options: DENY
                     jwt:
                       secret: dev-only-secret-change-me-in-production
+                      audience: https://app.example.com
                       rolesClaim: roles
                       permissionsClaim: permissions
                     policies:

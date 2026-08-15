@@ -17,7 +17,14 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-/** ID-token validation: signature/iss via JwtAuthenticator, plus the OIDC aud and nonce checks. */
+/**
+ * ID-token validation: signature, iss, exp and aud via JwtAuthenticator, plus the OIDC nonce check.
+ *
+ * <p>The audience check moved into the shared authenticator (docs/audit-hardening.md Decision 1), so
+ * the fixture declares the client id as the authenticator's audience rather than passing it beside
+ * the authenticator. An audience failure is now a TQL-SEC-4143 the OIDC flow wraps, which is why the
+ * rejection asserts on the wrapper rather than on the old message.
+ */
 class OidcTokenValidatorTest {
 
     private static final String CLIENT_ID = "my-app";
@@ -39,9 +46,10 @@ class OidcTokenValidatorTest {
         String pem = "-----BEGIN PUBLIC KEY-----\n"
                 + Base64.getMimeEncoder().encodeToString(keyPair.getPublic().getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
-        JwtConfig jwt = new JwtConfig("RS256", null, pem, null, null, ISSUER, null,
-                "roles", "permissions", "groups", "tenant_id", "preferred_username", "name");
-        return new OidcTokenValidator(CLIENT_ID, new JwtAuthenticator(jwt));
+        JwtConfig jwt = new JwtConfig("RS256", null, pem, null, null, ISSUER, List.of(CLIENT_ID),
+                null, null, "roles", "permissions", "groups", "tenant_id", "preferred_username",
+                "name");
+        return new OidcTokenValidator(new JwtAuthenticator(jwt));
     }
 
     private static String idToken(Map<String, Object> claims) throws Exception {
@@ -81,7 +89,7 @@ class OidcTokenValidatorTest {
         assertThatThrownBy(
                 () -> validator().validate(idToken(claims("someone-else", "n-1")), "n-1"))
                 .isInstanceOf(OidcException.class)
-                .hasMessageContaining("audience");
+                .hasMessageContaining("TQL-SEC-4143");
     }
 
     @Test

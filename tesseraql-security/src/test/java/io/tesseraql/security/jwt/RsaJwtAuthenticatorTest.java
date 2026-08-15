@@ -23,6 +23,7 @@ class RsaJwtAuthenticatorTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Base64.Encoder ENC = Base64.getUrlEncoder().withoutPadding();
+    private static final String AUDIENCE = "https://app.example.com";
 
     private static KeyPair keyPair;
     private static KeyPair otherKeyPair;
@@ -39,8 +40,9 @@ class RsaJwtAuthenticatorTest {
         String pem = "-----BEGIN PUBLIC KEY-----\n"
                 + Base64.getMimeEncoder().encodeToString(keyPair.getPublic().getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
-        return new JwtConfig("RS256", null, pem, null, null, null, null, "roles", "permissions",
-                "groups", "tenant_id", "preferred_username", "name");
+        return new JwtConfig("RS256", null, pem, null, null, null, java.util.List.of(AUDIENCE),
+                null, null, "roles", "permissions", "groups", "tenant_id", "preferred_username",
+                "name");
     }
 
     private static String rs256Token(Map<String, Object> claims, PrivateKey signingKey)
@@ -54,7 +56,14 @@ class RsaJwtAuthenticatorTest {
                 ? "{\"alg\":\"" + alg + "\",\"typ\":\"JWT\"}"
                 : "{\"alg\":\"" + alg + "\",\"typ\":\"JWT\",\"kid\":\"" + kid + "\"}";
         String header = ENC.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
-        String payload = ENC.encodeToString(MAPPER.writeValueAsBytes(claims));
+        // A token without exp and aud is no longer a valid token; a case meaning to omit or
+        // contradict either passes it explicitly, and its value wins.
+        Map<String, Object> payloadClaims = new java.util.LinkedHashMap<>();
+        payloadClaims.put("exp", System.currentTimeMillis() / 1000L + 3600);
+        payloadClaims.put("aud", AUDIENCE);
+        payloadClaims.putAll(claims);
+        payloadClaims.values().removeIf(java.util.Objects::isNull);
+        String payload = ENC.encodeToString(MAPPER.writeValueAsBytes(payloadClaims));
         Signature rsa = Signature.getInstance("SHA256withRSA");
         rsa.initSign(signingKey);
         rsa.update((header + "." + payload).getBytes(StandardCharsets.US_ASCII));
@@ -124,9 +133,8 @@ class RsaJwtAuthenticatorTest {
         long justExpired = System.currentTimeMillis() / 1000L - 10;
         String jwt = rs256Token(Map.of("sub", "svc-1", "exp", justExpired), keyPair.getPrivate());
         JwtConfig lenient = new JwtConfig("RS256", null, rs256Config().publicKey(), null, null,
-                null,
-                java.time.Duration.ofMinutes(1), "roles", "permissions", "groups",
-                "tenant_id", "preferred_username", "name");
+                null, java.util.List.of(AUDIENCE), java.time.Duration.ofMinutes(1), null, "roles",
+                "permissions", "groups", "tenant_id", "preferred_username", "name");
 
         Principal principal = new JwtAuthenticator(lenient).authenticate("Bearer " + jwt);
         assertThat(principal.subject()).isEqualTo("svc-1");
@@ -145,8 +153,9 @@ class RsaJwtAuthenticatorTest {
         String n = ENC.encodeToString(toUnsigned(pub.getModulus().toByteArray()));
         String e = ENC.encodeToString(toUnsigned(pub.getPublicExponent().toByteArray()));
         String jwk = "{\"kty\":\"RSA\",\"n\":\"" + n + "\",\"e\":\"" + e + "\"}";
-        JwtConfig jwkConfig = new JwtConfig("RS256", null, jwk, null, null, null, null, "roles",
-                "permissions", "groups", "tenant_id", "preferred_username", "name");
+        JwtConfig jwkConfig = new JwtConfig("RS256", null, jwk, null, null, null,
+                java.util.List.of(AUDIENCE), null, null, "roles", "permissions", "groups",
+                "tenant_id", "preferred_username", "name");
         String jwt = rs256Token(Map.of("sub", "svc-1"), keyPair.getPrivate());
 
         Principal principal = new JwtAuthenticator(jwkConfig).authenticate("Bearer " + jwt);

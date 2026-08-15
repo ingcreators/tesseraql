@@ -45,7 +45,17 @@ public record SecurityConfig(
      * @param jwksUri          RS256 JWKS endpoint, an alternative to a static {@code publicKey}
      * @param jwks             JWKS cache settings (never null; defaults applied)
      * @param issuer           expected {@code iss}, or null to skip the check
+     * @param audience         the identifiers this application answers to; a token matches when its
+     *                         {@code aud} — string or array — names any of them. Empty means no
+     *                         check, which an app cannot reach: TQL-SEC-4048 refuses the build and
+     *                         the boot. Only the internally-built configurations (OIDC's ID-token
+     *                         validator) construct one directly
      * @param clockSkew        leeway applied to {@code exp}/{@code nbf}; defaults to zero
+     * @param requireExpiration whether a token with no {@code exp} is refused; defaults to true.
+     *                         A {@code Boolean} rather than a {@code boolean} because this record
+     *                         applies every default by null-check, and a primitive cannot tell a
+     *                         caller passing {@code false} from a caller meaning "unset" — with the
+     *                         zero value being the unsafe one
      * @param rolesClaim       claim holding the roles array
      * @param permissionsClaim claim holding the permissions array
      * @param groupsClaim      claim holding the groups array
@@ -60,7 +70,9 @@ public record SecurityConfig(
             String jwksUri,
             JwksConfig jwks,
             String issuer,
+            java.util.List<String> audience,
             java.time.Duration clockSkew,
+            Boolean requireExpiration,
             String rolesClaim,
             String permissionsClaim,
             String groupsClaim,
@@ -73,7 +85,9 @@ public record SecurityConfig(
                     ? "HS256"
                     : algorithm.toUpperCase(java.util.Locale.ROOT);
             jwks = jwks == null ? new JwksConfig(null, null, null) : jwks;
+            audience = audience == null ? java.util.List.of() : java.util.List.copyOf(audience);
             clockSkew = clockSkew == null ? java.time.Duration.ZERO : clockSkew;
+            requireExpiration = requireExpiration == null ? Boolean.TRUE : requireExpiration;
             rolesClaim = orDefault(rolesClaim, "roles");
             permissionsClaim = orDefault(permissionsClaim, "permissions");
             groupsClaim = orDefault(groupsClaim, "groups");

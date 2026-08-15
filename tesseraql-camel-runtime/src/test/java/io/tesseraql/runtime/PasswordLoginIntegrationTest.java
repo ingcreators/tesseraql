@@ -123,8 +123,8 @@ class PasswordLoginIntegrationTest {
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         String header = enc.encodeToString(
                 "{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String payload = enc.encodeToString(mapper.writeValueAsBytes(
-                java.util.Map.of("sub", "ops", "roles", java.util.List.of("USER_WRITE"))));
+        String payload = enc.encodeToString(mapper.writeValueAsBytes(TestClaims.addressed(
+                java.util.Map.of("sub", "ops", "roles", java.util.List.of("USER_WRITE")))));
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
         mac.init(new javax.crypto.spec.SecretKeySpec(
                 "dev-only-secret-change-me-in-production"
