@@ -403,11 +403,16 @@ cannot catch the divergence.
 Move the three entries to `PUBLIC_BY_DESIGN`, carrying `McpRouteBuilder`'s own truthful
 wording, and make the guard falsifiable: for each `PROCESSOR_ENFORCED` entry, drive an
 unauthenticated request at the mounted route and require 401 or 403. On today's tree the three
-surviving entries pass and the MCP three would answer 200 — which is the point.
+surviving entries pass; putting `mcp.endpoint.post` back was run as an experiment and the guard
+fails it with `answered 202` — which is the point, and 202 rather than the 200 first assumed,
+because the endpoint accepts the JSON-RPC message rather than merely answering it.
 
-The guard needs the HTTP method alongside the reason; `FrameworkSurfaces` records only
-`routeId → reason` today, and all three surviving entries are POST, so a probe without a verb
-gets 405 and proves nothing.
+A probe needs the verb, since all three surviving entries are POST and a probe without one gets
+405 and proves nothing. Take it off the mounted route rather than recording it beside the reason:
+the rest DSL runs with `inlineRoutes(true)`, so the definition carrying the `routeId` is the same
+one whose input is `rest://<verb>:<path>`. Writing the verb into `FrameworkSurfaces` would add a
+second source of truth for the mounting, inside the registry whose whole purpose is to stop that
+kind of claim drifting from the runtime.
 
 This lands regardless of whether Decision 2 is scheduled. A false attestation and a missing
 gate are two different problems, and the record should be honest either way.
