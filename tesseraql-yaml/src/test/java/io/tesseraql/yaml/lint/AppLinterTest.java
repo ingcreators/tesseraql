@@ -2165,6 +2165,44 @@ class AppLinterTest {
                 .noneMatch(f -> f.code().equals("TQL-YAML-1310"));
     }
 
+    /**
+     * A liveness window no wider than the heartbeat that fills it is refused
+     * (docs/audit-hardening.md Decision 6).
+     */
+    @Test
+    void flagsALivenessWindowShorterThanTheHeartbeatInterval(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  batch:
+                    heartbeat:
+                      interval: 60s
+                      livenessWindow: 30s
+                """)).anyMatch(f -> f.code().equals("TQL-BATCH-4211") && f.isError());
+    }
+
+    /** Equal is refused too: it leaves no room for the jitter a real pulse carries. */
+    @Test
+    void flagsALivenessWindowEqualToTheHeartbeatInterval(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  batch:
+                    heartbeat:
+                      interval: 30s
+                      livenessWindow: 30s
+                """)).anyMatch(f -> f.code().equals("TQL-BATCH-4211") && f.isError());
+    }
+
+    /** The shipped defaults are a valid pair, which is worth pinning rather than assuming. */
+    @Test
+    void theDefaultHeartbeatAndWindowAreAcceptedTogether(@TempDir Path dir) throws Exception {
+        assertThat(lintWithConfig(dir, """
+                  batch:
+                    heartbeat:
+                      interval: 30s
+                      livenessWindow: 5m
+                """)).noneMatch(f -> f.code().equals("TQL-BATCH-4211"));
+        // And with nothing declared at all, which is how most apps run.
+        assertThat(lintWithConfig(dir, "")).noneMatch(f -> f.code().equals("TQL-BATCH-4211"));
+    }
+
     /** A single string is accepted where a list would be; the model holds a list either way. */
     @Test
     void acceptsASingleAudienceString(@TempDir Path dir) throws Exception {

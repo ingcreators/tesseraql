@@ -30,5 +30,21 @@ public record JobExecution(
         Instant startTime,
         Instant endTime,
         Long durationMs,
-        String exitMessage) {
+        String exitMessage,
+        String ownerNode,
+        Instant heartbeatAt) {
+
+    /**
+     * Whether this run's owner has reported inside {@code window}
+     * (docs/audit-hardening.md Decision 6).
+     *
+     * <p>A null heartbeat reads as alive rather than dead, and that is deliberate: rows written
+     * before this column existed have no pulse to judge, and treating them as dead would let a
+     * reaper kill a run that a still-running older process owns. The conservative reading keeps
+     * today's behaviour for those rows — they stay wedged, which is the bug this change stops
+     * creating rather than one it retroactively repairs.
+     */
+    public boolean ownerAlive(Instant now, java.time.Duration window) {
+        return heartbeatAt == null || heartbeatAt.isAfter(now.minus(window));
+    }
 }

@@ -49,6 +49,7 @@ public final class AppLinter {
                 new ApiKeyConfigRules(),
                 new BearerConfigRules(),
                 new AuthWithoutPolicyRules(),
+                new BatchHeartbeatRules(),
                 new MtlsConfigRules(),
                 new OidcSamlRules(),
                 new SecurityDefaultRules(),

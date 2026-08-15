@@ -132,6 +132,30 @@ final class DialectRuntimeChecks {
     }
 
     /**
+     * Run ownership and the heartbeat on this vendor (docs/audit-hardening.md Decision 6).
+     *
+     * <p>V8 adds two columns, and a column add is exactly the migration shape that has a different
+     * spelling on every dialect — Oracle takes no {@code column} keyword, SQL Server needs its
+     * {@code col_length} guard to stay re-runnable. Starting a run here proves the columns exist
+     * and that {@code startExecution} can write them.
+     */
+    static void jobOwnershipRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.batch.JobRepository repository = new io.tesseraql.operations.batch.JobRepository(
+                dataSource, "dialect-node");
+        repository.ensureSchema();
+        String executionId = repository.startExecution("dialect.owned", "app", "manual", "tester");
+
+        var execution = repository.findExecution(executionId).orElseThrow();
+        assertThat(execution.ownerNode()).isEqualTo("dialect-node");
+        assertThat(execution.heartbeatAt()).isNotNull();
+
+        repository.heartbeat(executionId);
+        assertThat(repository.findRunning("dialect.owned", java.time.Duration.ofMinutes(5)))
+                .extracting(io.tesseraql.operations.batch.JobExecution::id)
+                .contains(executionId);
+    }
+
+    /**
      * Poll-source exclusive consumption on this vendor (docs/audit-hardening.md Decision 4).
      *
      * <p>Its own check because the arbitration is a primary-key insert whose losing side must be
