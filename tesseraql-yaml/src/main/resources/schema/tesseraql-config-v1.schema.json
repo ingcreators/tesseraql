@@ -11,9 +11,17 @@
         "app": {
           "type": "object",
           "properties": {
-            "name": { "type": "string", "description": "The application name: tags job executions, outbox events, and per-app operations scope (ops.app.<name>)." },
-            "home": { "type": "string" },
-            "work": { "type": "string", "description": "The work directory for runtime artifacts (default: <home>/work)." }
+            "name": {
+              "type": "string",
+              "description": "The application name: tags job executions, outbox events, and per-app operations scope (ops.app.<name>)."
+            },
+            "home": {
+              "type": "string"
+            },
+            "work": {
+              "type": "string",
+              "description": "The work directory for runtime artifacts (default: <home>/work)."
+            }
           },
           "additionalProperties": true
         },
@@ -23,9 +31,16 @@
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "jdbcUrl": { "type": "string" },
-              "username": { "type": "string" },
-              "password": { "type": "string", "description": "Prefer a ${secret.*} reference over a literal." }
+              "jdbcUrl": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string",
+                "description": "Prefer a ${secret.*} reference over a literal."
+              }
             },
             "additionalProperties": true
           }
@@ -41,35 +56,94 @@
                   "description": "Path-matched security defaults, first match wins (* = one segment, ** = many). Documented in route-defaults.md.",
                   "items": {
                     "type": "object",
-                    "required": ["match"],
+                    "required": [
+                      "match"
+                    ],
                     "properties": {
-                      "match": { "type": "string", "description": "The URL path pattern this rule covers." },
-                      "auth": { "type": "string", "enum": ["bearer", "browser", "apiKey", "mtls", "public"] },
-                      "csrf": { "type": "string", "enum": ["auto", "required", "off"], "description": "auto requires CSRF exactly when the effective auth is browser and the method is not GET; required always; off never." },
-                      "policy": { "type": "string", "description": "A policy id under tesseraql.security.policies." }
+                      "match": {
+                        "type": "string",
+                        "description": "The URL path pattern this rule covers."
+                      },
+                      "auth": {
+                        "type": "string",
+                        "enum": [
+                          "bearer",
+                          "browser",
+                          "apiKey",
+                          "mtls",
+                          "public"
+                        ]
+                      },
+                      "csrf": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "required",
+                          "off"
+                        ],
+                        "description": "auto requires CSRF exactly when the effective auth is browser and the method is not GET; required always; off never."
+                      },
+                      "policy": {
+                        "type": "string",
+                        "description": "A policy id under tesseraql.security.policies."
+                      }
                     },
                     "additionalProperties": true
                   }
+                },
+                "mcp": {
+                  "type": "object",
+                  "description": "The floor under MCP primitives that declare no security: of their own. MCP documents never receive security.defaults.routes, because those rules match on a served URL path and a primitive is reached by name over one shared endpoint. One block applies to every MCP document.",
+                  "properties": {
+                    "auth": {
+                      "type": "string",
+                      "description": "The authentication mode a primitive inherits when it declares none."
+                    },
+                    "policy": {
+                      "type": "string",
+                      "description": "The policy a primitive inherits when it declares none. Never attached to a primitive whose effective auth is public."
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": true
             },
             "credentialThrottle": {
-          "type": "object",
-          "description": "Keyed rate limiting over the credential surfaces - login, reset, invite, SSO callbacks (docs/credential-throttle.md). Failures only, never a lockout; on by default.",
-          "properties": {
-            "enabled": { "type": "boolean", "description": "Default true. false disables every budget (tests, dev)." },
-            "loginAttempts": { "type": "integer", "minimum": 1, "description": "Failed attempts per submitted login id before throttling (default 10)." },
-            "loginWindow": { "type": "string", "description": "The login-key window (duration string, default 15m)." },
-            "addressAttempts": { "type": "integer", "minimum": 1, "description": "Failed attempts per presented address before throttling (default 100)." },
-            "addressWindow": { "type": "string", "description": "The address-key window (duration string, default 15m)." }
-          },
-          "additionalProperties": false
-        },
-        "responseHeaders": {
+              "type": "object",
+              "description": "Keyed rate limiting over the credential surfaces - login, reset, invite, SSO callbacks (docs/credential-throttle.md). Failures only, never a lockout; on by default.",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Default true. false disables every budget (tests, dev)."
+                },
+                "loginAttempts": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Failed attempts per submitted login id before throttling (default 10)."
+                },
+                "loginWindow": {
+                  "type": "string",
+                  "description": "The login-key window (duration string, default 15m)."
+                },
+                "addressAttempts": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Failed attempts per presented address before throttling (default 100)."
+                },
+                "addressWindow": {
+                  "type": "string",
+                  "description": "The address-key window (duration string, default 15m)."
+                }
+              },
+              "additionalProperties": false
+            },
+            "responseHeaders": {
               "type": "object",
               "description": "Response headers stamped on every route response (CSP, X-Frame-Options, ...). A flat map of header name to value.",
-              "additionalProperties": { "type": "string" }
+              "additionalProperties": {
+                "type": "string"
+              }
             },
             "policies": {
               "type": "object",
@@ -82,8 +156,12 @@
                     "items": {
                       "type": "object",
                       "properties": {
-                        "role": { "type": "string" },
-                        "permission": { "type": "string" }
+                        "role": {
+                          "type": "string"
+                        },
+                        "permission": {
+                          "type": "string"
+                        }
                       },
                       "additionalProperties": true
                     }
@@ -95,10 +173,19 @@
             "jwt": {
               "type": "object",
               "properties": {
-                "secret": { "type": "string", "description": "Prefer a ${secret.*} reference over a literal." },
-                "rolesClaim": { "type": "string" },
-                "permissionsClaim": { "type": "string" },
-                "tenantClaim": { "type": "string" }
+                "secret": {
+                  "type": "string",
+                  "description": "Prefer a ${secret.*} reference over a literal."
+                },
+                "rolesClaim": {
+                  "type": "string"
+                },
+                "permissionsClaim": {
+                  "type": "string"
+                },
+                "tenantClaim": {
+                  "type": "string"
+                }
               },
               "additionalProperties": true
             }
@@ -108,9 +195,19 @@
         "i18n": {
           "type": "object",
           "properties": {
-            "defaultLocale": { "type": "string", "description": "BCP-47 tag the message catalogs fall back to (default en)." },
-            "locales": { "type": "array", "items": { "type": "string" } },
-            "preference": { "type": "string" }
+            "defaultLocale": {
+              "type": "string",
+              "description": "BCP-47 tag the message catalogs fall back to (default en)."
+            },
+            "locales": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "preference": {
+              "type": "string"
+            }
           },
           "additionalProperties": true
         },
@@ -121,16 +218,38 @@
               "type": "object",
               "description": "Poll-source connectivity, deny-by-default. Documented in connectors.md.",
               "properties": {
-                "allowedHosts": { "type": "array", "items": { "type": "string" } },
-                "allowedPaths": { "type": "array", "items": { "type": "string" }, "description": "Roots a local poll source may watch; a local poll without one is refused." },
-                "knownHostsFile": { "type": "string", "description": "SSH known-hosts file for strict SFTP host-key checking." },
+                "allowedHosts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowedPaths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Roots a local poll source may watch; a local poll without one is refused."
+                },
+                "knownHostsFile": {
+                  "type": "string",
+                  "description": "SSH known-hosts file for strict SFTP host-key checking."
+                },
                 "trustStore": {
                   "type": "object",
-                  "required": ["file"],
+                  "required": [
+                    "file"
+                  ],
                   "properties": {
-                    "file": { "type": "string" },
-                    "password": { "type": "string" },
-                    "type": { "type": "string" }
+                    "file": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
                   },
                   "additionalProperties": true,
                   "description": "FTPS server-certificate trust; without it an ftps source is refused (TQL-SEC-4085)."
@@ -138,7 +257,10 @@
                 "credentials": {
                   "type": "object",
                   "description": "Named poll credentials (username plus exactly one of password/privateKeyFile; optional FTPS keyStore* for mutual TLS).",
-                  "additionalProperties": { "type": "object", "additionalProperties": true }
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
                 }
               },
               "additionalProperties": true
@@ -149,17 +271,37 @@
         "framework": {
           "type": "object",
           "properties": {
-            "datasource": { "type": "string", "description": "Named datasource (tesseraql.datasources) carrying ambient framework state - sessions, credential tokens, replay guards, OIDC state, rate leases, route audit, preferences (docs/framework-datasource.md). Default main. Transactionally-coupled stores (outbox, workflow, idempotency, webhook replay) always stay on the business datasource. An unknown name refuses the boot." }
+            "datasource": {
+              "type": "string",
+              "description": "Named datasource (tesseraql.datasources) carrying ambient framework state - sessions, credential tokens, replay guards, OIDC state, rate leases, route audit, preferences (docs/framework-datasource.md). Default main. Transactionally-coupled stores (outbox, workflow, idempotency, webhook replay) always stay on the business datasource. An unknown name refuses the boot."
+            }
           },
           "additionalProperties": true
         },
         "sessions": {
           "type": "object",
           "properties": {
-            "ttl": { "type": "string", "description": "Browser-session lifetime (duration string, default 12h)." },
-            "idleTimeout": { "type": "string", "description": "Invalidate a session unseen for this long (duration string) - sliding, inside the absolute ttl. Unset disables it (docs/session-visibility.md)." },
-            "maxPerSubject": { "type": "integer", "minimum": 1, "description": "Cap live sessions per account: a login beyond it evicts the subject's oldest session (newest login wins). 1 = single-session policy. Unset = unlimited." },
-            "store": { "type": "string", "enum": ["jdbc", "memory"], "description": "jdbc (default): tql_session shared across nodes, survives restarts. memory: per-node, gone on restart - the explicit opt-in for embedders and tests." }
+            "ttl": {
+              "type": "string",
+              "description": "Browser-session lifetime (duration string, default 12h)."
+            },
+            "idleTimeout": {
+              "type": "string",
+              "description": "Invalidate a session unseen for this long (duration string) - sliding, inside the absolute ttl. Unset disables it (docs/session-visibility.md)."
+            },
+            "maxPerSubject": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Cap live sessions per account: a login beyond it evicts the subject's oldest session (newest login wins). 1 = single-session policy. Unset = unlimited."
+            },
+            "store": {
+              "type": "string",
+              "enum": [
+                "jdbc",
+                "memory"
+              ],
+              "description": "jdbc (default): tql_session shared across nodes, survives restarts. memory: per-node, gone on restart - the explicit opt-in for embedders and tests."
+            }
           },
           "additionalProperties": true
         },
@@ -167,16 +309,30 @@
           "type": "object",
           "description": "Bounds on the live-event stream registry behind GET /_tesseraql/events (docs/realtime.md).",
           "properties": {
-            "maxPerSubject": { "type": "integer", "minimum": 1, "description": "Streams one subject may hold at once (default 4); one more evicts that subject's oldest stream." },
-            "maxTotal": { "type": "integer", "minimum": 1, "description": "Streams the whole registry may hold (default 256); at the cap a new subscription is refused with TQL-RATE-5030 (503), never by ending someone else's stream." }
+            "maxPerSubject": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Streams one subject may hold at once (default 4); one more evicts that subject's oldest stream."
+            },
+            "maxTotal": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Streams the whole registry may hold (default 256); at the cap a new subscription is refused with TQL-RATE-5030 (503), never by ending someone else's stream."
+            }
           },
           "additionalProperties": true
         },
         "metrics": {
           "type": "object",
           "properties": {
-            "enabled": { "type": "boolean", "description": "Serve the Prometheus exposition endpoint (default false)." },
-            "unauthenticated": { "type": "boolean", "description": "Let a cluster-internal scraper skip the bearer gate (default false)." }
+            "enabled": {
+              "type": "boolean",
+              "description": "Serve the Prometheus exposition endpoint (default false)."
+            },
+            "unauthenticated": {
+              "type": "boolean",
+              "description": "Let a cluster-internal scraper skip the bearer gate (default false)."
+            }
           },
           "additionalProperties": true
         },
@@ -186,7 +342,10 @@
             "routes": {
               "type": "object",
               "properties": {
-                "enabled": { "type": "boolean", "description": "Record every route invocation to the route audit trail (default false)." }
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Record every route invocation to the route audit trail (default false)."
+                }
               },
               "additionalProperties": true
             }
@@ -199,8 +358,14 @@
             "dispatch": {
               "type": "object",
               "properties": {
-                "fixedDelay": { "type": "string", "description": "How often the dispatcher claims pending events (duration string)." },
-                "maxAttempts": { "type": "integer", "description": "Delivery attempts before an event dead-letters." }
+                "fixedDelay": {
+                  "type": "string",
+                  "description": "How often the dispatcher claims pending events (duration string)."
+                },
+                "maxAttempts": {
+                  "type": "integer",
+                  "description": "Delivery attempts before an event dead-letters."
+                }
               },
               "additionalProperties": true
             }
@@ -210,18 +375,33 @@
         "retention": {
           "type": "object",
           "properties": {
-            "sweep": { "type": "string", "description": "How often the retention sweeper runs (duration string)." },
-            "outbox": { "type": "string", "description": "How long delivered outbox events are kept." },
-            "jobs": { "type": "string", "description": "How long finished job executions are kept." },
-            "attachments": { "type": "string" }
+            "sweep": {
+              "type": "string",
+              "description": "How often the retention sweeper runs (duration string)."
+            },
+            "outbox": {
+              "type": "string",
+              "description": "How long delivered outbox events are kept."
+            },
+            "jobs": {
+              "type": "string",
+              "description": "How long finished job executions are kept."
+            },
+            "attachments": {
+              "type": "string"
+            }
           },
           "additionalProperties": true
         },
         "studio": {
           "type": "object",
           "properties": {
-            "enabled": { "type": "boolean" },
-            "readOnly": { "type": "boolean" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "readOnly": {
+              "type": "boolean"
+            }
           },
           "additionalProperties": true
         },

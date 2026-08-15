@@ -33,6 +33,7 @@ class LintRegistryOrderTest {
                         "PromptRules",
                         "ConsumerRules",
                         "DuplicateMcpNameRules",
+                        "McpReadFloorRules",
                         "ToolUiLinkRules",
                         "I18nRules",
                         // Security and shared definitions, which need every document loaded.

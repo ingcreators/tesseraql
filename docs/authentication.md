@@ -64,6 +64,31 @@ Defaults cover the HTTP routes under `web/`. Workflow documents and attachment d
 their own HTTP surfaces and keep their explicit `security:` blocks — a document that governs
 transitions or files should say so on its face.
 
+### The MCP floor
+
+MCP primitives get their own block rather than a path rule, because they have no path: a tool or a
+resource is reached **by name over one shared endpoint**, so a `match:` pattern would have nothing
+to match and "which rule applies here?" would have no answer.
+
+```yaml
+tesseraql:
+  security:
+    defaults:
+      mcp:
+        auth: bearer
+        policy: mcp.read
+```
+
+One block covers every MCP document, and the same merge rules apply: what the primitive declares
+wins, and a primitive whose effective auth is `public` never inherits a policy.
+
+A **write** tool has always needed a policy of its own — `TQL-MCP-4030` refuses one without,
+because an agent must not mutate data without authorization. A **read** primitive had no floor at
+all, so the answer to "who may read this?" was whoever could reach the endpoint. `TQL-MCP-4261`
+warns when nothing at all is in force: neither the document's own `security:`, nor this block. It is
+a warning rather than an error because a genuinely public read is a real design — what is worth
+saying out loud is the case that is indistinguishable in the YAML from one somebody meant to govern.
+
 ## Bearer JWT
 
 A `bearer` route reads the `Authorization: Bearer <jwt>` header, verifies the signature, validates
