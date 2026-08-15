@@ -390,8 +390,11 @@ public final class ErrorResponseRenderer implements Processor {
         return switch (code.domain()) {
             case SEC -> switch (code.number()) {
                 // 4011 unauthenticated; 4012/4013 webhook signature invalid or stale — the
-                // caller's credential material is wrong.
-                case 4011, 4012, 4013 -> 401;
+                // caller's credential material is wrong. 4143/4144 are the same shape: the token
+                // verified, but it was minted for another relying party or with no expiry, so the
+                // credential is the problem and not this server (docs/audit-hardening.md
+                // Decision 1).
+                case 4011, 4012, 4013, 4143, 4144 -> 401;
                 case 4031, 4032 -> 403;
                 case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
                 // The SEC domain is the whole security namespace, not an auth-failure one:

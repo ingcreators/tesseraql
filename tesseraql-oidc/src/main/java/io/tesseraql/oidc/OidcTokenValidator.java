@@ -8,24 +8,33 @@ import io.tesseraql.security.jwt.JwtAuthenticator;
 import java.util.List;
 
 /**
- * Validates an OpenID Connect ID token (roadmap Phase 25). Signature, {@code exp}/{@code nbf}, and
- * {@code iss} are delegated to {@link JwtAuthenticator} (RS256 against the provider's JWKS — the
- * slice-1 verifier); the OIDC-specific {@code aud} and {@code nonce} checks live here so the bearer
- * path stays untouched. The expected issuer is always the discovered {@code issuer}, so the iss
- * check is never silently skipped.
+ * Validates an OpenID Connect ID token (roadmap Phase 25). Signature, {@code exp}/{@code nbf},
+ * {@code iss} and {@code aud} are delegated to {@link JwtAuthenticator} (RS256 against the
+ * provider's JWKS); only the {@code nonce} check remains here. The expected issuer is always the
+ * discovered {@code issuer}, so the iss check is never silently skipped.
+ *
+ * <p>The audience check used to live here, with a javadoc explaining that it did "so the bearer path
+ * stays untouched" — treating {@code aud} as OIDC-specific. It is not: it is RFC 7519 §4.1.3, and
+ * leaving the bearer path without it was a confused deputy (docs/audit-hardening.md Decision 1).
+ * There is now one implementation, in {@link JwtAuthenticator}, and this validator uses it by
+ * declaring the client id as the audience it expects.
  */
 public final class OidcTokenValidator {
 
-    private final String clientId;
     private final JwtAuthenticator authenticator;
 
     public OidcTokenValidator(OidcMetadata metadata, OidcConfig config) {
-        this(config.clientId(), buildAuthenticator(metadata, config));
+        this(buildAuthenticator(metadata, config));
     }
 
-    /** Test seam: inject a {@link JwtAuthenticator} (e.g. a static-key one) without a JWKS fetch. */
-    OidcTokenValidator(String clientId, JwtAuthenticator authenticator) {
-        this.clientId = clientId;
+    /**
+     * Test seam: inject a {@link JwtAuthenticator} (e.g. a static-key one) without a JWKS fetch.
+     *
+     * <p>It no longer takes a client id beside the authenticator. The audience is now the
+     * authenticator's, so passing one here would let a test declare an expectation the validator
+     * does not consult.
+     */
+    OidcTokenValidator(JwtAuthenticator authenticator) {
         this.authenticator = authenticator;
     }
 
@@ -38,7 +47,12 @@ public final class OidcTokenValidator {
                 metadata.jwksUri().toString(),
                 new JwksConfig(null, null, null),
                 metadata.issuer(),
+                // An ID token's aud is the client id — the same intersection rule the bearer path
+                // now runs, rather than a second copy of it here.
+                List.of(config.clientId()),
                 config.clockSkew(),
+                // An ID token without exp is refused, which is what the shared default already says.
+                null,
                 claims.roles(),
                 null,
                 claims.groups(),
@@ -65,17 +79,8 @@ public final class OidcTokenValidator {
         } catch (TqlException ex) {
             throw new OidcException("ID token rejected: " + ex.getMessage());
         }
-        requireAudience(principal.claims().get("aud"));
         requireNonce(principal.claims().get("nonce"), expectedNonce);
         return principal;
-    }
-
-    private void requireAudience(Object aud) {
-        boolean matches = aud instanceof String single && single.equals(clientId)
-                || aud instanceof List<?> many && many.contains(clientId);
-        if (!matches) {
-            throw new OidcException("ID token audience does not include the client id");
-        }
     }
 
     private static void requireNonce(Object nonce, String expected) {

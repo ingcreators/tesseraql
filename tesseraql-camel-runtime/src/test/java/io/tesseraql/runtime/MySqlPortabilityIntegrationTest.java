@@ -108,7 +108,8 @@ class MySqlPortabilityIntegrationTest {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = enc.encodeToString(
-                MAPPER.writeValueAsBytes(Map.of("sub", "u1", "roles", List.of("USER_READ"))));
+                MAPPER.writeValueAsBytes(
+                        TestClaims.addressed(Map.of("sub", "u1", "roles", List.of("USER_READ")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

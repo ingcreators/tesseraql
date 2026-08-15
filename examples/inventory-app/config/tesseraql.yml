@@ -63,6 +63,10 @@ tesseraql:
       Referrer-Policy: no-referrer
     jwt:
       secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+      # Which tokens are for this application. Without it, any token the issuer
+      # minted for any other relying party would be accepted (TQL-SEC-4048).
+      audience:
+        - https://inventory.example.com
       rolesClaim: roles
     # Deny-by-default, defined here (the marketplace admission bar, docs/admission.md).
     policies:

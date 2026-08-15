@@ -2603,11 +2603,16 @@ class StudioIntegrationTest {
         // search — all narrowing server-side while the tiles keep the full counts.
         String bad = "web/api/lintprobe2/get.yml";
         Files.createDirectories(appHome.resolve("web/api/lintprobe2"));
+        // The policy is not incidental: /api/** inherits auth: bearer from the app's security
+        // defaults, so a probe without one would also trip TQL-SEC-4049 and appear under the
+        // warning chip — which is exactly what this case asserts it does not do.
         Files.writeString(appHome.resolve(bad), """
                 version: tesseraql/v1
                 id: lint.probe2
                 kind: route
                 recipe: not-a-real-recipe
+                security:
+                  policy: app.read
                 response:
                   json:
                     body:
@@ -3585,8 +3590,10 @@ class StudioIntegrationTest {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(Map.of(
-                "sub", "studio-user", "preferred_username", "studio-user", "roles", roles)));
+        String payload = encoder
+                .encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(Map.of(
+                        "sub", "studio-user", "preferred_username", "studio-user", "roles",
+                        roles))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

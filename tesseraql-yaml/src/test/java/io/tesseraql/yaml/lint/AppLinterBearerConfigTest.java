@@ -48,6 +48,7 @@ class AppLinterBearerConfigTest {
               security:
                 jwt:
                   secret: dev-only-secret-change-me-in-production
+                  audience: https://app.example.com
             """;
 
     @Test

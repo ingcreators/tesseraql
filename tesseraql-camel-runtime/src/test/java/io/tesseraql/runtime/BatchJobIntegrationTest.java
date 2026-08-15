@@ -795,8 +795,8 @@ class BatchJobIntegrationTest {
     private static String token(List<String> roles, List<String> permissions) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", "ops", "roles", roles, "permissions", permissions)));
+        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                Map.of("sub", "ops", "roles", roles, "permissions", permissions))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

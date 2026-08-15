@@ -27,9 +27,17 @@ import java.util.stream.Stream;
  */
 final class ConfigReference {
 
-    /** {@code config.getString("tesseraql.x.y")} and the typed variants beside it. */
+    /**
+     * {@code config.getString("tesseraql.x.y")}, the typed variants beside it, and
+     * {@code navigate("...")}.
+     *
+     * <p>Without {@code navigate}, a key whose value is a block rather than a scalar — a list, or a
+     * map of named entries — was invisible to this page. That is how
+     * {@code tesseraql.security.jwt.audience} came to be a key an application <em>must</em> declare
+     * and could not look up here, and the same gap hid the mTLS client registry and the policy map.
+     */
     private static final Pattern READ = Pattern.compile(
-            "get(?:String|Boolean|Int|Integer|Long|List|Map|Duration)\\(\\s*\""
+            "(?:get(?:String|Boolean|Int|Integer|Long|List|Map|Duration)|navigate)\\(\\s*\""
                     + "((?:tesseraql|server|db)\\.[A-Za-z0-9_.<>-]*)\"");
 
     private static final String BLOB = "https://github.com/ingcreators/tesseraql/blob/main/";

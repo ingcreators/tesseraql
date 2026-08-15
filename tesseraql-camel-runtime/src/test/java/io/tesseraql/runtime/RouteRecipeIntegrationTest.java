@@ -208,8 +208,8 @@ class RouteRecipeIntegrationTest {
         java.util.Base64.Encoder encoder = java.util.Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString(
                 "{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(
-                java.util.Map.of("sub", "tester", "roles", java.util.List.of("USER_READ"))));
+        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                java.util.Map.of("sub", "tester", "roles", java.util.List.of("USER_READ")))));
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
         mac.init(new javax.crypto.spec.SecretKeySpec(
                 "dev-only-secret-change-me-in-production"

@@ -39,6 +39,7 @@ class LintRegistryOrderTest {
                         "JwtConfigRules",
                         "ApiKeyConfigRules",
                         "BearerConfigRules",
+                        "AuthWithoutPolicyRules",
                         "MtlsConfigRules",
                         "OidcSamlRules",
                         "SecurityDefaultRules",

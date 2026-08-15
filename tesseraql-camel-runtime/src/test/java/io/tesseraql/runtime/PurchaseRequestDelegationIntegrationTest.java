@@ -169,8 +169,8 @@ class PurchaseRequestDelegationIntegrationTest {
     private static String token(String sub) throws Exception {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(
-                Map.of("sub", sub, "roles", List.of("APPROVER"))));
+        String payload = enc.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                Map.of("sub", sub, "roles", List.of("APPROVER")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = enc.encodeToString(

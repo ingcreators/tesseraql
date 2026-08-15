@@ -36,6 +36,7 @@ class TokenCommandTest {
                   security:
                     jwt:
                       secret: unit-test-secret
+                      audience: https://app.example.com
                       rolesClaim: groups
                 """);
 
@@ -87,6 +88,7 @@ class TokenCommandTest {
                   security:
                     jwt:
                       jwksUri: https://idp.example.com/jwks
+                      audience: https://app.example.com
                 """);
 
         int exit = new CommandLine(new TokenCommand())

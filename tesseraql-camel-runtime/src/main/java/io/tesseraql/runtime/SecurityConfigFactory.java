@@ -166,6 +166,10 @@ public final class SecurityConfigFactory {
         return java.util.Optional.empty();
     }
 
+    /** TQL-SEC-4048: a JWT configuration that can validate a token but names no audience. */
+    private static final io.tesseraql.core.error.TqlErrorCode JWT_AUDIENCE_MISSING = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4048);
+
     private static JwtConfig parseJwt(AppConfig config) {
         // JWT auth is enabled by an HS256 secret or any RS256 key source (publicKey/jwksUri); the
         // jwt block existing on its own is not enough, so an app without bearer auth binds nothing.
@@ -174,6 +178,19 @@ public final class SecurityConfigFactory {
         String jwksUri = config.getString("tesseraql.security.jwt.jwksUri").orElse(null);
         if (secret == null && publicKey == null && jwksUri == null) {
             return null;
+        }
+        // The build-time lint is not enough on its own: nothing runs AppLinter at startup, so a
+        // configuration that reached a running process unlinted would silently take the
+        // empty-audience path, which checks nothing. Refusing here makes TQL-SEC-4048 a boot
+        // failure as well as a build failure, on the same condition and with the same code
+        // (docs/audit-hardening.md Decision 1).
+        List<String> audience = audiences(config);
+        if (audience.isEmpty()) {
+            throw new io.tesseraql.core.error.TqlException(JWT_AUDIENCE_MISSING,
+                    "tesseraql.security.jwt is configured without an audience, so any token the"
+                            + " issuer minted for any other relying party would be accepted;"
+                            + " declare tesseraql.security.jwt.audience with the identifier(s)"
+                            + " this application answers to");
         }
         java.time.Duration clockSkew = duration(config, "tesseraql.security.jwt.clockSkew");
         SecurityConfig.JwksConfig jwks = new SecurityConfig.JwksConfig(
@@ -187,13 +204,34 @@ public final class SecurityConfigFactory {
                 jwksUri,
                 jwks,
                 config.getString("tesseraql.security.jwt.issuer").orElse(null),
+                audience,
                 clockSkew,
+                config.getBoolean("tesseraql.security.jwt.requireExpiration", true),
                 config.getString("tesseraql.security.jwt.rolesClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.permissionsClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.groupsClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.tenantClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.loginClaim").orElse(null),
                 config.getString("tesseraql.security.jwt.nameClaim").orElse(null));
+    }
+
+    /**
+     * The declared audiences, written either as one string or as a list.
+     *
+     * <p>Every other {@code jwt} key is read through {@code getString}, through which a list cannot
+     * arrive at all — so this one navigates instead. The claim side and the config side need two
+     * different coercions and this is the config half: {@code aud} is string-or-array in the token,
+     * {@code audience} is string-or-list in the YAML, and the model holds a list either way.
+     */
+    private static List<String> audiences(AppConfig config) {
+        Object declared = config.navigate("tesseraql.security.jwt.audience");
+        if (declared instanceof List<?> list) {
+            return stringList(list);
+        }
+        if (declared instanceof String single && !single.isBlank()) {
+            return List.of(single.trim());
+        }
+        return List.of();
     }
 
     private static java.time.Duration duration(AppConfig config, String key) {

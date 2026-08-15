@@ -167,6 +167,7 @@ class RouteWatchIntegrationTest {
                   security:
                     jwt:
                       secret: dev-only-secret-change-me-in-production
+                      audience: https://app.example.com
                       rolesClaim: roles
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
