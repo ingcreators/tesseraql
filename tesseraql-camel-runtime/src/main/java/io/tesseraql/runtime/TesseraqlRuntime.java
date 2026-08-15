@@ -171,6 +171,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * Per-pool connection counts, read from Hikari's MXBean
+     * (docs/audit-hardening.md Decision 9).
+     *
+     * <p>Kept here rather than in {@code tesseraql-ops-ui} because that module has no Hikari
+     * dependency and this is not a reason to give it one: the ops module declares the shape it
+     * wants and the runtime, which already owns the pools, fills it in.
+     */
+    private static Map<String, Map<String, Integer>> poolStats(
+            Map<String, HikariDataSource> dataSources) {
+        Map<String, Map<String, Integer>> stats = new LinkedHashMap<>();
+        dataSources.forEach((name, dataSource) -> {
+            com.zaxxer.hikari.HikariPoolMXBean pool = dataSource.getHikariPoolMXBean();
+            if (pool != null) {
+                stats.put(name, Map.of(
+                        "active", pool.getActiveConnections(),
+                        "idle", pool.getIdleConnections(),
+                        "total", pool.getTotalConnections(),
+                        "awaiting", pool.getThreadsAwaitingConnection()));
+            }
+        });
+        return stats;
+    }
+
+    /**
      * The ring capacity a manifest asks for.
      *
      * <p>Read here as well as on the main start path because suite mode builds its own tracer
@@ -1128,10 +1152,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .pollSources(pollSourceStatus)
                     // A job firing unfiltered because its calendar would not resolve.
                     .calendars(calendarStatus)
+                    // Camel's own view of its routes, as a signal rather than a gate
+                    // (docs/audit-hardening.md Decision 9).
+                    .routeStatus(() -> RouteHealthSignals.stoppedRoutes(context))
                     // Truthful readiness (roadmap Phase 45): every configured datasource is
                     // probed live; any failure rolls health up to DOWN so a load balancer
                     // actually sheds traffic.
-                    .datasourceProbe(() -> probeDatasources(dataSource, dataSources));
+                    .datasourceProbe(() -> probeDatasources(dataSource, dataSources))
+                    // An unauthenticated endpoint doing real work per poll is a lever; a memo
+                    // bounds it to one probe per TTL however fast the polls arrive
+                    // (docs/audit-hardening.md Decision 9).
+                    .healthTtl(io.tesseraql.core.util.Durations.parse(manifest.config()
+                            .getString("tesseraql.diagnostics.readinessTtl").orElse("1s")));
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
             AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
@@ -1217,7 +1249,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .map(Boolean::parseBoolean).orElse(false),
                     manifest.config().getString("tesseraql.metrics.unauthenticated")
                             .map(Boolean::parseBoolean).orElse(false),
-                    aggregatingMeter, pollSourceStatus);
+                    aggregatingMeter, pollSourceStatus,
+                    new io.tesseraql.opsui.RuntimeMetrics(() -> poolStats(dataSources)));
+            // camel-main was declared with zero references anywhere. Removing it is a clean
+            // subtraction that also closes the camel.server.mcp* door structurally: the only thing
+            // keeping those properties inert was that camel-main's bootstrap never ran
+            // (docs/audit-hardening.md Decision 9).
             Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             // What this runtime serves: the host app plus anything mounted into it. The ops

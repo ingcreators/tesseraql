@@ -75,7 +75,11 @@ class HealthProbeIntegrationTest {
     void readinessDegradesToDownWhenTheDatabaseStopsWhileLivenessStaysUp() throws Exception {
         POSTGRES.stop();
 
-        HttpResponse<String> ready = get("/_tesseraql/health/ready");
+        // The roll-up is memoized for a second (docs/audit-hardening.md Decision 9), so readiness
+        // is allowed to be that stale — the endpoint is unauthenticated by design, and without a
+        // memo every poll walked the span ring twice and probed every datasource. What is not
+        // allowed is for it to stay stale, which is what this waits to see.
+        HttpResponse<String> ready = awaitReadiness(503);
         assertThat(ready.statusCode()).isEqualTo(503);
         assertThat(MAPPER.readTree(ready.body()).get("status").asText()).isEqualTo("DOWN");
         assertThat(get("/_tesseraql/health").statusCode()).isEqualTo(503);
@@ -85,6 +89,19 @@ class HealthProbeIntegrationTest {
         HttpResponse<String> live = get("/_tesseraql/health/live");
         assertThat(live.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(live.body()).get("status").asText()).isEqualTo("UP");
+    }
+
+    /** Polls readiness until it reports {@code expected}, well inside a handful of TTLs. */
+    private static HttpResponse<String> awaitReadiness(int expected) throws Exception {
+        HttpResponse<String> response = null;
+        for (int attempt = 0; attempt < 40; attempt++) {
+            response = get("/_tesseraql/health/ready");
+            if (response.statusCode() == expected) {
+                return response;
+            }
+            Thread.sleep(250);
+        }
+        return response;
     }
 
     private static int freePort() throws IOException {

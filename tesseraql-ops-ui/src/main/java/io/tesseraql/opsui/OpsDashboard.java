@@ -28,6 +28,37 @@ public final class OpsDashboard {
     private final long slowSpanThresholdMs;
     private final AlertThresholds thresholds;
     private final io.tesseraql.core.diag.PinningMonitor pinning;
+
+    /**
+     * The memoized health roll-up (docs/audit-hardening.md Decision 9).
+     *
+     * <p>{@code health()} walked the whole span ring twice — once directly and once through
+     * {@code alerts()} — and probed every datasource, on every poll of an endpoint that is
+     * unauthenticated by design. A load balancer polling every second was paying for two full ring
+     * scans and a round trip per datasource each time, and anyone who could reach the port could
+     * ask for that work as often as they liked.
+     *
+     * <p>A short TTL rather than a longer one: readiness has to stay readiness. The point is that
+     * a burst of polls costs one probe, not that the answer is allowed to go stale.
+     */
+    private final java.util.concurrent.atomic.AtomicReference<Memoized> cachedHealth = new java.util.concurrent.atomic.AtomicReference<>();
+
+    /**
+     * One second by default, and the default is the whole trade.
+     *
+     * <p>A readiness answer may be up to this old, so an orchestrator takes up to this much longer
+     * to shed traffic during an outage. One second buys the thing that matters — a burst of polls
+     * costs one probe per second no matter how fast it arrives, which is what stops an
+     * unauthenticated endpoint from being a lever — while staying inside the interval any
+     * orchestrator actually polls at.
+     */
+    private java.util.function.Supplier<Map<String, String>> routeStatus;
+
+    private volatile java.time.Duration healthTtl = java.time.Duration.ofSeconds(1);
+
+    /** A roll-up and the moment it was computed. */
+    private record Memoized(HealthReport report, long computedAtMillis) {
+    }
     private java.util.function.Supplier<Map<String, Integer>> outboxCounts;
     private java.util.function.Supplier<Map<String, Integer>> eventCounts;
     private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
@@ -113,6 +144,22 @@ public final class OpsDashboard {
         return this;
     }
 
+    /**
+     * Wires the route-status contributor (docs/audit-hardening.md Decision 9).
+     *
+     * <p>A supplier rather than a direct reference because this module has no Camel dependency and
+     * a stopped route is Camel's fact about itself, which nothing here can compute.
+     *
+     * <p>It contributes a detail and an alert, never the readiness verdict. Gating on Camel's own
+     * health registry would black out the boot: its {@code initialState} is DOWN, so a healthy
+     * consumer that has not polled yet reports DOWN — on exactly the file and SFTP sources the
+     * signal is for.
+     */
+    public OpsDashboard routeStatus(java.util.function.Supplier<Map<String, String>> routeStatus) {
+        this.routeStatus = routeStatus;
+        return this;
+    }
+
     /** Builds the dashboard overview: batch summary, lane diagnostics, slow SQL, and recent traces. */
     public Overview overview(int recentLimit) {
         return overview(recentLimit, app -> true);
@@ -141,6 +188,14 @@ public final class OpsDashboard {
                 pinning(), !alerts.isEmpty(), alerts);
     }
 
+    /** How long a health roll-up is reused; the runtime binds the declared key. */
+    public OpsDashboard healthTtl(java.time.Duration ttl) {
+        if (ttl != null && !ttl.isNegative()) {
+            this.healthTtl = ttl;
+        }
+        return this;
+    }
+
     /**
      * A health roll-up suitable for an actuator/health endpoint (design ch. 19.1, roadmap
      * Phase 45): {@code DOWN} when the datasource probe fails (a dependency the app cannot
@@ -148,6 +203,20 @@ public final class OpsDashboard {
      * key metrics and per-datasource probe results as details.
      */
     public HealthReport health() {
+        Memoized cached = cachedHealth.get();
+        long now = System.currentTimeMillis();
+        if (cached != null && now - cached.computedAtMillis() < healthTtl.toMillis()) {
+            return cached.report();
+        }
+        HealthReport fresh = computeHealth();
+        // Last writer wins rather than a lock: two concurrent polls may both compute, which costs
+        // one extra probe and never a wrong answer. Serialising them would make the endpoint's
+        // latency depend on the slowest datasource for every caller at once.
+        cachedHealth.set(new Memoized(fresh, now));
+        return fresh;
+    }
+
+    private HealthReport computeHealth() {
         TraceMetrics metrics = traceMetrics();
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("traceErrorRate", metrics.traceErrorRate());
@@ -157,6 +226,11 @@ public final class OpsDashboard {
         Map<String, Boolean> datasources = probeDatasources();
         if (!datasources.isEmpty()) {
             details.put("datasources", datasources);
+        }
+        Map<String, String> stoppedRoutes = routeStatus == null ? Map.of() : routeStatus.get();
+        if (!stoppedRoutes.isEmpty()) {
+            // A detail and an alert; deliberately not part of the down verdict below.
+            details.put("stoppedRoutes", stoppedRoutes);
         }
         boolean down = datasources.containsValue(Boolean.FALSE);
         List<Alert> alerts;
