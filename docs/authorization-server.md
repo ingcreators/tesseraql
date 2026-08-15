@@ -4,6 +4,12 @@ Status: **designed 2026-08-15, and deferred.** The design below is complete enou
 from. The recommendation is not to build it yet, and the conditions for revisiting are written
 down at the end so the question does not have to be re-researched from scratch.
 
+Two things escape the deferral, and both moved into
+[audit-hardening.md](audit-hardening.md) so they are not deferred with it: the SAML hardening of
+open question 4 is that campaign's Decision 10 and slice 13, and the companion-authorization-
+server documentation of "What to do instead" item 3 ships with its wave E, because the resource-
+server slices serve nobody without an authorization server to name.
+
 The question arrived from MCP. [audit-hardening.md](audit-hardening.md) Decision 2 makes
 TesseraQL an OAuth 2.0 *resource server*: it validates a bearer token an identity provider
 issued and names that provider in its protected-resource metadata. That decision has a
@@ -242,8 +248,11 @@ implies narrower ones — a concept with no home here.
 ## What to do instead
 
 1. **Audience validation on the bearer path** — [audit-hardening.md](audit-hardening.md) slice 1.
-   Roughly twenty lines, closes a real confused-deputy hole, and is the same defect CXF shipped
-   as a CVE. This is the highest-value security change available in either document.
+   Roughly twenty lines of logic, closing a real confused-deputy hole, and the same defect CXF
+   shipped as a CVE. This is the highest-value security change available in either document.
+   Do not read those twenty lines as the cost: because the audience becomes *required*, the
+   fan-out reaches seven gallery apps, fourteen files declaring `auth: bearer`, the scaffolder
+   template and 28 test sources. The hardening campaign's §Slices prices it, and it is not a day.
 2. **The resource-server slices** — Decision 2 of the same campaign: the metadata document and
    the challenge. Satisfies every MCP server-side MUST without issuing anything.
 3. **For an application with a SAML identity provider**, the supported answer is a companion
@@ -531,7 +540,7 @@ Concrete triggers, so this does not get re-litigated on vibes:
   concatenates and excludes comments — which is correct but *behavioural*. Copying Shibboleth's
   answer is cheap and converts it to structural: reject comment nodes inside signed SAML elements
   at parse time, so no future accessor choice can matter. See
-  [audit-hardening.md](audit-hardening.md) open question 4.
+  [audit-hardening.md](audit-hardening.md) Decision 10.
 
   Worth recording as validation rather than as a change: the algorithm this service provider
   uses — resolve the element the signature actually covers, then consume only what is inside it —
@@ -598,8 +607,10 @@ Concrete triggers, so this does not get re-litigated on vibes:
    scripts and every locally running assistant. It does not reach the hosted assistants, so it
    does not answer this document's question — but it may be worth doing for reasons that have
    nothing to do with MCP.
-4. **Two SAML hardening items surfaced while researching this** and belong in the hardening
-   campaign rather than here.
+4. ~~**Two SAML hardening items surfaced while researching this.**~~ **Closed: they are
+   [audit-hardening.md](audit-hardening.md) Decision 10, shipped as that campaign's slice 13 in
+   wave A.** Recorded here in full because the reasoning is where it was found; the campaign
+   carries the decision and the schedule. Neither item is deferred with this document.
 
    **Fail closed on comments rather than only testing for them.** The current defence is correct
    — `text()` uses `getTextContent()`, which concatenates text children and excludes comments —

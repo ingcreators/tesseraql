@@ -1,6 +1,7 @@
 # Audit hardening
 
-Status: **designed 2026-08-15** — eleven slices below, none shipped yet.
+Status: **designed 2026-08-15** — thirteen slices below, none shipped yet. §Order records the
+sequence they land in and why.
 
 Two audits of the Camel dependency — what it does today, and whether to lean on it further —
 found almost nothing worth changing about Camel and eleven things worth changing about
@@ -440,6 +441,37 @@ main source. Sample them into the existing meter and Prometheus rendering. JDK-o
 the posture that produced the hand-rolled meter in the first place; this is the one signal
 `camel-micrometer` would genuinely have added, and it does not need Micrometer.
 
+## Decision 10 — a signed SAML element is structurally unambiguous, not carefully read
+
+These two arrived from the authorization-server research
+([authorization-server.md](authorization-server.md) open question 4) rather than from the Camel
+audits, and they belong here because that document is deferred and these are a few lines each.
+
+`SamlResponseValidator` is immune to the 2018 attribute-truncation class, but **behaviourally**:
+`text()` calls `getTextContent()`, which concatenates text children and excludes comments. A
+refactor to `getFirstChild().getNodeValue()` would silently reintroduce the whole class with
+every existing test still green, because nothing tests the property. Probed on a stock parser the
+two accessors genuinely differ on the same payload — one returns the full signed string, the
+other the attacker's truncation.
+
+A regression test is the obvious fix and the weaker one. Copy Shibboleth's answer instead:
+**reject a comment or CDATA child inside a signed SAML element at parse time.** OpenSAML has done
+exactly that as a hard unmarshalling error since v3.4, after discovering that its own protection
+was a parser default an integrator could switch off. That removes the accessor question
+permanently rather than pinning one answer to it, and the regression test then guards a
+structural property instead of a habit.
+
+The neighbour is the same shape. `registerIds` marks every `ID` attribute as an XML id without
+rejecting duplicates, while the signed element is resolved twice — once inside signature
+validation and once by `getElementById`. They share one DOM registry so they should agree, but
+XML enforces no uniqueness. The 2024–2026 record says this is the class worth spending the lines
+on: what keeps breaking SAML implementations is two answers to "which element was signed"
+disagreeing, including through parser differentials where the component doing the cryptography
+and the component feeding the application build different trees from identical bytes.
+
+Both are refusals at parse time, both are pre-1.0 because each adds a wire-visible rejection, and
+neither depends on anything else in this campaign.
+
 ## Slices
 
 | # | Slice | Pre-1.0 | Notes |
@@ -449,18 +481,25 @@ the posture that produced the hand-rolled meter in the first place; this is the 
 | 3 | SQL Server constraint classification, including the xopenStates path | yes | Gated dialect round-trip required |
 | 4 | Per-file poll exclusion on every transport | yes | New key, new table, new migration |
 | 5 | Shutdown ordering and boot-failure teardown | no | Land early regardless |
-| 6 | MCP transport gate: `tesseraql.mcp.auth` and audience binding | yes | Depends on slice 1 |
+| 6 | MCP transport gate: `tesseraql.mcp.auth` and audience binding | yes | Depends on slices 1 and 12 |
 | 7 | MCP Protected Resource Metadata and a conformant challenge | yes | Depends on slice 6 |
 | 8 | Node identity, heartbeat, and a bounded stop | yes | Timer-driven heartbeat, not boundary writes |
 | 9 | The reaper, and `overlap: skip` asking whether the owner is alive | yes | Depends on slice 8 |
 | 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and suite-mode tracing | yes | Reaches every log line and the console's trace pages |
 | 11 | Readiness memoization, camel-health as a signal, camel-main removed, JDK gauges | yes | Two new keys (readiness TTL, ring capacity); dist-jar boot check required |
+| 12 | MCP security defaults: a floor for primitives that declare none | yes | Open question 4's mechanism; the only slice an intranet deployment needs |
+| 13 | SAML parse-time structural hardening | yes | Decision 10; independent of everything else here |
+
+The numbers run in decision order, not schedule order — §Order carries the schedule. Slices 12
+and 13 were added after the first draft: 12 because open question 4 closed on a mechanism that no
+slice implemented, and 13 because Decision 10's two items had no home in either document.
 
 W3C trace propagation is deliberately **not** a slice here. It is a new capability rather than
 a repaired one, it must follow slice 10, and it carries a trust decision — an attacker-supplied
 `traceparent` writes into the trace tree — that belongs with the reverse-proxy posture work.
 
-Three orderings are forced: slice 10 before propagation; slice 8 before slice 9; slice 11's
+Four orderings are forced: slice 1 before slice 6, because the gate validates an audience through
+the bearer path; slice 10 before propagation; slice 8 before slice 9; and slice 11's
 readiness fix before any camel-health adoption, since a gate multiplies whatever the probe
 costs. The often-claimed slice 3 → slice 9 edge is **not** forced — `tryClaimFiring` is already
 broken on SQL Server and the reaper does not consume the claim path — but the two are release-
@@ -477,6 +516,47 @@ Every slice that adds a key triggers the reference regeneration ritual — `docs
 is generated and counts its keys — and every new error code needs `ErrorIndex` registration
 plus the errors-reference regen. Slices 3, 4, 8 and 9 each require a gated dialect run before
 the release that carries them, not merely a local container run.
+
+## Order
+
+Five waves. The waves are the schedule; the slice numbers above are not.
+
+**Wave A — the half-days (slices 2, 5, 13).** Nothing here adds a config key or changes a
+contract, and slice 5 earns its place first for a practical reason rather than a principled one:
+the tree currently leaks a bound port on every failed boot, so every later slice's own
+experiments hit it. Slice 2 makes the surface registry honest, and slice 13 converts a
+behavioural SAML defence into a structural one.
+
+**Wave B — the security hole (slice 1), alone.** The highest-value change in either document, and
+the prerequisite for the MCP work. It runs alone because its fan-out reaches every gallery app,
+the scaffolder template and 28 test sources, so anything else in flight collides with it.
+
+**Wave C — cluster correctness, as one release train (slices 3, 4, 8, 9).** These are batched
+because each demands a gated dialect run before the release that carries it, and one run covers
+all four. Three of them carry migrations. Slice 8 precedes slice 9; slice 3 is release-gated with
+slice 9 for the reason recorded above.
+
+**Wave D — observability (slices 10, then 11).** Slice 10 adds no key and reaches further than
+anything else in the campaign — every structured log line, the MDC, and the console's trace
+pages. Slice 11's readiness memoization is small enough to pull forward into wave A if an
+unauthenticated endpoint doing real work per poll is judged urgent; the camel-health adoption and
+the JDK gauges are not.
+
+**Wave E — MCP (the transport decision, then slices 12, 6, 7).** Last, and deliberately.
+Decision 2 states that obligations 3 and 4 become MUSTs *the moment a server accepts a bearer
+token at all* — and today it accepts none, because the handler is constructed with a null
+authenticator. So once slice 2 lands, the framework is conformant by abstention, and its pre-1.0
+obligation is discharged. What remains is a new capability, not a repaired one: it is the only
+part of the campaign whose specification is still moving, the only part with no dogfood app, and
+the only part that is useless to an operator who runs no authorization server. Everything else
+repairs a shipped feature.
+
+Two things belong inside wave E rather than after it. The **stdio-versus-OAuth decision**
+(open question 10) is a gate on the wave, not a footnote to it — the answer changes whether
+slices 6 and 7 are built at all for the deployment shapes that exist today. And the **companion
+authorization-server documentation** ([authorization-server.md](authorization-server.md), "What
+to do instead", item 3) ships with slices 6 and 7 rather than later, because without an
+authorization server to name in `authorization_servers` those slices serve nobody.
 
 ## Traps
 
@@ -499,45 +579,51 @@ catalogue is the advertisement; the bytecode is the contract.**
 
 ## Lint
 
-Numbers assigned at implementation from the registry; described here by meaning.
+Numbers assigned at implementation from the registry; described here by meaning. Each entry names
+the slice that ships it, because the first draft left two of them without one.
 
-- **SEC, error (build and startup)** — a JWT-validating authentication mode is configured and
+- **SEC, error (build and startup)** — *slice 1.* A JWT-validating authentication mode is configured and
   `tesseraql.security.jwt.audience` is absent. The message names the risk, not the rule: with
   an external `jwksUri` and no declared audience, a token that IdP minted for another relying
   party is accepted. An error rather than a warning because a warning leaves the hole open by
   default (open question 1), which makes this the one lint in the campaign that fails an
   existing app's boot until its config declares the value.
-- **SEC, warning** — a document declares an authentication mode other than `public` and no
+- **SEC, warning** — *slice 1.* A document declares an authentication mode other than `public` and no
   policy. It authenticates the caller and then authorizes nothing, which in the YAML is
   indistinguishable from a governed route. (Note the precedent does not carry here:
   `docs/prompt-as-recipe.md` argues that an MCP *read primitive* need not declare a policy,
   which is a different shape from authenticate-then-nothing.)
-- **SEC, error** — `tesseraql.mcp.resource` is not a canonical resource identifier. The
+- **SEC, error** — *slice 6.* `tesseraql.mcp.resource` is not a canonical resource identifier. The
   specification makes the invalid forms explicit: a scheme is required, a fragment is
   forbidden, a trailing slash is not canonical.
-- **MCP, error (build and startup)** — `tesseraql.mcp.auth` is not `public` and neither
+- **MCP, error (build and startup)** — *slice 6.* `tesseraql.mcp.auth` is not `public` and neither
   `tesseraql.mcp.resource` nor `tesseraql.security.jwt.audience` resolves. A gate cannot
   validate audience without knowing what this server is called; the MCP key inherits the JWT
   one when omitted (open question 5), so this fires only when both are absent.
-- **MCP, error (build and startup)** — `tesseraql.mcp.auth` is not `public` and no
+- **MCP, error (build and startup)** — *slice 7.* `tesseraql.mcp.auth` is not `public` and no
   authorization server resolves from either `tesseraql.mcp.authorizationServers` or
   `tesseraql.security.jwt.issuer`. The metadata document would be non-conformant.
-- **MCP, warning** — an MCP read primitive declares no `security:`, the MCP security defaults
+- **MCP, warning** — *slice 12.* An MCP read primitive declares no `security:`, the MCP security defaults
   supply none, and `tesseraql.mcp.auth` is `public`. Fires only when nothing at all gates the
   call. Read primitives get no floor today, and unlike HTTP routes they never receive
   `security.defaults.routes`, because MCP documents are loaded into their own collections and
   never reach `applySecurityDefaults` — which is why open question 4 gives MCP its own
   defaults block rather than widening the path rules.
-- **YAML, warning** — a poll source on a transport with no server-side exclusion (`sftp`,
+- **YAML, warning** — *slice 4.* A poll source on a transport with no server-side exclusion (`sftp`,
   `ftps`) declares no exclusive-consumption store. Every replica will import every file.
-- **BATCH, error** — a declared liveness window shorter than the heartbeat interval, which
+- **BATCH, error** — *slice 8.* A declared liveness window shorter than the heartbeat interval, which
   would reap runs that are alive.
-- **BATCH, runtime status reason** — an execution was reaped because its owner stopped
+- **BATCH, runtime status reason** — *slice 9.* An execution was reaped because its owner stopped
   reporting. Deliberately distinct from a failure the job itself produced, so the console and
   the alert set can tell them apart.
-- **SEC, runtime 401** — token audience does not include this resource. Its own code rather
+- **SEC, runtime 401** — *slice 1.* Token audience does not include this resource. Its own code rather
   than folding into the shared authentication failure, under the one-meaning-per-code rule.
-- **SEC, runtime 401** — token carries no `exp`.
+- **SEC, runtime 401** — *slice 1.* Token carries no `exp`.
+- **SEC, runtime rejection** — *slice 13.* A comment or CDATA node appears inside a signed SAML
+  element. Its own code rather than the shared assertion-invalid one, because the operator-facing
+  meaning is "this response was shaped to be read two ways", not "this response failed
+  validation".
+- **SEC, runtime rejection** — *slice 13.* A SAML document carries two elements with the same `ID`.
 
 Slices 2, 5, 10 and 11 need no codes: they change an attestation, a shutdown ordering, an
 identity format and a set of metric names.
@@ -562,9 +648,11 @@ identity format and a set of metric names.
   records the outcome; neither interrupts a running JDBC call, for the reason
   `docs/jobs.md:588-595` already records.
 - **A dogfooded MCP gallery app.** No gallery or bundled app declares an `mcp/` folder today,
-  and the only exercise of the surface is a test fixture. Worth doing, and it is a separate
-  slice from any of these — which means the strengthened surface guard in slice 2 is, for now,
-  the only thing testing that surface.
+  and the only exercise of the surface is a test fixture. It is a separate slice from any of
+  these — which means the strengthened surface guard in slice 2 is, until then, the only thing
+  testing that surface. Out of scope as a slice, but **not** as a precondition: wave E puts a
+  security gate on that surface, so it lands with wave E rather than whenever. Shipping a gate
+  for a surface no shipped app exercises is how a gate ships broken.
 
 ## Open questions
 
@@ -650,3 +738,12 @@ identity format and a set of metric names.
    `TesseraqlRuntime.java:123` and `:136` gets a key of its own, matching the
    `slowSqlCapacity` key eleven lines below it that has always been configurable. Both are new
    keys, so both are pre-1.0 and both trigger the reference regeneration.
+10. **Is the answer for MCP OAuth, stdio, or both?** **Open, and it gates wave E.** Decision 2
+    describes a `tesseraql mcp --app` stdio mode as a complement rather than an alternative and
+    then declines to choose, which is defensible in a design document and not defensible in a
+    schedule. The choice decides real work: stdio reaches Codex and Claude Desktop with no
+    metadata document, no authorization server and no new configuration surface, and it is the
+    **only** route that exists for Claude Desktop on a private network — while claude.ai and
+    ChatGPT's hosted connector are reachable through OAuth alone. So the deployment shapes that
+    exist today are served by different halves, and the ordering question is which half is
+    built first, not which one is right. Answer this before slice 12 rather than after slice 7.
