@@ -19,6 +19,16 @@ import java.util.Map;
  * as "public by design" would have been a lie in the registry meant to prevent lies. So a route is
  * gated by a step, gated inside its processor (named here, so the claim is checkable), or public on
  * purpose.
+ *
+ * <p><b>A {@link #PROCESSOR_ENFORCED} entry is probed, not believed</b> (docs/audit-hardening.md
+ * slice 2). It was believed until an audit found three entries attesting a gate the runtime never
+ * wired: the MCP endpoints claimed "McpHttpHandler calls McpAuthenticator with the Authorization
+ * header" while {@code TesseraqlRuntime} constructed that handler with a null authenticator, which
+ * makes the handler's whole 401 path dead code. {@link #exempt} is pure map membership, so no guard
+ * reading this class could have caught it — the registry asserted something about the framework
+ * that was not true, and the assertion was the only evidence for it. The guard now drives an
+ * unauthenticated request at every processor-enforced route and requires a refusal, so the claim
+ * costs a passing probe rather than a sentence.
  */
 public final class FrameworkSurfaces {
 
@@ -52,7 +62,19 @@ public final class FrameworkSurfaces {
             Map.entry("tql.studio.docs.share.table",
                     "a shareable documentation page; declared auth: public in the Studio app"),
             Map.entry("tql.studio.docs.share.coverage",
-                    "a shareable documentation page; declared auth: public in the Studio app"));
+                    "a shareable documentation page; declared auth: public in the Studio app"),
+            // Moved from PROCESSOR_ENFORCED, where they attested a gate that does not run
+            // (docs/audit-hardening.md Decision 8). The wording is McpRouteBuilder's own, which
+            // has always described the surface accurately; only this registry disagreed.
+            Map.entry("mcp.endpoint.post",
+                    "each MCP primitive runs its own route security, so there is no transport-level"
+                            + " gate: discovery is open and a primitive that declares a policy"
+                            + " enforces it on call"),
+            Map.entry("mcp.endpoint.get",
+                    "the MCP session stream; open for the same reason as the POST endpoint"),
+            Map.entry("mcp.endpoint.delete",
+                    "ends an MCP session the caller already holds; open for the same reason as the"
+                            + " POST endpoint"));
 
     /**
      * Routes whose gate lives in their processor rather than in a route step.
@@ -60,22 +82,21 @@ public final class FrameworkSurfaces {
      * <p>The value names what enforces it, so the entry can be checked rather than believed. These
      * are the ones a step-based guard would report as unprotected — the false positives that make
      * a guard's failures get waved through.
+     *
+     * <p>Membership here is a claim the guard falsifies: it calls each route with no credentials
+     * and requires the refusal the reason promises. An entry whose processor stops enforcing —
+     * or never started — fails the build.
      */
     public static final Map<String, String> PROCESSOR_ENFORCED = Map.ofEntries(
             Map.entry("system.logout",
-                    "LoginRouteBuilder#logout resolves the session from the cookie"),
+                    "LoginRouteBuilder#logout validates the CSRF token against the session"
+                            + " resolved from the cookie, which refuses when there is none"),
             Map.entry("system.logout.others",
                     "LoginRouteBuilder#logoutOthers requires a session and validates the CSRF"
                             + " token before invalidating anything"),
             Map.entry("system.logout.device",
                     "LoginRouteBuilder#logoutDevice requires a session and validates the CSRF"
-                            + " token; the handle is scoped to the caller's own subject"),
-            Map.entry("mcp.endpoint.post",
-                    "McpHttpHandler calls McpAuthenticator with the Authorization header"),
-            Map.entry("mcp.endpoint.get",
-                    "McpHttpHandler calls McpAuthenticator with the Authorization header"),
-            Map.entry("mcp.endpoint.delete",
-                    "McpHttpHandler calls McpAuthenticator with the Authorization header"));
+                            + " token; the handle is scoped to the caller's own subject"));
 
     /** Whether this route is allowed to answer without an {@code authenticate} step. */
     public static boolean exempt(String routeId) {

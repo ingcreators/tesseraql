@@ -2,6 +2,10 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -195,6 +199,54 @@ class FrameworkSurfaceGuardTest {
     }
 
     /**
+     * A processor-enforced claim is falsifiable (docs/audit-hardening.md slice 2).
+     *
+     * <p>Until this ran, {@link FrameworkSurfaces#PROCESSOR_ENFORCED} carried three entries
+     * attesting that {@code McpHttpHandler} calls an authenticator with the {@code Authorization}
+     * header, while the runtime constructed that handler with a null one. {@code exempt} is pure
+     * map membership, so the registry could assert a gate that does not run and no guard reading
+     * the registry could tell. The fix is not a better sentence: call the route with no
+     * credentials and require the refusal the reason promises.
+     *
+     * <p>The verb comes off the mounted route rather than out of the registry. Recording it beside
+     * the reason was the other option, and it would have introduced a second source of truth for
+     * what this class exists to stop drifting — while a probe with no verb gets 405 from all three
+     * surviving entries and proves nothing.
+     */
+    @Test
+    void everyProcessorEnforcedRouteRefusesAnUnauthenticatedCall() throws Exception {
+        List<String> probed = new ArrayList<>();
+        List<String> answered = new ArrayList<>();
+        for (RouteDefinition route : frameworkRoutes()) {
+            String id = route.getRouteId();
+            if (!FrameworkSurfaces.PROCESSOR_ENFORCED.containsKey(id)) {
+                continue;
+            }
+            Mounted mounted = mountedAt(route);
+            HttpResponse<String> response = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                            + mounted.path()))
+                            .header("Content-Type", "application/json")
+                            .method(mounted.method(), HttpRequest.BodyPublishers.ofString("{}"))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+            probed.add(id);
+            if (response.statusCode() != 401 && response.statusCode() != 403) {
+                answered.add("%s (%s %s) answered %d".formatted(id, mounted.method(),
+                        mounted.path(), response.statusCode()));
+            }
+        }
+
+        assertThat(answered)
+                .as("routes recorded as processor-enforced that served an unauthenticated caller —"
+                        + " the gate the registry attests does not run")
+                .isEmpty();
+        assertThat(probed).as("every processor-enforced entry must be probed, or the guard reads"
+                + " as coverage while covering nothing")
+                .containsExactlyInAnyOrderElementsOf(FrameworkSurfaces.PROCESSOR_ENFORCED.keySet());
+    }
+
+    /**
      * The honesty probe, the same one the config-key registry carries.
      *
      * <p>Without it the guard passes loudest when it checks least: a fixture that quietly failed to
@@ -236,6 +288,28 @@ class FrameworkSurfaceGuardTest {
             }
         }
         return framework;
+    }
+
+    /** The verb and path a framework route actually answers on. */
+    private record Mounted(String method, String path) {
+    }
+
+    /**
+     * Reads the verb and path off the mounted route.
+     *
+     * <p>The rest DSL is configured with {@code inlineRoutes(true)}, so the route carrying the
+     * {@code routeId} is the same one whose input is {@code rest://<verb>:<path>} — there is no
+     * second definition to correlate, and nothing to keep in step by hand.
+     */
+    private static Mounted mountedAt(RouteDefinition route) {
+        String uri = java.net.URLDecoder.decode(route.getInput().getEndpointUri(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        String remaining = uri.substring(uri.indexOf("://") + 3);
+        int separator = remaining.indexOf(':');
+        String method = remaining.substring(0, separator).toUpperCase(java.util.Locale.ROOT);
+        String path = remaining.substring(separator + 1);
+        int query = path.indexOf('?');
+        return new Mounted(method, query < 0 ? path : path.substring(0, query));
     }
 
     private static List<String> authSteps(RouteDefinition route) {
