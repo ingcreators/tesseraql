@@ -492,7 +492,7 @@ neither depends on anything else in this campaign.
 | 9 | The reaper, and `overlap: skip` asking whether the owner is alive | yes | Depends on slice 8 |
 | 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and suite-mode tracing | yes | Reaches every log line and the console's trace pages |
 | 11 | Readiness memoization, camel-health as a signal, camel-main removed, JDK gauges | yes | Two new keys (readiness TTL, ring capacity); dist-jar boot check required |
-| 12 | MCP security defaults: a floor for primitives that declare none | yes | Open question 4's mechanism; the only slice an intranet deployment needs |
+| 12 | MCP security defaults: a floor for primitives that declare none | yes | Open question 4's mechanism; the only slice an intranet deployment needs. Ships with [session-token-exchange.md](session-token-exchange.md) |
 | 13 | SAML parse-time structural hardening | yes | Decision 10; independent of everything else here |
 
 The numbers run in decision order, not schedule order — §Order carries the schedule. Slices 12
@@ -547,7 +547,12 @@ pages. Slice 11's readiness memoization is small enough to pull forward into wav
 unauthenticated endpoint doing real work per poll is judged urgent; the camel-health adoption and
 the JDK gauges are not.
 
-**Wave E — MCP (the transport decision, then slices 12, 6, 7).** Last, and deliberately.
+**Wave E — MCP (slice 12, then the session-to-token exchange; slices 6 and 7 deferred).** The
+transport decision closed at open question 10: tokens minted from an authenticated session reach
+every client that runs on the user's own machine, and MCP authenticates such a call today without a
+transport gate. Slice 12 ships first because it is the floor. Slices 6 and 7 wait for a deployment
+that needs the hosted assistants, which nothing else reaches — the reasoning below is why they were
+last in the order to begin with.
 Decision 2 states that obligations 3 and 4 become MUSTs *the moment a server accepts a bearer
 token at all* — and today it accepts none, because the handler is constructed with a null
 authenticator. So once slice 2 lands, the framework is conformant by abstention, and its pre-1.0
@@ -743,7 +748,26 @@ identity format and a set of metric names.
    `TesseraqlRuntime.java:123` and `:136` gets a key of its own, matching the
    `slowSqlCapacity` key eleven lines below it that has always been configurable. Both are new
    keys, so both are pre-1.0 and both trigger the reference regeneration.
-10. **Is the answer for MCP OAuth, stdio, or both?** **Open, and it gates wave E.** Decision 2
+10. ~~**Is the answer for MCP OAuth, stdio, or both?**~~ **Closed 2026-08-15: neither, first.**
+    The answer is a session-to-token exchange plus the MCP security defaults — see
+    [session-token-exchange.md](session-token-exchange.md). Tokens minted from an authenticated
+    session reach every client that runs on the user's own machine, and MCP already authenticates
+    and authorizes such a call without slice 6, because `AppMcpServer.call` forwards the
+    `Authorization` header into each `direct:mcp.*` route. What slice 6 adds is discovery and a
+    floor, and slice 12 supplies the floor on its own.
+
+    **Slices 6 and 7 are deferred, not cancelled**, on conditions rather than on vibes: a
+    deployment that needs claude.ai or ChatGPT's hosted connector, which no fixed credential
+    reaches and which therefore has no alternative. They land with an authorization server to name
+    in `authorization_servers`, the companion documentation, and an MCP dogfood app — without which
+    a gate would ship over a surface no application exercises.
+
+    Nothing pre-1.0 turns on the deferral. The specification's two unconditional MUSTs attach the
+    moment a server accepts a bearer token at its MCP endpoint, and it accepts none; slice 2 made
+    the attestation honest, which leaves the framework conformant by abstention. The original
+    reasoning below stands as the record of what the choice was between.
+
+    *(Original framing.)* Decision 2
     describes a `tesseraql mcp --app` stdio mode as a complement rather than an alternative and
     then declines to choose, which is defensible in a design document and not defensible in a
     schedule. The choice decides real work: stdio reaches Codex and Claude Desktop with no
