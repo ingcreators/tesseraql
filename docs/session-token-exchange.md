@@ -1,6 +1,6 @@
 # Session-to-token exchange
 
-Status: **designed 2026-08-15** — two slices below, neither shipped yet.
+Status: **designed and shipped 2026-08-15.**
 
 An authenticated browser session can be exchanged for a short-lived bearer token. That is far less
 than an authorization server: no `/authorize`, no consent screen, no client registry, no redirect
@@ -135,8 +135,14 @@ decided it should, not because they upgraded.
 
 | # | Slice | Notes |
 | --- | --- | --- |
-| 1 | MCP security defaults ([audit-hardening.md](audit-hardening.md) slice 12) | The floor; ships first so tokens do not arrive before it |
-| 2 | The exchange endpoint, its CSRF guard, audit record and the HS256-only refusal | Two declared keys, two error codes |
+| 1 | MCP security defaults ([audit-hardening.md](audit-hardening.md) slice 12) | The floor; shipped first so tokens did not arrive before it |
+| 2 | The exchange endpoint, its CSRF guard and the HS256-only refusal | Two declared keys, **one** error code |
+
+**One code, not two.** The design said two; the runtime refusals turned out to need none of their
+own. An unauthenticated caller is refused by `CsrfValidator`, which already raises the shared
+unauthenticated and CSRF-failure codes, and inventing parallel ones for this endpoint would have
+broken the one-meaning-per-code rule to satisfy a sentence. The single new code is the boot refusal,
+`TQL-SEC-4146`.
 
 ## Out of scope
 
