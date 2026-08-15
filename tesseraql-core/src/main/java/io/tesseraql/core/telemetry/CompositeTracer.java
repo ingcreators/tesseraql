@@ -17,6 +17,11 @@ public final class CompositeTracer implements Tracer {
         this.delegates = List.of(delegates);
     }
 
+    /** The tracers this fans out to, so a caller can find one by capability rather than by luck. */
+    public List<Tracer> delegates() {
+        return delegates;
+    }
+
     @Override
     public Span start(String name) {
         return start(name, null);

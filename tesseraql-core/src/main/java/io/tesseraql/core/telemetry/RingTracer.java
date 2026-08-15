@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A {@link Tracer} that keeps the most recent finished spans in a bounded in-memory ring, exposing
@@ -17,7 +16,6 @@ public final class RingTracer implements Tracer, TraceLog {
 
     private final int capacity;
     private final ArrayDeque<SpanSample> ring;
-    private final AtomicLong ids = new AtomicLong();
 
     public RingTracer(int capacity) {
         if (capacity < 1) {
@@ -34,13 +32,34 @@ public final class RingTracer implements Tracer, TraceLog {
 
     @Override
     public Span start(String name, SpanContext parent) {
-        String spanId = Long.toHexString(ids.incrementAndGet());
-        String traceId = parent != null
-                ? parent.traceId()
-                : Long.toHexString(ids.incrementAndGet());
+        String spanId = randomHex(8);
+        String traceId = parent != null ? parent.traceId() : randomHex(16);
         String parentSpanId = parent != null ? parent.spanId() : null;
         return new RingSpan(name, traceId, spanId, parentSpanId,
                 System.nanoTime(), System.currentTimeMillis());
+    }
+
+    /**
+     * A W3C-shaped id: {@code bytes} bytes as lowercase hex, never all zeroes.
+     *
+     * <p>These used to be {@code Long.toHexString(counter)}, which was fine while nothing outside
+     * this process read them. It is not fine now: the same value is installed as the exported
+     * span's trace and span id, so it has to be a shape the trace-context specification recognises
+     * — 16 bytes of trace, 8 of span, lowercase hex, and an all-zero id is invalid.
+     *
+     * <p>{@link java.util.concurrent.ThreadLocalRandom} rather than {@link java.security.SecureRandom}:
+     * a trace id is an identifier, not a secret, and this runs on every span.
+     */
+    private static String randomHex(int bytes) {
+        StringBuilder hex = new StringBuilder(bytes * 2);
+        boolean nonZero = false;
+        for (int i = 0; i < bytes; i++) {
+            int value = java.util.concurrent.ThreadLocalRandom.current().nextInt(256);
+            nonZero |= value != 0;
+            hex.append(Character.forDigit(value >>> 4, 16)).append(Character.forDigit(value & 15,
+                    16));
+        }
+        return nonZero ? hex.toString() : randomHex(bytes);
     }
 
     @Override

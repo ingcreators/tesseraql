@@ -48,8 +48,21 @@ public final class OpenTelemetryTracer implements KeyedTracer {
         if (parentContext == null) {
             parentContext = Context.root();
         }
-        io.opentelemetry.api.trace.Span span = tracer.spanBuilder(name)
-                .setParent(parentContext).startSpan();
+        // The shared identity is installed as the span's own trace and span id, not merely used as
+        // a map key (docs/audit-hardening.md Decision 7). startSpan() is synchronous on this
+        // thread, so the handoff is a thread local set immediately around it and cleared in a
+        // finally.
+        io.opentelemetry.api.trace.Span span;
+        if (identity != null) {
+            SuppliedIdGenerator.supply(identity.traceId(), identity.spanId());
+            try {
+                span = tracer.spanBuilder(name).setParent(parentContext).startSpan();
+            } finally {
+                SuppliedIdGenerator.clear();
+            }
+        } else {
+            span = tracer.spanBuilder(name).setParent(parentContext).startSpan();
+        }
         // The key future children will reference: the shared identity if supplied, else our own id.
         String key = identity != null ? identity.spanId() : span.getSpanContext().getSpanId();
         liveContexts.put(key, span.storeInContext(parentContext));
