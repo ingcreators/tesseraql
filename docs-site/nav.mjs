@@ -229,4 +229,9 @@ export const EXCLUDED = [
   'jvm-baseline.md',
   // What a DuckDB 1.5 upgrade would take (inlined writes, three-verb retention), 2026-08-14.
   'ducklake-1.5.md',
+  // Audit hardening (bearer audience, MCP authorization, dialect classification, poll
+  // exclusion, batch ownership, span identity), 2026-08-15.
+  'audit-hardening.md',
+  // Whether TesseraQL should issue its own tokens — designed and deferred, 2026-08-15.
+  'authorization-server.md',
 ];
