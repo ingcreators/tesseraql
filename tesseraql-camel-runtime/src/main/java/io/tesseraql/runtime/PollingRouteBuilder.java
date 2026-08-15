@@ -36,10 +36,18 @@ final class PollingRouteBuilder extends RouteBuilder {
     private final Path appHome;
     private final Path workHome;
     private final io.tesseraql.opsui.PollSourceStatus status;
+    /**
+     * The exclusive-consumption store, consulted only by sources that declare {@code consumeOnce}.
+     *
+     * <p>Always supplied. The schema is created lazily in {@link #wire}, so an app with no such
+     * source never touches the database for it.
+     */
+    private final io.tesseraql.operations.poll.JdbcPollConsumedStore consumedStore;
 
     PollingRouteBuilder(List<JobFile> jobs, FileConnectors connectors, String appName,
             Map<String, String> jobOwners, Path appHome, Path workHome,
-            io.tesseraql.opsui.PollSourceStatus status) {
+            io.tesseraql.opsui.PollSourceStatus status,
+            io.tesseraql.operations.poll.JdbcPollConsumedStore consumedStore) {
         this.jobs = List.copyOf(jobs);
         this.connectors = connectors;
         this.appName = appName;
@@ -47,6 +55,7 @@ final class PollingRouteBuilder extends RouteBuilder {
         this.appHome = appHome;
         this.workHome = workHome;
         this.status = status;
+        this.consumedStore = consumedStore;
     }
 
     @Override
@@ -89,7 +98,12 @@ final class PollingRouteBuilder extends RouteBuilder {
             return;
         }
 
-        String uri = endpointUri(poll);
+        if (poll.consumesOnce()) {
+            consumedStore.ensureSchema();
+            getContext().getRegistry().bind(repositoryBeanName(jobId),
+                    new PollConsumedRepository(consumedStore, jobId));
+        }
+        String uri = endpointUri(jobId, poll);
         Path rowSqlFile = job.source().getParent().resolve(rowStep.file()).normalize();
         String owner = jobOwners.getOrDefault(jobId, appName);
         io.tesseraql.core.files.FileReadSpec readSpec = importSpec.toReadSpec()
@@ -103,11 +117,15 @@ final class PollingRouteBuilder extends RouteBuilder {
     }
 
     /** Builds the Camel consumer URI for the source, keeping the component name out of the YAML. */
-    String endpointUri(PollSpec poll) {
+    String endpointUri(String jobId, PollSpec poll) {
         String options = "delay=" + Durations.toMillis(poll.effectiveDelay())
                 + "&move=" + archiveDirectory("move", poll.effectiveMove())
                 + "&moveFailed=" + archiveDirectory("moveFailed", poll.effectiveMoveFailed())
+                // Kept alongside the idempotent store rather than replaced by it: readLock=changed
+                // is the write-stability check that stops a half-written file being read, which is
+                // a different job from deciding which replica gets it.
                 + "&readLock=changed"
+                + exclusiveConsumption(jobId, poll)
                 + (poll.include() == null || poll.include().isBlank()
                         ? ""
                         // RAW keeps an '&' in a glob from splitting the query and binding
@@ -128,6 +146,45 @@ final class PollingRouteBuilder extends RouteBuilder {
             default -> throw new IllegalArgumentException(
                     "Unsupported poll transport '" + poll.transport() + "'");
         };
+    }
+
+    /**
+     * The consumer options that make one file the property of one replica
+     * (docs/audit-hardening.md Decision 4).
+     *
+     * <p>Two facts decide this, and both were found in Camel's bytecode rather than its
+     * documentation — the catalogue is the advertisement, the bytecode is the contract.
+     *
+     * <p><b>{@code readLock=idempotent} is not the mechanism.</b> {@code sftp.json} lists it in the
+     * readLock enum because the option is declared on the shared endpoint configuration class, not
+     * because the remote factory implements it: {@code SftpProcessStrategyFactory} handles only
+     * {@code none}/{@code false}, {@code rename} and {@code changed}, and every other value falls
+     * through to returning null. Setting it would leave the route with <em>no</em> read lock —
+     * losing today's write-stability check and gaining nothing.
+     *
+     * <p><b>The consumer-level flag needs {@code idempotentEager=true}.</b>
+     * {@code GenericFileConsumer} branches on {@code isIdempotentEager()}, which defaults to false.
+     * The eager arm calls {@code add} and rejects a false return, which is atomic; the default arm
+     * calls {@code contains} and adds on completion, which is check-then-act — two replicas can
+     * both pass {@code contains} and both import the file.
+     *
+     * <p>The key is name, size and modified time rather than Camel's default absolute path. A
+     * partner legitimately re-sending a file under a name it has used before would otherwise be
+     * suppressed forever; with this key it is suppressed only while the bytes are identical and the
+     * retention window has not lapsed.
+     */
+    private String exclusiveConsumption(String jobId, PollSpec poll) {
+        if (!poll.consumesOnce()) {
+            return "";
+        }
+        return "&idempotent=true&idempotentEager=true"
+                + "&idempotentKey=RAW(${file:name}-${file:size}-${file:modified})"
+                + "&idempotentRepository=#bean:" + repositoryBeanName(jobId);
+    }
+
+    /** The registry name of a source's consumption repository. */
+    static String repositoryBeanName(String jobId) {
+        return "tesseraqlPollConsumed-" + jobId;
     }
 
     /**

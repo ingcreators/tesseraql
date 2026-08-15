@@ -1566,7 +1566,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.yaml.connectors.FileConnectors.poll(manifest.config()), appName,
                     jobOwners, appHome,
                     io.tesseraql.yaml.config.WorkHome.resolve(appHome, manifest.config()),
-                    pollSourceStatus));
+                    pollSourceStatus,
+                    new io.tesseraql.operations.poll.JdbcPollConsumedStore(dataSource,
+                            io.tesseraql.core.util.Durations.parse(manifest.config()
+                                    .getString("tesseraql.connectors.poll.consumedRetention")
+                                    .orElse("30d")))));
             // Messaging consumers (roadmap Phase 27): each queue-consume route drains its channel
             // off the durable tql_event table — that table is what makes delivery at-least-once.
             // The wake mechanism depends on the channel's transport: pg-notify adds low-latency

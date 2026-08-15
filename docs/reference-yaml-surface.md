@@ -490,6 +490,7 @@ Fire the job when files arrive: a local directory, SFTP, or FTPS source feeding 
 | `delay` | string | Poll interval (duration string). |
 | `move` | string | Relative directory for processed files (default .done). Plain names only - no paths or placeholders. |
 | `moveFailed` | string | Relative directory for failed files (default .error). Plain names only. |
+| `consumeOnce` | boolean | Consume each file once across every replica, arbitrated through a shared store. Off by default. The read lock a poll consumer carries is a write-stability check, and on sftp/ftps there is no server-side exclusion at all, so without this every replica imports every file. Turning it on also means a partner re-sending a byte-identical file is skipped while connectors.poll.consumedRetention has not lapsed. |
 
 ### pipeline
 

@@ -1506,6 +1506,11 @@ class AppLinterTest {
         // The undeclared credential is a warning.
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4081") && !f.isError()
                 && f.message().contains("ghost"));
+        // Both remote sources leave consumeOnce off, so both are warned about: sftp has no
+        // server-side exclusion, and every replica would import every file
+        // (docs/audit-hardening.md Decision 4).
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1310") && !f.isError()
+                && f.message().contains("partner.intake"));
         // The poll job with no import block.
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-YAML-1055") && f.isError()
                 && f.message().contains("bad.intake"));
@@ -2105,6 +2110,59 @@ class AppLinterTest {
                       algorithm: RS256
                       jwksUri: https://idp.example.com/jwks
                 """)).anyMatch(f -> f.code().equals("TQL-SEC-4048") && f.isError());
+    }
+
+    /**
+     * The exclusion warning is scoped to the transports that need it
+     * (docs/audit-hardening.md Decision 4).
+     *
+     * <p>A local source is not silent about exclusion by accident: Camel's changed strategy extends
+     * the marker-file one and writes an atomic {@code .camelLock}, so it does have inter-process
+     * exclusion. The remote strategy implements the interface directly and takes no lock, which is
+     * the whole reason this warning exists.
+     */
+    @Test
+    void theExclusionWarningSkipsLocalSourcesAndDeclaredOnes(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("batch/local"));
+        Files.writeString(dir.resolve("batch/local/job.yml"), """
+                version: tesseraql/v1
+                id: local.intake
+                kind: job
+                recipe: file-import
+                trigger:
+                  poll:
+                    transport: local
+                    path: inbox
+                import:
+                  format: csv
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
+                """);
+        Files.createDirectories(dir.resolve("batch/declared"));
+        Files.writeString(dir.resolve("batch/declared/job.yml"), """
+                version: tesseraql/v1
+                id: declared.intake
+                kind: job
+                recipe: file-import
+                trigger:
+                  poll:
+                    transport: sftp
+                    host: sftp.partner.example
+                    path: /outbound
+                    credential: partner-sftp
+                    consumeOnce: true
+                import:
+                  format: csv
+                pipeline:
+                  - id: row
+                    sql:
+                      file: upsert.sql
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> f.code().equals("TQL-YAML-1310"));
     }
 
     /** A single string is accepted where a list would be; the model holds a list either way. */

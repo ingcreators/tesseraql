@@ -132,6 +132,26 @@ final class DialectRuntimeChecks {
     }
 
     /**
+     * Poll-source exclusive consumption on this vendor (docs/audit-hardening.md Decision 4).
+     *
+     * <p>Its own check because the arbitration is a primary-key insert whose losing side must be
+     * recognised as a duplicate — the same predicate that could not see a duplicate on SQL Server
+     * at all — and because the DDL has a per-vendor variant, where SQL Server's key length limit
+     * makes {@code file_key} narrower than elsewhere.
+     */
+    static void pollConsumedRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.poll.JdbcPollConsumedStore store = new io.tesseraql.operations.poll.JdbcPollConsumedStore(
+                dataSource, java.time.Duration.ofDays(30));
+        store.ensureSchema();
+
+        assertThat(store.claim("dialect.intake", "orders.csv-1024-1749513600000")).isTrue();
+        assertThat(store.claim("dialect.intake", "orders.csv-1024-1749513600000")).isFalse();
+        assertThat(store.claimed("dialect.intake", "orders.csv-1024-1749513600000")).isTrue();
+        assertThat(store.release("dialect.intake", "orders.csv-1024-1749513600000")).isTrue();
+        assertThat(store.claim("dialect.intake", "orders.csv-1024-1749513600000")).isTrue();
+    }
+
+    /**
      * The code-catalog version table (docs/lookups.md, decision 14) on this vendor's DDL.
      *
      * <p>Its own check because the table is created only by an app that declares

@@ -35,7 +35,8 @@ public record PollSpec(
         String include,
         String delay,
         String move,
-        String moveFailed) {
+        String moveFailed,
+        Boolean consumeOnce) {
 
     /** The transport kind in lower case ({@code local}/{@code sftp}/{@code ftps}). */
     public String effectiveTransport() {
@@ -61,5 +62,21 @@ public record PollSpec(
     /** The failed-file sub-directory, defaulting to {@code .error}. */
     public String effectiveMoveFailed() {
         return moveFailed == null || moveFailed.isBlank() ? ".error" : moveFailed;
+    }
+
+    /**
+     * Whether each file is consumed once across every replica
+     * (docs/audit-hardening.md Decision 4).
+     *
+     * <p>Off by default, because turning it on changes what a re-sent file means. The read lock the
+     * consumer already carries is a write-stability check, not inter-process exclusion — and on
+     * {@code sftp}/{@code ftps} it is not even that, since the remote strategy takes no lock at all,
+     * so three replicas polling one drop directory each import every file. Declaring this puts a
+     * shared store behind the consumer so exactly one of them wins.
+     *
+     * <p>TQL-YAML-1310 warns when a remote source leaves it off.
+     */
+    public boolean consumesOnce() {
+        return Boolean.TRUE.equals(consumeOnce);
     }
 }

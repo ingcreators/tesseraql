@@ -82,6 +82,11 @@ class OraclePortabilityIntegrationTest {
     }
 
     @Test
+    void pollSourceExclusiveConsumptionWorksOnThisDialect() throws Exception {
+        DialectRuntimeChecks.pollConsumedRoundTrip(dataSource());
+    }
+
+    @Test
     void clusterJobClaimingSkipsTheLoserOnThisDialect() throws Exception {
         DialectRuntimeChecks.jobClaimRoundTrip(dataSource());
     }
