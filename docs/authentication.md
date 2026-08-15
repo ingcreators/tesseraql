@@ -89,6 +89,42 @@ warns when nothing at all is in force: neither the document's own `security:`, n
 a warning rather than an error because a genuinely public read is a real design — what is worth
 saying out loud is the case that is indistinguishable in the YAML from one somebody meant to govern.
 
+## Exchanging a session for a token
+
+A browser session can buy a short-lived bearer token, for callers that have a session but cannot
+carry a cookie — CI, scripts, and the assistants that run on the user's own machine:
+
+```yaml
+tesseraql:
+  security:
+    token:
+      enabled: true     # off by default
+      ttl: 15m
+```
+
+`POST /_tesseraql/token` with the session cookie and its CSRF token returns
+`{"token": "...", "tokenType": "Bearer", "expiresAt": "..."}`. The claims are the ones the bearer
+path already reads, taken from the principal the session already holds, so the token this
+application mints is one it verifies itself.
+
+Three things are worth knowing before turning it on.
+
+**It only works where TesseraQL holds the signing key.** An application verifying `HS256` against
+`tesseraql.security.jwt.secret` can issue; one verifying `RS256` against a `publicKey` or `jwksUri`
+cannot, because there is no private key — its tokens come from the identity provider that holds one.
+Enabling it there fails the boot with `TQL-SEC-4146` rather than mounting an endpoint that answers
+500 per request.
+
+**It is guarded like a state change**, because it is one: it converts a session cookie into a
+credential that carries none of the cookie's protections and outlives it. The CSRF token is required
+exactly as the sign-out routes require it, so a page that can make the browser POST cannot mint a
+token from a visitor's session.
+
+**Expiry is the revocation story.** A minted token is validated statelessly, so a password change —
+which invalidates every session of that subject — does **not** invalidate tokens already minted from
+them. They expire. Keep `ttl` short. A credential that needs revoking on demand should be an
+[API key](#api-keys), which has a status column and a client registry.
+
 ## Bearer JWT
 
 A `bearer` route reads the `Authorization: Bearer <jwt>` header, verifies the signature, validates
