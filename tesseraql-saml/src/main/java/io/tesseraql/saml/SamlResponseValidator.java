@@ -28,9 +28,10 @@ import org.w3c.dom.NodeList;
 /**
  * Validates a SAML 2.0 {@code Response} for a service provider and returns its trusted assertion
  * (design ch. 10.14). Validation, in order: secure XML parse (no DTD/external entities), top-level
- * status is Success, the XML signature verifies against the pinned IdP key with JDK secure
- * validation, the consumed assertion lies inside the signed element (XML-signature-wrapping guard),
- * and the assertion's conditions and subject confirmation hold for the supplied clock.
+ * status is Success, the document is structurally unambiguous (no duplicate {@code ID}, no comment
+ * or CDATA inside a SAML element), the XML signature verifies against the pinned IdP key with JDK
+ * secure validation, the consumed assertion lies inside the signed element (XML-signature-wrapping
+ * guard), and the assertion's conditions and subject confirmation hold for the supplied clock.
  *
  * <p>Anything that does not hold raises {@link SamlException}; nothing untrusted is ever returned.
  */
@@ -250,15 +251,58 @@ public final class SamlResponseValidator {
         }
     }
 
-    /** Marks every {@code ID} attribute as an XML id, so signature references and lookups resolve. */
+    /**
+     * Marks every {@code ID} attribute as an XML id, so signature references and lookups resolve —
+     * and refuses a document in which any part of "which element was signed" has two answers
+     * (docs/audit-hardening.md Decision 10).
+     *
+     * <p><b>Duplicate ids.</b> The signed element is resolved twice: once inside signature
+     * validation, once by {@link Document#getElementById}. They share this registry so they should
+     * agree, but XML enforces no uniqueness on an id attribute, and what keeps breaking SAML
+     * implementations is exactly two components building different answers from identical bytes.
+     * Rejecting the duplicate removes the question instead of relying on the two resolvers picking
+     * the same element.
+     *
+     * <p><b>Comments and CDATA.</b> {@link #text} calls {@code getTextContent()}, which concatenates
+     * text children and excludes comments, so the 2018 attribute-truncation class does not reach
+     * this validator. That defence is behavioural: a refactor to
+     * {@code getFirstChild().getNodeValue()} would silently reintroduce it with every existing test
+     * still green — the two accessors genuinely disagree on the same payload, one returning the full
+     * signed string and the other the attacker's truncation. So the answer is Shibboleth's rather
+     * than a regression test: a comment or CDATA section inside a SAML element is a hard rejection
+     * here, and no future accessor choice can matter. OpenSAML made the same move at v3.4 after
+     * finding that its own protection was a parser default an integrator could switch off.
+     *
+     * <p>The check covers every SAML-namespaced element rather than only the signed one, because at
+     * this point nothing has established which element that is. Elements from other namespaces —
+     * {@code ds:Signature} and any extension content — are left alone.
+     */
     private static void registerIds(Element root) {
+        registerIds(root, new java.util.HashSet<>());
+    }
+
+    private static void registerIds(Element root, java.util.Set<String> seenIds) {
         if (root.hasAttribute("ID")) {
+            String id = root.getAttribute("ID");
+            if (!seenIds.add(id)) {
+                throw new SamlException("SAML response reuses the ID '" + id
+                        + "'; which element is signed would have two answers");
+            }
             root.setIdAttribute("ID", true);
         }
+        boolean samlElement = ASSERTION_NS.equals(root.getNamespaceURI())
+                || PROTOCOL_NS.equals(root.getNamespaceURI());
         NodeList children = root.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
-            if (children.item(i) instanceof Element child) {
-                registerIds(child);
+            Node child = children.item(i);
+            if (samlElement && (child.getNodeType() == Node.COMMENT_NODE
+                    || child.getNodeType() == Node.CDATA_SECTION_NODE)) {
+                throw new SamlException("SAML element <" + root.getLocalName()
+                        + "> contains a comment or CDATA section, which makes its text readable"
+                        + " two ways");
+            }
+            if (child instanceof Element element) {
+                registerIds(element, seenIds);
             }
         }
     }

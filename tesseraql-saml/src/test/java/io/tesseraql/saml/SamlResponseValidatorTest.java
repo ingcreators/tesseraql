@@ -197,6 +197,101 @@ class SamlResponseValidatorTest {
                 .isEqualTo("alice@example.com");
     }
 
+    /**
+     * A comment inside a signed SAML element is refused outright
+     * (docs/audit-hardening.md Decision 10).
+     *
+     * <p>The comment goes in <em>after</em> signing and leaves the concatenated text unchanged, so
+     * the signature still verifies — exclusive canonicalization excludes comment nodes from the
+     * digest, which is the whole 2018 attribute-truncation class. What the split changes is what a
+     * DOM accessor returns: {@code getTextContent()} concatenates and yields the full name id,
+     * {@code getFirstChild().getNodeValue()} yields {@code alice} alone. Measured against this
+     * validator before the check landed, this document validated and returned the full name id —
+     * correct, but correct by an accessor choice a later refactor could reverse with every existing
+     * test still green.
+     *
+     * <p>So the refusal is structural, and this test guards the structure rather than the accessor.
+     */
+    @Test
+    void aCommentInjectedIntoASignedAssertionIsRejected() throws Exception {
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                true);
+        String injected = xml.replace("alice@example.com</saml:NameID>",
+                "alice<!---->@example.com</saml:NameID>");
+        assertThat(injected).isNotEqualTo(xml);
+
+        assertThatThrownBy(() -> validator().validate(injected, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("comment or CDATA");
+    }
+
+    /**
+     * A CDATA section is the same question wearing a different node type, and it also validated
+     * before the check landed: the section carries the identical text, so the digest is unchanged.
+     */
+    @Test
+    void aCdataSectionInsideASamlElementIsRejected() throws Exception {
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                true);
+        String injected = xml.replace("alice@example.com</saml:NameID>",
+                "<![CDATA[alice@example.com]]></saml:NameID>");
+        assertThat(injected).isNotEqualTo(xml);
+
+        assertThatThrownBy(() -> validator().validate(injected, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("comment or CDATA");
+    }
+
+    /**
+     * A duplicate of the <em>signed</em> id was already refused, and by the JDK rather than by this
+     * validator.
+     *
+     * <p>Worth stating precisely, because it narrows what the new check is for. With
+     * {@code secureValidation} enabled, dereferencing the signature's own {@code #assertion-id}
+     * raises {@code URIReferenceException: Multiple Elements with the same ID}. The check moves that
+     * refusal earlier and states it in the framework's own terms; it does not open a door that was
+     * shut.
+     */
+    @Test
+    void aDuplicateOfTheSignedIdIsRejectedBeforeTheSignatureIsProcessed() throws Exception {
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                true);
+        String injected = xml.replace("<samlp:Status>", "<samlp:Status ID=\"assertion-id\">");
+        assertThat(injected).isNotEqualTo(xml);
+
+        assertThatThrownBy(() -> validator().validate(injected, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("reuses the ID 'assertion-id'");
+    }
+
+    /**
+     * A duplicate on an id the signature does <em>not</em> reference is what the check actually adds.
+     *
+     * <p>The JDK only dereferences the id the signature names, so it never sees this one, and before
+     * the check this document validated. Nothing in the framework reads it today either — which is
+     * exactly why it is worth refusing now rather than after something does. The signed element is
+     * already resolved twice, once inside signature validation and once by {@code getElementById},
+     * and what keeps breaking SAML implementations is two components building different answers from
+     * identical bytes.
+     *
+     * <p>Both duplicates sit in the {@code Status} block, outside the signed assertion, so the
+     * signature is untouched. Putting one inside the assertion instead simply breaks the digest —
+     * which is a different rejection, and would have made this test pass for the wrong reason.
+     */
+    @Test
+    void aDuplicateIdTheSignatureNeverReferencesIsAlsoRejected() throws Exception {
+        String xml = signedResponse(NOW.minusSeconds(60), NOW.plusSeconds(300), AUDIENCE, RECIPIENT,
+                true);
+        String injected = xml
+                .replace("<samlp:Status>", "<samlp:Status ID=\"shared\">")
+                .replace("<samlp:StatusCode Value=", "<samlp:StatusCode ID=\"shared\" Value=");
+        assertThat(injected).isNotEqualTo(xml);
+
+        assertThatThrownBy(() -> validator().validate(injected, NOW))
+                .isInstanceOf(SamlException.class)
+                .hasMessageContaining("reuses the ID 'shared'");
+    }
+
     // --- SAML builder / signer (test only) -------------------------------------------------------
 
     private static String signedResponse(Instant notBefore, Instant notOnOrAfter, String audience,
