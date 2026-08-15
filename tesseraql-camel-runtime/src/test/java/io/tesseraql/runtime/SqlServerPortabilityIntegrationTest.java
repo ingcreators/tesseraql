@@ -85,6 +85,11 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     @Test
+    void clusterJobClaimingSkipsTheLoserOnThisDialect() throws Exception {
+        DialectRuntimeChecks.jobClaimRoundTrip(dataSource());
+    }
+
+    @Test
     void messagingEventChannelClaimsOnThisDialect() throws Exception {
         DialectRuntimeChecks.eventChannelRoundTrip(dataSource());
     }
