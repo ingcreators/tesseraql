@@ -368,9 +368,14 @@ class AppLinterTest {
                 && f.source().contains("bad.yml"));
         assertThat(findings).anyMatch(f -> f.code().equals("TQL-MCP-1012") && f.isError()
                 && f.source().contains("dangling.yml"));
-        // The clean UI resource and its linking tool raise nothing.
-        assertThat(findings).noneMatch(f -> f.source().contains("board.yml"));
-        assertThat(findings).noneMatch(f -> f.source().contains("find.yml"));
+        // The clean UI resource and its linking tool raise nothing in this family. Scoped to
+        // TQL-MCP-10xx rather than asserting silence outright: find.yml is a read tool that
+        // declares no security:, which TQL-MCP-4261 reports on purpose, and a blanket noneMatch
+        // would make every future lint look like a regression here.
+        assertThat(findings).noneMatch(f -> f.code().startsWith("TQL-MCP-10")
+                && f.source().contains("board.yml"));
+        assertThat(findings).noneMatch(f -> f.code().startsWith("TQL-MCP-10")
+                && f.source().contains("find.yml"));
     }
 
     @Test
@@ -2201,6 +2206,70 @@ class AppLinterTest {
                 """)).noneMatch(f -> f.code().equals("TQL-BATCH-4211"));
         // And with nothing declared at all, which is how most apps run.
         assertThat(lintWithConfig(dir, "")).noneMatch(f -> f.code().equals("TQL-BATCH-4211"));
+    }
+
+    /**
+     * A read primitive nothing gates is reported; anything at all silences it
+     * (docs/audit-hardening.md open question 4).
+     */
+    @Test
+    void flagsAnMcpReadPrimitiveWithNoFloorAtAll(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), "tesseraql:\n  app:\n    name: t\n");
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/list.sql"), "select 1 as one\n");
+        Files.writeString(dir.resolve("mcp/list.yml"), """
+                version: tesseraql/v1
+                id: ungoverned.read
+                kind: tool
+                recipe: query-json
+                description: Reads rows.
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                """);
+
+        assertThat(new AppLinter().lint(dir))
+                .anyMatch(f -> f.code().equals("TQL-MCP-4261") && !f.isError()
+                        && f.message().contains("ungoverned.read"));
+    }
+
+    /** The defaults block is resolved into the document, so declaring it silences the warning. */
+    @Test
+    void theMcpDefaultsBlockSuppliesTheFloor(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/application.yml"), "server:\n  port: 0\n");
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    defaults:
+                      mcp:
+                        auth: bearer
+                        policy: mcp.read
+                    policies:
+                      mcp.read:
+                        anyOf:
+                          - role: AGENT
+                """);
+        Files.createDirectories(dir.resolve("mcp"));
+        Files.writeString(dir.resolve("mcp/list.sql"), "select 1 as one\n");
+        Files.writeString(dir.resolve("mcp/list.yml"), """
+                version: tesseraql/v1
+                id: floored.read
+                kind: tool
+                recipe: query-json
+                description: Reads rows.
+                sources:
+                  main:
+                    sql:
+                      file: list.sql
+                """);
+
+        assertThat(new AppLinter().lint(dir)).noneMatch(f -> f.code().equals("TQL-MCP-4261"));
     }
 
     /** A single string is accepted where a list would be; the model holds a list either way. */

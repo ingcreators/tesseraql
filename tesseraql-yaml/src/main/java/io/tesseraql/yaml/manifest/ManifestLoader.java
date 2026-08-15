@@ -112,6 +112,29 @@ public final class ManifestLoader {
         List<UiResourceFile> uiResources = new ArrayList<>();
         List<PromptFile> prompts = new ArrayList<>();
         loadMcp(home, tools, resources, uiResources, prompts);
+        // The floor under primitives that declare nothing (docs/audit-hardening.md open question
+        // 4). MCP documents never reach applySecurityDefaults: the path rules match on a served
+        // URL path, and a primitive reached by name over one shared endpoint has none. So they get
+        // their own block, applied here where they are loaded.
+        io.tesseraql.yaml.config.McpSecurityDefaults mcpDefaults = io.tesseraql.yaml.config.McpSecurityDefaults
+                .from(config);
+        if (!mcpDefaults.isEmpty()) {
+            tools.replaceAll(tool -> new ToolFile(tool.source(),
+                    tool.definition().withSecurity(
+                            mcpDefaults.resolve(tool.definition().security())),
+                    tool.description(), tool.uiResource()));
+            resources.replaceAll(resource -> new ResourceFile(resource.source(),
+                    resource.definition().withSecurity(
+                            mcpDefaults.resolve(resource.definition().security())),
+                    resource.description(), resource.uri(), resource.mimeType()));
+            uiResources.replaceAll(ui -> new UiResourceFile(ui.source(),
+                    ui.definition().withSecurity(mcpDefaults.resolve(ui.definition().security())),
+                    ui.description(), ui.uri(), ui.ui()));
+            prompts.replaceAll(prompt -> new PromptFile(prompt.source(), prompt.id(),
+                    prompt.description(), prompt.arguments(),
+                    prompt.definition().withSecurity(
+                            mcpDefaults.resolve(prompt.definition().security()))));
+        }
         tools.replaceAll(tool -> new ToolFile(tool.source(),
                 resolveSharedDefinitions(domains, ruleSets, decisions, tool.source(),
                         tool.definition()),

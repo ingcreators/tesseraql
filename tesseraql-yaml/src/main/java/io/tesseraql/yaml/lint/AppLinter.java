@@ -43,6 +43,7 @@ public final class AppLinter {
                 new PromptRules(),
                 new ConsumerRules(),
                 new DuplicateMcpNameRules(),
+                new McpReadFloorRules(),
                 new ToolUiLinkRules(),
                 new I18nRules(),
                 new JwtConfigRules(),
