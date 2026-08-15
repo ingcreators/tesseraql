@@ -28,6 +28,10 @@ public final class OpenTelemetrySupport {
 
         SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
                 .setResource(resource)
+                // The exported span carries the id the logs carry (docs/audit-hardening.md
+                // Decision 7). Without this the two are unrelated values and nobody can pivot from
+                // a log line to a trace.
+                .setIdGenerator(new SuppliedIdGenerator())
                 .addSpanProcessor(BatchSpanProcessor.builder(
                         OtlpGrpcSpanExporter.builder().setEndpoint(endpoint).build()).build())
                 .build();

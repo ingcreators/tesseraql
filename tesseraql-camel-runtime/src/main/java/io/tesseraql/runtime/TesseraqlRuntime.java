@@ -120,7 +120,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             DataSources.MainDatasourceOverride override) {
         AppManifest manifest = new ManifestLoader().load(appHome);
         int port = manifest.config().getString("server.port").map(Integer::parseInt).orElse(8080);
-        return start(appHome, manifest, port, new io.tesseraql.core.telemetry.RingTracer(100),
+        return start(appHome, manifest, port,
+                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(manifest)),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null);
     }
 
@@ -132,8 +133,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /** Starts the runtime on an explicit port, with the {@code main} datasource override applied. */
     public static TesseraqlRuntime start(Path appHome, int port,
             DataSources.MainDatasourceOverride override) {
-        return start(appHome, new ManifestLoader().load(appHome), port,
-                new io.tesseraql.core.telemetry.RingTracer(100),
+        AppManifest manifest = new ManifestLoader().load(appHome);
+        return start(appHome, manifest, port,
+                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(manifest)),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null);
     }
 
@@ -160,9 +162,46 @@ public final class TesseraqlRuntime implements AutoCloseable {
     static TesseraqlRuntime start(Path appHome, int port, String basePathOverride,
             String cookiePath) {
         AppManifest loaded = new ManifestLoader().load(appHome);
+        // Suite mode had no tracing at all, so the console's trace pages behind `tesseraql host`
+        // were permanently empty (docs/audit-hardening.md Decision 7). An app hosted in a suite is
+        // the same app: it gets the same in-process ring every other start path gets.
         return start(appHome, withBasePath(loaded, basePathOverride), port,
-                io.tesseraql.core.telemetry.NoopTracer.INSTANCE,
+                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, cookiePath);
+    }
+
+    /**
+     * The ring capacity a manifest asks for.
+     *
+     * <p>Read here as well as on the main start path because suite mode builds its own tracer
+     * before that path runs.
+     */
+    private static int ringCapacity(AppManifest manifest) {
+        return manifest.config().getString("tesseraql.diagnostics.traceRingCapacity")
+                .map(Integer::parseInt).orElse(100);
+    }
+
+    /**
+     * The in-process span ring behind a tracer, wherever it sits.
+     *
+     * <p>An {@code instanceof} against the supplied tracer found nothing once OTLP wrapped it in a
+     * composite, so the console's trace pages went empty in exactly the deployments carrying the
+     * most telemetry. Asking the composite is the fix rather than reaching past it.
+     */
+    private static io.tesseraql.core.telemetry.TraceLog traceLogOf(
+            io.tesseraql.core.telemetry.Tracer tracer) {
+        if (tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog) {
+            return traceLog;
+        }
+        if (tracer instanceof io.tesseraql.core.telemetry.CompositeTracer composite) {
+            for (io.tesseraql.core.telemetry.Tracer delegate : composite.delegates()) {
+                io.tesseraql.core.telemetry.TraceLog found = traceLogOf(delegate);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return io.tesseraql.core.telemetry.TraceLog.empty();
     }
 
     /** The manifest with {@code tesseraql.http.basePath} replaced by the host's value. */
@@ -1062,10 +1101,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         context.getRegistry().bind("tesseraqlPollSourceStatus", pollSourceStatus);
         io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
+            // The effective tracer, not the supplied one: with OTLP configured the supplied tracer
+            // is wrapped in a composite, and reading past it left the console's trace pages empty
+            // in exactly the deployments that had the most telemetry (docs/audit-hardening.md
+            // Decision 7).
             opsDashboard = new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
-                    tracer instanceof io.tesseraql.core.telemetry.TraceLog traceLog
-                            ? traceLog
-                            : io.tesseraql.core.telemetry.TraceLog.empty(),
+                    traceLogOf(effectiveTracer),
                     manifest.config().getString("tesseraql.diagnostics.slowSpanMillis")
                             .map(Long::parseLong).orElse(200L),
                     new io.tesseraql.opsui.OpsDashboard.AlertThresholds(
