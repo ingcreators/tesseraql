@@ -234,4 +234,6 @@ export const EXCLUDED = [
   'audit-hardening.md',
   // Whether TesseraQL should issue its own tokens — designed and deferred, 2026-08-15.
   'authorization-server.md',
+  // A session exchanged for a short-lived bearer, instead of an authorization server, 2026-08-15.
+  'session-token-exchange.md',
 ];

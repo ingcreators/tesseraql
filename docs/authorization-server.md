@@ -601,12 +601,13 @@ Concrete triggers, so this does not get re-litigated on vibes:
    Documenting it is cheap. A tested reference deployment is a hosting-documentation project.
    Shipping one — bundling Keycloak the way the embedded database is bundled — is a much larger
    commitment and a different kind of product.
-3. **Does a session-to-token exchange stand on its own merits?** Issuing a short-lived bearer
-   token to an already-authenticated browser session is far less than an authorization server:
-   no `/authorize`, no consent, no client registry, no redirect handling. It would serve CI,
-   scripts and every locally running assistant. It does not reach the hosted assistants, so it
-   does not answer this document's question — but it may be worth doing for reasons that have
-   nothing to do with MCP.
+3. ~~**Does a session-to-token exchange stand on its own merits?**~~ **Closed 2026-08-15: yes,
+   and it is being built** — [session-token-exchange.md](session-token-exchange.md). It reaches CI,
+   scripts and every locally running assistant, and it still does not reach the hosted assistants,
+   so this document's question is untouched: an operator who needs those needs an authorization
+   server. What changed is the ordering. The exchange is what the deployments that exist today can
+   actually use, so it goes first, and the resource-server slices wait for a deployment that needs
+   them.
 4. ~~**Two SAML hardening items surfaced while researching this.**~~ **Closed: they are
    [audit-hardening.md](audit-hardening.md) Decision 10, shipped as that campaign's slice 13 in
    wave A.** Recorded here in full because the reasoning is where it was found; the campaign
