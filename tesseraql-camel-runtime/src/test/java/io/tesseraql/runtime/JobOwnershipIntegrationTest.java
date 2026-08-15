@@ -107,6 +107,67 @@ class JobOwnershipIntegrationTest {
         assertThat(running.get(0).heartbeatAt()).isNull();
     }
 
+    // --- the reaper (docs/audit-hardening.md Decision 6, slice 9) --------------------------------
+
+    /**
+     * A stranded row is finished, with a reason that names what happened.
+     *
+     * <p>The distinct code is the point: an operator seeing TQL-BATCH-4212 knows the node running
+     * this went away, which is an infrastructure incident, not a job whose own logic failed. Those
+     * are different responses, and folding them into one exit message would make the reaper look
+     * like a source of job failures.
+     */
+    @Test
+    void anAbandonedRunIsReapedWithAReasonOfItsOwn() throws Exception {
+        JobRepository repository = repository("node-gone");
+        String executionId = repository.startExecution("abandoned.job", "app", "cron", null);
+        ageHeartbeat(executionId, Duration.ofHours(2));
+
+        assertThat(repository.reapAbandoned("abandoned.job", Duration.ofMinutes(5)))
+                .containsExactly(executionId);
+
+        JobExecution reaped = repository.findExecution(executionId).orElseThrow();
+        assertThat(reaped.status().name()).isEqualTo("FAILED");
+        assertThat(reaped.endTime()).isNotNull();
+        assertThat(reaped.exitMessage())
+                .contains(JobRepository.REAPED_REASON)
+                .contains("node-gone")
+                .contains("abandoned, not failed");
+    }
+
+    /** A live run is never reaped — the window is many heartbeat intervals wide for this. */
+    @Test
+    void aRunStillReportingIsLeftAlone() {
+        JobRepository repository = repository("node-busy");
+        String executionId = repository.startExecution("busy2.job", "app", "cron", null);
+
+        assertThat(repository.reapAbandoned("busy2.job", Duration.ofMinutes(5))).isEmpty();
+        assertThat(repository.findExecution(executionId).orElseThrow().status().name())
+                .isEqualTo("RUNNING");
+    }
+
+    /**
+     * The reaper never overwrites a verdict the run itself reached.
+     *
+     * <p>The marking update is conditional on the row still being RUNNING, so a run that finished
+     * between the reaper's read and its write keeps its own outcome — and two nodes sweeping at
+     * once produce one write and one winner.
+     */
+    @Test
+    void aRunThatFinishedItselfKeepsItsOwnOutcome() throws Exception {
+        JobRepository repository = repository("node-racing");
+        String executionId = repository.startExecution("racy.job", "app", "cron", null);
+        ageHeartbeat(executionId, Duration.ofHours(2));
+        repository.completeExecution(executionId);
+
+        assertThat(repository.reapAbandoned("racy.job", Duration.ofMinutes(5))).isEmpty();
+        JobExecution finished = repository.findExecution(executionId).orElseThrow();
+        assertThat(finished.status().name()).isEqualTo("COMPLETED");
+        // A clean completion carries no exit message at all, which is itself the assertion: the
+        // reaper did not write one over it.
+        assertThat(finished.exitMessage()).isNull();
+    }
+
     /** Two replicas of one image on one host must not share an identity. */
     @Test
     void aDerivedNodeIdIsUsedWhenNoneIsConfigured() {

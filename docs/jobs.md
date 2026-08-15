@@ -633,7 +633,22 @@ tesseraql:
 ```
 
 Being plain about the limit: configuring the drain is mitigation, not a fix. SIGKILL, OOM and node
-loss strand rows at any timeout. Ownership is what makes a stranded row recognisable.
+loss strand rows at any timeout. Ownership is what makes a stranded row recognisable, and a
+**reaper** is what finishes it:
+
+```yaml
+tesseraql:
+  batch:
+    reaperInterval: 60s         # how often abandoned runs are swept up
+```
+
+A reaped execution is recorded `FAILED` with `TQL-BATCH-4212` and a message naming the owner that
+went silent — deliberately distinct from a failure the job's own logic produced, because they are
+different incidents with different responses. One is infrastructure; the other is the app.
+
+The reaper never overwrites a verdict a run reached itself: the marking is conditional on the row
+still being `RUNNING`, so a run that finished between the sweep's read and its write keeps its own
+outcome, and two nodes sweeping at once produce one write and one winner.
 
 ## Stopping a run
 
