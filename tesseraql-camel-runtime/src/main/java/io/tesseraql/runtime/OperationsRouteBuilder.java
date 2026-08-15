@@ -74,7 +74,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
      */
     record MetricsSettings(boolean enabled, boolean unauthenticated,
             io.tesseraql.core.telemetry.AggregatingMeter meter,
-            io.tesseraql.opsui.PollSourceStatus pollSources) {
+            io.tesseraql.opsui.PollSourceStatus pollSources,
+            io.tesseraql.opsui.RuntimeMetrics runtime) {
     }
 
     OperationsRouteBuilder(OpsActions actions, JobRepository repository,
@@ -176,7 +177,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 exchange.getMessage().setBody(io.tesseraql.core.telemetry.PrometheusTextFormat
                         .render(metrics.meter())
                         + io.tesseraql.opsui.PollSourceMetrics.render(metrics.pollSources(),
-                                java.time.Instant.now()));
+                                java.time.Instant.now())
+                // Heap, GC, threads and the pool (docs/audit-hardening.md Decision 9):
+                // request rates and latency histograms could not answer "is it out of
+                // heap" or "is the pool exhausted", which is what gets asked first.
+                        + (metrics.runtime() == null ? "" : metrics.runtime().render()));
             });
         }
 
