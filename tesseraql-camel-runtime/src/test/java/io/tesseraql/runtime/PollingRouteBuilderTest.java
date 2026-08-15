@@ -30,7 +30,7 @@ class PollingRouteBuilderTest {
     void sftpVerifiesTheHostKeyAgainstAConfiguredKnownHostsFile() {
         String uri = builder(Map.of(
                 "allowedHosts", List.of("sftp.partner.example"),
-                "knownHostsFile", "security/known_hosts")).endpointUri(sftp());
+                "knownHostsFile", "security/known_hosts")).endpointUri("poll.job", sftp());
 
         assertThat(uri)
                 // The declared `/outbound` is absolute (contract-bugfixes track C): Camel's
@@ -46,7 +46,8 @@ class PollingRouteBuilderTest {
     @Test
     void anAbsoluteKnownHostsFilePassesThroughUnchanged() {
         Path pinned = home.resolve("etc/ssh/known_hosts").toAbsolutePath();
-        String uri = builder(Map.of("knownHostsFile", pinned.toString())).endpointUri(sftp());
+        String uri = builder(Map.of("knownHostsFile", pinned.toString())).endpointUri("poll.job",
+                sftp());
 
         assertThat(uri).contains("knownHostsFile=" + pinned)
                 .contains("strictHostKeyChecking=yes");
@@ -55,7 +56,7 @@ class PollingRouteBuilderTest {
     @Test
     void withoutAKnownHostsFileTheHostKeyStaysUnchecked() {
         String uri = builder(Map.of("allowedHosts", List.of("sftp.partner.example")))
-                .endpointUri(sftp());
+                .endpointUri("poll.job", sftp());
 
         assertThat(uri).contains("strictHostKeyChecking=no")
                 .doesNotContain("knownHostsFile=");
@@ -66,7 +67,7 @@ class PollingRouteBuilderTest {
         String uri = builder(Map.of(
                 "allowedHosts", List.of("ftps.partner.example"),
                 "trustStore", Map.of("file", "security/partner-ca.p12", "password", "s3cr3t")))
-                .endpointUri(ftps());
+                .endpointUri("poll.job", ftps());
 
         assertThat(uri)
                 .startsWith("ftps://ftps.partner.example:21//outbound?")
@@ -96,7 +97,7 @@ class PollingRouteBuilderTest {
 
         // Nothing to validate against means any in-date certificate from any host is accepted,
         // so the handshake proves nothing about the peer. Refuse the job instead of polling it.
-        assertThatThrownBy(() -> builder.endpointUri(ftps()))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", ftps()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("trustStore");
     }
@@ -114,9 +115,9 @@ class PollingRouteBuilderTest {
         PollingRouteBuilder builder = builder(
                 Map.of("allowedHosts", List.of("sftp.partner.example")));
         PollSpec anonymous = new PollSpec("sftp", "sftp.partner.example", null, "/outbound",
-                null, null, null, null, null);
+                null, null, null, null, null, null);
 
-        assertThatThrownBy(() -> builder.endpointUri(anonymous))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", anonymous))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                 .hasMessageContaining("TQL-SEC-4088")
                 .hasMessageContaining("needs a credential");
@@ -132,7 +133,7 @@ class PollingRouteBuilderTest {
     @Test
     void sftpAuthenticatesWithADeclaredPrivateKey() {
         String uri = builderWith(Map.of("username", "svc", "privateKeyFile", "/keys/id_ed25519",
-                "privateKeyPassphrase", "pp")).endpointUri(sftp());
+                "privateKeyPassphrase", "pp")).endpointUri("poll.job", sftp());
 
         assertThat(uri).contains("privateKeyFile=RAW(/keys/id_ed25519)");
         assertThat(uri).contains("privateKeyPassphrase=RAW(pp)");
@@ -150,7 +151,7 @@ class PollingRouteBuilderTest {
     void ftpsPresentsADeclaredClientCertificate() {
         String uri = builderWith(Map.of("username", "svc", "password", "s3cr3t",
                 "keyStoreFile", "/etc/tql/client.p12", "keyStorePassword", "kp"))
-                .endpointUri(ftps());
+                .endpointUri("poll.job", ftps());
 
         assertThat(uri).contains("ftpClient.keyStore.file=/etc/tql/client.p12");
         assertThat(uri).contains("ftpClient.keyStore.password=RAW(kp)");
@@ -161,7 +162,7 @@ class PollingRouteBuilderTest {
     @Test
     void aCredentialWithoutAKeyStoreCarriesNoClientCertificate() {
         String uri = builderWith(Map.of("username", "svc", "password", "s3cr3t"))
-                .endpointUri(ftps());
+                .endpointUri("poll.job", ftps());
 
         assertThat(uri).doesNotContain("keyStore");
     }
@@ -172,7 +173,7 @@ class PollingRouteBuilderTest {
                 "privateKeyFile", "/keys/id_ed25519"));
 
         // Which one wins is exactly the question a deployment should never answer by experiment.
-        assertThatThrownBy(() -> builder.endpointUri(sftp()))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", sftp()))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                 .hasMessageContaining("TQL-SEC-4089")
                 .hasMessageContaining("both");
@@ -182,7 +183,7 @@ class PollingRouteBuilderTest {
     void aCredentialWithNoMethodIsRefused() {
         PollingRouteBuilder builder = builderWith(Map.of("username", "svc"));
 
-        assertThatThrownBy(() -> builder.endpointUri(sftp()))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", sftp()))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                 .hasMessageContaining("neither");
     }
@@ -192,7 +193,7 @@ class PollingRouteBuilderTest {
         PollingRouteBuilder builder = builderWith(Map.of("username", "svc",
                 "privateKeyFile", "/keys/id_ed25519"));
 
-        assertThatThrownBy(() -> builder.endpointUri(ftps()))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", ftps()))
                 .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                 .hasMessageContaining("only an sftp endpoint");
     }
@@ -206,13 +207,17 @@ class PollingRouteBuilderTest {
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", poll))), name -> null);
         return new PollingRouteBuilder(List.of(), FileConnectors.poll(config), "app", Map.of(),
-                home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus());
+                home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus(),
+                // The URI is built from the declaration; nothing touches the datasource until a
+                // source that declares consumeOnce actually wires.
+                new io.tesseraql.operations.poll.JdbcPollConsumedStore(null,
+                        java.time.Duration.ofDays(30)));
     }
 
     @Test
     void aLocalPathIsAnchoredUnderADeclaredRoot() {
         String uri = builder(Map.of("allowedPaths", List.of("inbox")))
-                .endpointUri(local("inbox/orders"));
+                .endpointUri("poll.job", local("inbox/orders"));
 
         assertThat(uri).startsWith("file://" + home.resolve("inbox/orders").toAbsolutePath() + "?");
     }
@@ -223,7 +228,7 @@ class PollingRouteBuilderTest {
 
         // The poll consumer does not only read: it moves what it reads, so a path that escapes
         // the root relocates a live directory's contents into .done.
-        assertThatThrownBy(() -> builder.endpointUri(local("inbox/../../secret")))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", local("inbox/../../secret")))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("outside every");
     }
@@ -232,7 +237,7 @@ class PollingRouteBuilderTest {
     void aLocalSourceWithNoDeclaredRootIsRefused() {
         PollingRouteBuilder builder = builder(Map.of());
 
-        assertThatThrownBy(() -> builder.endpointUri(local("anywhere")))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job", local("anywhere")))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("allowedPaths");
     }
@@ -240,8 +245,8 @@ class PollingRouteBuilderTest {
     @Test
     void anIncludeGlobCannotSmuggleExtraEndpointOptions() {
         String uri = builder(Map.of("allowedPaths", List.of("inbox")))
-                .endpointUri(new PollSpec("local", null, null, "inbox", null,
-                        "*.csv&noop=true", null, null, null));
+                .endpointUri("poll.job", new PollSpec("local", null, null, "inbox", null,
+                        "*.csv&noop=true", null, null, null, null));
 
         // Camel splits the query on '&' before binding, so an unwrapped glob would bind noop
         // (and anything else after it) as real consumer options.
@@ -254,12 +259,14 @@ class PollingRouteBuilderTest {
 
         // Camel evaluates move: as a Simple expression, so this writes the polled file outside
         // the poll tree entirely — escaping would not help, only refusing the value does.
-        assertThatThrownBy(() -> builder.endpointUri(new PollSpec("local", null, null, "inbox",
-                null, null, null, "${file:parent}/../../escaped", null)))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job",
+                new PollSpec("local", null, null, "inbox",
+                        null, null, null, "${file:parent}/../../escaped", null, null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Simple expression");
-        assertThatThrownBy(() -> builder.endpointUri(new PollSpec("local", null, null, "inbox",
-                null, null, null, null, "../outside")))
+        assertThatThrownBy(() -> builder.endpointUri("poll.job",
+                new PollSpec("local", null, null, "inbox",
+                        null, null, null, null, "../outside", null)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("relative directory name");
     }
@@ -274,17 +281,64 @@ class PollingRouteBuilderTest {
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", withCredential))),
                 name -> null);
         return new PollingRouteBuilder(List.of(), FileConnectors.poll(config), "app", Map.of(),
-                home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus());
+                home, home.resolve("work"), new io.tesseraql.opsui.PollSourceStatus(),
+                // The URI is built from the declaration; nothing touches the datasource until a
+                // source that declares consumeOnce actually wires.
+                new io.tesseraql.operations.poll.JdbcPollConsumedStore(null,
+                        java.time.Duration.ofDays(30)));
+    }
+
+    // --- exclusive consumption (docs/audit-hardening.md Decision 4) -----------------------------
+
+    /**
+     * The two options that decide it, and the key that makes it safe.
+     *
+     * <p>{@code idempotentEager=true} is not decoration: {@code GenericFileConsumer} branches on
+     * it, and the lazy default calls {@code contains} then adds on completion — check-then-act, so
+     * two replicas can both pass and both import. And the key is name-size-modified rather than
+     * Camel's default absolute path, or a partner re-sending a file under a name it has used
+     * before is suppressed forever.
+     */
+    @Test
+    void consumeOnceWiresTheEagerIdempotentStoreWithACompositeKey() {
+        String uri = builder(Map.of("allowedHosts", List.of("sftp.partner.example")))
+                .endpointUri("orders.intake", consumeOnce(sftp()));
+
+        assertThat(uri)
+                .contains("&idempotent=true")
+                .contains("&idempotentEager=true")
+                .contains("idempotentKey=RAW(${file:name}-${file:size}-${file:modified})")
+                .contains("idempotentRepository=#bean:tesseraqlPollConsumed-orders.intake")
+                // Kept alongside, not replaced: the read lock is the write-stability check.
+                .contains("readLock=changed")
+                // readLock=idempotent is advertised in the component catalogue and unimplemented in
+                // the remote strategy factory, where it silently yields no lock at all.
+                .doesNotContain("readLock=idempotent");
+    }
+
+    /** Off by default, so an app that never declares it is wired exactly as before. */
+    @Test
+    void withoutConsumeOnceNoIdempotentOptionsAreEmitted() {
+        String uri = builder(Map.of("allowedHosts", List.of("sftp.partner.example")))
+                .endpointUri("orders.intake", sftp());
+
+        assertThat(uri).doesNotContain("idempotent").contains("readLock=changed");
+    }
+
+    private static PollSpec consumeOnce(PollSpec spec) {
+        return new PollSpec(spec.transport(), spec.host(), spec.port(), spec.path(),
+                spec.credential(), spec.include(), spec.delay(), spec.move(), spec.moveFailed(),
+                true);
     }
 
     private static PollSpec sftp() {
         return new PollSpec("sftp", "sftp.partner.example", null, "/outbound", "partner", null,
-                null, null, null);
+                null, null, null, null);
     }
 
     private static PollSpec sftp(String path) {
         return new PollSpec("sftp", "sftp.partner.example", null, path, "partner", null,
-                null, null, null);
+                null, null, null, null);
     }
 
     @Test
@@ -294,22 +348,22 @@ class PollingRouteBuilderTest {
         // escape collapses to the same absolute meaning instead of breaking.
         PollingRouteBuilder builder = builder(
                 Map.of("allowedHosts", List.of("sftp.partner.example")));
-        assertThat(builder.endpointUri(sftp("outbound/orders")))
+        assertThat(builder.endpointUri("poll.job", sftp("outbound/orders")))
                 .startsWith("sftp://sftp.partner.example:22/outbound/orders?");
-        assertThat(builder.endpointUri(sftp("/outbound/orders")))
+        assertThat(builder.endpointUri("poll.job", sftp("/outbound/orders")))
                 .startsWith("sftp://sftp.partner.example:22//outbound/orders?");
-        assertThat(builder.endpointUri(sftp("//outbound/orders")))
+        assertThat(builder.endpointUri("poll.job", sftp("//outbound/orders")))
                 .startsWith("sftp://sftp.partner.example:22//outbound/orders?");
     }
 
     @Test
     void aRemoteSourceStreamsThroughALocalWorkDirectory() {
         String sftp = builder(Map.of("allowedHosts", List.of("sftp.partner.example")))
-                .endpointUri(sftp());
+                .endpointUri("poll.job", sftp());
         String ftps = builder(Map.of(
                 "allowedHosts", List.of("ftps.partner.example"),
                 "trustStore", Map.of("file", "ca.p12", "password", "s3cr3t")))
-                .endpointUri(ftps());
+                .endpointUri("poll.job", ftps());
 
         // Both remote components otherwise load the whole file into memory before the route sees
         // it, which is what PollImportProcessor's "never materializes in memory" comment claims
@@ -320,11 +374,11 @@ class PollingRouteBuilderTest {
     }
 
     private static PollSpec local(String path) {
-        return new PollSpec("local", null, null, path, null, null, null, null, null);
+        return new PollSpec("local", null, null, path, null, null, null, null, null, null);
     }
 
     private static PollSpec ftps() {
         return new PollSpec("ftps", "ftps.partner.example", null, "/outbound", "partner", null,
-                null, null, null);
+                null, null, null, null);
     }
 }

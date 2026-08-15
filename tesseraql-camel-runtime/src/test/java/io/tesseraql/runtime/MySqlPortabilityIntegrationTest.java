@@ -92,6 +92,11 @@ class MySqlPortabilityIntegrationTest {
     }
 
     @Test
+    void pollSourceExclusiveConsumptionWorksOnThisDialect() throws Exception {
+        DialectRuntimeChecks.pollConsumedRoundTrip(mysqlDataSource());
+    }
+
+    @Test
     void clusterJobClaimingSkipsTheLoserOnThisDialect() throws Exception {
         DialectRuntimeChecks.jobClaimRoundTrip(mysqlDataSource());
     }

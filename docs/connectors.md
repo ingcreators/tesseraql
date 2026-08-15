@@ -291,6 +291,7 @@ trigger:
     delay: 60s                   # poll interval (default 60s)
     move: .done                  # processed files move here (default .done)
     moveFailed: .error           # files that could not be ingested move here (default .error)
+    consumeOnce: true            # one file, one replica (default false)
 
 A **local** source needs a declared root, the same deny-by-default rule remote sources get from
 `allowedHosts`:
@@ -308,6 +309,42 @@ The `path:` resolves under one of those roots, is normalized, and is re-checked 
 climb out. Without a root the job is refused, and lint says so first (`TQL-SEC-4093`). This is
 not only about reading: the poll consumer **moves** what it ingests, so an unanchored path can
 relocate a live directory's contents into `.done`.
+
+### One file, one replica
+
+Every poll consumer carries a write-stability check, so a file still being written is not read
+half-formed. That is not the same as deciding **which** replica gets it, and on `sftp` and `ftps`
+there is no server-side exclusion at all — three replicas polling one drop directory each import
+every file. The job claim does not cover this: it is per *firing*, not per file.
+
+`consumeOnce: true` puts a shared store behind the source, so the first replica to claim a file is
+the one that imports it:
+
+```yaml
+  poll:
+    transport: sftp
+    host: sftp.partner.example
+    path: /outbound/orders
+    credential: partner-sftp
+    consumeOnce: true
+```
+
+Lint warns (`TQL-YAML-1310`) when a remote source leaves it off.
+
+**It changes what a re-sent file means, which is why it is opt-in.** A file is identified by name,
+size and modified time — not by path, which would suppress a partner's daily `orders.csv` forever
+after the first one. So a partner re-sending a *byte-identical* file is skipped rather than
+imported again, for as long as the claim is retained:
+
+```yaml
+tesseraql:
+  connectors:
+    poll:
+      consumedRetention: 30d      # how long a consumed file is remembered (default 30d)
+```
+
+Outside that window the same bytes are imported again. With `consumeOnce` off — today's behaviour
+for every source — a re-sent file is always re-imported.
 
 `move:` and `moveFailed:` must be plain relative directory names. Camel evaluates them as Simple
 expressions, so a value like `${file:parent}/../archive` would write the polled file outside the

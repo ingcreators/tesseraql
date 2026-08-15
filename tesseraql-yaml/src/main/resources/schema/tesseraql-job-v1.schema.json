@@ -119,6 +119,10 @@
             "moveFailed": {
               "type": "string",
               "description": "Relative directory for failed files (default .error). Plain names only."
+            },
+            "consumeOnce": {
+              "type": "boolean",
+              "description": "Consume each file once across every replica, arbitrated through a shared store. Off by default. The read lock a poll consumer carries is a write-stability check, and on sftp/ftps there is no server-side exclusion at all, so without this every replica imports every file. Turning it on also means a partner re-sending a byte-identical file is skipped while connectors.poll.consumedRetention has not lapsed."
             }
           },
           "additionalProperties": true,

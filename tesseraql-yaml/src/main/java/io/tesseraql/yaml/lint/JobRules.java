@@ -27,6 +27,12 @@ final class JobRules implements LintRule {
 
     private static final String POLL_HOST_NOT_ALLOWED = "TQL-SEC-4080";
 
+    /**
+     * TQL-YAML-1310: a remote poll source with no exclusive-consumption store, so every replica
+     * imports every file (docs/audit-hardening.md Decision 4).
+     */
+    private static final String POLL_WITHOUT_EXCLUSIVE_CONSUMPTION = "TQL-YAML-1310";
+
     private static final String POLL_UNDECLARED_CREDENTIAL = "TQL-SEC-4081";
 
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
@@ -195,6 +201,17 @@ final class JobRules implements LintRule {
         if (poll.port() != null && (poll.port() < 1 || poll.port() > 65535)) {
             findings.add(new LintFinding(LintCodes.INVALID_JOB_TRIGGER, ERROR, source,
                     "Poll trigger port " + poll.port() + " is outside 1-65535"));
+        }
+        // The read lock the consumer carries is a write-stability check, and on the remote
+        // transports it is not even that: SftpChangedExclusiveReadLockStrategy implements the
+        // interface directly and takes no lock, so three replicas polling one drop directory each
+        // import every file. A warning rather than an error because a single-node deployment is a
+        // real deployment, and because turning it on changes what a re-sent file means.
+        if (poll.isRemote() && !poll.consumesOnce()) {
+            findings.add(new LintFinding(POLL_WITHOUT_EXCLUSIVE_CONSUMPTION, WARNING, source,
+                    "Poll source '" + job.definition().id() + "' polls " + kind
+                            + ", which has no server-side exclusion, and declares no"
+                            + " consumeOnce: true — every replica will import every file"));
         }
         if (!poll.isRemote()) {
             // Keys that belong to a remote source parse cleanly and are then discarded, so an
