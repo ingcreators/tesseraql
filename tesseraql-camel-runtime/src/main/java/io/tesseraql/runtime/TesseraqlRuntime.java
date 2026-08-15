@@ -1562,6 +1562,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .getString("tesseraql.batch.slaSweepInterval").orElse("60s"));
                 context.addRoutes(new JobSlaRoutes(slaSweeper, slaPeriod));
             }
+            // The reaper (docs/audit-hardening.md Decision 6, slice 9): a RUNNING row whose owner
+            // stopped reporting is finished with a reason of its own, so the console stops showing
+            // a run that ended when its node did.
+            if (!jobs.isEmpty()) {
+                context.addRoutes(new JobReaperRoutes(jobRepository,
+                        List.copyOf(jobs.keySet()),
+                        io.tesseraql.core.util.Durations.parse(manifest.config()
+                                .getString("tesseraql.batch.heartbeat.livenessWindow")
+                                .orElse("5m")),
+                        io.tesseraql.core.util.Durations.toMillis(manifest.config()
+                                .getString("tesseraql.batch.reaperInterval").orElse("60s"))));
+            }
             // Approval-workflow deadline sweeper (roadmap Phase 28 slice 3): a cluster-safe timer
             // escalates overdue tasks, so exactly one node sweeps per interval.
             if (workflowSweeper != null) {

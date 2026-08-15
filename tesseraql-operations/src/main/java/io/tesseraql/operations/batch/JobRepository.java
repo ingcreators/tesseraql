@@ -348,6 +348,66 @@ public final class JobRepository {
         finishExecution(executionId, JobStatus.FAILED, message);
     }
 
+    /**
+     * TQL-BATCH-4212: an execution was reaped because its owner stopped reporting
+     * (docs/audit-hardening.md Decision 6).
+     *
+     * <p>A code of its own, and that is the point of the whole mechanism: the console and the alert
+     * set have to be able to tell "the node running this went away" from "the job's own logic
+     * failed". They are different incidents with different responses — one is infrastructure, the
+     * other is the app — and folding them into one exit message would make the reaper look like a
+     * source of job failures.
+     */
+    public static final String REAPED_REASON = "TQL-BATCH-4212";
+
+    /**
+     * Finishes runs whose owner stopped reporting, returning their ids
+     * (docs/audit-hardening.md Decision 6).
+     *
+     * <p>The reaper is a recovery mechanism, not a correctness guarantee, and the difference is
+     * worth stating rather than papering over. A graceful stop already writes its own outcome;
+     * what strands a row is SIGKILL, OOM or node loss, and those strand it at any timeout. This is
+     * what notices afterwards.
+     *
+     * <p>It sweeps whatever it finds rather than only this node's rows: the whole point is that the
+     * node which owned the row is gone. Marking is a conditional update on the row still being
+     * RUNNING, so a run that finished between the read and the write keeps its own outcome — the
+     * reaper never overwrites a verdict the run itself reached.
+     */
+    public List<String> reapAbandoned(String jobId, java.time.Duration livenessWindow) {
+        Instant now = Instant.now();
+        List<String> reaped = new ArrayList<>();
+        for (JobExecution execution : findRunning(jobId)) {
+            if (execution.ownerAlive(now, livenessWindow)) {
+                continue;
+            }
+            if (markReaped(execution, livenessWindow)) {
+                reaped.add(execution.id());
+            }
+        }
+        return reaped;
+    }
+
+    /** True when this call is the one that finished the row. */
+    private boolean markReaped(JobExecution execution, java.time.Duration livenessWindow) {
+        String message = REAPED_REASON + ": owner '"
+                + (execution.ownerNode() == null ? "unknown" : execution.ownerNode())
+                + "' stopped reporting for longer than " + livenessWindow
+                + "; the run was abandoned, not failed";
+        int updated = update("""
+                update tql_job_execution
+                set status = ?, end_time = ?, exit_message = ?
+                where job_execution_id = ? and status = ?""",
+                ps -> {
+                    ps.setString(1, JobStatus.FAILED.name());
+                    ps.setTimestamp(2, Timestamp.from(Instant.now()));
+                    ps.setString(3, message);
+                    ps.setString(4, execution.id());
+                    ps.setString(5, JobStatus.RUNNING.name());
+                });
+        return updated > 0;
+    }
+
     private void finishExecution(String executionId, JobStatus status, String message) {
         execute("""
                 update tql_job_execution
@@ -652,6 +712,17 @@ public final class JobRepository {
     @FunctionalInterface
     private interface StatementBinder {
         void bind(PreparedStatement statement) throws SQLException;
+    }
+
+    /** Like {@link #execute}, but the caller needs to know whether its row was the one updated. */
+    private int update(String sql, StatementBinder binder) {
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement ps = connection.prepareStatement(sql)) {
+            binder.bind(ps);
+            return ps.executeUpdate();
+        } catch (SQLException ex) {
+            throw error("Repository update failed", ex);
+        }
     }
 
     private void execute(String sql, StatementBinder binder) {
