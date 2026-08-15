@@ -40,6 +40,7 @@ class LintRegistryOrderTest {
                         "ApiKeyConfigRules",
                         "BearerConfigRules",
                         "AuthWithoutPolicyRules",
+                        "BatchHeartbeatRules",
                         "MtlsConfigRules",
                         "OidcSamlRules",
                         "SecurityDefaultRules",

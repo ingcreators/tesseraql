@@ -26,8 +26,39 @@ public final class JobRepository {
 
     private final DataSource dataSource;
 
+    /** This process's label on the runs it starts (docs/audit-hardening.md Decision 6). */
+    private final String nodeId;
+
     public JobRepository(DataSource dataSource) {
+        this(dataSource, NodeIdentity.resolve(null));
+    }
+
+    public JobRepository(DataSource dataSource, String nodeId) {
         this.dataSource = dataSource;
+        this.nodeId = nodeId;
+    }
+
+    /** The node label this repository stamps on the runs it starts. */
+    public String nodeId() {
+        return nodeId;
+    }
+
+    /**
+     * Records that this node is still running {@code executionId}.
+     *
+     * <p>Driven by a timer, never by step or chunk-commit boundaries. Those are where the
+     * cooperative stop already polls, so reusing them looks free — but their cadence is bounded by
+     * step duration rather than by a clock, and a job whose long step is a single non-chunk
+     * statement would emit no heartbeat for its whole runtime. A reaper reading that silence would
+     * kill a live run, which is the exact false positive the alert-only SLA decision was written to
+     * avoid (docs/jobs.md).
+     */
+    public void heartbeat(String executionId) {
+        execute("update tql_job_execution set heartbeat_at = ? where job_execution_id = ?",
+                ps -> {
+                    ps.setTimestamp(1, Timestamp.from(Instant.now()));
+                    ps.setString(2, executionId);
+                });
     }
 
     /**
@@ -52,6 +83,11 @@ public final class JobRepository {
                     "/tesseraql/db/migration/operations/V6__execution_params.sql");
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
                     "/tesseraql/db/migration/operations/V7__execution_cancel.sql");
+            // The owner and the heartbeat (V8): startExecution writes both on every insert, so a
+            // bootstrap-only deployment that skipped this would fail its first run rather than
+            // quietly losing the ownership it is supposed to record.
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource, JobRepository.class,
+                    "/tesseraql/db/migration/operations/V8__execution_owner.sql");
         } catch (SQLException ex) {
             throw error("Failed to create batch repository schema", ex);
         }
@@ -123,8 +159,8 @@ public final class JobRepository {
         execute("""
                 insert into tql_job_execution
                   (job_execution_id, job_id, app_name, status, trigger_type, triggered_by,
-                   business_date, params_json, start_time, created_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   business_date, params_json, start_time, created_at, owner_node, heartbeat_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 ps -> {
                     ps.setString(1, id);
                     ps.setString(2, jobId);
@@ -137,11 +173,40 @@ public final class JobRepository {
                     ps.setString(8, paramsJson);
                     ps.setTimestamp(9, Timestamp.from(now));
                     ps.setTimestamp(10, Timestamp.from(now));
+                    // The run is owned from its first instant, and its first heartbeat is that
+                    // instant: a row is never briefly indistinguishable from an abandoned one.
+                    ps.setString(11, nodeId);
+                    ps.setTimestamp(12, Timestamp.from(now));
                 });
         return id;
     }
 
-    /** The still-RUNNING executions of a job, newest first ({@code overlap: skip}, SLA sweep). */
+    /**
+     * Running executions of {@code jobId} whose owner is still reporting
+     * (docs/audit-hardening.md Decision 6).
+     *
+     * <p>This used to select on {@code status = 'RUNNING'} alone, so a replica killed mid-run left
+     * a row that read as a live run forever and {@code overlap: skip} wedged for good. The
+     * predicate is applied in Java rather than in SQL because the "no heartbeat means alive"
+     * reading is a decision worth stating once, in {@link JobExecution#ownerAlive}, rather than
+     * spelling out as a null-tolerant comparison in every dialect.
+     *
+     * <p>Being plain about the limit: this makes a wedged row visible, it does not finish it. The
+     * reaper is what writes the outcome.
+     */
+    public List<JobExecution> findRunning(String jobId, java.time.Duration livenessWindow) {
+        Instant now = Instant.now();
+        return findRunning(jobId).stream()
+                .filter(execution -> execution.ownerAlive(now, livenessWindow))
+                .toList();
+    }
+
+    /**
+     * Every execution still marked RUNNING, newest first — alive or not.
+     *
+     * <p>What the reaper and the console read; {@code overlap: skip} and the SLA sweep want the
+     * liveness-filtered overload above.
+     */
     public List<JobExecution> findRunning(String jobId) {
         List<JobExecution> executions = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
@@ -555,7 +620,9 @@ public final class JobRepository {
                 start,
                 end,
                 durationMs(start, end),
-                rs.getString("exit_message"));
+                rs.getString("exit_message"),
+                rs.getString("owner_node"),
+                instant(rs.getTimestamp("heartbeat_at")));
     }
 
     private static StepExecution readStep(ResultSet rs) throws SQLException {

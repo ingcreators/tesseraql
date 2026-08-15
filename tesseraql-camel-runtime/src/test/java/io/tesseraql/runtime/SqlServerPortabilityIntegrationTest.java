@@ -85,6 +85,11 @@ class SqlServerPortabilityIntegrationTest {
     }
 
     @Test
+    void batchRunOwnershipAndHeartbeatWorkOnThisDialect() throws Exception {
+        DialectRuntimeChecks.jobOwnershipRoundTrip(dataSource());
+    }
+
+    @Test
     void pollSourceExclusiveConsumptionWorksOnThisDialect() throws Exception {
         DialectRuntimeChecks.pollConsumedRoundTrip(dataSource());
     }

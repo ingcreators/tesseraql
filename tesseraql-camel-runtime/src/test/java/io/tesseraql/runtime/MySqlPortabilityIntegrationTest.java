@@ -92,6 +92,11 @@ class MySqlPortabilityIntegrationTest {
     }
 
     @Test
+    void batchRunOwnershipAndHeartbeatWorkOnThisDialect() throws Exception {
+        DialectRuntimeChecks.jobOwnershipRoundTrip(mysqlDataSource());
+    }
+
+    @Test
     void pollSourceExclusiveConsumptionWorksOnThisDialect() throws Exception {
         DialectRuntimeChecks.pollConsumedRoundTrip(mysqlDataSource());
     }

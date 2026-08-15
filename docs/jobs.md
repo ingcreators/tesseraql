@@ -594,6 +594,47 @@ execution). **Alert-only by design**: killing an in-flight JDBC statement safely
 project, and a false sense of "timeout means stopped" is worse than an honest page.
 Malformed declarations refuse at build time (`TQL-BATCH-4210`).
 
+## Who owns a run
+
+Every execution records the node that started it and a **heartbeat** it writes on a timer:
+
+```yaml
+tesseraql:
+  batch:
+    nodeId: slot-3              # default: hostname plus process id
+    heartbeat:
+      interval: 30s             # how often a running execution reports
+      livenessWindow: 5m        # how long silence is tolerated before it stops counting
+```
+
+`overlap: skip` believes a previous execution only while its owner is still reporting. Without
+that, a replica killed mid-run left a `RUNNING` row nothing would ever finish, and the job wedged
+permanently: every later firing was recorded `SKIPPED` naming an execution that had been dead for
+days.
+
+The pulse is driven by a clock and not by step boundaries, which matters more than it looks. The
+cooperative stop already polls at step and chunk-commit boundaries, so writing the heartbeat there
+would have been free — and wrong: the cadence would be bounded by step duration, so a job whose
+long step is a single non-chunk statement would go silent for its whole runtime and be mistaken
+for a dead one. The window is many intervals wide for the same reason, so a transient database
+blip costs a pulse rather than a run. A window no wider than the interval is refused at build time
+(`TQL-BATCH-4211`).
+
+A run with no heartbeat at all — a row written before this existed — reads as **alive**, on
+purpose: the alternative is killing a run that an older process is still executing.
+
+The shutdown drain is declared rather than inherited:
+
+```yaml
+tesseraql:
+  shutdown:
+    timeout: 45s                # how long in-flight exchanges may finish
+    forceOnTimeout: true        # stop hard when they do not
+```
+
+Being plain about the limit: configuring the drain is mitigation, not a fix. SIGKILL, OOM and node
+loss strand rows at any timeout. Ownership is what makes a stranded row recognisable.
+
 ## Stopping a run
 
 What an operator needs is not a kill switch but a stop button that tells the truth. A

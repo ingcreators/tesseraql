@@ -54,6 +54,31 @@ public final class JobExecutor {
     private final TempStore tempStore;
     private final io.tesseraql.core.diag.SqlExecutionLog slowSqlLog;
     private final io.tesseraql.core.telemetry.Tracer tracer;
+
+    /**
+     * Drives the heartbeat of every run this process owns
+     * (docs/audit-hardening.md Decision 6).
+     *
+     * <p>A clock, not a set of boundaries. Writing the pulse where the cooperative stop already
+     * polls — step and chunk-commit boundaries — looks free and is wrong: the cadence would be
+     * bounded by step duration, so a job whose long step is a single non-chunk statement emits
+     * nothing for its whole runtime and a reaper reading that silence kills a live run.
+     *
+     * <p>One daemon thread for the process. A run that hangs holds a scheduled task, not a
+     * thread.
+     */
+    private final java.util.concurrent.ScheduledExecutorService heartbeats = java.util.concurrent.Executors
+            .newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "tesseraql-job-heartbeat");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    /** How often a running execution reports; see {@link #heartbeatInterval}. */
+    private java.time.Duration heartbeatInterval = java.time.Duration.ofSeconds(30);
+
+    /** How long a run may go unheard from before it stops counting as an overlap. */
+    private java.time.Duration livenessWindow = java.time.Duration.ofMinutes(5);
     private final ObjectMapper mapper = new ObjectMapper();
     private io.tesseraql.operations.outbox.JdbcOutboxStore notificationOutbox;
     private io.tesseraql.operations.http.HttpCallClient httpCallClient;
@@ -93,6 +118,37 @@ public final class JobExecutor {
         this.tempStore = tempStore;
         this.slowSqlLog = slowSqlLog;
         this.tracer = tracer;
+    }
+
+    /**
+     * How often a run this process owns writes its heartbeat.
+     *
+     * <p>Paired with the liveness window the reaper reads: a window shorter than this interval
+     * would reap runs that are alive, which lint refuses as TQL-BATCH-4211.
+     */
+    public JobExecutor heartbeatInterval(java.time.Duration interval) {
+        if (interval != null && !interval.isZero() && !interval.isNegative()) {
+            this.heartbeatInterval = interval;
+        }
+        return this;
+    }
+
+    /**
+     * How long a run may go unheard from before {@code overlap: skip} stops believing in it.
+     *
+     * <p>Many heartbeat intervals wide on purpose: a transient database blip costs a pulse or two,
+     * and a window barely wider than the interval would turn that into a wrongly-skipped firing.
+     */
+    public JobExecutor livenessWindow(java.time.Duration window) {
+        if (window != null && !window.isZero() && !window.isNegative()) {
+            this.livenessWindow = window;
+        }
+        return this;
+    }
+
+    /** Stops the heartbeat thread; the runtime calls this on shutdown. */
+    public void close() {
+        heartbeats.shutdownNow();
     }
 
     /**
@@ -238,7 +294,11 @@ public final class JobExecutor {
         // run. The check is a cheap read; scheduled firings are already serialized by the
         // cluster claim, so the residual race is the concurrent-manual-run window.
         if (job.skipsOverlap()) {
-            java.util.List<JobExecution> running = repository.findRunning(job.id());
+            // A previous run only blocks this firing while its owner is still reporting. It used
+            // to block forever: a replica killed mid-run left a RUNNING row that nothing would
+            // ever finish, and overlap: skip wedged permanently (docs/audit-hardening.md
+            // Decision 6).
+            java.util.List<JobExecution> running = repository.findRunning(job.id(), livenessWindow);
             if (!running.isEmpty()) {
                 String skippedId = repository.recordSkipped(job.id(), appName, triggerType,
                         businessDate, "skipped: execution " + running.get(0).id()
@@ -278,6 +338,20 @@ public final class JobExecutor {
             jobSpan.attribute("tenant", tenant.id());
         }
         io.tesseraql.core.telemetry.SpanContext jobContext = jobSpan.context();
+        java.util.concurrent.ScheduledFuture<?> pulse = heartbeats.scheduleAtFixedRate(
+                () -> {
+                    try {
+                        repository.heartbeat(executionId);
+                    } catch (RuntimeException ex) {
+                        // A missed pulse is not a reason to fail the run it is reporting on. The
+                        // reaper's window is many intervals wide precisely so a transient database
+                        // blip does not read as a dead owner.
+                        LOG.debug("Heartbeat for execution {} failed: {}", executionId,
+                                ex.getMessage());
+                    }
+                },
+                heartbeatInterval.toMillis(), heartbeatInterval.toMillis(),
+                java.util.concurrent.TimeUnit.MILLISECONDS);
         try {
             boolean stopped = false;
             for (PipelineStep step : job.effectiveSteps()) {
@@ -313,6 +387,7 @@ public final class JobExecutor {
             LOG.warn("Job {} execution {} failed: {}", job.id(), executionId, ex.getMessage());
             notifyFailure(job.id(), executionId, appName, ex.getMessage());
         } finally {
+            pulse.cancel(false);
             jobSpan.end();
         }
         return metered(repository.findExecution(executionId).orElseThrow());

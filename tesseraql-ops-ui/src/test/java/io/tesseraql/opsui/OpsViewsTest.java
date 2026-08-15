@@ -168,7 +168,8 @@ class OpsViewsTest {
         JobExecution execution = new JobExecution("e-9", "nightly", "app", JobStatus.COMPLETED,
                 "cron", null, java.time.LocalDate.parse("2026-06-10"),
                 java.time.Instant.parse("2026-06-10T00:00:00Z"),
-                java.time.Instant.parse("2026-06-10T00:00:02Z"), 2000L, "ok");
+                java.time.Instant.parse("2026-06-10T00:00:02Z"), 2000L, "ok",
+                "node-1", java.time.Instant.parse("2026-06-10T00:00:02Z"));
         StepExecution step = new StepExecution("s-1", "e-9", "load", StepStatus.FAILED,
                 null, null, 1500L, 42, null, "boom");
 

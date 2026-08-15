@@ -499,7 +499,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 effectiveMeter);
         context.getRegistry().bind(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                 credentialThrottle);
-        JobRepository jobRepository = new JobRepository(dataSource);
+        // A run is stamped with the node that owns it (docs/audit-hardening.md Decision 6). The
+        // default is derived from host and pid so two replicas of one image are distinguishable
+        // without anybody configuring anything.
+        JobRepository jobRepository = new JobRepository(dataSource,
+                io.tesseraql.operations.batch.NodeIdentity.resolve(manifest.config()
+                        .getString("tesseraql.batch.nodeId").orElse(null)));
         jobRepository.ensureSchema();
         JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
         idempotencyStore.ensureSchema();
@@ -746,6 +751,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
                 httpOutbound, manifest.config(), tracer, effectiveMeter);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
+                // A running job says so on a clock, and overlap: skip believes a previous run
+                // only while its owner keeps saying it (docs/audit-hardening.md Decision 6).
+                .heartbeatInterval(io.tesseraql.core.util.Durations.parse(manifest.config()
+                        .getString("tesseraql.batch.heartbeat.interval").orElse("30s")))
+                .livenessWindow(io.tesseraql.core.util.Durations.parse(manifest.config()
+                        .getString("tesseraql.batch.heartbeat.livenessWindow").orElse("5m")))
                 // Every finished run counts on the exposition (docs/jobs.md "Observing
                 // runs"): tesseraql.job.runs by job/app/status + a duration histogram.
                 .meter(effectiveMeter)
@@ -1872,6 +1883,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 context.addRoutes(new AlertNotifyRouteBuilder(opsDashboard, outboxStore,
                         alertChannel, alertPeriod, appName));
             }
+            // The drain is configured rather than inherited (docs/audit-hardening.md Decision 6).
+            // Nothing referenced ShutdownStrategy anywhere, so Camel's 45-second default with
+            // hard-stop-on-timeout applied unread — an in-flight batch step was cut off at a
+            // number nobody had chosen, and no declared key said so. Configuring it does not make
+            // a stop safe: SIGKILL, OOM and node loss strand rows at any timeout, which is why the
+            // reaper exists. It makes the bound deliberate and visible.
+            context.getShutdownStrategy().setTimeout(io.tesseraql.core.util.Durations
+                    .parse(manifest.config().getString("tesseraql.shutdown.timeout")
+                            .orElse("45s"))
+                    .toSeconds());
+            context.getShutdownStrategy().setShutdownNowOnTimeout(manifest.config()
+                    .getBoolean("tesseraql.shutdown.forceOnTimeout", true));
             context.start();
             // Unicode route paths match their percent-encoded requests (UnicodePaths).
             UnicodePaths.install(context, port);
@@ -2693,6 +2716,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // and metric produced while Camel finished its in-flight exchanges — the one window
             // the drain exists to make visible. The transfer executor is the same shape: shutting
             // it down first rejects a transfer a draining route submits.
+            // The heartbeat thread outlives the drain for the same reason the tracer does: a run
+            // still finishing during the drain is still a run that must say so.
+            closeQuietly(jobExecutor::close);
             closeQuietly(pinningSource);
             closeQuietly(otelSdk);
             io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = camelContext
