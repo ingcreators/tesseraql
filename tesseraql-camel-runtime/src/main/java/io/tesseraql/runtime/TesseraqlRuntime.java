@@ -1873,9 +1873,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
             UnicodePaths.install(context, port);
             sseEndpoints.forEach(Runnable::run);
         } catch (Exception ex) {
-            tenantDataSources.close();
-            lanes.close();
-            dataSources.values().forEach(HikariDataSource::close);
+            // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
+            // the TesseraQL objects is not enough: everything registered through addService above
+            // — the HTTP server, the notify bridge, the LISTEN connection — is started and stopped
+            // by the context, so a boot that fails after context.start() left a bound port behind
+            // and the next attempt failed on an address already in use.
+            //
+            // Each step is best-effort for the same reason the ordering matters: on this path one
+            // failing close must not strand the resources after it, and the exception that
+            // actually explains the boot failure is the one being rethrown.
+            closeQuietly(context::stop);
+            closeQuietly(pinningSource);
+            closeQuietly(otelSdk);
+            closeQuietly(tenantDataSources);
+            closeQuietly(lanes);
+            dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
             throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
@@ -2668,18 +2680,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Stop the --watch file watcher first so no reload races the context shutdown.
         closeQuietly(camelContext.getRegistry()
                 .lookupByNameAndType(RouteWatcher.BEAN, RouteWatcher.class));
-        closeQuietly(pinningSource);
-        closeQuietly(otelSdk);
-        io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = camelContext
-                .getRegistry().lookupByNameAndType(
-                        TesseraqlProperties.FILE_TRANSFER_BEAN,
-                        io.tesseraql.operations.files.JdbcFileTransferService.class);
-        if (fileTransfers != null) {
-            fileTransfers.close();
-        }
         try {
             camelContext.stop();
         } finally {
+            // Everything below outlives the drain, because the drain is what it observes and
+            // serves (docs/audit-hardening.md Decision 5). The tracer and meter bound into the
+            // registry wrap this SDK, so closing it before camelContext.stop() dropped every span
+            // and metric produced while Camel finished its in-flight exchanges — the one window
+            // the drain exists to make visible. The transfer executor is the same shape: shutting
+            // it down first rejects a transfer a draining route submits.
+            closeQuietly(pinningSource);
+            closeQuietly(otelSdk);
+            io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = camelContext
+                    .getRegistry().lookupByNameAndType(
+                            TesseraqlProperties.FILE_TRANSFER_BEAN,
+                            io.tesseraql.operations.files.JdbcFileTransferService.class);
+            if (fileTransfers != null) {
+                fileTransfers.close();
+            }
             try {
                 executionLanes.close();
             } finally {
@@ -2699,7 +2717,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         try {
             closeable.close();
         } catch (Exception ignored) {
-            // best-effort shutdown of the diagnostics source
+            // Best-effort: on both shutdown paths one resource failing to close must not strand
+            // the ones after it, and on the boot-failure path the exception worth reporting is
+            // the one that failed the boot.
         }
     }
 
