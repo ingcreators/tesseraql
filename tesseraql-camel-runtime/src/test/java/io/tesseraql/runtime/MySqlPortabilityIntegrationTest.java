@@ -92,6 +92,11 @@ class MySqlPortabilityIntegrationTest {
     }
 
     @Test
+    void clusterJobClaimingSkipsTheLoserOnThisDialect() throws Exception {
+        DialectRuntimeChecks.jobClaimRoundTrip(mysqlDataSource());
+    }
+
+    @Test
     void theCatalogVersionTableAppliesOnThisDialect() throws Exception {
         DialectRuntimeChecks.catalogVersionTableApplies(mysqlDataSource());
     }

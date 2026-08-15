@@ -107,6 +107,31 @@ final class DialectRuntimeChecks {
     }
 
     /**
+     * Cluster job claiming on this vendor (docs/audit-hardening.md Decision 3).
+     *
+     * <p>The claim is a plain insert whose primary key does the arbitration: the winner returns
+     * true, and every loser is expected to see a unique violation and return false. That "expected"
+     * was a portability claim nothing tested — {@code tryClaimFiring} returns false only on
+     * {@code isUniqueViolation} and otherwise <em>throws</em>, and on SQL Server the classifier
+     * could not recognise a duplicate key at all, so every losing node raised an error instead of
+     * skipping. A unit row over the vendor codes is necessary and not sufficient; this repo has
+     * already shipped two dialect bugs that only a live run caught.
+     */
+    static void jobClaimRoundTrip(javax.sql.DataSource dataSource) {
+        io.tesseraql.operations.batch.JobRepository repository = new io.tesseraql.operations.batch.JobRepository(
+                dataSource);
+        repository.ensureSchema();
+        java.time.Instant fireTime = java.time.Instant.parse("2026-06-10T02:00:00Z");
+        String jobId = "dialect-claim-check";
+
+        assertThat(repository.tryClaimFiring(jobId, fireTime)).isTrue();
+        // The losing node skips. Before the classifier learned this dialect, this line threw.
+        assertThat(repository.tryClaimFiring(jobId, fireTime)).isFalse();
+        // A different firing of the same job is claimed independently.
+        assertThat(repository.tryClaimFiring(jobId, fireTime.plusSeconds(60))).isTrue();
+    }
+
+    /**
      * The code-catalog version table (docs/lookups.md, decision 14) on this vendor's DDL.
      *
      * <p>Its own check because the table is created only by an app that declares
