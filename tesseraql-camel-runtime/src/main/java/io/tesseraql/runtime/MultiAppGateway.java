@@ -1,7 +1,6 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
@@ -198,7 +197,11 @@ public final class MultiAppGateway implements AutoCloseable {
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
             Settings settings) {
         Mode mode = settings.mode();
-        List<InstalledApp> catalogued = new AppCatalog(installRoot).list();
+        // Whatever the directory holds: a catalogue, or application homes with no catalogue at
+        // all (docs/cli-surface.md Decision 2). The entries are shaped the same either way, so
+        // nothing below needs to know which it was.
+        List<InstalledApp> catalogued = io.tesseraql.operations.app.AppDirectory.applications(
+                io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
         if (mode == Mode.ISOLATED) {
             List<String> addressless = catalogued.stream()
                     .filter(app -> app.hosts().isEmpty())

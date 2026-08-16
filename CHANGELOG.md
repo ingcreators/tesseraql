@@ -6,6 +6,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **`tesseraql host --install-root` is now `--suite`, and `--app` serves one application**
+  (docs/cli-surface.md). The old name described an implementation detail — a directory with a
+  catalogue in it — where the new one describes what the operator is running. `--suite` accepts
+  either shape: an install root with `catalog.json`, or **a folder of application homes with no
+  catalogue at all**, which is how a suite runs from source trees without being packaged first.
+  They host identically; entries are synthesised from each application's own configuration, keyed
+  by the `tesseraql.app.name` that is now required.
+
+  Pointing a flag at the wrong shape is refused rather than guessed: `--app` on a folder of three
+  prints the three commands that would have worked, and `--suite` on a single application asks
+  whether `--app` was meant.
+
 ### Fixed
 
 - **Migrating from the CLI or the build wrote a history the runtime then ignored.** The Flyway

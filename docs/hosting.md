@@ -6,16 +6,27 @@ run several applications on one machine, start them together with `tesseraql hos
 its own runtime, and one port fronts them all.
 
 ```sh
-tesseraql host --install-root /srv/tesseraql/apps --port 8080 --mode suite
+tesseraql host --suite /srv/tesseraql/apps --port 8080 --mode suite
 ```
 
-Every application installed under the install root starts in its own runtime: its own Camel
-context, its own datasource set, its own Studio, its own traces. A gateway on the given port
-routes each request to the right one.
+Every application the directory holds starts in its own runtime: its own Camel context, its own
+datasource set, its own Studio, its own traces. A gateway on the given port routes each request
+to the right one.
+
+## What `--suite` accepts
+
+Two shapes, and the directory's contents decide which it is
+([cli-surface.md](https://github.com/ingcreators/tesseraql/blob/main/docs/cli-surface.md)):
+an **install root**, which holds `catalog.json`, or a **folder of application homes**, which
+holds none. They host identically — the second is how a suite runs from source trees without
+being packaged first.
+
+`--app <dir>` serves one application instead, and refuses a directory holding several rather
+than picking one.
 
 ## The install root
 
-The install root holds `catalog.json` — the list of installed applications, their versions,
+An install root holds `catalog.json` — the list of installed applications, their versions,
 their tenant entitlements and, for isolated mode, their hostnames — beside one unpacked tree
 per application version. Baking that directory into a container image gives every node
 identical bytes with nothing to download at boot.
@@ -83,7 +94,7 @@ hop later repairs it.
 The gateway speaks HTTP/1.1 by default. `--http2` serves and forwards cleartext HTTP/2 (h2c):
 
 ```sh
-tesseraql host --install-root /srv/tesseraql/apps --port 8080 --mode suite --http2
+tesseraql host --suite /srv/tesseraql/apps --port 8080 --mode suite --http2
 ```
 
 **One switch moves both hops** — the client's connection to the gateway and the gateway's
@@ -96,7 +107,7 @@ against an h2c gateway: the upgrade is offered, not required.
 forwarded headers are the edge's rather than a caller's:
 
 ```sh
-tesseraql host --install-root /srv/tesseraql/apps --port 8080 \
+tesseraql host --suite /srv/tesseraql/apps --port 8080 \
   --trusted-proxies 10.0.0.0/8,192.168.1.5
 ```
 

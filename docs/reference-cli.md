@@ -30,7 +30,8 @@ Serve every installed app from one port, each in its own runtime.
 
 | Argument | Required? | Description |
 | --- | --- | --- |
-| `--install-root <installRoot>` | yes | Directory holding catalog.json and the installed app trees. |
+| `--suite <dir>` | — | Directory holding the applications to serve: an install root (catalog.json) or a folder of application homes. Exactly one of --suite or --app. |
+| `--app <dir>` | — | One application home to serve. Exactly one of --suite or --app. |
 | `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
 | `--mode <suite\|isolated>` | — | suite: one origin, /apps/<id>/ per app, one session across them. isolated: a hostname per app, sessions not shared. Default suite. |
 | `--http2` | — | Serve and forward cleartext HTTP/2 (h2c). Off by default. One switch moves both hops: a client's connection to the gateway and the gateway's connection to each app. An app that does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as before. |
