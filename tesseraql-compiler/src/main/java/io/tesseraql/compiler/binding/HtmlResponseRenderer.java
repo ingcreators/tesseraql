@@ -13,7 +13,6 @@ import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -49,7 +48,7 @@ public final class HtmlResponseRenderer implements Processor {
     private final String defaultLocaleTag;
     private final ViewBinding viewBinding;
     private final Map<String, ViewBinding> boundViews;
-    private final Map<String, Expr> headerGuards;
+    private final ResponseHeaders headers;
     private final Map<String, Expr> compiledModel = new LinkedHashMap<>();
     private final java.util.List<JsonResponseRenderer.CompiledStatus> statusWhen;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -138,13 +137,7 @@ public final class HtmlResponseRenderer implements Processor {
         });
         this.statusWhen = JsonResponseRenderer.CompiledStatus
                 .compileAll(response.statusWhen());
-        // Pre-compile each header's optional guard expression so a syntax error fails the build.
-        this.headerGuards = new LinkedHashMap<>();
-        response.headersWhen().forEach((name, when) -> {
-            if (when != null && !when.isBlank()) {
-                headerGuards.put(name, ExpressionParser.parse(when));
-            }
-        });
+        this.headers = new ResponseHeaders(response.headers(), response.headersWhen());
     }
 
     @Override
@@ -266,7 +259,7 @@ public final class HtmlResponseRenderer implements Processor {
                 response.effectiveStatus(), evaluation);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
-        applyHeaders(exchange, evaluation);
+        headers.apply(exchange, evaluation);
         if ("auto".equals(shellMode)) {
             // The negotiated response differs by HX-Request, so caches must key on it.
             String vary = exchange.getMessage().getHeader("Vary", String.class);
@@ -277,33 +270,6 @@ public final class HtmlResponseRenderer implements Processor {
         exchange.getMessage().setBody(html);
     }
 
-    private void applyHeaders(Exchange exchange, EvaluationContext evaluation) {
-        response.headers().forEach((name, value) -> {
-            // A header with a guard (headersWhen) is emitted only when its condition is truthy, so a
-            // single fragment can fire e.g. HX-Trigger on success but not on a handled error.
-            Expr guard = headerGuards.get(name);
-            if (guard != null && !guard.evalBoolean(evaluation)) {
-                return;
-            }
-            try {
-                // Resolve {expression} placeholders against the execution context (recursively for a
-                // nested map/list), so a header like HX-Trigger can carry per-request data; a value
-                // with no placeholder is unchanged. Nested map/list values then serialize to JSON.
-                Object resolved = interpolate(value, evaluation);
-                String headerValue = resolved instanceof Map || resolved instanceof List
-                        ? mapper.writeValueAsString(resolved)
-                        : String.valueOf(resolved);
-                exchange.getMessage().setHeader(name, headerValue);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-                throw new TqlException(RENDER_ERROR, "Failed to serialize header " + name);
-            }
-        });
-    }
-
-    /**
-     * Resolves {@code {expression}} placeholders in a header value (recursively into maps/lists).
-     * Delegates to {@link Interpolation}; kept as the renderer's test-visible seam.
-     */
     static Object interpolate(Object value, EvaluationContext evaluation) {
         return Interpolation.interpolate(value, evaluation);
     }

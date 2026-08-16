@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`response.json.headers:` and `response.json.headersWhen:`** (docs/response-shaping.md). The
+  block existed on `response.html` only; on a JSON route it deserialized away at runtime, so a
+  declared header simply did not arrive. (The linter did report it — `TQL-YAML-1043` walks every
+  nested shape and knew the key was not accepted — so an author who ran the linter was told and one
+  who did not was not.) Values interpolate `{expression}` placeholders against the execution context
+  exactly as the HTML block does, and the guard-and-interpolate logic is now one shared
+  implementation rather than a second copy.
+  The guards earn their place on JSON through one case in particular: a JSON response can already
+  vary its status per request through `statusWhen:`, so the headers *defined in terms of that
+  status* — `Location` on a 201, `Retry-After` on a 429 or 503, `WWW-Authenticate` on a 401 — have
+  to vary with it. Anything else conditional belongs in the body a client parses anyway.
+
 - **A prompt can be a recipe, so it can read data** (docs/prompt-as-recipe.md, slice 1). An
   `mcp/` prompt document that declares `recipe: prompt-text` is a route like its three siblings:
   it compiles to `direct:mcp.prompt.<id>` through the head every recipe gets, binds its `input:`,
@@ -103,6 +115,26 @@ All notable changes to TesseraQL are documented here. The format follows
   `tesseraql.app.work` default is unchanged.
 
 ### Changed
+
+- **A response header that cannot be serialized reports one code.** An HTML response reported
+  `TQL-TPL-2001` for it — the template-render code, which happened to be the constant in scope —
+  and a JSON response had no such failure to report because it carried no headers. Both now report
+  `TQL-CAMEL-3001`, the response-render code, which is what the failure is: nothing about the
+  template resolved wrongly.
+
+- **The app-wide default response headers reach JSON responses** (docs/route-defaults.md). They
+  merged into HTML responses only, on the reading that `security.responseHeaders` is
+  browser-document machinery. That is true of three of the four — `Content-Security-Policy`,
+  `X-Frame-Options` and `Referrer-Policy` govern a document and are inert on a response no browser
+  renders as one — and backwards for the fourth: `X-Content-Type-Options: nosniff` exists precisely
+  to stop a browser treating a non-document as a document, so the response most at risk of being
+  sniffed was the one kind it never reached. The whole block merges rather than a classified subset,
+  because classifying would mean reading header names to guess which are document-scoped, and an
+  operator adding a header of their own could not predict the answer. `TQL-SEC-4133`/`4134` (a route
+  restating or weakening a default) now inspect JSON routes too, which they had to once the defaults
+  reached them. Two documentation claims are corrected with it: `route-defaults.md` said the
+  defaults merged into "every HTML, file, and stream response", and file and stream responses carry
+  no `headers:` map at all.
 
 - **The gateway relays through `vertx-http-proxy` rather than a copy loop of its own**
   (docs/suite-architecture.md decision 13). Three transparency defects in roughly forty lines, in

@@ -32,6 +32,7 @@ public final class JsonResponseRenderer implements Processor {
     private final ResponseSpec.JsonResponse response;
     private final Object compiledBody;
     private final java.util.List<CompiledStatus> statusWhen;
+    private final ResponseHeaders headers;
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** A pre-compiled statusWhen arm (roadmap Phase 41): first truthy condition wins. */
@@ -69,6 +70,7 @@ public final class JsonResponseRenderer implements Processor {
         this.response = response;
         this.compiledBody = compile(response.body());
         this.statusWhen = CompiledStatus.compileAll(response.statusWhen());
+        this.headers = new ResponseHeaders(response.headers(), response.headersWhen());
     }
 
     /**
@@ -128,6 +130,9 @@ public final class JsonResponseRenderer implements Processor {
         }
 
         int status = CompiledStatus.resolve(statusWhen, response.effectiveStatus(), evaluation);
+        // Declared headers before the framework's own: Content-Type is this renderer's to set, and
+        // a route naming it would be describing a body it is not producing.
+        headers.apply(exchange, evaluation);
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(json);

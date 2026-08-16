@@ -27,7 +27,7 @@ It builds on:
 
 - **[Security hardening](security-hardening.md)** — the headers being centralized and the
   deny-by-default stance the merge rules must preserve.
-- **[Response shaping](response-shaping.md)** — `response.html.headers`, the per-route map the
+- **[Response shaping](response-shaping.md)** — `response.html.headers` / `response.json.headers`, the per-route map the
   default merges into.
 - **The central policy table** ([authentication](authentication.md)) — `security.policies` is
   already declare-once/reference-by-name; path-matched defaults extend where a policy *applies*,
@@ -96,8 +96,10 @@ security:
 
 Merge rules, per header name:
 
-- The default set is merged into every HTML, file, and stream response at compile time.
-- A route-local `response.html.headers` entry **overrides** the default for that header name.
+- The default set is merged into every HTML and JSON response at compile time. File and
+  stream responses carry no `headers:` map of their own, so there is nothing to merge under.
+- A route-local `response.html.headers` or `response.json.headers` entry **overrides** the default
+  for that header name.
 - A route declares a header with the literal value `unset` to **suppress** a default it must not
   send (rare; the case is a route embedded by an external page needing a different
   `frame-ancestors`).
