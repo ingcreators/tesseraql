@@ -287,9 +287,28 @@ identity realm to run as, which is a property of those two commands and of nothi
 `--out` takes a file path. `--report-dir` takes a directory. Two names for two things is correct,
 and collapsing them would be tidiness at the cost of meaning. They stay.
 
-What gets fixed is a name that says the wrong thing: `migrate --app-name` names the application id
-recorded in the schema history, and sits one character from `--app`, which names a directory.
-It becomes `--schema-app`.
+`migrate --app-name` was going to be renamed here, for sitting one character from `--app` while
+naming something else entirely. **Investigating the rename found that the flag should not exist**,
+and that the defect it papers over is larger than the CLI — so it is deleted rather than renamed,
+and the rest belongs to its own change.
+
+The flag keys the Flyway history table, `tql_schema_history_<value>`. Three entry points derive that
+value three different ways: the runtime from `tesseraql.app.name`, `tesseraql migrate` from the
+**application directory name**, and the `tesseraql:migrate` Maven goal from
+**`${project.artifactId}`**. Measured 2026-08-16 across the seven examples, the directory name and
+the application name **never** agree — `helpdesk-app` against `helpdesk` — so migrating from the CLI
+writes a history the runtime then ignores, and re-runs everything under its own.
+
+Once the value is derived in one place, the flag's only remaining power is writing migration history
+under a key the runtime will never read, which is the failure it was compensating for. That is a
+surface to remove rather than rename ([suite-architecture.md](suite-architecture.md) Decision 21).
+The replacement is declarative, so every entry point picks it up without being told:
+`tesseraql.migrations.historyName`, winning over `tesseraql.app.name` when set — which is also the
+escape hatch for the identifier-length limit, since the derived name is refused rather than silently
+truncated when it overflows the dialect's maximum.
+
+The Maven goal's `tesseraql.appName` parameter goes the same way, and the goal gains the
+configuration load it does not do today.
 
 ### 7. The sets are `@Mixin`s, and the test guards their shape rather than their membership
 
@@ -328,7 +347,7 @@ and gains its options.
 | `host` | `--install-root` → **`--app` / `--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; `+config` |
 | `mcp` | gains **`--suite`** — `suite-architecture.md` Decision 19 makes the development-tool MCP span the suite; `--read-only` becomes a property of the server, not of an application; `+config` |
 | `new` | `--dir` → **`--app`**. It is the directory that becomes an application home, and every other command calls that `--app` |
-| `migrate` | `--app-name` → **`--schema-app`** (Decision 6); `+config` |
+| `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |
 | `scaffold` | `+config`, `+connection` (has three of four; gains `--datasource`) |
 | `test` | `+config`, `+connection` (gains `--datasource`) |
 | `coverage` | `+config`, `+connection` (gains `--datasource`) |
@@ -358,7 +377,11 @@ its subject. Everything else is addition or a rename.
 | 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway; `--port` as the front door, and `MultiAppHost` honouring a declared `server.port` instead of always calling `freePort()` (Decision 4a) |
 | 3a | `--embedded-db` for a suite (Decision 4b): the coordinates supplied through the environment source, the declared query string carried over, the pool-level backstop and its one line |
 | 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
-| 5 | The renames: `--app-name` → `--schema-app`, `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
+| 5 | `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
+
+**The `--app-name` deletion is not in these slices.** It depends on the history-key change of
+Decision 6, which fixes a defect that bites `serve` and every scaffolded application today and has
+no reason to wait for a suite. It ships on its own, before or beside slice 1.
 
 Slice 1 is first because slices 2 and 3 are both callers of it, and because it is where the
 application-versus-suite refusals live. Slice 4 is last of the mechanical ones because it touches
