@@ -160,29 +160,54 @@ application *was* the front door. Under
 
 **So `server.port` needs an answer, because the silent one is wrong.** Today an application
 declaring `server.port: 9000` and started by `serve` answers on 9000; started through a host it gets
-`freePort()` and the declared value is discarded with nothing said. That is precisely the failure
-[suite-architecture.md](suite-architecture.md) Decision 16 names — a setting that only the host can
-know correctly, where divergence between applications fails silently.
+`freePort()` unconditionally and the declared value is discarded with nothing said.
 
-The resolution, in order:
+**`server.port` keeps meaning exactly one thing: the port this application binds.** It is now an
+internal port behind the gateway rather than an address anyone types, and that is the only thing
+that changed about it.
 
-1. `--port`, always.
-2. Otherwise, if the suite holds **exactly one** application and it declares `server.port`, that —
-   which keeps `dev --app ./orders` behaving as `serve --app ./orders` did, and that is the case
-   anyone actually configured.
-3. Otherwise `8080`.
+An earlier draft of this decision resolved it as "the front door, when the suite holds exactly one
+application" — which would have kept `dev --app ./orders` answering where `serve --app ./orders`
+did. It is rejected for the reason Decision 1 gives about `--app`: it is one key meaning the
+application's own port in one arrangement and the suite's front port in another, and a reader of
+`server.port: 9000` could not tell which without counting the applications in the folder. The saving
+was continuity for one command; the cost was a second meaning.
 
-**Several applications declaring `server.port` is a refusal, not a tie-break.** They cannot all have
-the front port, and picking one silently is how an operator spends an afternoon. The error names
-every application that declared it and points at `--port`.
+So:
+
+| | Port | Set by |
+| --- | --- | --- |
+| The gateway | the address callers use | `--port`, default `8080` |
+| Each application | internal, behind the gateway | its own `server.port`, default ephemeral |
+
+`dev --app ./orders` with `server.port: 9000` therefore answers on **8080**, and the application
+binds 9000 behind it. That is a behaviour change from `serve` and it is the honest one: under
+Decision 12 the gateway is the address, and the key still does what its name says.
+
+**Pinning an application's port is supported, because there is a real need for it and it is a
+development need.** An ephemeral port cannot be pointed at — not by a debugger, not by a profiler,
+not by a developer isolating whether the gateway is the problem, and not by Studio's API console,
+which builds a URL against exactly this port. Declaring `server.port` makes the application
+addressable directly, run after run.
+
+It stays *ephemeral by default* rather than pinned by default, because in production nothing should
+be addressing a runtime around the gateway, and a port that is hard to find is a mild discouragement
+that costs nothing. And nothing needs to refuse a port collision between two applications: the JVM
+already does, at bind time, naming the port.
+
+**The gateway's port has no configuration key, only `--port`.** Under
+[suite-architecture.md](suite-architecture.md) Decision 16 it is the host's setting, not an
+application's, and a suite-level configuration file does not exist yet. Adding it there is a
+separate decision and belongs with the host context object of slice 3.
 
 **A consequence found while writing this, which is a pre-existing defect rather than a new one.**
 Studio's API console builds `"http://127.0.0.1:" + port + path`. It carries no base path, so behind
-a gateway it addresses `/api/users` on a runtime serving `/apps/<id>/api/users` and gets a 404. It
-also guards on `port <= 0` with the message "the API console needs a fixed `server.port`", which
-reads as a configuration problem when the port is simply internal now. Both are wrong once every
-deployment is a suite, and neither is created by this document — recorded here because slice 3 is
-what makes them universal, and because the console is the surface a developer meets first.
+a gateway it addresses `/api/users` on a runtime serving `/apps/<id>/api/users` and gets a 404. Its
+`port <= 0` guard — "the API console needs a fixed `server.port`" — survives this decision and is
+now *correct advice for the wrong reason*: declaring `server.port` does make the console work, but
+the message describes an ephemeral port as a misconfiguration when it is the default. Neither is
+created by this document; recorded here because slice 3 makes them universal, and because the
+console is a surface a developer meets early.
 
 ### 5. Options come in sets, and a command takes the whole set or none of it
 
@@ -278,7 +303,7 @@ its subject. Everything else is addition or a rename.
 | --- | --- |
 | 1 | The two resolvers (Decisions 1–3): one application, or the applications in a suite, with the refusals under test |
 | 2 | `--install-root` → `--suite` on `host`; `--suite` added to `mcp` per Decision 19 |
-| 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway; `--port` as the front door and the `server.port` resolution of Decision 4a, including the refusal |
+| 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway; `--port` as the front door, and `MultiAppHost` honouring a declared `server.port` instead of always calling `freePort()` (Decision 4a) |
 | 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
 | 5 | The renames: `--app-name` → `--schema-app`, `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
 
