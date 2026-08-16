@@ -4,18 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.security.Principal;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
@@ -32,11 +23,11 @@ import org.apache.camel.builder.RouteBuilder;
  * <p>The token asserts nothing new. Its claims are the ones the bearer path already reads, taken
  * from the principal the session already carries, so {@link io.tesseraql.security.jwt.JwtAuthenticator}
  * validates it exactly as it validates an identity provider's.
+ *
+ * <p>This is the JSON face. The console's issue-token page is the other one, and both mint through
+ * {@link SessionTokens} so the two cannot drift.
  */
 final class TokenExchangeRouteBuilder extends RouteBuilder {
-
-    private static final System.Logger LOG = System.getLogger(
-            TokenExchangeRouteBuilder.class.getName());
 
     /**
      * TQL-SEC-4146: issuing was enabled and there is nothing to sign with.
@@ -53,13 +44,11 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final SessionStore sessions;
-    private final JwtConfig jwt;
-    private final Duration ttl;
+    private final SessionTokens tokens;
 
-    TokenExchangeRouteBuilder(SessionStore sessions, JwtConfig jwt, Duration ttl) {
+    TokenExchangeRouteBuilder(SessionStore sessions, SessionTokens tokens) {
         this.sessions = sessions;
-        this.jwt = jwt;
-        this.ttl = ttl;
+        this.tokens = tokens;
     }
 
     /**
@@ -112,60 +101,10 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
         new CsrfValidator(sessions).validate(cookie, token);
 
         SessionStore.Session session = sessions.session(sessions.sessionIdFromCookie(cookie));
-        Principal principal = session.principal();
-        Instant expiry = Instant.now().plus(ttl);
-        String minted = sign(principal, expiry);
-
-        // Recorded because a token outliving the session that produced it is a credential nobody
-        // would otherwise know exists.
-        LOG.log(System.Logger.Level.INFO,
-                "Issued a bearer token for subject {0}, expiring {1}", principal.subject(), expiry);
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
-        exchange.getMessage().setBody(MAPPER.writeValueAsString(Map.of(
-                "token", minted,
-                "tokenType", "Bearer",
-                "expiresAt", expiry.toString())));
-    }
-
-    /** The claims the bearer path reads, signed with the secret it verifies against. */
-    private String sign(Principal principal, Instant expiry) throws Exception {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("sub", principal.subject());
-        put(payload, jwt.loginClaim(), principal.loginId());
-        put(payload, jwt.nameClaim(), principal.displayName());
-        put(payload, jwt.tenantClaim(), principal.tenantId());
-        if (!principal.roles().isEmpty()) {
-            payload.put(jwt.rolesClaim(), principal.roles());
-        }
-        if (!principal.permissions().isEmpty()) {
-            payload.put(jwt.permissionsClaim(), principal.permissions());
-        }
-        if (!principal.groups().isEmpty()) {
-            payload.put(jwt.groupsClaim(), principal.groups());
-        }
-        if (jwt.issuer() != null && !jwt.issuer().isBlank()) {
-            payload.put("iss", jwt.issuer());
-        }
-        // The audience is required now (docs/audit-hardening.md Decision 1), so a token minted
-        // without it would be signed correctly and refused on arrival by this same application.
-        payload.put("aud", jwt.audience().size() == 1 ? jwt.audience().get(0) : jwt.audience());
-        payload.put("exp", expiry.getEpochSecond());
-
-        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder.encodeToString(
-                "{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-        String body = encoder.encodeToString(MAPPER.writeValueAsBytes(payload));
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(jwt.secret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-        return header + "." + body + "." + encoder.encodeToString(
-                mac.doFinal((header + "." + body).getBytes(StandardCharsets.US_ASCII)));
-    }
-
-    private static void put(Map<String, Object> payload, String claim, String value) {
-        if (claim != null && value != null && !value.isBlank()) {
-            payload.put(claim, value);
-        }
+        exchange.getMessage().setBody(
+                MAPPER.writeValueAsString(tokens.mint(session.principal())));
     }
 }

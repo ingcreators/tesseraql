@@ -734,6 +734,23 @@ Two additions, both small:
 These serve developers and CI. They do not serve the case in Decision 2; nothing short of OAuth
 does.
 
+**Shipped 2026-08-16, with one addition this decision did not name.** The console page and the
+endpoint are two faces of the same act, and a page that assembled its own claims would have drifted
+from the endpoint the first time a claim was added to one of them. So the signing moved into one
+place both call, and the page reaches it through an ordinary service provider bound to the
+**ambient** principal — the curated map the request binder seeds from the authenticated exchange
+(`ambient-params.md`). That detail is the security property: a route that wired `subject: 'admin'`
+would be writing a parameter the provider never reads, so the provider cannot be asked for somebody
+else's token.
+
+The page also has to answer when issuing is off, which is the default. It says so and names
+`tesseraql.security.token.enabled` rather than raising anything: an application that does not issue
+tokens replying "I do not issue tokens" is a correct answer, and a new error code for it would have
+reached the operator as a 500 with nothing actionable in it. That is the shape
+`ops-console-coverage.md` Decision 1 already took for the audit page and its
+`tesseraql.audit.routes.enabled` — a bundled app cannot mount a page conditionally on the host's
+configuration, so the page mounts and the provider tells the truth about the flag.
+
 ### 21. Framework identification is accepted, explicitly
 
 `threat-model.md` treats information disclosure as enumeration, field exposure, secrets and error
@@ -767,7 +784,7 @@ Ordering is by dependency, not by size.
 | # | Slice | Depends on |
 | --- | --- | --- |
 | 1 | ~~Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division~~ — **shipped 2026-08-16**; the measurement found a dropped-body defect beside the predicted buffering one and moved the relay to `vertx-http-proxy` (Decision 13) | — |
-| 2 | Login response returns the CSRF token; `tesseraql token --url`; console issue-token page | — |
+| 2 | ~~Login response returns the CSRF token; `tesseraql token --url`; console issue-token page~~ — **shipped 2026-08-16**; all three as designed, plus the mint extracted so the page and the endpoint cannot drift (Decision 20) | — |
 | 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS; `security` migration hoisted to the host with runtimes validating; CLI entry point for the suite, including the suite-spanning development-tool MCP (Decision 19) | 1 |
 | 4 | Identity surfaces become suite-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |
 | 5 | Authorization server: candidate decided, endpoints, open DCR, consent per client and resource, refresh rotation with reuse detection, RS256 and JWKS, brokering to an external provider | 4 |

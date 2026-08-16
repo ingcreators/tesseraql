@@ -1,6 +1,7 @@
 # Session-to-token exchange
 
-Status: **designed and shipped 2026-08-15.**
+Status: **designed and shipped 2026-08-15**; the path to the endpoint followed on 2026-08-16, as
+slice 3.
 
 An authenticated browser session can be exchanged for a short-lived bearer token. That is far less
 than an authorization server: no `/authorize`, no consent screen, no client registry, no redirect
@@ -137,12 +138,20 @@ decided it should, not because they upgraded.
 | --- | --- | --- |
 | 1 | MCP security defaults ([audit-hardening.md](audit-hardening.md) slice 12) | The floor; shipped first so tokens did not arrive before it |
 | 2 | The exchange endpoint, its CSRF guard and the HS256-only refusal | Two declared keys, **one** error code |
+| 3 | A path to the endpoint: the CSRF token in the login answer, `tesseraql token --url`, the console page | [suite-architecture.md](suite-architecture.md) Decision 20; **no** new keys and **no** new error code |
 
 **One code, not two.** The design said two; the runtime refusals turned out to need none of their
 own. An unauthenticated caller is refused by `CsrfValidator`, which already raises the shared
 unauthenticated and CSRF-failure codes, and inventing parallel ones for this endpoint would have
 broken the one-meaning-per-code rule to satisfy a sentence. The single new code is the boot refusal,
 `TQL-SEC-4146`.
+
+**Slice 3 was owed and not designed here.** This document built an endpoint whose only credential
+arrived inside a page, and then described clients that parse no HTML. Nothing was wrong with the
+guard — the CSRF requirement is Decision 2 and stands — but the value it checks had no way out of
+the browser, so the endpoint was correct and unreachable. Returning the token in the JSON login
+answer is what fixed it, and it changes no posture: the same value already reaches any
+authenticated browser through the `<meta name="csrf-token">` tag.
 
 ## Out of scope
 

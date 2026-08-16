@@ -16,6 +16,9 @@ web/_tesseraql/ops/console/outbox/get.yml
 web/_tesseraql/ops/console/outbox/outbox.html
 web/_tesseraql/ops/console/outbox/redeliver/post.yml
 web/_tesseraql/ops/console/overview.html
+web/_tesseraql/ops/console/token/get.yml
+web/_tesseraql/ops/console/token/post.yml
+web/_tesseraql/ops/console/token/token.html
 web/_tesseraql/ops/console/traces/get.yml
 web/_tesseraql/ops/console/traces/traces.html
 web/_tesseraql/ops/console/transfers/get.yml

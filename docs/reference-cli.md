@@ -107,14 +107,18 @@ Lint the app home, failing on errors.
 
 ## `token`
 
-Mint a development bearer token signed with the app's HS256 secret.
+Obtain a bearer token: mint one from an app's HS256 secret (--app), or sign in to a running application and exchange (--url).
 
 | Argument | Required? | Description |
 | --- | --- | --- |
-| `--app <app>` | yes | Path to the app home. |
+| `--app <app>` | — | Path to the app home; mints locally from its config. |
+| `--url <base-url>` | — | Base URL of a running application; signs in and exchanges the session for a token. Include the base path if the application has one. |
 | `--env <profile>` | — | Environment profile (also TESSERAQL_ENV). |
 | `--sub <subject>` | — | Subject claim (default dev). |
-| `--login <login>` | — | loginId claim (default: the subject). |
+| `--login <login>` | — | With --app, the loginId claim (default: the subject). With --url, the login id to sign in as; required there. |
+| `--password <password>` | — | With --url: the password. Omit to be prompted, or set TESSERAQL_PASSWORD — passing it here puts a credential in the process list and the shell history. |
+| `--tenant <id>` | — | With --url: the tenant to sign in to, for a multi-tenant realm. |
+| `--otp <code>` | — | With --url: the TOTP code, or a recovery code, when the account has an authenticator enrolled. |
 | `--role <role>` | — | Role (repeatable); lands under the configured rolesClaim. |
 | `--permission <permission>` | — | Permission (repeatable); lands under the configured permissionsClaim. |
 | `--claim <name=value>` | — | Custom claim (repeatable). A value that parses as JSON ('["a","b"]', '7', 'true') is embedded structurally; anything else is a string. |

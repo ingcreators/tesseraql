@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.opsConsole.token
+kind: route
+recipe: query-html
+
+# The console face of POST /_tesseraql/token (docs/suite-architecture.md Decision 20). The
+# endpoint was correct and unreachable: it requires the session's CSRF token, and that value
+# reached pages only, as <meta name="csrf-token">, so the one route open to a human was reading
+# a cookie and a meta tag out of browser developer tools. On an authenticated page the token is
+# already there, which is why this is one page rather than a feature.
+#
+# No ops policy, deliberately. A minted token carries the caller's own subject, roles and
+# permissions and nothing else, so requiring an operations grant to obtain one would gate the
+# credential behind an authority it does not confer.
+
+sources:
+  main:
+    service:
+      name: ops.token.status
+response:
+  html:
+    status: 200
+    template: token.html
+    model:
+      issue: main
