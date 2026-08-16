@@ -165,4 +165,23 @@ class AppDirectoryTest {
                 """.formatted(name)
                 + (version == null ? "" : "    version: " + version + "\n"));
     }
+
+    /**
+     * A directory that IS one application answers at the origin root — the single-application
+     * shape, with no second mechanism for it (docs/suite-architecture.md Decision 12).
+     */
+    @Test
+    void oneApplicationTakesTheOriginRootAndAWorkspaceMemberTakesItsPrefix(@TempDir Path dir)
+            throws IOException {
+        writeApplication(dir.resolve("solo"), "solo", null);
+
+        assertThat(AppDirectory.applications(AppDirectory.resolve(dir.resolve("solo"))))
+                .singleElement()
+                .satisfies(app -> assertThat(app.basePath())
+                        .as("the origin root, normalised to the empty prefix").isEmpty());
+
+        assertThat(AppDirectory.applications(AppDirectory.resolve(dir)))
+                .singleElement()
+                .satisfies(app -> assertThat(app.basePath()).isEqualTo("/apps/solo"));
+    }
 }

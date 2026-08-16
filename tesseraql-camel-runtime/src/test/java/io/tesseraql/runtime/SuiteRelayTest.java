@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.operations.app.InstalledApp;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpServer;
@@ -41,6 +42,17 @@ class SuiteRelayTest {
     private static final long GAP_MILLIS = 300;
     private static final String APP = "stub";
 
+    /**
+     * The catalogue entry the stub is addressed by.
+     *
+     * <p>An application with no entry has no base path and therefore no address at all, since
+     * routing became prefix-driven (docs/suite-architecture.md Decision 12). These tests used to
+     * pass an empty map and be routed anyway, because the prefix was a constant the relay parsed;
+     * now the entry is what says where the application answers.
+     */
+    private static final Map<String, InstalledApp> CATALOGUE = Map.of(APP,
+            new InstalledApp(APP, "1.0.0", APP, java.util.List.of()));
+
     private static Vertx vertx;
     private static HttpClient client;
     private static HttpServer origin;
@@ -65,8 +77,7 @@ class SuiteRelayTest {
         origin.requestHandler(SuiteRelayTest::serveStub);
         originPort = await(origin.listen()).actualPort();
 
-        SuiteRelay relay = new SuiteRelay(client,
-                Map.of(), appId -> originPort);
+        SuiteRelay relay = new SuiteRelay(client, CATALOGUE, appId -> originPort);
         front = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
         front.requestHandler(relay::handle);
         base = "http://localhost:" + await(front.listen()).actualPort() + "/apps/" + APP;
@@ -75,8 +86,7 @@ class SuiteRelayTest {
         // and piped into an HTTP/1.1 request has neither a declared length nor chunked framing,
         // and Vert.x refuses the write on the event loop. One setting moves both.
         h2Client = vertx.createHttpClient(SuiteRelay.outboundOptions(true));
-        SuiteRelay h2Relay = new SuiteRelay(h2Client,
-                Map.of(), appId -> originPort);
+        SuiteRelay h2Relay = new SuiteRelay(h2Client, CATALOGUE, appId -> originPort);
         h2Front = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
         h2Front.requestHandler(h2Relay::handle);
         h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/apps/" + APP;
@@ -196,7 +206,7 @@ class SuiteRelayTest {
 
     /** What the origin received for {@code X-Client-Cert} through a relay trusting {@code edges}. */
     private static String headerSeenBehind(TrustedProxies edges) throws Exception {
-        SuiteRelay relay = new SuiteRelay(client, Map.of(),
+        SuiteRelay relay = new SuiteRelay(client, CATALOGUE,
                 Map.of(APP, Set.of("x-client-cert")), edges, appId -> originPort);
         HttpServer scoped = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
         scoped.requestHandler(relay::handle);
@@ -324,7 +334,7 @@ class SuiteRelayTest {
         plainOrigin.requestHandler(SuiteRelayTest::serveStub);
         int plainPort = await(plainOrigin.listen()).actualPort();
         SuiteRelay relay = new SuiteRelay(h2Client,
-                Map.of(), appId -> plainPort);
+                CATALOGUE, appId -> plainPort);
         HttpServer h2FrontToPlain = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
         h2FrontToPlain.requestHandler(relay::handle);
         String plainBase = "http://localhost:" + await(h2FrontToPlain.listen()).actualPort()
