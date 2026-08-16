@@ -48,6 +48,41 @@ sign-in reaches every application in the suite.
 session established on one hostname does not authenticate against another. An application with
 no hostname fails the start rather than being catalogued, started, and left unreachable.
 
+## The gateway routes, the ingress protects
+
+The gateway is a route to the application that answers, not a guard in front of it. It fronts
+applications the operator installed, on one machine, behind whatever reverse proxy the deployment
+already runs — and that reverse proxy is where the protections belong:
+
+| Concern | Belongs to |
+| --- | --- |
+| Request body limits | the ingress, and each application's own declared limits |
+| Rate limiting | the ingress |
+| TLS termination | the ingress |
+| Which application answers | the gateway |
+| Tenant entitlement at the door | the gateway, as a convenience filter — the application's own tenancy resolution is authoritative |
+| Overwriting headers a caller must not set for itself | the ingress |
+
+The gateway imposes **no body limit of its own** in either direction. It used to: 10 MB inbound and
+64 MB outbound, which capped every attachment and import at a number the gateway picked and
+truncated large exports mid-download. An application keeps whatever limits it declares, and a
+deployment that wants a limit in front of every application sets one at the ingress, where it can be
+tuned per route and per client.
+
+**Forwarded headers pass through.** The gateway does not strip the mTLS forwarded header an
+application declares, because it cannot tell a caller's copy from the edge's without knowing which
+sources are trusted — and stripping it unconditionally destroyed the edge's own value, which made
+[mTLS authentication](authentication.md#mutual-tls-client-certificates) unusable behind the gateway. The trust contract
+is the edge's, and it is the same one that has always applied: **the edge must overwrite or strip
+the `forwardedHeader` on every inbound request, and the runtime must not be reachable except through
+that edge.** A gateway reachable from anywhere but the edge is a deployment error, and no amount of
+header filtering one hop later repairs it.
+
+Responses pass through unchanged: framing, chunked bodies, event streams, `Location` values and
+cookie attributes all reach the client as the application wrote them. An event stream arrives frame
+by frame rather than in bursts, which is what the ops console, Studio's preview and the MCP
+transport depend on.
+
 ## What isolation gives you, and what it does not
 
 Each runtime is separate: a separate Camel context, URL space, Studio, trace buffer and

@@ -96,6 +96,15 @@
 
     <!-- Third-party library versions -->
     <camel.version>4.22.0</camel.version>
+    <!--
+      Vert.x arrives transitively through camel-platform-http-vertx; the gateway's relay
+      (docs/suite-architecture.md decision 13) adds vertx-http-proxy on top of it. The two must be
+      the same version, so both are managed from this one property rather than one being pinned
+      and the other inherited — a split is how a proxy ends up loaded beside a core it was not
+      built against. Bumping camel.version means checking what vertx-core it resolves and moving
+      this with it.
+    -->
+    <vertx.version>4.5.31</vertx.version>
     <jackson.version>2.22.1</jackson.version>
     <hikaricp.version>7.1.0</hikaricp.version>
     <postgresql.version>42.7.13</postgresql.version>
@@ -171,6 +180,22 @@
         <version>${jackson.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <!--
+        Vert.x, pinned as a pair: vertx-core is what camel-platform-http-vertx brings and
+        vertx-http-proxy is what the gateway relays through. Managing both here means they cannot
+        drift apart silently when Camel moves.
+      -->
+      <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-core</artifactId>
+        <version>${vertx.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-http-proxy</artifactId>
+        <version>${vertx.version}</version>
       </dependency>
 
       <!-- Testcontainers (imported BOM) -->

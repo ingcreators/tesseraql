@@ -48,6 +48,33 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **mTLS forwarded-header authentication could not work behind the multi-app gateway.** The gateway
+  stripped the header each application declares in `tesseraql.security.mtls.forwardedHeader`, to stop
+  a caller supplying the assertion the application is configured to believe. It stripped
+  unconditionally — there is no trusted-proxy concept in the tree — so the value the *edge* had just
+  set was destroyed with it, and the application saw no certificate at all. `MtlsIntegrationTest`
+  never goes through a gateway, so nothing caught it. The trust contract stays where
+  docs/authentication.md already puts it and where it can actually be discharged: the edge overwrites
+  the header on every inbound request, and the runtime is not reachable except through the edge.
+  Under docs/suite-architecture.md decision 12 this stops being "unavailable in one hosting mode" and
+  becomes the whole feature, which is why it is fixed here rather than deferred.
+- **The multi-app gateway dropped the body of every chunked response** (docs/suite-architecture.md
+  decision 13, slice 1). `com.sun.net.httpserver` reads a response length of `0` as "chunked,
+  length unknown" and `-1` as "no response body"; the relay computed `-1` for an application that
+  declared no `Content-Length` and passed it through verbatim. Streaming exports and event streams
+  answered 200, with the right headers, and nothing after them. Found by the measurement the design
+  asked for before implementation, which had predicted only the second defect beside it: the copy
+  loop never flushed, so a corrected length still delivered every event at once when the stream
+  closed. A third sat with them — the outbound client negotiated h2c with the application and the
+  response headers were copied into an HTTP/1.1 answer unchanged, putting the HTTP/2 `:status`
+  pseudo-header on the wire as an HTTP/1.1 field name.
+- **A suite-hosted application could not be sent more than 10 MB, or send back more than 64 MB.**
+  The gateway buffered every request body into a `byte[]` and refused past 10 MB, and aborted a
+  response mid-body past 64 MB — after the status was already sent, so the truncation was
+  undetectable to the client, which is the precise failure the export pipeline exists to avoid. The
+  gateway fronts applications the operator installed, behind whatever ingress the deployment already
+  runs; body limits belong there and to each application's own declarations.
+
 - **`deploy/Dockerfile` could not be built.** The builder stage ran `package`, so the following
   `dependency:copy-dependencies` could not resolve the reactor's own modules and the build failed
   on the `io.tesseraql:*` coordinates. `Dockerfile.demo` had already hit this and moved to
@@ -77,6 +104,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The gateway relays through `vertx-http-proxy` rather than a copy loop of its own**
+  (docs/suite-architecture.md decision 13). Three transparency defects in roughly forty lines, in
+  the component every request in every deployment passes through, is the argument: framing,
+  flushing and protocol translation are what a proxy library exists to have already solved. Vert.x
+  is already a compile dependency through `camel-platform-http-vertx`, so this adds one jar at a
+  version the runtime already resolves, and both are now pinned from one `vertx.version` property
+  so they cannot drift apart. Two consequences worth stating: the hop-by-hop half of the gateway's
+  header list is the library's now — asserted by an origin the test owns reporting that `te`,
+  `trailer`, `connection`, `keep-alive` and `upgrade` never arrive, rather than assumed — and the
+  front runs on an event loop instead of a virtual thread per request — nothing on that path may block, in exchange for a long-lived stream
+  costing no thread at all rather than a parked one. The front stays HTTP/1.1, which is what
+  `com.sun.net.httpserver` spoke, so no client's protocol changes.
 - **Log lines carry their correlation on the exchange, not on the thread** (docs/jvm-baseline.md,
   decision 2, slice 5). Camel 4.19 deprecated the MDC logic the runtime used to carry `traceId`
   and `spanId` across async boundaries; the `camel-mdc` component replaces it, and it propagates

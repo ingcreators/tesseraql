@@ -25,7 +25,12 @@ import org.slf4j.LoggerFactory;
 public final class MultiAppHost implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppHost.class);
-    private static final TqlErrorCode UNKNOWN_APP = new TqlErrorCode(TqlDomain.APP, 4040);
+    // Shared with SuiteRelay, which answers it as a 404 for the same condition one layer out.
+    // One number, one meaning, one declaration — the error registry reads a single source, and the
+    // javadoc below is the reference page's wording for it, so it stays a meaning rather than a
+    // rationale.
+    /** TQL-APP-4040: no app is hosted under this id. */
+    static final TqlErrorCode UNKNOWN_APP = new TqlErrorCode(TqlDomain.APP, 4040);
 
     private static final String CANARY_SLOT = "#canary";
 
