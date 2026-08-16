@@ -543,7 +543,7 @@ final class ErrorIndex {
             "export-pipeline.md", "lookups.md", "unified-sources.md", "jvm-baseline.md",
             "ducklake-1.5.md", "audit-hardening.md", "authorization-server.md",
             "session-token-exchange.md", "suite-architecture.md", "token-issuance.md",
-            "lint-restructure.md", "prompt-as-recipe.md");
+            "lint-restructure.md", "prompt-as-recipe.md", "cli-surface.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
