@@ -24,81 +24,109 @@ a changelog line saying what changed and why is the whole obligation.
 
 ## Decisions
 
-### 1. One flag, one meaning — so there are two flags
+### 1. Two flags, and only one of them runs anything
 
-`--app <dir>` is **exactly one application**. `--suite <dir>` is **a directory holding several**.
+`--app <dir>` is **exactly one application home**, for the commands that operate *on* an application
+— `package`, `lint`, `migrate`, `scaffold`, `release-diff`, `verify` and the rest. `--suite <dir>`
+is **the applications to run**, for `dev`, `host` and `mcp`. **The running commands do not accept
+`--app`.**
 
-An earlier draft of this document used `--app` for both and let the directory's contents decide
-which. It was rejected in review, correctly: `--app` is singular, and a flag that sometimes denotes
-one application and sometimes denotes six is a flag whose name is wrong half the time. A reader
-cannot tell from `--app ./work` whether one thing or twelve things are about to start. The saving
-was one word of vocabulary and the cost was ambiguity at every call site, which is the wrong trade.
-
-So the distinction is carried by the flag, where the reader can see it, rather than by the
-filesystem, where they cannot.
+An earlier draft used `--app` for both and let the directory's contents decide which. It was
+rejected in review, correctly: `--app` is singular, and a flag that sometimes denotes one
+application and sometimes denotes six is a flag whose name is wrong half the time.
 
 | Flag | Denotes | Accepted by |
 | --- | --- | --- |
-| `--app <dir>` | one application home | every command |
-| `--suite <dir>` | several applications | the commands that *run* applications: `dev`, `host`, `mcp` |
+| `--app <dir>` | one application home | the commands that operate on an application |
+| `--suite <dir>` | the applications to run | `dev`, `host`, `mcp` |
+
+**Amended 2026-08-16, and this is a reversal.** This decision first gave the running commands
+*both* flags, `--app` meaning "this directory is the deployment". Reviewed against what it cost, it
+was wrong, and the reasons compound:
+
+- **It gave one application two addresses.** `host --app ./orders` served at the origin root and
+  `host --suite ./work` served the same application at `/apps/orders`. A team developing with one
+  flag and deploying with the other changes every URL the application emits — a divergence between
+  development and production in exactly the dimension
+  [suite-architecture.md](suite-architecture.md) Decision 12 exists to remove.
+- **It derived an address from a flag**, immediately after Decision 12's implementation established
+  that an application's address is *declared* in its catalogue entry rather than derived from a
+  constant. Deriving it from a flag instead is the same shape one level up.
+- **It cost Decision 22 an option.** `--app` names a directory that is an application's own tree,
+  so there is nowhere in it to put a suite's settings file, and the settings had to be reachable
+  through a `--suite-config <file>` that existed for no other reason.
+- **It doubled the resolver's refusals.** `AppDirectory` had to refuse each flag's directory in the
+  other's shape and cross-reference the two.
+
+None of these is fatal alone. Together they are four costs paid so that a single-application
+deployment can have an address it can now simply declare.
 
 **`--suite` is not new vocabulary.** [suite-architecture.md](suite-architecture.md) Decision 12
-makes the suite the only deployment shape, and the campaign has been calling it that throughout.
-The flag names a concept the system already has; it does not introduce one.
+makes the suite the only deployment shape, and the campaign has been calling it that throughout. A
+suite of one is still a suite; the flag is plural in name and that is not a claim about arity.
 
 `--install-root` is deleted. It named an implementation detail — a directory with a catalogue in it
 — where `--suite` names what the operator is running.
 
-### 2. `--suite` accepts a catalogue or a folder of source trees, because both are a suite
+### 2. `--suite` accepts a catalogue, a folder of source trees, or one application home
+
+All three are the same sentence — *the applications here* — recorded three ways.
 
 - `catalog.json` at the root → the installed applications it catalogues. This is what
   `--install-root` meant.
+- The directory **is itself an application home** (`config/` or `web/` at its root) → that
+  application, alone. A suite of one.
 - Otherwise, subdirectories **one level down** that are application homes → each of those.
 
-That is one meaning — "the applications here" — recorded two ways. It is what lets a developer run
-the shape they deploy without packaging anything first, which is
-[suite-architecture.md](suite-architecture.md) slice 3's actual requirement:
-
 ```bash
-tesseraql dev --suite ./myworkspace     # every application in the folder
-tesseraql dev --app ./myworkspace/orders   # just this one
+tesseraql dev --suite ./myworkspace          # every application in the folder
+tesseraql dev --suite ./myworkspace/orders   # just this one, at the address it always has
 ```
 
-**A directory that is itself an application is refused, not scanned.** `--suite ./orders`, where
-`./orders` has `config/` or `web/` at its root, answers *"that is one application — did you mean
-`--app`?"*
+**The application home is taken as-is and never scanned for children**, which is what keeps the
+`work/apps/` trap closed. **Every real application home unpacks the five bundled framework surfaces
+into `work/apps/`** — `account`, `auth-ui`, `iam-admin`, `ops-console`, `studio` — and each of those
+*is* an application home. A resolver that scanned an application looking for children, or scanned
+recursively, would offer the framework's own surfaces as if the operator had installed them.
 
-That refusal is doing more work than it appears to. **Every real application home unpacks the five
-bundled system applications into `work/apps/`** — `account`, `auth-ui`, `iam-admin`, `ops-console`,
-`studio` — and each of those *is* an application home. A resolver that scanned an application
-looking for children would mount the framework's own surfaces as if the operator had installed them.
-Stopping at "this is one application" removes that path entirely rather than guarding it, which is
-the second reason to prefer two flags over one: the single-flag draft had to reach the same safety
-through rule ordering and a one-level scan depth, both of which the next person to make the scan
-recursive would have undone.
+The first version of this decision closed that path with a **refusal** ("that is one application —
+did you mean `--app`?"). Recognising the application and stopping closes it just as completely, and
+the ordering that does so — an application is recognised *before* its children are looked at — is
+the same rule either way. What changes is that a shape which used to be an error is now an answer.
 
 Verified 2026-08-16: every application home in the tree has `config/` or `web/` — the seven
-examples, the five bundled system applications, and the lint fixtures except `evil-app`, which is
+examples, the five bundled framework surfaces, and the lint fixtures except `evil-app`, which is
 deliberately empty.
 
-### 3. Neither flag ever means an id, and narrowing is choosing the other flag
+### 3. Neither flag ever means an id, and narrowing is pointing `--suite` at the member
 
 `--app` takes a path. `--suite` takes a path. Nothing takes an application id, so no flag's value
-changes kind depending on a sibling flag — the failure mode Decision 1 exists to avoid, arrived at
-from the other direction.
+changes kind depending on a sibling flag.
 
-Narrowing a suite to one application is passing `--app` instead of `--suite`. It is not a mode, not
-a filter, and not a third flag, which satisfies [suite-architecture.md](suite-architecture.md)
-Decision 19's requirement that narrowing the development-tool MCP "stays available" as "a scoping
-flag, not a second mode."
+**Narrowing a suite to one application is `--suite ./work/orders`** — the member's own directory,
+which Decision 2 resolves as a suite of one. It needs no new mechanism, and it satisfies
+[suite-architecture.md](suite-architecture.md) Decision 19's requirement that narrowing the
+development-tool MCP "stays available" as "a scoping flag, not a second mode."
 
-On the run-applications commands the two are **mutually exclusive and one is required**, the same
-shape `tesseraql token` already uses for `--app` and `--url`.
+**Amended 2026-08-16.** This first said narrowing was passing `--app` instead of `--suite`. That
+worked, and it changed the application's address while doing it, so the narrow case and the whole
+case disagreed about where the application answers. Pointing `--suite` at the member keeps the
+address identical, which is the property that makes narrowing useful rather than a second
+configuration to keep in your head.
 
-**What this costs, stated rather than discovered.** A command that operates on one application
-refuses `--suite` by not accepting it, which picocli reports without any code of ours. The
-interesting refusal is `--suite` pointed at something that holds nothing, and `--app` pointed at a
-folder of applications. Both list what they found and print a command that works:
+**What it does not carry, stated rather than discovered:** the suite's `suite.yml` sits in the
+suite's directory, so running a member on its own does not read it (Decision 22). For a development
+loop that is usually right — the settings it carries are the ones that only matter across
+applications, and there is one application. **The trigger:** the first case that needs a suite's
+settings while running one of its members. The answer then is a filter on the suite —
+`--suite ./work --only orders` — and not a path to a configuration file, because a file path is a
+second source for a value the suite directory already answers.
+
+**What this costs on the single-application commands, measured 2026-08-16: nothing.** `package`,
+`scaffold`, `release-diff` and `verify` contain no reference to `AppCatalog` or to an install root.
+They take one application home today and always have. They keep `--app`, unchanged, and never see
+`--suite`. The interesting refusal is `--app` pointed at a folder of applications, which lists what
+it found and prints a command that works:
 
 ```
 $ tesseraql package --app ./myworkspace
@@ -111,11 +139,6 @@ $ tesseraql package --app ./myworkspace
 
 A refusal that names the alternatives costs a second. One that says "expected a single application"
 costs a directory listing and a guess.
-
-**How much friction this adds to the single-application commands, measured 2026-08-16: none.**
-`package`, `scaffold`, `release-diff` and `verify` contain no reference to `AppCatalog` or to an
-install root. They take one application home today and always have. They keep `--app`, unchanged,
-and never see `--suite`.
 
 ### 3a. Addressing an application inside a suite by id is deferred, with a trigger
 
@@ -141,12 +164,12 @@ The verb count does not change: `serve` + `host` becomes `dev` + `host`. What ch
 command pasted into a runbook says which one it is.
 
 `dev` carries what `serve` carries — `--watch`, `--modules`, `--embedded-db`, `--embedded-db-port`,
-`--embedded-db-version`, `--log-format`, `--log-level`, `--port` — and takes `--app` or `--suite`,
-running through the gateway either way, because Decision 12 makes that the only shape there is.
+`--embedded-db-version`, `--log-format`, `--log-level`, `--port` — and takes `--suite`, running
+through the gateway, because Decision 12 makes that the only shape there is and Decision 1 makes
+`--suite` the only way to name what runs.
 
-`host` takes `--suite` (or `--app`, for a single-application deployment) plus `--port`, `--http2`
-and `--trusted-proxies`, and gains nothing from `dev`. An `--embedded-db` in production is not a
-feature.
+`host` takes `--suite` plus `--port`, `--http2` and `--trusted-proxies`, and gains nothing from
+`dev`. An `--embedded-db` in production is not a feature.
 
 ### 4a. `--port` is the front door, and an application's own `server.port` stops being one
 
@@ -167,11 +190,11 @@ internal port behind the gateway rather than an address anyone types, and that i
 that changed about it.
 
 An earlier draft of this decision resolved it as "the front door, when the suite holds exactly one
-application" — which would have kept `dev --app ./orders` answering where `serve --app ./orders`
-did. It is rejected for the reason Decision 1 gives about `--app`: it is one key meaning the
-application's own port in one arrangement and the suite's front port in another, and a reader of
-`server.port: 9000` could not tell which without counting the applications in the folder. The saving
-was continuity for one command; the cost was a second meaning.
+application" — which would have kept `dev ./orders` answering where `serve --app ./orders` did. It
+is rejected because it is one key meaning the application's own port in one arrangement and the
+suite's front port in another, and a reader of `server.port: 9000` could not tell which without
+counting the applications in the folder. The saving was continuity for one command; the cost was a
+second meaning.
 
 So:
 
@@ -180,7 +203,7 @@ So:
 | The gateway | the address callers use | `--port`, default `8080` |
 | Each application | internal, behind the gateway | its own `server.port`, default ephemeral |
 
-`dev --app ./orders` with `server.port: 9000` therefore answers on **8080**, and the application
+`dev --suite ./orders` with `server.port: 9000` therefore answers on **8080**, and the application
 binds 9000 behind it. That is a behaviour change from `serve` and it is the honest one: under
 Decision 12 the gateway is the address, and the key still does what its name says.
 
@@ -344,8 +367,8 @@ and gains its options.
 
 | Command | Change |
 | --- | --- |
-| `serve` | **becomes `dev`**; `--app` gains `--suite` beside it; gains `--suite-config` (`suite-architecture.md` Decision 22); `+config` (already had `--env`) |
-| `host` | `--install-root` → **`--app` / `--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--suite-config` (Decision 22); `+config` |
+| `serve` | **becomes `dev`**; `--app` → **`--suite`**, which is now the only way to name what runs (Decision 1); `+config` (already had `--env`) |
+| `host` | `--install-root` → **`--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; `+config` |
 | `mcp` | gains **`--suite`** — `suite-architecture.md` Decision 19 makes the development-tool MCP span the suite; `--read-only` becomes a property of the server, not of an application; `+config` |
 | `new` | `--dir` → **`--app`**. It is the directory that becomes an application home, and every other command calls that `--app` |
 | `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |
@@ -375,7 +398,8 @@ its subject. Everything else is addition or a rename.
 | --- | --- |
 | 1 | The two resolvers (Decisions 1–3): one application, or the applications in a suite, with the refusals under test |
 | 2 | `--install-root` → `--suite` on `host`; `--suite` added to `mcp` per Decision 19 |
-| 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway; `--port` as the front door, and `MultiAppHost` honouring a declared `server.port` instead of always calling `freePort()` (Decision 4a) |
+| 2a | **The amendment of 2026-08-16:** `--app` removed from `dev` / `host` / `mcp`; `AppDirectory.suite` takes an application home as a suite of one instead of refusing it; the `APPLICATION` shape stops defaulting to the origin root, which becomes a declared address like any other |
+| 3 | `serve` → `dev`, over `--suite`, through the gateway; `--port` as the front door, and `MultiAppHost` honouring a declared `server.port` instead of always calling `freePort()` (Decision 4a) |
 | 3a | `--embedded-db` for a suite (Decision 4b): the coordinates supplied through the environment source, the declared query string carried over, the pool-level backstop and its one line |
 | 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
 | 5 | `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |

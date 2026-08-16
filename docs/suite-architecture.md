@@ -389,6 +389,14 @@ null`. Reading the catalogue instead, defaulting to `/apps/<appId>/`, lets a one
 declare `/` and serve at the root — the old shape, with no second mechanism and no branch in any
 design that follows.
 
+**Note 2026-08-16, because the implementation drifted from this sentence and had to be pulled back.**
+"Declare" is load-bearing. The first CLI surface gave the running commands an `--app` flag that
+*derived* the origin root from the shape of the directory it was pointed at, which is the same
+second mechanism this paragraph rules out, arrived at from the CLI rather than from a `Mode` enum.
+[cli-surface.md](cli-surface.md) Decision 1 has been amended to remove it: the running commands take
+`--suite` only, an application home is a suite of one, and the origin root is what a catalogue entry
+or `suite.yml` says it is.
+
 **Decision 13 is a prerequisite, not a follow-up.** Routing every deployment through the gateway
 before the gateway is transparent ships a regression.
 
@@ -829,10 +837,19 @@ security:
     jwksUri: https://apps.example.com/_tesseraql/oauth/jwks
 ```
 
-`--app` names one application, and there is no directory there that is not the application's own
-tree. The application's files do not name their deployment (base-path.md decision 1 holds the same
-line for the prefix), so the file is **not** read out of `config/`; it is named explicitly with
-`--suite-config <file>`, or there is none.
+**The file is always `<dir>/suite.yml`, and nothing names it separately.** A draft of this decision
+added a `--suite-config <file>` option, because the running commands then also took `--app` and an
+application's own tree is nowhere to put a suite's settings. [cli-surface.md](cli-surface.md)
+Decision 1 has since removed `--app` from those commands — for four reasons of which this was one —
+so the directory `--suite` names is the only place the file can be, and a second source for it
+would be a second answer to a question that has one.
+
+**A suite whose directory *is* one application therefore has no `suite.yml`**, and that is the
+right refusal rather than a gap: the file would sit in the application's own tree and ship inside
+its package. A suite of one has no cross-application divergence to prevent, which is this
+decision's own test for what belongs in the file. When it does need suite settings — an external
+origin for MCP, an issuer — it gets a directory. That is one `mkdir`, and it is the same shape
+every other suite has.
 
 #### What goes in the file, and what stays on a flag
 
