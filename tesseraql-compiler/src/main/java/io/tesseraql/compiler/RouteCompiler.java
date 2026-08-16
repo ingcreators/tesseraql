@@ -350,7 +350,7 @@ public final class RouteCompiler {
             return new io.tesseraql.compiler.binding.RedirectRenderer(
                     definition.response().redirect());
         }
-        return new JsonResponseRenderer(definition.response().json());
+        return new JsonResponseRenderer(withDefaultHeaders(definition.response().json()));
     }
 
     /**
@@ -1371,7 +1371,7 @@ public final class RouteCompiler {
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */
     private org.apache.camel.Processor mcpToolRenderer(RouteDefinition definition) {
         if (definition.response() != null && definition.response().json() != null) {
-            return new JsonResponseRenderer(definition.response().json());
+            return new JsonResponseRenderer(withDefaultHeaders(definition.response().json()));
         }
         return new io.tesseraql.compiler.binding.McpToolResultRenderer();
     }
@@ -1758,6 +1758,27 @@ public final class RouteCompiler {
             return null;
         }
         return html.withHeaders(responseHeaders.mergeUnder(html.headers()));
+    }
+
+    /**
+     * The same merge for a JSON response.
+     *
+     * <p>The defaults used to reach HTML, file and stream responses only, on the reading that the
+     * block is browser-document machinery. Three of the four are — {@code Content-Security-Policy},
+     * {@code X-Frame-Options} and {@code Referrer-Policy} govern a document and are inert on a
+     * response no browser renders as one. {@code X-Content-Type-Options: nosniff} is the exception,
+     * and it is the header whose whole purpose is to stop a browser treating a non-document as a
+     * document: a JSON body was the one place it was most needed and the one place it never
+     * arrived. Merging the whole block rather than a classified subset keeps one mechanism — the
+     * alternative reads header names to guess which are document-scoped, which an operator adding
+     * a header of their own could not predict.
+     */
+    private io.tesseraql.yaml.model.ResponseSpec.JsonResponse withDefaultHeaders(
+            io.tesseraql.yaml.model.ResponseSpec.JsonResponse json) {
+        if (json == null) {
+            return null;
+        }
+        return json.withHeaders(responseHeaders.mergeUnder(json.headers()));
     }
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */

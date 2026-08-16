@@ -75,7 +75,12 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 java.sql.Statement statement = connection.createStatement();
                 java.sql.ResultSet rs = statement.executeQuery(
-                        "select * from tql_route_audit where route_id = 'things'")) {
+                        // Newest first: the query had no ORDER BY, so it asserted on whichever
+                        // row the database happened to return, and a second invocation of this
+                        // route from any other test silently decided which one that was. The row
+                        // under test is the one this test just wrote.
+                        "select * from tql_route_audit where route_id = 'things'"
+                                + " order by occurred_at desc")) {
             assertThat(rs.next()).isTrue();
             assertThat(rs.getString("actor")).isEqualTo("audit-caller");
             assertThat(rs.getString("http_method")).isEqualTo("GET");
@@ -166,6 +171,29 @@ class RouteAuditAndErrorPagesIntegrationTest {
         assertThat(asset.headers().firstValue("X-Frame-Options").orElse("")).isEqualTo("DENY");
     }
 
+    /**
+     * A JSON response carries the app's header block too.
+     *
+     * <p>It did not. The merge reached HTML responses only, on the reading that the block is
+     * browser-document machinery — true of the CSP, {@code X-Frame-Options} and
+     * {@code Referrer-Policy}, and backwards for {@code X-Content-Type-Options: nosniff}, whose
+     * entire purpose is to stop a browser treating a non-document as a document. The response most
+     * at risk of being sniffed was the one response kind the header never reached
+     * (docs/route-defaults.md).
+     */
+    @Test
+    void aJsonResponseCarriesTheAppsSecurityHeaders() throws Exception {
+        HttpResponse<String> json = get("/api/plain", null, null);
+
+        assertThat(json.statusCode()).isEqualTo(200);
+        assertThat(json.headers().firstValue("X-Content-Type-Options").orElse(""))
+                .isEqualTo("nosniff");
+        assertThat(json.headers().firstValue("X-Frame-Options").orElse("")).isEqualTo("DENY");
+        assertThat(json.headers().firstValue("Content-Type").orElse(""))
+                .as("and the renderer still owns the content type")
+                .contains("application/json");
+    }
+
     private static HttpResponse<String> get(String path, String bearer, String accept)
             throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
@@ -228,6 +256,7 @@ class RouteAuditAndErrorPagesIntegrationTest {
                     responseHeaders:
                       Content-Security-Policy: "default-src 'self'; frame-ancestors 'none'"
                       X-Frame-Options: DENY
+                      X-Content-Type-Options: nosniff
                     jwt:
                       secret: dev-only-secret-change-me-in-production
                       audience: https://app.example.com
@@ -278,6 +307,27 @@ class RouteAuditAndErrorPagesIntegrationTest {
                 """);
         Files.writeString(things.resolve("things.sql"),
                 "select /* q */ 'x' as q_echo, 1 as value\n");
+
+        Path plain = target.resolve("web/api/plain");
+        Files.createDirectories(plain);
+        Files.writeString(plain.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: plain
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: plain.sql
+                      mode: query
+                response:
+                  json:
+                    body:
+                      data: main.rows
+                """);
+        Files.writeString(plain.resolve("plain.sql"), "select 1 as value\n");
 
         Path broken = target.resolve("web/broken");
         Files.createDirectories(broken);

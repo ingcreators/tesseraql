@@ -73,4 +73,88 @@ class AppLinterResponseHeadersTest {
 
         assertThat(findings).noneMatch(f -> f.code().startsWith("TQL-SEC-413"));
     }
+    /**
+     * A JSON route is linted against the defaults too.
+     *
+     * <p>Only {@code response.html} was inspected, so once the defaults began merging into JSON
+     * responses as well (docs/route-defaults.md) a JSON route could restate or weaken one of them
+     * without a word — the same drift these lints exist to end, in the arm they did not reach.
+     */
+    @Test
+    void flagsARestatementOnAJsonRoute(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    responseHeaders:
+                      X-Frame-Options: DENY
+                """);
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                response:
+                  json:
+                    status: 200
+                    headers:
+                      X-Frame-Options: DENY
+                    body:
+                      ok: true
+                """);
+        Files.writeString(dir.resolve("web/api/items/items.sql"), "select 1\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).anyMatch(f -> f.code().equals("TQL-SEC-4133") && !f.isError()
+                && f.source().equals("web/api/items/get.yml"));
+    }
+
+    /** And a declared JSON header the defaults say nothing about is not a finding. */
+    @Test
+    void leavesAJsonHeaderWithNoMatchingDefaultAlone(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    responseHeaders:
+                      X-Frame-Options: DENY
+                """);
+        Files.createDirectories(dir.resolve("web/api/items"));
+        Files.writeString(dir.resolve("web/api/items/get.yml"), """
+                version: tesseraql/v1
+                id: items.list
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                response:
+                  json:
+                    status: 200
+                    headers:
+                      Cache-Control: no-store
+                    body:
+                      ok: true
+                """);
+        Files.writeString(dir.resolve("web/api/items/items.sql"), "select 1\n");
+
+        List<LintFinding> findings = new AppLinter().lint(dir);
+
+        assertThat(findings).noneMatch(f -> f.code().startsWith("TQL-SEC-413"));
+    }
 }

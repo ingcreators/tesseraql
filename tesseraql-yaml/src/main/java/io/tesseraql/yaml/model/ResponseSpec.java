@@ -135,21 +135,57 @@ public record ResponseSpec(JsonResponse json, HtmlResponse html, StreamResponse 
      *
      * @param status HTTP status code, defaulting to 200
      * @param body   the response body template
+     * @param headers  response headers, resolved and merged exactly as
+     *                 {@link HtmlResponse#headers()} — {@code {expression}} placeholders resolve
+     *                 against the execution context, and the app-wide
+     *                 {@code security.responseHeaders} merge under them
+     * @param headersWhen  per-header guard expressions (header name &rarr; boolean expression); a
+     *                 header is emitted only when its guard is truthy. The case this exists for on
+     *                 a JSON response is the header defined in terms of the status: {@code status}
+     *                 already varies per request through {@code statusWhen}, so {@code Location} on
+     *                 a 201, {@code Retry-After} on a 429 or 503, and {@code WWW-Authenticate} on a
+     *                 401 have to be able to vary with it. A response that could change its status
+     *                 but not the headers that describe that status is the asymmetry this closes;
+     *                 conditional payload information belongs in the body, which a JSON client
+     *                 parses anyway
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record JsonResponse(Integer status, Object body,
             java.util.Map<String, FieldPolicy> fields,
-            java.util.List<StatusWhen> statusWhen) {
+            java.util.List<StatusWhen> statusWhen,
+            java.util.Map<String, Object> headers, java.util.Map<String, String> headersWhen) {
 
         public JsonResponse {
             fields = fields == null ? java.util.Map.of() : java.util.Map.copyOf(fields);
             statusWhen = statusWhen == null
                     ? java.util.List.of()
                     : java.util.List.copyOf(statusWhen);
+            headers = headers == null ? java.util.Map.of() : java.util.Map.copyOf(headers);
+            headersWhen = headersWhen == null
+                    ? java.util.Map.of()
+                    : java.util.Map.copyOf(headersWhen);
+        }
+
+        /** A synthesized response: a status and a body, with nothing declared around them. */
+        public JsonResponse(Integer status, Object body,
+                java.util.Map<String, FieldPolicy> fields,
+                java.util.List<StatusWhen> statusWhen) {
+            this(status, body, fields, statusWhen, null, null);
         }
 
         public int effectiveStatus() {
             return status == null ? 200 : status;
+        }
+
+        /**
+         * A copy carrying the effective header map — how the compiler merges the app-wide
+         * default response headers (docs/route-defaults.md) under the route's own entries.
+         */
+        public JsonResponse withHeaders(java.util.Map<String, Object> effective) {
+            if (effective.equals(headers)) {
+                return this;
+            }
+            return new JsonResponse(status, body, fields, statusWhen, effective, headersWhen);
         }
     }
 

@@ -56,35 +56,48 @@ final class ResponseHeaderRules implements LintRule {
         }
         for (RouteFile route : manifest.routes()) {
             var response = route.definition().response();
-            if (response == null || response.html() == null
-                    || response.html().headers().isEmpty()) {
+            if (response == null) {
                 continue;
             }
             String source = appHome.relativize(route.source()).toString();
-            for (var entry : response.html().headers().entrySet()) {
-                String name = entry.getKey();
-                String declared = String.valueOf(entry.getValue());
-                String fallback = defaults.headers().get(name);
-                if (fallback == null) {
-                    continue;
-                }
-                if (declared.equals(fallback)) {
-                    findings.add(new LintFinding(RESPONSE_HEADER_RESTATES_DEFAULT, WARNING, source,
-                            "Route '" + route.definition().id() + "' restates the default"
-                                    + " response header '" + name + "' — the app default"
-                                    + " already sends it"));
-                } else if (io.tesseraql.yaml.config.ResponseHeaderDefaults.UNSET
-                        .equals(declared)) {
-                    findings.add(new LintFinding(RESPONSE_HEADER_WEAKENS_DEFAULT, WARNING, source,
-                            "Route '" + route.definition().id() + "' suppresses the default"
-                                    + " response header '" + name + "' — confirm the page must"
-                                    + " not send it"));
-                } else if (declared.contains("*") && !fallback.contains("*")) {
-                    findings.add(new LintFinding(RESPONSE_HEADER_WEAKENS_DEFAULT, WARNING, source,
-                            "Route '" + route.definition().id() + "' overrides the default"
-                                    + " response header '" + name + "' with a wildcard the"
-                                    + " default does not carry — confirm the broadening"));
-                }
+            // Both response kinds carry the block and both receive the defaults, so both are
+            // linted against them. Checking only HTML left a JSON route free to restate or weaken
+            // a default unremarked once the merge reached it (docs/route-defaults.md).
+            if (response.html() != null) {
+                lintAgainstDefaults(route, response.html().headers(), defaults, source, findings);
+            }
+            if (response.json() != null) {
+                lintAgainstDefaults(route, response.json().headers(), defaults, source, findings);
+            }
+        }
+    }
+
+    /** One response's declared headers against the app-wide defaults they merge under. */
+    private void lintAgainstDefaults(RouteFile route, java.util.Map<String, Object> declaredHeaders,
+            io.tesseraql.yaml.config.ResponseHeaderDefaults defaults, String source,
+            List<LintFinding> findings) {
+        for (var entry : declaredHeaders.entrySet()) {
+            String name = entry.getKey();
+            String declared = String.valueOf(entry.getValue());
+            String fallback = defaults.headers().get(name);
+            if (fallback == null) {
+                continue;
+            }
+            if (declared.equals(fallback)) {
+                findings.add(new LintFinding(RESPONSE_HEADER_RESTATES_DEFAULT, WARNING, source,
+                        "Route '" + route.definition().id() + "' restates the default"
+                                + " response header '" + name + "' — the app default"
+                                + " already sends it"));
+            } else if (io.tesseraql.yaml.config.ResponseHeaderDefaults.UNSET.equals(declared)) {
+                findings.add(new LintFinding(RESPONSE_HEADER_WEAKENS_DEFAULT, WARNING, source,
+                        "Route '" + route.definition().id() + "' suppresses the default"
+                                + " response header '" + name + "' — confirm the response must"
+                                + " not send it"));
+            } else if (declared.contains("*") && !fallback.contains("*")) {
+                findings.add(new LintFinding(RESPONSE_HEADER_WEAKENS_DEFAULT, WARNING, source,
+                        "Route '" + route.definition().id() + "' overrides the default"
+                                + " response header '" + name + "' with a wildcard the"
+                                + " default does not carry — confirm the broadening"));
             }
         }
     }

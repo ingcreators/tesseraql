@@ -240,7 +240,8 @@ the generated OpenAPI as a response entry.
 
 ## Default response headers
 
-An HTML response's `headers:` map sends per-route headers (`HX-Trigger` toasts, cache hints).
+An HTML or JSON response's `headers:` map sends per-route headers (`HX-Trigger` toasts, cache
+hints, a `Location` on a created row).
 The security header block every page sends identically — `Content-Security-Policy`,
 `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` — is declared once, app-wide:
 
@@ -254,7 +255,7 @@ tesseraql:
       Referrer-Policy: no-referrer
 ```
 
-The compiler merges the defaults under every HTML response; the merge is per header name and the
+The compiler merges the defaults under every HTML and JSON response; the merge is per header name and the
 route always wins. A route that must not send a default declares it with the literal value
 `unset`, which removes the header entirely (and draws lint `TQL-SEC-4134`, so a suppressed
 security header is owned, not accidental). Restating a default identically is flagged as leftover
@@ -262,8 +263,39 @@ copy-paste (`TQL-SEC-4133`); overriding one with a wildcard the default does not
 as a broadening (`TQL-SEC-4134`). Hardening the whole app — tightening CSP, adding a new header —
 becomes a one-line config edit instead of an edit per page.
 
-Defaults apply to HTML responses (pages, fragments, and MCP UI resources). JSON, stream, and
-generated-file responses do not carry a `headers:` map and are unaffected.
+Defaults apply to HTML responses (pages, fragments, and MCP UI resources) and to JSON responses.
+Three of the four headers above govern a browser document, and are inert on a response no browser
+renders as one. `X-Content-Type-Options: nosniff` is the exception. Its whole purpose is to stop a
+browser treating a non-document as a document, so a JSON body was the one place it was most needed
+and the one place it never arrived. The whole block merges rather than a classified
+subset, because the alternative reads header names to guess which are document-scoped, and an
+operator adding a header of their own could not predict which bucket it lands in.
+
+Stream and generated-file responses carry no `headers:` map and are unaffected.
+
+### Guards, and the case they exist for
+
+A header named under `headersWhen:` is emitted only when its expression is truthy:
+
+```yaml
+response:
+  json:
+    status: 200
+    statusWhen:
+      - when: steps.record.created
+        status: 201
+    headers:
+      Location: "/api/items/{steps.record.keys.id}"
+    headersWhen:
+      Location: steps.record.created
+```
+
+On an HTML fragment this is an `HX-Trigger` toast firing on success but not on a handled error. On
+a JSON response the case is narrower, because conditional payload information belongs in the body a
+client parses anyway. What does not is the header **defined in terms of the status**: a response
+can already vary its status through `statusWhen:`, so `Location` on a 201, `Retry-After` on a 429
+or 503, and `WWW-Authenticate` on a 401 have to vary with it. A route that can
+change its status but not the header describing that status is the asymmetry these close.
 
 ## Where to go next
 
