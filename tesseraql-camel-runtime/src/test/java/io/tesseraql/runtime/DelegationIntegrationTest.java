@@ -273,6 +273,8 @@ class DelegationIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  app:
+                    name: delegation
                   workflow:
                     mode: managed
                     sweep:

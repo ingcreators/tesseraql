@@ -1,4 +1,9 @@
 tesseraql:
+  # Its own name, matching the name it is mounted under. The mount is what the runtime
+  # identifies it by; declaring it here keeps the application honest about itself and lets
+  # the linter require the key of every application (docs/cli-surface.md Decision 6).
+  app:
+    name: iam-admin
   security:
     # Path-matched route security defaults (docs/route-defaults.md): every page and
     # fragment of this bundled app is a browser-session surface with CSRF on writes;

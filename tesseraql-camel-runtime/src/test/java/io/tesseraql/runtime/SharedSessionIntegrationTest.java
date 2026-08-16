@@ -151,6 +151,8 @@ class SharedSessionIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: shared-session
                   sessions:
                     store: jdbc
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),

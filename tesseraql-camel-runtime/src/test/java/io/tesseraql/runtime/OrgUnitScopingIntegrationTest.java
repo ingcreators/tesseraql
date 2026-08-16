@@ -164,6 +164,8 @@ class OrgUnitScopingIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  app:
+                    name: org-unit-scoping
                   orgunit:
                     mode: managed
                   datasources:

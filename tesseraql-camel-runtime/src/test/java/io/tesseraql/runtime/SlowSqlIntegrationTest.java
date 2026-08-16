@@ -234,6 +234,8 @@ class SlowSqlIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: slow-sql
                   diagnostics:
                     slowSqlMillis: 0
                     slowSpanMillis: 0

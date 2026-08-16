@@ -221,6 +221,8 @@ class TenantDataSourceRoutingIntegrationTest {
                       password: %3$s
 
                 tesseraql:
+                  app:
+                    name: tenant-datasource-routing
                   datasources:
                     reporting:
                       jdbcUrl: %1$s&currentSchema=reporting_s

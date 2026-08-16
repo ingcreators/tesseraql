@@ -147,6 +147,8 @@ class MySqlMessagingIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: my-sql-messaging
                   outbox:
                     dispatch:
                       fixedDelay: 500ms

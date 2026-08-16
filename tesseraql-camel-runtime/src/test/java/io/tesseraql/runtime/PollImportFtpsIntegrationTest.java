@@ -292,6 +292,8 @@ class PollImportFtpsIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: poll-import-ftps
                   connectors:
                     poll:
                       allowedHosts:

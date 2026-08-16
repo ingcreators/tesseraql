@@ -22,6 +22,9 @@ class LintRegistryOrderTest {
     void theRegistryRunsTheFamiliesInThisOrder() {
         assertThat(AppLinter.rules().stream().map(rule -> rule.getClass().getSimpleName()).toList())
                 .containsExactly(
+                        // First, and needing nothing loaded: an application that does not name
+                        // itself has no identity for any later finding to be about.
+                        "ApplicationNameRules",
                         // The document families, one loop each, in load order.
                         "RouteRules",
                         "CalendarRules",

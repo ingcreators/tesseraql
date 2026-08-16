@@ -148,6 +148,8 @@ class HealthProbeIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: health-probe
                   datasources:
                     main:
                       # A short borrow timeout so the readiness probe detects the outage fast

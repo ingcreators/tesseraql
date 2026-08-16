@@ -1405,6 +1405,8 @@ class BatchJobIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: batch-job
                   diagnostics:
                     slowSqlMillis: 0
                   connectors:

@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
@@ -65,7 +64,8 @@ final class AppMigrations {
         int total = 0;
         Path main = appHome.resolve("db/migration");
         if (Files.isDirectory(main)) {
-            String historyTable = historyTable(appName);
+            String historyTable = io.tesseraql.core.migration.SchemaHistory.table(appName);
+            io.tesseraql.core.migration.SchemaHistory.requireFits(historyTable, mainDataSource);
             total += run(main, historyTable, mainDataSource, appName, "main");
             for (String tenantId : tenantDataSources.tenantIds()) {
                 total += run(main, historyTable,
@@ -85,8 +85,10 @@ final class AppMigrations {
                         + " duckdb datasource is a query engine with nothing durable to migrate"
                         + " (docs/duckdb.md)");
             }
-            total += run(migrations, historyTable(appName) + "__" + sanitize(datasource),
-                    dataSource, appName, datasource);
+            String namedHistory = io.tesseraql.core.migration.SchemaHistory.table(appName,
+                    datasource);
+            io.tesseraql.core.migration.SchemaHistory.requireFits(namedHistory, dataSource);
+            total += run(migrations, namedHistory, dataSource, appName, datasource);
         }
         return total;
     }
@@ -140,14 +142,15 @@ final class AppMigrations {
         }
     }
 
-    /** A per-app history table name, so apps sharing a database do not collide. */
+    /**
+     * A per-app history table name, so apps sharing a database do not collide.
+     *
+     * <p>Kept as a package-private seam for the tests and for
+     * Studio's migration view; the derivation itself is
+     * {@link io.tesseraql.core.migration.SchemaHistory}, shared with the CLI and the Maven goal so
+     * the three entry points cannot disagree about which table holds an application's history.
+     */
     static String historyTable(String appName) {
-        return "tql_schema_history_" + sanitize(appName);
-    }
-
-    private static String sanitize(String name) {
-        // Unicode letters survive (docs/unicode-identifiers.md) — an ASCII-only class mapped
-        // every Japanese app name to underscores, so two apps shared one history table.
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}_]", "_");
+        return io.tesseraql.core.migration.SchemaHistory.table(appName);
     }
 }

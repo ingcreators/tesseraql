@@ -188,6 +188,14 @@ class AppLinterWorkflowTest {
 
     @Test
     void aMemberGuardMayReadTheDispatchLevelDecision(@TempDir Path dir) throws Exception {
+        // This is the one assertion here on the WHOLE finding list, so the application has to be
+        // well-formed in every unrelated way too — including declaring its own name.
+        Files.createDirectories(dir.resolve("config"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: workflow-lint
+                """);
         writeRoutingDecision(dir);
         writeWorkflow(dir, WELL_FORMED
                 .replace("id: approve, from: submitted, to: approved,",
@@ -355,6 +363,8 @@ class AppLinterWorkflowTest {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
                 tesseraql:
+                  app:
+                    name: workflow-lint
                   workflow:
                     mode: bogus
                 """);

@@ -105,6 +105,8 @@ class SamlIdpMetadataIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: saml-idp-metadata
                   saml:
                     enabled: true
                     allowIdpInitiated: true

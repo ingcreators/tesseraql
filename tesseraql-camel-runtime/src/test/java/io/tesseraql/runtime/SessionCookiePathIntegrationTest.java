@@ -130,6 +130,8 @@ class SessionCookiePathIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: session-cookie-path
                   sessions:
                     store: jdbc
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),

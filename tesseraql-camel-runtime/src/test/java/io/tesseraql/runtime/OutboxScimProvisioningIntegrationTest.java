@@ -156,6 +156,8 @@ class OutboxScimProvisioningIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: outbox-scim-provisioning
                   scim:
                     outbound:
                       enabled: true

@@ -156,6 +156,8 @@ class SamlUserLinkIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: saml-user-link
                   # This fixture fails credentials on purpose; the throttle under test
                   # elsewhere is disabled visibly (docs/credential-throttle.md).
                   security:

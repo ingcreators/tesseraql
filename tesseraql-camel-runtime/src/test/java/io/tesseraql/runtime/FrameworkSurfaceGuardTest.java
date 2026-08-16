@@ -104,6 +104,8 @@ class FrameworkSurfaceGuardTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: framework-surface-guard
                   studio:
                     enabled: true
                   metrics:

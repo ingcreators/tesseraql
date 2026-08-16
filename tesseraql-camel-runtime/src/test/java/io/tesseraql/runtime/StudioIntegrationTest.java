@@ -3620,6 +3620,8 @@ class StudioIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: studio-it
                   # A second, duckdb datasource: the data browser's datasource selector and
                   # its non-main browsing (docs/analytics-experience.md track 1). No
                   # extensions and no attaches — the engine's own catalogs are scratch, so

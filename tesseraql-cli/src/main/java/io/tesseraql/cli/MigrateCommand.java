@@ -4,6 +4,7 @@ import io.tesseraql.apptasks.AppMigrator;
 import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.migration.SchemaHistoryName;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.concurrent.Callable;
@@ -34,17 +35,14 @@ final class MigrateCommand implements Callable<Integer> {
     @Option(names = {"--datasource"}, description = "Migration set to act on (default: main).")
     String datasourceName = "main";
 
-    @Option(names = {
-            "--app-name"}, description = "App name keying the history table (default: the app directory name).")
-    String appName;
-
     @Override
     public Integer call() throws Exception {
         AppConfig config = new ManifestLoader().load(app).config();
         DriverManagerDataSource dataSource = datasource.resolve(config, app);
-        String name = appName != null && !appName.isBlank()
-                ? appName
-                : app.toAbsolutePath().normalize().getFileName().toString();
+        // The application declares its own history key, so this command and the runtime record
+        // into one table. It used to default to the app DIRECTORY name, which never matches:
+        // examples/helpdesk-app against tesseraql.app.name helpdesk, every time.
+        String name = SchemaHistoryName.of(config);
 
         switch (operation.toLowerCase(Locale.ROOT)) {
             case "apply" -> AppMigrator.migrate(app, name, datasourceName, dataSource)

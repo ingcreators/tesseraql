@@ -142,6 +142,8 @@ class RowLevelMaskingIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  app:
+                    name: row-level-masking
                   datasources:
                     main:
                       jdbcUrl: %s

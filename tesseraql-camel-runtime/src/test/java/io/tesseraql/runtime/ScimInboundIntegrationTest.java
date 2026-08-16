@@ -354,6 +354,8 @@ class ScimInboundIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: scim-inbound
                   scim:
                     enabled: true
                     users:
