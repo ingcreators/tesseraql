@@ -39,6 +39,14 @@ final class HostCommand implements Callable<Integer> {
                     + " the upgrade over HTTP/1.1 and is reached exactly as before.")
     boolean http2;
 
+    @Option(names = {
+            "--trusted-proxies"}, paramLabel = "<cidr,...>", description = "Addresses whose forwarded headers come from your edge rather than"
+                    + " from a caller, e.g. 10.0.0.0/8,192.168.1.5. When set, an application's"
+                    + " mTLS forwardedHeader is stripped from requests arriving from anywhere"
+                    + " else. Empty by default, which strips nothing: the edge overwriting the"
+                    + " header on every inbound request is the contract either way.")
+    String trustedProxies;
+
     @Override
     public Integer call() throws Exception {
         MultiAppGateway.Mode selected;
@@ -50,7 +58,7 @@ final class HostCommand implements Callable<Integer> {
         }
 
         try (MultiAppGateway gateway = MultiAppGateway.start(installRoot, port,
-                new MultiAppGateway.Settings(selected, http2))) {
+                new MultiAppGateway.Settings(selected, http2, trustedProxies))) {
             System.out.println("TesseraQL hosting " + gateway.appIds().size()
                     + " app(s) on port " + gateway.port() + " (" + mode.toLowerCase(
                             java.util.Locale.ROOT)

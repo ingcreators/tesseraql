@@ -69,7 +69,7 @@ truncated large exports mid-download. An application keeps whatever limits it de
 deployment that wants a limit in front of every application sets one at the ingress, where it can be
 tuned per route and per client.
 
-**Forwarded headers pass through.** The gateway does not strip the mTLS forwarded header an
+**Forwarded headers pass through by default.** The gateway does not strip the mTLS forwarded header an
 application declares, because it cannot tell a caller's copy from the edge's without knowing which
 sources are trusted — and stripping it unconditionally destroyed the edge's own value, which made
 [mTLS authentication](authentication.md#mutual-tls-client-certificates) unusable behind the gateway. The trust contract
@@ -91,6 +91,25 @@ connection to each application — because enabling it at one end alone breaks r
 application that does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as
 before, so turning this on cannot make an application unreachable. HTTP/1.1 clients keep working
 against an h2c gateway: the upgrade is offered, not required.
+
+**Naming your edge adds a second line of defence.** `--trusted-proxies` takes the addresses whose
+forwarded headers are the edge's rather than a caller's:
+
+```sh
+tesseraql host --install-root /srv/tesseraql/apps --port 8080 \
+  --trusted-proxies 10.0.0.0/8,192.168.1.5
+```
+
+With it set, an application's `mtls.forwardedHeader` is stripped from every request arriving from
+anywhere else, so a caller reaching the gateway around the edge cannot present the assertion the
+application is configured to believe. The comparison is against the **peer of the connection**,
+never a header: a caller can write `X-Forwarded-For`, and cannot write the socket it connected
+from. CIDR blocks and bare addresses are both accepted, IPv4 and IPv6.
+
+Leaving it empty strips nothing, and that is deliberate. Reading "no edge named" as "trust nobody,
+strip from everyone" is the unconditional strip that made mTLS unusable behind a gateway, and it
+would be the default again. `X-Tenant-Id` is never stripped either way, because the application's
+own tenancy resolution is the authority on it.
 
 Responses pass through unchanged: framing, chunked bodies, event streams, `Location` values and
 cookie attributes all reach the client as the application wrote them. An event stream arrives frame

@@ -470,8 +470,11 @@ The duty is already assigned where it can be discharged. `authentication.md`'s t
 must not be reachable except through that edge."* Duplicating it one hop later bought defence in
 depth against an operator who has already lost — the network isolation the same contract requires —
 and paid for it with the feature. Keeping the strip *and* the feature needs the gateway to know
-which sources are trusted, which is a configuration and a decision this slice does not have; it is
-available later without anything here standing in its way. This is the same division the decision is
+which sources are trusted, which is a configuration this slice did not have. It arrives as
+`--trusted-proxies`: name the edge's addresses and the header is stripped from requests arriving
+from anywhere else, compared against the peer of the connection rather than a header a caller can
+write. Empty is the default and strips nothing — reading "no edge named" as "strip from everyone"
+is the unconditional strip this decision removed, restored as a default. This is the same division the decision is
 drawing anyway: **the gateway routes, the ingress protects.**
 
 **The front is HTTP/1.1 by default, and HTTP/2 is one switch that moves both hops.**

@@ -21,6 +21,16 @@ All notable changes to TesseraQL are documented here. The format follows
   only symptom was a stack trace per request — every page load and every event stream, in the log,
   forever. An unknown length on a method that cannot carry a body is zero.
 
+- **`tesseraql host --trusted-proxies`** (docs/hosting.md). Names the addresses whose forwarded
+  headers come from the deployment's edge rather than from a caller; an application's
+  `mtls.forwardedHeader` is then stripped from every request arriving from anywhere else. The
+  comparison is against the peer of the connection, never a header — a caller can write
+  `X-Forwarded-For` and cannot write the socket it connected from. CIDR blocks and bare addresses,
+  IPv4 and IPv6. Empty by default, which strips nothing: reading "no edge named" as "strip from
+  everyone" is the unconditional strip that made mTLS forwarded-header authentication unusable
+  behind a gateway, and it would be the default again. This is defence in depth on top of the trust
+  contract in docs/authentication.md, not a replacement for it.
+
 - **`response.json.headers:` and `response.json.headersWhen:`** (docs/response-shaping.md). The
   block existed on `response.html` only; on a JSON route it deserialized away at runtime, so a
   declared header simply did not arrive. (The linter did report it — `TQL-YAML-1043` walks every

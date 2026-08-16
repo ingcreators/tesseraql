@@ -95,22 +95,38 @@ public final class MultiAppGateway implements AutoCloseable {
      * The deployment's choices about the front door.
      *
      * <p>A record rather than more positional arguments, on the reasoning
-     * docs/suite-architecture.md decision 16 gives for the host's own settings: the list grows,
-     * and a boolean in position four says nothing at the call site about what it turns on. This
-     * is the gateway's own block and is not decision 16's host context object, which carries what
-     * only the host can know about each <em>runtime</em> — that arrives with slice 3.
+     * docs/suite-architecture.md decision 16 gives for the host's own settings: the list grows, and
+     * a value in position four says nothing at the call site about what it is. This is the
+     * gateway's own block and is not decision 16's host context object, which carries what only
+     * the host can know about each <em>runtime</em> — that arrives with slice 3.
      *
-     * @param mode  how apps are addressed
-     * @param http2 serve and forward cleartext HTTP/2. Off by default: the previous front spoke
-     *              HTTP/1.1 only, so this is new behaviour rather than restored behaviour. It
-     *              moves both hops together, because enabling it at one end alone breaks request
-     *              framing (see {@link SuiteRelay#frontOptions})
+     * @param mode           how apps are addressed
+     * @param http2          serve and forward cleartext HTTP/2. Off by default: the previous front
+     *                       spoke HTTP/1.1 only, so this is new behaviour rather than restored
+     *                       behaviour. It moves both hops together, because enabling it at one end
+     *                       alone breaks request framing (see {@link SuiteRelay#frontOptions})
+     * @param trustedProxies the addresses whose forwarded headers are the edge's rather than a
+     *                       caller's. Empty by default, which strips nothing — see
+     *                       {@link TrustedProxies} for why the opposite reading would be wrong
      */
-    public record Settings(Mode mode, boolean http2) {
+    public record Settings(Mode mode, boolean http2, TrustedProxies trustedProxies) {
 
         /** The addressing choice alone, with every other front-door default. */
         public Settings(Mode mode) {
-            this(mode, false);
+            this(mode, false, TrustedProxies.NONE);
+        }
+
+        /** Addressing and the protocol, with no edge named. */
+        public Settings(Mode mode, boolean http2) {
+            this(mode, http2, TrustedProxies.NONE);
+        }
+
+        /**
+         * The choices {@code tesseraql host} exposes: addressing, whether to serve HTTP/2, and the
+         * operator's edge as {@code 10.0.0.0/8,192.168.1.5}.
+         */
+        public Settings(Mode mode, boolean http2, String trustedProxies) {
+            this(mode, http2, TrustedProxies.parse(trustedProxies));
         }
     }
 
@@ -129,20 +145,23 @@ public final class MultiAppGateway implements AutoCloseable {
     private final int port;
     private final SuiteRelay relay;
 
-    private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps, Settings settings,
-            int frontPort) {
+    private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
+            java.nio.file.Path installRoot, Settings settings, int frontPort) {
         this.host = host;
         Map<String, String> hosts = new java.util.HashMap<>();
         Map<String, InstalledApp> byId = new java.util.HashMap<>();
+        Map<String, Set<String>> strip = new java.util.HashMap<>();
         for (InstalledApp app : hostedApps) {
             byId.put(app.id(), app);
+            strip.put(app.id(), ingressStripHeaders(installRoot, app));
             for (String hostName : app.hosts()) {
                 hosts.put(hostName.toLowerCase(Locale.ROOT), app.id());
             }
         }
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(SuiteRelay.outboundOptions(settings.http2()));
-        this.relay = new SuiteRelay(client, settings.mode(), hosts, byId, this::targetPort);
+        this.relay = new SuiteRelay(client, settings.mode(), hosts, byId, strip,
+                settings.trustedProxies(), this::targetPort);
         this.server = vertx.createHttpServer(
                 SuiteRelay.frontOptions(frontPort, settings.http2()));
         server.requestHandler(relay::handle);
@@ -203,10 +222,30 @@ public final class MultiAppGateway implements AutoCloseable {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))
                     .toList();
-            return new MultiAppGateway(host, hosted, settings, frontPort);
+            return new MultiAppGateway(host, hosted, installRoot, settings, frontPort);
         } catch (RuntimeException ex) {
             host.close();
             throw ex;
+        }
+    }
+
+    /**
+     * The headers to drop from a request bound for {@code app} when it did not come from a named
+     * edge: the mTLS forwarded header its configuration says to believe. Best-effort — an app
+     * whose config cannot be read strips nothing extra, because the alternative is refusing to
+     * host it over a header it may not even use.
+     */
+    static Set<String> ingressStripHeaders(java.nio.file.Path installRoot, InstalledApp app) {
+        try {
+            java.nio.file.Path appHome = installRoot.resolve(app.path()).normalize();
+            return new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config()
+                    .getString("tesseraql.security.mtls.forwardedHeader")
+                    .map(header -> Set.of(header.toLowerCase(Locale.ROOT)))
+                    .orElseGet(Set::of);
+        } catch (RuntimeException unreadable) {
+            LOG.warn("Could not read '{}' configuration for ingress header stripping: {}",
+                    app.id(), unreadable.getMessage());
+            return Set.of();
         }
     }
 

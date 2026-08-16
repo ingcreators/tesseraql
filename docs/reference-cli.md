@@ -34,6 +34,7 @@ Serve every installed app from one port, each in its own runtime.
 | `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
 | `--mode <suite\|isolated>` | — | suite: one origin, /apps/<id>/ per app, one session across them. isolated: a hostname per app, sessions not shared. Default suite. |
 | `--http2` | — | Serve and forward cleartext HTTP/2 (h2c). Off by default. One switch moves both hops: a client's connection to the gateway and the gateway's connection to each app. An app that does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as before. |
+| `--trusted-proxies <cidr,...>` | — | Addresses whose forwarded headers come from your edge rather than from a caller, e.g. 10.0.0.0/8,192.168.1.5. When set, an application's mTLS forwardedHeader is stripped from requests arriving from anywhere else. Empty by default, which strips nothing: the edge overwriting the header on every inbound request is the contract either way. |
 
 ## `routes`
 

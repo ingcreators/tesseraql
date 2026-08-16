@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -45,6 +46,7 @@ class SuiteRelayTest {
     private static HttpServer origin;
     private static HttpServer front;
     private static String base;
+    private static int originPort;
     /** The same relay with cleartext HTTP/2 on, at both ends together. */
     private static HttpClient h2Client;
     private static HttpServer h2Front;
@@ -61,7 +63,7 @@ class SuiteRelayTest {
 
         origin = vertx.createHttpServer(new HttpServerOptions().setPort(0));
         origin.requestHandler(SuiteRelayTest::serveStub);
-        int originPort = await(origin.listen()).actualPort();
+        originPort = await(origin.listen()).actualPort();
 
         SuiteRelay relay = new SuiteRelay(client, MultiAppGateway.Mode.SUITE, Map.of(),
                 Map.of(), appId -> originPort);
@@ -167,6 +169,51 @@ class SuiteRelayTest {
         assertThat(lastRequestHeaders)
                 .as("hop-by-hop headers address this hop, and the proxy ends it")
                 .doesNotContainKeys("te", "trailer", "connection", "keep-alive", "upgrade");
+    }
+
+    /**
+     * With an edge named, the forwarded header survives from it and not from anywhere else.
+     *
+     * <p>Loopback is the peer in a test, so naming {@code 127.0.0.1/32} names this client as the
+     * edge and naming {@code 10.0.0.0/8} names something it is not. The comparison is against the
+     * connection's peer rather than a header, which is the point — a caller can write
+     * {@code X-Forwarded-For} and cannot write the socket it connected from.
+     */
+    @Test
+    void theForwardedHeaderSurvivesFromTheNamedEdgeAndNotFromElsewhere() throws Exception {
+        assertThat(headerSeenBehind(TrustedProxies.parse("127.0.0.1/32,::1")))
+                .as("this client is the named edge, so its assertion is the edge's")
+                .isEqualTo("from-the-edge");
+
+        assertThat(headerSeenBehind(TrustedProxies.parse("10.0.0.0/8")))
+                .as("this client is not the named edge, so its assertion is a caller's")
+                .isNull();
+
+        assertThat(headerSeenBehind(TrustedProxies.NONE))
+                .as("no edge named: nothing is stripped, and the contract stays at the edge")
+                .isEqualTo("from-the-edge");
+    }
+
+    /** What the origin received for {@code X-Client-Cert} through a relay trusting {@code edges}. */
+    private static String headerSeenBehind(TrustedProxies edges) throws Exception {
+        SuiteRelay relay = new SuiteRelay(client, MultiAppGateway.Mode.SUITE, Map.of(), Map.of(),
+                Map.of(APP, Set.of("x-client-cert")), edges, appId -> originPort);
+        HttpServer scoped = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
+        scoped.requestHandler(relay::handle);
+        int port = await(scoped.listen()).actualPort();
+        try {
+            send(HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + port + "/apps/" + APP + "/echo"))
+                    .header("X-Client-Cert", "from-the-edge")
+                    .header("X-Tenant-Id", "tenant-a"));
+            assertThat(lastRequestHeaders)
+                    .as("the tenant header is never stripped: the app's own tenancy resolution"
+                            + " is the authoritative one (docs/app-isolation-model.md decision 3)")
+                    .containsEntry("x-tenant-id", "tenant-a");
+            return lastRequestHeaders.get("x-client-cert");
+        } finally {
+            await(scoped.close());
+        }
     }
 
     /** A cookie's attributes are the app's to choose; the relay does not rewrite them. */
