@@ -163,13 +163,12 @@ public final class MultiAppGateway implements AutoCloseable {
         // nothing below needs to know which it was.
         List<InstalledApp> catalogued = io.tesseraql.operations.app.AppDirectory.applications(
                 io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
-        // Each app is started serving the prefix it is fronted under, so it answers at the
-        // addresses it emits (docs/base-path.md decision 5). The session cookie is the gateway's
-        // call, not the applications' (decision 4): a suite is one sign-in across one origin, so
-        // the cookie is issued at the root of it rather than scoped to each app's prefix.
-        Map<String, String> basePaths = catalogued.stream().collect(java.util.stream.Collectors
-                .toMap(InstalledApp::id, InstalledApp::basePath, (first, second) -> first));
-        MultiAppHost host = MultiAppHost.start(installRoot, basePaths::get, "/");
+        // The session cookie is the gateway's call, not the applications' (docs/base-path.md
+        // decision 4): a suite is one sign-in across one origin, so the cookie is issued at the
+        // root of it rather than scoped to each app's prefix. The address is the catalogue's, and
+        // the host reads it from there — each app is started serving the prefix it is fronted
+        // under, so it answers at the addresses it emits (decision 5).
+        MultiAppHost host = MultiAppHost.start(installRoot, HostContext.suite());
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))

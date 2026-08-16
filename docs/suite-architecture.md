@@ -641,7 +641,22 @@ Two implementation notes. The parameter list is already four and would reach eig
 decisions want **one context object** rather than more positional arguments, which also gives the
 tests that call `TesseraqlRuntime.start` directly a single place to change. And the host must
 resolve a datasource configuration that may carry `${secret.…}` references, so **the secret
-provider has to be reachable at host scope** — verify that before designing the hoist.
+provider has to be reachable at host scope** — verify that before designing the hoist (open
+question 3: yes, `SecretResolvers.discover()` is static and process-scoped).
+
+**Status 2026-08-16.** `HostContext` exists, carrying the two settings a host can already answer:
+the address the catalogue declares and the cookie path. It replaced the positional arguments and
+the app-id-to-prefix function the host used to be handed, so the catalogue is now the single source
+of an application's address.
+
+**The remaining three are gated on a question this document did not ask: where does a host read its
+own settings from?** `tesseraql.framework.datasource`, the external origin and the issuer/JWKS
+triple all need a host-scoped source, and none exists —
+[cli-surface.md](cli-surface.md) records the same gap from the other side for the gateway's port
+("a suite-level configuration file does not exist yet"). The candidates are a suite configuration
+file beside the applications, options on `host` and `dev`, or both with the flags overriding. It is
+a user-facing surface rather than an internal shape, so it is named here and decided before the
+`security` migration hoist, which cannot be built without it.
 
 ### 17. The URL scheme is one rule applied at two scopes
 

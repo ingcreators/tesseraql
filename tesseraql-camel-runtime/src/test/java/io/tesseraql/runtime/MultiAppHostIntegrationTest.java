@@ -48,8 +48,10 @@ class MultiAppHostIntegrationTest {
     static void start() throws Exception {
         seedDatabase();
         installRoot = Files.createTempDirectory("tesseraql-multiapp-it");
-        installApp("shop-a", "a");
-        installApp("shop-b", "b");
+        installApp("shop-a", "a", null, null);
+        // shop-b declares a prefix of its own and is catalogued at the origin root, which is the
+        // pair the host has to resolve rather than average.
+        installApp("shop-b", "b", "/legacy", "/");
         host = MultiAppHost.start(installRoot);
     }
 
@@ -67,19 +69,46 @@ class MultiAppHostIntegrationTest {
     void hostsBothAppsEachServingOwnData() throws Exception {
         assertThat(host.appIds()).containsExactlyInAnyOrder("shop-a", "shop-b");
 
-        assertThat(itemName("shop-a")).isEqualTo("from-a");
-        assertThat(itemName("shop-b")).isEqualTo("from-b");
+        assertThat(itemName("shop-a", "/apps/shop-a")).isEqualTo("from-a");
+        assertThat(itemName("shop-b", "")).isEqualTo("from-b");
     }
 
-    private static String itemName(String appId) throws Exception {
-        HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + host.port(appId) + "/api/items")).build(),
-                HttpResponse.BodyHandlers.ofString());
+    /**
+     * The catalogue declares the address and the host starts the runtime serving it, so the app
+     * answers on its own port at the same path the gateway forwards (docs/base-path.md decision 5).
+     * Hosting used to leave the prefix to the caller, and this entry point passed none at all.
+     */
+    @Test
+    void anAppIsStartedServingTheAddressItsCatalogueEntryDeclares() throws Exception {
+        assertThat(get("shop-a", "/api/items").statusCode()).isEqualTo(404);
+        assertThat(get("shop-a", "/apps/shop-a/api/items").statusCode()).isEqualTo(200);
+    }
+
+    /**
+     * The origin root is an address, not the absence of one. A catalogue entry declaring {@code /}
+     * normalises to the empty string, and reading that as "no host said anything" would leave
+     * shop-b serving the {@code /legacy} its own configuration names while the gateway forwards it
+     * the root's paths — a 404 on every request.
+     */
+    @Test
+    void theCatalogueOutranksTheApplicationsOwnBasePathEvenAtTheOriginRoot() throws Exception {
+        assertThat(get("shop-b", "/legacy/api/items").statusCode()).isEqualTo(404);
+        assertThat(get("shop-b", "/api/items").statusCode()).isEqualTo(200);
+    }
+
+    private static String itemName(String appId, String prefix) throws Exception {
+        HttpResponse<String> response = get(appId, prefix + "/api/items");
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).get("data");
         assertThat(data).hasSize(1);
         return data.get(0).get("name").asText();
+    }
+
+    private static HttpResponse<String> get(String appId, String path) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + host.port(appId) + path)).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private static void seedDatabase() throws Exception {
@@ -96,8 +125,14 @@ class MultiAppHostIntegrationTest {
         }
     }
 
-    /** Installs a copy of the example app under {@code appId}, bound to the given DB schema. */
-    private static void installApp(String appId, String schema) throws IOException {
+    /**
+     * Installs a copy of the example app under {@code appId}, bound to the given DB schema.
+     *
+     * @param ownBasePath      the prefix the application's own configuration names, or null
+     * @param catalogueAddress the address its catalogue entry declares, or null for the default
+     */
+    private static void installApp(String appId, String schema, String ownBasePath,
+            String catalogueAddress) throws IOException {
         Path appHome = installRoot.resolve(appId).resolve("1.0.0");
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         try (Stream<Path> files = Files.walk(source)) {
@@ -112,7 +147,12 @@ class MultiAppHostIntegrationTest {
                     username: %s
                     password: %s
                 """.formatted(POSTGRES.getJdbcUrl(), schema,
-                POSTGRES.getUsername(), POSTGRES.getPassword()));
+                POSTGRES.getUsername(), POSTGRES.getPassword())
+                + (ownBasePath == null ? "" : """
+                        tesseraql:
+                          http:
+                            basePath: %s
+                        """.formatted(ownBasePath)));
 
         Path itemsDir = appHome.resolve("web/api/items");
         Files.createDirectories(itemsDir);
@@ -137,7 +177,7 @@ class MultiAppHostIntegrationTest {
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
         new AppCatalog(installRoot).register(
-                new InstalledApp(appId, "1.0.0", appId + "/1.0.0", List.of()));
+                new InstalledApp(appId, "1.0.0", appId + "/1.0.0", List.of(), catalogueAddress));
     }
 
     private static void copy(Path source, Path target, Path path) {

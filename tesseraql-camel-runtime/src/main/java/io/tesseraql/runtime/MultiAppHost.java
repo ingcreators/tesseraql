@@ -47,26 +47,25 @@ public final class MultiAppHost implements AutoCloseable {
     }
 
     /**
-     * Starts every catalogued app under {@code installRoot}, each on its own ephemeral port. Any app
-     * with a staged canary candidate is also hosted in a separate runtime for traffic splitting.
+     * Starts every app the directory holds, each on its own ephemeral port and under the address
+     * its catalogue entry declares. Any app with a staged canary candidate is also hosted in a
+     * separate runtime for traffic splitting.
      */
     public static MultiAppHost start(Path installRoot) {
-        return start(installRoot, appId -> null, "/");
+        return start(installRoot, HostContext.suite());
     }
 
     /**
-     * Hosts every catalogued app, each started under the base path {@code basePathFor} returns
-     * for it (docs/base-path.md). Suite-mode hosting answers {@code /apps/<id>}, so the app
-     * serves the prefix the gateway forwards; isolated hosting answers null, since each app owns
-     * its own origin.
+     * Hosts every app the directory holds, each started with {@code suite}'s settings and its own
+     * declared address (docs/suite-architecture.md decision 16).
      *
-     * <p>{@code cookiePath} is the other half, and the half only a host can decide (decision 4):
-     * a suite shares one sign-in across its applications, which requires a cookie every one of
-     * them receives. Scoping it per prefix would make each application a separate sign-in and
-     * delete the mode's reason to exist.
+     * <p>The address is read from the catalogue entry rather than supplied by the caller. The host
+     * used to take a function from app id to prefix, which left two sources able to disagree about
+     * where an application answers — and the one the gateway routes by is the catalogue. There is
+     * now one source, so an app is started serving exactly the prefix it is fronted under
+     * (docs/base-path.md decision 5).
      */
-    public static MultiAppHost start(Path installRoot,
-            java.util.function.Function<String, String> basePathFor, String cookiePath) {
+    public static MultiAppHost start(Path installRoot, HostContext suite) {
         // Catalogued or not — a workspace of source trees hosts exactly like an install root
         // (docs/cli-surface.md Decision 2).
         List<InstalledApp> applications = io.tesseraql.operations.app.AppDirectory.applications(
@@ -79,7 +78,7 @@ public final class MultiAppHost implements AutoCloseable {
             for (InstalledApp app : applications) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
                 started.put(app.id(), TesseraqlRuntime.start(appHome, freePort(),
-                        basePathFor.apply(app.id()), cookiePath));
+                        suite.forApplication(app.basePath())));
                 appIds.add(app.id());
                 LOG.info("Hosting app {} v{} from {}", app.id(), app.version(), appHome);
 
@@ -89,7 +88,7 @@ public final class MultiAppHost implements AutoCloseable {
                     // serves the same base path.
                     started.put(app.id() + CANARY_SLOT,
                             TesseraqlRuntime.start(candidateHome, freePort(),
-                                    basePathFor.apply(app.id()), cookiePath));
+                                    suite.forApplication(app.basePath())));
                     canaryWeights.put(app.id(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
                             app.id(), canary.candidate().version(), canary.weightPercent());
