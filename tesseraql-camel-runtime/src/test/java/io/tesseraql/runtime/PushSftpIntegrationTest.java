@@ -138,6 +138,8 @@ class PushSftpIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: push-sftp
                   connectors:
                     push:
                       allowedHosts:

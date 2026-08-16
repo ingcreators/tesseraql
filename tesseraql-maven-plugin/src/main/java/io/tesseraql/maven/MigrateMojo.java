@@ -2,6 +2,8 @@ package io.tesseraql.maven;
 
 import io.tesseraql.apptasks.AppMigrator;
 import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.migration.SchemaHistoryName;
 import java.io.File;
 import java.util.Locale;
 import org.apache.maven.plugin.AbstractMojo;
@@ -23,10 +25,6 @@ public class MigrateMojo extends AbstractMojo {
 
     @Parameter(property = "tesseraql.appHome", required = true)
     private File appHome;
-
-    /** The app name keying the history table; matches the runtime's mounted app name. */
-    @Parameter(property = "tesseraql.appName", defaultValue = "${project.artifactId}")
-    private String appName;
 
     /**
      * Which migration set to act on: {@code main} uses {@code db/migration}, any other name uses
@@ -53,6 +51,10 @@ public class MigrateMojo extends AbstractMojo {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(jdbcUrl, username,
                 password);
         java.nio.file.Path home = appHome.toPath();
+        // Read from the application rather than defaulted from ${project.artifactId}, which agrees
+        // with the runtime's history key only by coincidence — and a goal that writes a history the
+        // runtime ignores makes the runtime re-run every migration on the next start.
+        String appName = SchemaHistoryName.of(new ManifestLoader().load(home).config());
         switch (operation.toLowerCase(Locale.ROOT)) {
             case "apply" -> AppMigrator.migrate(home, appName, datasource, dataSource)
                     .ifPresentOrElse(

@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
@@ -118,6 +117,10 @@ public final class AppMigrator {
         if (!Files.isDirectory(migrations)) {
             return Optional.empty();
         }
+        // Before any Flyway call, so an overlong name is a refusal here rather than a table the
+        // database truncated into somebody else's history.
+        io.tesseraql.core.migration.SchemaHistory
+                .requireFits(historyTable(appName, datasource), dataSource);
         List<String> locations = new ArrayList<>();
         locations.add("filesystem:" + migrations);
         DatabaseVendors.vendor(dataSource)
@@ -135,19 +138,17 @@ public final class AppMigrator {
     }
 
     private static String historyTable(String appName, String datasource) {
-        return "main".equals(datasource)
-                ? historyTable(appName)
-                : historyTable(appName) + "__" + sanitize(datasource);
+        return io.tesseraql.core.migration.SchemaHistory.table(appName, datasource);
     }
 
-    /** Must stay aligned with the runtime's {@code AppMigrations.historyTable}. */
+    /**
+     * The history table for an application's {@code main} migrations.
+     *
+     * <p>Delegates to {@link io.tesseraql.core.migration.SchemaHistory}, which the runtime uses too.
+     * This used to be a second copy carrying the comment "must stay aligned with the runtime's
+     * AppMigrations.historyTable" — an instruction to a future reader is not alignment.
+     */
     public static String historyTable(String appName) {
-        return "tql_schema_history_" + sanitize(appName);
-    }
-
-    private static String sanitize(String name) {
-        // Unicode letters survive (docs/unicode-identifiers.md) — an ASCII-only class mapped
-        // every Japanese app name to underscores, so two apps shared one history table.
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}_]", "_");
+        return io.tesseraql.core.migration.SchemaHistory.table(appName);
     }
 }

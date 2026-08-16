@@ -164,6 +164,8 @@ class MySqlPortabilityIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: my-sql-portability
                   migrations:
                     enabled: false
                 """.formatted(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword()));

@@ -150,6 +150,8 @@ class WebhookRecipeIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: webhook-recipe
                   connectors:
                     webhooks:
                       partner:

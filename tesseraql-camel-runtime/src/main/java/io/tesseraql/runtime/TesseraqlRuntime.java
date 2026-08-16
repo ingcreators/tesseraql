@@ -700,7 +700,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN,
                                 io.tesseraql.core.workflow.WorkflowStore.class);
                 workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, outboxStore,
-                        manifest.config().getString("tesseraql.app.name").orElse("app"),
+                        io.tesseraql.yaml.app.ApplicationName.of(manifest.config()),
                         dataSource, delegationStore);
                 context.getRegistry().bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                         workflowSweeper);
@@ -1011,7 +1011,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         }
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
-        String appName = manifest.config().getString("tesseraql.app.name").orElse("app");
+        // Required, not defaulted: the name scopes outbox claims, job ownership and
+        // ops.app.<name>, so a shared fallback is a shared identity (io.tesseraql.yaml.app
+        // .ApplicationName).
+        String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
         // The owning app per job id (main app jobs default), so execution records are tagged with
         // the app that declared the job, not just the hosting runtime (design ch. 26, 32).
         Map<String, String> jobOwners = new LinkedHashMap<>();
@@ -1166,8 +1169,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .getString("tesseraql.diagnostics.readinessTtl").orElse("1s")));
             // The app's db/migration runs before anything queries its schema: fresh installs,
             // upgrades and canary activations all converge here (design ch. 31, 32).
-            AppMigrations.migrate(appName, appHome, manifest.config(), dataSource,
-                    tenantDataSources, dataSources::get);
+            // The history key is the application's own declaration, not this runtime's idea of its
+            // name, so `tesseraql migrate` and the Maven goal converge on the same table.
+            // Mounted apps below keep passing their mount name: they share this config object, and
+            // resolving from it would key all five bundled surfaces to one history table.
+            AppMigrations.migrate(
+                    io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
+                    appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
             context.addRoutes(new RouteCompiler().appName(appName).compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)

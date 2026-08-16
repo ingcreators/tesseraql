@@ -152,6 +152,8 @@ class MessagingRecipeIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: messaging-recipe
                   outbox:
                     dispatch:
                       fixedDelay: 500ms

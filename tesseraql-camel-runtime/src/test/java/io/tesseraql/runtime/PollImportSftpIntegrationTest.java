@@ -149,6 +149,8 @@ class PollImportSftpIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: poll-import-sftp
                   connectors:
                     poll:
                       allowedHosts:

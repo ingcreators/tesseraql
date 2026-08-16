@@ -213,6 +213,8 @@ class LiveRouteReloadIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: live-route-reload
                   studio:
                     readOnly: false
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),

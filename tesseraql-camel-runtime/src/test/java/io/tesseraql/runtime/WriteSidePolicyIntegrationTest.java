@@ -154,6 +154,8 @@ class WriteSidePolicyIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  app:
+                    name: write-side-policy
                   datasources:
                     main:
                       jdbcUrl: %s

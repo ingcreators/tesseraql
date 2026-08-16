@@ -163,6 +163,8 @@ class SamlAcsIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: saml-acs
                   # This fixture fails credentials on purpose; the throttle under test
                   # elsewhere is disabled visibly (docs/credential-throttle.md).
                   security:

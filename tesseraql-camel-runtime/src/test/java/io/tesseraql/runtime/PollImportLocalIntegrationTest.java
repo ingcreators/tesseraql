@@ -169,6 +169,8 @@ class PollImportLocalIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: poll-import-local
                   connectors:
                     poll:
                       # A local source polls under a declared root, the same deny-by-default rule

@@ -385,6 +385,8 @@ class WorkflowTransitionIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  app:
+                    name: workflow-transition
                   workflow:
                     mode: managed
                     sweep:

@@ -6,6 +6,52 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **Migrating from the CLI or the build wrote a history the runtime then ignored.** The Flyway
+  history table is `tql_schema_history_<name>`, and three entry points derived *name* three
+  different ways: the runtime from `tesseraql.app.name`, `tesseraql migrate` from the **application
+  directory name**, and the `tesseraql:migrate` Maven goal from **`${project.artifactId}`**. Across
+  the bundled examples the directory name and the application name never agree — `helpdesk-app`
+  against `helpdesk` — so `tesseraql migrate` recorded into one table and the runtime, finding its
+  own empty, re-ran every migration on the next start.
+
+  All three now read `tesseraql.app.name` from the application, so they converge by construction
+  rather than by the operator remembering a flag. `tesseraql.migrations.historyName` overrides it
+  where the derived name does not fit.
+
+- **`tesseraql.app.name` is required; it no longer defaults to the literal `app`.** The name reads
+  as a label and is an **identity**: it scopes outbox claims and cluster job claim keys, it is the
+  owner recorded against every job execution and so what `ops.app.<name>` grants are checked
+  against, it names the MCP server, and under a suite it is the application's address
+  (`/apps/<name>/`). Defaulting it made the value *required to deploy and optional to run* —
+  `AppInstaller` refuses a package without one — and nothing collided only because that requirement
+  kept unnamed applications to one at a time. An application declaring none is now refused
+  (`TQL-YAML-1404`) instead of sharing an identity with every other unnamed one.
+
+  The linter reports it too, so a missing name is a lint error before it is a failed boot; both
+  carry the same sentence. `tesseraql.otel.serviceName` is unaffected — a display label with its own
+  override, where falling back to a shared value costs nothing.
+
+  The five bundled framework surfaces now declare their names as well. They are identified by their
+  mount rather than by their configuration, so nothing about them changes at runtime; declaring it
+  keeps them honest about themselves and lets the rule require the key of every application without
+  an exemption.
+
+- **An overlong history table name was silently truncated by the database.** Nothing checked the
+  length anywhere. `tql_schema_history_` is 19 characters against PostgreSQL's 63-**byte** limit, a
+  Japanese name costs three bytes a character, and a named datasource appends `__<name>` on top —
+  and a character count does not catch it: a 49-character name is 109 bytes, which PostgreSQL stored
+  as 61 with no error. Two applications truncating to the same name shared one history, each reading
+  the other's applied versions. The name is now refused with `TQL-APP-4208`, which names
+  `tesseraql.migrations.historyName` as the fix.
+
+### Removed
+
+- **`tesseraql migrate --app-name` and the `tesseraql:migrate` goal's `tesseraql.appName`.** Both
+  existed to hand-correct the disagreement above. With the value read from the application they can
+  only reintroduce it, by writing history under a key the runtime will never read.
+
 ### Added
 
 - **A path to a bearer token that a person can follow** (docs/authentication.md). The exchange

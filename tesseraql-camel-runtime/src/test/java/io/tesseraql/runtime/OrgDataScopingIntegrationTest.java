@@ -195,6 +195,8 @@ class OrgDataScopingIntegrationTest {
                   port: 0
 
                 tesseraql:
+                  app:
+                    name: org-data-scoping
                   datasources:
                     main:
                       jdbcUrl: %s

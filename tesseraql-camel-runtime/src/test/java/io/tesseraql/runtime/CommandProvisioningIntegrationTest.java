@@ -220,6 +220,8 @@ class CommandProvisioningIntegrationTest {
                     password: %s
 
                 tesseraql:
+                  app:
+                    name: command-provisioning
                   scim:
                     outbound:
                       enabled: true

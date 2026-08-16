@@ -20,6 +20,8 @@ class AppLinterMailTest {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
                 tesseraql:
+                  app:
+                    name: mail-lint
                   notifications:
                     channels:
                       agent-mail:
@@ -123,6 +125,8 @@ class AppLinterMailTest {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
                 tesseraql:
+                  app:
+                    name: mail-lint
                   notifications:
                     channels:
                       agent-mail:
@@ -162,6 +166,8 @@ class AppLinterMailTest {
         Files.createDirectories(dir.resolve("config"));
         Files.writeString(dir.resolve("config/tesseraql.yml"), """
                 tesseraql:
+                  app:
+                    name: mail-lint
                   notifications:
                     channels:
                       agent-mail:

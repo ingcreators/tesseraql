@@ -232,7 +232,6 @@ Apply/info/validate/repair the app's db/migration scripts.
 | `--username <username>` | — | Database user for --jdbc-url. |
 | `--password <password>` | — | Database password for --jdbc-url. |
 | `--datasource <datasourceName>` | — | Migration set to act on (default: main). |
-| `--app-name <appName>` | — | App name keying the history table (default: the app directory name). |
 
 ## `job`
 

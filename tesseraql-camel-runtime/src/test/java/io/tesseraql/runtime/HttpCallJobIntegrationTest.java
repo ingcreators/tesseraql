@@ -144,6 +144,8 @@ class HttpCallJobIntegrationTest {
         // reachable host for this run.
         Files.writeString(target.resolve("config/overlay.yml"), """
                 tesseraql:
+                  app:
+                    name: http-call-job
                   http:
                     outbound:
                       allowedHosts:

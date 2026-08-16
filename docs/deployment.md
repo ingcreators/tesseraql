@@ -58,6 +58,18 @@ buffer for all of them ([app-isolation-model.md](app-isolation-model.md) decisio
    migrations; both converge on the same per-app Flyway history. In CI, the
    `tesseraql:migrate` Maven goal does the same
    (`mvn tesseraql:migrate -Dtesseraql.appHome=. -Dtesseraql.jdbcUrl=...`).
+
+   The history table is `tql_schema_history_<name>`, and *name* is the app's own
+   `tesseraql.app.name` — read from the app by all three, so they cannot disagree about
+   which table holds the history. Override it with `tesseraql.migrations.historyName`. The
+   reason to is an identifier limit: a name that does not fit the database's maximum is
+   refused (`TQL-APP-4208`) rather than truncated, because truncation is silent and two
+   apps whose names share a long prefix would then record into one history.
+
+   `tesseraql.app.name` is **required**. It is an identity rather than a label — it scopes
+   outbox claims and job ownership, it is what `ops.app.<name>` grants are checked against,
+   and in a suite it is the app's address — so an app declaring none is refused at start
+   (`TQL-YAML-1404`) rather than run under a name every unnamed app would share.
 2. `tesseraql identity-schema --jdbc-url ... --admin-login admin
    --admin-password-file ./admin.pw --admin-roles ADMIN --admin-permissions ops.app.*`
    applies the managed IAM schema and seeds the first administrator; the
