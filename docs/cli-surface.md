@@ -63,8 +63,44 @@ same reason: they add vocabulary to express something the filesystem already exp
 
 **What this costs, stated rather than discovered.** Commands that operate on exactly one application
 — `package`, `scaffold`, `release-diff`, `verify` — must **refuse** a directory that resolves to
-several, naming one of them and asking the caller to. Silently picking the first is the failure this
-document exists to avoid.
+several. Silently picking the first is the failure this document exists to avoid.
+
+The refusal is where this rule is either fine or annoying, so it is specified rather than left to
+whoever writes it. It lists what it found and prints a command that works:
+
+```
+$ tesseraql package --app ./myworkspace
+./myworkspace holds 3 applications; package works on one.
+
+  tesseraql package --app ./myworkspace/orders
+  tesseraql package --app ./myworkspace/billing
+  tesseraql package --app ./myworkspace/reporting
+```
+
+A refusal that names the alternatives costs a second. One that says "expected a single application"
+costs a directory listing and a guess.
+
+**How much friction this actually adds, measured 2026-08-16: almost none, and not where it looks.**
+None of those four commands knows what an install root is — no reference to `AppCatalog` or an
+install root in any of them. They take one application home today and always have, so multi-application
+resolution never engages for them. Against a workspace of source trees the change is
+`--app ./orders` becoming `--app ./myworkspace/orders`: one path segment, naming a directory that
+exists.
+
+### 2a. Addressing an application inside a suite by id is deferred, with a trigger
+
+The case where naming a directory is genuinely worse is an **install root**, where applications live
+at `<installRoot>/<id>/<version>`. Saying `--app ./work/orders/1.2.0` means knowing the version;
+saying `orders` would not.
+
+It is not built, because **no command can do it today** — the four single-application commands do not
+read catalogues at all, so this would be vocabulary for a capability that does not exist, which is
+the thing Decision 2 declined to add.
+
+**The trigger, so this is a deferral and not an omission:** the first single-application command that
+needs to address an installed, catalogued application. At that point add id-based narrowing —
+`--app <install-root> --only <id>` is the shape, and `AppCatalog.find(id)` already resolves it — and
+not before.
 
 ### 3. `dev` replaces `serve`; `host` keeps production
 
@@ -129,7 +165,7 @@ failure, and it is cheap: the options are annotations on fields the test can rea
 | # | Slice |
 | --- | --- |
 | 1 | Directory resolution (Decision 1) as a shared resolver, with the `work/apps/` trap under test |
-| 2 | `--install-root` → `--app` on `host`; single-application commands refuse a multi-application directory |
+| 2 | `--install-root` → `--app` on `host`; single-application commands refuse a multi-application directory, listing the runnable alternatives |
 | 3 | `serve` → `dev`, over a suite, through the gateway |
 | 4 | The option sets (Decision 4) applied across every command, and the guard of Decision 6 |
 | 5 | `--app-name` → `--schema-app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
@@ -146,6 +182,7 @@ everything.
   arguable and none of them is confusing enough to pay for.
 - **A configuration file for CLI defaults.** A real want, and a separate decision: it interacts with
   profiles, with secrets, and with what a repository should commit.
+- **Id-based narrowing inside a suite.** Deferred with a trigger — Decision 2a.
 
 ## Open questions
 
