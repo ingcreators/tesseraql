@@ -1,11 +1,21 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.operations.app.InstalledApp;
+import io.vertx.core.Future;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpClientOptions;
+import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.http.HttpVersion;
+import io.vertx.httpproxy.Body;
 import io.vertx.httpproxy.HttpProxy;
+import io.vertx.httpproxy.ProxyContext;
+import io.vertx.httpproxy.ProxyInterceptor;
+import io.vertx.httpproxy.ProxyRequest;
+import io.vertx.httpproxy.ProxyResponse;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,17 +48,41 @@ final class SuiteRelay {
     /**
      * The front server's options.
      *
-     * <p>Cleartext HTTP/2 is off. The previous front was {@code com.sun.net.httpserver}, which
-     * speaks HTTP/1.1 only, so no client ever reached a hosted app over h2c through the gateway
-     * and turning it on here would be new behaviour rather than restored behaviour. It also has to
-     * be turned on at both ends together: with h2c accepted at the front and an HTTP/1.1 hop to
+     * <p>Cleartext HTTP/2 is a deployment's choice and off by default, because the front this
+     * replaced was {@code com.sun.net.httpserver}, which speaks HTTP/1.1 only — no client ever
+     * reached a hosted app over h2c through the gateway, so serving it is new behaviour rather
+     * than restored behaviour and an operator should ask for it.
+     *
+     * <p>It cannot be turned on at one end: with h2c accepted at the front and an HTTP/1.1 hop to
      * the app, a request body arriving over HTTP/2 is piped into an outbound request that has
      * neither a declared length nor chunked framing, and Vert.x refuses the write on the event
-     * loop. Serving both protocols end to end is a change worth making deliberately, with the
-     * differential test extended to run every case twice; it is not this slice.
+     * loop. So one setting moves both ends together — see
+     * {@link #outboundOptions(boolean)}.
      */
-    static HttpServerOptions frontOptions(int port) {
-        return new HttpServerOptions().setPort(port).setHttp2ClearTextEnabled(false);
+    static HttpServerOptions frontOptions(int port, boolean http2) {
+        return new HttpServerOptions().setPort(port).setHttp2ClearTextEnabled(http2);
+    }
+
+    /**
+     * The outbound client's options, the other half of the same setting.
+     *
+     * <p>The upgrade is negotiated on a <b>preflight request</b>, and that detail is load-bearing.
+     * A plain h2c upgrade carries the negotiation on the first real request, which is sent as
+     * HTTP/1.1 — so a request that arrives at the front over HTTP/2 and is piped into it has
+     * neither a declared length nor chunked framing, and Vert.x refuses the write on the event
+     * loop. Measured, not reasoned: it is the same {@code IllegalStateException} that made
+     * serving h2c at one end only unshippable. A preflight negotiates on its own exchange, so
+     * every request that carries a body travels on HTTP/2 from the start.
+     *
+     * <p>An application that does not offer h2c answers the preflight over HTTP/1.1 and the hop
+     * continues over HTTP/1.1, so enabling this cannot make a hosted application unreachable.
+     */
+    static HttpClientOptions outboundOptions(boolean http2) {
+        HttpClientOptions options = new HttpClientOptions();
+        return http2
+                ? options.setProtocolVersion(HttpVersion.HTTP_2)
+                        .setHttp2ClearTextUpgrade(true)
+                : options;
     }
 
     /** The default tenant header checked for app entitlement at the front door (ch. 32.8). */
@@ -137,8 +171,38 @@ final class SuiteRelay {
      * ingress protects.
      */
     private HttpProxy proxyFor(int appPort) {
-        return proxies.computeIfAbsent(appPort,
-                target -> HttpProxy.reverseProxy(client).origin(target, "localhost"));
+        return proxies.computeIfAbsent(appPort, target -> HttpProxy.reverseProxy(client)
+                .origin(target, "localhost")
+                .addInterceptor(new BodylessRequestsHaveZeroLength()));
+    }
+
+    /**
+     * Gives a bodyless request a definite length of zero before it is relayed.
+     *
+     * <p>Over HTTP/2 a {@code GET} still ends its stream with a data event, so the proxy pipes an
+     * empty body into the outbound request — which has neither a declared length nor chunked
+     * framing, and Vert.x refuses the write on the event loop. The request succeeds anyway,
+     * because nothing was lost, so the only symptom is a stack trace per request: every page load
+     * and every event stream through an h2c front, in the log, forever.
+     *
+     * <p>Measured rather than reasoned. The first theory was that HTTP/2 omits
+     * {@code content-length} and large uploads were the casualty; the body lengths say otherwise —
+     * an 8 MB {@code POST} arrives as {@code length=8388608} and relays cleanly, and it is
+     * {@code GET length=-1} that throws. An unknown length on a method that cannot carry a body is
+     * zero, and saying so is what the relay needs.
+     */
+    private record BodylessRequestsHaveZeroLength() implements ProxyInterceptor {
+
+        @Override
+        public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+            ProxyRequest proxied = context.request();
+            boolean carriesNoBody = proxied.getMethod() == HttpMethod.GET
+                    || proxied.getMethod() == HttpMethod.HEAD;
+            if (carriesNoBody && proxied.getBody() != null && proxied.getBody().length() < 0) {
+                proxied.setBody(Body.body(Buffer.buffer()));
+            }
+            return context.sendRequest();
+        }
     }
 
     /** The request path without the query, undecoded — routing reads raw segments. */

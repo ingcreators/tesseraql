@@ -91,6 +91,29 @@ public final class MultiAppGateway implements AutoCloseable {
         ISOLATED
     }
 
+    /**
+     * The deployment's choices about the front door.
+     *
+     * <p>A record rather than more positional arguments, on the reasoning
+     * docs/suite-architecture.md decision 16 gives for the host's own settings: the list grows,
+     * and a boolean in position four says nothing at the call site about what it turns on. This
+     * is the gateway's own block and is not decision 16's host context object, which carries what
+     * only the host can know about each <em>runtime</em> — that arrives with slice 3.
+     *
+     * @param mode  how apps are addressed
+     * @param http2 serve and forward cleartext HTTP/2. Off by default: the previous front spoke
+     *              HTTP/1.1 only, so this is new behaviour rather than restored behaviour. It
+     *              moves both hops together, because enabling it at one end alone breaks request
+     *              framing (see {@link SuiteRelay#frontOptions})
+     */
+    public record Settings(Mode mode, boolean http2) {
+
+        /** The addressing choice alone, with every other front-door default. */
+        public Settings(Mode mode) {
+            this(mode, false);
+        }
+    }
+
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppGateway.class);
     private static final String PREFIX = SuiteRelay.PREFIX;
     private static final long START_TIMEOUT_SECONDS = 60;
@@ -106,7 +129,7 @@ public final class MultiAppGateway implements AutoCloseable {
     private final int port;
     private final SuiteRelay relay;
 
-    private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps, Mode mode,
+    private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps, Settings settings,
             int frontPort) {
         this.host = host;
         Map<String, String> hosts = new java.util.HashMap<>();
@@ -118,9 +141,10 @@ public final class MultiAppGateway implements AutoCloseable {
             }
         }
         this.vertx = Vertx.vertx();
-        this.client = vertx.createHttpClient();
-        this.relay = new SuiteRelay(client, mode, hosts, byId, this::targetPort);
-        this.server = vertx.createHttpServer(SuiteRelay.frontOptions(frontPort));
+        this.client = vertx.createHttpClient(SuiteRelay.outboundOptions(settings.http2()));
+        this.relay = new SuiteRelay(client, settings.mode(), hosts, byId, this::targetPort);
+        this.server = vertx.createHttpServer(
+                SuiteRelay.frontOptions(frontPort, settings.http2()));
         server.requestHandler(relay::handle);
         try {
             this.port = server.listen()
@@ -148,6 +172,13 @@ public final class MultiAppGateway implements AutoCloseable {
      * that chose per-host addressing is the one that cares about which app answers where.
      */
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort, Mode mode) {
+        return start(installRoot, frontPort, new Settings(mode));
+    }
+
+    /** As {@link #start(java.nio.file.Path, int, Mode)}, with the front door's settings. */
+    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
+            Settings settings) {
+        Mode mode = settings.mode();
         List<InstalledApp> catalogued = new AppCatalog(installRoot).list();
         if (mode == Mode.ISOLATED) {
             List<String> addressless = catalogued.stream()
@@ -172,7 +203,7 @@ public final class MultiAppGateway implements AutoCloseable {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))
                     .toList();
-            return new MultiAppGateway(host, hosted, mode, frontPort);
+            return new MultiAppGateway(host, hosted, settings, frontPort);
         } catch (RuntimeException ex) {
             host.close();
             throw ex;

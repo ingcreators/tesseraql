@@ -77,6 +77,9 @@ class MultiAppGatewayDifferentialTest {
     static String direct;
     /** The gateway's port — the leg under test. */
     static String front;
+    /** A second gateway serving and forwarding cleartext HTTP/2. */
+    static MultiAppGateway h2Gateway;
+    static String h2Front;
 
     @BeforeAll
     static void start() throws Exception {
@@ -86,10 +89,16 @@ class MultiAppGatewayDifferentialTest {
         gateway = MultiAppGateway.start(installRoot, 0, MultiAppGateway.Mode.SUITE);
         direct = "http://localhost:" + gateway.appPort(APP);
         front = "http://localhost:" + gateway.port();
+        h2Gateway = MultiAppGateway.start(installRoot, 0,
+                new MultiAppGateway.Settings(MultiAppGateway.Mode.SUITE, true));
+        h2Front = "http://localhost:" + h2Gateway.port();
     }
 
     @AfterAll
     static void stop() throws IOException {
+        if (h2Gateway != null) {
+            h2Gateway.close();
+        }
         if (gateway != null) {
             gateway.close();
         }
@@ -223,6 +232,26 @@ class MultiAppGatewayDifferentialTest {
         assertSame("/apps/" + APP + "/api/cookie");
     }
 
+    /**
+     * With cleartext HTTP/2 served and forwarded, a real application answers the same.
+     *
+     * <p>The setting moves both hops together, so this exercises HTTP/2 end to end against the
+     * application's own runtime rather than a stub. The comparison is against the direct leg over
+     * HTTP/1.1, which is the point: the protocol is the gateway's business and the answer is the
+     * application's.
+     */
+    @Test
+    void anApplicationAnswersIdenticallyOverHttp2() throws Exception {
+        for (String path : List.of("/apps/" + APP + "/api/items", "/apps/" + APP + "/users",
+                "/apps/" + APP + "/api/export")) {
+            Captured straight = capture(direct, get(path));
+            Captured overHttp2 = captureOver(h2Front, get(path), HttpClient.Version.HTTP_2);
+
+            assertThat(overHttp2.status).as("status of " + path).isEqualTo(straight.status);
+            assertThat(overHttp2.digest).as("body of " + path).isEqualTo(straight.digest);
+        }
+    }
+
     // ---------------------------------------------------------------- machinery
 
     private record Captured(int status, Map<String, List<String>> headers, long length,
@@ -276,19 +305,22 @@ class MultiAppGatewayDifferentialTest {
      * heap rather than the gateway's transparency.
      */
     private static Captured capture(String base, Call call) throws Exception {
+        return captureOver(base, call, HttpClient.Version.HTTP_1_1);
+    }
+
+    private static Captured captureOver(String base, Call call, HttpClient.Version version)
+            throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + call.path))
-                // Both legs pinned to HTTP/1.1. The app's Vert.x server offers an h2c upgrade and
-                // the gateway does not, so an unpinned comparison measures which protocol each leg
-                // negotiated — the pseudo-header on one side, the upgrade offer on the other —
-                // rather than whether the answer survived the hop.
-                .version(HttpClient.Version.HTTP_1_1)
+                // Pinned, because an unpinned comparison measures which protocol each leg
+                // negotiated — the HTTP/2 pseudo-header on one side, the upgrade offer on the
+                // other — rather than whether the answer survived the hop.
+                .version(version)
                 .method(call.method, call.body == null
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofString(call.body));
         call.headers.forEach(builder::header);
         HttpRequest built = builder.build();
-        try (HttpClient client = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1).build()) {
+        try (HttpClient client = HttpClient.newBuilder().version(version).build()) {
             HttpResponse<InputStream> response = client.send(built,
                     HttpResponse.BodyHandlers.ofInputStream());
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

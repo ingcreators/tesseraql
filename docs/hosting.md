@@ -78,6 +78,20 @@ inbound request, and the runtime must not be reachable except through that edge*
 reachable from anywhere but the edge is a deployment error, and no amount of header filtering one
 hop later repairs it.
 
+### HTTP/2
+
+The gateway speaks HTTP/1.1 by default. `--http2` serves and forwards cleartext HTTP/2 (h2c):
+
+```sh
+tesseraql host --install-root /srv/tesseraql/apps --port 8080 --mode suite --http2
+```
+
+**One switch moves both hops** — the client's connection to the gateway and the gateway's
+connection to each application — because enabling it at one end alone breaks request framing. An
+application that does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as
+before, so turning this on cannot make an application unreachable. HTTP/1.1 clients keep working
+against an h2c gateway: the upgrade is offered, not required.
+
 Responses pass through unchanged: framing, chunked bodies, event streams, `Location` values and
 cookie attributes all reach the client as the application wrote them. An event stream arrives frame
 by frame rather than in bursts, which is what the ops console, Studio's preview and the MCP
