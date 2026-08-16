@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.app.InstalledApp;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
@@ -68,29 +67,6 @@ import org.slf4j.LoggerFactory;
 public final class MultiAppGateway implements AutoCloseable {
 
     /**
-     * How the gateway addresses the apps behind it — a deployment's choice, not a per-app one
-     * (docs/app-isolation-model.md decision 2).
-     *
-     * <p>The two are exclusive on purpose. Serving both at once means an app reached on its own
-     * hostname is *also* reachable on the shared origin, so a browser session taken through the
-     * prefix carries across every app the gateway fronts — which is exactly the separation
-     * declaring hostnames was meant to obtain. Whichever mode is chosen, the other addressing
-     * answers 404.
-     */
-    public enum Mode {
-        /**
-         * One origin, {@code /apps/<appId>/} per app: related applications of one organization,
-         * sharing a session by design.
-         */
-        SUITE,
-        /**
-         * A hostname per app: applications that must not see each other's sessions. Every app
-         * must declare at least one hostname, or it would have no address at all.
-         */
-        ISOLATED
-    }
-
-    /**
      * The deployment's choices about the front door.
      *
      * <p>A record rather than more positional arguments, on the reasoning
@@ -99,7 +75,6 @@ public final class MultiAppGateway implements AutoCloseable {
      * gateway's own block and is not decision 16's host context object, which carries what only
      * the host can know about each <em>runtime</em> — that arrives with slice 3.
      *
-     * @param mode           how apps are addressed
      * @param http2          serve and forward cleartext HTTP/2. Off by default: the previous front
      *                       spoke HTTP/1.1 only, so this is new behaviour rather than restored
      *                       behaviour. It moves both hops together, because enabling it at one end
@@ -108,34 +83,30 @@ public final class MultiAppGateway implements AutoCloseable {
      *                       caller's. Empty by default, which strips nothing — see
      *                       {@link TrustedProxies} for why the opposite reading would be wrong
      */
-    public record Settings(Mode mode, boolean http2, TrustedProxies trustedProxies) {
+    public record Settings(boolean http2, TrustedProxies trustedProxies) {
 
-        /** The addressing choice alone, with every other front-door default. */
-        public Settings(Mode mode) {
-            this(mode, false, TrustedProxies.NONE);
+        /** Every front-door default. */
+        public Settings() {
+            this(false, TrustedProxies.NONE);
         }
 
-        /** Addressing and the protocol, with no edge named. */
-        public Settings(Mode mode, boolean http2) {
-            this(mode, http2, TrustedProxies.NONE);
+        /** The protocol, with no edge named. */
+        public Settings(boolean http2) {
+            this(http2, TrustedProxies.NONE);
         }
 
         /**
-         * The choices {@code tesseraql host} exposes: addressing, whether to serve HTTP/2, and the
-         * operator's edge as {@code 10.0.0.0/8,192.168.1.5}.
+         * The choices {@code tesseraql host} exposes: whether to serve HTTP/2, and the operator's
+         * edge as {@code 10.0.0.0/8,192.168.1.5}.
          */
-        public Settings(Mode mode, boolean http2, String trustedProxies) {
-            this(mode, http2, TrustedProxies.parse(trustedProxies));
+        public Settings(boolean http2, String trustedProxies) {
+            this(http2, TrustedProxies.parse(trustedProxies));
         }
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppGateway.class);
     private static final String PREFIX = SuiteRelay.PREFIX;
     private static final long START_TIMEOUT_SECONDS = 60;
-
-    /** An isolated-hosting app that declares no hostname would be started and unreachable. */
-    private static final io.tesseraql.core.error.TqlErrorCode NO_HOSTNAME = new io.tesseraql.core.error.TqlErrorCode(
-            io.tesseraql.core.error.TqlDomain.APP, 5003);
 
     private final MultiAppHost host;
     private final Vertx vertx;
@@ -147,19 +118,15 @@ public final class MultiAppGateway implements AutoCloseable {
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
             java.nio.file.Path installRoot, Settings settings, int frontPort) {
         this.host = host;
-        Map<String, String> hosts = new java.util.HashMap<>();
         Map<String, InstalledApp> byId = new java.util.HashMap<>();
         Map<String, Set<String>> strip = new java.util.HashMap<>();
         for (InstalledApp app : hostedApps) {
             byId.put(app.id(), app);
             strip.put(app.id(), ingressStripHeaders(installRoot, app));
-            for (String hostName : app.hosts()) {
-                hosts.put(hostName.toLowerCase(Locale.ROOT), app.id());
-            }
         }
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(SuiteRelay.outboundOptions(settings.http2()));
-        this.relay = new SuiteRelay(client, settings.mode(), hosts, byId, strip,
+        this.relay = new SuiteRelay(client, byId, strip,
                 settings.trustedProxies(), this::targetPort);
         this.server = vertx.createHttpServer(
                 SuiteRelay.frontOptions(frontPort, settings.http2()));
@@ -182,45 +149,26 @@ public final class MultiAppGateway implements AutoCloseable {
     }
 
     /**
-     * Hosts all catalogued apps and fronts them on {@code frontPort} (0 picks an ephemeral port),
-     * addressed as {@code mode} says.
-     *
-     * <p>{@link Mode#ISOLATED} refuses to start when an app declares no hostname: it would be
-     * catalogued, started, and unreachable — a silence worth failing on, since the deployment
-     * that chose per-host addressing is the one that cares about which app answers where.
+     * Hosts every app the directory holds and fronts them on {@code frontPort} (0 picks an
+     * ephemeral port), each addressed as {@code /apps/<id>/}.
      */
-    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort, Mode mode) {
-        return start(installRoot, frontPort, new Settings(mode));
+    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort) {
+        return start(installRoot, frontPort, new Settings());
     }
 
-    /** As {@link #start(java.nio.file.Path, int, Mode)}, with the front door's settings. */
+    /** As {@link #start(java.nio.file.Path, int)}, with the front door's settings. */
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
             Settings settings) {
-        Mode mode = settings.mode();
         // Whatever the directory holds: a catalogue, or application homes with no catalogue at
         // all (docs/cli-surface.md Decision 2). The entries are shaped the same either way, so
         // nothing below needs to know which it was.
         List<InstalledApp> catalogued = io.tesseraql.operations.app.AppDirectory.applications(
                 io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
-        if (mode == Mode.ISOLATED) {
-            List<String> addressless = catalogued.stream()
-                    .filter(app -> app.hosts().isEmpty())
-                    .map(InstalledApp::id)
-                    .toList();
-            if (!addressless.isEmpty()) {
-                throw new TqlException(NO_HOSTNAME, "Isolated hosting addresses each app by"
-                        + " hostname, and these declare none: " + String.join(", ", addressless)
-                        + ". Declare hostnames in the catalog, or host them as a suite.");
-            }
-        }
-        // Suite mode forwards the prefix, so each app is started serving it; isolated mode gives
-        // each app its own origin and no prefix at all (docs/base-path.md decision 5).
-        // The session cookie is the gateway's call, not the applications'
-        // (docs/base-path.md decision 4): a suite is one sign-in across one origin, so the
-        // cookie is issued at the root of it rather than scoped to each app's prefix. Isolated
-        // hosting gives every application its own origin, where "/" is already its own alone.
-        MultiAppHost host = MultiAppHost.start(installRoot,
-                appId -> mode == Mode.SUITE ? PREFIX + appId : null, "/");
+        // Each app is started serving the prefix it is fronted under, so it answers at the
+        // addresses it emits (docs/base-path.md decision 5). The session cookie is the gateway's
+        // call, not the applications' (decision 4): a suite is one sign-in across one origin, so
+        // the cookie is issued at the root of it rather than scoped to each app's prefix.
+        MultiAppHost host = MultiAppHost.start(installRoot, appId -> PREFIX + appId, "/");
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))

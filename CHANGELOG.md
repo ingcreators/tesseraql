@@ -6,6 +6,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Removed
+
+- **Independent hosting — `tesseraql host --mode isolated` — is gone, and with it host-header
+  routing** (docs/suite-architecture.md Decision 12). It gave each application its own hostname and
+  no shared session. A suite is defined by sharing an origin and a sign-in, and a mode that undid
+  both was a second deployment shape to reason about, document and test; removing it is what lets
+  development and production have one topology between them. An application that must not share a
+  session with its neighbours gets its own suite.
+
+  This removes something reachable and documented, not something unused — the design said otherwise
+  until it was measured. Pre-1.0 there is no migration path to write, only the honest note that the
+  mode existed and does not now.
+
+  What goes with it: the `Mode` enum and `--mode`, `tesseraql.app.hosts` and the `hosts` field on a
+  catalogue entry, the `Host`-header lookup on every request, and `TQL-APP-5003` (an isolated
+  application declaring no hostname). Routing is one rule: `/apps/<appId>/`.
+
 ### Changed
 
 - **`tesseraql host --install-root` is now `--suite`, and `--app` serves one application**

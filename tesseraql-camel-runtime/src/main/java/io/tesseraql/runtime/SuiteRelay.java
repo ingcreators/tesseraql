@@ -46,7 +46,7 @@ final class SuiteRelay {
 
     private static final Logger LOG = LoggerFactory.getLogger(SuiteRelay.class);
 
-    /** The shared-origin prefix each app is addressed under in suite mode. */
+    /** The shared-origin prefix each app is addressed under — the only address there is. */
     static final String PREFIX = "/apps/";
 
     /**
@@ -99,8 +99,6 @@ final class SuiteRelay {
     private static final String GATEWAY_ERROR = "TQL-APP-5020";
 
     private final HttpClient client;
-    private final MultiAppGateway.Mode mode;
-    private final Map<String, String> hostToApp;
     private final Map<String, InstalledApp> appsById;
     /** Per app, the forwarded header its configuration tells it to believe, lowercased. */
     private final Map<String, Set<String>> ingressStripByApp;
@@ -110,17 +108,15 @@ final class SuiteRelay {
     /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
     private final Map<Integer, HttpProxy> proxies = new ConcurrentHashMap<>();
 
-    SuiteRelay(HttpClient client, MultiAppGateway.Mode mode, Map<String, String> hostToApp,
-            Map<String, InstalledApp> appsById, ToIntFunction<String> portOf) {
-        this(client, mode, hostToApp, appsById, Map.of(), TrustedProxies.NONE, portOf);
+    SuiteRelay(HttpClient client, Map<String, InstalledApp> appsById,
+            ToIntFunction<String> portOf) {
+        this(client, appsById, Map.of(), TrustedProxies.NONE, portOf);
     }
 
-    SuiteRelay(HttpClient client, MultiAppGateway.Mode mode, Map<String, String> hostToApp,
-            Map<String, InstalledApp> appsById, Map<String, Set<String>> ingressStripByApp,
+    SuiteRelay(HttpClient client, Map<String, InstalledApp> appsById,
+            Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf) {
         this.client = client;
-        this.mode = mode;
-        this.hostToApp = Map.copyOf(hostToApp);
         this.appsById = Map.copyOf(appsById);
         this.ingressStripByApp = Map.copyOf(ingressStripByApp);
         this.trustedProxies = trustedProxies;
@@ -131,20 +127,17 @@ final class SuiteRelay {
     void handle(HttpServerRequest request) {
         try {
             String rawPath = rawPath(request);
-            String hostApp = hostToApp.get(requestHost(request));
-
-            String appId;
-            if (mode == MultiAppGateway.Mode.ISOLATED && hostApp != null) {
-                // Host-based: the matched app owns the whole address, forward the path unchanged.
-                appId = hostApp;
-            } else if (mode == MultiAppGateway.Mode.SUITE && rawPath.startsWith(PREFIX)) {
-                String remainder = rawPath.substring(PREFIX.length());
-                int slash = remainder.indexOf('/');
-                appId = slash < 0 ? remainder : remainder.substring(0, slash);
-            } else {
+            // One address per application, and one way to reach it (docs/suite-architecture.md
+            // Decision 12). Host-header routing went with independent hosting: it existed so an
+            // application could own a whole origin, which is the separation a suite is defined by
+            // not having.
+            if (!rawPath.startsWith(PREFIX)) {
                 respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
                 return;
             }
+            String remainder = rawPath.substring(PREFIX.length());
+            int slash = remainder.indexOf('/');
+            String appId = slash < 0 ? remainder : remainder.substring(0, slash);
 
             // Tenant entitlement at the front door (ch. 32.8): when the request declares its
             // tenant, an app with an entitlement list only serves the tenants on it. Claim-based
@@ -163,7 +156,7 @@ final class SuiteRelay {
                 respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
                 return;
             }
-            // The URI is forwarded verbatim in both modes — the app serves the address it is
+            // The URI is forwarded verbatim — the app serves the address it is
             // fronted at (docs/base-path.md decision 5) — so there is nothing to rewrite here,
             // only an origin to choose.
             proxyFor(appId, appPort).handle(request);
@@ -264,17 +257,6 @@ final class SuiteRelay {
         int query = uri.indexOf('?');
         String path = query < 0 ? uri : uri.substring(0, query);
         return path.isEmpty() ? "/" : path;
-    }
-
-    /** The request's host without port, lowercased, or empty if absent. */
-    private static String requestHost(HttpServerRequest request) {
-        String header = request.getHeader("Host");
-        if (header == null) {
-            return "";
-        }
-        int colon = header.indexOf(':');
-        String name = colon < 0 ? header : header.substring(0, colon);
-        return name.toLowerCase(Locale.ROOT);
     }
 
     private static void respond(HttpServerRequest request, int status, String code) {

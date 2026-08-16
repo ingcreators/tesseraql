@@ -135,11 +135,8 @@ class AppDirectoryTest {
         assertThat(applications).extracting(InstalledApp::id).containsExactly("billing", "orders");
         assertThat(applications).extracting(InstalledApp::version)
                 .containsExactly("0.0.0", "2.1.0");
-        // Nothing was installed for anyone, so nothing is entitled or addressed by hostname.
-        assertThat(applications).allSatisfy(app -> {
-            assertThat(app.entitledTenants()).isEmpty();
-            assertThat(app.hosts()).isEmpty();
-        });
+        // Nothing was installed for anyone, so nothing is entitled.
+        assertThat(applications).allSatisfy(app -> assertThat(app.entitledTenants()).isEmpty());
         Path root = dir.toAbsolutePath().normalize();
         assertThat(applications)
                 .allSatisfy(app -> assertThat(root.resolve(app.path()).normalize()).exists());

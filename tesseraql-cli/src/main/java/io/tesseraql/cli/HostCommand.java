@@ -33,11 +33,6 @@ final class HostCommand implements Callable<Integer> {
     int port = 8080;
 
     @Option(names = {
-            "--mode"}, paramLabel = "<suite|isolated>", description = "suite: one origin, /apps/<id>/ per app, one session across them."
-                    + " isolated: a hostname per app, sessions not shared. Default suite.")
-    String mode = "suite";
-
-    @Option(names = {
             "--http2"}, description = "Serve and forward cleartext HTTP/2 (h2c). Off by default."
                     + " One switch moves both hops: a client's connection to the gateway and the"
                     + " gateway's connection to each app. An app that does not offer h2c answers"
@@ -75,20 +70,10 @@ final class HostCommand implements Callable<Integer> {
             return 2;
         }
 
-        MultiAppGateway.Mode selected;
-        try {
-            selected = MultiAppGateway.Mode.valueOf(mode.toUpperCase(java.util.Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
-            System.err.println("Unknown --mode '" + mode + "'; expected suite or isolated.");
-            return 2;
-        }
-
         try (MultiAppGateway gateway = MultiAppGateway.start(served, port,
-                new MultiAppGateway.Settings(selected, http2, trustedProxies))) {
+                new MultiAppGateway.Settings(http2, trustedProxies))) {
             System.out.println("TesseraQL hosting " + gateway.appIds().size()
-                    + " app(s) on port " + gateway.port() + " (" + mode.toLowerCase(
-                            java.util.Locale.ROOT)
-                    + " mode" + (http2 ? ", h2c" : "") + ")");
+                    + " app(s) on port " + gateway.port() + (http2 ? " (h2c)" : ""));
             for (String appId : gateway.appIds()) {
                 System.out.println("  " + appId);
             }

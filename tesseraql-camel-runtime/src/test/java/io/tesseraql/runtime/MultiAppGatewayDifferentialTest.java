@@ -86,11 +86,11 @@ class MultiAppGatewayDifferentialTest {
         seedDatabase();
         installRoot = Files.createTempDirectory("tesseraql-gateway-diff");
         installApp();
-        gateway = MultiAppGateway.start(installRoot, 0, MultiAppGateway.Mode.SUITE);
+        gateway = MultiAppGateway.start(installRoot, 0);
         direct = "http://localhost:" + gateway.appPort(APP);
         front = "http://localhost:" + gateway.port();
         h2Gateway = MultiAppGateway.start(installRoot, 0,
-                new MultiAppGateway.Settings(MultiAppGateway.Mode.SUITE, true));
+                new MultiAppGateway.Settings(true));
         h2Front = "http://localhost:" + h2Gateway.port();
     }
 

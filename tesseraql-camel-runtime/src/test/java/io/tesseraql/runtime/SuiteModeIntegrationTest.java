@@ -57,7 +57,7 @@ class SuiteModeIntegrationTest {
         installRoot = Files.createTempDirectory("tesseraql-suite-it");
         installApp("shop-a", "a");
         installApp("shop-b", "b");
-        gateway = MultiAppGateway.start(installRoot, 0, MultiAppGateway.Mode.SUITE);
+        gateway = MultiAppGateway.start(installRoot, 0);
         sessionCookie = signIn();
     }
 
@@ -159,40 +159,6 @@ class SuiteModeIntegrationTest {
                 .startsWith("/apps/shop-a/_tesseraql/login?next=")
                 .as("the next target is the address the browser asked for, once")
                 .endsWith("%2F_tesseraql%2Fstudio%2Fui");
-    }
-
-    /**
-     * The converse mode, and the converse promise (docs/app-isolation-model.md decision 2):
-     * independent hosting addresses each application by its own hostname and does <em>not</em>
-     * share a sign-in, because there is nothing to share — each runtime has its own session
-     * store, the framework datasource being per app.
-     *
-     * <p>Worth holding: the two modes differ in exactly this, and a mode that quietly shared a
-     * session would be the shared suite wearing another name.
-     */
-    @Test
-    void aSessionDoesNotCrossHostsUnderIndependentHosting() throws Exception {
-        Path root = Files.createTempDirectory("tesseraql-isolated-it");
-        try {
-            installApp(root, "shop-a", "a", false);
-            installApp(root, "shop-b", "b", false);
-            seedIdentity("a");
-            try (MultiAppGateway isolated = MultiAppGateway.start(root, 0,
-                    MultiAppGateway.Mode.ISOLATED)) {
-                String cookie = cookieFrom(rawRequest(isolated, "POST", "/_tesseraql/login",
-                        "shop-a.localhost", "{\"loginId\":\"admin\",\"password\":\"s3cret\"}"));
-
-                assertThat(rawRequest(isolated, "GET", "/users/fragments/table",
-                        "shop-a.localhost", null, cookie))
-                        .startsWith("HTTP/1.1 200");
-                assertThat(rawRequest(isolated, "GET", "/users/fragments/table",
-                        "shop-b.localhost", null, cookie))
-                        .as("the neighbouring application never saw this session")
-                        .startsWith("HTTP/1.1 401");
-            }
-        } finally {
-            deleteRecursively(root);
-        }
     }
 
     private static String cookieFrom(String rawResponse) {
@@ -369,7 +335,7 @@ class SuiteModeIntegrationTest {
         }
 
         new AppCatalog(root).register(new InstalledApp(
-                appId, "1.0.0", appId + "/1.0.0", List.of(), List.of(appId + ".localhost")));
+                appId, "1.0.0", appId + "/1.0.0", List.of()));
     }
 
     private static void copy(Path source, Path target, Path path) {

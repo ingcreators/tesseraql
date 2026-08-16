@@ -91,7 +91,7 @@ public final class AppInstaller {
 
                 return new InstalledApp(id, version,
                         installRoot.relativize(target).toString().replace('\\', '/'),
-                        entitledTenants, hosts(config));
+                        entitledTenants);
             } finally {
                 deleteRecursively(staging);
             }
@@ -166,14 +166,6 @@ public final class AppInstaller {
 
     private Map<String, Object> parseIfPresent(Path file) {
         return Files.isRegularFile(file) ? parser.parseTree(file) : Map.of();
-    }
-
-    private static List<String> hosts(AppConfig config) {
-        Object node = config.navigate("tesseraql.app.hosts");
-        if (node instanceof List<?> list) {
-            return list.stream().map(String::valueOf).toList();
-        }
-        return List.of();
     }
 
     private static void deleteRecursively(Path root) throws IOException {

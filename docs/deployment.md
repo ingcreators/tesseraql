@@ -41,9 +41,8 @@ previous image.
 
 **B. Several applications on one host.** `tesseraql host --suite <dir>` starts every application
 the directory holds in its own runtime behind one port — its own Camel context, datasource
-set, Studio and traces. `--mode suite` addresses them as `/apps/<id>/` on one origin and
-shares a sign-in across them; `--mode isolated` gives each its own hostname and no shared
-session. See [hosting.md](hosting.md).
+set, Studio and traces. They are addressed as `/apps/<id>/` on one origin and share a sign-in
+across them. See [hosting.md](hosting.md).
 
 One runtime serves **one** application plus the framework's own surfaces. Mounting further
 applications into it — `tesseraql.apps.<name>.path` / `.package` / `.url`, previously
