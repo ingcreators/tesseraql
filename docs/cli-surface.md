@@ -178,11 +178,63 @@ What gets fixed is a name that says the wrong thing: `migrate --app-name` names 
 recorded in the schema history, and sits one character from `--app`, which names a directory.
 It becomes `--schema-app`.
 
-### 7. The rule is enforced by a test, because it will not survive review alone
+### 7. The sets are `@Mixin`s, and the test guards their shape rather than their membership
 
-Every decision here describes the surface a *future* command must join. A guard that reads the
-picocli model and asserts the sets of Decision 5 turns "remember to add `--env`" into a build
-failure, and it is cheap: the options are annotations on fields the test can read.
+The first draft of this decision promised a guard that reads the picocli model and asserts
+membership — "this command loads a manifest, so it must declare `--env`". **That test cannot be
+written**, and the reason is worth recording because it looks writable.
+
+Measured 2026-08-16: `lint`, `admission` and `release-diff` never mention `ManifestLoader`. They
+call `AppLinter.lint(app)`, `AdmissionProfile.check(app)` and `ReleaseDiff.between(baseline, app)`,
+each of which resolves configuration inside. A guard that inferred capability from the command class
+would have decided those three need no `--env`, which is exactly backwards — `lint` is the command
+whose missing `--env` is closest to a defect.
+
+So the split is:
+
+- **Membership is declared, in one line.** Each set is a picocli `@Mixin` — `ConfigOptions`,
+  `CompileOptions`, `ConnectionOptions` — and a command mixes in what it needs. Whether it needs one
+  stays a review question, made cheap by being visible at the top of the class instead of spread
+  across four `@Option` fields.
+- **The test guards shape.** No command may declare `--env`, `--modules`, `--jdbc-url`,
+  `--username`, `--password` or `--datasource` as its own field; those names belong to the mixins.
+  That is checkable from the picocli model, and it is what stops the sets from drifting apart again
+  one command at a time — which is how they drifted in the first place.
+
+A guard that cannot answer the interesting question is still worth having when it answers the
+question that actually decayed.
+
+## The complete mapping
+
+Every command, and what these decisions do to it. `+set` means the command joins a Decision 5 set
+and gains its options.
+
+| Command | Change |
+| --- | --- |
+| `serve` | **becomes `dev`**; `--app` gains `--suite` beside it; `+config` (already had `--env`) |
+| `host` | `--install-root` → **`--app` / `--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; `+config` |
+| `mcp` | gains **`--suite`** — `suite-architecture.md` Decision 19 makes the development-tool MCP span the suite; `--read-only` becomes a property of the server, not of an application; `+config` |
+| `new` | `--dir` → **`--app`**. It is the directory that becomes an application home, and every other command calls that `--app` |
+| `migrate` | `--app-name` → **`--schema-app`** (Decision 6); `+config` |
+| `scaffold` | `+config`, `+connection` (has three of four; gains `--datasource`) |
+| `test` | `+config`, `+connection` (gains `--datasource`) |
+| `coverage` | `+config`, `+connection` (gains `--datasource`) |
+| `job` | `+config`, `+connection` (gains `--datasource`) |
+| `identity-schema` | `+config`, `+connection` (gains `--datasource`) |
+| `schema` | `+config` (connection already complete) |
+| `lint` | `+config` — the command whose missing `--env` is closest to a defect |
+| `routes`, `symbols`, `generate`, `governance`, `admission`, `verify`, `package`, `release-diff`, `modules`, `duckdb` | `+config` |
+| `token` | unchanged — `--app` / `--url` already exclusive, `--env` already present |
+| `embedded-db` | unchanged — takes no options |
+
+**`--modules` membership is settled in slice 4, per command, by whether it compiles routes**, and is
+deliberately not guessed here. Measured today: `lint`, `test`, `coverage`, `job`, `duckdb`, `routes`
+and `mcp` reach route compilation; `serve` already carries the flag. The rest are read-only over
+sources or over a database and probably do not, but "probably" is not a mapping and the slice that
+adds the mixin can answer it per command in one line.
+
+Nothing above removes an option except `--install-root`, which is renamed, and `--mode`, which loses
+its subject. Everything else is addition or a rename.
 
 ## Slices
 
@@ -191,8 +243,8 @@ failure, and it is cheap: the options are annotations on fields the test can rea
 | 1 | The two resolvers (Decisions 1–3): one application, or the applications in a suite, with the refusals under test |
 | 2 | `--install-root` → `--suite` on `host`; `--suite` added to `mcp` per Decision 19 |
 | 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway |
-| 4 | The option sets (Decision 5) applied across every command, and the guard of Decision 7 |
-| 5 | `--app-name` → `--schema-app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
+| 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
+| 5 | The renames: `--app-name` → `--schema-app`, `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
 
 Slice 1 is first because slices 2 and 3 are both callers of it, and because it is where the
 application-versus-suite refusals live. Slice 4 is last of the mechanical ones because it touches
