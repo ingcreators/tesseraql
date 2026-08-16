@@ -3,20 +3,21 @@ package io.tesseraql.runtime;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Hosts every app recorded in an install root's {@link AppCatalog} at once (design ch. 32.7).
+ * Hosts every app a directory holds at once (design ch. 32.7): an install root's catalogue, or
+ * application homes with no catalogue at all (docs/cli-surface.md Decision 2).
  *
  * <p>Each installed app runs in its own isolated {@link TesseraqlRuntime} — a separate CamelContext,
  * datasource set, and HTTP port — so apps share a process without sharing route paths or data. If
@@ -66,13 +67,16 @@ public final class MultiAppHost implements AutoCloseable {
      */
     public static MultiAppHost start(Path installRoot,
             java.util.function.Function<String, String> basePathFor, String cookiePath) {
-        AppCatalog catalog = new AppCatalog(installRoot);
+        // Catalogued or not — a workspace of source trees hosts exactly like an install root
+        // (docs/cli-surface.md Decision 2).
+        List<InstalledApp> applications = io.tesseraql.operations.app.AppDirectory.applications(
+                io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
         Set<String> appIds = new java.util.LinkedHashSet<>();
         Map<String, Integer> canaryWeights = new LinkedHashMap<>();
         try {
-            for (InstalledApp app : catalog.list()) {
+            for (InstalledApp app : applications) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
                 started.put(app.id(), TesseraqlRuntime.start(appHome, freePort(),
                         basePathFor.apply(app.id()), cookiePath));

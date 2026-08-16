@@ -119,4 +119,53 @@ class AppDirectoryTest {
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("holds no application");
     }
+
+    /**
+     * A workspace hosts exactly like an install root: entries shaped the same, {@code path}
+     * relative to the root either way, so a host needs no branch for where they came from.
+     */
+    @Test
+    void aWorkspaceSynthesisesCatalogueEntriesFromEachApplication(@TempDir Path dir)
+            throws IOException {
+        writeApplication(dir.resolve("orders"), "orders", "2.1.0");
+        writeApplication(dir.resolve("billing"), "billing", null);
+
+        List<InstalledApp> applications = AppDirectory.applications(AppDirectory.resolve(dir));
+
+        assertThat(applications).extracting(InstalledApp::id).containsExactly("billing", "orders");
+        assertThat(applications).extracting(InstalledApp::version)
+                .containsExactly("0.0.0", "2.1.0");
+        // Nothing was installed for anyone, so nothing is entitled or addressed by hostname.
+        assertThat(applications).allSatisfy(app -> {
+            assertThat(app.entitledTenants()).isEmpty();
+            assertThat(app.hosts()).isEmpty();
+        });
+        Path root = dir.toAbsolutePath().normalize();
+        assertThat(applications)
+                .allSatisfy(app -> assertThat(root.resolve(app.path()).normalize()).exists());
+    }
+
+    /** A single application resolves against itself — an empty relative path is still the root. */
+    @Test
+    void oneApplicationIsAOneMemberSuite(@TempDir Path dir) throws IOException {
+        writeApplication(dir, "orders", "1.0.0");
+
+        List<InstalledApp> applications = AppDirectory.applications(AppDirectory.resolve(dir));
+
+        assertThat(applications).singleElement()
+                .satisfies(app -> assertThat(app.id()).isEqualTo("orders"));
+        Path root = dir.toAbsolutePath().normalize();
+        assertThat(root.resolve(applications.get(0).path()).normalize()).isEqualTo(root);
+    }
+
+    private static void writeApplication(Path home, String name, String version)
+            throws IOException {
+        Files.createDirectories(home.resolve("config"));
+        Files.writeString(home.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: %s
+                """.formatted(name)
+                + (version == null ? "" : "    version: " + version + "\n"));
+    }
 }

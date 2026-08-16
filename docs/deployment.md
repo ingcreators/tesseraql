@@ -39,8 +39,8 @@ otherwise (status word only). Point container health checks at
 (`lint`, `test`, `governance`, `release-evidence`) run before the build, and rollback is the
 previous image.
 
-**B. Several applications on one host.** `tesseraql host --install-root <dir>` starts every
-installed application in its own runtime behind one port — its own Camel context, datasource
+**B. Several applications on one host.** `tesseraql host --suite <dir>` starts every application
+the directory holds in its own runtime behind one port — its own Camel context, datasource
 set, Studio and traces. `--mode suite` addresses them as `/apps/<id>/` on one origin and
 shares a sign-in across them; `--mode isolated` gives each its own hostname and no shared
 session. See [hosting.md](hosting.md).

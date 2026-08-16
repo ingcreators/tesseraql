@@ -19,9 +19,14 @@ import picocli.CommandLine.Option;
 @Command(name = "host", description = "Serve every installed app from one port, each in its own runtime.")
 final class HostCommand implements Callable<Integer> {
 
-    @Option(names = {
-            "--install-root"}, required = true, description = "Directory holding catalog.json and the installed app trees.")
-    Path installRoot;
+    @Option(names = {"--suite"}, paramLabel = "<dir>", description = "Directory holding the"
+            + " applications to serve: an install root (catalog.json) or a folder of application"
+            + " homes. Exactly one of --suite or --app.")
+    Path suite;
+
+    @Option(names = {"--app"}, paramLabel = "<dir>", description = "One application home to serve."
+            + " Exactly one of --suite or --app.")
+    Path app;
 
     @Option(names = {
             "--port"}, description = "The port the gateway fronts every app on (default 8080).")
@@ -49,6 +54,27 @@ final class HostCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        if ((suite == null) == (app == null)) {
+            System.err.println("Choose one: --suite <dir> serves every application the directory"
+                    + " holds, --app <dir> serves one.");
+            return 2;
+        }
+        // Resolved here rather than inside the gateway, because only the caller knows which flag
+        // was typed and therefore which refusal is the useful one
+        // (docs/cli-surface.md Decision 3).
+        Path served;
+        try {
+            served = suite != null
+                    ? suite
+                    : io.tesseraql.operations.app.AppDirectory.application(app, "tesseraql host");
+            if (suite != null) {
+                io.tesseraql.operations.app.AppDirectory.suite(suite);
+            }
+        } catch (io.tesseraql.core.error.TqlException refused) {
+            System.err.println(refused.getMessage());
+            return 2;
+        }
+
         MultiAppGateway.Mode selected;
         try {
             selected = MultiAppGateway.Mode.valueOf(mode.toUpperCase(java.util.Locale.ROOT));
@@ -57,7 +83,7 @@ final class HostCommand implements Callable<Integer> {
             return 2;
         }
 
-        try (MultiAppGateway gateway = MultiAppGateway.start(installRoot, port,
+        try (MultiAppGateway gateway = MultiAppGateway.start(served, port,
                 new MultiAppGateway.Settings(selected, http2, trustedProxies))) {
             System.out.println("TesseraQL hosting " + gateway.appIds().size()
                     + " app(s) on port " + gateway.port() + " (" + mode.toLowerCase(
