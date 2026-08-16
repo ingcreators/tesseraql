@@ -91,8 +91,13 @@ class RouteWatchIntegrationTest {
         Files.writeString(appHome.resolve("web/api/ping/get.yml"),
                 routeYaml("ping", "ping").replace("recipe: query-json",
                         "recipe: no-such-recipe"));
+        // Waiting on the status alone raced the reload: a save is briefly a 500 before the stub
+        // that carries the envelope is mounted, so under load the poll returned that intermediate
+        // answer and the body assertion below read an empty string. The wait is for the answer
+        // being asserted, not for a status that precedes it.
         HttpResponse<String> stub = await("/api/ping",
-                response -> response.statusCode() == 500);
+                response -> response.statusCode() == 500
+                        && response.body().contains("TQL-CAMEL-3103"));
         assertThat(stub.statusCode()).isEqualTo(500);
         // The code identifies the failure; the cause goes to the log, not the response —
         // the stub replaces the route's own security chain, so it can be reached without

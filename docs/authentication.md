@@ -320,7 +320,10 @@ but means the runtime fully trusts the edge's validation — see the lint warnin
 
 > **Trust contract.** A forwarded certificate header is only trustworthy if callers cannot set it
 > themselves: the edge must overwrite (or strip) the `forwardedHeader` on every inbound request, and
-> the runtime must not be reachable except through that edge. Because certificates are public,
+> the runtime must not be reachable except through that edge. This holds unchanged when several
+> applications are [hosted behind one gateway](hosting.md): the gateway relays the header rather
+> than filtering it, because it cannot tell the edge's value from a caller's, so the edge remains
+> the only place the contract can be discharged. Because certificates are public,
 > fingerprint or DN pinning alone does not stop header injection — network isolation does. Only the
 > URL-encoded (and raw) PEM convention is supported; Envoy/Istio's `x-forwarded-client-cert` (XFCC)
 > envelope is not parsed.

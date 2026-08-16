@@ -1,24 +1,16 @@
 package io.tesseraql.runtime;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpServer;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +20,51 @@ import org.slf4j.LoggerFactory;
  * <p>Each app still runs in its own isolated runtime on an internal port. The gateway routes a
  * request to an app by, in order: the {@code Host} header (when the app declares hostnames in its
  * catalog entry), then the {@code /apps/<appId>/<path>} path prefix. Host routing forwards the full
- * path; prefix routing strips the prefix. All apps are reachable through one address without sharing
- * route paths or data; unmatched requests get 404.
+ * path; prefix routing forwards it too, because the app is started serving the prefix it is fronted
+ * under (docs/base-path.md decision 5). Unmatched requests get 404.
+ *
+ * <h2>The gateway is a route, not a rewrite</h2>
+ *
+ * <p>Under docs/suite-architecture.md decision 12 every deployment is a suite, so every request in
+ * every deployment passes through here. Decision 13 draws the line that follows from it: <b>the
+ * gateway routes, the ingress protects</b>. It fronts applications the operator installed, behind
+ * whatever reverse proxy the deployment already runs, so body limits, rate limiting and TLS
+ * termination belong there and not here.
+ *
+ * <p>The relay is {@code vertx-http-proxy} rather than a copy loop of our own. The hand-rolled
+ * version was measured on 2026-08-16 and was not transparent in three ways, each of which is the
+ * kind of defect a proxy library exists to have already solved:
+ *
+ * <ul>
+ *   <li><b>Chunked answers lost their bodies.</b> {@code com.sun.net.httpserver} reads a response
+ *       length of {@code 0} as "chunked" and {@code -1} as "no body at all"; an app that declared
+ *       no {@code Content-Length} produced {@code -1}, which was relayed verbatim as {@code -1}.
+ *       Every streaming export and every event stream answered 200, with the right headers, and
+ *       nothing after them.</li>
+ *   <li><b>Events arrived in bursts.</b> With the length fixed, the copy loop never flushed, so
+ *       {@code ChunkedOutputStream} held frames until its 4 KB buffer filled or the stream closed —
+ *       "working, but late", which decision 13 named as the hardest failure to diagnose.</li>
+ *   <li><b>Protocol translation was absent.</b> The outbound client negotiated h2c with the app and
+ *       the response headers were copied into an HTTP/1.1 answer unchanged, emitting the HTTP/2
+ *       {@code :status} pseudo-header as an HTTP/1.1 field name — which is not a legal token.</li>
+ * </ul>
+ *
+ * <h2>What is still ours</h2>
+ *
+ * <p><b>Ingress header stripping</b> stays, because it answers a different threat than the bounds
+ * decision 13 removed: an app may be trusted while the caller reaching it is not. Hop-by-hop
+ * correctness and body framing move to the library — applying our own {@code Content-Length} or
+ * {@code Transfer-Encoding} rules on top of a proxy that owns framing is how a relay corrupts a
+ * body, so the list kept here is the posture half only.
+ *
+ * <h2>The event loop is the execution model now</h2>
+ *
+ * <p>The previous front ran a virtual thread per request, which made blocking safe by default:
+ * a blocked relay parked one cheap thread. Vert.x inverts that. Nothing on the request path may
+ * block — routing is map lookups, the entitlement check reads an in-memory record, and the proxy
+ * is non-blocking end to end. Work added here later that reads a database or a file must move to
+ * {@code executeBlocking}, or it stalls every other connection sharing the loop. In exchange a
+ * long-lived stream costs no thread at all rather than a parked one.
  */
 public final class MultiAppGateway implements AutoCloseable {
 
@@ -57,96 +92,51 @@ public final class MultiAppGateway implements AutoCloseable {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppGateway.class);
-    private static final String PREFIX = "/apps/";
-
-    /** Hop-by-hop and length/host headers that must not be forwarded verbatim (RFC 9110 7.6.1). */
-    private static final Set<String> SKIP_HEADERS = Set.of(
-            "host", "content-length", "connection", "upgrade", "transfer-encoding",
-            "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "expect");
-
-    /** The default tenant header checked for app entitlement at the front door (ch. 32.8). */
-    private static final String TENANT_HEADER = "X-Tenant-Id";
-
-    /** TQL-APP-4030: the request's tenant is not on the app's entitlement list (HTTP 403). */
-    private static final String NOT_ENTITLED = "TQL-APP-4030";
-
-    /** TQL-APP-5020: the gateway failed to forward the request to the app's runtime (HTTP 502). */
-    private static final String GATEWAY_ERROR = "TQL-APP-5020";
+    private static final String PREFIX = SuiteRelay.PREFIX;
+    private static final long START_TIMEOUT_SECONDS = 60;
 
     /** An isolated-hosting app that declares no hostname would be started and unreachable. */
     private static final io.tesseraql.core.error.TqlErrorCode NO_HOSTNAME = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.APP, 5003);
 
     private final MultiAppHost host;
-    private final HttpServer server;
-    /**
-     * The largest request body the gateway will buffer before forwarding it.
-     *
-     * <p>A fixed ceiling rather than a config key, deliberately: the gateway fronts several apps
-     * and a per-app limit would be ambiguous here, so this is the front door's own bound and the
-     * app behind it keeps whatever limits it declares. Ten megabytes leaves ordinary form and
-     * upload traffic alone while making "how much heap can a stranger take" a bounded question.
-     */
-    static final int MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024;
-
-    /**
-     * The largest response body the gateway will relay.
-     *
-     * <p>The request side was bounded and the response side was not, which left the same
-     * question open from the other direction: a hosted app answering a large export decided how
-     * much of the gateway's heap it took. The body streams through a bounded buffer instead of
-     * materializing, so an oversized response fails the exchange rather than the process.
-     */
-    static final long MAX_RESPONSE_BODY_BYTES = 64L * 1024 * 1024;
-
+    private final Vertx vertx;
     private final HttpClient client;
-    private final java.util.concurrent.ExecutorService executor;
+    private final HttpServer server;
     private final int port;
-    private final Map<String, String> hostToApp;
-    private final Map<String, InstalledApp> appsById;
-    /**
-     * Per app, the headers a client must never be able to supply for itself: the mTLS
-     * forwarded header that app trusts, lowercased.
-     *
-     * <p>A client certificate is public, so PKIX proves issuance rather than possession — the
-     * edge's trust in this header *is* the control. The gateway forwarded a client-supplied copy
-     * verbatim, which let a caller present the header the app was configured to believe.
-     * TesseraQL's own front strips it on ingress; only an edge in front of the gateway may set
-     * it (docs/deployment.md).
-     *
-     * <p>{@code X-Tenant-Id} is deliberately *not* stripped: the gateway's entitlement check is
-     * a convenience filter, not a control, and the app's own tenancy resolution is the
-     * authoritative one (docs/app-isolation-model.md decision 3).
-     */
-    private final Map<String, Set<String>> ingressStripByApp;
-    private final Mode mode;
+    private final SuiteRelay relay;
 
-    private MultiAppGateway(MultiAppHost host, HttpServer server, List<InstalledApp> hostedApps,
-            java.nio.file.Path installRoot, Mode mode) {
+    private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps, Mode mode,
+            int frontPort) {
         this.host = host;
-        this.server = server;
-        this.mode = mode;
         Map<String, String> hosts = new java.util.HashMap<>();
         Map<String, InstalledApp> byId = new java.util.HashMap<>();
-        Map<String, Set<String>> strip = new java.util.HashMap<>();
         for (InstalledApp app : hostedApps) {
             byId.put(app.id(), app);
             for (String hostName : app.hosts()) {
                 hosts.put(hostName.toLowerCase(Locale.ROOT), app.id());
             }
-            strip.put(app.id(), ingressStripHeaders(installRoot, app));
         }
-        this.hostToApp = Map.copyOf(hosts);
-        this.appsById = Map.copyOf(byId);
-        this.ingressStripByApp = Map.copyOf(strip);
-        this.client = HttpClient.newHttpClient();
-        this.port = server.getAddress().getPort();
-        server.createContext("/", this::handle);
-        // Held so close() can shut it down: it was created inline and dropped, so stopping the
-        // gateway left the executor behind along with the client's connection pool and selector.
-        this.executor = Executors.newVirtualThreadPerTaskExecutor();
-        server.setExecutor(executor);
-        server.start();
+        this.vertx = Vertx.vertx();
+        this.client = vertx.createHttpClient();
+        this.relay = new SuiteRelay(client, mode, hosts, byId, this::targetPort);
+        this.server = vertx.createHttpServer(SuiteRelay.frontOptions(frontPort));
+        server.requestHandler(relay::handle);
+        try {
+            this.port = server.listen()
+                    .toCompletionStage().toCompletableFuture()
+                    .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .actualPort();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            closeQuietly();
+            throw new IllegalStateException("Interrupted starting the gateway", interrupted);
+        } catch (java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException failed) {
+            closeQuietly();
+            throw new IllegalStateException("Could not start the gateway on port " + frontPort,
+                    failed);
+        }
     }
 
     /**
@@ -179,35 +169,13 @@ public final class MultiAppGateway implements AutoCloseable {
         MultiAppHost host = MultiAppHost.start(installRoot,
                 appId -> mode == Mode.SUITE ? PREFIX + appId : null, "/");
         try {
-            HttpServer server = HttpServer.create(new InetSocketAddress(frontPort), 0);
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))
                     .toList();
-            return new MultiAppGateway(host, server, hosted, installRoot, mode);
-        } catch (IOException ex) {
+            return new MultiAppGateway(host, hosted, mode, frontPort);
+        } catch (RuntimeException ex) {
             host.close();
-            throw new UncheckedIOException(ex);
-        }
-    }
-
-    /**
-     * The headers to drop from a request bound for {@code app}: the mTLS forwarded header its
-     * configuration names, if any. Best-effort — an app whose config cannot be read strips
-     * nothing extra, because the alternative is refusing to host it over a header it may not
-     * even use.
-     */
-    private static Set<String> ingressStripHeaders(java.nio.file.Path installRoot,
-            InstalledApp app) {
-        try {
-            java.nio.file.Path appHome = installRoot.resolve(app.path()).normalize();
-            return new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config()
-                    .getString("tesseraql.security.mtls.forwardedHeader")
-                    .map(header -> Set.of(header.toLowerCase(Locale.ROOT)))
-                    .orElseGet(Set::of);
-        } catch (RuntimeException unreadable) {
-            LOG.warn("Could not read '{}' configuration for ingress header stripping: {}",
-                    app.id(), unreadable.getMessage());
-            return Set.of();
+            throw ex;
         }
     }
 
@@ -219,130 +187,13 @@ public final class MultiAppGateway implements AutoCloseable {
         return host.appIds();
     }
 
-    private void handle(HttpExchange exchange) throws IOException {
-        try {
-            String rawPath = exchange.getRequestURI().getRawPath();
-            String hostApp = hostToApp.get(requestHost(exchange));
-
-            String appId;
-            String downstreamPath;
-            if (mode == Mode.ISOLATED && hostApp != null) {
-                // Host-based: the matched app owns the whole address, forward the path unchanged.
-                appId = hostApp;
-                downstreamPath = rawPath.isEmpty() ? "/" : rawPath;
-            } else if (mode == Mode.SUITE && rawPath.startsWith(PREFIX)) {
-                String remainder = rawPath.substring(PREFIX.length());
-                int slash = remainder.indexOf('/');
-                appId = slash < 0 ? remainder : remainder.substring(0, slash);
-                // The prefix is forwarded, not stripped: the app is configured with the same
-                // base path, so it serves the URLs it emits (docs/base-path.md decision 5).
-                // Stripping left the runtime answering at one address and advertising another.
-                downstreamPath = rawPath;
-            } else {
-                respond(exchange, 404, "{\"error\":{\"code\":\"TQL-APP-4040\"}}");
-                return;
-            }
-
-            // Tenant entitlement at the front door (ch. 32.8): when the request declares its
-            // tenant, an app with an entitlement list only serves the tenants on it. Claim-based
-            // tenants are still enforced inside the app's own tenancy resolution.
-            String tenant = exchange.getRequestHeaders().getFirst(TENANT_HEADER);
-            InstalledApp app = appsById.get(appId);
-            if (tenant != null && app != null && !app.isEntitled(tenant)) {
-                respond(exchange, 403, "{\"error\":{\"code\":\"" + NOT_ENTITLED + "\"}}");
-                return;
-            }
-
-            int appPort;
-            try {
-                appPort = targetPort(appId);
-            } catch (RuntimeException unknown) {
-                respond(exchange, 404, "{\"error\":{\"code\":\"TQL-APP-4040\"}}");
-                return;
-            }
-            forward(exchange, appPort, downstreamPath,
-                    ingressStripByApp.getOrDefault(appId, Set.of()));
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
-        } catch (RuntimeException ex) {
-            LOG.warn("Gateway error: {}", ex.getMessage());
-            respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
-        } finally {
-            exchange.close();
-        }
-    }
-
-    private void forward(HttpExchange exchange, int appPort, String downstreamPath,
-            Set<String> stripOnIngress) throws IOException, InterruptedException {
-        String query = exchange.getRequestURI().getRawQuery();
-        URI target = URI.create("http://localhost:" + appPort + downstreamPath
-                + (query == null ? "" : "?" + query));
-
-        // Bounded, because this is the front door: readAllBytes() let any caller decide how much
-        // of the gateway's heap to take, and a proxy holds the whole body before it can forward.
-        // One byte past the cap is enough to know it was exceeded without buffering the rest.
-        byte[] body = exchange.getRequestBody().readNBytes(MAX_REQUEST_BODY_BYTES + 1);
-        if (body.length > MAX_REQUEST_BODY_BYTES) {
-            respond(exchange, 413, "{\"error\":\"Request body too large\"}");
-            return;
-        }
-        HttpRequest.Builder request = HttpRequest.newBuilder(target)
-                .method(exchange.getRequestMethod(), body.length == 0
-                        ? HttpRequest.BodyPublishers.noBody()
-                        : HttpRequest.BodyPublishers.ofByteArray(body));
-        exchange.getRequestHeaders().forEach((name, values) -> {
-            String lower = name.toLowerCase(Locale.ROOT);
-            if (!SKIP_HEADERS.contains(lower) && !stripOnIngress.contains(lower)) {
-                for (String value : values) {
-                    try {
-                        request.header(name, value);
-                    } catch (IllegalArgumentException restricted) {
-                        // The HTTP client disallows some headers; skip them.
-                    }
-                }
-            }
-        });
-
-        HttpResponse<java.io.InputStream> response = client.send(request.build(),
-                HttpResponse.BodyHandlers.ofInputStream());
-        response.headers().map().forEach((name, values) -> {
-            if (!SKIP_HEADERS.contains(name.toLowerCase(Locale.ROOT))) {
-                exchange.getResponseHeaders().put(name, List.copyOf(values));
-            }
-        });
-        // The declared length is relayed when the app declared one, so a download still reports
-        // its size and the wire format matches what the app produced; only an app that answers
-        // without a length makes this chunked (0). Either way the body streams through a fixed
-        // buffer — the gateway never holds a whole response, which is what the request side has
-        // bounded since it grew a cap.
-        long declared = response.headers().firstValueAsLong("content-length").orElse(-1);
-        if (declared > MAX_RESPONSE_BODY_BYTES) {
-            LOG.warn("App on port {} declared a {}-byte response, past the {}-byte relay bound",
-                    appPort, declared, MAX_RESPONSE_BODY_BYTES);
-            response.body().close();
-            respond(exchange, 502, "{\"error\":{\"code\":\"" + GATEWAY_ERROR + "\"}}");
-            return;
-        }
-        exchange.sendResponseHeaders(response.statusCode(), declared == 0 ? -1 : declared);
-        try (java.io.InputStream downstream = response.body();
-                OutputStream out = exchange.getResponseBody()) {
-            byte[] buffer = new byte[8192];
-            long relayed = 0;
-            int read;
-            while ((read = downstream.read(buffer)) != -1) {
-                relayed += read;
-                if (relayed > MAX_RESPONSE_BODY_BYTES) {
-                    // An undeclared length that runs past the bound: the status is already sent,
-                    // so the only honest signal left is to break the response. A truncated body
-                    // the client detects beats one it cannot.
-                    LOG.warn("Response from app on port {} exceeded {} bytes; relay aborted",
-                            appPort, MAX_RESPONSE_BODY_BYTES);
-                    return;
-                }
-                out.write(buffer, 0, read);
-            }
-        }
+    /**
+     * The internal port {@code appId} serves on, for the differential test's "direct" leg: the
+     * same request has to be answerable both here and through the gateway, and comparing the two
+     * is what makes "the gateway is a route, not a rewrite" checkable rather than asserted.
+     */
+    int appPort(String appId) {
+        return host.port(appId);
     }
 
     /** Resolves the port for {@code appId}, splitting traffic to a canary candidate by its weight. */
@@ -356,37 +207,50 @@ public final class MultiAppGateway implements AutoCloseable {
         return stablePort;
     }
 
-    /** The request's host without port, lowercased, or empty if absent. */
-    private static String requestHost(HttpExchange exchange) {
-        String header = exchange.getRequestHeaders().getFirst("Host");
-        if (header == null) {
-            return "";
-        }
-        int colon = header.indexOf(':');
-        String name = colon < 0 ? header : header.substring(0, colon);
-        return name.toLowerCase(Locale.ROOT);
-    }
-
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(bytes);
-        }
-    }
-
     @Override
     public void close() {
+        closeQuietly();
+        host.close();
+    }
+
+    /**
+     * Everything this instance opened, in the order it was opened: the front server, the outbound
+     * client, then the Vert.x instance carrying the event loops. A gateway restart used to
+     * accumulate the client's pool and the server's executor, so closing all of it is the point.
+     */
+    private void closeQuietly() {
         try {
-            server.stop(0);
-        } finally {
-            // Everything this instance opened, in the order it was opened: the executor the
-            // server ran on, then the client's pool and selector thread, then the hosted app.
-            // Two of the three were never closed at all, so a gateway restart accumulated both.
-            executor.shutdownNow();
-            client.close();
-            host.close();
+            if (server != null) {
+                server.close().toCompletionStage().toCompletableFuture()
+                        .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException ignored) {
+            LOG.debug("Gateway server did not close cleanly", ignored);
+        }
+        try {
+            if (client != null) {
+                client.close().toCompletionStage().toCompletableFuture()
+                        .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException ignored) {
+            LOG.debug("Gateway client did not close cleanly", ignored);
+        }
+        try {
+            if (vertx != null) {
+                vertx.close().toCompletionStage().toCompletableFuture()
+                        .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException | java.util.concurrent.ExecutionException
+                | java.util.concurrent.TimeoutException ignored) {
+            LOG.debug("Gateway Vert.x instance did not close cleanly", ignored);
         }
     }
 }

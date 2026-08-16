@@ -398,35 +398,97 @@ which is the precise failure mode the export pipeline was built to avoid.
 
 Changes:
 
-- **Request bodies stream.** `BodyPublishers.ofInputStream`, or `fromPublisher` with the relayed
-  `Content-Length` where one is declared, replacing the buffer and the cap.
-- **The response bound and its mid-body truncation are removed.** Responses already stream through
-  a fixed buffer; only the ceiling goes.
+- **Request bodies stream**, replacing the buffer and the cap.
+- **The response bound and its mid-body truncation are removed.**
 
-Kept, because they answer a different threat: **ingress header stripping** — applications may be
-trusted but callers are not, and that machinery is about callers — and `SKIP_HEADERS`, which is
-hop-by-hop correctness rather than posture.
+This decision originally also kept **ingress header stripping**, on the reasoning that applications
+may be trusted while callers are not. Implementation found that reasoning does not survive contact —
+see the addendum.
 
 Already correct, verified rather than assumed: the cookie path is `/` in suite mode by design
 (`CookiePath`'s own documentation — "A shared suite wants `/`, because one sign-in reaching every
-application *is* the mode"); the gateway runs on
-`Executors.newVirtualThreadPerTaskExecutor()`, so long-lived streams do not exhaust a pool; and
-neither the client nor the requests carry timeouts, so downloads and streams are not cut.
+application *is* the mode"), and neither the client nor the requests carry timeouts, so downloads
+and streams are not cut.
 
-**One thing genuinely needs measuring: flush behaviour on the response copy.** The loop writes 8 KB
-at a time to the exchange's output stream, and whether each write reaches the client promptly
-decides whether server-sent events arrive live or in bursts. MCP's Streamable HTTP, the ops console
-and Studio's preview all ride this path, and buffering there produces the hardest failure to
-diagnose — working, but late.
-
-**The deliverable that makes "equivalent" true rather than hoped-for is a differential test**: run
-one gallery application's declarative suite twice, directly against its own port and through the
-gateway, and assert the results match. Add the cases a proxy breaks specifically — a large upload,
-a large download, an event stream measured for arrival timing, a chunked response with no declared
-length, `HEAD`, `304`, redirect `Location` values, and the `Path` attribute on cookies.
+**The deliverable that makes "equivalent" true rather than hoped-for is a differential test**: issue
+the same request against one gallery application's own port and through the gateway, and assert the
+answers match. Add the cases a proxy breaks specifically — a large upload, a large download, an
+event stream measured for arrival timing, a chunked response with no declared length, `HEAD`, `304`,
+redirect `Location` values, and the `Path` attribute on cookies.
 
 `hosting.md` gains the division: **the gateway routes, the ingress protects.** Body limits, rate
 limiting and TLS termination belong to the reverse proxy every deployment already runs.
+
+#### What the measurement found, and what it changed — 2026-08-16
+
+This decision asked for one measurement before implementation: flush behaviour on the response copy,
+because buffering there produces the hardest failure to diagnose — working, but late. **The
+measurement found something worse, and three paragraphs above are wrong as written.**
+
+The relay did not stream. `com.sun.net.httpserver` reads a response length of `0` as "chunked,
+length unknown" and `-1` as **"no response body"**; the relay computed `-1` for an app that declared
+no `Content-Length` and passed it straight through. **Every chunked answer lost its body** — 200,
+the right headers, and nothing after them. That is every streaming export and every event stream, so
+the sentence "responses already stream through a fixed buffer; only the ceiling goes" describes
+something that was not happening. With the length corrected, the predicted defect appeared as
+predicted: the copy loop never flushed, so all frames landed together at close. A third defect sat
+beside them — the outbound client negotiated h2c with the app and the response headers were copied
+into an HTTP/1.1 answer unchanged, putting the HTTP/2 `:status` pseudo-header on the wire as an
+HTTP/1.1 field name.
+
+**So the relay is `vertx-http-proxy` rather than a corrected copy loop.** Vert.x is already a compile
+dependency through `camel-platform-http-vertx`, so this is one jar at a version the runtime already
+resolves. Three defects in roughly forty lines, in the component Decision 12 puts in front of every
+request in every deployment, is the argument: framing, flushing and protocol translation are what a
+proxy library exists to have already solved. Two consequences are recorded rather than left to be
+discovered:
+
+- **`SKIP_HEADERS` goes entirely.** Its framing entries would corrupt a relayed body if applied on
+  top of a proxy that owns framing, and its hop-by-hop entries are the library's — asserted rather
+  than assumed, by an origin the test owns reporting that `te`, `trailer`, `connection`,
+  `keep-alive` and `upgrade` never arrive. What remained after that was three headers nothing reads;
+  a denylist with no live effect reads later as a control, so it is not kept.
+- **The execution model inverts.** The old front ran a virtual thread per request, which made
+  blocking safe by default. On an event loop a blocking call stalls every connection sharing the
+  loop. Nothing on the path blocks today — routing is map lookups and the entitlement check reads an
+  in-memory record — but that is now a rule the slices adding work here have to keep. In exchange a
+  long-lived stream costs no thread rather than a parked one, which is a stronger form of what
+  "long-lived streams do not exhaust a pool" was claiming.
+
+**And ingress header stripping is removed, because it was breaking the feature it named.** The
+gateway stripped the mTLS forwarded header each application declares. It stripped
+**unconditionally** — there is no trusted-proxy concept anywhere in the tree — so the value the edge
+had *just set* was destroyed along with a forged one, and mTLS forwarded-header authentication could
+not work behind the gateway at all. Nothing caught it because `MtlsIntegrationTest` never goes
+through a gateway. Decision 12 changes what that costs: while the gateway was one shape among
+several this was "mTLS is unavailable in suite mode"; as the only shape it means
+`SecurityConfigFactory`'s mTLS branch, `MtlsConfigRules`, `TQL-SEC-4061`, `trustBundle` PKIX
+validation and a chapter of `authentication.md` all support something unreachable.
+
+The duty is already assigned where it can be discharged. `authentication.md`'s trust contract reads:
+*"the edge must overwrite (or strip) the `forwardedHeader` on every inbound request, and the runtime
+must not be reachable except through that edge."* Duplicating it one hop later bought defence in
+depth against an operator who has already lost — the network isolation the same contract requires —
+and paid for it with the feature. Keeping the strip *and* the feature needs the gateway to know
+which sources are trusted, which is a configuration and a decision this slice does not have; it is
+available later without anything here standing in its way. This is the same division the decision is
+drawing anyway: **the gateway routes, the ingress protects.**
+
+**The front stays HTTP/1.1.** `com.sun.net.httpserver` spoke nothing else, so no client ever reached
+a hosted app over h2c through the gateway; enabling it here would be new behaviour, and it has to be
+enabled at both ends together or a body arriving over HTTP/2 is piped into an HTTP/1.1 request with
+neither a declared length nor chunked framing. Serving both end to end is worth doing deliberately,
+with the differential test run twice; it is not this slice.
+
+**And the deliverable as first written could not be built.** "Run one gallery application's
+declarative suite twice" assumes that suite drives HTTP. It does not: every case kind `TestRunner`
+supports — `sql`, `contract`, `validate`, `decide`, `notify`, `http`, `messages`, `transition`,
+`dispatch` — evaluates in process against the app home and datasource, and `http` plans a route's
+*outbound* calls. `testing.md` says so outright, describing a dispatch case as "the button the UI
+actually calls, asserted without HTTP". Run twice, such a suite compares an in-process evaluation
+with itself and passes with the gateway switched off. The wording above is corrected to what the
+deliverable was reaching for: the same request issued at both ports, over real HTTP, answers
+compared.
 
 ### 14. Framework surfaces belong to the suite, and the ones that stay per-application delegate
 
@@ -691,7 +753,7 @@ Ordering is by dependency, not by size.
 
 | # | Slice | Depends on |
 | --- | --- | --- |
-| 1 | Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division | — |
+| 1 | ~~Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division~~ — **shipped 2026-08-16**; the measurement found a dropped-body defect beside the predicted buffering one and moved the relay to `vertx-http-proxy` (Decision 13) | — |
 | 2 | Login response returns the CSRF token; `tesseraql token --url`; console issue-token page | — |
 | 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS; `security` migration hoisted to the host with runtimes validating; CLI entry point for the suite, including the suite-spanning development-tool MCP (Decision 19) | 1 |
 | 4 | Identity surfaces become suite-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |

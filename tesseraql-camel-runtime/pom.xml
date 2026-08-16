@@ -145,6 +145,17 @@
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-platform-http-vertx</artifactId>
     </dependency>
+    <!--
+      The gateway's relay (docs/suite-architecture.md decision 13). Vert.x is already here through
+      camel-platform-http-vertx, so this adds one jar at a version the runtime already resolves;
+      its only transitive dependency is the vertx-core already on the classpath. A hand-rolled
+      relay was measured on 2026-08-16 and lost chunked bodies outright, buffered event streams,
+      and copied HTTP/2 pseudo-headers into HTTP/1.1 answers — see MultiAppGateway.
+    -->
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-http-proxy</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-quartz</artifactId>
