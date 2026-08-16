@@ -65,7 +65,7 @@ class SuiteRelayTest {
         origin.requestHandler(SuiteRelayTest::serveStub);
         originPort = await(origin.listen()).actualPort();
 
-        SuiteRelay relay = new SuiteRelay(client, MultiAppGateway.Mode.SUITE, Map.of(),
+        SuiteRelay relay = new SuiteRelay(client,
                 Map.of(), appId -> originPort);
         front = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
         front.requestHandler(relay::handle);
@@ -75,7 +75,7 @@ class SuiteRelayTest {
         // and piped into an HTTP/1.1 request has neither a declared length nor chunked framing,
         // and Vert.x refuses the write on the event loop. One setting moves both.
         h2Client = vertx.createHttpClient(SuiteRelay.outboundOptions(true));
-        SuiteRelay h2Relay = new SuiteRelay(h2Client, MultiAppGateway.Mode.SUITE, Map.of(),
+        SuiteRelay h2Relay = new SuiteRelay(h2Client,
                 Map.of(), appId -> originPort);
         h2Front = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
         h2Front.requestHandler(h2Relay::handle);
@@ -196,7 +196,7 @@ class SuiteRelayTest {
 
     /** What the origin received for {@code X-Client-Cert} through a relay trusting {@code edges}. */
     private static String headerSeenBehind(TrustedProxies edges) throws Exception {
-        SuiteRelay relay = new SuiteRelay(client, MultiAppGateway.Mode.SUITE, Map.of(), Map.of(),
+        SuiteRelay relay = new SuiteRelay(client, Map.of(),
                 Map.of(APP, Set.of("x-client-cert")), edges, appId -> originPort);
         HttpServer scoped = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
         scoped.requestHandler(relay::handle);
@@ -323,7 +323,7 @@ class SuiteRelayTest {
                 new HttpServerOptions().setPort(0).setHttp2ClearTextEnabled(false));
         plainOrigin.requestHandler(SuiteRelayTest::serveStub);
         int plainPort = await(plainOrigin.listen()).actualPort();
-        SuiteRelay relay = new SuiteRelay(h2Client, MultiAppGateway.Mode.SUITE, Map.of(),
+        SuiteRelay relay = new SuiteRelay(h2Client,
                 Map.of(), appId -> plainPort);
         HttpServer h2FrontToPlain = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
         h2FrontToPlain.requestHandler(relay::handle);

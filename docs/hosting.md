@@ -6,7 +6,7 @@ run several applications on one machine, start them together with `tesseraql hos
 its own runtime, and one port fronts them all.
 
 ```sh
-tesseraql host --suite /srv/tesseraql/apps --port 8080 --mode suite
+tesseraql host --suite /srv/tesseraql/apps --port 8080
 ```
 
 Every application the directory holds starts in its own runtime: its own Camel context, its own
@@ -27,7 +27,7 @@ than picking one.
 ## The install root
 
 An install root holds `catalog.json` — the list of installed applications, their versions,
-their tenant entitlements and, for isolated mode, their hostnames — beside one unpacked tree
+and their tenant entitlements — beside one unpacked tree
 per application version. Baking that directory into a container image gives every node
 identical bytes with nothing to download at boot.
 
@@ -36,28 +36,19 @@ deployment concern with better tools than a runtime fetcher. There is no `instal
 CLI today: a deployment either ships the directory or drives `AppInstaller` from its own
 tooling.
 
-## The two modes
+## One address per application
 
-The mode is a deployment choice, and it decides three things at once. They cannot be mixed:
-sharing a session across applications requires a cookie that reaches all of them, and that is
-the same decision as sharing an origin.
+Every application is addressed as `/apps/<appId>/` on one origin, and the suite shares one
+sign-in across them: the runtimes are told the prefix they serve under, so each answers at the
+addresses it emits ([base-path.md](base-path.md)), and the session cookie is issued at the
+origin root so one sign-in reaches every application.
 
-| | `--mode suite` | `--mode isolated` |
-| --- | --- | --- |
-| For | related applications of one organization | unrelated applications, or applications from different authors |
-| Address | `/apps/<appId>/` on one origin | one hostname per application |
-| Sign-in | shared: one session across the suite | per host, never shared |
-| Framework database | shared | per application |
-| Business database | shared | per application |
-
-**Suite mode** puts every application on one origin under its own path prefix. The runtimes
-are told the prefix they serve under, so each answers at the addresses it emits
-([base-path.md](base-path.md)); the session cookie is issued at the origin root, so one
-sign-in reaches every application in the suite.
-
-**Isolated mode** gives each application its own hostname, declared when it is installed. A
-session established on one hostname does not authenticate against another. An application with
-no hostname fails the start rather than being catalogued, started, and left unreachable.
+An earlier `--mode isolated` gave each application its own hostname and no shared session. It is
+gone: a suite is defined by sharing an origin and a sign-in, and a mode that undid both was a
+second deployment shape to reason about, document and test — which
+[suite-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/suite-architecture.md)
+Decision 12 removes so that development and production have one topology between them. An
+application that must not share a session with its neighbours gets its own suite.
 
 ## The gateway routes, the ingress protects
 
@@ -94,7 +85,7 @@ hop later repairs it.
 The gateway speaks HTTP/1.1 by default. `--http2` serves and forwards cleartext HTTP/2 (h2c):
 
 ```sh
-tesseraql host --suite /srv/tesseraql/apps --port 8080 --mode suite --http2
+tesseraql host --suite /srv/tesseraql/apps --port 8080 --http2
 ```
 
 **One switch moves both hops** — the client's connection to the gateway and the gateway's
@@ -135,8 +126,8 @@ shows the application whose runtime serves it.
 
 **Data isolation is enabled, not guaranteed.** The framework does not verify that co-hosted
 applications reach different data, and does not claim to. An application declares the shape of
-its datasource; the operator installing it supplies the connection. Under suite mode they
-share one by design.
+its datasource; the operator installing it supplies the connection, and a suite shares one by
+design.
 
 Nor is this a security boundary. The applications share a JVM, which offers no in-process
 mechanism to confine bytecode. This is why the [admission profile](admission.md) requires a

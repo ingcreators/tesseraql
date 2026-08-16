@@ -51,7 +51,7 @@ class MultiAppGatewayIntegrationTest {
         installRoot = Files.createTempDirectory("tesseraql-gateway-it");
         installApp("shop-a", "a", List.of());
         installApp("shop-b", "b", List.of("tenant-b"));
-        gateway = MultiAppGateway.start(installRoot, 0, MultiAppGateway.Mode.SUITE);
+        gateway = MultiAppGateway.start(installRoot, 0);
     }
 
     @AfterAll
@@ -82,8 +82,7 @@ class MultiAppGatewayIntegrationTest {
      */
     @Test
     void closingTheGatewayReleasesWhatItOpened() throws Exception {
-        MultiAppGateway second = MultiAppGateway.start(installRoot, 0,
-                MultiAppGateway.Mode.SUITE);
+        MultiAppGateway second = MultiAppGateway.start(installRoot, 0);
         io.vertx.core.Vertx vertx = field(second, "vertx", io.vertx.core.Vertx.class);
         int port = second.port();
         assertThat(statusOf(second, "/apps/shop-a/api/items")).isEqualTo(200);
@@ -138,56 +137,19 @@ class MultiAppGatewayIntegrationTest {
     }
 
     /**
-     * Isolated hosting addresses each app by its own hostname, and the shared-origin prefix is
-     * not also live (docs/app-isolation-model.md decision 2).
+     * There is one address, and a hostname is not it (docs/suite-architecture.md Decision 12).
      *
-     * <p>Both addressings used to answer at once, so an operator who separated apps by hostname
-     * — the reason to separate them being that a session must not cross — still had every app on
-     * one origin through {@code /apps/<id>/}, where a session does cross. One mode, one address.
+     * <p>Host-header routing went with independent hosting. Kept as a test because "the gateway
+     * ignores the Host header" is the property that replaced a mode, not an absence of one.
      */
     @Test
-    void isolatedModeRoutesByHostAndRefusesTheSharedPrefix() throws Exception {
-        try (MultiAppGateway isolated = MultiAppGateway.start(installRoot, 0,
-                MultiAppGateway.Mode.ISOLATED)) {
-            assertThat(itemNameForHost(isolated, "shop-a.localhost")).isEqualTo("from-a");
-            assertThat(itemNameForHost(isolated, "shop-b.localhost")).isEqualTo("from-b");
-
-            assertThat(statusOf(isolated, "/apps/shop-a/api/items"))
-                    .as("the shared origin is not an address in isolated hosting")
-                    .isEqualTo(404);
-        }
-    }
-
-    /** And the converse: suite mode answers on the prefix and not on a hostname. */
-    @Test
-    void suiteModeRoutesByPrefixAndIgnoresHostnames() throws Exception {
+    void aHostnameIsNotAnAddress() throws Exception {
         assertThat(itemName("shop-a")).isEqualTo("from-a");
 
         String response = rawGet(gateway, "/api/items", "shop-a.localhost");
         assertThat(response)
                 .as("a hostname is not an address in suite mode")
                 .startsWith("HTTP/1.1 404");
-    }
-
-    /**
-     * An app with no hostname would be catalogued, started, and unreachable under isolated
-     * hosting. Failing the start says so; a silent unreachable app does not.
-     */
-    @Test
-    void isolatedModeRefusesAnAppWithNoHostname() throws Exception {
-        Path root = Files.createTempDirectory("tesseraql-gw-addressless");
-        try {
-            new AppCatalog(root).register(
-                    new InstalledApp("addressless", "1.0.0", "addressless/1.0.0", List.of()));
-
-            assertThatThrownBy(() -> MultiAppGateway.start(root, 0, MultiAppGateway.Mode.ISOLATED))
-                    .hasMessageContaining("addressless")
-                    .hasMessageContaining("hostname");
-        } finally {
-            try (Stream<Path> files = Files.walk(root)) {
-                files.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-            }
-        }
     }
 
     /**
@@ -421,7 +383,7 @@ class MultiAppGatewayIntegrationTest {
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
         new AppCatalog(installRoot).register(new InstalledApp(
-                appId, "1.0.0", appId + "/1.0.0", entitledTenants, List.of(appId + ".localhost")));
+                appId, "1.0.0", appId + "/1.0.0", entitledTenants));
     }
 
     private static void copy(Path source, Path target, Path path) {
