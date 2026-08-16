@@ -6,7 +6,11 @@ The framework carried two multi-app models. One was documented, reachable, and s
 everything; the other isolated properly and had never had a caller. This decides which serves
 what, scopes each honestly, and records what the framework does **not** promise.
 
-## What exists today
+## What existed when this was written
+
+Read as the starting state, not as the current one. This section is the survey the decisions below
+were made against; the slices then changed two of the facts in it, and the corrections are marked
+where they occur.
 
 **① In-process mounting** (`SystemApps` / `AppSources`). One `TesseraqlRuntime` mounts several
 apps from two sources: the five `AppSourceProvider` system apps discovered through
@@ -22,6 +26,14 @@ port — with a single-port gateway in front routing by `Host` header or an `/ap
 prefix. It carries an upgrader and canary weights. It has **no CLI or plugin entry point**,
 no user documentation, and recorded defects that were deferred precisely because it has no
 production callers.
+
+> **Corrected 2026-08-16 — that last sentence stopped being true inside this document's own
+> campaign, and was never updated.** Follow-up 4 below records `tesseraql host --install-root <dir>
+> --mode <suite|isolated>` as **Done (#693)**, and `hosting.md` now documents both modes with a
+> comparison table on the published site. ② has an entry point, user documentation and a reference
+> page. It is still true that it has no *known* production callers, which is a weaker claim and the
+> only one that should be relied on. It was relied on twice in `suite-architecture.md` before this
+> correction: read that document's Decision 12 and slice 3 note, not this paragraph.
 
 ### What ① actually costs its users
 

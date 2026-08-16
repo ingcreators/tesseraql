@@ -20,11 +20,12 @@ belong to the suite rather than being copied into every application.
 | Document | What changes |
 | --- | --- |
 | [authorization-server.md](authorization-server.md) | Decision 1 ("neither build nor adopt, yet") is reopened. Its survey asked which library could be *embedded*; it never priced building a companion, which is what is now proposed |
-| [app-isolation-model.md](app-isolation-model.md) | Decision 2's independent-hosting mode is dropped; Decision 4 (per-app ops console) is reversed; ① stops being a deployment shape and remains only a mechanism |
+| [app-isolation-model.md](app-isolation-model.md) | Decision 2's independent-hosting mode is dropped — a **shipped, documented** mode, not an unreachable one, see Decision 12; Decision 4 (per-app ops console) is reversed; ① stops being a deployment shape and remains only a mechanism. Its "what existed" survey is marked as the starting state it always was |
 | [audit-hardening.md](audit-hardening.md) | Open question 10's deferral condition for slices 6 and 7 is widened — see Decision 2 |
 | [session-token-exchange.md](session-token-exchange.md) | Decision 1's premise ("there is no private key anywhere in the tree, and there will not be one") does not survive Decision 8; its refusal of refresh tokens and of a revocation store is answered differently for a different audience — Decision 9 |
 | [threat-model.md](threat-model.md) | Gains an explicit row accepting framework identification — see Decision 21 |
 | [base-path.md](base-path.md) | An application's base path becomes catalogue-driven rather than mode-derived |
+| [hosting.md](hosting.md) | Loses "The two modes" once independent hosting goes, and gains whatever the suite's development loop turns out to be — slice 3 |
 
 ## Decisions
 
@@ -355,11 +356,23 @@ connect-and-observe pass that open question 6 calls for.
 per-host session cookies, per-application datasources — is intended for "unrelated apps, or apps
 from different authors." It is dropped.
 
-**Nothing reachable is being deleted.** That document records ② as having "no CLI or plugin entry
-point, no user documentation, and recorded defects that were deferred precisely because it has no
-production callers." Independent hosting is half of an already-unreachable mechanism, and pre-1.0
-carries no migration obligation. In code the mode is thin: a `Mode` enum, a `hostToApp` lookup
-consulted first, and one conditional in the base-path assigner.
+**A documented feature is being deleted, and this paragraph used to deny it.** It quoted
+`app-isolation-model.md`'s "no CLI or plugin entry point, no user documentation" — a sentence that
+document wrote about its own starting state and never updated once its follow-ups closed the gap.
+Measured 2026-08-16: `HostCommand` is registered in `TesseraqlCli`, `tesseraql host --mode isolated`
+runs, `hosting.md` carries a two-mode comparison table, the page is published, and
+`reference-cli.md` has the row. Independent hosting is reachable, documented and shipped.
+
+**The deletion is still right, on the ground the next paragraph gives** — development and production
+parity — which never depended on how many callers the mode has. What changes is the accounting: this
+removes a feature rather than tidying away an unreachable one, so it is a breaking change and is
+recorded as one. Pre-1.0 that costs no migration path and no upgrade instructions; it does cost an
+honest changelog line saying the mode is gone and why, and the removal of the mode table from
+`hosting.md` rather than its quiet decay.
+
+What *is* thin is the code: a `Mode` enum, a `hostToApp` lookup consulted first, and one conditional
+in the base-path assigner. Small to remove is not the same as unreachable, and conflating the two is
+how a shipped feature disappears without anyone writing it down.
 
 **The gateway-less single-application shape goes too**, which is the larger half of this decision.
 The argument is development and production parity: a team building several interlocking
@@ -792,10 +805,26 @@ Ordering is by dependency, not by size.
 | 7 | Ops console becomes a suite-level shell with a switcher, delegating over HTTP | 3 |
 | 8 | Studio becomes a suite-level shell with a switcher, including per-application edit authorisation | 7 |
 
-**Slice 3 carries the largest hidden cost**, and it is not the deletion. ② has no CLI entry point;
-making it the only shape puts building one — the development loop, reload, Studio, `--embedded-db`,
-all through the gateway — on the critical path. It should be estimated as the slice's main body
-rather than its tail.
+**Slice 3 carries the largest hidden cost**, and it is not the deletion — but the cost is not where
+this note first put it. It said ② has no CLI entry point and that building one is the slice's main
+body. `tesseraql host` exists and is registered, and Studio behind the gateway shipped as
+`app-isolation-model.md`'s follow-up 5 (#701), verified by `SuiteModeIntegrationTest` opening Studio
+through `/apps/<id>/`. Two of the four items named were already done.
+
+**The measured gap, 2026-08-16.** What `serve` carries and `host` does not: `--env`, `--log-format`,
+`--log-level`, `--watch`, `--modules`, `--embedded-db`, `--embedded-db-port`,
+`--embedded-db-version`, and with them `ModulesInstaller`, the `CliModules` classloader,
+`ExpressionFunctions.install`, `ModuleDrivers.register` and `EmbeddedPostgresSupport`.
+
+Some of that is cheap. `watchRoutes` is a per-runtime method, so a suite watches by calling it on
+each hosted runtime rather than by growing a mechanism.
+
+**The structural half is the real body, and it is one sentence long:** `serve --app <dir>` runs a
+source tree being edited, and `host --install-root <dir>` runs installed packages recorded in a
+catalogue. Making the suite the only shape means the development loop has to point at source trees
+without packaging them first. `AppCatalog.register` is public, so synthesising a catalogue over
+source directories is available; whether that is the answer, or an option on `host`, or a separate
+verb, is not decided here.
 
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
 campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author
