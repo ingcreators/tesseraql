@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql host --http2`** (docs/hosting.md). Serves and forwards cleartext HTTP/2. One switch
+  moves both hops — the client's connection to the gateway and the gateway's connection to each
+  application — because enabling it at one end alone breaks request framing. An application that
+  does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as before, and an
+  HTTP/1.1 client still reaches an h2c gateway: the upgrade is offered, not required. Off by
+  default, because the front this replaced spoke HTTP/1.1 only.
+  Getting there needed one fix that is worth naming, because it presents as something else
+  entirely: over HTTP/2 a `GET` still ends its stream with a data event, so the relay saw a body of
+  unknown length and produced an outbound request with neither a declared length nor chunked
+  framing. Vert.x refused the write on the event loop while the request itself succeeded, so the
+  only symptom was a stack trace per request — every page load and every event stream, in the log,
+  forever. An unknown length on a method that cannot carry a body is zero.
+
 - **`response.json.headers:` and `response.json.headersWhen:`** (docs/response-shaping.md). The
   block existed on `response.html` only; on a JSON route it deserialized away at runtime, so a
   declared header simply did not arrive. (The linter did report it — `TQL-YAML-1043` walks every

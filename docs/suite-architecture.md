@@ -474,11 +474,21 @@ which sources are trusted, which is a configuration and a decision this slice do
 available later without anything here standing in its way. This is the same division the decision is
 drawing anyway: **the gateway routes, the ingress protects.**
 
-**The front stays HTTP/1.1.** `com.sun.net.httpserver` spoke nothing else, so no client ever reached
-a hosted app over h2c through the gateway; enabling it here would be new behaviour, and it has to be
-enabled at both ends together or a body arriving over HTTP/2 is piped into an HTTP/1.1 request with
-neither a declared length nor chunked framing. Serving both end to end is worth doing deliberately,
-with the differential test run twice; it is not this slice.
+**The front is HTTP/1.1 by default, and HTTP/2 is one switch that moves both hops.**
+`com.sun.net.httpserver` spoke nothing else, so no client ever reached a hosted app over h2c through
+the gateway; serving it is new behaviour and an operator asks for it (`--http2`).
+
+The defect that made this look unshippable is worth recording, because three separate diagnoses of
+it were wrong and each was reasoning ahead of a measurement that was cheap to take. An h2c front
+logged an `IllegalStateException` on the event loop for every request, while the request itself
+succeeded. The wrong answers, in order: that the outbound hop was HTTP/1.1 (the stack named
+`HttpClientRequestImpl`, which serves *both* protocols and says nothing about which); that HTTP/2
+omits `content-length` and large uploads were the casualty (an 8 MB `POST` arrives as
+`length=8388608` and relays cleanly); and that no extension point could reach it (one could). What
+the body lengths actually showed: **`GET length=-1`**. Over HTTP/2 a `GET` still ends its stream
+with a data event, so the proxy relays a body of unknown length, and an unknown length on a method
+that cannot carry a body is zero. Saying so — `Body.body(Buffer.buffer())` in a request interceptor
+— is the whole fix. The pairing was never the problem: HTTP/1.1 in and HTTP/2 out is clean.
 
 **And the deliverable as first written could not be built.** "Run one gallery application's
 declarative suite twice" assumes that suite drives HTTP. It does not: every case kind `TestRunner`

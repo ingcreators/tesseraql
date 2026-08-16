@@ -11,6 +11,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.net.http.HttpClient.Version;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -44,8 +45,14 @@ class SuiteRelayTest {
     private static HttpServer origin;
     private static HttpServer front;
     private static String base;
+    /** The same relay with cleartext HTTP/2 on, at both ends together. */
+    private static HttpClient h2Client;
+    private static HttpServer h2Front;
+    private static String h2Base;
     /** What the origin actually received, so ingress stripping is observable on the wire. */
     private static volatile Map<String, String> lastRequestHeaders = Map.of();
+    /** The protocol the origin saw on the second hop, so a case can prove both hops moved. */
+    private static volatile String lastOriginVersion = "";
 
     @BeforeAll
     static void start() throws Exception {
@@ -58,13 +65,29 @@ class SuiteRelayTest {
 
         SuiteRelay relay = new SuiteRelay(client, MultiAppGateway.Mode.SUITE, Map.of(),
                 Map.of(), appId -> originPort);
-        front = vertx.createHttpServer(SuiteRelay.frontOptions(0));
+        front = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
         front.requestHandler(relay::handle);
         base = "http://localhost:" + await(front.listen()).actualPort() + "/apps/" + APP;
+
+        // The h2c pair. Enabling it at one end only is what breaks: a body arriving over HTTP/2
+        // and piped into an HTTP/1.1 request has neither a declared length nor chunked framing,
+        // and Vert.x refuses the write on the event loop. One setting moves both.
+        h2Client = vertx.createHttpClient(SuiteRelay.outboundOptions(true));
+        SuiteRelay h2Relay = new SuiteRelay(h2Client, MultiAppGateway.Mode.SUITE, Map.of(),
+                Map.of(), appId -> originPort);
+        h2Front = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
+        h2Front.requestHandler(h2Relay::handle);
+        h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/apps/" + APP;
     }
 
     @AfterAll
     static void stop() throws Exception {
+        if (h2Front != null) {
+            await(h2Front.close());
+        }
+        if (h2Client != null) {
+            await(h2Client.close());
+        }
         if (front != null) {
             await(front.close());
         }
@@ -183,6 +206,106 @@ class SuiteRelayTest {
                 .isEqualTo(96L * 1024 * 1024);
     }
 
+    /**
+     * With HTTP/2 served and forwarded, the relay stays transparent.
+     *
+     * <p>The setting moves both hops on purpose, and this is why: an earlier build accepted h2c at
+     * the front while the hop to the app stayed HTTP/1.1, and a request body arriving over HTTP/2
+     * was piped into an outbound request with neither a declared length nor chunked framing —
+     * Vert.x refused the write on the event loop, so an upload failed with nothing in the response
+     * to say why. The body cases are the ones that catch it.
+     */
+    @Test
+    void http2CarriesBodiesAndStreamsInBothDirections() throws Exception {
+        int upload = 8 * 1024 * 1024;
+        HttpResponse<String> sent = sendOver(Version.HTTP_2,
+                HttpRequest.newBuilder(URI.create(h2Base + "/upload"))
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[upload])));
+
+        assertThat(sent.version()).as("the client really did negotiate h2c")
+                .isEqualTo(Version.HTTP_2);
+        assertThat(sent.statusCode()).isEqualTo(200);
+        assertThat(sent.body()).as("every byte crossed both hops")
+                .isEqualTo(String.valueOf(upload));
+        assertThat(lastOriginVersion).as("the second hop moved with the first").isEqualTo("HTTP_2");
+
+        HttpResponse<String> chunked = sendOver(Version.HTTP_2,
+                HttpRequest.newBuilder(URI.create(h2Base + "/chunked")));
+        assertThat(chunked.body()).isEqualTo("one-two-three");
+
+        List<Long> arrivals = readStream(h2Base + "/sse");
+        assertThat(arrivals).hasSize(EVENTS);
+        assertThat(arrivals.getLast() - arrivals.getFirst())
+                .as("frames still arrive as they are written")
+                .isGreaterThan(GAP_MILLIS * (EVENTS - 1) / 2);
+    }
+
+    /**
+     * A body arriving over HTTP/1.1 at an h2c front still reaches the app.
+     *
+     * <p>Worth its own case because the first diagnosis of the h2c defect blamed the mismatched
+     * pair, and the pair is not the problem: this one relays HTTP/1.1 in and HTTP/2 out and is
+     * clean. What broke was a request the proxy treated as having a body of unknown length.
+     */
+    @Test
+    void anHttp11BodyReachesTheAppThroughAnHttp2Front() throws Exception {
+        int upload = 1024 * 1024;
+
+        HttpResponse<String> sent = sendOver(Version.HTTP_1_1,
+                HttpRequest.newBuilder(URI.create(h2Base + "/upload"))
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[upload])));
+
+        assertThat(sent.statusCode()).isEqualTo(200);
+        assertThat(sent.body()).isEqualTo(String.valueOf(upload));
+        assertThat(lastOriginVersion).as("and the hop to the app still used HTTP/2")
+                .isEqualTo("HTTP_2");
+    }
+
+    /**
+     * An application that does not speak h2c stays reachable through an h2c front.
+     *
+     * <p>This is the claim the outbound options make and it has to be checked, because the
+     * obvious alternative breaks it: asking for HTTP/2 with prior knowledge rather than through an
+     * upgrade makes the client open with an HTTP/2 preface, an HTTP/1.1-only origin answers with
+     * something else, and the connection is evicted — measured as a 502. The upgrade negotiates,
+     * so an origin that declines it is served over HTTP/1.1 as before.
+     */
+    @Test
+    void anAppThatDoesNotSpeakHttp2StaysReachable() throws Exception {
+        HttpServer plainOrigin = vertx.createHttpServer(
+                new HttpServerOptions().setPort(0).setHttp2ClearTextEnabled(false));
+        plainOrigin.requestHandler(SuiteRelayTest::serveStub);
+        int plainPort = await(plainOrigin.listen()).actualPort();
+        SuiteRelay relay = new SuiteRelay(h2Client, MultiAppGateway.Mode.SUITE, Map.of(),
+                Map.of(), appId -> plainPort);
+        HttpServer h2FrontToPlain = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
+        h2FrontToPlain.requestHandler(relay::handle);
+        String plainBase = "http://localhost:" + await(h2FrontToPlain.listen()).actualPort()
+                + "/apps/" + APP;
+        try {
+            HttpResponse<String> response = sendOver(Version.HTTP_2,
+                    HttpRequest.newBuilder(URI.create(plainBase + "/chunked")));
+
+            assertThat(response.statusCode()).as("reachable, not a 502").isEqualTo(200);
+            assertThat(response.body()).isEqualTo("one-two-three");
+            assertThat(lastOriginVersion).as("served over HTTP/1.1, as that origin can")
+                    .isEqualTo("HTTP_1_1");
+        } finally {
+            await(h2FrontToPlain.close());
+            await(plainOrigin.close());
+        }
+    }
+
+    /** An HTTP/1.1 client still reaches an h2c-enabled front; the upgrade is offered, not required. */
+    @Test
+    void anHttp11ClientStillReachesAnHttp2Front() throws Exception {
+        HttpResponse<String> response = sendOver(Version.HTTP_1_1,
+                HttpRequest.newBuilder(URI.create(h2Base + "/chunked")));
+
+        assertThat(response.version()).isEqualTo(Version.HTTP_1_1);
+        assertThat(response.body()).isEqualTo("one-two-three");
+    }
+
     /** No app answers at this address, and the relay says so rather than proxying. */
     @Test
     void anAddressNoAppAnswersIsRefusedHere() throws Exception {
@@ -200,6 +323,7 @@ class SuiteRelayTest {
         request.headers().forEach(entry -> received
                 .put(entry.getKey().toLowerCase(java.util.Locale.ROOT), entry.getValue()));
         lastRequestHeaders = Map.copyOf(received);
+        lastOriginVersion = String.valueOf(request.version());
 
         HttpServerResponse response = request.response();
         String path = request.path();
@@ -262,8 +386,16 @@ class SuiteRelayTest {
     }
 
     private static HttpResponse<String> send(HttpRequest.Builder request) throws Exception {
-        try (java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient()) {
-            return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return sendOver(Version.HTTP_1_1, request);
+    }
+
+    /** Sends pinned to one protocol, so a case says which wire it exercised. */
+    private static HttpResponse<String> sendOver(Version version, HttpRequest.Builder request)
+            throws Exception {
+        try (java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                .version(version).build()) {
+            return http.send(request.version(version).build(),
+                    HttpResponse.BodyHandlers.ofString());
         }
     }
 

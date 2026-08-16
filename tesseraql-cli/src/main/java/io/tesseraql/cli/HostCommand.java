@@ -32,6 +32,13 @@ final class HostCommand implements Callable<Integer> {
                     + " isolated: a hostname per app, sessions not shared. Default suite.")
     String mode = "suite";
 
+    @Option(names = {
+            "--http2"}, description = "Serve and forward cleartext HTTP/2 (h2c). Off by default."
+                    + " One switch moves both hops: a client's connection to the gateway and the"
+                    + " gateway's connection to each app. An app that does not offer h2c answers"
+                    + " the upgrade over HTTP/1.1 and is reached exactly as before.")
+    boolean http2;
+
     @Override
     public Integer call() throws Exception {
         MultiAppGateway.Mode selected;
@@ -42,11 +49,12 @@ final class HostCommand implements Callable<Integer> {
             return 2;
         }
 
-        try (MultiAppGateway gateway = MultiAppGateway.start(installRoot, port, selected)) {
+        try (MultiAppGateway gateway = MultiAppGateway.start(installRoot, port,
+                new MultiAppGateway.Settings(selected, http2))) {
             System.out.println("TesseraQL hosting " + gateway.appIds().size()
                     + " app(s) on port " + gateway.port() + " (" + mode.toLowerCase(
                             java.util.Locale.ROOT)
-                    + " mode)");
+                    + " mode" + (http2 ? ", h2c" : "") + ")");
             for (String appId : gateway.appIds()) {
                 System.out.println("  " + appId);
             }
