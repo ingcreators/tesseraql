@@ -25,7 +25,7 @@ belong to the suite rather than being copied into every application.
 | [session-token-exchange.md](session-token-exchange.md) | Decision 1's premise ("there is no private key anywhere in the tree, and there will not be one") does not survive Decision 8; its refusal of refresh tokens and of a revocation store is answered differently for a different audience — Decision 9 |
 | [threat-model.md](threat-model.md) | Gains an explicit row accepting framework identification — see Decision 21 |
 | [base-path.md](base-path.md) | An application's base path becomes catalogue-driven rather than mode-derived |
-| [hosting.md](hosting.md) | Loses "The two modes" once independent hosting goes, and gains whatever the suite's development loop turns out to be — slice 3 |
+| [hosting.md](hosting.md) | Loses "The two modes" once independent hosting goes, and gains the suite's development loop — slice 3, over [cli-surface.md](cli-surface.md) |
 
 ## Decisions
 
@@ -822,9 +822,13 @@ each hosted runtime rather than by growing a mechanism.
 **The structural half is the real body, and it is one sentence long:** `serve --app <dir>` runs a
 source tree being edited, and `host --install-root <dir>` runs installed packages recorded in a
 catalogue. Making the suite the only shape means the development loop has to point at source trees
-without packaging them first. `AppCatalog.register` is public, so synthesising a catalogue over
-source directories is available; whether that is the answer, or an option on `host`, or a separate
-verb, is not decided here.
+without packaging them first.
+
+**That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer is
+that the flag carries the distinction, where a reader can see it: `--app` is one application,
+`--suite` is several — a catalogue or a folder of source trees, both being "the applications here".
+So `--install-root` is replaced by the word this document already uses, narrowing a suite is passing
+`--app` instead of `--suite`, and `serve` becomes `dev`.
 
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
 campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author

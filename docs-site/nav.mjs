@@ -240,4 +240,6 @@ export const EXCLUDED = [
   'suite-architecture.md',
   // How the authorization server is built: CXF's grant layer, own endpoints, 2026-08-16.
   'token-issuance.md',
+  // What a CLI argument means, and the option sets a command belongs to, 2026-08-16.
+  'cli-surface.md',
 ];
