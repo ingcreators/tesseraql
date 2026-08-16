@@ -197,8 +197,9 @@ already does, at bind time, naming the port.
 
 **The gateway's port has no configuration key, only `--port`.** Under
 [suite-architecture.md](suite-architecture.md) Decision 16 it is the host's setting, not an
-application's, and a suite-level configuration file does not exist yet. Adding it there is a
-separate decision and belongs with the host context object of slice 3.
+application's, and a suite-level configuration file did not exist when this was written. One does
+now — **Decision 22's `suite.yml`** — and the port deliberately **stays out of it**. That file
+carries the settings whose divergence fails silently; a wrong port fails at bind, naming the port.
 
 **A consequence found while writing this, which is a pre-existing defect rather than a new one.**
 Studio's API console builds `"http://127.0.0.1:" + port + path`. It carries no base path, so behind
@@ -343,8 +344,8 @@ and gains its options.
 
 | Command | Change |
 | --- | --- |
-| `serve` | **becomes `dev`**; `--app` gains `--suite` beside it; `+config` (already had `--env`) |
-| `host` | `--install-root` → **`--app` / `--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; `+config` |
+| `serve` | **becomes `dev`**; `--app` gains `--suite` beside it; gains `--suite-config` (`suite-architecture.md` Decision 22); `+config` (already had `--env`) |
+| `host` | `--install-root` → **`--app` / `--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--suite-config` (Decision 22); `+config` |
 | `mcp` | gains **`--suite`** — `suite-architecture.md` Decision 19 makes the development-tool MCP span the suite; `--read-only` becomes a property of the server, not of an application; `+config` |
 | `new` | `--dir` → **`--app`**. It is the directory that becomes an application home, and every other command calls that `--app` |
 | `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |

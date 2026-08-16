@@ -649,14 +649,12 @@ the address the catalogue declares and the cookie path. It replaced the position
 the app-id-to-prefix function the host used to be handed, so the catalogue is now the single source
 of an application's address.
 
-**The remaining three are gated on a question this document did not ask: where does a host read its
+**The remaining three were gated on a question this document did not ask: where does a host read its
 own settings from?** `tesseraql.framework.datasource`, the external origin and the issuer/JWKS
-triple all need a host-scoped source, and none exists —
+triple all need a host-scoped source, and none existed —
 [cli-surface.md](cli-surface.md) records the same gap from the other side for the gateway's port
-("a suite-level configuration file does not exist yet"). The candidates are a suite configuration
-file beside the applications, options on `host` and `dev`, or both with the flags overriding. It is
-a user-facing surface rather than an internal shape, so it is named here and decided before the
-`security` migration hoist, which cannot be built without it.
+("a suite-level configuration file does not exist yet"). **Decision 22 answers it**, and the
+`security` migration hoist below is built on that answer.
 
 ### 17. The URL scheme is one rule applied at two scopes
 
@@ -805,6 +803,112 @@ Attack surface is reduced by **removing surfaces, not renaming them** — `tesse
 false`, `tesseraql.apps.<name>.enabled` for individual framework applications, and ingress rules by
 prefix.
 
+### 22. A suite declares its own settings in a file beside its applications
+
+Decision 16 named three settings that belong to the host and stopped short of building them for one
+reason: **a host has nowhere to read its own settings from.** [cli-surface.md](cli-surface.md)
+reached the same wall from the other side over the gateway's port, and deferred the answer to here.
+
+**The answer is `suite.yml`, in the directory `--suite` names.** It is loaded through the
+configuration loader applications already use, so `${secret.…}` and `${ENV_VAR:default}` resolve in
+it exactly as they do in `config/tesseraql.yml` — open question 3 already confirmed that
+`SecretResolvers.discover()` is process-scoped and reachable at host scope.
+
+```yaml
+# work/suite.yml — the same file the deployment ships and the developer runs against
+framework:
+  datasource:
+    jdbcUrl: jdbc:postgresql://${DB_HOST:localhost}:5432/suite
+    username: ${secret.env.SUITE_DB_USER}
+    password: ${secret.env.SUITE_DB_PASSWORD}
+externalOrigin: https://apps.example.com
+security:
+  jwt:
+    algorithm: RS256
+    issuer: https://apps.example.com/_tesseraql/oauth
+    jwksUri: https://apps.example.com/_tesseraql/oauth/jwks
+```
+
+`--app` names one application, and there is no directory there that is not the application's own
+tree. The application's files do not name their deployment (base-path.md decision 1 holds the same
+line for the prefix), so the file is **not** read out of `config/`; it is named explicitly with
+`--suite-config <file>`, or there is none.
+
+#### What goes in the file, and what stays on a flag
+
+The rule is decision 16's own, applied to the operator's surface: **a setting belongs in the file
+when divergence — between applications, or between development and production — fails silently.**
+
+| Declared in `suite.yml` | Why it cannot be a flag |
+| --- | --- |
+| `framework.datasource` | Divergence presents as "signing in does not carry", which reads as a framework defect |
+| `externalOrigin` | Decision 6 requires MCP's `resource` to match what the user typed character for character |
+| `security.jwt.algorithm` / `issuer` / `jwksUri` | One authorization server means one issuer and one key set |
+
+| Stays a flag | Why it does not need declaring |
+| --- | --- |
+| `--port` | A wrong value fails at bind, naming the port |
+| `--http2` | A wrong value fails at the handshake |
+| `--trusted-proxies` | It describes *this* deployment's topology, not the suite's |
+
+That closes cli-surface.md's open note with a reason rather than a deferral: **the gateway's port
+stays flag-only.** It was never the silent-divergence case that motivated the file.
+
+#### The file is optional, and the alternative to it is agreement rather than silence
+
+A suite of one needs nothing declared, and a development workspace should not have to carry a file
+to run. So `suite.yml` may be absent — but "absent" must not restore the failure mode the file
+exists to remove.
+
+**With no file and more than one application, the host checks that the applications agree.** It
+resolves each application's framework datasource coordinate (the `tesseraql.framework.datasource`
+name, then that entry's `jdbcUrl` and `username`, after placeholder resolution) and refuses to start
+when they differ, naming each application and its coordinate — **TQL-APP-4211**. The gateway
+already loads every application's manifest, for ingress header stripping, so this costs a
+comparison rather than a pass over the tree.
+
+The comparison is on the resolved strings, exactly. That will refuse a suite whose applications
+name the same database as `localhost` and `127.0.0.1`, which is a false refusal — and it is the
+right way round: **a false refusal is loud and one edit from fixed; a false pass is a suite where
+signing in silently does not carry.**
+
+#### An application's framework datasource is a name; a suite's is a coordinate
+
+`tesseraql.framework.datasource` names an entry in the application's own `tesseraql.datasources`.
+The suite declares a connection instead, and the host builds one pool from it and hands it to every
+runtime through `HostContext` — the name indirection is not involved, so no reserved datasource name
+has to be invented and no application's registry gains an entry it did not declare.
+
+An application that **explicitly** declares `tesseraql.framework.datasource` while the suite
+supplies a coordinate is refused — **TQL-APP-4212**. It asked for framework state on a particular
+pool and the host is replacing that pool; ignoring the request would be the silent divergence this
+decision exists to remove. The default (`main`, unstated) is not a request, so the host simply wins.
+
+#### Rejected
+
+**Flags alone.** The list reaches eight options, a database password lands in shell history and
+process listings, and the values that must be identical between development and production live
+nowhere a repository can hold them — which is exactly the case the stated priority names first: a
+single team building interlocking applications, developing locally in the shape they deploy.
+
+**A file with flag overrides.** cli-surface.md rejected the same shape for `--port` and for
+`server.port`, both times because one meaning acquired two sources. A reader of a running deployment
+would have to check both, and the interesting failures are the ones where the file says what
+everybody read and the flag says what actually ran.
+
+**A key inside each application.** This is decision 16's original rejection, unchanged:
+`CookiePath`'s documentation already records why an operator setting a suite-wide value per
+application is a defect generator rather than a flexibility.
+
+#### What it owes
+
+A JSON schema sidecar for the documentation portal, an entry in the lint registry so a malformed or
+misspelled `suite.yml` is a refusal rather than a shrug, and a `hosting.md` section. **The word
+already means something else in this codebase** — `TestSuite` is a set of route tests inside an
+application — and `--suite` (cli-surface.md decision 1) already committed the deployment sense of
+it. The scopes do not overlap in any path, so the collision is accepted and named rather than
+renamed around.
+
 ## Slices
 
 Ordering is by dependency, not by size.
@@ -813,7 +917,7 @@ Ordering is by dependency, not by size.
 | --- | --- | --- |
 | 1 | ~~Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division~~ — **shipped 2026-08-16**; the measurement found a dropped-body defect beside the predicted buffering one and moved the relay to `vertx-http-proxy` (Decision 13) | — |
 | 2 | ~~Login response returns the CSRF token; `tesseraql token --url`; console issue-token page~~ — **shipped 2026-08-16**; all three as designed, plus the mint extracted so the page and the endpoint cannot drift (Decision 20) | — |
-| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS; `security` migration hoisted to the host with runtimes validating; CLI entry point for the suite, including the suite-spanning development-tool MCP (Decision 19) | 1 |
+| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS, over the `suite.yml` Decision 22 introduces; `security` migration hoisted to the host with runtimes validating; CLI entry point for the suite, including the suite-spanning development-tool MCP (Decision 19) | 1 |
 | 4 | Identity surfaces become suite-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |
 | 5 | Authorization server: candidate decided, endpoints, open DCR, consent per client and resource, refresh rotation with reuse detection, RS256 and JWKS, brokering to an external provider | 4 |
 | 6 | MCP resource metadata, the transport gate, and the gateway's well-known routing (`audit-hardening.md` slices 6 and 7) | 5 |
