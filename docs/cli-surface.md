@@ -148,6 +148,42 @@ running through the gateway either way, because Decision 12 makes that the only 
 and `--trusted-proxies`, and gains nothing from `dev`. An `--embedded-db` in production is not a
 feature.
 
+### 4a. `--port` is the front door, and an application's own `server.port` stops being one
+
+On both `dev` and `host`, `--port` is the **gateway's** port. Every application runtime behind it
+gets an ephemeral internal port, which is what `MultiAppHost` already does.
+
+That is not a new rule for `host`, where `--port` has always meant this. It is a change for the
+command that was `serve`, where `--port` overrode the application's own `server.port` and the
+application *was* the front door. Under
+[suite-architecture.md](suite-architecture.md) Decision 12 there is no shape in which it is.
+
+**So `server.port` needs an answer, because the silent one is wrong.** Today an application
+declaring `server.port: 9000` and started by `serve` answers on 9000; started through a host it gets
+`freePort()` and the declared value is discarded with nothing said. That is precisely the failure
+[suite-architecture.md](suite-architecture.md) Decision 16 names — a setting that only the host can
+know correctly, where divergence between applications fails silently.
+
+The resolution, in order:
+
+1. `--port`, always.
+2. Otherwise, if the suite holds **exactly one** application and it declares `server.port`, that —
+   which keeps `dev --app ./orders` behaving as `serve --app ./orders` did, and that is the case
+   anyone actually configured.
+3. Otherwise `8080`.
+
+**Several applications declaring `server.port` is a refusal, not a tie-break.** They cannot all have
+the front port, and picking one silently is how an operator spends an afternoon. The error names
+every application that declared it and points at `--port`.
+
+**A consequence found while writing this, which is a pre-existing defect rather than a new one.**
+Studio's API console builds `"http://127.0.0.1:" + port + path`. It carries no base path, so behind
+a gateway it addresses `/api/users` on a runtime serving `/apps/<id>/api/users` and gets a 404. It
+also guards on `port <= 0` with the message "the API console needs a fixed `server.port`", which
+reads as a configuration problem when the port is simply internal now. Both are wrong once every
+deployment is a suite, and neither is created by this document — recorded here because slice 3 is
+what makes them universal, and because the console is the surface a developer meets first.
+
 ### 5. Options come in sets, and a command takes the whole set or none of it
 
 Three sets, each defined by a capability rather than by a list:
@@ -242,7 +278,7 @@ its subject. Everything else is addition or a rename.
 | --- | --- |
 | 1 | The two resolvers (Decisions 1–3): one application, or the applications in a suite, with the refusals under test |
 | 2 | `--install-root` → `--suite` on `host`; `--suite` added to `mcp` per Decision 19 |
-| 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway |
+| 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway; `--port` as the front door and the `server.port` resolution of Decision 4a, including the refusal |
 | 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
 | 5 | The renames: `--app-name` → `--schema-app`, `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
 
@@ -268,3 +304,8 @@ the most files and conflicts with everything.
    first question. Recommendation: do not imply it; make `getting-started.md` show the flag.
 2. **What `dev --suite` does when the folder holds no application.** An error is obvious; whether it
    should offer to scaffold one is not.
+3. **Studio's API console behind a gateway** — Decision 4a. It needs the base path and it needs to
+   stop treating an internal port as a misconfiguration. Whether it should address the gateway
+   instead of the runtime is the real question, and it is a Studio decision rather than a CLI one:
+   `suite-architecture.md` slice 8 is where a suite-level Studio is designed, and this may belong
+   there rather than being patched twice.
