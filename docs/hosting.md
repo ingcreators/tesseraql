@@ -73,10 +73,10 @@ tuned per route and per client.
 application declares, because it cannot tell a caller's copy from the edge's without knowing which
 sources are trusted — and stripping it unconditionally destroyed the edge's own value, which made
 [mTLS authentication](authentication.md#mutual-tls-client-certificates) unusable behind the gateway. The trust contract
-is the edge's, and it is the same one that has always applied: **the edge must overwrite or strip
-the `forwardedHeader` on every inbound request, and the runtime must not be reachable except through
-that edge.** A gateway reachable from anywhere but the edge is a deployment error, and no amount of
-header filtering one hop later repairs it.
+is the edge's, and unchanged: **the edge must overwrite or strip the `forwardedHeader` on every
+inbound request, and the runtime must not be reachable except through that edge**. A gateway
+reachable from anywhere but the edge is a deployment error, and no amount of header filtering one
+hop later repairs it.
 
 Responses pass through unchanged: framing, chunked bodies, event streams, `Location` values and
 cookie attributes all reach the client as the application wrote them. An event stream arrives frame
