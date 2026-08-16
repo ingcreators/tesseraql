@@ -8,6 +8,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A path to a bearer token that a person can follow** (docs/authentication.md). The exchange
+  endpoint was correct and unreachable: it requires the session's CSRF token, and that value left
+  the server only inside a page, as `<meta name="csrf-token">`. So a command-line client could
+  authenticate and then had nowhere to go, and a human's only route was reading a cookie and a meta
+  tag out of browser developer tools. Three additions close it, none of which changes what a token
+  is or what it carries:
+  - a JSON login now answers with `csrfToken` beside `ok` and `loginId`. This grants no new
+    capability — the same value already reaches any authenticated browser through the meta tag, and
+    a hostile page still cannot read a cross-origin response body;
+  - **`tesseraql token --url <base-url> --login <id>`** signs in and exchanges in one step, printing
+    only the token on stdout so it pipes. Password from `--password`, `TESSERAQL_PASSWORD`, or a
+    prompt; `--tenant` and `--otp` where the realm needs them. Nothing is cached. Claim and lifetime
+    options are refused rather than ignored, because the application decides both;
+  - **`/_tesseraql/ops/console/token`** issues a token and offers it for copying, and says which
+    configuration key to set when the application does not issue. It needs no operations grant: a
+    token carries the caller's own authority and nobody else's.
+
+  The page and the endpoint mint through one implementation, so their claims cannot drift, and the
+  page reaches it bound to the ambient principal — the one the request binder seeds from the
+  authenticated exchange — so no route can ask it for somebody else's token.
+
 - **`tesseraql host --http2`** (docs/hosting.md). Serves and forwards cleartext HTTP/2. One switch
   moves both hops — the client's connection to the gateway and the gateway's connection to each
   application — because enabling it at one end alone breaks request framing. An application that

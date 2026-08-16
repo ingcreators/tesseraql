@@ -107,6 +107,37 @@ tesseraql:
 path already reads, taken from the principal the session already holds, so the token this
 application mints is one it verifies itself.
 
+### Getting one
+
+Two paths, and neither involves developer tools.
+
+**The console page.** `/_tesseraql/ops/console/token` issues a token and offers it for copying. It
+needs no operations grant: a token carries the caller's own subject, roles and permissions and
+nothing else, so anyone who may sign in may mint their own.
+
+**The command line.** `tesseraql token --url <base-url> --login <id>` signs in and exchanges in one
+step, printing only the token on stdout so it pipes:
+
+```bash
+export TESSERAQL_TOKEN=$(tesseraql token --url https://app.example.com --login alice)
+```
+
+The password comes from `--password`, from `TESSERAQL_PASSWORD`, or from a prompt — in that order.
+Add `--tenant` for a multi-tenant realm and `--otp` when the account has an authenticator enrolled.
+Nothing is cached: no cookie jar, no token file. Claim and lifetime options are refused here rather
+than ignored, because the application decides both.
+
+That command works because a JSON login answers with the session's CSRF token:
+
+```json
+{"ok": true, "loginId": "alice", "csrfToken": "..."}
+```
+
+The exchange endpoint requires that token, and without it in the response a command-line client
+could authenticate and then go nowhere. Returning it grants no new capability — the same value
+already reaches any authenticated browser through the `<meta name="csrf-token">` tag, and a hostile
+page still cannot read a cross-origin response body.
+
 Three things are worth knowing before turning it on.
 
 **It only works where TesseraQL holds the signing key.** An application verifying `HS256` against

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-page('Issue a token', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
+  </div>
+</th:block>
+<!-- No auto-refresh here, unlike its sibling pages: a poll would either discard the token the
+     page was opened to show or mint a new one every fifteen seconds. -->
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <div class="hc-card__header">Bearer token</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">A token carries the subject, roles and permissions this session
+      already holds &mdash; nothing more. It is for callers that have an account but cannot carry
+      a cookie: CI, scripts, and the assistants that run on your own machine.</p>
+
+    <!-- Issuing is opt-in, so the page has to be able to say so. Naming the key is the whole
+         value of this branch: an operator who lands here with it off should not have to search. -->
+    <div class="hc-empty" th:unless="${issue.enabled}">
+      <p class="hc-empty__title">This application does not issue tokens.</p>
+      <p class="hc-empty__description">Set <code>tesseraql.security.token.enabled</code> to
+        <code>true</code> in the application configuration. It only works where TesseraQL holds
+        the signing key &mdash; an application verifying <code>RS256</code> against a
+        <code>publicKey</code> or <code>jwksUri</code> has no private key to sign with, and
+        refuses to start with <code>TQL-SEC-4146</code> rather than answering 500 per request.</p>
+    </div>
+
+    <th:block th:if="${issue.enabled}">
+      <!-- Posts to this same path: the token must not travel in a URL, which rules out the
+           post/redirect/get the rest of this app uses. -->
+      <form method="post" th:action="@{/_tesseraql/ops/console/token}" class="hc-stack"
+            th:unless="${issue.token}">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <p class="hc-field__message">Tokens from this application last
+          <strong th:text="${issue.ttl}">15m</strong>. They cannot be revoked before they expire
+          &mdash; a password change ends every session and does not reach a token already minted
+          from one.</p>
+        <!-- A native submit, not htmx: the browser's own navigation indicator is the feedback,
+             and an hx-post would have to swap a fragment carrying a credential. -->
+        <button type="submit" class="hc-button" data-variant="primary">Issue a token</button>
+      </form>
+
+      <th:block th:if="${issue.token}">
+        <p class="hc-alert" data-variant="warning" role="status">Copy it now. It is a credential
+          that carries none of the session cookie's protections and outlives it, and this page
+          cannot show it again.</p>
+        <div class="hc-cluster">
+          <span class="hc-field__label">Token</span>
+          <span class="hc-spacer"></span>
+          <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+                  data-hc-copy="#issued-token">Copy</button>
+        </div>
+        <pre class="hc-code"><code id="issued-token" th:text="${issue.token}"></code></pre>
+        <p class="hc-field__message">Expires <span th:text="${issue.expiresAt}">…</span>. Send it
+          as <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+        <div class="hc-cluster">
+          <form method="post" th:action="@{/_tesseraql/ops/console/token}">
+            <input type="hidden" name="_csrf" th:value="${_csrf}">
+            <button type="submit" class="hc-button" data-variant="ghost" data-size="sm">Issue another</button>
+          </form>
+        </div>
+      </th:block>
+    </th:block>
+  </div>
+</section>
+<section class="hc-card">
+  <div class="hc-card__header">From a terminal</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">The same exchange without a browser &mdash; signs in and mints
+      in one step, and prints only the token on stdout so it pipes.</p>
+    <div class="hc-cluster">
+      <span class="hc-spacer"></span>
+      <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+              data-hc-copy="#token-cli">Copy</button>
+    </div>
+    <pre class="hc-code"><code id="token-cli">tesseraql token --url https://this-host --login you</code></pre>
+  </div>
+</section>
+</div>
+</html>

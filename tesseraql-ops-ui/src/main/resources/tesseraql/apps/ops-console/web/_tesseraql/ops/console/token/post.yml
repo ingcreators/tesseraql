@@ -1,0 +1,31 @@
+version: tesseraql/v1
+id: tql.opsConsole.token.issue
+kind: route
+recipe: query-html
+
+# Mints for the caller's own session and renders the token on the same page, because the value
+# must not travel in a URL — which is what rules out the post/redirect/get this app uses
+# everywhere else. A refresh re-submits and mints a second token; both are short-lived, and the
+# alternative was putting a credential in the browser's history.
+#
+# query-html rather than command-json: minting writes no row and changes no session. The POST is
+# there for the CSRF guard, which `csrf: auto` enforces on every non-GET browser route of this
+# app — and that guard is the whole reason the endpoint is safe to expose, since without it any
+# page that can make the browser POST could convert a visitor's session into a bearer token.
+
+sources:
+  main:
+    service:
+      name: ops.token.issue
+      params:
+        # The ambient principal map already carries subject, loginId, tenantId, roles,
+        # permissions and groups (docs/ambient-params.md). Display name is the one claim outside
+        # that closed set, so it is wired explicitly and a token copied from this page carries
+        # the same name claim as one fetched from the endpoint.
+        displayName: principal.displayName
+response:
+  html:
+    status: 200
+    template: token.html
+    model:
+      issue: main

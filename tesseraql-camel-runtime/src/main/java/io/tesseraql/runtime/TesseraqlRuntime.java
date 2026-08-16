@@ -1734,15 +1734,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // A session buys a short-lived bearer (docs/session-token-exchange.md). Off by
             // default: an endpoint that turns a session into a credential should exist because
             // somebody decided it should, not because they upgraded.
-            if (manifest.config().getBoolean("tesseraql.security.token.enabled", false)) {
+            boolean tokenIssuing = manifest.config()
+                    .getBoolean("tesseraql.security.token.enabled", false);
+            String tokenTtl = manifest.config()
+                    .getString("tesseraql.security.token.ttl").orElse("15m");
+            SessionTokens sessionTokens = new SessionTokens(security.jwt(),
+                    io.tesseraql.core.util.Durations.parse(tokenTtl), tokenTtl, tokenIssuing);
+            if (tokenIssuing) {
                 if (!TokenExchangeRouteBuilder.canIssue(security.jwt())) {
                     throw TokenExchangeRouteBuilder.noSigningKey();
                 }
-                context.addRoutes(new TokenExchangeRouteBuilder(sessionStore,
-                        security.jwt(),
-                        io.tesseraql.core.util.Durations.parse(manifest.config()
-                                .getString("tesseraql.security.token.ttl").orElse("15m"))));
+                context.addRoutes(new TokenExchangeRouteBuilder(sessionStore, sessionTokens));
             }
+            // The console's issue-token page (docs/suite-architecture.md Decision 20), so
+            // acquiring a token stops meaning "read a cookie and a meta tag out of developer
+            // tools". Registered whether or not issuing is on, because the page has to be able to
+            // name the key that turns it on rather than answer a 500.
+            serviceProviders
+                    .register("ops.token.status", params -> sessionTokens.status())
+                    .register("ops.token.issue", sessionTokens::issue);
             // The IAM Admin bulk endpoint (docs/hypermedia-ui.md "Bulk actions"): Java
             // because the form posts repeated ids fields, which the Simple-YAML input
             // surface deliberately does not model. Gated by iam.admin.write like the

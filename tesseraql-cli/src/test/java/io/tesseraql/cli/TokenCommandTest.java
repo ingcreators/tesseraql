@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
@@ -95,6 +98,124 @@ class TokenCommandTest {
                 .execute("--app", dir.toString(), "--role", "ADMIN");
 
         assertThat(exit).isEqualTo(1);
+    }
+
+    /**
+     * The {@code --url} flow against a stub that behaves like a runtime
+     * (docs/suite-architecture.md Decision 20): sign in, take the CSRF token out of the JSON
+     * answer, present it with the cookie, print only the token.
+     *
+     * <p>The stub asserts the wire sequence rather than the outcome, because the outcome is easy
+     * to fake and the sequence is what the endpoint requires: a cookie with no CSRF token is
+     * exactly the request the guard exists to refuse.
+     */
+    @Test
+    void signsInAndExchangesAgainstARunningApplication() throws Exception {
+        List<String> seen = new CopyOnWriteArrayList<>();
+        HttpServer server = stub(seen, "{\"ok\":true,\"loginId\":\"you\",\"csrfToken\":\"c-42\"}");
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            PrintStream stdout = System.out;
+            System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+            int exit;
+            try {
+                exit = new CommandLine(new TokenCommand()).execute("--url",
+                        "http://localhost:" + server.getAddress().getPort(),
+                        "--login", "you", "--password", "s3cret");
+            } finally {
+                System.setOut(stdout);
+            }
+
+            assertThat(exit).isZero();
+            // Only the token, so the command pipes.
+            assertThat(out.toString(StandardCharsets.UTF_8).trim()).isEqualTo("minted.jwt.value");
+            assertThat(seen).containsExactly(
+                    "POST /_tesseraql/login {\"loginId\":\"you\",\"password\":\"s3cret\"}"
+                            + " cookie=null csrf=null",
+                    "POST /_tesseraql/token {} cookie=tesseraql_sid=s-1 csrf=c-42");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * An application older than the returned {@code csrfToken} leaves a command-line caller with a
+     * session it cannot use. Saying that is the point: the failure otherwise arrives one step later
+     * as a 403 the caller has no way to act on.
+     */
+    @Test
+    void saysSoWhenTheLoginAnswerCarriesNoCsrfToken() throws Exception {
+        List<String> seen = new CopyOnWriteArrayList<>();
+        HttpServer server = stub(seen, "{\"ok\":true,\"loginId\":\"you\"}");
+        try {
+            ByteArrayOutputStream err = new ByteArrayOutputStream();
+            PrintStream stderr = System.err;
+            System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+            int exit;
+            try {
+                exit = new CommandLine(new TokenCommand()).execute("--url",
+                        "http://localhost:" + server.getAddress().getPort(),
+                        "--login", "you", "--password", "s3cret");
+            } finally {
+                System.setErr(stderr);
+            }
+
+            assertThat(exit).isEqualTo(1);
+            assertThat(err.toString(StandardCharsets.UTF_8)).contains("csrfToken");
+            // It stopped rather than exchanging without one.
+            assertThat(seen).hasSize(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /** The two modes are alternatives; neither and both are the same mistake. */
+    @Test
+    void refusesNeitherModeAndBothModes(@TempDir Path dir) {
+        assertThat(new CommandLine(new TokenCommand()).execute()).isEqualTo(2);
+        assertThat(new CommandLine(new TokenCommand())
+                .execute("--app", dir.toString(), "--url", "http://localhost:1")).isEqualTo(2);
+    }
+
+    /**
+     * A claim option against {@code --url} is refused rather than dropped: the server decides what
+     * the token carries, so honoring the flag is impossible and ignoring it hands back a token that
+     * silently disagrees with the command that asked for it.
+     */
+    @Test
+    void refusesLocalMintingOptionsAgainstARunningApplication() {
+        assertThat(new CommandLine(new TokenCommand()).execute("--url", "http://localhost:1",
+                "--login", "you", "--password", "x", "--role", "ADMIN")).isEqualTo(2);
+    }
+
+    /** A stub runtime: the login answer is the variable, the token answer is fixed. */
+    private static HttpServer stub(List<String> seen, String loginAnswer) throws Exception {
+        HttpServer server = HttpServer.create(new java.net.InetSocketAddress("localhost", 0), 0);
+        server.createContext("/_tesseraql/", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(),
+                    StandardCharsets.UTF_8);
+            seen.add(exchange.getRequestMethod() + " " + exchange.getRequestURI().getPath()
+                    + " " + body
+                    + " cookie=" + exchange.getRequestHeaders().getFirst("Cookie")
+                    + " csrf=" + exchange.getRequestHeaders().getFirst("X-CSRF-Token"));
+            boolean login = exchange.getRequestURI().getPath().endsWith("/login");
+            if (login) {
+                exchange.getResponseHeaders().add("Set-Cookie",
+                        "tesseraql_sid=s-1; Path=/; HttpOnly");
+            }
+            byte[] answer = (login
+                    ? loginAnswer
+                    : "{\"token\":\"minted.jwt.value\",\"tokenType\":\"Bearer\","
+                            + "\"expiresAt\":\"2026-01-01T00:00:00Z\"}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, answer.length);
+            try (java.io.OutputStream out = exchange.getResponseBody()) {
+                out.write(answer);
+            }
+        });
+        server.start();
+        return server;
     }
 
     @Test
