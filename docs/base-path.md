@@ -45,11 +45,25 @@ contract question and not only a sweep.
 
 `tesseraql.http.basePath` (default empty) is what the runtime serves under and what its
 emitted URLs carry. A standalone application behind nginx at `/myapp` sets it in
-configuration; suite-mode hosting passes `/apps/<id>` to each runtime it starts, derived from
-the catalog id.
+configuration; a host passes each runtime the address that runtime's catalogue entry declares.
 
 The app's files do not name their mount point. The same `.tqlapp` mounts at two prefixes in
 two deployments, and the value is the operator's, not the author's.
+
+**Amended 2026-08-16.** This first said hosting *derives* `/apps/<id>` from the catalog id.
+[suite-architecture.md](suite-architecture.md) Decision 12 made the address **declared**:
+`InstalledApp.basePath` carries it, `/apps/<id>` is only its default, and an application may be
+addressed at the origin root. Two consequences that cost a defect each to find:
+
+- **The empty string is an address, not the absence of one.** The origin root normalises to `""`
+  so the gateway can compare prefixes rather than parse them, and a host answer of `""` therefore
+  has to outrank the application's own configuration exactly as `/apps/<id>` does. Treating blank
+  as "no host said anything" left an application that declared a prefix of its own serving that
+  prefix while the gateway forwarded it the root's paths — a 404 on every request, in the shape
+  Decision 12 exists to make ordinary.
+- **The host reads the address rather than being told it.** `MultiAppHost` took a function from
+  app id to prefix, so two sources could disagree about where an application answers while only
+  one of them — the catalogue — decided where the gateway sent traffic.
 
 That this serves the standalone reverse-proxy case is the reason to build it at all. Suite
 mode is one consumer; "put the app under a path" is a request the framework cannot answer

@@ -60,7 +60,7 @@ class SessionCookiePathIntegrationTest {
     @Test
     void aStandaloneApplicationScopesItsCookieToItsOwnPrefix() throws Exception {
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort(),
-                "/myapp", null)) {
+                new HostContext("/myapp", null))) {
             assertThat(setCookieOnLogin(runtime)).contains("Path=/myapp");
         }
     }
@@ -69,7 +69,7 @@ class SessionCookiePathIntegrationTest {
     @Test
     void aSuiteHostIssuesTheCookieAtTheOriginRoot() throws Exception {
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort(),
-                "/apps/shop-a", "/")) {
+                HostContext.suite().forApplication("/apps/shop-a"))) {
             assertThat(setCookieOnLogin(runtime))
                     .contains("Path=/;")
                     .doesNotContain("Path=/apps/shop-a");

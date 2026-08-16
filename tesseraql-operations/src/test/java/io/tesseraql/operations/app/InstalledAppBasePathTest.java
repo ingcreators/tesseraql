@@ -17,13 +17,27 @@ class InstalledAppBasePathTest {
     @Test
     void theDefaultIsTheApplicationsOwnPrefix() {
         assertThat(entry(null).basePath()).isEqualTo("/apps/orders");
-        assertThat(entry("").basePath()).isEqualTo("/apps/orders");
-        assertThat(entry("   ").basePath()).isEqualTo("/apps/orders");
     }
 
     @Test
     void theOriginRootIsTheEmptyPrefix() {
         assertThat(entry("/").basePath()).isEmpty();
+        assertThat(entry("").basePath()).isEmpty();
+        assertThat(entry("   ").basePath()).isEmpty();
+    }
+
+    /**
+     * The catalogue is JSON on disk, so an entry is normalised, written in normalised form, and
+     * normalised again on the way back in. Reading a blank value as "not declared" made that round
+     * trip lossy in exactly one case, and it was the interesting one: a suite of one declaring
+     * {@code /} was stored as {@code ""} and came back as {@code /apps/orders}.
+     */
+    @Test
+    void normalisingIsIdempotent() {
+        for (String declared : new String[]{null, "/", "", "/shop", "/shop/", "/apps/orders"}) {
+            String once = entry(declared).basePath();
+            assertThat(entry(once).basePath()).as("round trip of %s", declared).isEqualTo(once);
+        }
     }
 
     @Test

@@ -153,21 +153,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
-     * Starts with the addressing a host supplies, overriding whatever the app's own configuration
-     * says (docs/base-path.md decisions 1 and 4). Suite-mode hosting passes {@code /apps/<id>}
-     * and a cookie path of {@code /}; the values belong to the deployment, not to the
-     * application's files, so the same package mounts at two prefixes in two places — and only
-     * the host knows whether these applications are one suite sharing a sign-in.
+     * Starts with the settings a host decided, overriding whatever the app's own configuration
+     * says about them (docs/base-path.md decisions 1 and 4, docs/suite-architecture.md decision
+     * 16). A suite passes the address the catalogue declares and a cookie path of {@code /}; the
+     * values belong to the deployment, not to the application's files, so the same package mounts
+     * at two prefixes in two places — and only the host knows whether these applications are one
+     * suite sharing a sign-in.
      */
-    static TesseraqlRuntime start(Path appHome, int port, String basePathOverride,
-            String cookiePath) {
+    static TesseraqlRuntime start(Path appHome, int port, HostContext host) {
         AppManifest loaded = new ManifestLoader().load(appHome);
         // Suite mode had no tracing at all, so the console's trace pages behind `tesseraql host`
         // were permanently empty (docs/audit-hardening.md Decision 7). An app hosted in a suite is
         // the same app: it gets the same in-process ring every other start path gets.
-        return start(appHome, withBasePath(loaded, basePathOverride), port,
+        return start(appHome, withBasePath(loaded, host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, cookiePath);
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, host.cookiePath());
     }
 
     /**
@@ -228,9 +228,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return io.tesseraql.core.telemetry.TraceLog.empty();
     }
 
-    /** The manifest with {@code tesseraql.http.basePath} replaced by the host's value. */
+    /**
+     * The manifest with {@code tesseraql.http.basePath} replaced by the host's value.
+     *
+     * <p>Only {@code null} means "no host is speaking". The empty string is the origin root, which
+     * a catalogue entry declares as {@code /} and {@link io.tesseraql.operations.app.InstalledApp}
+     * normalises away — so treating it as absent would leave an application whose own
+     * configuration names a prefix serving that prefix while the gateway forwards it the root's
+     * paths, and every request would 404.
+     */
     private static AppManifest withBasePath(AppManifest manifest, String basePath) {
-        if (basePath == null || basePath.isBlank()) {
+        if (basePath == null) {
             return manifest;
         }
         Map<String, Object> root = SystemApps.deepCopy(manifest.config().root());

@@ -7,14 +7,13 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
- * {@code tesseraql host --install-root <dir>}: serves every application installed under an install
- * root, each in its own runtime, behind one port (docs/app-isolation-model.md).
+ * {@code tesseraql host --suite <dir>} / {@code --app <dir>}: serves the applications a directory
+ * holds, each in its own runtime, behind one port (docs/cli-surface.md decision 1).
  *
- * <p>This is the counterpart of {@code serve}, which runs one application. Each app here keeps its
- * own Camel context, datasource set, Studio, and traces; what they share is the process and
- * whatever database their configurations happen to name — the framework enables that separation
- * and never guarantees it, because an application's configuration is not the authority on its
- * connection (decision 3).
+ * <p>Each app keeps its own Camel context, datasource set, Studio, and traces; what they share is
+ * the process and whatever database their configurations happen to name — the framework enables
+ * that separation and never guarantees it, because an application's configuration is not the
+ * authority on its connection (docs/app-isolation-model.md decision 3).
  */
 @Command(name = "host", description = "Serve every installed app from one port, each in its own runtime.")
 final class HostCommand implements Callable<Integer> {
