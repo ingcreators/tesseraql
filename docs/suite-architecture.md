@@ -825,10 +825,10 @@ catalogue. Making the suite the only shape means the development loop has to poi
 without packaging them first.
 
 **That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer is
-that the argument stops carrying the distinction: `--app` names a directory, and what the directory
-holds — an application, a catalogue, or a folder of source trees — decides what runs. So the
-development loop needs no new vocabulary, `--install-root` disappears rather than being renamed, and
-`serve` becomes `dev` over a suite.
+that the flag carries the distinction, where a reader can see it: `--app` is one application,
+`--suite` is several — a catalogue or a folder of source trees, both being "the applications here".
+So `--install-root` is replaced by the word this document already uses, narrowing a suite is passing
+`--app` instead of `--suite`, and `serve` becomes `dev`.
 
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
 campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author
