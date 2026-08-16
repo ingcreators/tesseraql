@@ -209,6 +209,58 @@ the message describes an ephemeral port as a misconfiguration when it is the def
 created by this document; recorded here because slice 3 makes them universal, and because the
 console is a surface a developer meets early.
 
+### 4b. `--embedded-db` relocates the declared topology; it does not invent one
+
+`dev` runs a suite, so `--embedded-db` has to answer a question `serve` never faced: where does each
+application's data go when one PostgreSQL serves several of them.
+
+**One server, one database, shared — and an application that wants separation writes
+`currentSchema` in its own URL.** Nothing is derived from the application id and nothing is
+injected that the application did not ask for.
+
+The default is sharing because a suite is a team's interlocking applications
+([suite-architecture.md](suite-architecture.md) Decision 12), and two of them reading one
+`customers` table is the ordinary case rather than the dangerous one. Isolation is available to
+whoever wants it, spelled the same way in development and in production.
+
+**How it is applied: replace `db.main.*`, do not bypass the pool.** Today `--embedded-db` builds the
+`main` pool directly from the override and never reads the declared configuration for it, which
+loses whatever else was declared there and makes every tool that reads effective configuration
+report the production URL while the runtime is on the embedded one. Instead, the embedded
+coordinates are supplied through the environment source `AppConfig` already accepts — where they
+outrank the configuration tree — so `${db.main.url}` resolves to them and everything referencing it
+follows.
+
+Two properties fall out of that, and both are the point:
+
+- **Declared query parameters carry over.** `currentSchema`, `sslmode`, `ApplicationName` — the
+  database name is replaced, the rest of the URL is not. So an application that chose a schema keeps
+  it, which is what makes "write `currentSchema`" a real answer rather than advice.
+- **Everything declared on `main` survives** — `maximumPoolSize` and its neighbours are read from
+  configuration as usual, because the pool is no longer built from three fields.
+
+**A backstop, because the placeholder is a convention rather than a contract.** `db.main.*` is
+written by the scaffolder and followed by every example, but the runtime reads only
+`tesseraql.datasources.main.*`; an application may spell its URL literally. So after resolution, if
+`main` does not point at the embedded server, the pool-level override applies as it does today —
+and says so in one line. That keeps the case this feature must never get wrong, which is a
+development command connecting to production, while leaving the good path unpenalised.
+
+An earlier draft derived a database per application from the declared name, and another injected
+`currentSchema=<appId>`. Both are rejected for the same reason: they invent a separation the
+applications did not ask for, and they make development differ from production in exactly the
+dimension [suite-architecture.md](suite-architecture.md) Decision 12 exists to keep identical.
+
+**The framework datasource is not part of this.** `security` is suite-wide, so the host supplies one
+coordinate for every runtime ([suite-architecture.md](suite-architecture.md) Decision 16) rather
+than deriving it from any application's URL. An application's `currentSchema` must not reach it: a
+per-application session store is a suite where signing in does not carry.
+
+Schema creation needs nothing from the author. Measured 2026-08-16 against PostgreSQL 16: Flyway
+creates an absent `currentSchema` itself, and each application already migrates under its own
+history table `tql_schema_history_<app>`, so `currentSchema=hd` on a shared database is the whole
+configuration.
+
 ### 5. Options come in sets, and a command takes the whole set or none of it
 
 Three sets, each defined by a capability rather than by a list:
@@ -304,6 +356,7 @@ its subject. Everything else is addition or a rename.
 | 1 | The two resolvers (Decisions 1–3): one application, or the applications in a suite, with the refusals under test |
 | 2 | `--install-root` → `--suite` on `host`; `--suite` added to `mcp` per Decision 19 |
 | 3 | `serve` → `dev`, over `--app` or `--suite`, through the gateway; `--port` as the front door, and `MultiAppHost` honouring a declared `server.port` instead of always calling `freePort()` (Decision 4a) |
+| 3a | `--embedded-db` for a suite (Decision 4b): the coordinates supplied through the environment source, the declared query string carried over, the pool-level backstop and its one line |
 | 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
 | 5 | The renames: `--app-name` → `--schema-app`, `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
 
