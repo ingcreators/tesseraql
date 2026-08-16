@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.operations.app.InstalledApp;
 import io.vertx.core.Future;
+import io.vertx.core.MultiMap;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientOptions;
@@ -10,14 +11,17 @@ import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.http.HttpVersion;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.httpproxy.Body;
 import io.vertx.httpproxy.HttpProxy;
 import io.vertx.httpproxy.ProxyContext;
 import io.vertx.httpproxy.ProxyInterceptor;
 import io.vertx.httpproxy.ProxyRequest;
 import io.vertx.httpproxy.ProxyResponse;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.ToIntFunction;
 import org.slf4j.Logger;
@@ -98,6 +102,9 @@ final class SuiteRelay {
     private final MultiAppGateway.Mode mode;
     private final Map<String, String> hostToApp;
     private final Map<String, InstalledApp> appsById;
+    /** Per app, the forwarded header its configuration tells it to believe, lowercased. */
+    private final Map<String, Set<String>> ingressStripByApp;
+    private final TrustedProxies trustedProxies;
     /** App id to the internal port that answers for it now — canary weighting included. */
     private final ToIntFunction<String> portOf;
     /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
@@ -105,10 +112,18 @@ final class SuiteRelay {
 
     SuiteRelay(HttpClient client, MultiAppGateway.Mode mode, Map<String, String> hostToApp,
             Map<String, InstalledApp> appsById, ToIntFunction<String> portOf) {
+        this(client, mode, hostToApp, appsById, Map.of(), TrustedProxies.NONE, portOf);
+    }
+
+    SuiteRelay(HttpClient client, MultiAppGateway.Mode mode, Map<String, String> hostToApp,
+            Map<String, InstalledApp> appsById, Map<String, Set<String>> ingressStripByApp,
+            TrustedProxies trustedProxies, ToIntFunction<String> portOf) {
         this.client = client;
         this.mode = mode;
         this.hostToApp = Map.copyOf(hostToApp);
         this.appsById = Map.copyOf(appsById);
+        this.ingressStripByApp = Map.copyOf(ingressStripByApp);
+        this.trustedProxies = trustedProxies;
         this.portOf = portOf;
     }
 
@@ -151,7 +166,7 @@ final class SuiteRelay {
             // The URI is forwarded verbatim in both modes — the app serves the address it is
             // fronted at (docs/base-path.md decision 5) — so there is nothing to rewrite here,
             // only an origin to choose.
-            proxyFor(appPort).handle(request);
+            proxyFor(appId, appPort).handle(request);
         } catch (RuntimeException ex) {
             LOG.warn("Gateway error: {}", ex.getMessage());
             respond(request, 502, GATEWAY_ERROR);
@@ -170,10 +185,16 @@ final class SuiteRelay {
      * through that edge." That is the division this class exists to draw — the gateway routes, the
      * ingress protects.
      */
-    private HttpProxy proxyFor(int appPort) {
-        return proxies.computeIfAbsent(appPort, target -> HttpProxy.reverseProxy(client)
-                .origin(target, "localhost")
-                .addInterceptor(new BodylessRequestsHaveZeroLength()));
+    private HttpProxy proxyFor(String appId, int appPort) {
+        Set<String> strip = ingressStripByApp.getOrDefault(appId, Set.of());
+        return proxies.computeIfAbsent(appPort, target -> {
+            HttpProxy proxy = HttpProxy.reverseProxy(client).origin(target, "localhost")
+                    .addInterceptor(new BodylessRequestsHaveZeroLength());
+            if (!trustedProxies.isEmpty() && !strip.isEmpty()) {
+                proxy.addInterceptor(new StripUnlessFromATrustedEdge(strip, trustedProxies));
+            }
+            return proxy;
+        });
     }
 
     /**
@@ -200,6 +221,38 @@ final class SuiteRelay {
                     || proxied.getMethod() == HttpMethod.HEAD;
             if (carriesNoBody && proxied.getBody() != null && proxied.getBody().length() < 0) {
                 proxied.setBody(Body.body(Buffer.buffer()));
+            }
+            return context.sendRequest();
+        }
+    }
+
+    /**
+     * Drops the app's forwarded mTLS header unless the request came from an address the operator
+     * named as their edge.
+     *
+     * <p>Only installed when an edge is named. The gateway used to strip this header
+     * unconditionally, which destroyed the edge's own value along with a forged one and made mTLS
+     * forwarded-header authentication unusable behind a gateway at all; naming the edge is what
+     * lets the strip tell the two apart. With no edge named there is nothing to compare against,
+     * so nothing is stripped and the trust contract stays where {@code authentication.md} puts it.
+     *
+     * <p>The comparison is against the <em>peer of the connection</em>, never a header — a caller
+     * can write {@code X-Forwarded-For}, and cannot write the socket it connected from.
+     */
+    private record StripUnlessFromATrustedEdge(Set<String> stripOnIngress, TrustedProxies edges)
+            implements
+                ProxyInterceptor {
+
+        @Override
+        public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+            SocketAddress peer = context.request().proxiedRequest().remoteAddress();
+            if (!edges.includes(peer == null ? null : peer.hostAddress())) {
+                MultiMap headers = context.request().headers();
+                // Collected first: removing while iterating the names mutates what is being read.
+                List<String> present = headers.names().stream()
+                        .filter(name -> stripOnIngress.contains(name.toLowerCase(Locale.ROOT)))
+                        .toList();
+                present.forEach(headers::remove);
             }
             return context.sendRequest();
         }
