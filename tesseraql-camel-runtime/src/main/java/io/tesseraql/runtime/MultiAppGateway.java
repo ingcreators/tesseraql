@@ -105,7 +105,6 @@ public final class MultiAppGateway implements AutoCloseable {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppGateway.class);
-    private static final String PREFIX = SuiteRelay.PREFIX;
     private static final long START_TIMEOUT_SECONDS = 60;
 
     private final MultiAppHost host;
@@ -168,7 +167,9 @@ public final class MultiAppGateway implements AutoCloseable {
         // addresses it emits (docs/base-path.md decision 5). The session cookie is the gateway's
         // call, not the applications' (decision 4): a suite is one sign-in across one origin, so
         // the cookie is issued at the root of it rather than scoped to each app's prefix.
-        MultiAppHost host = MultiAppHost.start(installRoot, appId -> PREFIX + appId, "/");
+        Map<String, String> basePaths = catalogued.stream().collect(java.util.stream.Collectors
+                .toMap(InstalledApp::id, InstalledApp::basePath, (first, second) -> first));
+        MultiAppHost host = MultiAppHost.start(installRoot, basePaths::get, "/");
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))

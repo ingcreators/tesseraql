@@ -46,9 +46,6 @@ final class SuiteRelay {
 
     private static final Logger LOG = LoggerFactory.getLogger(SuiteRelay.class);
 
-    /** The shared-origin prefix each app is addressed under — the only address there is. */
-    static final String PREFIX = "/apps/";
-
     /**
      * The front server's options.
      *
@@ -123,6 +120,39 @@ final class SuiteRelay {
         this.portOf = portOf;
     }
 
+    /**
+     * The application whose declared prefix addresses {@code rawPath}, longest first, or null.
+     *
+     * <p>Longest-first, not first-match, because the prefixes are declared rather than derived: a
+     * suite of one may take the origin root while another application keeps {@code /apps/<id>}, and
+     * a root-addressed application would otherwise swallow its neighbour's traffic. A prefix
+     * matches on a segment boundary, so {@code /apps/orders} never answers for
+     * {@code /apps/orders-archive}.
+     */
+    private String appAddressedBy(String rawPath) {
+        String best = null;
+        String bestPrefix = null;
+        for (Map.Entry<String, InstalledApp> entry : appsById.entrySet()) {
+            String prefix = entry.getValue().basePath();
+            if (!addresses(prefix, rawPath)) {
+                continue;
+            }
+            if (bestPrefix == null || prefix.length() > bestPrefix.length()) {
+                best = entry.getKey();
+                bestPrefix = prefix;
+            }
+        }
+        return best;
+    }
+
+    /** Whether {@code prefix} addresses {@code path}: equal, or followed by a segment boundary. */
+    private static boolean addresses(String prefix, String path) {
+        if (prefix.isEmpty()) {
+            return true;
+        }
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
+
     /** Routes one request to the app that answers for it, or refuses it here. */
     void handle(HttpServerRequest request) {
         try {
@@ -131,13 +161,11 @@ final class SuiteRelay {
             // Decision 12). Host-header routing went with independent hosting: it existed so an
             // application could own a whole origin, which is the separation a suite is defined by
             // not having.
-            if (!rawPath.startsWith(PREFIX)) {
+            String appId = appAddressedBy(rawPath);
+            if (appId == null) {
                 respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
                 return;
             }
-            String remainder = rawPath.substring(PREFIX.length());
-            int slash = remainder.indexOf('/');
-            String appId = slash < 0 ? remainder : remainder.substring(0, slash);
 
             // Tenant entitlement at the front door (ch. 32.8): when the request declares its
             // tenant, an app with an entitlement list only serves the tenants on it. Claim-based
