@@ -1,0 +1,755 @@
+# Suite architecture
+
+Status: **designed 2026-08-16** — nothing shipped. This document records a chain of decisions and
+the reasoning that forced each one; the implementation designs it calls for are named at the end.
+
+This began as a narrow question — can an ordinary business user connect a chat client to an
+application's MCP surface — and did not stay narrow. The answer required an authorization server,
+which required deciding where identity lives, which required deciding what a deployment *is*. Each
+step is small; the chain is not. It is written down together because reading the steps apart makes
+each look arbitrary.
+
+**The spine.** Reaching MCP from the clients people actually use needs OAuth discovery. Discovery
+needs an authorization server to name. An authorization server that authenticates TesseraQL's own
+users belongs beside TesseraQL's own login. Once it is one component serving several applications,
+the *suite* — not the application — is the unit that gets deployed, and the framework's own surfaces
+belong to the suite rather than being copied into every application.
+
+## What this revises
+
+| Document | What changes |
+| --- | --- |
+| [authorization-server.md](authorization-server.md) | Decision 1 ("neither build nor adopt, yet") is reopened. Its survey asked which library could be *embedded*; it never priced building a companion, which is what is now proposed |
+| [app-isolation-model.md](app-isolation-model.md) | Decision 2's independent-hosting mode is dropped; Decision 4 (per-app ops console) is reversed; ① stops being a deployment shape and remains only a mechanism |
+| [audit-hardening.md](audit-hardening.md) | Open question 10's deferral condition for slices 6 and 7 is widened — see Decision 2 |
+| [session-token-exchange.md](session-token-exchange.md) | Decision 1's premise ("there is no private key anywhere in the tree, and there will not be one") does not survive Decision 8; its refusal of refresh tokens and of a revocation store is answered differently for a different audience — Decision 9 |
+| [threat-model.md](threat-model.md) | Gains an explicit row accepting framework identification — see Decision 21 |
+| [base-path.md](base-path.md) | An application's base path becomes catalogue-driven rather than mode-derived |
+
+## Decisions
+
+### 1. The clients that matter connect from the user's machine, and that changes what is owed them
+
+The dividing line between MCP clients is not the transport, it is which side opens the connection.
+`session-token-exchange.md` Decision 4 already recorded that Claude Code, the Codex CLI and the
+ChatGPT desktop app all connect from the user's machine, and that claude.ai and ChatGPT's hosted
+connectors do not. That table is correct and worth restating, because it is repeatedly misread as a
+statement about transports.
+
+The consequence that was missed: **a client reachable by a fixed credential is not thereby served.**
+The ChatGPT desktop app accepts a static `Authorization` header, so it is "reachable" — but the
+token it would carry lives 15 minutes, and asking a business user to re-paste a credential four
+times an hour is not a delivery. Reachability was the wrong test.
+
+### 2. Slices 6 and 7 are owed to a case their deferral condition does not name
+
+`audit-hardening.md` open question 10 defers the MCP transport gate and Protected Resource Metadata
+until "a deployment that needs claude.ai or ChatGPT's hosted connector, which no fixed credential
+reaches." The condition is written on reachability, per Decision 1.
+
+**A general business user on the ChatGPT desktop app is a third case.** It is reached by a fixed
+credential and is not usable with one. And because that client connects from the user's own machine,
+none of the costs that made slices 6 and 7 expensive apply to it: no public HTTPS, no vendor egress
+range, no ten-second discovery budget, no behaviour that can only be verified against a vendor's
+cloud. An intranet authorization server the user's browser can reach is enough.
+
+So the deferral condition gains a second clause: **or a deployment that puts MCP in front of users
+who are not developers.**
+
+### 3. Dynamic client registration is required, and pre-registration is not available
+
+Verified 2026-08-16 against primary sources, because the whole shape of an authorization server
+turns on it.
+
+- The Codex and ChatGPT desktop configuration reference documents exactly four authentication
+  fields for Streamable HTTP servers — `auth` (`oauth` | `chatgpt`), `bearer_token_env_var`,
+  `http_headers`, `env_http_headers` — plus `mcp_oauth_callback_port` and
+  `mcp_oauth_callback_url`. **There is no documented way to configure a pre-registered
+  `client_id`.**
+- `openai/codex#19154` ("cannot use pre-registered client identity") has been **open** since
+  2026-04-23 and was still being asked about on 2026-08-03. Its thread carries reproductions
+  against Salesforce, Slack, Snowflake and Meta Ads hosted MCP servers, all of which refuse DCR.
+  `openai/codex#13200` is open on the same defect. A contributor prepared a fork implementation on
+  2026-06-18; no merged pull request exists.
+- On the other side, `anthropics/claude-code#38102` asked for exactly this and was closed
+  **NOT_PLANNED** on 2026-05-05.
+- **Neither `openai/codex` nor `anthropics/claude-code` contains a single issue or pull request
+  mentioning CIMD.** The MCP specification deprecated DCR in favour of Client ID Metadata Documents
+  on 2026-07-28, and no client implements the replacement.
+
+Two things follow. The authorization server **must implement RFC 7591**, which both remaining
+candidates provide. And Keycloak's recorded advantage of shipping *both* CIMD and DCR is worth
+much less than it appeared, because CIMD is dead weight against every client this targets. The
+deprecation clock (removal possible from 2027-07-28) is a watch item, not a schedule input.
+
+One undocumented workaround circulates — an `[mcp_servers.<name>.oauth] client_id` key — reported
+together with a redirect-URI defect, since Codex appends `/callback/<callback_id>` to the
+configured callback. **Do not design against it. Do verify the redirect-URI shape empirically**
+before finalising the authorization server's redirect validation; strict exact-match will fail.
+
+### 4. TesseraQL builds an authorization server for its own users, and only for those
+
+`authorization-server.md` Decision 1 surveyed candidates against one criterion: is there an
+embeddable, maintained, non-Spring OAuth 2.1 library? Under that criterion Spring Authorization
+Server falls in one line, Apereo CAS and Syncope are "not liftable", and the answer is no. The
+survey of companion products asked a different question — which off-the-shelf identity provider to
+adopt — and answered Keycloak.
+
+**Neither question was "should we build a companion of our own?"** That is the third category, and
+it wins on three points that adoption cannot buy:
+
+1. **No second user directory.** TesseraQL already owns users, roles, realms, password change and
+   session invalidation. Keycloak and Casdoor bring their own store, so users exist in both —
+   authorisation uses locally-managed roles either way (`OidcUserLinker`), so the duplication buys
+   nothing. An authorization server that authenticates against TesseraQL's own identity service
+   leaves one directory.
+2. **No theme treadmill.** Keycloak's recorded cost is FreeMarker themes, roughly 140
+   `theme.properties` entries, **no theme backward compatibility by the maintainer's own
+   statement**, a theme-affecting change in every 26.x minor, and about four minors a year. Owning
+   the login page — which TesseraQL already does, on hc — makes that cost permanently zero.
+3. **Multi-node works.** Keycloak cannot match "every replica identical, the database arbitrates":
+   `--cache=local` across N nodes fails *silently*, making single-use tokens replayable and
+   multiplying brute-force budgets. An authorization server designed stateless-JWT over the shared
+   framework datasource inherits TesseraQL's model instead of fighting it.
+
+The scope is the limit that makes this defensible: **an authorization server for TesseraQL's own
+users.** No SAML brokering as a product, no general federation, no MFA. The moment any of those is
+a requirement, Keycloak's argument returns intact, and a deployment that already has an identity
+provider should keep using it (Decision 7).
+
+The target is precisely the gap `authorization-server.md` named and left open — an operator whose
+only identity source is TesseraQL's own IAM "cannot serve the hosted assistants through OAuth at
+all, because there is no authorization server to name in `authorization_servers`."
+
+### 5. Two candidates remain, and the choice is whether a second process is acceptable
+
+Re-surveyed under the build framing rather than the embed framing.
+
+| Candidate | Second process | User store | DCR | Distribution | Login UI |
+| --- | --- | --- | --- | --- | --- |
+| **Apache CXF `rs-security-oauth2`** | **not required** | none — TesseraQL's | yes | a dependency | reuse the existing one |
+| **Spring Authorization Server** | required (JVM) | none — wired by us | yes | one JVM | ours to write |
+| Ory Hydra | required (Go) | none — headless | lifecycle defects open | **per-platform binary** | ours to write |
+| Casdoor | required (Go) | **its own → duplication** | yes | per-platform binary | Casdoor's |
+| Keycloak | required (JVM) | **its own → duplication** | yes, plus experimental CIMD | one JVM | theme migration |
+
+**Ory Hydra deserves the note it did not get first time**: headless is the *feature* here, not the
+flaw, because the login and consent screens being ours is exactly what authenticating against
+TesseraQL's identity service requires. It loses on distribution — a Go binary is a per-platform
+artefact, the very property that made Keycloak preferable to zonky's per-platform archives — and on
+open defects in the DCR management endpoints (`ory/hydra#4084`, `#4093`, `#4060`).
+
+**CXF is the only candidate that needs no second process at all.** `camel-cxf-rest` 4.22.0 already
+depends on CXF 4.2.3, so the version alignment exists; `OAuthDataProvider` is a seven-method SPI, so
+storage is TesseraQL's own database and multi-node follows; `/authorize`, `/token` and `/register`
+become ordinary compiled routes. Against it stands the CVE record `authorization-server.md`
+documented — thirteen OAuth and OIDC advisories in 2026 — although the most recent one found
+(CVE-2026-50629, June 2026) is log injection via an unsanitised `clientId`, fixed in 4.2.2, which
+is a milder class than the earlier batch. **Re-verify against primary sources at implementation
+time**; that document's own instruction applies with full force here.
+
+`authorization-server.md` also recorded a third path that was never priced: taking CXF's domain
+layer and writing the endpoints as compiled routes, inheriting reviewed protocol logic without the
+JAX-RS runtime. **Measured against 4.2.3 on 2026-08-16**, and the measurement corrects that
+document as well as pricing the path.
+
+| Package | Classes | Touching `jakarta.ws.rs` |
+| --- | --- | --- |
+| `common` — `Client`, `ServerAccessToken` | 25 | 1 |
+| `grants` — the protocol logic | 36 | 17 |
+| `provider` — SPIs and JSON providers | 30 | 11 |
+| `services` — the endpoints | 21 | 18 |
+
+That document's claim that "the only JAX-RS leak in the grant SPI is a `MultivaluedMap` in one
+signature" is **wrong on count and right on consequence**, and the consequence is what matters.
+Across `grants` and `provider` there are roughly 130 references to `MultivaluedMap` and 6 to `Form`
+— **data carriers**, not control flow — against **five** references in total to `Response` and
+`WebApplicationException`, the only places the protocol logic reaches for HTTP. The `MediaType`,
+`Produces` and `MessageBodyReader`/`Writer` cluster is the JSON provider layer, which this build
+replaces regardless.
+
+So the dependency the grant layer imposes is `jakarta.ws.rs-api` — **a 152 KB API jar** — on the
+compile and runtime classpath. Not a JAX-RS runtime, not a servlet container, not the CXF bus.
+Confirm its own transitive set at implementation time.
+
+Two further findings narrow it. Of five grant families (`code`, `refresh`, `clientcred`, `owner`,
+`jwt`) this needs **two**: `code` and `refresh`. `owner` is the password grant OAuth 2.1 removes,
+and `clientcred` is unsupported by the hosted assistants in any case. And inside `code`, the classes
+**not** wanted are `JPACodeDataProvider`, `JCacheCodeDataProvider` and
+`DefaultEncryptingCodeDataProvider` — the storage and caching implementations, replaced by
+TesseraQL's own `OAuthDataProvider`, and **the same ones carrying several of the 2026 advisories**.
+The mitigation this decision assumed turns out to be structural rather than aspirational.
+
+**The measurement also settles the choice between the two paths.** Using CXF's `services` as they
+ship means 18 of 21 endpoint classes bound to JAX-RS, hence a JAX-RS runtime in-process — against
+the JDK-only posture and against the axis just decided. The grant layer beneath our own compiled
+routes is the path.
+
+**The axis is settled: no second process.** So the shortlist is the two CXF paths — the endpoints
+as they ship, or the grant layer beneath them with our own compiled routes — and Spring
+Authorization Server is recorded as the option that was available and not taken, so that a later
+reader knows the cost was weighed rather than missed. Choosing between the two remaining paths
+needs the estimate open question 1 calls for, and is the subject of the implementation design named
+at the end.
+
+Taking CXF in-process means **taking on its defect history in our own address space**, which is the
+price of the axis. Two things bound it: the storage and caching providers that carry several of the
+2026 advisories are replaced by TesseraQL's own `OAuthDataProvider`, and the version must be tracked
+closely rather than pinned and forgotten. Write that expectation into the campaign rather than
+leaving it to a future reader to infer.
+
+### 6. The authorization server and the resource server share a host, and that is the ordinary case
+
+MCP permits it explicitly — a single server may be both roles; nothing requires the split. Before
+2025-06-18 the specification *assumed* colocation. Four things need care and none of them blocks it.
+
+**Issuer and resource are distinct URLs on one host.** `authorization_servers` carries **issuer
+URLs, not embedded metadata**; the client still fetches each authorization server's own
+`/.well-known/oauth-authorization-server`, and the value there must equal the `issuer` field in the
+document it finds.
+
+**The issuer is the suite origin.** `https://suite.example.com`, with no path component, so RFC
+8414's path-insertion rule does not apply and the metadata sits at the bare
+`/.well-known/oauth-authorization-server` — the simplest form and the one clients handle best. The
+endpoints (`/_tesseraql/oauth/authorize`, `/token`, `/register`) are listed explicitly in the
+metadata and need not share the issuer's path. **The framework's URL prefix is therefore irrelevant
+to the issuer**, which removes one coupling that would otherwise have been discovered late.
+
+**Audience validation becomes the only boundary.** With one host and one signing key, `aud` is all
+that separates a token minted for the application's API routes from one minted for an MCP surface.
+The machinery exists — `SecurityConfigFactory` refuses to boot without a declared audience
+(`TQL-SEC-4048`) since the audience work — but it stops being defence in depth and becomes the wall.
+Each MCP resource identifier must differ from the application's own audience, and a lint should say
+so.
+
+**One session serves both roles, which is the point.** `/authorize` asks whether the caller is
+signed in, and the answer is the existing `tesseraql_sid` — no second identity-provider session, no
+second cookie, no cookie contention. The authorization-code redirect lands on the client's own
+loopback origin, which is cross-site but a top-level GET navigation, so `SameSite=Lax` is
+sufficient.
+
+RFC 9207 (`iss` in the authorization response) is cheap now and awkward later. Include it.
+
+### 7. An existing identity provider coexists, and brokering through it is the best shape
+
+Three cases, and only two work.
+
+**A — the existing provider only.** `auth: bearer` with RS256 and a `jwksUri`, and the provider
+named in `authorization_servers`. Works today. The built authorization server must therefore be
+**off by default**, on the same reasoning `token.enabled` is off: a component that issues
+credentials should exist because somebody decided it should.
+
+**B — the authorization server brokers to the existing provider.** This is the best shape and
+TesseraQL is unusually ready for it: `OidcRouteBuilder` is already a relying party running
+authorization-code with PKCE against an external provider, and `auth: browser` is satisfied however
+the user signed in — own login, OIDC or SAML all land on one session cookie. So `/authorize` needs
+no new authentication path.
+
+What it buys is larger than convenience. **It makes TesseraQL a DCR proxy**: dynamic registration
+facing the MCP client, an ordinary pre-registered client facing the enterprise provider. Decision 3
+established that Entra-, Okta- and Salesforce-shaped providers refuse DCR and that Codex and Claude
+Code cannot pre-register — this configuration resolves that deadlock without touching the customer's
+identity provider.
+
+**C — both token issuers accepted in parallel. Not supported.**
+`tesseraql.security.jwt` is a single application-wide block with one algorithm and one key source,
+so two issuers cannot both be validated. Widening it to an issuer-to-key-source map is a separate
+decision; case B removes almost all demand for it. **Out of scope, stated rather than discovered.**
+
+### 8. The authorization server signs RS256, which overturns a premise
+
+For a single application colocated with its resource server, HS256 would be legitimate and much
+cheaper: MCP clients treat tokens as opaque, so the algorithm is entirely between the authorization
+server and the resource server, and choosing symmetric removes JWKS publication, overlapping key
+rotation and `kid` assignment — the exact list `authorization-server.md` said asymmetric issuance
+would require.
+
+**A suite forecloses it.** If every application in the suite holds the same symmetric secret, **any
+application can forge a token for any other**, and `aud` is not a boundary when the signing key is
+shared. RS256 with the authorization server holding the private key and the applications holding
+only the published key is what makes the audience separation of Decision 6 real.
+
+Process separation, if it is ever built (Decision 15), reaches the same conclusion independently:
+distributing a shared symmetric secret across processes is worse than publishing a key set. Two
+unrelated arguments landing on the same answer is the reason to trust it.
+
+The consequence is stated rather than left implicit: `session-token-exchange.md` Decision 1 rests on
+"there is no private key anywhere in the tree, and there will not be one." **There will be one.**
+Its `TQL-SEC-4146` refusal — the exchange is offered to HS256 applications and refused to RS256 ones
+— was correct under the premise that TesseraQL never issues asymmetrically, and must be revisited
+rather than quietly kept.
+
+### 9. Access tokens stay stateless and short; refresh tokens are stored and revocable
+
+`session-token-exchange.md` answered this question differently — fifteen minutes, no refresh tokens,
+and "a short default lifetime is the revocation story" — and it was right for what it served.
+**The audience changed.** That endpoint serves a developer at a terminal who can re-run a command;
+this serves a business user whose chat client holds a connection all day. Re-consenting four times
+an hour is the problem this chain exists to remove, so an authorization server without refresh
+tokens does not deliver. It issues them, with rotation and reuse detection — the machinery that
+document deliberately avoided, taken up here because the case differs, not because the earlier
+judgement was wrong.
+
+Revocation splits the same way, and the split is what makes it affordable. That document rejected a
+revocation store because "a token id checked against a revocation table … would put a database read
+in front of every bearer request on every route." **That objection is exactly right for access
+tokens and does not apply to refresh tokens**, which are consulted only when a client refreshes.
+
+- **Access tokens**: self-contained, validated statelessly, short-lived. No store, no read on the
+  hot path.
+- **Refresh tokens**: stored, rotated on use, revoked on sign-out and on account disablement, with
+  reuse detection retiring the whole chain.
+
+The asymmetry that document recorded — a password change invalidates every session and does not
+invalidate the tokens minted from them — narrows to one access-token lifetime instead of persisting
+until each token expires.
+
+### 10. Registration is open, so consent is mandatory and client metadata is untrusted
+
+Decision 3 established that MCP clients cannot present an initial access token; they post their
+metadata and expect a `client_id`. **Gating registration therefore means not being reachable at
+all.** Registration is open.
+
+Open registration without consent would hand the user's authority to anyone who can reach the
+endpoint, silently. So **consent is mandatory**, and three consequences are easy to leave implicit
+and expensive to discover:
+
+- A client's `client_name` and other registration metadata are **display text chosen by the party
+  asking to be authorised**. Render escaped, never trusted. A consent screen that presents an
+  attacker's chosen name as though the framework vouched for it is a phishing surface.
+- **Consent is recorded per client and per resource**, not per client. A suite hosts several
+  applications with separate audiences (Decision 6); consenting to one is not consenting to the
+  rest, and that separation is the whole reason the audiences exist.
+- Consent is **revocable by the subject**, which the account surface (Decision 14) is the natural
+  home for.
+
+Open registration leaves a registration-spam surface. Bounding it belongs to the ingress under
+Decision 13's division, not to closing the endpoint.
+
+### 11. A token carries TesseraQL's own authority, scoped to one resource
+
+Three questions that will otherwise be settled by whoever writes the code first.
+
+**Where claims come from.** Under Decision 7 case B the authorization server authenticates through
+an external provider and must still mint **TesseraQL's** roles and permissions rather than the
+provider's assertions. `OidcUserLinker` already states that rule for federated logins; an
+authorization server that passed provider claims through would quietly reverse it.
+
+**How much authority one token carries.** A subject's roles are suite-wide; an application's policy
+is not. A token minted for one resource carries what that resource's policy can read, not the
+subject's authority across the suite. Decision 6 makes `aud` the boundary, and a token carrying
+every application's roles would make the boundary narrower than the credential it guards.
+
+**What to do with `scope`.** `session-token-exchange.md` observed correctly that `Policy.Rule` has
+role, permission and claim dimensions and no scope concept, so a token carrying scopes would carry
+something nothing reads. An authorization server cannot simply ignore the parameter — clients send
+it, and Codex prefers server-advertised values when `scopes_supported` is present. The resolution is
+to **advertise no `scopes_supported`, accept the parameter, and grant nothing on it**;
+authorisation stays by role and permission rather than gaining a second vocabulary that duplicates
+the policy engine. Revisit only if a client refuses to proceed without one — measurable in the same
+connect-and-observe pass that open question 6 calls for.
+
+### 12. Shared suite is the only deployment shape
+
+`app-isolation-model.md` Decision 2 gave ② two modes. Independent hosting — `Host`-header routing,
+per-host session cookies, per-application datasources — is intended for "unrelated apps, or apps
+from different authors." It is dropped.
+
+**Nothing reachable is being deleted.** That document records ② as having "no CLI or plugin entry
+point, no user documentation, and recorded defects that were deferred precisely because it has no
+production callers." Independent hosting is half of an already-unreachable mechanism, and pre-1.0
+carries no migration obligation. In code the mode is thin: a `Mode` enum, a `hostToApp` lookup
+consulted first, and one conditional in the base-path assigner.
+
+**The gateway-less single-application shape goes too**, which is the larger half of this decision.
+The argument is development and production parity: a team building several interlocking
+applications must develop against the topology it deploys, and under the previous split it could
+not. The concrete instance is this document's own subject — **the authorization server, MCP
+discovery and the OAuth flow could not be exercised locally in the shape they run in production**,
+which is exactly the class of defect that is most expensive to find late.
+
+Two conditions make this affordable rather than punitive.
+
+**Base path becomes catalogue-driven, not mode-derived.** `MultiAppHost.start` already takes a
+function from application id to base path; today it reads `mode == Mode.SUITE ? PREFIX + appId :
+null`. Reading the catalogue instead, defaulting to `/apps/<appId>/`, lets a one-application suite
+declare `/` and serve at the root — the old shape, with no second mechanism and no branch in any
+design that follows.
+
+**Decision 13 is a prerequisite, not a follow-up.** Routing every deployment through the gateway
+before the gateway is transparent ships a regression.
+
+① survives as a *mechanism* — it is how each runtime mounts framework surfaces — and stops being a
+deployment shape. The two meanings have been conflated in conversation and must not be conflated in
+the documentation.
+
+### 13. The gateway aggregates internal applications; it does not stand guard
+
+`MultiAppGateway` bounds request bodies at 10 MB by reading them fully into a `byte[]` before
+forwarding, and bounds responses at 64 MB, aborting the relay mid-body when an undeclared length
+runs past the limit. The comment states the justification plainly: *"Bounded, because this is the
+front door."*
+
+**It is not the front door.** Under Decision 12 it fronts applications the operator installed, in a
+suite whose members are mutually trusted, behind whatever ingress the deployment already has. The
+justification does not survive the repositioning, and the bounds are wrong as universal limits: a
+10 MB ceiling caps every attachment and import, and a 64 MB ceiling **silently truncates exports**,
+which is the precise failure mode the export pipeline was built to avoid.
+
+Changes:
+
+- **Request bodies stream.** `BodyPublishers.ofInputStream`, or `fromPublisher` with the relayed
+  `Content-Length` where one is declared, replacing the buffer and the cap.
+- **The response bound and its mid-body truncation are removed.** Responses already stream through
+  a fixed buffer; only the ceiling goes.
+
+Kept, because they answer a different threat: **ingress header stripping** — applications may be
+trusted but callers are not, and that machinery is about callers — and `SKIP_HEADERS`, which is
+hop-by-hop correctness rather than posture.
+
+Already correct, verified rather than assumed: the cookie path is `/` in suite mode by design
+(`CookiePath`'s own documentation — "A shared suite wants `/`, because one sign-in reaching every
+application *is* the mode"); the gateway runs on
+`Executors.newVirtualThreadPerTaskExecutor()`, so long-lived streams do not exhaust a pool; and
+neither the client nor the requests carry timeouts, so downloads and streams are not cut.
+
+**One thing genuinely needs measuring: flush behaviour on the response copy.** The loop writes 8 KB
+at a time to the exchange's output stream, and whether each write reaches the client promptly
+decides whether server-sent events arrive live or in bursts. MCP's Streamable HTTP, the ops console
+and Studio's preview all ride this path, and buffering there produces the hardest failure to
+diagnose — working, but late.
+
+**The deliverable that makes "equivalent" true rather than hoped-for is a differential test**: run
+one gallery application's declarative suite twice, directly against its own port and through the
+gateway, and assert the results match. Add the cases a proxy breaks specifically — a large upload,
+a large download, an event stream measured for arrival timing, a chunked response with no declared
+length, `HEAD`, `304`, redirect `Location` values, and the `Path` attribute on cookies.
+
+`hosting.md` gains the division: **the gateway routes, the ingress protects.** Body limits, rate
+limiting and TLS termination belong to the reverse proxy every deployment already runs.
+
+### 14. Framework surfaces belong to the suite, and the ones that stay per-application delegate
+
+Today five framework applications are mounted into every runtime through `ServiceLoader`. Under
+Decision 12 that means N copies of surfaces whose state is suite-wide.
+
+**The identity surfaces become one, and this is not a reversal of anything.** `auth-ui`, `account`
+and IAM Admin operate on the shared framework datasource, and a suite has one session, one sign-in
+and one user store. Five "change my password" pages is the anomaly. Together with the authorization
+server they form the suite's identity surface, and `app-isolation-model.md` Decision 1's criterion —
+system applications must share the host's state — reads the same way once the state in question is
+suite-wide.
+
+**The ops console and Studio become suite-level shells with an application switcher, which does
+reverse `app-isolation-model.md` Decision 4.** That decision made the console per-application and scoped, deliberately giving
+up the single cross-application screen. Its three justifications each weaken under Decision 12:
+"traces need no cross-runtime aggregation" holds only while there is nowhere to aggregate to;
+"*which runtime's ops do I open* stops being a question" is answered by a switcher; and "the console
+stops behaving differently depending on whether the deployment shares a database" is moot when there
+is one shape. The reversal is legitimate, and the document must record what changed rather than
+simply flipping.
+
+**They aggregate over runtimes, not over databases.** Reading each application's datasource
+configuration was considered and rejected on four grounds, one decisive: **`RingTracer` is an
+in-memory ring inside each runtime, so a database connection cannot serve the trace pages at all** —
+and those are the pages where a switcher is most wanted. The others: N connection pools held by one
+application; `app-isolation-model.md` Decision 3's rule that an application's configuration is not
+the authority on its database connection, so a second reader can resolve differently; and scoping
+and permissions staying where they are implemented.
+
+A consequence that is easy to miss: **a suite-level Studio can edit any application's source.** The
+permission model changes shape. `ops.app.<name>` reverts from "the permission to open an
+application's console" toward "which applications appear in the switcher", and Studio needs
+per-application edit authorisation on the switch rather than a single "may open Studio" role. The
+audit trail widens correspondingly.
+
+This changes what a framework application *is* — from a bundle mounted into a runtime to a component
+hosted by the suite that talks to runtimes — so the hosting mechanism changes with it, from
+`AppSourceProvider` discovery to being hosted alongside user applications.
+
+One collision class disappears as a by-product: with framework surfaces at the gateway root and user
+applications under `/apps/<appId>/`, `requireNoRouteConflicts` has nothing left to catch between
+them.
+
+### 15. Process separation is not built, and the boundary is kept shaped so it stays available
+
+`app-isolation-model.md` lists splitting ② across processes as out of scope with the note that "the
+measurements assume one JVM." **That wording bakes in an assumption where a deferral was meant**,
+and it is amended: the delegation boundary is API-shaped, so the split remains reachable; it is
+simply unbuilt.
+
+The ordering argument for doing it first was that it would *enforce* the discipline. **That
+enforcement already exists and was verified**: `tesseraql-studio`, `tesseraql-ops-ui` and
+`tesseraql-identity` depend on `tesseraql-core`, `tesseraql-yaml`, `tesseraql-operations` and
+`tesseraql-security` — **none of them depends on `tesseraql-camel-runtime`**, so none of them can
+hold a runtime reference. It will not compile. The two framework applications that live inside the
+runtime module, `AuthUiAppProvider` and `AccountAppProvider`, are exactly the ones Decision 14 moves
+out, so the remaining boundary is created by the work itself.
+
+Against doing it first: each process pays the full JVM baseline (22 MB heap, 29 MB metaspace, about
+2,200 ms) where an additional in-JVM runtime costs 8 MB, 0 MB and about 600 ms — a penalty paid on
+every restart of the development loop that Decision 12 exists to protect. And interleaving process
+supervision, port allocation, shutdown ordering and a new class of failure states with the largest
+refactor in the framework makes failures unattributable.
+
+The discipline the module boundary cannot enforce is *semantic*: delegation written as though it
+cannot fail, cannot be slow and cannot be asynchronous. So **delegation is real HTTP over loopback
+even within one JVM** — the same hop the gateway already performs for every user request. Then
+failure is a state that exists and is tested from the first day, and process separation becomes a
+change of address rather than a change of design.
+
+Add a build check that the suite-application modules never acquire a dependency on
+`tesseraql-camel-runtime`. It is permanent, free, and states the rule where it will be read.
+
+**Revisit when** a suite needs one application's failure not to take the others down; or per-
+application upgrade and canary reach production, where `AppUpgrader` and canary weights already
+exist; or per-application resource limits are required. None of these is present today.
+
+### 16. Settings only the host can know correctly belong to the host, and that includes migrating the shared schema
+
+The framework already made this call once and did not generalise it. `CookiePath`'s own
+documentation records the reasoning: "Only the component that starts the runtimes knows which of
+those it is building, so it carries the value; **a configuration key was considered and rejected**,
+an operator setting it wrongly getting either a silently unshared suite or a session offered to
+every neighbour, neither of which announces itself."
+
+**The rule that generalises it:** a setting belongs to the host when only the host can know it, or
+when divergence between applications fails silently.
+
+`MultiAppHost.start` passes an application home, a port, a base path and a cookie path — the last
+two by this rule. Three more qualify and are not passed today:
+
+- **`tesseraql.framework.datasource`.** A shared cookie reaching every application is worthless
+  unless every runtime reads the same session store. Divergence presents as "signing in does not
+  carry", which reads as a framework defect rather than the misconfiguration it is.
+- **The external origin.** MCP's `resource` and the authorization server's `issuer` are absolute
+  URLs, and Decision 6 requires `resource` to match what the user typed character for character.
+  **An application cannot know its own external origin**; only the gateway does. This value exists
+  nowhere today and Decision 18 cannot be implemented without it.
+- **`security.jwt.algorithm`, `issuer` and `jwksUri`.** One authorization server means one issuer
+  and one key set. `audience` stays per application — it is the boundary.
+
+What stays per application is as much the point: business datasources, audiences, policies. This is
+not a call to hoist configuration generally.
+
+**And the framework schema is migrated once, by the host, before any runtime starts.**
+`FrameworkMigrations.migrate` runs today from `TesseraqlRuntime.java:501` on every runtime start,
+across two components with different homes — `security` (sessions) on the framework datasource and
+`operations` on the business datasource. **The split is already half right**: `operations` is
+per-application and stays there. `security` is suite-wide, so N runtimes take the lock on one
+`tql_schema_history__security` in turn and N−1 do nothing. Flyway's lock makes that safe rather than
+correct; its documented purpose is "serializing concurrent node startups", which anticipated
+replicas of one application, not several applications of one suite.
+
+So the host migrates `security` once, and **runtimes validate instead of migrating**, failing to
+start when the schema is not at the version they expect.
+
+That last clause dissolves a guard this document previously wanted on its own. A runtime pointed at
+the wrong framework datasource finds no migrated schema and **fails loudly at boot** instead of
+producing a suite where sign-in silently does not carry. Validating rather than migrating *is* the
+check.
+
+Two implementation notes. The parameter list is already four and would reach eight; the host's
+decisions want **one context object** rather than more positional arguments, which also gives the
+tests that call `TesseraqlRuntime.start` directly a single place to change. And the host must
+resolve a datasource configuration that may carry `${secret.…}` references, so **the secret
+provider has to be reachable at host scope** — verify that before designing the hoist.
+
+### 17. The URL scheme is one rule applied at two scopes
+
+```
+/_tesseraql/login              suite identity
+/_tesseraql/oauth/...          authorization server endpoints
+/_tesseraql/account
+/_tesseraql/iam
+/_tesseraql/studio             application switcher
+/_tesseraql/ops                application switcher
+/apps/orders/...               a user application
+/apps/orders/_tesseraql/mcp    that application's MCP surface
+/.well-known/...               authorization-server and protected-resource metadata
+```
+
+The rule: **framework surfaces live under `_tesseraql/` relative to their scope.**
+
+The prefix's original justification is gone — it existed because framework surfaces shared a flat
+URL space with a root-mounted user application, and under Decision 12 they no longer do. It is kept
+on three replacement grounds. The collision it prevented **still exists one level down**, inside
+`/apps/<appId>/`, where an application's declared routes share a namespace with the framework
+surfaces belonging to that application; dropping the prefix at the suite level alone would make the
+two scopes asymmetric for no gain. It keeps the framework's claim on root names at **two**
+(`/apps/`, `/_tesseraql/`) rather than one per surface, permanently. And it leaves the rest of the
+root to the operator, who may want `/health` for a load balancer.
+
+The leading `_` carries no protocol meaning — RFC 3986 lists it as unreserved — and follows the
+convention of `/_next/`, `/_nuxt/`, `/_matrix/` and `/_ah/`: a reserved-namespace marker, a
+collision probability near zero because business domains do not name path segments with a leading
+underscore, and a single prefix that separates framework traffic from business traffic in logs and
+metrics.
+
+### 18. MCP is per application, with no suite-level aggregate
+
+Each application serves its own surface at `/apps/<appId>/_tesseraql/mcp`, with its own `resource`
+identifier and its own audience.
+
+**No aggregate endpoint.** One endpoint exposing every application's tools sounds convenient and
+destroys the per-application audience separation that Decision 6 makes the security boundary; tool
+names would also collide across applications. The authorization server removes the motive anyway:
+**one dynamic registration, one sign-in, N resources**, with each token scoped by the `resource`
+parameter to the application it is for.
+
+Metadata placement follows from Decision 6. RFC 9728 inserts the well-known segment between host and
+path, so an application's resource metadata is served at
+`/.well-known/oauth-protected-resource/apps/orders/_tesseraql/mcp` — at the gateway root, not under
+the application's prefix. **The gateway needs a rule that reads the inserted path and resolves the
+application**, and the document itself should be produced by that application's runtime and relayed,
+rather than synthesised by the gateway from the catalogue, so the configuration is not read twice.
+The authorization server side needs no insertion at all, because its issuer is the bare origin.
+
+### 19. The development-tool MCP spans the suite, which is the opposite of Decision 18 on purpose
+
+Two MCP surfaces, opposite answers. The contrast is deliberate and worth stating, because it reads
+as an inconsistency until the reason is written down.
+
+An **application's** MCP surface is per application with no aggregate (Decision 18) because a token
+carries a per-resource audience and that audience is the security boundary; one endpoint spanning
+several applications would collapse it.
+
+The **development-tool** MCP has no such boundary to protect. `tesseraql mcp` runs on the
+developer's own machine against application homes they already hold on disk, and nothing it does
+crosses a trust boundary the filesystem did not already cross. So the argument that forces
+separation upstream does not reach it — while the argument that a team building interlocking
+applications wants one agent that can see all of them does.
+
+**One server for the suite**, resolving application homes under the install root, with an
+application argument on each tool. Three consequences:
+
+- Every development tool's input schema gains the argument, and its description must tell the model
+  how to choose. An agent that guesses which application it is editing is worse than one that has
+  to be told.
+- `McpCommand` builds `McpDevTools(app, readOnly)` today. `readOnly` becomes a property of the
+  server rather than of an application — there is no reason to vary it per application, and a
+  mixed-mode server would be hard to reason about.
+- Narrowing to a single application stays available, because someone working on one should not have
+  to see six. That is a scoping flag, not a second mode.
+
+**It does not inherit the authorisation problem Decision 14 records for Studio.** A suite-level
+Studio is reached over HTTP by an authenticated subject, so "which applications may this person
+edit" is a real question with no current answer. This is a local process run by someone who already
+has the files, and conflating the two would invent a permission model where none is needed.
+
+### 20. Token acquisition needs a path a person can follow
+
+`POST /_tesseraql/token` is guarded like the sign-out routes and requires the session's CSRF token,
+which is correct — it converts a cookie into a credential that outlives it. But the CSRF token
+reaches only pages, as `<meta name="csrf-token">`, so the only route available to a human today is
+reading a cookie and a meta tag out of browser developer tools.
+
+Two additions, both small:
+
+- **A console page that issues a token** and offers it for copying. On an authenticated page the
+  CSRF token is already present; this is one page.
+- **`tesseraql token --url <app> --login <id>`**, which signs in and exchanges in one step. This is
+  currently impossible to build: `LoginRouteBuilder` answers a non-browser `POST
+  /_tesseraql/login` with `{"ok":true,"loginId":"…"}` and a cookie, and **never returns the CSRF
+  token**, so a command-line client can authenticate and then cannot proceed. Returning it in that
+  response grants no new capability — the same value already reaches any authenticated browser
+  through the meta tag — and leaves Decision 2 of `session-token-exchange.md` intact, since a
+  hostile page still cannot read a cross-origin response body.
+
+These serve developers and CI. They do not serve the case in Decision 2; nothing short of OAuth
+does.
+
+### 21. Framework identification is accepted, explicitly
+
+`threat-model.md` treats information disclosure as enumeration, field exposure, secrets and error
+internals. Framework identification is absent, and therefore accepted implicitly. It should be
+accepted **explicitly**, because an unstated acceptance reads later as an omission.
+
+The acceptance is sound. The name leaks through channels far stronger than a path prefix: `TQL-`
+error codes in responses, which are a deliberate feature; the `tesseraql_sid` cookie name; the login
+page's markup and hc asset paths; and, once Decision 6 ships, OAuth metadata that the specification
+requires to be public. Renaming the prefix buys obscurity and pays in clarity.
+
+What actually matters is already right: **the version is not disclosed over HTTP** — it appears in
+logs and in Studio's internal model, and no `X-Powered-By`-equivalent header was found — and version
+is the fingerprint that maps to advisories.
+
+The strongest argument against obscuring the prefix is that **it is a control surface for the
+defender**. `location /_tesseraql/studio { allow 10.0.0.0/8; deny all; }` is writable precisely
+because the prefix is stable and distinctive; scattering or obfuscating framework surfaces costs the
+operator that line and costs an attacker nothing. Making the prefix configurable is rejected for the
+same reason, plus two: MCP requires the `resource` identifier to match what the user typed
+character for character, and every document, test and example depends on the value.
+
+Attack surface is reduced by **removing surfaces, not renaming them** — `tesseraql.mcp.enabled:
+false`, `tesseraql.apps.<name>.enabled` for individual framework applications, and ingress rules by
+prefix.
+
+## Slices
+
+Ordering is by dependency, not by size.
+
+| # | Slice | Depends on |
+| --- | --- | --- |
+| 1 | Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division | — |
+| 2 | Login response returns the CSRF token; `tesseraql token --url`; console issue-token page | — |
+| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS; `security` migration hoisted to the host with runtimes validating; CLI entry point for the suite, including the suite-spanning development-tool MCP (Decision 19) | 1 |
+| 4 | Identity surfaces become suite-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |
+| 5 | Authorization server: candidate decided, endpoints, open DCR, consent per client and resource, refresh rotation with reuse detection, RS256 and JWKS, brokering to an external provider | 4 |
+| 6 | MCP resource metadata, the transport gate, and the gateway's well-known routing (`audit-hardening.md` slices 6 and 7) | 5 |
+| 7 | Ops console becomes a suite-level shell with a switcher, delegating over HTTP | 3 |
+| 8 | Studio becomes a suite-level shell with a switcher, including per-application edit authorisation | 7 |
+
+**Slice 3 carries the largest hidden cost**, and it is not the deletion. ② has no CLI entry point;
+making it the only shape puts building one — the development loop, reload, Studio, `--embedded-db`,
+all through the gateway — on the critical path. It should be estimated as the slice's main body
+rather than its tail.
+
+**Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
+campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author
+and the test runner to a runtime. It is listed here for ordering and should be designed separately,
+on the delegation pattern slice 7 establishes.
+
+## Out of scope
+
+- **Accepting two token issuers in parallel** (Decision 7 case C). One application-wide `jwt:`
+  block, one algorithm, one key source. Widening it to an issuer-to-key-source map is a separate
+  decision that case B largely removes the demand for.
+- **Process separation** (Decision 15). Deferred with named triggers, and kept reachable rather
+  than assumed away.
+- **A suite-level aggregate MCP endpoint** (Decision 18).
+- **A general-purpose identity provider.** No SAML brokering as a product, no federation beyond
+  Decision 7 case B, no MFA. Each of these returns Keycloak's argument.
+- **CIMD.** No client implements it (Decision 3). Watch the 2027-07-28 deprecation horizon.
+- **Cross-application aggregate views** beyond the switcher. Metrics already label job runs by
+  `job`, `app` and `status`.
+
+## Open questions
+
+Each carries the slice it gates, because an open question with no gate drifts. Two of the six are
+**measurements rather than decisions** and should be taken early, since both are cheap and either
+could invalidate a design assumption.
+
+1. **Confirm the grant-layer path** — *gates slice 5.* Decision 5 settled the axis and the
+   2026-08-16 measurement settles the rest. What remains is confirmation rather than
+   investigation: read `AuthorizationCodeGrantHandler` and `AbstractGrantHandler` end to end
+   before committing, because a package-level count cannot show how the five
+   `Response`/`WebApplicationException` references behave in the paths that matter.
+2. ~~**The development-tool MCP in a suite.**~~ **Closed by Decision 19**: one server spanning the
+   suite, with an application argument on each tool. Kept in the list rather than deleted, because
+   the alternative it rejected — a server per application — is the one a reader is likely to
+   propose again.
+3. ~~**Whether the secret provider is reachable at host scope.**~~ **Closed 2026-08-16: yes, with
+   no change to Decision 16.** `SecretResolvers.discover()` is a static factory with no application
+   context, in `tesseraql-yaml`, which the runtime module already depends on. `EnvSecretResolver`
+   reads the process environment, and `FileSecretResolver` resolves against a **process-wide**
+   directory — `/run/secrets`, overridden by `tesseraql.secrets.dir` or `TESSERAQL_SECRETS_DIR` —
+   rather than anything application-relative. A host resolves exactly what a runtime would.
+4. **The permission vocabulary after Decision 14** — *gates slice 7.* `ops.app.<name>` shifts
+   meaning, and Studio needs per-application edit authorisation that has no equivalent today.
+5. **What `TQL-SEC-4146` becomes** once TesseraQL holds a private key — *gates slice 5.* The refusal
+   was correct under a premise Decision 8 removes.
+6. **How Codex actually behaves on connection** — *measurement; gates slice 5.* It appends
+   `/callback/<callback_id>` to the configured callback, so strict exact-match redirect validation
+   will reject it. The same connect-and-observe pass answers Decision 11's `scope` question and
+   confirms Decision 3's finding against a live server rather than against issue threads.
