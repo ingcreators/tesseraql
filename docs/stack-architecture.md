@@ -395,7 +395,8 @@ design that follows.
 second mechanism this paragraph rules out, arrived at from the CLI rather than from a `Mode` enum.
 [cli-surface.md](cli-surface.md) Decision 1 has been amended to remove it: the running commands take
 `--stack` only, an application home is a stack of one, and the origin root is what `stack.yml` says
-it is — later narrowed further by Decisions 24 and 25: a portal or a redirect, never an application.
+it is — later narrowed further by Decisions 24 and 25: always a redirect — to the portal by default —
+never an application.
 
 **Decision 13 is a prerequisite, not a follow-up.** Routing every deployment through the gateway
 before the gateway is transparent ships a regression.
@@ -673,6 +674,7 @@ triple all need a host-scoped source, and none existed —
 /_tesseraql/iam
 /_tesseraql/studio             application switcher
 /_tesseraql/ops                application switcher
+/_tesseraql/portal/            the stack's portal; / is a 307 to it, or to root.redirect (D. 24)
 /orders/...                    a user application (Decision 25; /apps/orders before it)
 /orders/_tesseraql/mcp         that application's MCP surface
 /.well-known/...               authorization-server and protected-resource metadata
@@ -1059,18 +1061,27 @@ A guard is owed with the implementation; its minimum shape is that `install` say
 and its open question is whether same-name-different-application can be detected at all, or whether
 name governance is documented as the teams' responsibility the way service names are.
 
-### 24. The unclaimed root is the stack's portal
+### 24. The root always redirects, and the portal it defaults to lives inside the fence
 
-Stated as a requirement in review: the root of a stack should be **a real application portal**, not
-a routing gap. Today the relay answers the unclaimed origin root with `TQL-APP-4040`, so the first
-URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
+Stated as a requirement in review: the root of a stack should lead to **a real application
+portal**, not a routing gap. Today the relay answers the unclaimed origin root with
+`TQL-APP-4040`, so the first URL anyone types into a fresh deployment — or a fresh `dev` — is a
+404.
 
-- **Anonymous → the stack's sign-in**, `next=/`. **Signed in → the applications this principal may
-  reach**, filtered, as links. One screen answers "what is here and who am I here" — the intranet
-  home page, which for the internal-business-application deployments this architecture serves is a
-  product surface rather than a nicety.
-- **The root can instead be a configured redirect**, suggested in the same review. `stack.yml`
-  declares it by *name*, not by URL:
+**The portal is a framework surface at `/_tesseraql/portal/`**, and `/` is a **307 redirect to it
+by default**. A first draft served the portal *at* the root, and review caught what that was: the
+only framework surface outside the `_tesseraql/` fence — the single exception to Decision 17's one
+rule. Placed inside it, the rule has no exceptions, an ingress line fencing `/_tesseraql/` covers
+the portal with everything else, and the root stops being a place where content lives: **`/` does
+exactly one thing — redirect — and configuration chooses only the target.**
+
+- **The portal**: anonymous → the stack's sign-in, `next=/_tesseraql/portal/` — a real address, not
+  `/`. Signed in → the applications this principal may reach, filtered, as links. One screen
+  answers "what is here and who am I here" — the intranet home page, which for the
+  internal-business-application deployments this architecture serves is a product surface rather
+  than a nicety.
+- **The configured target**, suggested in the same review. `stack.yml` declares it by *name*, not
+  by URL:
 
   ```yaml
   root:
@@ -1083,12 +1094,13 @@ URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
   stack does not hold is refused at start, like every other disagreement. The redirect is
   **temporary (307), deliberately**: a permanent redirect is cached by browsers past the
   configuration change that retires it, which would turn an operator's edit into a support ticket.
-- **Precedence, one rule:** `root.redirect` points at one application → else the portal. Two
-  behaviours, one question — "what does the bare origin do" — answered in one place, `stack.yml`,
-  falling back to the portal when it says nothing. A first draft kept a third branch — an
-  application *owning* the root via `basePath: /`, for the public site whose URLs must not carry a
-  prefix — and review removed it (Decision 25): that case sits outside the persona this
-  architecture serves, and it was already costing a guard. Restoring it later is additive.
+- **No precedence, because there is only one mechanism.** `/` 307s to `root.redirect`'s
+  application when `stack.yml` names one, and to `/_tesseraql/portal/` when it does not — one
+  behaviour with a default target, not branches to order. Two earlier drafts each had a branch more:
+  one served the portal at the root as content, and one kept an application *owning* the root via
+  `basePath: /` for the public site whose URLs must not carry a prefix. Review removed both — the
+  first for breaking Decision 17's fence, the second (Decision 25) for sitting outside the persona
+  while already costing a guard. Restoring ownership later is additive.
 - **Development and production get the same screen** (Decision 12's parity). This costs the
   development loop nothing new: the five-minute demo already begins with "First login" against a
   seeded identity store, so sign-in-first at `/` is the flow developers already have.
@@ -1139,7 +1151,8 @@ shadowed by one unlikely path. A first draft answered with a start-time check; t
 *why allow root ownership at all?* — was better. Two mechanisms defending a shape is the sign the
 shape is wrong, root ownership's remaining case sat outside the persona, and Decision 24's redirect
 serves the deployment's root choice without it. So **`basePath: /` is not accepted**: the origin
-root is the portal or a redirect, never an application, and the shadow guard never needs to exist.
+root always redirects — to the portal by default, to a named application by configuration — and is
+never an application itself, so the shadow guard never needs to exist.
 
 Rollout note: `/apps/<name>` is the *shipped* default from #834, so `hosting.md` and
 `base-path.md` keep describing it until the code changes the default — the same policy as the
