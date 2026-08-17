@@ -740,7 +740,7 @@ application argument on each tool. Three consequences:
   mixed-mode server would be hard to reason about.
 - Narrowing to a single application stays available, because someone working on one should not have
   to see six. That is a scoping flag, not a second mode — [cli-surface.md](cli-surface.md) Decision
-  3 makes it `--suite <dir> --app-id <id>`, which narrows what starts without changing anything
+  3 makes it `--suite <dir> --app-name <name>`, which narrows what starts without changing anything
   about how it is addressed or configured.
 
 **It does not inherit the authorisation problem Decision 14 records for Studio.** A suite-level
@@ -846,19 +846,16 @@ Decision 1 has since removed `--app` from those commands — for four reasons of
 so the directory `--suite` names is the only place the file can be, and a second source for it
 would be a second answer to a question that has one.
 
-**A suite whose directory *is* one application therefore has no `suite.yml`**, and that is the
-right refusal rather than a gap: the file would sit in the application's own tree and ship inside
-its package. A suite of one has no cross-application divergence to prevent, which is this
-decision's own test for what belongs in the file. When it does need suite settings — an external
-origin for MCP, an issuer — it gets a directory. That is one `mkdir`, and it is the same shape
-every other suite has.
-
-**Which leaves one way to lose these settings by accident, and it is closed rather than documented.**
-Pointing `--suite` at a member of a real suite — `./work/orders`, with `./work/suite.yml` beside
-it — would start that application with none of them, silently, because the file is not reached up
-for. [cli-surface.md](cli-surface.md) Decision 3 refuses that invocation and prints
-`--suite ./work --app-id orders`, which reads the file and starts the same one application. The
-check is one level up and never further, so it cannot depend on where the tree sits.
+**Every suite has a directory, so every suite can hold this file** — which is not a coincidence but
+the reason [cli-surface.md](cli-surface.md) Decision 2 refuses to treat an application home as a
+suite. A draft of that decision accepted one, to save a single-application repository a directory;
+a suite file could not live there, since it would ship inside the application's package, so that
+shape could hold **no suite settings at all**. The reply drafted at the time — that a suite of one
+has no cross-application divergence to prevent, so it needs none — applied **half** of this
+decision's rule. The rule has two limbs, and the external origin is the first one: an application
+cannot know its own external origin however few of them there are, and Decision 18 needs it. The
+shape was removed rather than patched, and narrowing to one application became
+`--suite <dir> --app-name <name>`, which names the suite directory and therefore reads this file.
 
 #### What goes in the file, and what stays on a flag
 
@@ -971,9 +968,10 @@ without packaging them first.
 
 **That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer,
 after the amendments of 2026-08-16: the commands that *run* applications take `--suite` only — a
-catalogue, a folder of source trees, or one application home, all being "the applications here" —
+catalogue or a folder of source trees, both being "the applications here", and always a directory
+that *holds* applications rather than one that is one —
 `--install-root` is replaced by the word this document already uses, narrowing is
-`--suite <dir> --app-id <id>`, and `serve` becomes `dev`. `--app` keeps its own meaning on the
+`--suite <dir> --app-name <name>`, and `serve` becomes `dev`. `--app` keeps its own meaning on the
 commands that operate on one application, where it never denoted a deployment.
 
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
