@@ -571,6 +571,17 @@ walks to the filesystem root; this deliberately does not, and the cost is that r
 `work/orders/web/` is refused rather than resolved, which the refusal message makes a two-second
 fix.
 
+**Amended at implementation (the 0d catch-up PR): the step up also stops at the repository
+boundary.** The rule as first written was vacuous in its second arm — the parent of an application
+home always "holds applications", namely this one, so *every* application home had a "stack-shaped"
+parent. A repository whose root is the application home would have silently adopted whatever
+directory holds the checkouts as its stack, sibling repositories swept in as neighbours, and the
+restructure refusal below could never fire. The fence is the operating model's own line: the source
+unit *is* the stack, so a directory outside this checkout cannot be this application's stack.
+Concretely: an application home that is itself a repository root (it has `.git`) does not look up,
+and meets the refusal that prints the one `git mv` the design asks for. An application inside a
+stack-layout repository still discovers the repository root as its stack, `.git` and all.
+
 Discovery runs the **whole** stack, not the application the shell happens to be inside. Narrowing
 stays explicit (`--app-name`, Decision 3), because a stack silently missing its neighbours is
 cross-application links answering 404 in exactly the runs that were started for convenience.
