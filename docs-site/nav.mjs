@@ -238,6 +238,7 @@ export const EXCLUDED = [
   'session-token-exchange.md',
   // The suite as the unit of deployment, and the authorization server that forced it, 2026-08-16.
   'stack-architecture.md',
+  'runtime-footprint.md',
   // How the authorization server is built: CXF's grant layer, own endpoints, 2026-08-16.
   'token-issuance.md',
   // What a CLI argument means, and the option sets a command belongs to, 2026-08-16.
