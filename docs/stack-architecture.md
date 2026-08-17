@@ -394,8 +394,8 @@ design that follows.
 *derived* the origin root from the shape of the directory it was pointed at, which is the same
 second mechanism this paragraph rules out, arrived at from the CLI rather than from a `Mode` enum.
 [cli-surface.md](cli-surface.md) Decision 1 has been amended to remove it: the running commands take
-`--stack` only, an application home is a stack of one, and the origin root is what a catalogue entry
-or `stack.yml` says it is.
+`--stack` only, an application home is a stack of one, and the origin root is what `stack.yml` says
+it is — later narrowed further by Decisions 24 and 25: a portal or a redirect, never an application.
 
 **Decision 13 is a prerequisite, not a follow-up.** Routing every deployment through the gateway
 before the gateway is transparent ships a regression.
@@ -1026,18 +1026,20 @@ the external origin, the issuer (Decision 22) — and the applications' addresse
 arrive and upgrade continuously, each on its own schedule, owned by their teams**: name, version,
 install path, entitlements. So:
 
-- **`stack.yml` is the intent file**, written by people. It gains an `applications:` section
-  declaring addresses — `basePath: /` for the one application a deployment chooses to put at the
-  origin root, nothing for the `/<name>` default (Decision 25).
+- **`stack.yml` is the intent file**, written by people: the framework datasource, the external
+  origin, the issuer (Decision 22), and the root pointer (Decision 24).
 - **`catalog.json` is the ledger**, written by install tooling and never edited by hand.
 
-**This moves the address out of `catalog.json`, revising #834.** The reason is per-application
-deployment itself: installing a new version of an application must not be able to change where the
-application answers, and an installer that wrote addresses would be carrying topology it does not
-own — the team's package deciding the deployment's layout. `InstalledApp.basePath` stays as the
-in-memory carrier; `AppDirectory.applications` fills it from `stack.yml` for every shape, which also
-closes a parity hole: a source-tree stack had no way to reproduce a root-addressed production
-layout, because only a catalogue could declare an address.
+**And the address is in neither file, because it stopped being declarable at all.** A first draft of
+this decision moved `basePath` from the catalogue into a `stack.yml` `applications:` section. Review
+then removed its cases one by one: the root went to Decision 24's redirect, root *ownership* was
+dropped rather than guarded (Decision 25), and what remained of a declarable address was the vanity
+rename — which this decision itself rejects, because a renamed address breaks every neighbour's
+links. So **an application's address is derived, always: `/<name>`**. `InstalledApp.basePath` stays
+as the in-memory carrier with exactly one producer, and the `basePath` field leaves `catalog.json`,
+revising #834 — whose motivating case, the one-application stack serving at the root, is served by
+the redirect instead. Installing a new version of an application cannot change where it answers,
+because *nothing* can.
 
 **The multi-team model falls out rather than being designed.** A team's repository holds a
 *development stack* — its own applications, its own `stack.yml`, which under Decision 22's
@@ -1075,16 +1077,18 @@ URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
     redirect: orders     # /  →  /orders/
   ```
 
-  For the one-main-application deployment this is **better than claiming root with `basePath: /`**,
-  because the application keeps its canonical `/orders` address — the name contract Decision 23
-  rests on — while the bare origin still lands users somewhere useful. Naming an application the
+  For the one-main-application deployment this keeps the application's canonical `/orders`
+  address — the name contract Decision 23 rests on — while the bare origin still lands users
+  somewhere useful. Naming an application the
   stack does not hold is refused at start, like every other disagreement. The redirect is
   **temporary (307), deliberately**: a permanent redirect is cached by browsers past the
   configuration change that retires it, which would turn an operator's edit into a support ticket.
-- **Precedence, one rule:** an application declaring `basePath: /` owns the root outright (the
-  public-site case, where URLs must not carry a prefix) → else `root.redirect` points at one
-  application → else the portal. Three behaviours, one question — "what does the bare origin do" —
-  answered in one place, `stack.yml`, falling back to the portal when it says nothing.
+- **Precedence, one rule:** `root.redirect` points at one application → else the portal. Two
+  behaviours, one question — "what does the bare origin do" — answered in one place, `stack.yml`,
+  falling back to the portal when it says nothing. A first draft kept a third branch — an
+  application *owning* the root via `basePath: /`, for the public site whose URLs must not carry a
+  prefix — and review removed it (Decision 25): that case sits outside the persona this
+  architecture serves, and it was already costing a guard. Restoring it later is additive.
 - **Development and production get the same screen** (Decision 12's parity). This costs the
   development loop nothing new: the five-minute demo already begins with "First login" against a
   seeded identity store, so sign-in-first at `/` is the flow developers already have.
@@ -1110,12 +1114,16 @@ mails, bookmarks and browser bars daily, and `/orders/invoice/123` is the addres
 have guessed. It also completes Decision 23's contract — *an application's address is its name*,
 now literally.
 
-**The condition this stands on, found by measuring:** the grammar is enforced only by
-`tesseraql new` (`AppScaffolder`). A hand-written manifest can name an application `_tesseraql`
-today. That was already wrong — a name with a slash breaks the address, the history table and the
-`ops.app.<name>` grant — but this decision makes the grammar load-bearing for the URL space, so it
-is promoted to the manifest rule: **TQL-YAML-1405**, the scaffolder's pattern checked by
-`ApplicationNameRules` beside 1404's presence check, refusing at lint and at boot.
+**The condition this stands on, found by measuring:** nothing on the manifest path constrains the
+name's characters. The scaffolder enforces `[a-z][a-z0-9-]{0,63}`, but a hand-written manifest can
+name an application `_tesseraql` today. That was already wrong — a name with a slash breaks the
+address, the history table and the `ops.app.<name>` grant — and this decision makes the character
+rule load-bearing for the URL space. **TQL-YAML-1405** adds it to `ApplicationNameRules` beside
+1404's presence check, refusing at lint and at boot. **The rule is segment safety, not the
+scaffolder's ASCII pattern**: no leading underscore or dot, no slash, one valid path segment. The
+history-key work measured names in *UTF-8 bytes* precisely because names are not confined to
+ASCII — a rule that outlawed the names that guard exists to measure would be revising a shipped
+decision by accident. The scaffolder's stricter pattern remains what `new` generates.
 
 **What is honestly given up, from Decision 17's own grounds** (its "two root names" note is amended
 to point here): the framework's claim on the origin root goes from two fixed names to
@@ -1125,11 +1133,13 @@ operator case Decision 17 imagined — `/health` for a load balancer — is alre
 that wants to fence application traffic wholesale writes "everything except `/_tesseraql/`" instead
 of `/apps/`. One rule either way.
 
-**One collision becomes wider and gets a guard.** An application that owns the root
-(`basePath: /`, Decision 24's exception) is shadowed by its siblings' prefixes; under `/apps/` that
-shadow was one unlikely path, under names it is every sibling. Routes are statically known, so the
-host checks at start: a root-owning application whose top-level route segment equals a sibling's
-name is refused, naming both. Loud, at boot, like every other disagreement.
+**One collision would have widened, and review removed its precondition instead of guarding it.**
+An application owning the root would be shadowed by every sibling's name where under `/apps/` it was
+shadowed by one unlikely path. A first draft answered with a start-time check; the review question —
+*why allow root ownership at all?* — was better. Two mechanisms defending a shape is the sign the
+shape is wrong, root ownership's remaining case sat outside the persona, and Decision 24's redirect
+serves the deployment's root choice without it. So **`basePath: /` is not accepted**: the origin
+root is the portal or a redirect, never an application, and the shadow guard never needs to exist.
 
 Rollout note: `/apps/<name>` is the *shipped* default from #834, so `hosting.md` and
 `base-path.md` keep describing it until the code changes the default — the same policy as the
