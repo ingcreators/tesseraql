@@ -1159,6 +1159,50 @@ Rollout note: `/apps/<name>` is the *shipped* default from #834, so `hosting.md`
 `stack` rename. The change itself is one line: `InstalledApp.normalize`'s default becomes
 `"/" + name`.
 
+### 26. Cross-application configuration: values share through the environment, declarations do not share at all
+
+Asked in review: eleven applications, one SMTP relay, a business database some of them share —
+where does the common configuration live?
+
+**Not in `stack.yml`.** Decision 16 drew this line when it drew the other one: "this is not a call
+to hoist configuration generally." The stack file carries the settings that pass its two-limb rule
+and nothing else, or it becomes the thing it replaced — one file whose edits reach applications that
+did not ask.
+
+**The sharing plane for *values* already exists, and it is stack-scoped by construction.**
+Measured: `AppConfig` resolves `${key}` / `${key:default}` against **the environment first**, then
+the configuration tree, and its environment source is `System::getenv` — and one stack is one
+process, so one environment reaches every runtime in it. `SecretResolvers` is process-wide the same
+way. So the pattern is:
+
+- every application that uses the relay writes `host: ${MAIL_HOST:localhost}`;
+- the deployment sets `MAIL_HOST` **once** — in the service unit, the container, the shell;
+- development sets nothing, because the default rides in the placeholder.
+
+A value written once per deployment reaches every application that names it, which is the sharing
+the question asks for — with no new file, no new precedence layer, and no mechanism to document.
+
+**The *declarations* stay per application, and that is a feature with three names on it.** An
+application declaring its own channels, datasources and connectors is what keeps it **lintable
+alone** (`AppLinter.lint(app)` has no stack parameter), **packageable** (the `.tqlapp` is the whole
+application), and **deployable one at a time** (Decision 23's lifecycle). Three of the seven
+examples declare a `notifications:` block; that repetition is each application stating what it
+needs, with the values shared through the environment underneath.
+
+**Rejected: a `shared:` or `defaults:` section in `stack.yml`, merged beneath every application's
+tree.** It reads like a convenience and it is the silent-divergence shape wearing one: an
+application's behaviour would no longer be determinable from its own files, so lint, packaging and
+review would all need the stack context, and the same `.tqlapp` would behave differently in two
+stacks with nothing in either application saying so. It would also add a fifth precedence layer to
+`application.yml` < `tesseraql.yml` < profile < `overlay.yml`, and every position it could take
+surprises someone.
+
+**The growth path is per-key, through Decision 16's rule.** The issuer and JWKS earned their place;
+IdP brokering will arrive as a named `stack.yml` key when slices 4 and 5 land, with its reason
+attached. What the environment cannot carry is named honestly: a *structured* shared block — a
+whole channel definition — does not ride in one flat string variable. If a real case appears where
+structural sharing has silent-divergence risk, it earns a named key the same way, not a merge.
+
 ## Slices
 
 Ordering is by dependency, not by size.
