@@ -57,7 +57,7 @@ public final class MultiAppHost implements AutoCloseable {
 
     /**
      * Hosts every app the directory holds, each started with {@code suite}'s settings and its own
-     * declared address (docs/suite-architecture.md decision 16).
+     * declared address (docs/stack-architecture.md decision 16).
      *
      * <p>The address is read from the catalogue entry rather than supplied by the caller. The host
      * used to take a function from app id to prefix, which left two sources able to disagree about

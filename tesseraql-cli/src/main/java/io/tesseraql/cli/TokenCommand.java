@@ -35,7 +35,7 @@ import picocli.CommandLine.Option;
  * environment — the command signs with whatever the resolved config exposes and says so on stderr.
  *
  * <p><b>{@code --url}</b> asks a running application instead: it signs in and exchanges in one
- * step (docs/suite-architecture.md Decision 20), which is the path for a deployment this machine
+ * step (docs/stack-architecture.md Decision 20), which is the path for a deployment this machine
  * has an account on rather than the source of. Nothing is invented here — the server decides the
  * claims, the lifetime and whether it issues at all.
  *

@@ -9,7 +9,7 @@ All notable changes to TesseraQL are documented here. The format follows
 ### Removed
 
 - **Independent hosting — `tesseraql host --mode isolated` — is gone, and with it host-header
-  routing** (docs/suite-architecture.md Decision 12). It gave each application its own hostname and
+  routing** (docs/stack-architecture.md Decision 12). It gave each application its own hostname and
   no shared session. A suite is defined by sharing an origin and a sign-in, and a mode that undid
   both was a second deployment shape to reason about, document and test; removing it is what lets
   development and production have one topology between them. An application that must not share a
@@ -189,9 +189,9 @@ All notable changes to TesseraQL are documented here. The format follows
   never goes through a gateway, so nothing caught it. The trust contract stays where
   docs/authentication.md already puts it and where it can actually be discharged: the edge overwrites
   the header on every inbound request, and the runtime is not reachable except through the edge.
-  Under docs/suite-architecture.md decision 12 this stops being "unavailable in one hosting mode" and
+  Under docs/stack-architecture.md decision 12 this stops being "unavailable in one hosting mode" and
   becomes the whole feature, which is why it is fixed here rather than deferred.
-- **The multi-app gateway dropped the body of every chunked response** (docs/suite-architecture.md
+- **The multi-app gateway dropped the body of every chunked response** (docs/stack-architecture.md
   decision 13, slice 1). `com.sun.net.httpserver` reads a response length of `0` as "chunked,
   length unknown" and `-1` as "no response body"; the relay computed `-1` for an application that
   declared no `Content-Length` and passed it through verbatim. Streaming exports and event streams
@@ -258,7 +258,7 @@ All notable changes to TesseraQL are documented here. The format follows
   no `headers:` map at all.
 
 - **The gateway relays through `vertx-http-proxy` rather than a copy loop of its own**
-  (docs/suite-architecture.md decision 13). Three transparency defects in roughly forty lines, in
+  (docs/stack-architecture.md decision 13). Three transparency defects in roughly forty lines, in
   the component every request in every deployment passes through, is the argument: framing,
   flushing and protocol translation are what a proxy library exists to have already solved. Vert.x
   is already a compile dependency through `camel-platform-http-vertx`, so this adds one jar at a

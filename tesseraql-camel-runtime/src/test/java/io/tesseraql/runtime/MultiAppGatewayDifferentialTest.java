@@ -36,7 +36,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The gateway is a route, not a rewrite: a request answered by an app's own port must be answered
- * identically through the gateway (docs/suite-architecture.md decision 13).
+ * identically through the gateway (docs/stack-architecture.md decision 13).
  *
  * <p>Every case here issues the <em>same</em> request twice — once at the app's internal port and
  * once at the gateway's — and asserts the two answers match. In suite mode both legs use the same

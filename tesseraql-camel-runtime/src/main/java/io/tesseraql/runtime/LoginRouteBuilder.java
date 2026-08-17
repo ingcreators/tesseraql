@@ -188,7 +188,7 @@ final class LoginRouteBuilder extends RouteBuilder {
         }
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
-        // The CSRF token rides back with the cookie (docs/suite-architecture.md Decision 20). A
+        // The CSRF token rides back with the cookie (docs/stack-architecture.md Decision 20). A
         // non-browser caller that authenticates here could not proceed to any guarded route
         // without it — POST /_tesseraql/token most of all — because the token reached pages only,
         // as <meta name="csrf-token">, and a command-line client parses no HTML. Returning it

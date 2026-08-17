@@ -46,7 +46,7 @@ origin root so one sign-in reaches every application.
 An earlier `--mode isolated` gave each application its own hostname and no shared session. It is
 gone: a suite is defined by sharing an origin and a sign-in, and a mode that undid both was a
 second deployment shape to reason about, document and test — which
-[suite-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/suite-architecture.md)
+[stack-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/stack-architecture.md)
 Decision 12 removes so that development and production have one topology between them. An
 application that must not share a session with its neighbours gets its own suite.
 

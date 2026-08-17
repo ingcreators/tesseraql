@@ -1,4 +1,4 @@
-# Suite architecture
+# Stack architecture
 
 Status: **designed 2026-08-16** — nothing shipped. This document records a chain of decisions and
 the reasoning that forced each one; the implementation designs it calls for are named at the end.
@@ -12,8 +12,8 @@ each look arbitrary.
 **The spine.** Reaching MCP from the clients people actually use needs OAuth discovery. Discovery
 needs an authorization server to name. An authorization server that authenticates TesseraQL's own
 users belongs beside TesseraQL's own login. Once it is one component serving several applications,
-the *suite* — not the application — is the unit that gets deployed, and the framework's own surfaces
-belong to the suite rather than being copied into every application.
+the *stack* — not the application — is the unit that gets deployed, and the framework's own surfaces
+belong to the stack rather than being copied into every application.
 
 ## What this revises
 
@@ -25,7 +25,7 @@ belong to the suite rather than being copied into every application.
 | [session-token-exchange.md](session-token-exchange.md) | Decision 1's premise ("there is no private key anywhere in the tree, and there will not be one") does not survive Decision 8; its refusal of refresh tokens and of a revocation store is answered differently for a different audience — Decision 9 |
 | [threat-model.md](threat-model.md) | Gains an explicit row accepting framework identification — see Decision 21 |
 | [base-path.md](base-path.md) | An application's base path becomes catalogue-driven rather than mode-derived |
-| [hosting.md](hosting.md) | Loses "The two modes" once independent hosting goes, and gains the suite's development loop — slice 3, over [cli-surface.md](cli-surface.md) |
+| [hosting.md](hosting.md) | Loses "The two modes" once independent hosting goes, and gains the stack's development loop — slice 3, over [cli-surface.md](cli-surface.md) |
 
 ## Decisions
 
@@ -209,7 +209,7 @@ URLs, not embedded metadata**; the client still fetches each authorization serve
 `/.well-known/oauth-authorization-server`, and the value there must equal the `issuer` field in the
 document it finds.
 
-**The issuer is the suite origin.** `https://suite.example.com`, with no path component, so RFC
+**The issuer is the stack origin.** `https://stack.example.com`, with no path component, so RFC
 8414's path-insertion rule does not apply and the metadata sits at the bare
 `/.well-known/oauth-authorization-server` — the simplest form and the one clients handle best. The
 endpoints (`/_tesseraql/oauth/authorize`, `/token`, `/register`) are listed explicitly in the
@@ -265,7 +265,7 @@ server and the resource server, and choosing symmetric removes JWKS publication,
 rotation and `kid` assignment — the exact list `authorization-server.md` said asymmetric issuance
 would require.
 
-**A suite forecloses it.** If every application in the suite holds the same symmetric secret, **any
+**A stack forecloses it.** If every application in the stack holds the same symmetric secret, **any
 application can forge a token for any other**, and `aud` is not a boundary when the signing key is
 shared. RS256 with the authorization server holding the private key and the applications holding
 only the published key is what makes the audience separation of Decision 6 real.
@@ -318,7 +318,7 @@ and expensive to discover:
 - A client's `client_name` and other registration metadata are **display text chosen by the party
   asking to be authorised**. Render escaped, never trusted. A consent screen that presents an
   attacker's chosen name as though the framework vouched for it is a phishing surface.
-- **Consent is recorded per client and per resource**, not per client. A suite hosts several
+- **Consent is recorded per client and per resource**, not per client. A stack hosts several
   applications with separate audiences (Decision 6); consenting to one is not consenting to the
   rest, and that separation is the whole reason the audiences exist.
 - Consent is **revocable by the subject**, which the account surface (Decision 14) is the natural
@@ -336,9 +336,9 @@ an external provider and must still mint **TesseraQL's** roles and permissions r
 provider's assertions. `OidcUserLinker` already states that rule for federated logins; an
 authorization server that passed provider claims through would quietly reverse it.
 
-**How much authority one token carries.** A subject's roles are suite-wide; an application's policy
+**How much authority one token carries.** A subject's roles are stack-wide; an application's policy
 is not. A token minted for one resource carries what that resource's policy can read, not the
-subject's authority across the suite. Decision 6 makes `aud` the boundary, and a token carrying
+subject's authority across the stack. Decision 6 makes `aud` the boundary, and a token carrying
 every application's roles would make the boundary narrower than the credential it guards.
 
 **What to do with `scope`.** `session-token-exchange.md` observed correctly that `Policy.Rule` has
@@ -350,7 +350,7 @@ authorisation stays by role and permission rather than gaining a second vocabula
 the policy engine. Revisit only if a client refuses to proceed without one — measurable in the same
 connect-and-observe pass that open question 6 calls for.
 
-### 12. Shared suite is the only deployment shape
+### 12. Shared stack is the only deployment shape
 
 `app-isolation-model.md` Decision 2 gave ② two modes. Independent hosting — `Host`-header routing,
 per-host session cookies, per-application datasources — is intended for "unrelated apps, or apps
@@ -385,9 +385,17 @@ Two conditions make this affordable rather than punitive.
 
 **Base path becomes catalogue-driven, not mode-derived.** `MultiAppHost.start` already takes a
 function from application id to base path; today it reads `mode == Mode.SUITE ? PREFIX + appId :
-null`. Reading the catalogue instead, defaulting to `/apps/<appId>/`, lets a one-application suite
+null`. Reading the catalogue instead, defaulting to `/apps/<appId>/`, lets a one-application stack
 declare `/` and serve at the root — the old shape, with no second mechanism and no branch in any
 design that follows.
+
+**Note 2026-08-16, because the implementation drifted from this sentence and had to be pulled back.**
+"Declare" is load-bearing. The first CLI surface gave the running commands an `--app` flag that
+*derived* the origin root from the shape of the directory it was pointed at, which is the same
+second mechanism this paragraph rules out, arrived at from the CLI rather than from a `Mode` enum.
+[cli-surface.md](cli-surface.md) Decision 1 has been amended to remove it: the running commands take
+`--stack` only, an application home is a stack of one, and the origin root is what a catalogue entry
+or `stack.yml` says it is.
 
 **Decision 13 is a prerequisite, not a follow-up.** Routing every deployment through the gateway
 before the gateway is transparent ships a regression.
@@ -404,7 +412,7 @@ runs past the limit. The comment states the justification plainly: *"Bounded, be
 front door."*
 
 **It is not the front door.** Under Decision 12 it fronts applications the operator installed, in a
-suite whose members are mutually trusted, behind whatever ingress the deployment already has. The
+stack whose members are mutually trusted, behind whatever ingress the deployment already has. The
 justification does not survive the repositioning, and the bounds are wrong as universal limits: a
 10 MB ceiling caps every attachment and import, and a 64 MB ceiling **silently truncates exports**,
 which is the precise failure mode the export pipeline was built to avoid.
@@ -418,8 +426,8 @@ This decision originally also kept **ingress header stripping**, on the reasonin
 may be trusted while callers are not. Implementation found that reasoning does not survive contact —
 see the addendum.
 
-Already correct, verified rather than assumed: the cookie path is `/` in suite mode by design
-(`CookiePath`'s own documentation — "A shared suite wants `/`, because one sign-in reaching every
+Already correct, verified rather than assumed: the cookie path is `/` in stack mode by design
+(`CookiePath`'s own documentation — "A shared stack wants `/`, because one sign-in reaching every
 application *is* the mode"), and neither the client nor the requests carry timeouts, so downloads
 and streams are not cut.
 
@@ -474,7 +482,7 @@ gateway stripped the mTLS forwarded header each application declares. It strippe
 had *just set* was destroyed along with a forged one, and mTLS forwarded-header authentication could
 not work behind the gateway at all. Nothing caught it because `MtlsIntegrationTest` never goes
 through a gateway. Decision 12 changes what that costs: while the gateway was one shape among
-several this was "mTLS is unavailable in suite mode"; as the only shape it means
+several this was "mTLS is unavailable in stack mode"; as the only shape it means
 `SecurityConfigFactory`'s mTLS branch, `MtlsConfigRules`, `TQL-SEC-4061`, `trustBundle` PKIX
 validation and a chapter of `authentication.md` all support something unreachable.
 
@@ -507,28 +515,28 @@ that cannot carry a body is zero. Saying so — `Body.body(Buffer.buffer())` in 
 — is the whole fix. The pairing was never the problem: HTTP/1.1 in and HTTP/2 out is clean.
 
 **And the deliverable as first written could not be built.** "Run one gallery application's
-declarative suite twice" assumes that suite drives HTTP. It does not: every case kind `TestRunner`
+declarative stack twice" assumes that stack drives HTTP. It does not: every case kind `TestRunner`
 supports — `sql`, `contract`, `validate`, `decide`, `notify`, `http`, `messages`, `transition`,
 `dispatch` — evaluates in process against the app home and datasource, and `http` plans a route's
 *outbound* calls. `testing.md` says so outright, describing a dispatch case as "the button the UI
-actually calls, asserted without HTTP". Run twice, such a suite compares an in-process evaluation
+actually calls, asserted without HTTP". Run twice, such a stack compares an in-process evaluation
 with itself and passes with the gateway switched off. The wording above is corrected to what the
 deliverable was reaching for: the same request issued at both ports, over real HTTP, answers
 compared.
 
-### 14. Framework surfaces belong to the suite, and the ones that stay per-application delegate
+### 14. Framework surfaces belong to the stack, and the ones that stay per-application delegate
 
 Today five framework applications are mounted into every runtime through `ServiceLoader`. Under
-Decision 12 that means N copies of surfaces whose state is suite-wide.
+Decision 12 that means N copies of surfaces whose state is stack-wide.
 
 **The identity surfaces become one, and this is not a reversal of anything.** `auth-ui`, `account`
-and IAM Admin operate on the shared framework datasource, and a suite has one session, one sign-in
+and IAM Admin operate on the shared framework datasource, and a stack has one session, one sign-in
 and one user store. Five "change my password" pages is the anomaly. Together with the authorization
-server they form the suite's identity surface, and `app-isolation-model.md` Decision 1's criterion —
+server they form the stack's identity surface, and `app-isolation-model.md` Decision 1's criterion —
 system applications must share the host's state — reads the same way once the state in question is
-suite-wide.
+stack-wide.
 
-**The ops console and Studio become suite-level shells with an application switcher, which does
+**The ops console and Studio become stack-level shells with an application switcher, which does
 reverse `app-isolation-model.md` Decision 4.** That decision made the console per-application and scoped, deliberately giving
 up the single cross-application screen. Its three justifications each weaken under Decision 12:
 "traces need no cross-runtime aggregation" holds only while there is nowhere to aggregate to;
@@ -545,14 +553,14 @@ application; `app-isolation-model.md` Decision 3's rule that an application's co
 the authority on its database connection, so a second reader can resolve differently; and scoping
 and permissions staying where they are implemented.
 
-A consequence that is easy to miss: **a suite-level Studio can edit any application's source.** The
+A consequence that is easy to miss: **a stack-level Studio can edit any application's source.** The
 permission model changes shape. `ops.app.<name>` reverts from "the permission to open an
 application's console" toward "which applications appear in the switcher", and Studio needs
 per-application edit authorisation on the switch rather than a single "may open Studio" role. The
 audit trail widens correspondingly.
 
 This changes what a framework application *is* — from a bundle mounted into a runtime to a component
-hosted by the suite that talks to runtimes — so the hosting mechanism changes with it, from
+hosted by the stack that talks to runtimes — so the hosting mechanism changes with it, from
 `AppSourceProvider` discovery to being hosted alongside user applications.
 
 One collision class disappears as a by-product: with framework surfaces at the gateway root and user
@@ -586,10 +594,10 @@ even within one JVM** — the same hop the gateway already performs for every us
 failure is a state that exists and is tested from the first day, and process separation becomes a
 change of address rather than a change of design.
 
-Add a build check that the suite-application modules never acquire a dependency on
+Add a build check that the stack-application modules never acquire a dependency on
 `tesseraql-camel-runtime`. It is permanent, free, and states the rule where it will be read.
 
-**Revisit when** a suite needs one application's failure not to take the others down; or per-
+**Revisit when** a stack needs one application's failure not to take the others down; or per-
 application upgrade and canary reach production, where `AppUpgrader` and canary weights already
 exist; or per-application resource limits are required. None of these is present today.
 
@@ -598,7 +606,7 @@ exist; or per-application resource limits are required. None of these is present
 The framework already made this call once and did not generalise it. `CookiePath`'s own
 documentation records the reasoning: "Only the component that starts the runtimes knows which of
 those it is building, so it carries the value; **a configuration key was considered and rejected**,
-an operator setting it wrongly getting either a silently unshared suite or a session offered to
+an operator setting it wrongly getting either a silently unshared stack or a session offered to
 every neighbour, neither of which announces itself."
 
 **The rule that generalises it:** a setting belongs to the host when only the host can know it, or
@@ -624,17 +632,17 @@ not a call to hoist configuration generally.
 `FrameworkMigrations.migrate` runs today from `TesseraqlRuntime.java:501` on every runtime start,
 across two components with different homes — `security` (sessions) on the framework datasource and
 `operations` on the business datasource. **The split is already half right**: `operations` is
-per-application and stays there. `security` is suite-wide, so N runtimes take the lock on one
+per-application and stays there. `security` is stack-wide, so N runtimes take the lock on one
 `tql_schema_history__security` in turn and N−1 do nothing. Flyway's lock makes that safe rather than
 correct; its documented purpose is "serializing concurrent node startups", which anticipated
-replicas of one application, not several applications of one suite.
+replicas of one application, not several applications of one stack.
 
 So the host migrates `security` once, and **runtimes validate instead of migrating**, failing to
 start when the schema is not at the version they expect.
 
 That last clause dissolves a guard this document previously wanted on its own. A runtime pointed at
 the wrong framework datasource finds no migrated schema and **fails loudly at boot** instead of
-producing a suite where sign-in silently does not carry. Validating rather than migrating *is* the
+producing a stack where sign-in silently does not carry. Validating rather than migrating *is* the
 check.
 
 Two implementation notes. The parameter list is already four and would reach eight; the host's
@@ -649,19 +657,17 @@ the address the catalogue declares and the cookie path. It replaced the position
 the app-id-to-prefix function the host used to be handed, so the catalogue is now the single source
 of an application's address.
 
-**The remaining three are gated on a question this document did not ask: where does a host read its
+**The remaining three were gated on a question this document did not ask: where does a host read its
 own settings from?** `tesseraql.framework.datasource`, the external origin and the issuer/JWKS
-triple all need a host-scoped source, and none exists —
+triple all need a host-scoped source, and none existed —
 [cli-surface.md](cli-surface.md) records the same gap from the other side for the gateway's port
-("a suite-level configuration file does not exist yet"). The candidates are a suite configuration
-file beside the applications, options on `host` and `dev`, or both with the flags overriding. It is
-a user-facing surface rather than an internal shape, so it is named here and decided before the
-`security` migration hoist, which cannot be built without it.
+("a stack-level configuration file does not exist yet"). **Decision 22 answers it**, and the
+`security` migration hoist below is built on that answer.
 
 ### 17. The URL scheme is one rule applied at two scopes
 
 ```
-/_tesseraql/login              suite identity
+/_tesseraql/login              stack identity
 /_tesseraql/oauth/...          authorization server endpoints
 /_tesseraql/account
 /_tesseraql/iam
@@ -678,7 +684,7 @@ The prefix's original justification is gone — it existed because framework sur
 URL space with a root-mounted user application, and under Decision 12 they no longer do. It is kept
 on three replacement grounds. The collision it prevented **still exists one level down**, inside
 `/apps/<appId>/`, where an application's declared routes share a namespace with the framework
-surfaces belonging to that application; dropping the prefix at the suite level alone would make the
+surfaces belonging to that application; dropping the prefix at the stack level alone would make the
 two scopes asymmetric for no gain. It keeps the framework's claim on root names at **two**
 (`/apps/`, `/_tesseraql/`) rather than one per surface, permanently. And it leaves the rest of the
 root to the operator, who may want `/health` for a load balancer.
@@ -689,7 +695,7 @@ collision probability near zero because business domains do not name path segmen
 underscore, and a single prefix that separates framework traffic from business traffic in logs and
 metrics.
 
-### 18. MCP is per application, with no suite-level aggregate
+### 18. MCP is per application, with no stack-level aggregate
 
 Each application serves its own surface at `/apps/<appId>/_tesseraql/mcp`, with its own `resource`
 identifier and its own audience.
@@ -708,7 +714,7 @@ application**, and the document itself should be produced by that application's 
 rather than synthesised by the gateway from the catalogue, so the configuration is not read twice.
 The authorization server side needs no insertion at all, because its issuer is the bare origin.
 
-### 19. The development-tool MCP spans the suite, which is the opposite of Decision 18 on purpose
+### 19. The development-tool MCP spans the stack, which is the opposite of Decision 18 on purpose
 
 Two MCP surfaces, opposite answers. The contrast is deliberate and worth stating, because it reads
 as an inconsistency until the reason is written down.
@@ -723,7 +729,7 @@ crosses a trust boundary the filesystem did not already cross. So the argument t
 separation upstream does not reach it — while the argument that a team building interlocking
 applications wants one agent that can see all of them does.
 
-**One server for the suite**, resolving application homes under the install root, with an
+**One server for the stack**, resolving application homes under the install root, with an
 application argument on each tool. Three consequences:
 
 - Every development tool's input schema gains the argument, and its description must tell the model
@@ -733,9 +739,11 @@ application argument on each tool. Three consequences:
   server rather than of an application — there is no reason to vary it per application, and a
   mixed-mode server would be hard to reason about.
 - Narrowing to a single application stays available, because someone working on one should not have
-  to see six. That is a scoping flag, not a second mode.
+  to see six. That is a scoping flag, not a second mode — [cli-surface.md](cli-surface.md) Decision
+  3 makes it `--stack <dir> --app-name <name>`, which narrows what starts without changing anything
+  about how it is addressed or configured.
 
-**It does not inherit the authorisation problem Decision 14 records for Studio.** A suite-level
+**It does not inherit the authorisation problem Decision 14 records for Studio.** A stack-level
 Studio is reached over HTTP by an authenticated subject, so "which applications may this person
 edit" is a real question with no current answer. This is a local process run by someone who already
 has the files, and conflating the two would invent a permission model where none is needed.
@@ -805,6 +813,200 @@ Attack surface is reduced by **removing surfaces, not renaming them** — `tesse
 false`, `tesseraql.apps.<name>.enabled` for individual framework applications, and ingress rules by
 prefix.
 
+### 22. A stack declares its own settings in a file beside its applications
+
+Decision 16 named three settings that belong to the host and stopped short of building them for one
+reason: **a host has nowhere to read its own settings from.** [cli-surface.md](cli-surface.md)
+reached the same wall from the other side over the gateway's port, and deferred the answer to here.
+
+**The answer is `stack.yml`, in the directory `--stack` names.** It is loaded through the
+configuration loader applications already use, so `${secret.…}` and `${ENV_VAR:default}` resolve in
+it exactly as they do in `config/tesseraql.yml` — open question 3 already confirmed that
+`SecretResolvers.discover()` is process-scoped and reachable at host scope.
+
+```yaml
+# work/stack.yml — the same file the deployment ships and the developer runs against
+framework:
+  datasource:
+    jdbcUrl: jdbc:postgresql://${DB_HOST:localhost}:5432/stack
+    username: ${secret.env.SUITE_DB_USER}
+    password: ${secret.env.SUITE_DB_PASSWORD}
+externalOrigin: https://apps.example.com
+security:
+  jwt:
+    algorithm: RS256
+    issuer: https://apps.example.com/_tesseraql/oauth
+    jwksUri: https://apps.example.com/_tesseraql/oauth/jwks
+```
+
+**The file is always `<dir>/stack.yml`, and nothing names it separately.** A draft of this decision
+added a `--stack-config <file>` option, because the running commands then also took `--app` and an
+application's own tree is nowhere to put a stack's settings. [cli-surface.md](cli-surface.md)
+Decision 1 has since removed `--app` from those commands — for four reasons of which this was one —
+so the directory `--stack` names is the only place the file can be, and a second source for it
+would be a second answer to a question that has one.
+
+**Every stack has a directory, so every stack can hold this file** — which is not a coincidence but
+the reason [cli-surface.md](cli-surface.md) Decision 2 refuses to treat an application home as a
+stack. A draft of that decision accepted one, to save a single-application repository a directory;
+a stack file could not live there, since it would ship inside the application's package, so that
+shape could hold **no stack settings at all**. The reply drafted at the time — that a stack of one
+has no cross-application divergence to prevent, so it needs none — applied **half** of this
+decision's rule. The rule has two limbs, and the external origin is the first one: an application
+cannot know its own external origin however few of them there are, and Decision 18 needs it. The
+shape was removed rather than patched, and narrowing to one application became
+`--stack <dir> --app-name <name>`, which names the stack directory and therefore reads this file.
+
+#### What goes in the file, and what stays on a flag
+
+The rule is decision 16's own, applied to the operator's surface: **a setting belongs in the file
+when divergence — between applications, or between development and production — fails silently.**
+
+| Declared in `stack.yml` | Why it cannot be a flag |
+| --- | --- |
+| `framework.datasource` | Divergence presents as "signing in does not carry", which reads as a framework defect |
+| `externalOrigin` | Decision 6 requires MCP's `resource` to match what the user typed character for character |
+| `security.jwt.algorithm` / `issuer` / `jwksUri` | One authorization server means one issuer and one key set |
+
+| Stays a flag | Why it does not need declaring |
+| --- | --- |
+| `--port` | A wrong value fails at bind, naming the port |
+| `--http2` | A wrong value fails at the handshake |
+| `--trusted-proxies` | It describes *this* deployment's topology, not the stack's |
+
+That closes cli-surface.md's open note with a reason rather than a deferral: **the gateway's port
+stays flag-only.** It was never the silent-divergence case that motivated the file.
+
+#### The file is optional, and the alternative to it is agreement rather than silence
+
+A stack of one needs nothing declared, and a development workspace should not have to carry a file
+to run. So `stack.yml` may be absent — but "absent" must not restore the failure mode the file
+exists to remove.
+
+**With no file and more than one application, the host checks that the applications agree.** It
+resolves each application's framework datasource coordinate (the `tesseraql.framework.datasource`
+name, then that entry's `jdbcUrl` and `username`, after placeholder resolution) and refuses to start
+when they differ, naming each application and its coordinate — **TQL-APP-4211**. The gateway
+already loads every application's manifest, for ingress header stripping, so this costs a
+comparison rather than a pass over the tree.
+
+The comparison is on the resolved strings, exactly. That will refuse a stack whose applications
+name the same database as `localhost` and `127.0.0.1`, which is a false refusal — and it is the
+right way round: **a false refusal is loud and one edit from fixed; a false pass is a stack where
+signing in silently does not carry.**
+
+#### An application's framework datasource is a name; a stack's is a coordinate
+
+`tesseraql.framework.datasource` names an entry in the application's own `tesseraql.datasources`.
+The stack declares a connection instead, and the host builds one pool from it and hands it to every
+runtime through `HostContext` — the name indirection is not involved, so no reserved datasource name
+has to be invented and no application's registry gains an entry it did not declare.
+
+An application that **explicitly** declares `tesseraql.framework.datasource` while the stack
+supplies a coordinate is refused — **TQL-APP-4212**. It asked for framework state on a particular
+pool and the host is replacing that pool; ignoring the request would be the silent divergence this
+decision exists to remove. The default (`main`, unstated) is not a request, so the host simply wins.
+
+#### Two authors, two moments — and no generated blank
+
+**The team writes it, checked in beside the applications**, with `${DB_HOST:localhost}` and
+`${secret.env.…}` for anything that varies by environment. **The operator writes it on an install
+root, by hand, once, before the first `host`** — `tesseraql install` puts an application and a
+catalogue entry there and nothing else, and it should not start inventing a stack's settings from
+one application's package.
+
+Nothing generates the file, for the reason [cli-surface.md](cli-surface.md) Decision 8 gives about
+`tesseraql new`: it has no required content, so a generated one would be entirely commented out.
+
+**Discovery is a refusal rather than a blank file.** An operator meets `stack.yml` at the moment it
+matters — when the applications disagree about the framework datasource and TQL-APP-4211 refuses to
+start, naming it — or when they reach for MCP or the authorization server and the documentation
+names it. Until then there is nothing to read and nothing to fill in.
+
+#### The development loop needs no file, and one measurement says why it nearly did
+
+`dev` should require no stack settings at all, and it almost does. Working through
+`--embedded-db` found a collision between two decisions that each read correctly alone.
+
+[cli-surface.md](cli-surface.md) Decision 4b tells applications to isolate themselves inside the
+shared embedded database with `currentSchema` **in their own URL**. With no `stack.yml`, this
+decision falls back to each runtime's own `tesseraql.framework.datasource`, which is `main`. So
+application A resolves `…?currentSchema=a`, application B resolves `…?currentSchema=b`, the two
+coordinates differ, and **TQL-APP-4211 refuses the whole development stack** — over the isolation
+the other decision just recommended. Decision 4b even states the rule that is violated: "an
+application's `currentSchema` must not reach it."
+
+**So `--embedded-db` supplies the framework datasource itself**, as the embedded server's shared
+database with no schema qualifier. It is not derived from any application — which is 4b's actual
+prohibition — it is the same coordinate the CLI already knows because it started the server. One
+sign-in across the development stack, no file, and the per-application `currentSchema` stays where
+it belongs.
+
+**And `dev` can default the external origin, where `host` must not.** `dev` is the gateway, so it
+knows its own address and `http://localhost:<port>` is right by construction. A host behind an
+ingress cannot know it, and defaulting there would hand an MCP client a `resource` of
+`localhost` — the silent misconfiguration Decision 6 requires character-for-character matching to
+prevent. So it is **required when something reads it** — MCP resource metadata, the authorization
+server's issuer — and absent until then, rather than demanded at boot from every deployment that
+will never use either.
+
+#### Open: whether `--env` selects a profile for this file
+
+Applications resolve `config/env/<profile>.yml` through `--env`, `TESSERAQL_ENV` or
+`-Dtesseraql.env`. A stack has no equivalent, and `--env` is on `dev` and `host` under
+[cli-surface.md](cli-surface.md) Decision 5. One flag that selects a profile for the applications
+and silently does not for the stack around them is the shape this document keeps removing.
+
+Both answers are defensible and it is not decided here. Placeholders already cover environment
+variation — `${DB_HOST:localhost}` is the same file in both places — which argues that a second
+profile axis buys little. Against that, the surprise is real, and the loader that merges profiles is
+the one this file is already read through, so the cost of consistency is small. **It is decided
+before the file is implemented, not after**, because the answer changes what a stack directory
+contains.
+
+#### The repository boundary follows the stack, not the application
+
+Guidance rather than a decision, recorded because the file's location makes it unavoidable.
+
+**The source repository should hold a stack.** Decision 12 says a team must develop against the
+topology it deploys; a layout where nobody can check out *the stack* cannot satisfy it. Applications
+in separate repositories need submodules or a meta-repository before `dev --stack` has anything to
+point at, and `stack.yml` — which belongs to the whole — has no home.
+
+**Independent release is not a reason to split**, because it is already available without splitting:
+`.tqlapp` packages and `AppCatalog` exist precisely so applications can be installed at different
+versions into one install root. **The distributable unit is an application; the source unit is a
+stack.**
+
+**When to split is the same question as when to stop being one stack:** applications that no longer
+share an origin and a sign-in are not a stack, and their repositories should part at the same
+boundary their deployment does.
+
+#### Rejected
+
+**Flags alone.** The list reaches eight options, a database password lands in shell history and
+process listings, and the values that must be identical between development and production live
+nowhere a repository can hold them — which is exactly the case the stated priority names first: a
+single team building interlocking applications, developing locally in the shape they deploy.
+
+**A file with flag overrides.** cli-surface.md rejected the same shape for `--port` and for
+`server.port`, both times because one meaning acquired two sources. A reader of a running deployment
+would have to check both, and the interesting failures are the ones where the file says what
+everybody read and the flag says what actually ran.
+
+**A key inside each application.** This is decision 16's original rejection, unchanged:
+`CookiePath`'s documentation already records why an operator setting a stack-wide value per
+application is a defect generator rather than a flexibility.
+
+#### What it owes
+
+A JSON schema sidecar for the documentation portal, an entry in the lint registry so a malformed or
+misspelled `stack.yml` is a refusal rather than a shrug, and a `hosting.md` section. **The word
+already means something else in this codebase** — `TestSuite` is a set of route tests inside an
+application — and `--stack` (cli-surface.md decision 1) already committed the deployment sense of
+it. The scopes do not overlap in any path, so the collision is accepted and named rather than
+renamed around.
+
 ## Slices
 
 Ordering is by dependency, not by size.
@@ -813,12 +1015,12 @@ Ordering is by dependency, not by size.
 | --- | --- | --- |
 | 1 | ~~Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division~~ — **shipped 2026-08-16**; the measurement found a dropped-body defect beside the predicted buffering one and moved the relay to `vertx-http-proxy` (Decision 13) | — |
 | 2 | ~~Login response returns the CSRF token; `tesseraql token --url`; console issue-token page~~ — **shipped 2026-08-16**; all three as designed, plus the mint extracted so the page and the endpoint cannot drift (Decision 20) | — |
-| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS; `security` migration hoisted to the host with runtimes validating; CLI entry point for the suite, including the suite-spanning development-tool MCP (Decision 19) | 1 |
-| 4 | Identity surfaces become suite-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |
+| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS, over the `stack.yml` Decision 22 introduces; `security` migration hoisted to the host with runtimes validating; CLI entry point for the stack, including the stack-spanning development-tool MCP (Decision 19) | 1 |
+| 4 | Identity surfaces become stack-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |
 | 5 | Authorization server: candidate decided, endpoints, open DCR, consent per client and resource, refresh rotation with reuse detection, RS256 and JWKS, brokering to an external provider | 4 |
 | 6 | MCP resource metadata, the transport gate, and the gateway's well-known routing (`audit-hardening.md` slices 6 and 7) | 5 |
-| 7 | Ops console becomes a suite-level shell with a switcher, delegating over HTTP | 3 |
-| 8 | Studio becomes a suite-level shell with a switcher, including per-application edit authorisation | 7 |
+| 7 | Ops console becomes a stack-level shell with a switcher, delegating over HTTP | 3 |
+| 8 | Studio becomes a stack-level shell with a switcher, including per-application edit authorisation | 7 |
 
 **Slice 3 carries the largest hidden cost**, and it is not the deletion — but the cost is not where
 this note first put it. It said ② has no CLI entry point and that building one is the slice's main
@@ -831,19 +1033,21 @@ through `/apps/<id>/`. Two of the four items named were already done.
 `--embedded-db-version`, and with them `ModulesInstaller`, the `CliModules` classloader,
 `ExpressionFunctions.install`, `ModuleDrivers.register` and `EmbeddedPostgresSupport`.
 
-Some of that is cheap. `watchRoutes` is a per-runtime method, so a suite watches by calling it on
+Some of that is cheap. `watchRoutes` is a per-runtime method, so a stack watches by calling it on
 each hosted runtime rather than by growing a mechanism.
 
 **The structural half is the real body, and it is one sentence long:** `serve --app <dir>` runs a
 source tree being edited, and `host --install-root <dir>` runs installed packages recorded in a
-catalogue. Making the suite the only shape means the development loop has to point at source trees
+catalogue. Making the stack the only shape means the development loop has to point at source trees
 without packaging them first.
 
-**That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer is
-that the flag carries the distinction, where a reader can see it: `--app` is one application,
-`--suite` is several — a catalogue or a folder of source trees, both being "the applications here".
-So `--install-root` is replaced by the word this document already uses, narrowing a suite is passing
-`--app` instead of `--suite`, and `serve` becomes `dev`.
+**That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer,
+after the amendments of 2026-08-16: the commands that *run* applications take `--stack` only — a
+catalogue or a folder of source trees, both being "the applications here", and always a directory
+that *holds* applications rather than one that is one —
+`--install-root` is replaced by the word this document already uses, narrowing is
+`--stack <dir> --app-name <name>`, and `serve` becomes `dev`. `--app` keeps its own meaning on the
+commands that operate on one application, where it never denoted a deployment.
 
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
 campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author
@@ -857,7 +1061,7 @@ on the delegation pattern slice 7 establishes.
   decision that case B largely removes the demand for.
 - **Process separation** (Decision 15). Deferred with named triggers, and kept reachable rather
   than assumed away.
-- **A suite-level aggregate MCP endpoint** (Decision 18).
+- **A stack-level aggregate MCP endpoint** (Decision 18).
 - **A general-purpose identity provider.** No SAML brokering as a product, no federation beyond
   Decision 7 case B, no MFA. Each of these returns Keycloak's argument.
 - **CIMD.** No client implements it (Decision 3). Watch the 2027-07-28 deprecation horizon.
@@ -875,8 +1079,8 @@ could invalidate a design assumption.
    investigation: read `AuthorizationCodeGrantHandler` and `AbstractGrantHandler` end to end
    before committing, because a package-level count cannot show how the five
    `Response`/`WebApplicationException` references behave in the paths that matter.
-2. ~~**The development-tool MCP in a suite.**~~ **Closed by Decision 19**: one server spanning the
-   suite, with an application argument on each tool. Kept in the list rather than deleted, because
+2. ~~**The development-tool MCP in a stack.**~~ **Closed by Decision 19**: one server spanning the
+   stack, with an application argument on each tool. Kept in the list rather than deleted, because
    the alternative it rejected — a server per application — is the one a reader is likely to
    propose again.
 3. ~~**Whether the secret provider is reachable at host scope.**~~ **Closed 2026-08-16: yes, with

@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test;
  * the gateway as beside it. These are the cases that need an origin under the test's control
  * rather than a hosted application: an event stream on a known schedule, a header the app would
  * have to echo to be observed, a body with no declared length. Decision 13 of
- * docs/suite-architecture.md called the first of these out as the one thing that genuinely needed
+ * docs/stack-architecture.md called the first of these out as the one thing that genuinely needed
  * measuring, because buffering there produces "working, but late" — the hardest failure to
  * diagnose.
  */
@@ -46,7 +46,7 @@ class SuiteRelayTest {
      * The catalogue entry the stub is addressed by.
      *
      * <p>An application with no entry has no base path and therefore no address at all, since
-     * routing became prefix-driven (docs/suite-architecture.md Decision 12). These tests used to
+     * routing became prefix-driven (docs/stack-architecture.md Decision 12). These tests used to
      * pass an empty map and be routed anyway, because the prefix was a constant the relay parsed;
      * now the entry is what says where the application answers.
      */

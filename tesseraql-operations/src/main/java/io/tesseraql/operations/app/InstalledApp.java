@@ -11,7 +11,7 @@ import java.util.List;
  * @param path            the install directory, app-relative to the install root
  * @param entitledTenants tenants allowed to use this app; empty means all tenants (ch. 32.8)
  * @param basePath        the prefix this app is addressed under and serves at, or {@code null} for
- *                        the {@code /apps/<id>} default (docs/suite-architecture.md Decision 12).
+ *                        the {@code /apps/<id>} default (docs/stack-architecture.md Decision 12).
  *                        A suite of one may declare {@code /} and answer at the origin root, which
  *                        is the single-application shape without a second mechanism for it.
  *                        <b>Absent means the default; present means an address</b> — {@code ""} is

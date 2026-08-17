@@ -168,7 +168,7 @@ class AppDirectoryTest {
 
     /**
      * A directory that IS one application answers at the origin root — the single-application
-     * shape, with no second mechanism for it (docs/suite-architecture.md Decision 12).
+     * shape, with no second mechanism for it (docs/stack-architecture.md Decision 12).
      */
     @Test
     void oneApplicationTakesTheOriginRootAndAWorkspaceMemberTakesItsPrefix(@TempDir Path dir)

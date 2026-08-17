@@ -237,7 +237,7 @@ export const EXCLUDED = [
   // A session exchanged for a short-lived bearer, instead of an authorization server, 2026-08-15.
   'session-token-exchange.md',
   // The suite as the unit of deployment, and the authorization server that forced it, 2026-08-16.
-  'suite-architecture.md',
+  'stack-architecture.md',
   // How the authorization server is built: CXF's grant layer, own endpoints, 2026-08-16.
   'token-issuance.md',
   // What a CLI argument means, and the option sets a command belongs to, 2026-08-16.

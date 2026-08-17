@@ -32,7 +32,7 @@ production callers.
 > --mode <suite|isolated>` as **Done (#693)**, and `hosting.md` now documents both modes with a
 > comparison table on the published site. ② has an entry point, user documentation and a reference
 > page. It is still true that it has no *known* production callers, which is a weaker claim and the
-> only one that should be relied on. It was relied on twice in `suite-architecture.md` before this
+> only one that should be relied on. It was relied on twice in `stack-architecture.md` before this
 > correction: read that document's Decision 12 and slice 3 note, not this paragraph.
 
 ### What ① actually costs its users

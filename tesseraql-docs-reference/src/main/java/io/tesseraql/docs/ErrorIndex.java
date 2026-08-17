@@ -542,7 +542,7 @@ final class ErrorIndex {
             "documentation-ia.md", "style-guide.md", "app-isolation-model.md", "base-path.md",
             "export-pipeline.md", "lookups.md", "unified-sources.md", "jvm-baseline.md",
             "ducklake-1.5.md", "audit-hardening.md", "authorization-server.md",
-            "session-token-exchange.md", "suite-architecture.md", "token-issuance.md",
+            "session-token-exchange.md", "stack-architecture.md", "token-issuance.md",
             "lint-restructure.md", "prompt-as-recipe.md", "cli-surface.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */

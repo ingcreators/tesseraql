@@ -138,7 +138,7 @@ decided it should, not because they upgraded.
 | --- | --- | --- |
 | 1 | MCP security defaults ([audit-hardening.md](audit-hardening.md) slice 12) | The floor; shipped first so tokens did not arrive before it |
 | 2 | The exchange endpoint, its CSRF guard and the HS256-only refusal | Two declared keys, **one** error code |
-| 3 | A path to the endpoint: the CSRF token in the login answer, `tesseraql token --url`, the console page | [suite-architecture.md](suite-architecture.md) Decision 20; **no** new keys and **no** new error code |
+| 3 | A path to the endpoint: the CSRF token in the login answer, `tesseraql token --url`, the console page | [stack-architecture.md](stack-architecture.md) Decision 20; **no** new keys and **no** new error code |
 
 **One code, not two.** The design said two; the runtime refusals turned out to need none of their
 own. An unauthenticated caller is refused by `CsrfValidator`, which already raises the shared

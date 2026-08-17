@@ -3,7 +3,7 @@ id: tql.opsConsole.token
 kind: route
 recipe: query-html
 
-# The console face of POST /_tesseraql/token (docs/suite-architecture.md Decision 20). The
+# The console face of POST /_tesseraql/token (docs/stack-architecture.md Decision 20). The
 # endpoint was correct and unreachable: it requires the session's CSRF token, and that value
 # reached pages only, as <meta name="csrf-token">, so the one route open to a human was reading
 # a cookie and a meta tag out of browser developer tools. On an authenticated page the token is

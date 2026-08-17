@@ -13,7 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * The provider behind the console's issue-token page (docs/suite-architecture.md Decision 20).
+ * The provider behind the console's issue-token page (docs/stack-architecture.md Decision 20).
  *
  * <p>Two properties matter here and neither is visible from the page: an application that does not
  * issue answers rather than fails, and the provider mints for the ambient principal only — the one
