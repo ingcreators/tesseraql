@@ -765,6 +765,16 @@ Studio is reached over HTTP by an authenticated subject, so "which applications 
 edit" is a real question with no current answer. This is a local process run by someone who already
 has the files, and conflating the two would invent a permission model where none is needed.
 
+**Shipped 2026-08-17, as written, with one call the decision did not make.** `mcp` resolves the
+stack exactly as `dev` does (`--stack`, discovered one level up when omitted; `--app-name`
+narrows), every tool and the copilot prompt carry the `application` argument, and read-only is the
+server's. The addition: the HTTP transport's bearer check used to read one application's
+`tesseraql.security.jwt`, and a stack has several. The members must agree — the server has one
+gate, and one that verified each request against whichever member it happened to pick would accept
+a token another member rejects — so disagreeing JWT settings refuse the HTTP transport with the
+fix named, the same declared-when-divergence-fails-silently shape as the framework-datasource
+guard. Stdio is unaffected; it inherits the launching process's trust.
+
 ### 20. Token acquisition needs a path a person can follow
 
 `POST /_tesseraql/token` is guarded like the sign-out routes and requires the session's CSRF token,

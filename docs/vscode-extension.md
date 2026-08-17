@@ -209,11 +209,12 @@ schema, the linter, and the form in sync: they can never drift apart.
 ## Registering the MCP server
 
 *TesseraQL: Register MCP Server* writes the [dev-tools MCP server](ai-mcp.md)
-(`<cliPath> mcp --app <home>`, stdio transport) into the chosen client
-configuration: `.vscode/mcp.json` (VS Code MCP clients) and/or the repo-root
-`.mcp.json` (Claude Code), merging with any existing servers and never overwriting a
-foreign `tesseraql` entry without confirmation. One command, and any connected agent
-sees manifest, lint, tests, and scaffolding.
+(`<cliPath> mcp`, stdio transport) into the chosen client configuration:
+`.vscode/mcp.json` (VS Code MCP clients) and/or the repo-root `.mcp.json` (Claude
+Code), merging with any existing servers and never overwriting a foreign
+`tesseraql` entry without confirmation. The server discovers the stack one level up
+from the configuration's own directory, the same way `tesseraql dev` finds it. One
+command, and any connected agent sees manifest, lint, tests, and scaffolding.
 
 A file that is not valid JSON — `mcp.json` is JSONC in practice, and VS Code itself writes
 comments into it — cannot be merged, so the command **refuses to write it** and offers to open

@@ -65,6 +65,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`tesseraql mcp` serves one server for the stack** (docs/stack-architecture.md Decision 19).
+  `--app` is gone: `--stack` names the directory holding the applications and is discovered one
+  level up when omitted, exactly as `dev` resolves it, and `--app-name` narrows without changing
+  anything else. Every development tool and the `studio_copilot` prompt carry an `application`
+  argument naming which stack member the call operates on — required when the server spans
+  several, defaulted when it holds one — because an agent that guesses which application it is
+  editing is worse than one that has to be told. `--read-only` is a property of the server,
+  never of one application. The HTTP transport's bearer check now requires the stack's members
+  to agree on `tesseraql.security.jwt` — the server has one gate, and one that verified each
+  request against whichever member it happened to pick would accept a token another member
+  rejects — refusing with the fix named when they disagree. The VS Code extension's *Register
+  MCP Server* command writes `args: ["mcp"]` accordingly.
+
 - **`tesseraql serve` is `tesseraql dev`, and it runs the stack** (docs/cli-surface.md
   Decision 4). `serve` was the gateway-less single-application shape — the second deployment
   topology Decision 12 removed; development now runs exactly what production runs: every

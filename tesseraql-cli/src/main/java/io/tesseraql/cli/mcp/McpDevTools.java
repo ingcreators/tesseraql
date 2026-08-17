@@ -43,6 +43,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,14 @@ import java.util.Optional;
  * coverage, ops status, scaffolding, and Studio drafts - as MCP tools, so an agent connected only
  * over MCP can scaffold a table-backed route and iterate until lint, tests, and coverage pass
  * without touching the filesystem directly (roadmap Phase 24).
+ *
+ * <p>One server spans the stack (docs/stack-architecture.md decision 19): the development tools run
+ * on the developer's own machine against application homes they already hold on disk, so there is
+ * no per-application audience to protect and a team building interlocking applications wants one
+ * agent that can see all of them. Every tool therefore carries an {@code application} argument
+ * whose description tells the model how to choose - an agent that guesses which application it is
+ * editing is worse than one that has to be told - and read-only is a property of the server, not
+ * of an application.
  *
  * <p>Every tool reuses the same framework services the CLI and Maven plugin use, so behavior is
  * identical to running them by hand. Write tools (scaffold, drafts) are gated: they apply through
@@ -65,19 +74,19 @@ public final class McpDevTools {
     private static final TqlErrorCode BAD_ARGS = new TqlErrorCode(TqlDomain.MCP, 4002);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.MCP, 5001);
 
-    private static final String INSTRUCTIONS = """
-            TesseraQL developer tools. Typical loop: scaffold_crud a table, then lint and test \
-            until both pass. Edit files through draft_save -> draft_preview -> draft_apply (a draft \
-            only applies if it compiles). All paths are app-home-relative and confined to the app. \
-            schema_introspect, test, and ops_status use the app's configured datasource unless you \
-            pass jdbcUrl/username/password. To build from a plain-language request, start with the \
-            studio_copilot prompt, which walks the describe -> draft -> preview -> apply loop.""";
-
-    private final Path appHome;
+    /** The applications this server spans, name to home, in the stack's stable order. */
+    private final Map<String, Path> applications;
     private final boolean readOnly;
 
-    public McpDevTools(Path appHome, boolean readOnly) {
-        this.appHome = appHome.toAbsolutePath().normalize();
+    public McpDevTools(Map<String, Path> applications, boolean readOnly) {
+        if (applications.isEmpty()) {
+            throw new IllegalArgumentException("The MCP dev-tool server needs at least one"
+                    + " application.");
+        }
+        LinkedHashMap<String, Path> normalized = new LinkedHashMap<>();
+        applications.forEach(
+                (name, home) -> normalized.put(name, home.toAbsolutePath().normalize()));
+        this.applications = Collections.unmodifiableMap(normalized);
         this.readOnly = readOnly;
     }
 
@@ -87,13 +96,30 @@ public final class McpDevTools {
      */
     public McpServer toServer() {
         McpServer.Builder builder = McpServer.builder("tesseraql-dev", VERSION)
-                .instructions(INSTRUCTIONS)
+                .instructions(instructions())
                 .tools(readTools());
         if (!readOnly) {
             builder.tools(writeTools());
             builder.prompts(prompts());
         }
         return builder.build();
+    }
+
+    private String instructions() {
+        return "TesseraQL developer tools, spanning "
+                + (applications.size() == 1
+                        ? "the application '" + soleName() + "'."
+                        : applications.size() + " applications: " + names() + ". Every tool takes"
+                                + " an 'application' argument naming which one it operates on;"
+                                + " pass the one the developer's request concerns, and ask rather"
+                                + " than guess when it is ambiguous.")
+                + " Typical loop: scaffold_crud a table, then lint and test until both pass. Edit"
+                + " files through draft_save -> draft_preview -> draft_apply (a draft only applies"
+                + " if it compiles). All paths are app-home-relative and confined to the"
+                + " application. schema_introspect, test, and ops_status use the application's"
+                + " configured datasource unless you pass jdbcUrl/username/password. To build from"
+                + " a plain-language request, start with the studio_copilot prompt, which walks"
+                + " the describe -> draft -> preview -> apply loop.";
     }
 
     List<McpTool> readTools() {
@@ -109,18 +135,64 @@ public final class McpDevTools {
         return List.of(studioCopilot());
     }
 
+    // ----- the application argument (decision 19) ---------------------------
+
+    /**
+     * A schema pre-seeded with the {@code application} argument every development tool carries.
+     * Required when the server spans several applications - the description tells the model how to
+     * choose - and optional with the obvious default when it holds exactly one.
+     */
+    private McpSchema schema() {
+        McpSchema schema = McpSchema.object();
+        return applications.size() > 1
+                ? schema.required("application", "string", "which application this call operates"
+                        + " on - one of: " + names() + ". Pass the application the developer's"
+                        + " request concerns; ask rather than guess when it is ambiguous.")
+                : schema.property("application", "string", "the application to operate on"
+                        + " (default: '" + soleName() + "', the only application this server"
+                        + " holds)");
+    }
+
+    /** Resolves a call's {@code application} argument to its home directory. */
+    private Path appHome(JsonNode args) {
+        String name = textOrNull(args, "application");
+        if (name == null || name.isBlank()) {
+            if (applications.size() == 1) {
+                return applications.values().iterator().next();
+            }
+            throw new TqlException(BAD_ARGS, "Missing required argument: application. This server"
+                    + " spans " + names() + " - name the one the request concerns.");
+        }
+        Path home = applications.get(name);
+        if (home == null) {
+            throw new TqlException(BAD_ARGS, "Unknown application '" + name + "'. This server"
+                    + " holds: " + names());
+        }
+        return home;
+    }
+
+    private String names() {
+        return String.join(", ", applications.keySet());
+    }
+
+    private String soleName() {
+        return applications.keySet().iterator().next();
+    }
+
     // ----- read tools -------------------------------------------------------
 
     private McpTool manifestSummary() {
         return McpTool.builder("manifest_summary")
-                .description("Summarize the app: name, home, reproducibility hash, and every"
-                        + " discovered route and job.")
+                .description("Summarize an application: name, home, reproducibility hash, and"
+                        + " every discovered route and job.")
+                .inputSchema(schema())
                 .handler((args, ctx) -> {
-                    AppManifest manifest = new ManifestLoader().load(appHome);
+                    Path app = appHome(args);
+                    AppManifest manifest = new ManifestLoader().load(app);
                     StudioService.Explorer explorer = new StudioService(manifest, true).explorer();
                     return McpToolResult.json(obj(
                             "appName", explorer.appName(),
-                            "appHome", appHome.toString(),
+                            "appHome", app.toString(),
                             "reproducibilityHash", manifest.index().aggregateHash(),
                             "routes", explorer.routes(),
                             "jobs", explorer.jobs()));
@@ -130,12 +202,12 @@ public final class McpDevTools {
 
     private McpTool sourceRead() {
         return McpTool.builder("source_read")
-                .description("Read one app source file (YAML, SQL, or template) by its app-relative"
-                        + " path.")
-                .inputSchema(McpSchema.object()
+                .description("Read one application source file (YAML, SQL, or template) by its"
+                        + " app-relative path.")
+                .inputSchema(schema()
                         .required("path", "string", "app-home-relative file path"))
                 .handler((args, ctx) -> {
-                    AppManifest manifest = new ManifestLoader().load(appHome);
+                    AppManifest manifest = new ManifestLoader().load(appHome(args));
                     String content = new StudioService(manifest, true)
                             .source(requireText(args, "path"));
                     return McpToolResult.text(content);
@@ -147,15 +219,17 @@ public final class McpDevTools {
         return McpTool.builder("schema_introspect")
                 .description("Introspect a database table's columns, primary key, version column,"
                         + " and unique indexes via JDBC metadata.")
-                .inputSchema(McpSchema.object()
+                .inputSchema(schema()
                         .required("table", "string", "table name to introspect")
-                        .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
+                        .property("jdbcUrl", "string",
+                                "JDBC URL (default: the application's main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password"))
                 .handler((args, ctx) -> {
+                    Path app = appHome(args);
                     String table = requireText(args, "table");
                     TableSchema schema;
-                    try (Connection connection = connect(args, config())) {
+                    try (Connection connection = connect(args, app)) {
                         schema = new TableIntrospector().introspect(connection, table);
                     }
                     return McpToolResult.json(schemaJson(schema));
@@ -165,10 +239,12 @@ public final class McpDevTools {
 
     private McpTool lint() {
         return McpTool.builder("lint")
-                .description("Run the app linter (recipes, SQL files, security policies, tenant and"
-                        + " optimistic-locking rules, validation, notify, i18n) and report findings.")
+                .description("Run the application linter (recipes, SQL files, security policies,"
+                        + " tenant and optimistic-locking rules, validation, notify, i18n) and"
+                        + " report findings.")
+                .inputSchema(schema())
                 .handler((args, ctx) -> {
-                    List<LintFinding> findings = new AppLinter().lint(appHome);
+                    List<LintFinding> findings = new AppLinter().lint(appHome(args));
                     long errors = findings.stream().filter(LintFinding::isError).count();
                     return McpToolResult.json(obj(
                             "errors", errors,
@@ -180,10 +256,11 @@ public final class McpDevTools {
 
     private McpTool test() {
         return McpTool.builder("test")
-                .description("Run the app's declarative test suites against the datasource, collect"
-                        + " SQL and item coverage, and evaluate the coverage gate.")
-                .inputSchema(McpSchema.object()
-                        .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
+                .description("Run an application's declarative test suites against the datasource,"
+                        + " collect SQL and item coverage, and evaluate the coverage gate.")
+                .inputSchema(schema()
+                        .property("jdbcUrl", "string",
+                                "JDBC URL (default: the application's main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password")
                         .property("realm", "string", "managed realm id (default: local)"))
@@ -192,16 +269,18 @@ public final class McpDevTools {
     }
 
     private McpToolResult runTests(JsonNode args, McpCallContext context) throws Exception {
-        Datasource ds = resolve(args, config());
+        Path app = appHome(args);
+        AppConfig config = config(app);
+        Datasource ds = resolve(args, app, config);
         String realm = textOr(args, "realm", "local");
-        Path reportDir = io.tesseraql.yaml.config.WorkHome.resolve(appHome, config())
+        Path reportDir = io.tesseraql.yaml.config.WorkHome.resolve(app, config)
                 .resolve("mcp/reports");
         Files.createDirectories(reportDir);
-        AppTestRunner.RunResult result = new AppTestRunner().run(appHome,
+        AppTestRunner.RunResult result = new AppTestRunner().run(app,
                 new DriverManagerDataSource(ds.url(), ds.user(), ds.password()),
                 RealmConfig.managed(realm, "main"), reportDir);
 
-        CoverageThresholds thresholds = CoverageThresholdResolver.resolve(config(), 0, 0);
+        CoverageThresholds thresholds = CoverageThresholdResolver.resolve(config, 0, 0);
         CoverageGate.Result gate = CoverageGate.check(result.coverage(), result.kinds(),
                 thresholds);
 
@@ -234,13 +313,15 @@ public final class McpDevTools {
         return McpTool.builder("ops_status")
                 .description("Read operational status from the datasource: outbox event counts and"
                         + " recent events, and recent batch job executions.")
-                .inputSchema(McpSchema.object()
+                .inputSchema(schema()
                         .property("limit", "integer", "max recent rows (default 20)")
-                        .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
+                        .property("jdbcUrl", "string",
+                                "JDBC URL (default: the application's main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password"))
                 .handler((args, ctx) -> {
-                    Datasource ds = resolve(args, config());
+                    Path app = appHome(args);
+                    Datasource ds = resolve(args, app, config(app));
                     DriverManagerDataSource dataSource = new DriverManagerDataSource(ds.url(),
                             ds.user(), ds.password());
                     int limit = args.path("limit").isNumber() ? args.get("limit").asInt() : 20;
@@ -270,27 +351,30 @@ public final class McpDevTools {
                 .description(
                         "Scaffold list/detail/edit routes, 2-way SQL, htmx pages, and tests for"
                                 + " a table. Idempotent; hand-edited files are skipped unless force is set.")
-                .inputSchema(McpSchema.object()
+                .inputSchema(schema()
                         .required("table", "string", "table to scaffold")
                         .property("force", "boolean", "overwrite edited or user-owned files")
-                        .property("jdbcUrl", "string", "JDBC URL (default: app main datasource)")
+                        .property("jdbcUrl", "string",
+                                "JDBC URL (default: the application's main datasource)")
                         .property("username", "string", "database user")
                         .property("password", "string", "database password"))
                 .handler((args, ctx) -> {
+                    Path app = appHome(args);
+                    AppConfig config = config(app);
                     String table = requireText(args, "table");
                     boolean force = args.path("force").asBoolean(false);
                     TableSchema schema;
-                    try (Connection connection = connect(args, config())) {
+                    try (Connection connection = connect(args, app)) {
                         schema = new TableIntrospector().introspect(connection, table);
                     }
-                    List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config()),
-                            ResponseHeaderDefaults.from(config()),
-                            io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values()
+                    List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config),
+                            ResponseHeaderDefaults.from(config),
+                            io.tesseraql.yaml.catalog.Catalogs.load(app).all().values()
                                     .stream().map(io.tesseraql.yaml.model.CatalogSpec::table)
                                     .filter(java.util.Objects::nonNull)
                                     .collect(java.util.stream.Collectors.toUnmodifiableSet()))
                             .scaffold(schema);
-                    ScaffoldWriter.Report report = new ScaffoldWriter().apply(appHome, files,
+                    ScaffoldWriter.Report report = new ScaffoldWriter().apply(app, files,
                             force);
                     Object payload = obj(
                             "written", report.written(),
@@ -311,11 +395,11 @@ public final class McpDevTools {
         return McpTool.builder("draft_save")
                 .description("Save a draft edit of a file under work/studio/drafts without touching"
                         + " the source of truth.")
-                .inputSchema(McpSchema.object()
+                .inputSchema(schema()
                         .required("path", "string", "app-home-relative file path")
                         .required("content", "string", "new file content"))
                 .handler((args, ctx) -> {
-                    StudioService studio = studio();
+                    StudioService studio = studio(appHome(args));
                     studio.saveDraft(requireText(args, "path"), requireText(args, "content"));
                     return McpToolResult.json(obj("saved", requireText(args, "path")));
                 })
@@ -326,12 +410,12 @@ public final class McpDevTools {
         return McpTool.builder("draft_preview")
                 .description("Validate a draft (or supplied content) by compiling it - parse route"
                         + " YAML, render SQL, process templates - without applying it.")
-                .inputSchema(McpSchema.object()
+                .inputSchema(schema()
                         .required("path", "string", "app-home-relative file path")
                         .property("content", "string", "content to validate (default: saved draft"
                                 + " or current source)"))
                 .handler((args, ctx) -> {
-                    StudioService.PreviewResult preview = studio()
+                    StudioService.PreviewResult preview = studio(appHome(args))
                             .preview(requireText(args, "path"), textOrNull(args, "content"));
                     return McpToolResult.json(obj(
                             "valid", preview.valid(), "kind", preview.kind(),
@@ -344,11 +428,11 @@ public final class McpDevTools {
         return McpTool.builder("draft_apply")
                 .description("Promote a saved draft to the source of truth after it compiles. Fails"
                         + " if the draft does not compile.")
-                .inputSchema(McpSchema.object()
+                .inputSchema(schema()
                         .required("path", "string", "app-home-relative file path"))
                 .handler((args, ctx) -> {
                     String path = requireText(args, "path");
-                    studio().applyDraft(path);
+                    studio(appHome(args)).applyDraft(path);
                     return McpToolResult.json(obj("applied", path));
                 })
                 .build();
@@ -364,7 +448,7 @@ public final class McpDevTools {
      * TesseraQL; the prompt only returns guidance text.
      */
     private McpPrompt studioCopilot() {
-        return McpPrompt.builder("studio_copilot")
+        McpPrompt.Builder builder = McpPrompt.builder("studio_copilot")
                 .title("Studio copilot: describe -> draft -> preview -> apply")
                 .description(
                         "Turn a plain-language request into a verified TesseraQL route or job, "
@@ -373,15 +457,21 @@ public final class McpDevTools {
                         + "lists active users').", true)
                 .argument("table",
                         "The backing table, when the request is table-backed (optional).",
-                        false)
+                        false);
+        if (applications.size() > 1) {
+            builder.argument("application", "Which application to build it in - one of: "
+                    + names() + ".", true);
+        }
+        return builder
                 .handler((args, ctx) -> McpPromptResult.user(
                         "Studio copilot: describe -> draft -> preview -> apply.",
-                        copilotGuidance(args.get("task"), args.get("table"))))
+                        copilotGuidance(args.get("task"), args.get("table"),
+                                args.get("application"))))
                 .build();
     }
 
     /** Renders the copilot guidance for a request, naming the exact tools to drive each step. */
-    private static String copilotGuidance(String task, String table) {
+    private String copilotGuidance(String task, String table, String application) {
         StringBuilder text = new StringBuilder();
         text.append("Help the developer build a TesseraQL route or job for this request:\n\n  ")
                 .append(task == null || task.isBlank()
@@ -390,6 +480,15 @@ public final class McpDevTools {
                 .append("\n\n");
         if (table != null && !table.isBlank()) {
             text.append("Backing table: ").append(table).append("\n\n");
+        }
+        if (applications.size() > 1) {
+            text.append("Build it in the application '")
+                    .append(application == null || application.isBlank()
+                            ? "(none named - ask the developer; this server spans " + names() + ")"
+                            : application)
+                    .append("', and pass application: '")
+                    .append(application == null || application.isBlank() ? "<name>" : application)
+                    .append("' on every tool call - this server spans several applications.\n\n");
         }
         text.append(
                 """
@@ -419,26 +518,26 @@ public final class McpDevTools {
 
     // ----- helpers ----------------------------------------------------------
 
-    private AppConfig config() {
-        return new ManifestLoader().load(appHome).config();
+    private AppConfig config(Path app) {
+        return new ManifestLoader().load(app).config();
     }
 
-    private StudioService studio() {
-        return new StudioService(new ManifestLoader().load(appHome), readOnly);
+    private StudioService studio(Path app) {
+        return new StudioService(new ManifestLoader().load(app), readOnly);
     }
 
-    private Connection connect(JsonNode args, AppConfig config) throws java.sql.SQLException {
-        Datasource ds = resolve(args, config);
+    private Connection connect(JsonNode args, Path app) throws java.sql.SQLException {
+        Datasource ds = resolve(args, app, config(app));
         return DriverManager.getConnection(ds.url(), ds.user(), ds.password());
     }
 
     /**
      * Resolves a datasource with the CLI subcommands' precedence: explicit arguments, then the
-     * app's main datasource when it resolves and answers, then a running
+     * application's main datasource when it resolves and answers, then a running
      * {@code dev --embedded-db} (its {@code work/embedded-db.jdbc} marker) — so the agent's
      * database tools work against the embedded database another terminal is serving.
      */
-    private Datasource resolve(JsonNode args, AppConfig config) {
+    private Datasource resolve(JsonNode args, Path app, AppConfig config) {
         String url = textOrNull(args, "jdbcUrl");
         String user = textOrNull(args, "username");
         String password = textOrNull(args, "password");
@@ -463,7 +562,7 @@ public final class McpDevTools {
             configUrl = null;
             configFailure = ex.getMessage();
         }
-        Optional<String> marker = EmbeddedDbMarker.pick(appHome, configUrl, user, password,
+        Optional<String> marker = EmbeddedDbMarker.pick(app, configUrl, user, password,
                 EmbeddedDbMarker::reachable);
         if (marker.isPresent()) {
             return new Datasource(marker.get(), null, null);

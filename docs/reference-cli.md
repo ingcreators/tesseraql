@@ -361,7 +361,8 @@ Serve the developer MCP tools over stdio or HTTP.
 
 | Argument | Required? | Description |
 | --- | --- | --- |
-| `--app <app>` | yes | Path to the external app home. |
+| `--stack <dir>` | — | Directory holding the applications to serve: an install root (catalog.json) or a folder of application homes. Discovered one level up from the working directory when omitted. |
+| `--app-name <name>` | — | Serve only this application's tools from the stack. |
 | `--transport <transport>` | — | Transport: stdio (default) or http. Default: `stdio`. |
 | `--read-only` | — | Expose only the read tools. |
 | `--port <port>` | — | HTTP port (http transport). Default: `8765`. |

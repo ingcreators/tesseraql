@@ -8,7 +8,7 @@ test('a fresh .vscode/mcp.json registers the stdio dev-tools server', () => {
   assert.equal(result.conflict, false);
   assert.deepEqual(JSON.parse(result.content), {
     servers: {
-      tesseraql: { type: 'stdio', command: 'tesseraql', args: ['mcp', '--app', '.'] },
+      tesseraql: { type: 'stdio', command: 'tesseraql', args: ['mcp'] },
     },
   });
 });
