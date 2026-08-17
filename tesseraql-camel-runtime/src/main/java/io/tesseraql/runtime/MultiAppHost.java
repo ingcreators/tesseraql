@@ -33,17 +33,41 @@ public final class MultiAppHost implements AutoCloseable {
     /** TQL-APP-4040: no app is hosted under this name. */
     static final TqlErrorCode UNKNOWN_APP = new TqlErrorCode(TqlDomain.APP, 4040);
 
+    /**
+     * TQL-APP-4211: the stack supplies no framework datasource and the applications disagree
+     * about theirs.
+     *
+     * <p>Divergence here presents as "signing in does not carry between applications", which
+     * reads as a framework defect; the comparison is on the resolved strings, exactly, so a
+     * {@code localhost} vs {@code 127.0.0.1} pair is refused too — a false refusal is loud and
+     * one edit from fixed, a false pass is a stack where one sign-in silently is not one.
+     */
+    static final TqlErrorCode FRAMEWORK_DIVERGENCE = new TqlErrorCode(TqlDomain.APP, 4211);
+
+    /**
+     * TQL-APP-4212: an application explicitly declares {@code tesseraql.framework.datasource}
+     * while the stack supplies the connection.
+     *
+     * <p>The application asked for framework state on a particular pool and the host is replacing
+     * that pool; ignoring the request would be the silent divergence decision 22 exists to
+     * remove. The unstated {@code main} default is not a request, so the host simply wins.
+     */
+    static final TqlErrorCode FRAMEWORK_OVERRIDDEN = new TqlErrorCode(TqlDomain.APP, 4212);
+
     private static final String CANARY_SLOT = "#canary";
 
     private final Map<String, TesseraqlRuntime> runtimes;
     private final Set<String> appNames;
     private final Map<String, Integer> canaryWeights;
+    /** The stack's framework pool, when its file supplies one — host-built, host-closed. */
+    private final AutoCloseable stackFrameworkPool;
 
     private MultiAppHost(Map<String, TesseraqlRuntime> runtimes, Set<String> appNames,
-            Map<String, Integer> canaryWeights) {
+            Map<String, Integer> canaryWeights, AutoCloseable stackFrameworkPool) {
         this.runtimes = runtimes;
         this.appNames = appNames;
         this.canaryWeights = canaryWeights;
+        this.stackFrameworkPool = stackFrameworkPool;
     }
 
     /**
@@ -79,6 +103,16 @@ public final class MultiAppHost implements AutoCloseable {
      */
     public static MultiAppHost start(Path installRoot, HostContext stack,
             List<InstalledApp> applications) {
+        // The stack's own settings — tesseraql-stack.yml in the directory being hosted
+        // (docs/stack-architecture.md decision 22). Loaded before any runtime starts, because
+        // both of its guards are start-time refusals.
+        io.tesseraql.operations.app.StackSettings settings = io.tesseraql.operations.app.StackSettings
+                .load(installRoot);
+        com.zaxxer.hikari.HikariDataSource frameworkPool = frameworkPool(installRoot,
+                applications, settings);
+        HostContext context = stack.withStackSettings(
+                settings.externalOrigin().orElse(null), frameworkPool);
+
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
         Set<String> appNames = new java.util.LinkedHashSet<>();
@@ -87,7 +121,7 @@ public final class MultiAppHost implements AutoCloseable {
             for (InstalledApp app : applications) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
                 started.put(app.name(), TesseraqlRuntime.start(appHome, freePort(),
-                        stack.forApplication(app.basePath())));
+                        context.forApplication(app.basePath())));
                 appNames.add(app.name());
                 LOG.info("Hosting app {} v{} from {}", app.name(), app.version(), appHome);
 
@@ -97,7 +131,7 @@ public final class MultiAppHost implements AutoCloseable {
                     // serves the same base path.
                     started.put(app.name() + CANARY_SLOT,
                             TesseraqlRuntime.start(candidateHome, freePort(),
-                                    stack.forApplication(app.basePath())));
+                                    context.forApplication(app.basePath())));
                     canaryWeights.put(app.name(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
                             app.name(), canary.candidate().version(), canary.weightPercent());
@@ -105,9 +139,81 @@ public final class MultiAppHost implements AutoCloseable {
             }
         } catch (RuntimeException ex) {
             started.values().forEach(MultiAppHost::closeQuietly);
+            if (frameworkPool != null) {
+                frameworkPool.close();
+            }
             throw ex;
         }
-        return new MultiAppHost(started, Set.copyOf(appNames), Map.copyOf(canaryWeights));
+        return new MultiAppHost(started, Set.copyOf(appNames), Map.copyOf(canaryWeights),
+                frameworkPool);
+    }
+
+    /**
+     * The stack's framework pool when its file supplies a coordinate, after both of decision
+     * 22's guards — or {@code null} with the applications checked for agreement.
+     *
+     * <p>Supplied: one pool for the whole stack, so signing in carries by construction, and an
+     * application that <em>explicitly</em> declared {@code tesseraql.framework.datasource} is
+     * refused ({@code TQL-APP-4212}) rather than silently repointed. Absent: with more than one
+     * application, each one's resolved framework coordinate is compared and disagreement refuses
+     * the start ({@code TQL-APP-4211}) — absence is a check, never a silence.
+     */
+    private static com.zaxxer.hikari.HikariDataSource frameworkPool(Path installRoot,
+            List<InstalledApp> applications,
+            io.tesseraql.operations.app.StackSettings settings) {
+        Map<String, io.tesseraql.yaml.config.AppConfig> configs = new LinkedHashMap<>();
+        for (InstalledApp app : applications) {
+            Path appHome = installRoot.resolve(app.path()).normalize();
+            configs.put(app.name(),
+                    new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config());
+        }
+
+        java.util.Optional<io.tesseraql.operations.app.StackSettings.Coordinate> supplied = settings
+                .frameworkDatasource();
+        if (supplied.isPresent()) {
+            List<String> explicit = configs.entrySet().stream()
+                    .filter(entry -> entry.getValue()
+                            .getString("tesseraql.framework.datasource").isPresent())
+                    .map(Map.Entry::getKey)
+                    .toList();
+            if (!explicit.isEmpty()) {
+                throw new TqlException(FRAMEWORK_OVERRIDDEN, "The stack supplies the framework"
+                        + " datasource, and " + String.join(", ", explicit) + " explicitly"
+                        + " declares tesseraql.framework.datasource. The host would replace the"
+                        + " pool that declaration asked for, so it refuses instead: remove the"
+                        + " declaration to ride the stack's connection, or remove"
+                        + " framework.datasource from "
+                        + io.tesseraql.operations.app.StackSettings.FILE_NAME
+                        + ".");
+            }
+            io.tesseraql.operations.app.StackSettings.Coordinate coordinate = supplied.get();
+            return DataSources.create("tesseraql-stack-framework",
+                    new DataSources.MainDatasourceOverride(coordinate.jdbcUrl(),
+                            coordinate.username(), coordinate.password()));
+        }
+
+        if (configs.size() > 1) {
+            Map<String, String> coordinates = new LinkedHashMap<>();
+            configs.forEach((name, config) -> {
+                String datasource = config.getString("tesseraql.framework.datasource")
+                        .orElse("main");
+                String prefix = "tesseraql.datasources." + datasource + ".";
+                coordinates.put(name, config.getString(prefix + "jdbcUrl").orElse("<undeclared>")
+                        + " as " + config.getString(prefix + "username").orElse("<no username>"));
+            });
+            if (new java.util.HashSet<>(coordinates.values()).size() > 1) {
+                StringBuilder each = new StringBuilder();
+                coordinates.forEach((name, coordinate) -> each.append("\n  ").append(name)
+                        .append(": ").append(coordinate));
+                throw new TqlException(FRAMEWORK_DIVERGENCE, "The stack supplies no framework"
+                        + " datasource and its applications disagree about theirs, so one sign-in"
+                        + " would silently not be one:" + each + "\nDeclare framework.datasource"
+                        + " in " + io.tesseraql.operations.app.StackSettings.FILE_NAME
+                        + " beside the applications, or point their configurations at one"
+                        + " connection.");
+            }
+        }
+        return null;
     }
 
     /** The hosted runtime for {@code appName}, or throws {@code TQL-APP-4040} if it is not hosted. */
@@ -146,6 +252,14 @@ public final class MultiAppHost implements AutoCloseable {
     @Override
     public void close() {
         runtimes.values().forEach(MultiAppHost::closeQuietly);
+        // After the runtimes: they may still be draining work that rides the stack's pool.
+        if (stackFrameworkPool != null) {
+            try {
+                stackFrameworkPool.close();
+            } catch (Exception ex) {
+                LOG.warn("Failed to close the stack's framework pool: {}", ex.getMessage());
+            }
+        }
     }
 
     private static void closeQuietly(TesseraqlRuntime runtime) {

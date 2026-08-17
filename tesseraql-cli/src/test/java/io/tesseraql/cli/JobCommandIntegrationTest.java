@@ -36,7 +36,7 @@ class JobCommandIntegrationTest {
 
     @Test
     void listRunRerunAndTheExitCodeContract(@TempDir Path dir) throws Exception {
-        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
         Path app = dir.resolve("demo");
         writeJobs(app);
         assertThat(execute(args(app, "migrate", "apply"))).isZero();

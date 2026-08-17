@@ -76,8 +76,17 @@ public final class DataSources {
 
     /** Creates the {@code main} HikariCP pool from an explicit override rather than config. */
     public static HikariDataSource create(MainDatasourceOverride override) {
+        return create("tesseraql-main", override);
+    }
+
+    /**
+     * Creates a pool from an explicit coordinate under its own name — the stack's framework pool
+     * rides this (docs/stack-architecture.md decision 22), so it must not collide with any
+     * runtime's {@code tesseraql-main}.
+     */
+    public static HikariDataSource create(String poolName, MainDatasourceOverride override) {
         HikariConfig hikari = new HikariConfig();
-        hikari.setPoolName("tesseraql-main");
+        hikari.setPoolName(poolName);
         hikari.setJdbcUrl(override.jdbcUrl());
         if (override.username() != null) {
             hikari.setUsername(override.username());

@@ -23,6 +23,34 @@ All notable changes to TesseraQL are documented here. The format follows
   catalogue entry, the `Host`-header lookup on every request, and `TQL-APP-5003` (an isolated
   application declaring no hostname). Routing is one rule: `/apps/<appId>/`.
 
+### Added
+
+- **A stack declares its own settings in `tesseraql-stack.yml`, beside its applications**
+  (docs/stack-architecture.md Decision 22). Always `<stack dir>/tesseraql-stack.yml`, loaded
+  through the same configuration machinery applications use (`${ENV_VAR:default}` and
+  `${secret.…}` resolve). What belongs there is what fails silently when it diverges:
+  `framework.datasource` — the host builds **one pool** and every application's framework state
+  rides it, so one sign-in carries by construction — and `externalOrigin`; the gateway's
+  `--port`/`--http2`/`--trusted-proxies` stay flags because a wrong value there fails loudly.
+  Two guards, both start-time refusals: with no stack-supplied framework datasource and more
+  than one application, disagreeing per-application framework coordinates refuse the start
+  naming each application (`TQL-APP-4211` — absence is a check, not a silence; the comparison is
+  exact strings, so a `localhost`/`127.0.0.1` pair refuses too, loudly and one edit from fixed);
+  an application *explicitly* declaring `tesseraql.framework.datasource` while the stack
+  supplies the connection is refused (`TQL-APP-4212`) rather than silently repointed.
+
+- **`tesseraql new` writes `tesseraql-stack.yml` beside the application it creates, and its
+  flag is `--stack`** (was `--dir` — it always named the parent, which is by definition a
+  directory holding applications). The generated file is all guidance comments, which is
+  enough: it is also the stack's **marker**, and discovery's one-level step up now keys on it —
+  the parent of an application home qualifies as the stack when it carries
+  `tesseraql-stack.yml` or `catalog.json`, replacing the repository-boundary fence. A marker is
+  affirmative intent the way cargo's `[workspace]` is; shape alone could not distinguish a
+  stack from whatever directory happens to hold the checkout. A hand-made stack directory that
+  predates the marker refuses discovery from inside an application until the file is touched —
+  the refusal prints the fix — and the marker is read in the parent only, never from inside an
+  application home.
+
 ### Changed
 
 - **An application's address is its name — `/orders`, not `/apps/orders` — and it is derived,

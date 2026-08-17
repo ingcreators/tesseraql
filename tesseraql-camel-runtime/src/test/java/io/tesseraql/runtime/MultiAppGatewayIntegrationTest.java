@@ -51,6 +51,19 @@ class MultiAppGatewayIntegrationTest {
         installRoot = Files.createTempDirectory("tesseraql-gateway-it");
         installApp("shop-a", "a", List.of());
         installApp("shop-b", "b", List.of("tenant-b"));
+        // The two applications isolate their business data by schema, so their main coordinates
+        // differ — the stack supplies the framework connection, exactly the arrangement
+        // TQL-APP-4211 would otherwise refuse (docs/stack-architecture.md decision 22).
+        Files.writeString(installRoot.resolve(
+                io.tesseraql.operations.app.StackSettings.FILE_NAME),
+                """
+                        framework:
+                          datasource:
+                            jdbcUrl: %s
+                            username: %s
+                            password: %s
+                        """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                        POSTGRES.getPassword()));
         gateway = MultiAppGateway.start(installRoot, 0);
     }
 

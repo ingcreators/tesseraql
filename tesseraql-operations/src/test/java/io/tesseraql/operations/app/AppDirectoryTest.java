@@ -127,13 +127,13 @@ class AppDirectoryTest {
     /**
      * An omitted {@code --stack} is found the way {@code cargo} finds a workspace — one level,
      * never further (docs/cli-surface.md Decision 9): the working directory when it is
-     * stack-shaped, its parent when the working directory is an application home the parent
-     * holds.
+     * stack-shaped, its parent when the parent carries the stack's marker.
      */
     @Test
     void discoveryFindsTheStackFromInsideAnApplicationHome(@TempDir Path dir) throws IOException {
         writeApplication(dir.resolve("orders"), "orders", null);
         writeApplication(dir.resolve("billing"), "billing", null);
+        Files.writeString(dir.resolve(StackSettings.FILE_NAME), "# the stack's marker\n");
 
         Path root = dir.toAbsolutePath().normalize();
         assertThat(AppDirectory.discover(dir).root()).isEqualTo(root);
@@ -172,43 +172,39 @@ class AppDirectoryTest {
     }
 
     /**
-     * A repository whose root is the application home has nowhere to hold stack-level things,
-     * and the refusal prints the one restructure the design asks for
-     * (docs/stack-architecture.md Decision 22). The repository boundary is what makes this a
-     * refusal at all: the parent of an application home always "holds applications" — this one —
-     * so without the fence the checkout's parent directory, sibling repositories and all, would
-     * be adopted as the stack.
+     * The step up keys on the marker, because for it the shape says nothing: the parent of an
+     * application home always "holds applications" — this one — so shape alone would adopt
+     * whatever directory holds the checkouts, sibling repositories included. A markerless parent
+     * refuses, printing both remedies: the marker for a hand-made stack, the one {@code git mv}
+     * for a repository rooted in its application home (docs/stack-architecture.md Decision 22).
      */
     @Test
-    void aRepositoryRootedInAnApplicationHomeIsToldTheRestructure(@TempDir Path dir)
+    void aMarkerlessParentRefusesRatherThanAdoptingSiblingCheckouts(@TempDir Path dir)
             throws IOException {
         Path repo = dir.resolve("legacy-repo");
         writeApplication(repo, "orders", null);
-        Files.createDirectories(repo.resolve(".git"));
         // A sibling checkout that is also an application home: exactly what discovery must NOT
         // sweep into a stack with this one.
         writeApplication(dir.resolve("other-repo"), "other", null);
 
         assertThatThrownBy(() -> AppDirectory.discover(repo))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("repository boundary")
+                .hasMessageContaining("no stack claims it")
+                .hasMessageContaining(StackSettings.FILE_NAME)
                 .hasMessageContaining("git mv")
                 .hasMessageContaining("--stack <dir>");
     }
 
-    /**
-     * The fence stops at the repository, not before it: an application inside a stack-layout
-     * repository still discovers the repository root as its stack.
-     */
+    /** {@code catalog.json} is the install root's marker, and it qualifies the parent the same way. */
     @Test
-    void discoveryCrossesFromAnApplicationToItsOwnRepositoryRoot(@TempDir Path dir)
-            throws IOException {
-        Path repo = dir.resolve("myrepo");
-        Files.createDirectories(repo.resolve(".git"));
-        writeApplication(repo.resolve("orders"), "orders", null);
+    void aCatalogueMarksTheParentAsAStackToo(@TempDir Path dir) throws IOException {
+        Files.createDirectories(dir.resolve("orders/config"));
+        Files.writeString(dir.resolve("catalog.json"), """
+                [{"name":"orders","version":"1.2.0","path":"orders","entitledTenants":[]}]
+                """);
 
-        assertThat(AppDirectory.discover(repo.resolve("orders")).root())
-                .isEqualTo(repo.toAbsolutePath().normalize());
+        assertThat(AppDirectory.discover(dir.resolve("orders")).shape())
+                .isEqualTo(AppDirectory.Shape.INSTALL_ROOT);
     }
 
     @Test

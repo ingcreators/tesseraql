@@ -11,22 +11,33 @@ package io.tesseraql.runtime;
  * either a silently unshared stack or a session offered to every neighbour. Neither announces
  * itself.
  *
- * <p>A record rather than more positional arguments, for the reason decision 16 gives: the list was
- * already four and reaches eight as the framework datasource, the external origin, and the
- * authorization server's issuer and key set join it. A value in position four says nothing at the
- * call site about what it is. Those three are not here yet: a host has nowhere to read its own
- * settings from, which decision 16 names as the question to answer before the {@code security}
- * migration hoist. The shape they arrive into is the point of this type.
+ * <p>A record rather than more positional arguments, for the reason decision 16 gives: a value in
+ * position four says nothing at the call site about what it is. The fields decision 16 named as
+ * arriving once a host had somewhere to read its own settings from arrive here from
+ * {@code tesseraql-stack.yml} (decision 22): the framework datasource — one pool the host builds
+ * and every runtime rides, so signing in carries — and the external origin. The token issuer's
+ * key set joins them with the authorization server's slice.
  *
- * @param basePath   the prefix the application is served under, from its catalogue entry
- *                   (docs/base-path.md decision 5). {@code ""} is the origin root, and is a host
- *                   answer like any other; {@code null} means no host is speaking, so the
- *                   application's own {@code tesseraql.http.basePath} stands
- * @param cookiePath the {@code Path} session cookies are issued with (docs/base-path.md decision
- *                   4). {@code null} means the standalone answer: the application's own base path,
- *                   so its cookie is not offered to whatever else lives on that origin
+ * @param basePath            the prefix the application is served under, from its catalogue entry
+ *                            (docs/base-path.md decision 5). {@code ""} is the origin root, and is
+ *                            a host answer like any other; {@code null} means no host is speaking,
+ *                            so the application's own {@code tesseraql.http.basePath} stands
+ * @param cookiePath          the {@code Path} session cookies are issued with (docs/base-path.md
+ *                            decision 4). {@code null} means the standalone answer: the
+ *                            application's own base path, so its cookie is not offered to whatever
+ *                            else lives on that origin
+ * @param externalOrigin      the origin the stack is reached at from outside, from
+ *                            {@code tesseraql-stack.yml}; {@code null} until the stack declares
+ *                            it — it is required only when something reads it (MCP resource
+ *                            metadata, the token issuer), never defaulted by a host that cannot
+ *                            know it
+ * @param frameworkDataSource the one pool the stack's framework state rides, built by the host
+ *                            from the stack file's coordinate and owned by the host; {@code null}
+ *                            means the stack supplies none and each runtime resolves its own
+ *                            {@code tesseraql.framework.datasource}
  */
-public record HostContext(String basePath, String cookiePath) {
+public record HostContext(String basePath, String cookiePath, String externalOrigin,
+        javax.sql.DataSource frameworkDataSource) {
 
     /**
      * The stack's answers, before any one application's prefix is stamped onto them: one sign-in
@@ -37,11 +48,17 @@ public record HostContext(String basePath, String cookiePath) {
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/");
+        return new HostContext(null, "/", null, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
     public HostContext forApplication(String basePath) {
-        return new HostContext(basePath, cookiePath);
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource);
+    }
+
+    /** These settings, carrying what the stack's own file declared (decision 22). */
+    HostContext withStackSettings(String externalOrigin,
+            javax.sql.DataSource frameworkDataSource) {
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource);
     }
 }
