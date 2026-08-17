@@ -394,7 +394,7 @@ design that follows.
 *derived* the origin root from the shape of the directory it was pointed at, which is the same
 second mechanism this paragraph rules out, arrived at from the CLI rather than from a `Mode` enum.
 [cli-surface.md](cli-surface.md) Decision 1 has been amended to remove it: the running commands take
-`--stack` only, an application home is a stack of one, and the origin root is what `stack.yml` says
+`--stack` only, an application home is a stack of one, and the origin root is what `tesseraql-stack.yml` says
 it is — later narrowed further by Decisions 24 and 25: always a redirect — to the portal by default —
 never an application.
 
@@ -827,13 +827,17 @@ Decision 16 named three settings that belong to the host and stopped short of bu
 reason: **a host has nowhere to read its own settings from.** [cli-surface.md](cli-surface.md)
 reached the same wall from the other side over the gateway's port, and deferred the answer to here.
 
-**The answer is `stack.yml`, in the directory `--stack` names.** It is loaded through the
+**The answer is `tesseraql-stack.yml`, in the directory `--stack` names.** The name carries the
+`tesseraql-` prefix by review decision, for the same two reasons twice over: a bare `stack.yml` in
+a repository root reads as Docker's (`docker stack deploy` conventions named that file first), and
+the prefix makes the file's owner legible in a directory listing the way `docker-compose.yml`
+does — a stack directory is otherwise just a folder of folders. It is loaded through the
 configuration loader applications already use, so `${secret.…}` and `${ENV_VAR:default}` resolve in
 it exactly as they do in `config/tesseraql.yml` — open question 3 already confirmed that
 `SecretResolvers.discover()` is process-scoped and reachable at host scope.
 
 ```yaml
-# work/stack.yml — the same file the deployment ships and the developer runs against
+# work/tesseraql-stack.yml — the same file the deployment ships and the developer runs against
 framework:
   datasource:
     jdbcUrl: jdbc:postgresql://${DB_HOST:localhost}:5432/stack
@@ -847,7 +851,7 @@ security:
     jwksUri: https://apps.example.com/_tesseraql/oauth/jwks
 ```
 
-**The file is always `<dir>/stack.yml`, and nothing names it separately.** A draft of this decision
+**The file is always `<dir>/tesseraql-stack.yml`, and nothing names it separately.** A draft of this decision
 added a `--stack-config <file>` option, because the running commands then also took `--app` and an
 application's own tree is nowhere to put a stack's settings. [cli-surface.md](cli-surface.md)
 Decision 1 has since removed `--app` from those commands — for four reasons of which this was one —
@@ -870,7 +874,7 @@ shape was removed rather than patched, and narrowing to one application became
 The rule is decision 16's own, applied to the operator's surface: **a setting belongs in the file
 when divergence — between applications, or between development and production — fails silently.**
 
-| Declared in `stack.yml` | Why it cannot be a flag |
+| Declared in `tesseraql-stack.yml` | Why it cannot be a flag |
 | --- | --- |
 | `framework.datasource` | Divergence presents as "signing in does not carry", which reads as a framework defect |
 | `externalOrigin` | Decision 6 requires MCP's `resource` to match what the user typed character for character |
@@ -888,7 +892,7 @@ stays flag-only.** It was never the silent-divergence case that motivated the fi
 #### The file is optional, and the alternative to it is agreement rather than silence
 
 A stack of one needs nothing declared, and a development workspace should not have to carry a file
-to run. So `stack.yml` may be absent — but "absent" must not restore the failure mode the file
+to run. So `tesseraql-stack.yml` may be absent — but "absent" must not restore the failure mode the file
 exists to remove.
 
 **With no file and more than one application, the host checks that the applications agree.** It
@@ -926,7 +930,7 @@ one application's package.
 Nothing generates the file, for the reason [cli-surface.md](cli-surface.md) Decision 8 gives about
 `tesseraql new`: it has no required content, so a generated one would be entirely commented out.
 
-**Discovery is a refusal rather than a blank file.** An operator meets `stack.yml` at the moment it
+**Discovery is a refusal rather than a blank file.** An operator meets `tesseraql-stack.yml` at the moment it
 matters — when the applications disagree about the framework datasource and TQL-APP-4211 refuses to
 start, naming it — or when they reach for MCP or the authorization server and the documentation
 names it. Until then there is nothing to read and nothing to fill in.
@@ -937,7 +941,7 @@ names it. Until then there is nothing to read and nothing to fill in.
 `--embedded-db` found a collision between two decisions that each read correctly alone.
 
 [cli-surface.md](cli-surface.md) Decision 4b tells applications to isolate themselves inside the
-shared embedded database with `currentSchema` **in their own URL**. With no `stack.yml`, this
+shared embedded database with `currentSchema` **in their own URL**. With no `tesseraql-stack.yml`, this
 decision falls back to each runtime's own `tesseraql.framework.datasource`, which is `main`. So
 application A resolves `…?currentSchema=a`, application B resolves `…?currentSchema=b`, the two
 coordinates differ, and **TQL-APP-4211 refuses the whole development stack** — over the isolation
@@ -962,15 +966,35 @@ will never use either.
 application, or `--embedded-db` — need nothing, ever. Two edges legitimately want the file, and
 both are the design working rather than failing: **several applications against real databases**
 whose framework coordinates differ meet TQL-APP-4211, and the refusal's remedy *is* a development
-`stack.yml` — which is why Decision 23's multi-team model already expects team repositories to
+`tesseraql-stack.yml` — which is why Decision 23's multi-team model already expects team repositories to
 carry one; and **a development gateway addressed by anything other than `localhost`** (a colleague
 across the LAN, a forwarded container port) needs the origin declared, because the default is then
 the wrong string for Decision 6's character-for-character rule. Neither is silent: the first
 refuses naming the fix, the second only matters once MCP or the authorization server is in play.
 
+**And the second edge needs no new flag, asked directly in review for the single-application
+case.** A lone application developing against MCP or the authorization server declares the origin
+in `tesseraql-stack.yml` — and the place for that file already exists, because the layout `new`
+creates is already a stack directory holding the application:
+
+```
+myrepo/
+  tesseraql-stack.yml     # externalOrigin, for the machine your MCP client types
+  orders/
+```
+
+Decision 9's one-level discovery finds the file from inside `orders/` as well as beside it, so
+`cd orders && tesseraql dev` reads it with nothing named. A repository whose *root* is the
+application home has nowhere to put the file — that is the one restructure this design asks for,
+one `git mv` into the layout every stack has, and it is the same answer Decision 2 gives for every
+other stack-level need. **A flag naming the file (`--stack-config`) stays deleted**: it was removed
+because a second source for a value the stack directory already answers is a second answer to one
+question, and this case does not revive the need — it is served by the directory the tooling
+already builds.
+
 **And one rule intersection is scoped here so it never has to be discovered:** TQL-APP-4212 —
 an application *explicitly* declaring `tesseraql.framework.datasource` while the stack supplies a
-coordinate is refused — applies to a **`stack.yml` supply only**, not to `--embedded-db`'s. The
+coordinate is refused — applies to a **`tesseraql-stack.yml` supply only**, not to `--embedded-db`'s. The
 embedded flag is the developer explicitly saying *replace my databases*: it already overrides the
 application's declared `main`, and refusing the framework declaration it also replaces would make
 the one flag that means "override everything" the one place an override is refused.
@@ -983,7 +1007,7 @@ from what `dev` already knows — the issuer *is* the development external origi
 derives from the issuer, and the algorithm is the server's design value — leaving only the signing
 keypair, which follows the `--embedded-db` pattern exactly: infrastructure a deployment declares
 explicitly, generated by the CLI into `work/` for development and persisted there so issued tokens
-survive a restart. The triple sits in `stack.yml` because of constraints that bind **production
+survive a restart. The triple sits in `tesseraql-stack.yml` because of constraints that bind **production
 only** — an issuer external clients must match character for character, a key set that must be
 stable across nodes and restarts — and neither constraint reaches a single-machine loop. So the
 rule stays whole: **the development loop needs no stack file**, for these keys too.
@@ -991,14 +1015,14 @@ rule stays whole: **the development loop needs no stack file**, for these keys t
 #### Resolved: `--env` does not apply, because the file's location already is the environment
 
 Applications resolve `config/env/<profile>.yml` through `--env`, and a first draft left open whether
-the stack file should do the same. Walking the operator's journey answered it: **`stack.yml` exists
+the stack file should do the same. Walking the operator's journey answered it: **`tesseraql-stack.yml` exists
 per deployment directory.** The team's repository holds development's; the staging install root
 holds staging's; production holds production's. A profile axis inside the file would be a second way
 of saying what the file's location already says — and one flag selecting a profile for the
 applications while a *different* mechanism selects the stack's values is a smaller surprise than two
 mechanisms selecting the same thing.
 
-So `stack.yml` has no profiles and `--env` does not touch it. Environment variation inside one file
+So `tesseraql-stack.yml` has no profiles and `--env` does not touch it. Environment variation inside one file
 is what `${DB_HOST:localhost}` placeholders are for; a team keeping several environments' files in
 one repository keeps them under distinct names and places the right one at deploy time, which is the
 same act as deploying anything else.
@@ -1010,7 +1034,7 @@ Guidance rather than a decision, recorded because the file's location makes it u
 **The source repository should hold a stack.** Decision 12 says a team must develop against the
 topology it deploys; a layout where nobody can check out *the stack* cannot satisfy it. Applications
 in separate repositories need submodules or a meta-repository before `dev --stack` has anything to
-point at, and `stack.yml` — which belongs to the whole — has no home.
+point at, and `tesseraql-stack.yml` — which belongs to the whole — has no home.
 
 **Independent release is not a reason to split**, because it is already available without splitting:
 `.tqlapp` packages and `AppCatalog` exist precisely so applications can be installed at different
@@ -1040,13 +1064,13 @@ application is a defect generator rather than a flexibility.
 #### What it owes
 
 A JSON schema sidecar for the documentation portal, an entry in the lint registry so a malformed or
-misspelled `stack.yml` is a refusal rather than a shrug, and a `hosting.md` section. **The word
+misspelled `tesseraql-stack.yml` is a refusal rather than a shrug, and a `hosting.md` section. **The word
 already means something else in this codebase** — `TestSuite` is a set of route tests inside an
 application — and `--stack` (cli-surface.md decision 1) already committed the deployment sense of
 it. The scopes do not overlap in any path, so the collision is accepted and named rather than
 renamed around.
 
-### 23. `stack.yml` declares intent and the catalogue records inventory, because applications deploy one at a time
+### 23. `tesseraql-stack.yml` declares intent and the catalogue records inventory, because applications deploy one at a time
 
 Asked as a user question and answered with two requirements: teams develop their applications
 independently — five in one team, six in another — while **users see one sign-in**, and **deployment
@@ -1058,12 +1082,12 @@ the external origin, the issuer (Decision 22) — and the applications' addresse
 arrive and upgrade continuously, each on its own schedule, owned by their teams**: name, version,
 install path, entitlements. So:
 
-- **`stack.yml` is the intent file**, written by people: the framework datasource, the external
+- **`tesseraql-stack.yml` is the intent file**, written by people: the framework datasource, the external
   origin, the issuer (Decision 22), and the root pointer (Decision 24).
 - **`catalog.json` is the ledger**, written by install tooling and never edited by hand.
 
 **And the address is in neither file, because it stopped being declarable at all.** A first draft of
-this decision moved `basePath` from the catalogue into a `stack.yml` `applications:` section. Review
+this decision moved `basePath` from the catalogue into a `tesseraql-stack.yml` `applications:` section. Review
 then removed its cases one by one: the root went to Decision 24's redirect, root *ownership* was
 dropped rather than guarded (Decision 25), and what remained of a declarable address was the vanity
 rename — which this decision itself rejects, because a renamed address breaks every neighbour's
@@ -1074,9 +1098,9 @@ the redirect instead. Installing a new version of an application cannot change w
 because *nothing* can.
 
 **The multi-team model falls out rather than being designed.** A team's repository holds a
-*development stack* — its own applications, its own `stack.yml`, which under Decision 22's
+*development stack* — its own applications, its own `tesseraql-stack.yml`, which under Decision 22's
 file-is-the-environment rule is development's file. The deployed stack composes both teams'
-applications under one operator-owned `stack.yml`. No team reads the other's stack file, and no
+applications under one operator-owned `tesseraql-stack.yml`. No team reads the other's stack file, and no
 coordination meeting assigns addresses, because **the `/<name>` default makes the name the
 inter-team contract** — which is what the migration-history work made names required and unique
 *for*, and Decision 25 makes literal. Cross-application links are absolute `/<name>` paths, so address overrides break
@@ -1110,7 +1134,7 @@ exactly one thing — redirect — and configuration chooses only the target.**
   answers "what is here and who am I here" — the intranet home page, which for the
   internal-business-application deployments this architecture serves is a product surface rather
   than a nicety.
-- **The configured target**, suggested in the same review. `stack.yml` declares it by *name*, not
+- **The configured target**, suggested in the same review. `tesseraql-stack.yml` declares it by *name*, not
   by URL:
 
   ```yaml
@@ -1125,7 +1149,7 @@ exactly one thing — redirect — and configuration chooses only the target.**
   **temporary (307), deliberately**: a permanent redirect is cached by browsers past the
   configuration change that retires it, which would turn an operator's edit into a support ticket.
 - **No precedence, because there is only one mechanism.** `/` 307s to `root.redirect`'s
-  application when `stack.yml` names one, and to `/_tesseraql/portal/` when it does not — one
+  application when `tesseraql-stack.yml` names one, and to `/_tesseraql/portal/` when it does not — one
   behaviour with a default target, not branches to order. Two earlier drafts each had a branch more:
   one served the portal at the root as content, and one kept an application *owning* the root via
   `basePath: /` for the public site whose URLs must not carry a prefix. Review removed both — the
@@ -1194,7 +1218,7 @@ Rollout note: `/apps/<name>` is the *shipped* default from #834, so `hosting.md`
 Asked in review: eleven applications, one SMTP relay, a business database some of them share —
 where does the common configuration live?
 
-**Not in `stack.yml`.** Decision 16 drew this line when it drew the other one: "this is not a call
+**Not in `tesseraql-stack.yml`.** Decision 16 drew this line when it drew the other one: "this is not a call
 to hoist configuration generally." The stack file carries the settings that pass its two-limb rule
 and nothing else, or it becomes the thing it replaced — one file whose edits reach applications that
 did not ask.
@@ -1219,7 +1243,7 @@ application), and **deployable one at a time** (Decision 23's lifecycle). Three 
 examples declare a `notifications:` block; that repetition is each application stating what it
 needs, with the values shared through the environment underneath.
 
-**Rejected: a `shared:` or `defaults:` section in `stack.yml`, merged beneath every application's
+**Rejected: a `shared:` or `defaults:` section in `tesseraql-stack.yml`, merged beneath every application's
 tree.** It reads like a convenience and it is the silent-divergence shape wearing one: an
 application's behaviour would no longer be determinable from its own files, so lint, packaging and
 review would all need the stack context, and the same `.tqlapp` would behave differently in two
@@ -1228,7 +1252,7 @@ stacks with nothing in either application saying so. It would also add a fifth p
 surprises someone.
 
 **The growth path is per-key, through Decision 16's rule.** The issuer and JWKS earned their place;
-IdP brokering will arrive as a named `stack.yml` key when slices 4 and 5 land, with its reason
+IdP brokering will arrive as a named `tesseraql-stack.yml` key when slices 4 and 5 land, with its reason
 attached. What the environment cannot carry is named honestly: a *structured* shared block — a
 whole channel definition — does not ride in one flat string variable. If a real case appears where
 structural sharing has silent-divergence risk, it earns a named key the same way, not a merge.
@@ -1350,7 +1374,7 @@ what the host migrated — the validate-don't-migrate guard (Decision 16) is the
 one application's upgrade quietly re-migrate a schema every neighbour is standing on.
 
 **What stays stack-scoped on purpose**, so the requirement is stated with its boundary: the
-gateway, the framework schema, `stack.yml`'s values, and the process itself. Replacing those *is*
+gateway, the framework schema, `tesseraql-stack.yml`'s values, and the process itself. Replacing those *is*
 deploying the stack, and pretending otherwise would be the independent-hosting mistake at a
 different layer.
 
@@ -1367,7 +1391,7 @@ Ordering is by dependency, not by size.
 | --- | --- | --- |
 | 1 | ~~Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division~~ — **shipped 2026-08-16**; the measurement found a dropped-body defect beside the predicted buffering one and moved the relay to `vertx-http-proxy` (Decision 13) | — |
 | 2 | ~~Login response returns the CSRF token; `tesseraql token --url`; console issue-token page~~ — **shipped 2026-08-16**; all three as designed, plus the mint extracted so the page and the endpoint cannot drift (Decision 20) | — |
-| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS, over the `stack.yml` Decision 22 introduces; `security` migration hoisted to the host with runtimes validating; CLI entry point for the stack, including the stack-spanning development-tool MCP (Decision 19) | 1 |
+| 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS, over the `tesseraql-stack.yml` Decision 22 introduces; `security` migration hoisted to the host with runtimes validating; CLI entry point for the stack, including the stack-spanning development-tool MCP (Decision 19) | 1 |
 | 4 | Identity surfaces become stack-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module; the root portal (Decision 24) | 3 |
 | 5 | Authorization server: candidate decided, endpoints, open DCR, consent per client and resource, refresh rotation with reuse detection, RS256 and JWKS, brokering to an external provider | 4 |
 | 6 | MCP resource metadata, the transport gate, and the gateway's well-known routing (`audit-hardening.md` slices 6 and 7) | 5 |
