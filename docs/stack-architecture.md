@@ -1203,6 +1203,40 @@ attached. What the environment cannot carry is named honestly: a *structured* sh
 whole channel definition — does not ride in one flat string variable. If a real case appears where
 structural sharing has silent-divergence risk, it earns a named key the same way, not a merge.
 
+### 27. There is nothing above a stack
+
+Asked in review: does "multiple stacks" mean a supported composition, or just several independent
+processes whose sign-ins are separate? **The latter, and the absence of the former is a decision,
+not a gap.**
+
+A stack is one process, one origin, one sign-in, one framework datasource, one portal, one
+authorization server. Running two stacks is running two of everything, and the separation is
+complete — which is not a side effect but the definition. Decision 12's replacement for independent
+hosting already said it: *an application that must not share a session with its neighbours gets its
+own stack.* **A stack is the name for how far one sign-in reaches.** The commonest plural is not
+even organisational: staging and production are two stacks of the same applications, which is what
+Decision 22's file-is-the-environment rule is for.
+
+**TesseraQL builds no mechanism above the stack** — no federation, no cross-stack routing, no
+cross-stack login, no stack of stacks. The layer above a stack is which origins exist and which
+stack answers each, and that belongs to DNS and the operator's proxy, which already do it well.
+
+Two consequences are worth their own lines:
+
+- **People span stacks through a brokered IdP, and only that way** (Decision 7). Two stacks
+  brokering to the same corporate provider give users one authentication and an SSO experience,
+  while each stack keeps its own sessions, roles and entitlements. The tempting alternative —
+  pointing stack B at stack A's authorization server as its identity provider — is outside
+  Decision 4's boundary ("for its own users, and only for those") and makes one stack load-bearing
+  for another's login. It is not offered.
+- **A framework datasource belongs to exactly one stack.** Pointing two stacks at one shares the
+  session table and the identity store across origins. Browser cookies keep ordinary users apart,
+  so it *appears* to work — but a session identifier obtained from stack A then resolves as valid
+  when presented to stack B, an attack that separate stores refuse outright, and the shared
+  identity store is an undesigned back door to multi-origin identity, which is what brokering is
+  for. The `security` migration hoist is where a guard could live if this needs more than
+  documentation; until then it is the operator rule the sentence above states.
+
 ## Slices
 
 Ordering is by dependency, not by size.
