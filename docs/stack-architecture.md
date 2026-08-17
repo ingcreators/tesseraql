@@ -950,19 +950,20 @@ prevent. So it is **required when something reads it** — MCP resource metadata
 server's issuer — and absent until then, rather than demanded at boot from every deployment that
 will never use either.
 
-#### Open: whether `--env` selects a profile for this file
+#### Resolved: `--env` does not apply, because the file's location already is the environment
 
-Applications resolve `config/env/<profile>.yml` through `--env`, `TESSERAQL_ENV` or
-`-Dtesseraql.env`. A stack has no equivalent, and `--env` is on `dev` and `host` under
-[cli-surface.md](cli-surface.md) Decision 5. One flag that selects a profile for the applications
-and silently does not for the stack around them is the shape this document keeps removing.
+Applications resolve `config/env/<profile>.yml` through `--env`, and a first draft left open whether
+the stack file should do the same. Walking the operator's journey answered it: **`stack.yml` exists
+per deployment directory.** The team's repository holds development's; the staging install root
+holds staging's; production holds production's. A profile axis inside the file would be a second way
+of saying what the file's location already says — and one flag selecting a profile for the
+applications while a *different* mechanism selects the stack's values is a smaller surprise than two
+mechanisms selecting the same thing.
 
-Both answers are defensible and it is not decided here. Placeholders already cover environment
-variation — `${DB_HOST:localhost}` is the same file in both places — which argues that a second
-profile axis buys little. Against that, the surprise is real, and the loader that merges profiles is
-the one this file is already read through, so the cost of consistency is small. **It is decided
-before the file is implemented, not after**, because the answer changes what a stack directory
-contains.
+So `stack.yml` has no profiles and `--env` does not touch it. Environment variation inside one file
+is what `${DB_HOST:localhost}` placeholders are for; a team keeping several environments' files in
+one repository keeps them under distinct names and places the right one at deploy time, which is the
+same act as deploying anything else.
 
 #### The repository boundary follows the stack, not the application
 
@@ -1007,6 +1008,68 @@ application — and `--stack` (cli-surface.md decision 1) already committed the 
 it. The scopes do not overlap in any path, so the collision is accepted and named rather than
 renamed around.
 
+### 23. `stack.yml` declares intent and the catalogue records inventory, because applications deploy one at a time
+
+Asked as a user question and answered with two requirements: teams develop their applications
+independently — five in one team, six in another — while **users see one sign-in**, and **deployment
+happens per application**. Those two requirements split the stack into two lifecycles, and the files
+follow the lifecycles.
+
+**The stack's topology changes rarely and is owned by the deployment**: the framework datasource,
+the external origin, the issuer (Decision 22) — and the applications' addresses. **Applications
+arrive and upgrade continuously, each on its own schedule, owned by their teams**: name, version,
+install path, entitlements. So:
+
+- **`stack.yml` is the intent file**, written by people. It gains an `applications:` section
+  declaring addresses — `basePath: /` for the one application a deployment chooses to put at the
+  origin root, nothing for the `/apps/<name>` default.
+- **`catalog.json` is the ledger**, written by install tooling and never edited by hand.
+
+**This moves the address out of `catalog.json`, revising #834.** The reason is per-application
+deployment itself: installing a new version of an application must not be able to change where the
+application answers, and an installer that wrote addresses would be carrying topology it does not
+own — the team's package deciding the deployment's layout. `InstalledApp.basePath` stays as the
+in-memory carrier; `AppDirectory.applications` fills it from `stack.yml` for every shape, which also
+closes a parity hole: a source-tree stack had no way to reproduce a root-addressed production
+layout, because only a catalogue could declare an address.
+
+**The multi-team model falls out rather than being designed.** A team's repository holds a
+*development stack* — its own applications, its own `stack.yml`, which under Decision 22's
+file-is-the-environment rule is development's file. The deployed stack composes both teams'
+applications under one operator-owned `stack.yml`. No team reads the other's stack file, and no
+coordination meeting assigns addresses, because **the `/apps/<name>` default makes the name the
+inter-team contract** — which is what the migration-history work made names required and unique
+*for*. Cross-application links are absolute `/apps/<name>` paths, so address overrides break
+neighbours' links; overrides are for the deployment's root choice and little else, and with
+Decision 24's portal at the unclaimed root, most stacks override nothing.
+
+**The walk found a defect.** If names are the namespace, a collision must be refused loudly, and
+`AppCatalog.register` is `apps.put(app.id(), app)` — a second team installing an application under a
+name already taken **silently replaces** the first team's entry, indistinguishable from an upgrade.
+A guard is owed with the implementation; its minimum shape is that `install` says what it replaced,
+and its open question is whether same-name-different-application can be detected at all, or whether
+name governance is documented as the teams' responsibility the way service names are.
+
+### 24. The unclaimed root is the stack's portal
+
+Stated as a requirement in review: the root of a stack should be **a real application portal**, not
+a routing gap. Today the relay answers the unclaimed origin root with `TQL-APP-4040`, so the first
+URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
+
+- **Anonymous → the stack's sign-in**, `next=/`. **Signed in → the applications this principal may
+  reach**, filtered, as links. One screen answers "what is here and who am I here" — the intranet
+  home page, which for the internal-business-application deployments this architecture serves is a
+  product surface rather than a nicety.
+- **It stands at the *unclaimed* root only.** An application declaring `basePath: /` wins, and the
+  portal is not consulted; with Decision 23 making root a deliberate stack.yml declaration, claiming
+  it becomes the exception rather than the habit.
+- **Development and production get the same screen** (Decision 12's parity). This costs the
+  development loop nothing new: the five-minute demo already begins with "First login" against a
+  seeded identity store, so sign-in-first at `/` is the flow developers already have.
+- It is a stack-level framework surface in Decision 14's sense and ships with slice 4's identity
+  surfaces, which is where its two ingredients — the sign-in redirect and the entitlement check —
+  already live.
+
 ## Slices
 
 Ordering is by dependency, not by size.
@@ -1016,7 +1079,7 @@ Ordering is by dependency, not by size.
 | 1 | ~~Gateway transparency: streaming request bodies, response bound removed, SSE flush measured, differential test, `hosting.md` division~~ — **shipped 2026-08-16**; the measurement found a dropped-body defect beside the predicted buffering one and moved the relay to `vertx-http-proxy` (Decision 13) | — |
 | 2 | ~~Login response returns the CSRF token; `tesseraql token --url`; console issue-token page~~ — **shipped 2026-08-16**; all three as designed, plus the mint extracted so the page and the endpoint cannot drift (Decision 20) | — |
 | 3 | Base path becomes catalogue-driven; independent hosting removed; the gateway-less shape removed; host context object carrying framework datasource, external origin and issuer/JWKS, over the `stack.yml` Decision 22 introduces; `security` migration hoisted to the host with runtimes validating; CLI entry point for the stack, including the stack-spanning development-tool MCP (Decision 19) | 1 |
-| 4 | Identity surfaces become stack-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module | 3 |
+| 4 | Identity surfaces become stack-level: `auth-ui`, `account`, IAM Admin extracted from the runtime module; the root portal (Decision 24) | 3 |
 | 5 | Authorization server: candidate decided, endpoints, open DCR, consent per client and resource, refresh rotation with reuse detection, RS256 and JWKS, brokering to an external provider | 4 |
 | 6 | MCP resource metadata, the transport gate, and the gateway's well-known routing (`audit-hardening.md` slices 6 and 7) | 5 |
 | 7 | Ops console becomes a stack-level shell with a switcher, delegating over HTTP | 3 |

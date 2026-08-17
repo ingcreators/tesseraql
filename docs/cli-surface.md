@@ -549,6 +549,35 @@ This directory is now a stack. Add ./stack.yml when the applications in it need
 a shared session store, an external URL, or an issuer (docs/hosting.md).
 ```
 
+### 9. An omitted `--stack` is found the way `cargo` finds a workspace — one level, never further
+
+`cd work/orders && tesseraql dev` is the muscle memory every toolchain trains — `npm run dev`,
+`cargo build`, `git status` all run from inside the thing being worked on. Requiring
+`dev --stack ..` from there is a small persistent toll on the most-typed command in the product.
+
+**On `dev` and `mcp`, when `--stack` is not given:**
+
+- the working directory is stack-shaped (holds applications, or `catalog.json`) → it is the stack;
+- the working directory is an application home and its **parent** is stack-shaped → the parent is
+  the stack;
+- anything else → the refusal Decision 2 already prints, naming both accepted forms.
+
+An explicit `--stack` always wins and is never second-guessed. The search is **one level and never
+further** — the same discipline as Decision 2's one-level scan, for the same reason: a rule that
+walks an arbitrary distance behaves differently depending on where the tree happens to sit. `cargo`
+walks to the filesystem root; this deliberately does not, and the cost is that running from
+`work/orders/web/` is refused rather than resolved, which the refusal message makes a two-second
+fix.
+
+Discovery runs the **whole** stack, not the application the shell happens to be inside. Narrowing
+stays explicit (`--app-name`, Decision 3), because a stack silently missing its neighbours is
+cross-application links answering 404 in exactly the runs that were started for convenience.
+
+**`host` keeps `--stack` required.** It is run by operators and service units, where the working
+directory is an accident of the supervisor and an implicit start is a hazard rather than a
+convenience. The development loop guesses so the developer does not have to type; production does
+not guess.
+
 ## The complete mapping
 
 Every command, and what these decisions do to it. `+set` means the command joins a Decision 5 set
@@ -556,9 +585,9 @@ and gains its options.
 
 | Command | Change |
 | --- | --- |
-| `serve` | **becomes `dev`**; `--app` → **`--stack`**, which is now the only way to name what runs (Decision 1); gains `--app-name` for narrowing (Decision 3); `+config` (already had `--env`) |
-| `host` | `--install-root` → **`--stack`**; **`--mode` deleted** with independent hosting (`stack-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--app-name` (Decision 3); `+config` |
-| `mcp` | gains **`--stack`** and `--app-name` — `stack-architecture.md` Decision 19 makes the development-tool MCP span the stack, and Decision 3 is how it narrows; `--read-only` becomes a property of the server, not of an application; `+config` |
+| `serve` | **becomes `dev`**; `--app` → **`--stack`**, which is now the only way to name what runs (Decision 1), discovered one level up when omitted (Decision 9); gains `--app-name` for narrowing (Decision 3); `+config` (already had `--env`) |
+| `host` | `--install-root` → **`--stack`**, always explicit — production does not guess (Decision 9); **`--mode` deleted** with independent hosting (`stack-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--app-name` (Decision 3); `+config` |
+| `mcp` | gains **`--stack`** (discovered one level up when omitted, Decision 9) and `--app-name` — `stack-architecture.md` Decision 19 makes the development-tool MCP span the stack, and Decision 3 is how it narrows; `--read-only` becomes a property of the server, not of an application; `+config` |
 | `new` | `--dir` → **`--stack`**, not `--app` — see Decision 8; it names the *parent*, which is by definition a directory holding applications. The "Next steps" it prints are rewritten with it |
 | `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |
 | `scaffold` | `+config`, `+connection` (has three of four; gains `--datasource`) |
