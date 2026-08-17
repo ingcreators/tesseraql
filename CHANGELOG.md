@@ -25,6 +25,31 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **An application's identity is its `name`, and `id` is gone as a synonym** (docs/cli-surface.md
+  defect 1: two names for what looks like one thing). The two were the same string by
+  construction — the catalogue's `id` was read from `tesseraql.app.name` — so `InstalledApp.id`
+  is now `name`, `MultiAppGateway`/`MultiAppHost.appIds()` are `appNames()`, and **`catalog.json`
+  spells the field `"name"`** (pre-1.0 format change: a catalogue written with `"id"` is refused
+  with a message naming the rename — rewrite the key). The `release-evidence` goal's parameter is
+  `tesseraql.appName` (was `tesseraql.appId`) and now defaults to the application's own declared
+  `tesseraql.app.name` instead of a Maven coordinate no other surface checks against; the
+  evidence JSON records `app.name`. Naming note: `migrate --app-name` was deleted earlier by the
+  migration-history-key fix — that flag hand-corrected a derived history key, a different meaning
+  from both this rename and `host --app-name`.
+
+- **Installing over an installed name is refused, and the catalogue's `register` no longer
+  silently replaces** (docs/stack-architecture.md Decision 23, `TQL-APP-4213`). The name is the
+  stack's contract — what the deployment addresses, entitles and grants against — and the second
+  install winning was how a stack lost an application without anyone deleting it. Re-installing
+  the identical version stays idempotent; moving a name between versions is the upgrade
+  lifecycle's job (`AppUpgrader`), which replaces explicitly after its preflight.
+
+- **`tesseraql.app.name` must be a safe URL path segment** (docs/stack-architecture.md
+  Decision 25, `TQL-YAML-1405`, refused at lint and at boot). The name becomes the application's
+  address, so it must be one segment: no `/`, no leading `_` (the framework's own fence,
+  `/_tesseraql/`), no leading `.`. The rule is segment safety, not an ASCII pattern — non-ASCII
+  names stay legal, which is why the migration-history guard measures them in UTF-8 bytes.
+
 - **The deployment unit is a *stack*, and `tesseraql host` takes `--stack` — `--suite` and
   `--app` are gone from it** (docs/stack-architecture.md, the flag reversal; docs/cli-surface.md
   Decisions 1–3 rewritten). "Suite" already means a declarative test file in this product —

@@ -151,7 +151,7 @@ public final class AppDirectory {
      *
      * <p>An install root answers from its catalogue, so entitlements, hostnames and versions are
      * the ones recorded at install time. The other shapes have no catalogue, so an entry is
-     * synthesised per application home from its own configuration: the id is
+     * synthesised per application home from its own configuration: the name is
      * {@code tesseraql.app.name} — required since it is the application's identity, so there is
      * nothing to guess — the version is {@code tesseraql.app.version} or {@code 0.0.0}, and there
      * are no entitlements or hostnames, because a source tree has not been installed for anyone.

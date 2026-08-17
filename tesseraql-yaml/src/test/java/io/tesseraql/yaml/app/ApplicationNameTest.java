@@ -40,6 +40,37 @@ class ApplicationNameTest {
                 .isInstanceOf(TqlException.class);
     }
 
+    /**
+     * The name is the application's address (docs/stack-architecture.md Decision 25), so it must
+     * be one safe path segment: no slash, no leading underscore (the framework's fence), no
+     * leading dot.
+     */
+    @Test
+    void aNameThatCannotBeAnAddressSegmentIsRefused() {
+        for (String unsafe : new String[]{"a/b", "_admin", ".hidden"}) {
+            assertThatThrownBy(() -> ApplicationName.of(config(Map.of(
+                    "tesseraql", Map.of("app", Map.of("name", unsafe))))))
+                    .as(unsafe)
+                    .isInstanceOf(TqlException.class)
+                    .hasMessageContaining("TQL-YAML-1405");
+        }
+    }
+
+    /**
+     * Segment safety is not the scaffolder's ASCII pattern: non-ASCII names are legal — the
+     * migration history guard measures them in UTF-8 bytes for exactly that reason — and an inner
+     * underscore or dot fences nothing.
+     */
+    @Test
+    void segmentSafetyIsNotAnAsciiPattern() {
+        for (String legal : new String[]{"受注管理", "my_app", "v1.2"}) {
+            assertThat(ApplicationName.of(config(Map.of(
+                    "tesseraql", Map.of("app", Map.of("name", legal))))))
+                    .as(legal)
+                    .isEqualTo(legal);
+        }
+    }
+
     private static AppConfig config(Map<String, Object> root) {
         return new AppConfig(root, name -> null);
     }

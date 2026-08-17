@@ -27,7 +27,7 @@ class AppInstallerTest {
 
         InstalledApp app = new AppInstaller().install(pkg, installRoot);
 
-        assertThat(app.id()).isEqualTo("user-admin");
+        assertThat(app.name()).isEqualTo("user-admin");
         assertThat(app.version()).isEqualTo("1.2.0");
         assertThat(installRoot.resolve(app.path()).resolve("web/api/users/get.yml")).exists();
 
@@ -47,7 +47,8 @@ class AppInstallerTest {
         String good = io.tesseraql.core.util.Hashing.sha256(pkg);
 
         // The matching hash installs normally.
-        assertThat(new AppInstaller().install(pkg, installRoot, good).id()).isEqualTo("user-admin");
+        assertThat(new AppInstaller().install(pkg, installRoot, good).name())
+                .isEqualTo("user-admin");
 
         // A mismatched hash is rejected before extraction and nothing is catalogued.
         Path otherRoot = dir.resolve("apps2");
@@ -90,19 +91,31 @@ class AppInstallerTest {
         assertThat(dir.resolve("escape.txt")).doesNotExist();
     }
 
+    /**
+     * Installing over an installed name is refused, not replaced (docs/stack-architecture.md
+     * Decision 23): the name is the stack's contract, and a plain install carries none of the
+     * upgrade lifecycle's protections — no preflight, no version check, no snapshot to roll back
+     * to. Moving a name between versions is {@code AppUpgrader}'s job, and it replaces
+     * explicitly. Re-installing the identical version stays idempotent.
+     */
     @Test
-    void reinstallReplacesCatalogEntry(@TempDir Path dir) throws Exception {
+    void installingOverAnInstalledNameIsRefused(@TempDir Path dir) throws Exception {
         Path installRoot = dir.resolve("apps");
-        new AppInstaller().install(pack(dir.resolve("v1.tqlapp"), Map.of(
-                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: app\n    version: 1.0.0\n")),
-                installRoot);
-        new AppInstaller().install(pack(dir.resolve("v2.tqlapp"), Map.of(
-                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: app\n    version: 2.0.0\n")),
-                installRoot);
+        Path v1 = pack(dir.resolve("v1.tqlapp"), Map.of(
+                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: app\n    version: 1.0.0\n"));
+        new AppInstaller().install(v1, installRoot);
 
+        assertThatThrownBy(() -> new AppInstaller().install(pack(dir.resolve("v2.tqlapp"), Map.of(
+                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: app\n    version: 2.0.0\n")),
+                installRoot))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-APP-4213");
+
+        // The identical version re-installs without complaint, and the catalogue is unchanged.
+        new AppInstaller().install(v1, installRoot);
         AppCatalog catalog = new AppCatalog(installRoot);
         assertThat(catalog.list()).hasSize(1);
-        assertThat(catalog.find("app")).get().extracting(InstalledApp::version).isEqualTo("2.0.0");
+        assertThat(catalog.find("app")).get().extracting(InstalledApp::version).isEqualTo("1.0.0");
     }
 
     private static Path pack(Path output, Map<String, String> entries) throws Exception {

@@ -30,19 +30,19 @@ public final class MultiAppHost implements AutoCloseable {
     // One number, one meaning, one declaration — the error registry reads a single source, and the
     // javadoc below is the reference page's wording for it, so it stays a meaning rather than a
     // rationale.
-    /** TQL-APP-4040: no app is hosted under this id. */
+    /** TQL-APP-4040: no app is hosted under this name. */
     static final TqlErrorCode UNKNOWN_APP = new TqlErrorCode(TqlDomain.APP, 4040);
 
     private static final String CANARY_SLOT = "#canary";
 
     private final Map<String, TesseraqlRuntime> runtimes;
-    private final Set<String> appIds;
+    private final Set<String> appNames;
     private final Map<String, Integer> canaryWeights;
 
-    private MultiAppHost(Map<String, TesseraqlRuntime> runtimes, Set<String> appIds,
+    private MultiAppHost(Map<String, TesseraqlRuntime> runtimes, Set<String> appNames,
             Map<String, Integer> canaryWeights) {
         this.runtimes = runtimes;
-        this.appIds = appIds;
+        this.appNames = appNames;
         this.canaryWeights = canaryWeights;
     }
 
@@ -81,66 +81,66 @@ public final class MultiAppHost implements AutoCloseable {
             List<InstalledApp> applications) {
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
-        Set<String> appIds = new java.util.LinkedHashSet<>();
+        Set<String> appNames = new java.util.LinkedHashSet<>();
         Map<String, Integer> canaryWeights = new LinkedHashMap<>();
         try {
             for (InstalledApp app : applications) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
-                started.put(app.id(), TesseraqlRuntime.start(appHome, freePort(),
+                started.put(app.name(), TesseraqlRuntime.start(appHome, freePort(),
                         stack.forApplication(app.basePath())));
-                appIds.add(app.id());
-                LOG.info("Hosting app {} v{} from {}", app.id(), app.version(), appHome);
+                appNames.add(app.name());
+                LOG.info("Hosting app {} v{} from {}", app.name(), app.version(), appHome);
 
-                upgrader.canary(app.id(), installRoot).ifPresent(canary -> {
+                upgrader.canary(app.name(), installRoot).ifPresent(canary -> {
                     Path candidateHome = installRoot.resolve(canary.candidate().path()).normalize();
                     // The candidate answers the same address as the app it may replace, so it
                     // serves the same base path.
-                    started.put(app.id() + CANARY_SLOT,
+                    started.put(app.name() + CANARY_SLOT,
                             TesseraqlRuntime.start(candidateHome, freePort(),
                                     stack.forApplication(app.basePath())));
-                    canaryWeights.put(app.id(), canary.weightPercent());
+                    canaryWeights.put(app.name(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
-                            app.id(), canary.candidate().version(), canary.weightPercent());
+                            app.name(), canary.candidate().version(), canary.weightPercent());
                 });
             }
         } catch (RuntimeException ex) {
             started.values().forEach(MultiAppHost::closeQuietly);
             throw ex;
         }
-        return new MultiAppHost(started, Set.copyOf(appIds), Map.copyOf(canaryWeights));
+        return new MultiAppHost(started, Set.copyOf(appNames), Map.copyOf(canaryWeights));
     }
 
-    /** The hosted runtime for {@code appId}, or throws {@code TQL-APP-4040} if it is not hosted. */
-    public TesseraqlRuntime app(String appId) {
-        TesseraqlRuntime runtime = runtimes.get(appId);
+    /** The hosted runtime for {@code appName}, or throws {@code TQL-APP-4040} if it is not hosted. */
+    public TesseraqlRuntime app(String appName) {
+        TesseraqlRuntime runtime = runtimes.get(appName);
         if (runtime == null) {
-            throw new TqlException(UNKNOWN_APP, "App is not hosted: " + appId);
+            throw new TqlException(UNKNOWN_APP, "App is not hosted: " + appName);
         }
         return runtime;
     }
 
     /** The HTTP port the given app's active version is listening on. */
-    public int port(String appId) {
-        return app(appId).port();
+    public int port(String appName) {
+        return app(appName).port();
     }
 
-    public Set<String> appIds() {
-        return appIds;
+    public Set<String> appNames() {
+        return appNames;
     }
 
     /** Whether the app has a staged canary candidate receiving a share of traffic. */
-    public boolean hasCanary(String appId) {
-        return canaryWeights.containsKey(appId);
+    public boolean hasCanary(String appName) {
+        return canaryWeights.containsKey(appName);
     }
 
     /** The percentage of traffic the app's canary candidate should receive (0 if none). */
-    public int canaryWeight(String appId) {
-        return canaryWeights.getOrDefault(appId, 0);
+    public int canaryWeight(String appName) {
+        return canaryWeights.getOrDefault(appName, 0);
     }
 
     /** The HTTP port of the app's canary candidate; only valid when {@link #hasCanary} is true. */
-    public int canaryPort(String appId) {
-        return app(appId + CANARY_SLOT).port();
+    public int canaryPort(String appName) {
+        return app(appName + CANARY_SLOT).port();
     }
 
     @Override

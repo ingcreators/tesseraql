@@ -39,16 +39,56 @@ public final class ApplicationName {
             + " ops.app.<name> grants are checked against, and in a stack it is the application's"
             + " address — so it cannot be defaulted to a value every unnamed application shares.";
 
+    /**
+     * TQL-YAML-1405: the name is not a safe URL path segment
+     * (docs/stack-architecture.md Decision 25).
+     *
+     * <p>The rule is segment safety, not the scaffolder's ASCII pattern: the name becomes the
+     * application's address, so it must be one path segment (no {@code /}) and must not open the
+     * framework's fence (no leading {@code _} — {@code /_tesseraql/} is the framework's) or hide
+     * as a dotted segment (no leading {@code .}). Names are deliberately not confined to ASCII —
+     * the migration history guard measures them in UTF-8 bytes for exactly that reason — so a
+     * character-class pattern here would outlaw what that guard exists to measure.
+     */
+    public static final TqlErrorCode UNSAFE_SEGMENT = new TqlErrorCode(TqlDomain.YAML, 1405);
+
     private ApplicationName() {
     }
 
-    /** The declared name, or {@link #MISSING}. */
+    /** The declared name, or {@link #MISSING} / {@link #UNSAFE_SEGMENT}. */
     public static String of(AppConfig config) {
         String declared = config.getString("tesseraql.app.name").map(String::trim)
                 .filter(name -> !name.isEmpty()).orElse(null);
         if (declared == null) {
             throw new TqlException(MISSING, MESSAGE);
         }
+        String violation = segmentViolation(declared);
+        if (violation != null) {
+            throw new TqlException(UNSAFE_SEGMENT, violation);
+        }
         return declared;
+    }
+
+    /**
+     * Why {@code name} cannot be an address segment, or {@code null} when it can — shared by the
+     * boot refusal above and the lint rule, so the two read identically.
+     */
+    public static String segmentViolation(String name) {
+        if (name.indexOf('/') >= 0) {
+            return unsafe(name, "it contains '/', and the name is one path segment");
+        }
+        if (name.startsWith("_")) {
+            return unsafe(name, "a leading '_' opens the framework's own fence (/_tesseraql/)");
+        }
+        if (name.startsWith(".")) {
+            return unsafe(name, "a leading '.' hides it as a dotted segment");
+        }
+        return null;
+    }
+
+    private static String unsafe(String name, String why) {
+        return "tesseraql.app.name '" + name + "' cannot be the application's address: " + why
+                + ". The rule is segment safety, not an ASCII pattern — non-ASCII names stay"
+                + " legal.";
     }
 }

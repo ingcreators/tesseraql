@@ -66,10 +66,10 @@ final class HostCommand implements Callable<Integer> {
 
         try (MultiAppGateway gateway = MultiAppGateway.start(stack, port,
                 new MultiAppGateway.Settings(http2, trustedProxies), appName)) {
-            System.out.println("TesseraQL hosting " + gateway.appIds().size()
+            System.out.println("TesseraQL hosting " + gateway.appNames().size()
                     + " app(s) on port " + gateway.port() + (http2 ? " (h2c)" : ""));
-            for (String appId : gateway.appIds()) {
-                System.out.println("  " + appId);
+            for (String name : gateway.appNames()) {
+                System.out.println("  " + name);
             }
             // The gateway serves on its own threads; hold the command open until interrupted.
             Thread.currentThread().join();

@@ -67,7 +67,7 @@ class MultiAppHostIntegrationTest {
 
     @Test
     void hostsBothAppsEachServingOwnData() throws Exception {
-        assertThat(host.appIds()).containsExactlyInAnyOrder("shop-a", "shop-b");
+        assertThat(host.appNames()).containsExactlyInAnyOrder("shop-a", "shop-b");
 
         assertThat(itemName("shop-a", "/apps/shop-a")).isEqualTo("from-a");
         assertThat(itemName("shop-b", "")).isEqualTo("from-b");

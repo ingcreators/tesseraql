@@ -96,25 +96,25 @@ final class StackRelay {
     private static final String GATEWAY_ERROR = "TQL-APP-5020";
 
     private final HttpClient client;
-    private final Map<String, InstalledApp> appsById;
+    private final Map<String, InstalledApp> appsByName;
     /** Per app, the forwarded header its configuration tells it to believe, lowercased. */
     private final Map<String, Set<String>> ingressStripByApp;
     private final TrustedProxies trustedProxies;
-    /** App id to the internal port that answers for it now — canary weighting included. */
+    /** App name to the internal port that answers for it now — canary weighting included. */
     private final ToIntFunction<String> portOf;
     /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
     private final Map<Integer, HttpProxy> proxies = new ConcurrentHashMap<>();
 
-    StackRelay(HttpClient client, Map<String, InstalledApp> appsById,
+    StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             ToIntFunction<String> portOf) {
-        this(client, appsById, Map.of(), TrustedProxies.NONE, portOf);
+        this(client, appsByName, Map.of(), TrustedProxies.NONE, portOf);
     }
 
-    StackRelay(HttpClient client, Map<String, InstalledApp> appsById,
+    StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf) {
         this.client = client;
-        this.appsById = Map.copyOf(appsById);
+        this.appsByName = Map.copyOf(appsByName);
         this.ingressStripByApp = Map.copyOf(ingressStripByApp);
         this.trustedProxies = trustedProxies;
         this.portOf = portOf;
@@ -124,7 +124,7 @@ final class StackRelay {
      * The application whose declared prefix addresses {@code rawPath}, longest first, or null.
      *
      * <p>Longest-first, not first-match, because the prefixes are declared rather than derived: a
-     * stack of one may take the origin root while another application keeps {@code /apps/<id>}, and
+     * stack of one may take the origin root while another application keeps {@code /apps/<name>}, and
      * a root-addressed application would otherwise swallow its neighbour's traffic. A prefix
      * matches on a segment boundary, so {@code /apps/orders} never answers for
      * {@code /apps/orders-archive}.
@@ -132,7 +132,7 @@ final class StackRelay {
     private String appAddressedBy(String rawPath) {
         String best = null;
         String bestPrefix = null;
-        for (Map.Entry<String, InstalledApp> entry : appsById.entrySet()) {
+        for (Map.Entry<String, InstalledApp> entry : appsByName.entrySet()) {
             String prefix = entry.getValue().basePath();
             if (!addresses(prefix, rawPath)) {
                 continue;
@@ -161,8 +161,8 @@ final class StackRelay {
             // Decision 12). Host-header routing went with independent hosting: it existed so an
             // application could own a whole origin, which is the separation a stack is defined by
             // not having.
-            String appId = appAddressedBy(rawPath);
-            if (appId == null) {
+            String appName = appAddressedBy(rawPath);
+            if (appName == null) {
                 respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
                 return;
             }
@@ -171,7 +171,7 @@ final class StackRelay {
             // tenant, an app with an entitlement list only serves the tenants on it. Claim-based
             // tenants are still enforced inside the app's own tenancy resolution.
             String tenant = request.getHeader(TENANT_HEADER);
-            InstalledApp app = appsById.get(appId);
+            InstalledApp app = appsByName.get(appName);
             if (tenant != null && app != null && !app.isEntitled(tenant)) {
                 respond(request, 403, NOT_ENTITLED);
                 return;
@@ -179,7 +179,7 @@ final class StackRelay {
 
             int appPort;
             try {
-                appPort = portOf.applyAsInt(appId);
+                appPort = portOf.applyAsInt(appName);
             } catch (RuntimeException unknown) {
                 respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
                 return;
@@ -187,7 +187,7 @@ final class StackRelay {
             // The URI is forwarded verbatim — the app serves the address it is
             // fronted at (docs/base-path.md decision 5) — so there is nothing to rewrite here,
             // only an origin to choose.
-            proxyFor(appId, appPort).handle(request);
+            proxyFor(appName, appPort).handle(request);
         } catch (RuntimeException ex) {
             LOG.warn("Gateway error: {}", ex.getMessage());
             respond(request, 502, GATEWAY_ERROR);
@@ -206,8 +206,8 @@ final class StackRelay {
      * through that edge." That is the division this class exists to draw — the gateway routes, the
      * ingress protects.
      */
-    private HttpProxy proxyFor(String appId, int appPort) {
-        Set<String> strip = ingressStripByApp.getOrDefault(appId, Set.of());
+    private HttpProxy proxyFor(String appName, int appPort) {
+        Set<String> strip = ingressStripByApp.getOrDefault(appName, Set.of());
         return proxies.computeIfAbsent(appPort, target -> {
             HttpProxy proxy = HttpProxy.reverseProxy(client).origin(target, "localhost")
                     .addInterceptor(new BodylessRequestsHaveZeroLength());

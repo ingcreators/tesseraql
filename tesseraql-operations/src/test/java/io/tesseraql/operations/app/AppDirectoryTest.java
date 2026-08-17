@@ -38,7 +38,7 @@ class AppDirectoryTest {
     void aCatalogueIsAnInstallRoot(@TempDir Path dir) throws IOException {
         Files.createDirectories(dir.resolve("orders/1.2.0/config"));
         Files.writeString(dir.resolve("catalog.json"), """
-                [{"id":"orders","version":"1.2.0","path":"orders/1.2.0","entitledTenants":[]}]
+                [{"name":"orders","version":"1.2.0","path":"orders/1.2.0","entitledTenants":[]}]
                 """);
 
         AppDirectory.Resolved resolved = AppDirectory.resolve(dir);
@@ -147,7 +147,8 @@ class AppDirectoryTest {
 
         List<InstalledApp> applications = AppDirectory.applications(AppDirectory.resolve(dir));
 
-        assertThat(applications).extracting(InstalledApp::id).containsExactly("billing", "orders");
+        assertThat(applications).extracting(InstalledApp::name).containsExactly("billing",
+                "orders");
         assertThat(applications).extracting(InstalledApp::version)
                 .containsExactly("0.0.0", "2.1.0");
         // Nothing was installed for anyone, so nothing is entitled.
@@ -165,7 +166,7 @@ class AppDirectoryTest {
         List<InstalledApp> applications = AppDirectory.applications(AppDirectory.resolve(dir));
 
         assertThat(applications).singleElement()
-                .satisfies(app -> assertThat(app.id()).isEqualTo("orders"));
+                .satisfies(app -> assertThat(app.name()).isEqualTo("orders"));
         Path root = dir.toAbsolutePath().normalize();
         assertThat(root.resolve(applications.get(0).path()).normalize()).isEqualTo(root);
     }
