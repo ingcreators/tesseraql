@@ -6,9 +6,9 @@ package io.tesseraql.runtime;
  *
  * <p>The rule that selects what belongs here: <b>a setting belongs to the host when only the host
  * can know it, or when divergence between applications fails silently.</b> {@link
- * io.tesseraql.camel.CookiePath} is the case that established it — a suite shares one sign-in, so
+ * io.tesseraql.camel.CookiePath} is the case that established it — a stack shares one sign-in, so
  * its cookie has to reach every application, and an operator setting that per application gets
- * either a silently unshared suite or a session offered to every neighbour. Neither announces
+ * either a silently unshared stack or a session offered to every neighbour. Neither announces
  * itself.
  *
  * <p>A record rather than more positional arguments, for the reason decision 16 gives: the list was
@@ -29,14 +29,14 @@ package io.tesseraql.runtime;
 public record HostContext(String basePath, String cookiePath) {
 
     /**
-     * The suite's answers, before any one application's prefix is stamped onto them: one sign-in
+     * The stack's answers, before any one application's prefix is stamped onto them: one sign-in
      * across one origin.
      *
      * <p>Every field here is the host's. {@link #basePath} is simply the one that differs per
      * application, so it is left unset until {@link #forApplication} supplies the address the
      * catalogue declared for the runtime being started.
      */
-    public static HostContext suite() {
+    public static HostContext stack() {
         return new HostContext(null, "/");
     }
 

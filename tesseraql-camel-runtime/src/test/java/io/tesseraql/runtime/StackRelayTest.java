@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * measuring, because buffering there produces "working, but late" — the hardest failure to
  * diagnose.
  */
-class SuiteRelayTest {
+class StackRelayTest {
 
     private static final int EVENTS = 5;
     private static final long GAP_MILLIS = 300;
@@ -74,20 +74,20 @@ class SuiteRelayTest {
         client = vertx.createHttpClient();
 
         origin = vertx.createHttpServer(new HttpServerOptions().setPort(0));
-        origin.requestHandler(SuiteRelayTest::serveStub);
+        origin.requestHandler(StackRelayTest::serveStub);
         originPort = await(origin.listen()).actualPort();
 
-        SuiteRelay relay = new SuiteRelay(client, CATALOGUE, appId -> originPort);
-        front = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
+        StackRelay relay = new StackRelay(client, CATALOGUE, appId -> originPort);
+        front = vertx.createHttpServer(StackRelay.frontOptions(0, false));
         front.requestHandler(relay::handle);
         base = "http://localhost:" + await(front.listen()).actualPort() + "/apps/" + APP;
 
         // The h2c pair. Enabling it at one end only is what breaks: a body arriving over HTTP/2
         // and piped into an HTTP/1.1 request has neither a declared length nor chunked framing,
         // and Vert.x refuses the write on the event loop. One setting moves both.
-        h2Client = vertx.createHttpClient(SuiteRelay.outboundOptions(true));
-        SuiteRelay h2Relay = new SuiteRelay(h2Client, CATALOGUE, appId -> originPort);
-        h2Front = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
+        h2Client = vertx.createHttpClient(StackRelay.outboundOptions(true));
+        StackRelay h2Relay = new StackRelay(h2Client, CATALOGUE, appId -> originPort);
+        h2Front = vertx.createHttpServer(StackRelay.frontOptions(0, true));
         h2Front.requestHandler(h2Relay::handle);
         h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/apps/" + APP;
     }
@@ -206,9 +206,9 @@ class SuiteRelayTest {
 
     /** What the origin received for {@code X-Client-Cert} through a relay trusting {@code edges}. */
     private static String headerSeenBehind(TrustedProxies edges) throws Exception {
-        SuiteRelay relay = new SuiteRelay(client, CATALOGUE,
+        StackRelay relay = new StackRelay(client, CATALOGUE,
                 Map.of(APP, Set.of("x-client-cert")), edges, appId -> originPort);
-        HttpServer scoped = vertx.createHttpServer(SuiteRelay.frontOptions(0, false));
+        HttpServer scoped = vertx.createHttpServer(StackRelay.frontOptions(0, false));
         scoped.requestHandler(relay::handle);
         int port = await(scoped.listen()).actualPort();
         try {
@@ -331,11 +331,11 @@ class SuiteRelayTest {
     void anAppThatDoesNotSpeakHttp2StaysReachable() throws Exception {
         HttpServer plainOrigin = vertx.createHttpServer(
                 new HttpServerOptions().setPort(0).setHttp2ClearTextEnabled(false));
-        plainOrigin.requestHandler(SuiteRelayTest::serveStub);
+        plainOrigin.requestHandler(StackRelayTest::serveStub);
         int plainPort = await(plainOrigin.listen()).actualPort();
-        SuiteRelay relay = new SuiteRelay(h2Client,
+        StackRelay relay = new StackRelay(h2Client,
                 CATALOGUE, appId -> plainPort);
-        HttpServer h2FrontToPlain = vertx.createHttpServer(SuiteRelay.frontOptions(0, true));
+        HttpServer h2FrontToPlain = vertx.createHttpServer(StackRelay.frontOptions(0, true));
         h2FrontToPlain.requestHandler(relay::handle);
         String plainBase = "http://localhost:" + await(h2FrontToPlain.listen()).actualPort()
                 + "/apps/" + APP;

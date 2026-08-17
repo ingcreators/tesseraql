@@ -39,7 +39,7 @@ otherwise (status word only). Point container health checks at
 (`lint`, `test`, `governance`, `release-evidence`) run before the build, and rollback is the
 previous image.
 
-**B. Several applications on one host.** `tesseraql host --suite <dir>` starts every application
+**B. Several applications on one host.** `tesseraql host --stack <dir>` starts every application
 the directory holds in its own runtime behind one port — its own Camel context, datasource
 set, Studio and traces. They are addressed as `/apps/<id>/` on one origin and share a sign-in
 across them. See [hosting.md](hosting.md).
@@ -67,7 +67,7 @@ buffer for all of them ([app-isolation-model.md](app-isolation-model.md) decisio
 
    `tesseraql.app.name` is **required**. It is an identity rather than a label — it scopes
    outbox claims and job ownership, it is what `ops.app.<name>` grants are checked against,
-   and in a suite it is the app's address — so an app declaring none is refused at start
+   and in a stack it is the app's address — so an app declaring none is refused at start
    (`TQL-YAML-1404`) rather than run under a name every unnamed app would share.
 2. `tesseraql identity-schema --jdbc-url ... --admin-login admin
    --admin-password-file ./admin.pw --admin-roles ADMIN --admin-permissions ops.app.*`

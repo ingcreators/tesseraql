@@ -155,15 +155,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /**
      * Starts with the settings a host decided, overriding whatever the app's own configuration
      * says about them (docs/base-path.md decisions 1 and 4, docs/stack-architecture.md decision
-     * 16). A suite passes the address the catalogue declares and a cookie path of {@code /}; the
+     * 16). A stack host passes the address the catalogue declares and a cookie path of {@code /}; the
      * values belong to the deployment, not to the application's files, so the same package mounts
      * at two prefixes in two places — and only the host knows whether these applications are one
-     * suite sharing a sign-in.
+     * stack sharing a sign-in.
      */
     static TesseraqlRuntime start(Path appHome, int port, HostContext host) {
         AppManifest loaded = new ManifestLoader().load(appHome);
-        // Suite mode had no tracing at all, so the console's trace pages behind `tesseraql host`
-        // were permanently empty (docs/audit-hardening.md Decision 7). An app hosted in a suite is
+        // Hosted (stack) mode had no tracing at all, so the console's trace pages behind `tesseraql host`
+        // were permanently empty (docs/audit-hardening.md Decision 7). An app hosted in a stack is
         // the same app: it gets the same in-process ring every other start path gets.
         return start(appHome, withBasePath(loaded, host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
@@ -197,7 +197,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /**
      * The ring capacity a manifest asks for.
      *
-     * <p>Read here as well as on the main start path because suite mode builds its own tracer
+     * <p>Read here as well as on the main start path because stack mode builds its own tracer
      * before that path runs.
      */
     private static int ringCapacity(AppManifest manifest) {

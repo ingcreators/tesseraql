@@ -490,7 +490,7 @@ neither depends on anything else in this campaign.
 | 7 | MCP Protected Resource Metadata and a conformant challenge | yes | Depends on slice 6 |
 | 8 | Node identity, heartbeat, and a bounded stop | yes | Timer-driven heartbeat, not boundary writes |
 | 9 | The reaper, and `overlap: skip` asking whether the owner is alive | yes | Depends on slice 8 |
-| 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and suite-mode tracing | yes | Reaches every log line and the console's trace pages |
+| 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and stack-mode tracing | yes | Reaches every log line and the console's trace pages |
 | 11 | Readiness memoization, camel-health as a signal, camel-main removed, JDK gauges | yes | Two new keys (readiness TTL, ring capacity); dist-jar boot check required |
 | 12 | MCP security defaults: a floor for primitives that declare none | yes | Open question 4's mechanism; the only slice an intranet deployment needs. Ships with [session-token-exchange.md](session-token-exchange.md) |
 | 13 | SAML parse-time structural hardening | yes | Decision 10; independent of everything else here |

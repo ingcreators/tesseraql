@@ -87,6 +87,11 @@ mostly must not. Scoping ① to the first job lets it stop pretending to do the 
 
 ### 2. ② has two modes
 
+> **Superseded.** Independent hosting was removed in #833 (`stack-architecture.md` Decision 12:
+> every deployment shares one origin and one sign-in), and the deployment vocabulary is now
+> **stack** (#836) — "suite" stays reserved for declarative test files. The table below records
+> what existed when this decision was made.
+
 The mode is a deployment choice, and it decides three things together — they cannot be mixed
 independently, because sharing a session across apps requires a cookie that reaches them all.
 
@@ -112,7 +117,7 @@ secret references. Under ②, the operator installing the apps decides the conne
 
 Nor is there a checkable proxy for isolation: the same URL with different schemas is
 isolated, different credentials against the same tables are not, and requiring distinct URLs
-would break shared-suite mode outright.
+would break stack hosting outright.
 
 So ② provides **runtime isolation, not a security boundary**. It separates Camel contexts,
 URL spaces, Studio instances, traces and configuration. It does not separate data — that is
@@ -131,14 +136,14 @@ Like Studio, the ops console shows **one application** — the one whose runtime
 and its queries stay scoped to that app even when several apps share a business database.
 `ops.app.<name>` becomes the permission to open an app's console rather than a filter
 selecting which apps a shared console reveals; the scope clauses in the queries stay, because
-shared-suite mode puts several apps' rows in one database.
+a stack puts several apps' rows in one database.
 
 This resolves more than it costs. Traces need no cross-runtime aggregation, because a
 runtime's own in-memory spans are exactly what its console should show. "Which runtime's ops
 do I open" stops being a question. And the console stops behaving differently depending on
 whether the deployment happens to share a database.
 
-The cost is real and accepted: an operator running a suite loses the single screen listing
+The cost is real and accepted: an operator running a stack loses the single screen listing
 every app's jobs. Cross-application monitoring belongs to the metrics exposition, which
 already labels job runs by `job`, `app`, and `status`, rather than to N console tabs. A
 future aggregate view on the gateway would build on per-app consoles, not replace them.
@@ -191,7 +196,7 @@ replacement.
    `tesseraql host --install-root <dir> --mode <suite|isolated>`.
 5. **Studio under ②**: confirm a per-runtime Studio behaves correctly behind the gateway —
    path prefixes, redirects, CSRF, and asset URLs. **Done** (#701) — it needed the whole base
-   path campaign first, and `SuiteModeIntegrationTest` now opens Studio through
+   path campaign first, and `StackModeIntegrationTest` (named `SuiteModeIntegrationTest` before the #836 vocabulary) now opens Studio through
    `/apps/<id>/`, checks its CSRF token and command palette, and requests every URL it emits.
 6. **Reduce ①** (decision 1): drop `configuredDirectories` and `HttpAppSource`; simplify the
    `mountedApps` plumbing in `TesseraqlRuntime` and `RouteReloader`. **Done** — `AppSources`
@@ -225,7 +230,7 @@ replacement.
 - The gateway's hardening lands with tests for each recorded defect: a closed gateway
   releasing its client and executor, a body past the cap refused rather than buffered, and
   ingress headers not forwarded as if trusted.
-- Shared-suite mode: two apps behind one gateway, one sign-in reaching both.
+- Stack hosting: two apps behind one gateway, one sign-in reaching both.
 - Independent mode: two apps on different hosts, a session from one not authenticating
   against the other.
 - Per-app ops: an app's console lists only its own jobs and executions when both apps share a

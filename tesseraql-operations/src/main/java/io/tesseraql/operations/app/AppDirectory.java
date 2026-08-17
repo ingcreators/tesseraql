@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * What a directory handed to {@code --app} or {@code --suite} actually holds
+ * What a directory handed to {@code --app} or {@code --stack} actually holds
  * (docs/cli-surface.md Decisions 1–3).
  *
  * <p>The flag says how many applications the caller means; this says how many are there. One
@@ -104,19 +104,45 @@ public final class AppDirectory {
     }
 
     /**
-     * Every application {@code dir} holds — {@code --suite}.
+     * Every application {@code dir} holds — {@code --stack}.
      *
      * <p>A directory that is itself an application is refused rather than scanned, which is what
-     * keeps {@code work/apps/} out of reach entirely.
+     * keeps {@code work/apps/} out of reach entirely. A stack is a directory that <b>holds</b>
+     * applications, never an application home itself: an application home cannot carry the stack's
+     * own settings, and one application still cannot know stack-scoped answers such as its external
+     * origin (docs/cli-surface.md Decision 1). The refusal prints the narrowing that serves just
+     * this application from its parent directory.
      */
-    public static List<Path> suite(Path dir) {
+    public static List<Path> stack(Path dir) {
         Resolved resolved = resolve(dir);
         return switch (resolved.shape()) {
             case INSTALL_ROOT, WORKSPACE -> resolved.applications();
             case APPLICATION -> throw new TqlException(WRONG_SHAPE, resolved.root()
-                    + " is one application, not a suite — did you mean --app?");
+                    + " is one application, not a stack — a stack is a directory that holds"
+                    + " applications." + narrowing(resolved.root()));
             case NOTHING -> throw new TqlException(HOLDS_NOTHING, holdsNothing(resolved.root()));
         };
+    }
+
+    /**
+     * The narrowing that serves one application out of the directory that holds it —
+     * {@code --stack <parent> --app-name <name>} — or nothing when the home has no parent to
+     * name. Best-effort on the name: a home whose configuration cannot be read still gets the
+     * shape of the fix, with the key to fill in.
+     */
+    private static String narrowing(Path home) {
+        Path parent = home.getParent();
+        if (parent == null) {
+            return "";
+        }
+        String name;
+        try {
+            name = io.tesseraql.yaml.app.ApplicationName
+                    .of(new io.tesseraql.yaml.manifest.ManifestLoader().load(home).config());
+        } catch (RuntimeException unreadable) {
+            name = "<its tesseraql.app.name>";
+        }
+        return " To serve just this one: --stack " + parent + " --app-name " + name;
     }
 
     /**
@@ -141,17 +167,15 @@ public final class AppDirectory {
         return resolved.applications().stream().map(home -> {
             io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.manifest.ManifestLoader()
                     .load(home).config();
+            // No address is derived from the shape the directory was resolved through: an
+            // application has ONE address however it is reached, or serving it narrowed and
+            // serving it as a stack member would change every URL it emits — the divergence
+            // Decision 12 exists to remove (docs/stack-architecture.md, the flag reversal).
             return new InstalledApp(
                     io.tesseraql.yaml.app.ApplicationName.of(config),
                     config.getString("tesseraql.app.version").orElse("0.0.0"),
                     resolved.root().relativize(home).toString(),
-                    List.of(),
-                    // A directory that IS one application is the whole deployment, so it answers at
-                    // the origin root — the single-application shape, without a second mechanism
-                    // for it (docs/stack-architecture.md Decision 12). Members of a workspace take
-                    // the /apps/<id> default, because they have neighbours to be distinguished
-                    // from.
-                    resolved.shape() == Shape.APPLICATION ? "/" : null);
+                    List.of());
         }).toList();
     }
 

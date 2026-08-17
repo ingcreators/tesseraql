@@ -25,6 +25,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The deployment unit is a *stack*, and `tesseraql host` takes `--stack` — `--suite` and
+  `--app` are gone from it** (docs/stack-architecture.md, the flag reversal; docs/cli-surface.md
+  Decisions 1–3 rewritten). "Suite" already means a declarative test file in this product —
+  `glossary.md` defines it that way — and a set of applications deployed as one unit is a stack
+  everywhere else; one word cannot carry both. `--stack <dir>` names a directory that **holds**
+  applications (an install root, or a folder of application homes), and an application home is
+  refused with the narrowing that would have worked: `--stack <parent> --app-name <name>`.
+
+  `--app` is off the running commands because it made one application answer at **two
+  addresses** — the origin root when served alone, `/apps/<name>` as a stack member — so
+  developing with one flag and deploying with the other changed every URL the application
+  emits, which is exactly the divergence Decision 12 exists to remove. `--app-name` narrows a
+  stack to one member **without moving it**: a filter, never a second deployment shape. The
+  `--app` flag keeps its unchanged meaning on the commands that operate *on* one application
+  (`lint`, `migrate`, `package`, …). Internally `SuiteRelay` is now `StackRelay`, and
+  `HostContext.suite()` is `HostContext.stack()`.
+
 - **`tesseraql host --install-root` is now `--suite`, and `--app` serves one application**
   (docs/cli-surface.md). The old name described an implementation detail — a directory with a
   catalogue in it — where the new one describes what the operator is running. `--suite` accepts

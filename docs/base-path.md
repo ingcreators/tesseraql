@@ -6,12 +6,12 @@ during implementation, which is where the last three came from.
 Every URL a TesseraQL application emitted was rooted at `/`, so an application could only be
 served at the root of its origin. That blocked two things: hosting
 several applications on one origin under `/apps/<id>/`
-([app-isolation-model.md](app-isolation-model.md) suite mode), and the ordinary case of a
+([app-isolation-model.md](app-isolation-model.md) stack mode), and the ordinary case of a
 single application behind a reverse proxy at `/myapp`.
 
 ## What is actually broken
 
-Measured 2026-08-10 by starting a suite-mode gateway and requesting an HTML page through the
+Measured 2026-08-10 by starting a stack-mode gateway and requesting an HTML page through the
 prefix. The page returns 200 and is unusable:
 
 ```html
@@ -102,25 +102,25 @@ link off-site or to a path outside its own prefix, and the framework cannot tell
 Applications that never set a base path are never warned, so the lint is silent for everyone
 until the day it is useful.
 
-### 4. The host supplies the cookie path, because only the host knows it is a suite
+### 4. The host supplies the cookie path, because only the host knows it is a stack
 
 The session cookie is issued with `Path=/` in three places. Under a base path there are two
 correct answers and they conflict:
 
 - **`Path=<basePath>`** is right for a standalone application behind a proxy: its cookie
   should not be sent to whatever else lives on that origin.
-- **`Path=/`** is right for suite mode, whose *purpose* is one session across the suite
+- **`Path=/`** is right for stack mode, whose *purpose* is one session across the stack
   ([app-isolation-model.md](app-isolation-model.md) decision 2). Scoping per prefix would
   make each app a separate sign-in and delete the mode's reason to exist.
 
 The cookie path is therefore not derivable from the base path, and it is **supplied
 alongside it by whatever starts the runtime**. A standalone `serve` uses the base path; a
-suite-mode gateway passes `/`, because it is the component that knows these applications are
-one suite. An isolated-mode gateway passes each app's own path, since there is nothing to
+stack-mode gateway passes `/`, because it is the component that knows these applications are
+one stack. An isolated-mode gateway passes each app's own path, since there is nothing to
 share.
 
 A separate configuration key was considered and rejected: an operator who sets it wrongly
-gets either a silently unshared suite or a session offered to every neighbour on the origin,
+gets either a silently unshared stack or a session offered to every neighbour on the origin,
 and neither failure announces itself. The knowledge belongs to the host, so the host carries
 it.
 
@@ -237,7 +237,7 @@ have been the smaller change.
    the literal-substitution spelling too, that being how forty-seven of the framework's own
    URLs survived slice 3's first pass.
 5. **The cookie path**: supplied by the host beside the prefix (decision 4). **Done** —
-   `TesseraqlRuntime.start` takes it beside the base path, the suite gateway passes `/`, and a
+   `TesseraqlRuntime.start` takes it beside the base path, the stack gateway passes `/`, and a
    standalone start defaults to the application's own prefix. The seven places that assembled
    the header by hand, in five modules, agreeing by copy, became one `SessionCookie`. The
    OIDC flow cookie is the exception that proves the rule: scoped to `/_tesseraql/oidc`, it

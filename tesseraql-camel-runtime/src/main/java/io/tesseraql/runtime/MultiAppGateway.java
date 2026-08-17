@@ -16,14 +16,13 @@ import org.slf4j.LoggerFactory;
  * A single-port front that aggregates every app hosted by a {@link MultiAppHost} (design ch. 32.7).
  *
  * <p>Each app still runs in its own isolated runtime on an internal port. The gateway routes a
- * request to an app by, in order: the {@code Host} header (when the app declares hostnames in its
- * catalog entry), then the {@code /apps/<appId>/<path>} path prefix. Host routing forwards the full
- * path; prefix routing forwards it too, because the app is started serving the prefix it is fronted
- * under (docs/base-path.md decision 5). Unmatched requests get 404.
+ * request to the app whose catalogued prefix addresses it, longest first; the full path is
+ * forwarded, because the app is started serving the prefix it is fronted under (docs/base-path.md
+ * decision 5). Unmatched requests get 404.
  *
  * <h2>The gateway is a route, not a rewrite</h2>
  *
- * <p>Under docs/stack-architecture.md decision 12 every deployment is a suite, so every request in
+ * <p>Under docs/stack-architecture.md decision 12 every deployment is a stack, so every request in
  * every deployment passes through here. Decision 13 draws the line that follows from it: <b>the
  * gateway routes, the ingress protects</b>. It fronts applications the operator installed, behind
  * whatever reverse proxy the deployment already runs, so body limits, rate limiting and TLS
@@ -78,7 +77,7 @@ public final class MultiAppGateway implements AutoCloseable {
      * @param http2          serve and forward cleartext HTTP/2. Off by default: the previous front
      *                       spoke HTTP/1.1 only, so this is new behaviour rather than restored
      *                       behaviour. It moves both hops together, because enabling it at one end
-     *                       alone breaks request framing (see {@link SuiteRelay#frontOptions})
+     *                       alone breaks request framing (see {@link StackRelay#frontOptions})
      * @param trustedProxies the addresses whose forwarded headers are the edge's rather than a
      *                       caller's. Empty by default, which strips nothing — see
      *                       {@link TrustedProxies} for why the opposite reading would be wrong
@@ -112,7 +111,7 @@ public final class MultiAppGateway implements AutoCloseable {
     private final HttpClient client;
     private final HttpServer server;
     private final int port;
-    private final SuiteRelay relay;
+    private final StackRelay relay;
 
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
             java.nio.file.Path installRoot, Settings settings, int frontPort) {
@@ -124,11 +123,11 @@ public final class MultiAppGateway implements AutoCloseable {
             strip.put(app.id(), ingressStripHeaders(installRoot, app));
         }
         this.vertx = Vertx.vertx();
-        this.client = vertx.createHttpClient(SuiteRelay.outboundOptions(settings.http2()));
-        this.relay = new SuiteRelay(client, byId, strip,
+        this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
+        this.relay = new StackRelay(client, byId, strip,
                 settings.trustedProxies(), this::targetPort);
         this.server = vertx.createHttpServer(
-                SuiteRelay.frontOptions(frontPort, settings.http2()));
+                StackRelay.frontOptions(frontPort, settings.http2()));
         server.requestHandler(relay::handle);
         try {
             this.port = server.listen()
@@ -158,17 +157,44 @@ public final class MultiAppGateway implements AutoCloseable {
     /** As {@link #start(java.nio.file.Path, int)}, with the front door's settings. */
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
             Settings settings) {
+        return start(installRoot, frontPort, settings, null);
+    }
+
+    /**
+     * As {@link #start(java.nio.file.Path, int, Settings)}, narrowed to one member of the stack
+     * when {@code appName} is non-null — {@code tesseraql host --app-name}.
+     *
+     * <p>Narrowing is a filter, never a second deployment shape: the member keeps the address the
+     * catalogue gives it, so serving it narrowed and serving it beside its neighbours emit the
+     * same URLs (docs/stack-architecture.md decision 12). A name the stack does not hold is
+     * refused with the members that would have worked.
+     */
+    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
+            Settings settings, String appName) {
         // Whatever the directory holds: a catalogue, or application homes with no catalogue at
         // all (docs/cli-surface.md Decision 2). The entries are shaped the same either way, so
         // nothing below needs to know which it was.
         List<InstalledApp> catalogued = io.tesseraql.operations.app.AppDirectory.applications(
                 io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
+        if (appName != null) {
+            List<InstalledApp> named = catalogued.stream()
+                    .filter(app -> appName.equals(app.id()))
+                    .toList();
+            if (named.isEmpty()) {
+                throw new io.tesseraql.core.error.TqlException(MultiAppHost.UNKNOWN_APP,
+                        "The stack holds no application named '" + appName + "'. It holds: "
+                                + catalogued.stream().map(InstalledApp::id)
+                                        .collect(java.util.stream.Collectors.joining(", "))
+                                + ".");
+            }
+            catalogued = named;
+        }
         // The session cookie is the gateway's call, not the applications' (docs/base-path.md
-        // decision 4): a suite is one sign-in across one origin, so the cookie is issued at the
+        // decision 4): a stack is one sign-in across one origin, so the cookie is issued at the
         // root of it rather than scoped to each app's prefix. The address is the catalogue's, and
         // the host reads it from there — each app is started serving the prefix it is fronted
         // under, so it answers at the addresses it emits (decision 5).
-        MultiAppHost host = MultiAppHost.start(installRoot, HostContext.suite());
+        MultiAppHost host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued);
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appIds().contains(app.id()))

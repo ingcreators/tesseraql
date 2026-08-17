@@ -30,8 +30,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  *
  * <p>Under a base path there are two correct answers and they conflict. A standalone application
  * behind a proxy at {@code /myapp} should not offer its session to whatever else lives on that
- * origin, so its cookie is scoped to its own prefix. A shared suite must do the opposite: one
- * sign-in across the suite <em>is</em> the mode, and scoping per prefix would make every
+ * origin, so its cookie is scoped to its own prefix. A shared stack must do the opposite: one
+ * sign-in across the stack <em>is</em> the mode, and scoping per prefix would make every
  * application a separate sign-in.
  *
  * <p>So the value is not derived from the base path. It is supplied by whatever starts the
@@ -65,11 +65,11 @@ class SessionCookiePathIntegrationTest {
         }
     }
 
-    /** The suite host says otherwise, because only it knows these applications share a sign-in. */
+    /** The stack host says otherwise, because only it knows these applications share a sign-in. */
     @Test
-    void aSuiteHostIssuesTheCookieAtTheOriginRoot() throws Exception {
+    void aStackHostIssuesTheCookieAtTheOriginRoot() throws Exception {
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort(),
-                HostContext.suite().forApplication("/apps/shop-a"))) {
+                HostContext.stack().forApplication("/apps/shop-a"))) {
             assertThat(setCookieOnLogin(runtime))
                     .contains("Path=/;")
                     .doesNotContain("Path=/apps/shop-a");

@@ -31,18 +31,18 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Shared-suite hosting, end to end: two applications behind one gateway, addressed as
+ * Shared-stack hosting, end to end: two applications behind one gateway, addressed as
  * {@code /apps/<id>/} on one origin, each in its own runtime
  * (docs/app-isolation-model.md decision 2, docs/base-path.md slice 6).
  *
- * <p>This is the case docs/base-path.md opened with. A suite-hosted HTML page returned 200 and was
+ * <p>This is the case docs/base-path.md opened with. A stack-hosted HTML page returned 200 and was
  * unusable — its stylesheet, its scripts and its login form all named the origin, where the
  * gateway answers 404 — and the multi-app tests missed it because they exercised a JSON route,
  * which emits no links and so survives a prefix by accident. So these tests ask for pages, and
  * then ask for what the pages name.
  */
 @Testcontainers
-class SuiteModeIntegrationTest {
+class StackModeIntegrationTest {
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
@@ -54,7 +54,7 @@ class SuiteModeIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         seedDatabase();
-        installRoot = Files.createTempDirectory("tesseraql-suite-it");
+        installRoot = Files.createTempDirectory("tesseraql-stack-it");
         installApp("shop-a", "a");
         installApp("shop-b", "b");
         gateway = MultiAppGateway.start(installRoot, 0);
@@ -104,12 +104,12 @@ class SuiteModeIntegrationTest {
     }
 
     /**
-     * One sign-in across the suite (docs/app-isolation-model.md decision 2): the session
+     * One sign-in across the stack (docs/app-isolation-model.md decision 2): the session
      * established through one application's prefix authenticates the next one, because the
      * gateway issued the cookie at the origin root and the runtimes share a framework database.
      */
     @Test
-    void oneSignInReachesEveryApplicationInTheSuite() throws Exception {
+    void oneSignInReachesEveryApplicationInTheStack() throws Exception {
         assertThat(get("/apps/shop-a/users/fragments/table", sessionCookie).statusCode())
                 .isEqualTo(200);
         assertThat(get("/apps/shop-b/users/fragments/table", sessionCookie).statusCode())
@@ -117,7 +117,7 @@ class SuiteModeIntegrationTest {
                 .isEqualTo(200);
 
         assertThat(get("/apps/shop-b/users/fragments/table", null).statusCode())
-                .as("and it is a session that authorizes, not the suite")
+                .as("and it is a session that authorizes, not the stack")
                 .isEqualTo(401);
     }
 
@@ -213,7 +213,7 @@ class SuiteModeIntegrationTest {
         return List.copyOf(found);
     }
 
-    /** Signs in through one application's prefix, returning the suite-wide session cookie. */
+    /** Signs in through one application's prefix, returning the stack-wide session cookie. */
     private static String signIn() throws Exception {
         HttpResponse<String> login = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(uri("/apps/shop-a/_tesseraql/login"))
@@ -225,7 +225,7 @@ class SuiteModeIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         assertThat(setCookie)
-                .as("a suite shares one sign-in, so its cookie is not scoped to one app's prefix")
+                .as("a stack shares one sign-in, so its cookie is not scoped to one app's prefix")
                 .contains("Path=/;");
         return setCookie.substring(0, setCookie.indexOf(';'));
     }
@@ -256,7 +256,7 @@ class SuiteModeIntegrationTest {
             }
         }
         // The applications' own tables are theirs: each runtime migrates its schema at startup.
-        // Only the framework's schema is seeded here, with the one account the suite signs in as.
+        // Only the framework's schema is seeded here, with the one account the stack signs in as.
         seedIdentity("shared");
     }
 
@@ -290,7 +290,7 @@ class SuiteModeIntegrationTest {
 
     /**
      * @param sharedFrameworkState whether the application's sessions and identity realm live in
-     *                             the schema its neighbours share — the shape of a suite. Under
+     *                             the schema its neighbours share — the shape of a stack. Under
      *                             independent hosting they stay in the application's own.
      */
     private static void installApp(Path root, String appId, String schema,
@@ -310,7 +310,7 @@ class SuiteModeIntegrationTest {
                     password: %4$s
                 """.formatted(POSTGRES.getJdbcUrl(), schema, POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
-        // The suite's shape (docs/app-isolation-model.md decision 2): each application keeps its
+        // The stack's shape (docs/app-isolation-model.md decision 2): each application keeps its
         // own business schema, and the framework's own state — sessions, the identity realm —
         // lives in one they share, which is what a shared sign-in is made of. Written as an
         // overlay, which is merged last, so the example app's own config is left alone.
