@@ -65,6 +65,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A hosted application's declared `server.port` is honoured as its internal port**
+  (docs/cli-surface.md Decision 4a). The host used to bind every runtime to an ephemeral port
+  unconditionally; now `server.port` keeps its one meaning — the port this application binds —
+  behind the gateway's `--port` front door. `0` and absence both stay ephemeral, the canary
+  slot always takes an ephemeral port (the candidate runs beside the stable version holding
+  the declared one), and two applications declaring the same port fail loudly at bind.
+
 - **An application's address is its name — `/orders`, not `/apps/orders` — and it is derived,
   always** (docs/stack-architecture.md Decision 25). The `/apps/` wrapper defended nothing the
   name grammar does not already defend (`TQL-YAML-1405`: no leading `_`, so `/_tesseraql/*` is

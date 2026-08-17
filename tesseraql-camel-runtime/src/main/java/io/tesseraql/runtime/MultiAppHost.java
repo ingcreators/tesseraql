@@ -133,7 +133,13 @@ public final class MultiAppHost implements AutoCloseable {
         try {
             for (InstalledApp app : applications) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
-                started.put(app.name(), TesseraqlRuntime.start(appHome, freePort(),
+                // A declared server.port is honoured as the application's INTERNAL port
+                // (docs/cli-surface.md decision 4a) — the key keeps its one meaning, the port
+                // this application binds; the front door is the gateway's --port. Undeclared
+                // stays ephemeral, and a collision between two declared ports fails loudly at
+                // bind, which is a flag-grade failure rather than a silent one.
+                started.put(app.name(), TesseraqlRuntime.start(appHome,
+                        declaredPort(configs.get(app.name())).orElseGet(MultiAppHost::freePort),
                         context.forApplication(app.basePath())));
                 appNames.add(app.name());
                 LOG.info("Hosting app {} v{} from {}", app.name(), app.version(), appHome);
@@ -159,6 +165,20 @@ public final class MultiAppHost implements AutoCloseable {
         }
         return new MultiAppHost(started, Set.copyOf(appNames), Map.copyOf(canaryWeights),
                 frameworkPool);
+    }
+
+    /**
+     * The application's declared internal port, when it declares a fixed one. {@code 0} and
+     * absence both mean "ephemeral" — the test fixtures' {@code server.port: 0} idiom predates
+     * hosting and keeps its meaning — and the canary slot always takes an ephemeral port, since
+     * the candidate runs beside the stable version that holds the declared one.
+     */
+    private static java.util.Optional<Integer> declaredPort(
+            io.tesseraql.yaml.config.AppConfig config) {
+        return config == null
+                ? java.util.Optional.empty()
+                : config.getString("server.port").map(Integer::parseInt)
+                        .filter(port -> port > 0);
     }
 
     /** Each application's placeholder-resolved configuration, keyed by name, load order kept. */
