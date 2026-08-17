@@ -992,6 +992,20 @@ because a second source for a value the stack directory already answers is a sec
 question, and this case does not revive the need — it is served by the directory the tooling
 already builds.
 
+**Also rejected, proposed in the same review: falling back to a `tesseraql-stack.yml` *inside* the
+application home when the parent has none.** It would save the root-is-an-app-home repository its
+one `git mv`, and it opens a production path that is silent in exactly the way this document
+exists to close: `host --stack` hosts source trees, so an install whose operator has not yet
+written the stack file, holding an application whose tree still carries a developer's — would read
+**a development machine's origin, issuer and framework datasource as production's stack settings,
+saying nothing**. TQL-APP-4211 made absence a check instead of a silence; a fallback reintroduces
+the silence one directory down. It also breaks three standing rules at once: an application's
+files do not name their deployment, the file's *location* is the environment (a file inside the
+application travels to every environment), and a parent file would silently shadow the inner one —
+the shape the `--stack ./work/orders` refusal exists to prevent, inverted. What the pinch actually
+earns is a better refusal: when `dev` needs the origin and no stack directory exists, the message
+prints the restructure — the same refusal-teaches pattern as every other.
+
 **And one rule intersection is scoped here so it never has to be discovered:** TQL-APP-4212 —
 an application *explicitly* declaring `tesseraql.framework.datasource` while the stack supplies a
 coordinate is refused — applies to a **`tesseraql-stack.yml` supply only**, not to `--embedded-db`'s. The
