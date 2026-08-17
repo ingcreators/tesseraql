@@ -673,8 +673,8 @@ triple all need a host-scoped source, and none existed —
 /_tesseraql/iam
 /_tesseraql/studio             application switcher
 /_tesseraql/ops                application switcher
-/apps/orders/...               a user application
-/apps/orders/_tesseraql/mcp    that application's MCP surface
+/orders/...                    a user application (Decision 25; /apps/orders before it)
+/orders/_tesseraql/mcp         that application's MCP surface
 /.well-known/...               authorization-server and protected-resource metadata
 ```
 
@@ -683,11 +683,16 @@ The rule: **framework surfaces live under `_tesseraql/` relative to their scope.
 The prefix's original justification is gone — it existed because framework surfaces shared a flat
 URL space with a root-mounted user application, and under Decision 12 they no longer do. It is kept
 on three replacement grounds. The collision it prevented **still exists one level down**, inside
-`/apps/<appId>/`, where an application's declared routes share a namespace with the framework
-surfaces belonging to that application; dropping the prefix at the stack level alone would make the
-two scopes asymmetric for no gain. It keeps the framework's claim on root names at **two**
+each application's prefix, where an application's declared routes share a namespace with the
+framework surfaces belonging to that application; dropping the prefix at the stack level alone would
+make the two scopes asymmetric for no gain. It keeps the framework's claim on root names at **two**
 (`/apps/`, `/_tesseraql/`) rather than one per surface, permanently. And it leaves the rest of the
 root to the operator, who may want `/health` for a load balancer.
+
+**Amended by Decision 25**, which retires `/apps/` — the second and third grounds above described
+what that prefix bought, and Decision 25 records what replaces each: the name grammar fences the
+root, and the operator's health path is `/_tesseraql/health/live`, which the deployment image
+already probes. The `_tesseraql/` half of this decision is untouched.
 
 The leading `_` carries no protocol meaning — RFC 3986 lists it as unreserved — and follows the
 convention of `/_next/`, `/_nuxt/`, `/_matrix/` and `/_ah/`: a reserved-namespace marker, a
@@ -708,7 +713,8 @@ parameter to the application it is for.
 
 Metadata placement follows from Decision 6. RFC 9728 inserts the well-known segment between host and
 path, so an application's resource metadata is served at
-`/.well-known/oauth-protected-resource/apps/orders/_tesseraql/mcp` — at the gateway root, not under
+`/.well-known/oauth-protected-resource/orders/_tesseraql/mcp` (the resource URL per Decision 25) —
+at the gateway root, not under
 the application's prefix. **The gateway needs a rule that reads the inserted path and resolves the
 application**, and the document itself should be produced by that application's runtime and relayed,
 rather than synthesised by the gateway from the catalogue, so the configuration is not read twice.
@@ -1022,7 +1028,7 @@ install path, entitlements. So:
 
 - **`stack.yml` is the intent file**, written by people. It gains an `applications:` section
   declaring addresses — `basePath: /` for the one application a deployment chooses to put at the
-  origin root, nothing for the `/apps/<name>` default.
+  origin root, nothing for the `/<name>` default (Decision 25).
 - **`catalog.json` is the ledger**, written by install tooling and never edited by hand.
 
 **This moves the address out of `catalog.json`, revising #834.** The reason is per-application
@@ -1037,9 +1043,9 @@ layout, because only a catalogue could declare an address.
 *development stack* — its own applications, its own `stack.yml`, which under Decision 22's
 file-is-the-environment rule is development's file. The deployed stack composes both teams'
 applications under one operator-owned `stack.yml`. No team reads the other's stack file, and no
-coordination meeting assigns addresses, because **the `/apps/<name>` default makes the name the
+coordination meeting assigns addresses, because **the `/<name>` default makes the name the
 inter-team contract** — which is what the migration-history work made names required and unique
-*for*. Cross-application links are absolute `/apps/<name>` paths, so address overrides break
+*for*, and Decision 25 makes literal. Cross-application links are absolute `/<name>` paths, so address overrides break
 neighbours' links; overrides are for the deployment's root choice and little else — and Decision
 24's `root.redirect` serves that choice *without* an override, keeping the canonical address, so
 most stacks override nothing.
@@ -1066,11 +1072,11 @@ URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
 
   ```yaml
   root:
-    redirect: orders     # /  →  /apps/orders/
+    redirect: orders     # /  →  /orders/
   ```
 
   For the one-main-application deployment this is **better than claiming root with `basePath: /`**,
-  because the application keeps its canonical `/apps/orders` address — the name contract Decision 23
+  because the application keeps its canonical `/orders` address — the name contract Decision 23
   rests on — while the bare origin still lands users somewhere useful. Naming an application the
   stack does not hold is refused at start, like every other disagreement. The redirect is
   **temporary (307), deliberately**: a permanent redirect is cached by browsers past the
@@ -1085,6 +1091,50 @@ URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
 - It is a stack-level framework surface in Decision 14's sense and ships with slice 4's identity
   surfaces, which is where its two ingredients — the sign-in redirect and the entitlement check —
   already live.
+
+### 25. An application's address is its name — `/orders`, not `/apps/orders`
+
+Asked in review: framework surfaces are already fenced under `/_tesseraql/`, so why do applications
+carry an `/apps/` wrapper? Measured, the wrapper defends nothing the name grammar does not already
+defend — and the grammar is the finding.
+
+**What separates the root namespace is the character set, not the prefix.** Application names are
+`[a-z][a-z0-9-]{0,63}`: no leading underscore, so `/_tesseraql/*` is unreachable by any name; no
+dots, so `/.well-known/*`, `/favicon.ico` and `/robots.txt` are unreachable; no slashes. The
+`/apps/` prefix was a second fence around a namespace the grammar already fences. And since #834 the
+relay routes by comparing declared prefixes — nothing parses an id out of a constant — so `/orders`
+routes exactly as `/apps/orders` does, segment-boundary matching included.
+
+The user-seat gain is the point: these are internal business applications whose URLs appear in
+mails, bookmarks and browser bars daily, and `/orders/invoice/123` is the address a person would
+have guessed. It also completes Decision 23's contract — *an application's address is its name*,
+now literally.
+
+**The condition this stands on, found by measuring:** the grammar is enforced only by
+`tesseraql new` (`AppScaffolder`). A hand-written manifest can name an application `_tesseraql`
+today. That was already wrong — a name with a slash breaks the address, the history table and the
+`ops.app.<name>` grant — but this decision makes the grammar load-bearing for the URL space, so it
+is promoted to the manifest rule: **TQL-YAML-1405**, the scaffolder's pattern checked by
+`ApplicationNameRules` beside 1404's presence check, refusing at lint and at boot.
+
+**What is honestly given up, from Decision 17's own grounds** (its "two root names" note is amended
+to point here): the framework's claim on the origin root goes from two fixed names to
+`/_tesseraql/` plus *every application name*, so the root is no longer "left to the operator". The
+operator case Decision 17 imagined — `/health` for a load balancer — is already served by
+`/_tesseraql/health/live`, which is what the deployment image's own healthcheck calls; and an edge
+that wants to fence application traffic wholesale writes "everything except `/_tesseraql/`" instead
+of `/apps/`. One rule either way.
+
+**One collision becomes wider and gets a guard.** An application that owns the root
+(`basePath: /`, Decision 24's exception) is shadowed by its siblings' prefixes; under `/apps/` that
+shadow was one unlikely path, under names it is every sibling. Routes are statically known, so the
+host checks at start: a root-owning application whose top-level route segment equals a sibling's
+name is refused, naming both. Loud, at boot, like every other disagreement.
+
+Rollout note: `/apps/<name>` is the *shipped* default from #834, so `hosting.md` and
+`base-path.md` keep describing it until the code changes the default — the same policy as the
+`stack` rename. The change itself is one line: `InstalledApp.normalize`'s default becomes
+`"/" + name`.
 
 ## Slices
 

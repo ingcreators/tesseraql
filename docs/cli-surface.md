@@ -148,7 +148,8 @@ deliberately empty.
 value changes kind depending on a sibling flag.
 
 **Narrowing a stack to one of its applications is `--stack ./work --app-name orders`.** The stack
-directory is still named, so `stack.yml` is read and the application starts at `/apps/orders` — the
+directory is still named, so `stack.yml` is read and the application starts at `/orders`
+(`stack-architecture.md` Decision 25) — the
 address it has when the whole stack runs. Narrowing changes *how many* runtimes start and nothing
 else, which is what [stack-architecture.md](stack-architecture.md) Decision 19 asks for when it
 requires narrowing the development-tool MCP to stay "a scoping flag, not a second mode."
