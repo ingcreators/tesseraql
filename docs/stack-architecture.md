@@ -1237,6 +1237,55 @@ Two consequences are worth their own lines:
   for. The `security` migration hoist is where a guard could live if this needs more than
   documentation; until then it is the operator rule the sentence above states.
 
+### 28. A module belongs to the application that declared it, and the stack makes that literal
+
+Asked in review: how are per-application modules handled? Measured, the declaration side is already
+right and the effect side contradicts it — and a stack turns the contradiction into a defect.
+
+**Declared per application, correctly.** `tesseraql.modules` in the application's own
+configuration, Maven coordinates locked by `modules.lock`, resolved into that application's
+`work/modules`. The module set is part of the application the way its datasources are: declared in
+its tree, packaged with its identity, lint-checkable alone (Decision 26's three names apply
+unchanged).
+
+**Wired per process, wrongly for a stack.** `serve` composes the module jars onto the *thread
+context classloader* and calls `ExpressionFunctions.install(loader)` — whose registry is a single
+`static volatile` map and whose own javadoc says *"replacing any previous installation."* One
+application, one process: harmless. N runtimes in one host process: **the last application's
+install replaces every neighbour's custom functions.** A route referencing its own function loses
+it — or silently binds a neighbour's function of the same name with different semantics, which is
+the worse outcome because it answers instead of failing. `DriverManager` has the milder version:
+drivers are additive through the shim, but first-wins per URL, so two applications declaring the
+same driver at different versions get whichever loaded first. And `host` wires none of this today,
+so modules in a stack are not degraded — they are absent (the slice 3 gap, now with its mechanism
+named).
+
+**The decision is the scope: module visibility equals runtime scope.** Each hosted runtime gets its
+own classloader over its own application's `work/modules`, and the function registry becomes
+per-runtime state — bound where the tracer and lanes already bind, not process-global. An
+application's behaviour is then a function of its own declarations, in a stack exactly as alone.
+
+**Rejected: one union classloader over every application's modules.** Cheaper to build and it is
+the silent-divergence shape a third time: an application's routes change meaning because a
+*neighbour* declared a module, nothing in the application says so, and name collisions across teams
+resolve by load order. Decision 23 made the name the inter-team contract; a union loader would make
+function names an accidental one.
+
+**Implementation obstacles, named rather than discovered later.** `ExpressionFunctions` is the
+static-global shape this decision retires, and its readers sit deep in core expression evaluation —
+the refactor's mechanism (registry carried per context, or keyed lookup) is left to the
+implementation, but the *scope* is decided here. The driver shim needs per-runtime keying or a
+version-collision refusal. And `mcp --stack` (Decision 19) evaluates against several applications
+from one process, so the development-tool MCP needs the same per-application context the host
+needs — it cannot ride one TCCL either.
+
+**Deployment note:** module resolution reaches Maven repositories, so it happens at **install
+time** — `tesseraql install` resolves the declared set into `work/modules` under the lock — and a
+production `host` boots offline from what install resolved. `dev` resolves at start, which is the
+loop where the network is already assumed. The explicit `--modules <dir>` stays what it is today, a
+development override composed onto **every** runtime in the stack, and is documented as exactly
+that.
+
 ## Slices
 
 Ordering is by dependency, not by size.
