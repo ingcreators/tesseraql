@@ -52,6 +52,18 @@ class MultiAppHostIntegrationTest {
         // shop-b declares a base path of its own, which the derived address has to outrank —
         // an application's address is its name, and its own configuration cannot move it.
         installApp("shop-b", "b", "/legacy");
+        // Business data is isolated by schema, so the main coordinates differ; the stack
+        // supplies the framework connection (docs/stack-architecture.md decision 22).
+        Files.writeString(installRoot.resolve(
+                io.tesseraql.operations.app.StackSettings.FILE_NAME),
+                """
+                        framework:
+                          datasource:
+                            jdbcUrl: %s
+                            username: %s
+                            password: %s
+                        """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                        POSTGRES.getPassword()));
         host = MultiAppHost.start(installRoot);
     }
 

@@ -27,6 +27,40 @@ application home is refused — the refusal prints the narrowing that would have
 neighbours: narrowing is a filter, not a second deployment shape, so the application emits the
 same URLs either way.
 
+## The stack's own settings — `tesseraql-stack.yml`
+
+A stack may declare settings of its own in `tesseraql-stack.yml`, in the directory `--stack`
+names — always that name, always that place. The file is read through the same configuration
+machinery applications use, so `${ENV_VAR:default}` and `${secret.…}` resolve in it.
+
+What belongs there is what fails silently when it diverges between applications or between
+development and production:
+
+```yaml
+framework:
+  datasource:            # one sign-in across the stack rides this connection
+    jdbcUrl: jdbc:postgresql://${DB_HOST:localhost}:5432/stack
+    username: ${secret.env.STACK_DB_USER}
+    password: ${secret.env.STACK_DB_PASSWORD}
+externalOrigin: https://apps.example.com
+```
+
+When the stack supplies `framework.datasource`, the host builds one pool and every application's
+framework state — sessions, tokens, preferences — rides it, so one sign-in carries by
+construction. An application that *explicitly* declares `tesseraql.framework.datasource` in that
+arrangement is refused (`TQL-APP-4212`) rather than silently repointed.
+
+Every part of the file is optional, and absence is checked rather than trusted: when the stack
+supplies no framework datasource and more than one application runs, the host compares each
+application's own resolved framework coordinate and refuses to start on disagreement
+(`TQL-APP-4211`), naming each application — because the alternative is a stack where signing in
+silently does not carry. The gateway's `--port`, `--http2` and `--trusted-proxies` stay flags: a
+wrong value there fails loudly at bind or handshake, which is exactly what the file exists to
+avoid needing.
+
+`tesseraql new` writes the file beside the application it creates — all guidance comments, which
+is enough: the file is also the stack's marker, and development commands find the stack by it.
+
 ## The install root
 
 An install root holds `catalog.json` — the list of installed applications, their versions,

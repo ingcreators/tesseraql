@@ -18,19 +18,19 @@ class ScaffoldCommandsTest {
 
     @Test
     void newCreatesASkeletonAndRefusesToOverwriteIt(@TempDir Path dir) {
-        int first = execute("new", "demo", "--dir", dir.toString());
+        int first = execute("new", "demo", "--stack", dir.toString());
         assertThat(first).isZero();
         assertThat(dir.resolve("demo/config/tesseraql.yml")).exists();
         assertThat(dir.resolve("demo/db/migration/V1__create_items.sql")).exists();
         assertThat(dir.resolve("demo/tests/smoke-test.yml")).exists();
 
-        int second = execute("new", "demo", "--dir", dir.toString());
+        int second = execute("new", "demo", "--stack", dir.toString());
         assertThat(second).isNotZero();
     }
 
     @Test
     void scaffoldCrudGeneratesIdempotentlyAndDetectsEdits(@TempDir Path dir) throws Exception {
-        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
         Path app = dir.resolve("demo");
         String url = "jdbc:h2:" + dir.resolve("scaffold-db");
         try (Connection connection = DriverManager.getConnection(url);
@@ -66,7 +66,7 @@ class ScaffoldCommandsTest {
 
     @Test
     void ejectViewPinsTheTemplateAndFlipsTheRoute(@TempDir Path dir) throws Exception {
-        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
         Path app = dir.resolve("demo");
         Path board = app.resolve("web/board");
         Files.createDirectories(board);
@@ -111,7 +111,7 @@ class ScaffoldCommandsTest {
 
     @Test
     void scaffoldCrudPicksUpTheRunningEmbeddedDbMarker(@TempDir Path dir) throws Exception {
-        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
         Path app = dir.resolve("demo");
         String url = "jdbc:h2:" + dir.resolve("marker-db");
         try (Connection connection = DriverManager.getConnection(url);

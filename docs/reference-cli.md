@@ -51,7 +51,7 @@ Generate a runnable app skeleton.
 | Argument | Required? | Description |
 | --- | --- | --- |
 | `<appName>` | yes | The app name ([a-z][a-z0-9-]*); also the directory. |
-| `--dir <dir>` | — | Parent directory to create the app in (default: .). |
+| `--stack <stack>` | — | The stack directory to create the app in (default: .) — the directory that holds your applications. |
 
 ## `scaffold`
 

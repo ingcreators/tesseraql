@@ -489,7 +489,7 @@ Owed with that change — **and shipped with it (#839)**: `SuiteRelay` → `Stac
 the prose in `app-isolation-model.md`, `base-path.md`, `audit-hardening.md` and
 `token-issuance.md`. `TestSuite` and everything around it keeps the word, which is the point.
 
-### 8. `new` already creates the layout, so its flag is `--stack` and it writes no stack file
+### 8. `new` already creates the layout, so its flag is `--stack` — and it writes the stack file
 
 **Measured 2026-08-16, and it corrects this document.** The mapping table first said `new --dir`
 becomes `--app`, on the grounds that "it is the directory that becomes an application home". That is
@@ -520,6 +520,17 @@ tesseraql dev --stack ./work           # runs it
 orders` leaves the current directory holding one application home one level down — a stack, with no
 further step. Decision 2's cost was quoted as "one `mkdir` for a single-application repository"; the
 measurement says it is **zero** for anything created by `new`.
+
+**Amended (user decision, 2026-08-17): `new` writes `tesseraql-stack.yml` into the stack
+directory.** The title above first said the opposite, on the grounds that the file has no required
+content so a generated one would be entirely commented out. That reasoning stands for the
+*settings* and falls for the *marker*: Decision 9's discovery needs an affirmative sign that a
+directory is a stack rather than merely a directory that happens to contain this application, and
+a marker needs no content to mark. A generated file that is all guidance comments is exactly a
+marker. The operator/install path is unchanged — `tesseraql install` still writes only the
+application and the catalogue entry, and stack-architecture.md Decision 22's refusal-not-blank
+rule keeps applying there, re-keyed on what the stack *supplies* rather than whether a file
+exists.
 
 **`new` does not write `tesseraql-stack.yml`**, for three reasons that are the same reason:
 
@@ -571,16 +582,25 @@ walks to the filesystem root; this deliberately does not, and the cost is that r
 `work/orders/web/` is refused rather than resolved, which the refusal message makes a two-second
 fix.
 
-**Amended at implementation (the 0d catch-up PR): the step up also stops at the repository
-boundary.** The rule as first written was vacuous in its second arm — the parent of an application
-home always "holds applications", namely this one, so *every* application home had a "stack-shaped"
-parent. A repository whose root is the application home would have silently adopted whatever
-directory holds the checkouts as its stack, sibling repositories swept in as neighbours, and the
-restructure refusal below could never fire. The fence is the operating model's own line: the source
-unit *is* the stack, so a directory outside this checkout cannot be this application's stack.
-Concretely: an application home that is itself a repository root (it has `.git`) does not look up,
-and meets the refusal that prints the one `git mv` the design asks for. An application inside a
-stack-layout repository still discovers the repository root as its stack, `.git` and all.
+**Amended twice at implementation.** First (the 0d catch-up PR): the rule as written was vacuous
+in its second arm — the parent of an application home always "holds applications", namely this
+one, so *every* application home had a "stack-shaped" parent; a repository rooted in an
+application home would have silently adopted whatever directory holds the checkouts as its stack,
+sibling repositories swept in, and the restructure refusal below could never fire. 0d fenced the
+step up at the repository boundary (`.git`).
+
+**Second (user decision, 2026-08-17, superseding the fence): the step up keys on the stack's
+marker.** The parent qualifies as the stack when it holds `tesseraql-stack.yml` or `catalog.json` —
+affirmative intent, symmetric with the install root's existing marker, and `cargo`'s actual model
+(`[workspace]` is a marker, not a shape). Decision 8 now has `new` write the file, so every
+created layout carries its marker from birth. This closes the fence's two residual holes: an
+application home *without* `.git` (an exported tree) still adopted a markerless parent, and
+running from inside `work/apps/<surface>` adopted `work/apps` — the five bundled framework
+surfaces as a stack. The costs, accepted: a hand-made stack directory that predates the marker
+refuses discovery *from inside an application* until the file is touched (the refusal prints the
+fix; running from the stack directory itself still works by shape), and the marker is read in the
+parent only — never from inside the application home, which keeps Decision 22's rejected
+fallback rejected.
 
 Discovery runs the **whole** stack, not the application the shell happens to be inside. Narrowing
 stays explicit (`--app-name`, Decision 3), because a stack silently missing its neighbours is

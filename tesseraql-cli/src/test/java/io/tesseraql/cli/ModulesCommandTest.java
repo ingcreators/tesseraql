@@ -20,7 +20,7 @@ class ModulesCommandTest {
     @Test
     void addResolvesAPinnedModuleOfflineWritesTheLockAndCachesTheJar(@TempDir Path dir)
             throws Exception {
-        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
         Path app = dir.resolve("demo");
 
         assertThat(execute("modules", "add", PICOCLI, "--app", app.toString(), "--offline"))

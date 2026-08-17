@@ -353,7 +353,7 @@ class AppLifecycleCommandsTest {
     }
 
     private static Path scaffold(Path dir) {
-        assertThat(execute("new", "demo", "--dir", dir.toString())).isZero();
+        assertThat(execute("new", "demo", "--stack", dir.toString())).isZero();
         return dir.resolve("demo");
     }
 

@@ -138,7 +138,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.framework.datasource` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md) |
+| `tesseraql.framework.datasource` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [deployment](deployment.md), [hosting](hosting.md) |
 
 ## tesseraql.governance
 

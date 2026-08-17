@@ -167,7 +167,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // the same app: it gets the same in-process ring every other start path gets.
         return start(appHome, withBasePath(loaded, host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, host.cookiePath());
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null,
+                host.frameworkDataSource(), host.cookiePath());
     }
 
     /**
@@ -277,6 +278,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override, String cookiePath) {
+        return start(appHome, manifest, port, tracer, meter, override, null, cookiePath);
+    }
+
+    /**
+     * @param stackFrameworkDataSource the stack's framework pool, when its file supplies one
+     *                                 (docs/stack-architecture.md decision 22): host-built,
+     *                                 host-owned, never closed here. Null means this runtime
+     *                                 resolves its own {@code tesseraql.framework.datasource} —
+     *                                 the host has already refused the explicit-declaration
+     *                                 collision, so no name resolution happens when this is set
+     */
+    private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
+            io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
+            DataSources.MainDatasourceOverride override,
+            javax.sql.DataSource stackFrameworkDataSource, String cookiePath) {
         DefaultCamelContext context = new DefaultCamelContext();
         // The component policy guards every registration from here on
         // (docs/component-guard.md): baseline-denied components fail boot, config or not.
@@ -302,16 +318,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // webhook replay) deliberately ignore this key: a config line must not be able
         // to break outbox atomicity. An unknown name refuses the boot - a typo that
         // silently fell back to main would defeat the isolation someone configured.
-        String frameworkDataSourceName = manifest.config()
-                .getString("tesseraql.framework.datasource").orElse("main");
-        javax.sql.DataSource frameworkDataSource = dataSources.get(frameworkDataSourceName);
-        if (frameworkDataSource == null) {
-            throw new io.tesseraql.core.error.TqlException(
-                    new io.tesseraql.core.error.TqlErrorCode(
-                            io.tesseraql.core.error.TqlDomain.APP, 5205),
-                    "tesseraql.framework.datasource names '" + frameworkDataSourceName
-                            + "' but no such datasource is declared under"
-                            + " tesseraql.datasources");
+        javax.sql.DataSource frameworkDataSource;
+        if (stackFrameworkDataSource != null) {
+            // The stack supplies the connection (docs/stack-architecture.md decision 22): one
+            // pool for every runtime, so signing in carries by construction. The name
+            // indirection is not consulted — the host refused any explicit declaration before
+            // this runtime started (TQL-APP-4212).
+            frameworkDataSource = stackFrameworkDataSource;
+        } else {
+            String frameworkDataSourceName = manifest.config()
+                    .getString("tesseraql.framework.datasource").orElse("main");
+            frameworkDataSource = dataSources.get(frameworkDataSourceName);
+            if (frameworkDataSource == null) {
+                throw new io.tesseraql.core.error.TqlException(
+                        new io.tesseraql.core.error.TqlErrorCode(
+                                io.tesseraql.core.error.TqlDomain.APP, 5205),
+                        "tesseraql.framework.datasource names '" + frameworkDataSourceName
+                                + "' but no such datasource is declared under"
+                                + " tesseraql.datasources");
+            }
         }
 
         // OTLP export (design ch. 25.7): when an endpoint is configured, fan spans out to OTLP

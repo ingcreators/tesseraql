@@ -895,10 +895,13 @@ A stack of one needs nothing declared, and a development workspace should not ha
 to run. So `tesseraql-stack.yml` may be absent — but "absent" must not restore the failure mode the file
 exists to remove.
 
-**With no file and more than one application, the host checks that the applications agree.** It
+**When the stack supplies no framework datasource — no file, or a file that does not declare
+one — and more than one application runs, the host checks that the applications agree.** It
 resolves each application's framework datasource coordinate (the `tesseraql.framework.datasource`
 name, then that entry's `jdbcUrl` and `username`, after placeholder resolution) and refuses to start
-when they differ, naming each application and its coordinate — **TQL-APP-4211**. The gateway
+when they differ, naming each application and its coordinate — **TQL-APP-4211**. (Keyed on what
+the file *supplies* rather than its existence, so the marker file `new` generates cannot silence
+the check.) The gateway
 already loads every application's manifest, for ingress header stripping, so this costs a
 comparison rather than a pass over the tree.
 
@@ -919,7 +922,7 @@ supplies a coordinate is refused — **TQL-APP-4212**. It asked for framework st
 pool and the host is replacing that pool; ignoring the request would be the silent divergence this
 decision exists to remove. The default (`main`, unstated) is not a request, so the host simply wins.
 
-#### Two authors, two moments — and no generated blank
+#### Two authors, two moments — and the development stack's file is generated as a marker
 
 **The team writes it, checked in beside the applications**, with `${DB_HOST:localhost}` and
 `${secret.env.…}` for anything that varies by environment. **The operator writes it on an install
@@ -927,13 +930,19 @@ root, by hand, once, before the first `host`** — `tesseraql install` puts an a
 catalogue entry there and nothing else, and it should not start inventing a stack's settings from
 one application's package.
 
-Nothing generates the file, for the reason [cli-surface.md](cli-surface.md) Decision 8 gives about
-`tesseraql new`: it has no required content, so a generated one would be entirely commented out.
-
-**Discovery is a refusal rather than a blank file.** An operator meets `tesseraql-stack.yml` at the moment it
-matters — when the applications disagree about the framework datasource and TQL-APP-4211 refuses to
-start, naming it — or when they reach for MCP or the authorization server and the documentation
-names it. Until then there is nothing to read and nothing to fill in.
+**Amended (user decision, 2026-08-17): `tesseraql new` generates the file.** This section first
+said nothing generates it, quoting [cli-surface.md](cli-surface.md) Decision 8's reason — no
+required content, so a generated file would be entirely commented out. That reasoning stands for
+the settings and falls for the marker: Decision 9's discovery needs an affirmative sign that a
+directory *is* a stack (the parent of an application home always "holds applications" — this one —
+so shape alone cannot say), and a marker needs no content to mark. So `new` writes an
+all-guidance-comments `tesseraql-stack.yml` beside the application it creates, the way `cargo`'s
+`[workspace]` marks a workspace. The **operator/install path is unchanged**: `install` generates
+nothing, and discovery there stays a refusal rather than a blank file — an operator meets
+`tesseraql-stack.yml` at the moment it matters, when TQL-APP-4211 refuses to start naming it, or
+when the documentation names it for MCP or the authorization server. For that to survive a
+generated near-empty file, **TQL-APP-4211 is keyed on what the stack supplies, not on whether a
+file exists** — see below.
 
 #### The development loop needs no file, and one measurement says why it nearly did
 
