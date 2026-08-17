@@ -35,6 +35,11 @@ final class VerifyCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        Path home = SingleApplication.resolve(app, "tesseraql verify");
+        if (home == null) {
+            return 2;
+        }
+        app = home;
         AppManifest manifest = new ManifestLoader().load(app);
         Path signatureFile = evidenceFile.resolveSibling(evidenceFile.getFileName() + ".sig");
         String evidence = Files.readString(evidenceFile);

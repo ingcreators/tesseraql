@@ -91,6 +91,15 @@ public final class AppDirectory {
      * would have worked.
      */
     public static Path application(Path dir, String commandForHelp) {
+        return application(dir, commandForHelp, "--app");
+    }
+
+    /**
+     * Like {@link #application(Path, String)}, for a flag not spelled {@code --app} (say
+     * {@code release-diff --baseline}), so the printed alternatives are commands that actually
+     * run.
+     */
+    public static Path application(Path dir, String commandForHelp, String flag) {
         Resolved resolved = resolve(dir);
         if (resolved.shape() == Shape.APPLICATION) {
             return resolved.applications().get(0);
@@ -100,7 +109,7 @@ public final class AppDirectory {
         }
         throw new TqlException(WRONG_SHAPE, resolved.root() + " is not an application; it holds "
                 + resolved.applications().size() + "."
-                + alternatives(commandForHelp, "--app", resolved.applications()));
+                + alternatives(commandForHelp, flag, resolved.applications()));
     }
 
     /**

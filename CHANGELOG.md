@@ -65,6 +65,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The single-application commands refuse a directory of applications, naming each**
+  (docs/cli-surface.md Decision 2). `package`, `scaffold crud`/`decision`/`eject-view`,
+  `release-diff` — `--baseline` included, because a folder of applications diffed silently
+  reports every route as added — and `verify` resolve `--app` through the same shape check the
+  running commands use. A folder of applications or an empty directory is refused with the
+  commands that would have worked printed, instead of the command operating on the directory as
+  if it were one application: a refusal that names the alternatives costs a second, one that
+  says "expected a single application" costs a directory listing and a guess.
+
 - **`tesseraql mcp` serves one server for the stack** (docs/stack-architecture.md Decision 19).
   `--app` is gone: `--stack` names the directory holding the applications and is discovered one
   level up when omitted, exactly as `dev` resolves it, and `--app-name` narrows without changing
