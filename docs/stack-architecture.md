@@ -1271,13 +1271,18 @@ the silent-divergence shape a third time: an application's routes change meaning
 resolve by load order. Decision 23 made the name the inter-team contract; a union loader would make
 function names an accidental one.
 
-**Implementation obstacles, named rather than discovered later.** `ExpressionFunctions` is the
-static-global shape this decision retires, and its readers sit deep in core expression evaluation —
-the refactor's mechanism (registry carried per context, or keyed lookup) is left to the
-implementation, but the *scope* is decided here. The driver shim needs per-runtime keying or a
-version-collision refusal. And `mcp --stack` (Decision 19) evaluates against several applications
-from one process, so the development-tool MCP needs the same per-application context the host
-needs — it cannot ride one TCCL either.
+**Implementation obstacles, then measured smaller than they read.** `ExpressionFunctions` is the
+static-global shape this decision retires, and the measurement is good news: core reads it in
+exactly **two places** — evaluation (`Expr.java:210`) and parse-time arity
+(`ExpressionParser.java:191`) — six callsites in total, so carrying the registry per context is a
+small surgery, not a deep one. **Drivers resolve at the pool, which is the real seam:**
+`DataSources` sets only `jdbcUrl`/`username`/`password`, so Hikari falls back to `DriverManager` —
+JVM-global, first-wins per URL. Each application's pool binding its driver from its own module
+loader removes `DriverManager` from the load-bearing path and lets two applications carry the same
+driver at different versions. The single-application CLI commands change nothing: one invocation is
+one application. And `mcp --stack` (Decision 19) evaluates against several applications from one
+process, so the development-tool MCP needs the same per-application context the host needs — it
+cannot ride one TCCL either.
 
 **Deployment note:** module resolution reaches Maven repositories, so it happens at **install
 time** — `tesseraql install` resolves the declared set into `work/modules` under the lock — and a
@@ -1285,6 +1290,44 @@ production `host` boots offline from what install resolved. `dev` resolves at st
 loop where the network is already assumed. The explicit `--modules <dir>` stays what it is today, a
 development override composed onto **every** runtime in the stack, and is documented as exactly
 that.
+
+### 29. Deploying an application replaces its runtime, not the stack
+
+Stated as a requirement in review: deploying one application must not affect the others. Measured
+against the code, the requirement's negation is the current behaviour: **`MultiAppHost` has no
+replace operation** — start, lookup, canary accessors, close — so shipping a new version of one
+application today means restarting the host, which restarts every application in the stack.
+
+**The building blocks already exist**, which is why this is a decision and not a campaign:
+
+- **Install is already side-by-side.** Versions land in `<name>/<version>`, so the running
+  runtime's files are never touched by installing the next version — the delete-and-replace path
+  only fires on a same-version reinstall, and `runtime-footprint.md` already owes it the
+  install-beside shape for Windows' sake. The impact boundary on disk is already the application.
+- **The canary machinery is a replace with a ramp.** The host already runs two runtimes for one
+  application behind one address and splits traffic by weight per request — which means switching
+  targets is already a live operation. Replace is: start the new version's runtime (its own
+  classloader, its own pools, its own function registry — Decision 28 is a **prerequisite**, since
+  without per-runtime module state, reloading one application clobbers its neighbours' functions at
+  runtime), health-check it, move the weight to it, drain and stop the old.
+- **Sign-in survives the replace without any work.** Sessions live in the framework datasource's
+  JDBC store, not in the runtime — the same property that makes a multi-node deployment share
+  sessions makes an in-place replace keep them.
+
+**What a replace is refused over:** a new version whose framework-schema expectation is ahead of
+what the host migrated — the validate-don't-migrate guard (Decision 16) is the check, and it turns
+"deploy one application" into "first migrate the stack, then deploy" **loudly** instead of letting
+one application's upgrade quietly re-migrate a schema every neighbour is standing on.
+
+**What stays stack-scoped on purpose**, so the requirement is stated with its boundary: the
+gateway, the framework schema, `stack.yml`'s values, and the process itself. Replacing those *is*
+deploying the stack, and pretending otherwise would be the independent-hosting mistake at a
+different layer.
+
+**Open, for the implementation slice:** how a replace is triggered — an ops-console action, an
+`install` that notifies a running host, or a catalogue watch — and the drain policy for in-flight
+requests on the retiring runtime. The mechanism candidates all sit behind the same host operation,
+so the trigger can be chosen last.
 
 ## Slices
 
