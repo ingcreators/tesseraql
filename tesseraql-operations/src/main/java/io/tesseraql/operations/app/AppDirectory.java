@@ -125,6 +125,61 @@ public final class AppDirectory {
     }
 
     /**
+     * The stack an omitted {@code --stack} means, found the way {@code cargo} finds a workspace —
+     * one level, never further (docs/cli-surface.md Decision 9).
+     *
+     * <p>{@code cd work/orders && tesseraql dev} is the muscle memory every toolchain trains, so
+     * the development commands look for the stack instead of demanding it be typed: the working
+     * directory is stack-shaped → it is the stack; the working directory is an application home
+     * whose <b>parent</b> is stack-shaped and inside the same repository → the parent is the
+     * stack, so the run carries the neighbours and the stack's own settings file. Anything else
+     * is refused — deliberately not {@code cargo}'s walk to the filesystem root, because a rule
+     * that walks an arbitrary distance behaves differently depending on where the tree happens to
+     * sit. An explicit {@code --stack} always wins and never reaches here; {@code host} requires
+     * the flag, because production does not guess.
+     *
+     * <p>Discovery names the whole stack, never just the application the shell is inside:
+     * narrowing stays explicit ({@code --app-name}), because a stack silently missing its
+     * neighbours is cross-application links answering 404 in exactly the runs that were started
+     * for convenience.
+     */
+    public static Resolved discover(Path workingDirectory) {
+        Resolved here = resolve(workingDirectory);
+        if (here.shape() == Shape.INSTALL_ROOT || here.shape() == Shape.WORKSPACE) {
+            return here;
+        }
+        if (here.shape() == Shape.APPLICATION) {
+            // The step up stops at the repository boundary, because the stack does: the source
+            // unit IS the stack (docs/stack-architecture.md, the operating model), so a directory
+            // outside this checkout cannot be this application's stack. Without the fence the
+            // rule above it is vacuous — the parent of an application home always "holds
+            // applications", namely this one, so a repository whose root is the application home
+            // would silently adopt whatever directory holds the checkouts, sibling repositories
+            // included, instead of meeting the refusal below.
+            Path parent = Files.exists(here.root().resolve(".git"))
+                    ? null
+                    : here.root().getParent();
+            if (parent != null) {
+                Resolved up = resolve(parent);
+                if (up.shape() == Shape.INSTALL_ROOT || up.shape() == Shape.WORKSPACE) {
+                    return up;
+                }
+            }
+            // The one restructure the design asks for: a repository whose root is the
+            // application home has nowhere to hold stack-level things, and the fix is a single
+            // git mv into the layout every stack has (docs/stack-architecture.md Decision 22).
+            throw new TqlException(WRONG_SHAPE, here.root() + " is an application home and no"
+                    + " stack holds it (the search is one level, never past the repository"
+                    + " boundary). Restructure once into the layout every stack has —"
+                    + " mkdir <name> && git mv <the application's files> <name>/ — and the"
+                    + " repository root becomes the stack; or name one explicitly: --stack <dir>.");
+        }
+        throw new TqlException(HOLDS_NOTHING, holdsNothing(here.root())
+                + " Run from inside the stack or an application it holds, or name one:"
+                + " --stack <dir>.");
+    }
+
+    /**
      * The narrowing that serves one application out of the directory that holds it —
      * {@code --stack <parent> --app-name <name>} — or nothing when the home has no parent to
      * name. Best-effort on the name: a home whose configuration cannot be read still gets the

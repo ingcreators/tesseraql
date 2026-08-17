@@ -124,6 +124,93 @@ class AppDirectoryTest {
                 .hasMessageContaining("--app-name <its tesseraql.app.name>");
     }
 
+    /**
+     * An omitted {@code --stack} is found the way {@code cargo} finds a workspace — one level,
+     * never further (docs/cli-surface.md Decision 9): the working directory when it is
+     * stack-shaped, its parent when the working directory is an application home the parent
+     * holds.
+     */
+    @Test
+    void discoveryFindsTheStackFromInsideAnApplicationHome(@TempDir Path dir) throws IOException {
+        writeApplication(dir.resolve("orders"), "orders", null);
+        writeApplication(dir.resolve("billing"), "billing", null);
+
+        Path root = dir.toAbsolutePath().normalize();
+        assertThat(AppDirectory.discover(dir).root()).isEqualTo(root);
+        assertThat(AppDirectory.discover(dir.resolve("orders")).root())
+                .as("from inside an application, the stack is the parent — the WHOLE stack,"
+                        + " neighbours included")
+                .isEqualTo(root);
+        assertThat(AppDirectory.discover(dir.resolve("orders")).applications()).hasSize(2);
+    }
+
+    /** An install root discovers as itself, exactly as a workspace does. */
+    @Test
+    void discoveryRecognisesAnInstallRoot(@TempDir Path dir) throws IOException {
+        Files.createDirectories(dir.resolve("orders/1.2.0/config"));
+        Files.writeString(dir.resolve("catalog.json"), """
+                [{"name":"orders","version":"1.2.0","path":"orders/1.2.0","entitledTenants":[]}]
+                """);
+
+        assertThat(AppDirectory.discover(dir).shape())
+                .isEqualTo(AppDirectory.Shape.INSTALL_ROOT);
+    }
+
+    /**
+     * One level and never further: from a directory inside an application, discovery refuses
+     * rather than resolves — a rule that walks an arbitrary distance behaves differently
+     * depending on where the tree happens to sit.
+     */
+    @Test
+    void discoveryNeverWalksMoreThanOneLevel(@TempDir Path dir) throws IOException {
+        writeApplication(dir.resolve("orders"), "orders", null);
+        Files.createDirectories(dir.resolve("orders/web/users"));
+
+        assertThatThrownBy(() -> AppDirectory.discover(dir.resolve("orders/web")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("--stack");
+    }
+
+    /**
+     * A repository whose root is the application home has nowhere to hold stack-level things,
+     * and the refusal prints the one restructure the design asks for
+     * (docs/stack-architecture.md Decision 22). The repository boundary is what makes this a
+     * refusal at all: the parent of an application home always "holds applications" — this one —
+     * so without the fence the checkout's parent directory, sibling repositories and all, would
+     * be adopted as the stack.
+     */
+    @Test
+    void aRepositoryRootedInAnApplicationHomeIsToldTheRestructure(@TempDir Path dir)
+            throws IOException {
+        Path repo = dir.resolve("legacy-repo");
+        writeApplication(repo, "orders", null);
+        Files.createDirectories(repo.resolve(".git"));
+        // A sibling checkout that is also an application home: exactly what discovery must NOT
+        // sweep into a stack with this one.
+        writeApplication(dir.resolve("other-repo"), "other", null);
+
+        assertThatThrownBy(() -> AppDirectory.discover(repo))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("repository boundary")
+                .hasMessageContaining("git mv")
+                .hasMessageContaining("--stack <dir>");
+    }
+
+    /**
+     * The fence stops at the repository, not before it: an application inside a stack-layout
+     * repository still discovers the repository root as its stack.
+     */
+    @Test
+    void discoveryCrossesFromAnApplicationToItsOwnRepositoryRoot(@TempDir Path dir)
+            throws IOException {
+        Path repo = dir.resolve("myrepo");
+        Files.createDirectories(repo.resolve(".git"));
+        writeApplication(repo.resolve("orders"), "orders", null);
+
+        assertThat(AppDirectory.discover(repo.resolve("orders")).root())
+                .isEqualTo(repo.toAbsolutePath().normalize());
+    }
+
     @Test
     void anEmptyDirectoryNamesAllThreeShapes(@TempDir Path dir) {
         assertThatThrownBy(() -> AppDirectory.stack(dir))
