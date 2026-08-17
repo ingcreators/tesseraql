@@ -241,8 +241,11 @@ public final class AppScaffolder {
     }
 
     private static final String APPLICATION_YML = """
+            # The port this application binds, internal to the stack: 0 = ephemeral. The front
+            # door is the dev/host gateway's --port; a fixed value here is only for reaching
+            # this application directly, beside the gateway.
             server:
-              port: 8080
+              port: 0
 
             db:
               main:

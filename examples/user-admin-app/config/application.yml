@@ -1,5 +1,7 @@
+# The port this application binds, internal to the stack: 0 = ephemeral. The front
+# door is the dev/host gateway's --port.
 server:
-  port: 8080
+  port: 0
 
 db:
   main:

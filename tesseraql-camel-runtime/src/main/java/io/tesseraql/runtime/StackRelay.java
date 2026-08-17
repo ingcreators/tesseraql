@@ -158,8 +158,8 @@ final class StackRelay {
             String rawPath = rawPath(request);
             // The origin's own health, answered by the gateway itself: the operator case a load
             // balancer needs (docs/stack-architecture.md decision 25 names it) sits inside the
-            // framework's /_tesseraql/ fence at origin scope, which no application name can
-            // reach (TQL-YAML-1405). Liveness and readiness are the same answer here — a
+            // framework's /_tesseraql/ fence at origin scope, which the name grammar's
+            // segment-safety rule keeps unreachable by any application. Liveness and readiness are the same answer here — a
             // gateway that can respond has started every runtime, or it would not be serving.
             if ("/_tesseraql/health/live".equals(rawPath)
                     || "/_tesseraql/health/ready".equals(rawPath)) {
