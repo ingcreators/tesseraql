@@ -42,9 +42,9 @@ import org.slf4j.LoggerFactory;
  * Adding a call that reads a database, a file or a lock to this path stalls every other connection
  * sharing the loop — it must go to {@code executeBlocking} instead.
  */
-final class SuiteRelay {
+final class StackRelay {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SuiteRelay.class);
+    private static final Logger LOG = LoggerFactory.getLogger(StackRelay.class);
 
     /**
      * The front server's options.
@@ -105,12 +105,12 @@ final class SuiteRelay {
     /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
     private final Map<Integer, HttpProxy> proxies = new ConcurrentHashMap<>();
 
-    SuiteRelay(HttpClient client, Map<String, InstalledApp> appsById,
+    StackRelay(HttpClient client, Map<String, InstalledApp> appsById,
             ToIntFunction<String> portOf) {
         this(client, appsById, Map.of(), TrustedProxies.NONE, portOf);
     }
 
-    SuiteRelay(HttpClient client, Map<String, InstalledApp> appsById,
+    StackRelay(HttpClient client, Map<String, InstalledApp> appsById,
             Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf) {
         this.client = client;
@@ -124,7 +124,7 @@ final class SuiteRelay {
      * The application whose declared prefix addresses {@code rawPath}, longest first, or null.
      *
      * <p>Longest-first, not first-match, because the prefixes are declared rather than derived: a
-     * suite of one may take the origin root while another application keeps {@code /apps/<id>}, and
+     * stack of one may take the origin root while another application keeps {@code /apps/<id>}, and
      * a root-addressed application would otherwise swallow its neighbour's traffic. A prefix
      * matches on a segment boundary, so {@code /apps/orders} never answers for
      * {@code /apps/orders-archive}.
@@ -159,7 +159,7 @@ final class SuiteRelay {
             String rawPath = rawPath(request);
             // One address per application, and one way to reach it (docs/stack-architecture.md
             // Decision 12). Host-header routing went with independent hosting: it existed so an
-            // application could own a whole origin, which is the separation a suite is defined by
+            // application could own a whole origin, which is the separation a stack is defined by
             // not having.
             String appId = appAddressedBy(rawPath);
             if (appId == null) {

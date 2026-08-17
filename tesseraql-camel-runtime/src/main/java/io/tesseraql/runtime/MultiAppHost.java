@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 public final class MultiAppHost implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppHost.class);
-    // Shared with SuiteRelay, which answers it as a 404 for the same condition one layer out.
+    // Shared with StackRelay, which answers it as a 404 for the same condition one layer out.
     // One number, one meaning, one declaration — the error registry reads a single source, and the
     // javadoc below is the reference page's wording for it, so it stays a meaning rather than a
     // rationale.
@@ -52,11 +52,11 @@ public final class MultiAppHost implements AutoCloseable {
      * separate runtime for traffic splitting.
      */
     public static MultiAppHost start(Path installRoot) {
-        return start(installRoot, HostContext.suite());
+        return start(installRoot, HostContext.stack());
     }
 
     /**
-     * Hosts every app the directory holds, each started with {@code suite}'s settings and its own
+     * Hosts every app the directory holds, each started with {@code stack}'s settings and its own
      * declared address (docs/stack-architecture.md decision 16).
      *
      * <p>The address is read from the catalogue entry rather than supplied by the caller. The host
@@ -65,11 +65,20 @@ public final class MultiAppHost implements AutoCloseable {
      * now one source, so an app is started serving exactly the prefix it is fronted under
      * (docs/base-path.md decision 5).
      */
-    public static MultiAppHost start(Path installRoot, HostContext suite) {
+    public static MultiAppHost start(Path installRoot, HostContext stack) {
         // Catalogued or not — a workspace of source trees hosts exactly like an install root
         // (docs/cli-surface.md Decision 2).
-        List<InstalledApp> applications = io.tesseraql.operations.app.AppDirectory.applications(
-                io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
+        return start(installRoot, stack, io.tesseraql.operations.app.AppDirectory.applications(
+                io.tesseraql.operations.app.AppDirectory.resolve(installRoot)));
+    }
+
+    /**
+     * Hosts exactly {@code applications}, resolved by the caller — the gateway passes the same
+     * list it routes by, so the two cannot disagree about what is hosted, and a narrowed
+     * {@code host --app-name} hosts one member without a second resolution pass.
+     */
+    public static MultiAppHost start(Path installRoot, HostContext stack,
+            List<InstalledApp> applications) {
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
         Set<String> appIds = new java.util.LinkedHashSet<>();
@@ -78,7 +87,7 @@ public final class MultiAppHost implements AutoCloseable {
             for (InstalledApp app : applications) {
                 Path appHome = installRoot.resolve(app.path()).normalize();
                 started.put(app.id(), TesseraqlRuntime.start(appHome, freePort(),
-                        suite.forApplication(app.basePath())));
+                        stack.forApplication(app.basePath())));
                 appIds.add(app.id());
                 LOG.info("Hosting app {} v{} from {}", app.id(), app.version(), appHome);
 
@@ -88,7 +97,7 @@ public final class MultiAppHost implements AutoCloseable {
                     // serves the same base path.
                     started.put(app.id() + CANARY_SLOT,
                             TesseraqlRuntime.start(candidateHome, freePort(),
-                                    suite.forApplication(app.basePath())));
+                                    stack.forApplication(app.basePath())));
                     canaryWeights.put(app.id(), canary.weightPercent());
                     LOG.info("Hosting canary {} v{} at {}% traffic",
                             app.id(), canary.candidate().version(), canary.weightPercent());

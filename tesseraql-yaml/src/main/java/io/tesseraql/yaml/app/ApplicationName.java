@@ -14,7 +14,7 @@ import io.tesseraql.yaml.config.AppConfig;
  * docs/stack-architecture.md Decision 12 it is the application's address: {@code /apps/<name>/}.
  *
  * <p>It used to default to the literal {@code app} when absent, which made the value <em>required
- * to deploy and optional to run</em> — `AppInstaller` refuses a package without it and a suite
+ * to deploy and optional to run</em> — `AppInstaller` refuses a package without it and a stack
  * addresses members by it, while a runtime started one anyway under a shared constant. Nothing
  * collided only because installation's requirement kept unnamed applications to one at a time; the
  * places the identity reaches are not ones a shared default is safe in. Two unnamed applications
@@ -36,7 +36,7 @@ public final class ApplicationName {
     /** The message both the lint rule and the runtime refusal carry, so they read identically. */
     public static final String MESSAGE = "This application declares no tesseraql.app.name."
             + " The name is its identity — it scopes outbox claims and job ownership, it is what"
-            + " ops.app.<name> grants are checked against, and in a suite it is the application's"
+            + " ops.app.<name> grants are checked against, and in a stack it is the application's"
             + " address — so it cannot be defaulted to a value every unnamed application shares.";
 
     private ApplicationName() {

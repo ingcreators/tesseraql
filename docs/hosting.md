@@ -6,23 +6,26 @@ run several applications on one machine, start them together with `tesseraql hos
 its own runtime, and one port fronts them all.
 
 ```sh
-tesseraql host --suite /srv/tesseraql/apps --port 8080
+tesseraql host --stack /srv/tesseraql/apps --port 8080
 ```
 
 Every application the directory holds starts in its own runtime: its own Camel context, its own
 datasource set, its own Studio, its own traces. A gateway on the given port routes each request
 to the right one.
 
-## What `--suite` accepts
+## What `--stack` accepts
 
 Two shapes, and the directory's contents decide which it is
 ([cli-surface.md](https://github.com/ingcreators/tesseraql/blob/main/docs/cli-surface.md)):
 an **install root**, which holds `catalog.json`, or a **folder of application homes**, which
-holds none. They host identically — the second is how a suite runs from source trees without
+holds none. They host identically — the second is how a stack runs from source trees without
 being packaged first.
 
-`--app <dir>` serves one application instead, and refuses a directory holding several rather
-than picking one.
+A stack is a directory that **holds** applications, never an application home itself, so an
+application home is refused — the refusal prints the narrowing that would have worked.
+`--app-name <name>` serves one member of the stack, at the same address it has beside its
+neighbours: narrowing is a filter, not a second deployment shape, so the application emits the
+same URLs either way.
 
 ## The install root
 
@@ -38,17 +41,17 @@ tooling.
 
 ## One address per application
 
-Every application is addressed as `/apps/<appId>/` on one origin, and the suite shares one
+Every application is addressed as `/apps/<appId>/` on one origin, and the stack shares one
 sign-in across them: the runtimes are told the prefix they serve under, so each answers at the
 addresses it emits ([base-path.md](base-path.md)), and the session cookie is issued at the
 origin root so one sign-in reaches every application.
 
 An earlier `--mode isolated` gave each application its own hostname and no shared session. It is
-gone: a suite is defined by sharing an origin and a sign-in, and a mode that undid both was a
+gone: a stack is defined by sharing an origin and a sign-in, and a mode that undid both was a
 second deployment shape to reason about, document and test — which
 [stack-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/stack-architecture.md)
 Decision 12 removes so that development and production have one topology between them. An
-application that must not share a session with its neighbours gets its own suite.
+application that must not share a session with its neighbours gets its own stack.
 
 ## The gateway routes, the ingress protects
 
@@ -85,7 +88,7 @@ hop later repairs it.
 The gateway speaks HTTP/1.1 by default. `--http2` serves and forwards cleartext HTTP/2 (h2c):
 
 ```sh
-tesseraql host --suite /srv/tesseraql/apps --port 8080 --http2
+tesseraql host --stack /srv/tesseraql/apps --port 8080 --http2
 ```
 
 **One switch moves both hops** — the client's connection to the gateway and the gateway's
@@ -98,7 +101,7 @@ against an h2c gateway: the upgrade is offered, not required.
 forwarded headers are the edge's rather than a caller's:
 
 ```sh
-tesseraql host --suite /srv/tesseraql/apps --port 8080 \
+tesseraql host --stack /srv/tesseraql/apps --port 8080 \
   --trusted-proxies 10.0.0.0/8,192.168.1.5
 ```
 
@@ -126,7 +129,7 @@ shows the application whose runtime serves it.
 
 **Data isolation is enabled, not guaranteed.** The framework does not verify that co-hosted
 applications reach different data, and does not claim to. An application declares the shape of
-its datasource; the operator installing it supplies the connection, and a suite shares one by
+its datasource; the operator installing it supplies the connection, and a stack shares one by
 design.
 
 Nor is this a security boundary. The applications share a JVM, which offers no in-process
@@ -142,7 +145,7 @@ runtime that serves it, and its queries stay scoped to that application even whe
 share a business database. `ops.app.<name>` is the permission to open an application's
 console.
 
-An operator running a suite therefore has one console per application rather than one screen
+An operator running a stack therefore has one console per application rather than one screen
 listing every application's jobs. Cross-application monitoring belongs to the
 [metrics exposition](deployment.md#metrics-prometheus), which already labels job runs by
 application.

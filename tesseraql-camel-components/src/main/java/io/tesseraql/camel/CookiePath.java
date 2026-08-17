@@ -9,11 +9,11 @@ import org.apache.camel.Exchange;
  *
  * <p>It is not the base path, and cannot be derived from it. A standalone application behind a
  * proxy at {@code /myapp} wants its cookie scoped to {@code /myapp}, so it is not offered to
- * whatever else lives on that origin. A shared suite wants {@code /}, because one sign-in
+ * whatever else lives on that origin. A shared stack wants {@code /}, because one sign-in
  * reaching every application <em>is</em> the mode. Only the component that starts the runtimes
  * knows which of those it is building, so it carries the value; a configuration key was
  * considered and rejected, an operator setting it wrongly getting either a silently unshared
- * suite or a session offered to every neighbour, neither of which announces itself.
+ * stack or a session offered to every neighbour, neither of which announces itself.
  */
 public final class CookiePath {
 

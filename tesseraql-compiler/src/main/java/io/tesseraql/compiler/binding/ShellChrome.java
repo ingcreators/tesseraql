@@ -261,7 +261,7 @@ final class ShellChrome {
         }
         if (storedTheme != null && !storedTheme.equals(cookieTheme)) {
             // The same Path as the session cookie: the preference belongs to whoever is signed
-            // in, and follows the sign-in across the suite or stays with the one application
+            // in, and follows the sign-in across the stack or stays with the one application
             // (docs/base-path.md decision 4).
             exchange.getMessage().setHeader("Set-Cookie", "tesseraql_theme=" + storedTheme
                     + "; Path=" + CookiePath.of(exchange)

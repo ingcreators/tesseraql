@@ -105,6 +105,34 @@ class MultiAppGatewayIntegrationTest {
         return type.cast(field.get(gateway));
     }
 
+    /**
+     * {@code host --app-name} narrows to one member of the stack without changing its address —
+     * a filter, never a second deployment shape (docs/stack-architecture.md decision 12): the
+     * member emits the same URLs narrowed as it does beside its neighbours.
+     */
+    @Test
+    void narrowingHostsOneMemberAtItsUnchangedAddress() throws Exception {
+        try (MultiAppGateway narrowed = MultiAppGateway.start(installRoot, 0,
+                new MultiAppGateway.Settings(), "shop-a")) {
+            assertThat(narrowed.appIds()).containsExactly("shop-a");
+            assertThat(statusOf(narrowed, "/apps/shop-a/api/items")).isEqualTo(200);
+            assertThat(statusOf(narrowed, "/apps/shop-b/api/items"))
+                    .as("the neighbour is not hosted, and the member's address did not move")
+                    .isEqualTo(404);
+        }
+    }
+
+    /** A name the stack does not hold is refused with the members that would have worked. */
+    @Test
+    void narrowingToAnUnknownNameListsTheMembers() {
+        assertThatThrownBy(() -> MultiAppGateway.start(installRoot, 0,
+                new MultiAppGateway.Settings(), "shop-x"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("shop-x")
+                .hasMessageContaining("shop-a")
+                .hasMessageContaining("shop-b");
+    }
+
     @Test
     void unknownAppReturns404() throws Exception {
         HttpResponse<String> response = get("/apps/nope/api/items");
@@ -148,7 +176,7 @@ class MultiAppGatewayIntegrationTest {
 
         String response = rawGet(gateway, "/api/items", "shop-a.localhost");
         assertThat(response)
-                .as("a hostname is not an address in suite mode")
+                .as("a hostname is not an address in stack mode")
                 .startsWith("HTTP/1.1 404");
     }
 
@@ -198,8 +226,8 @@ class MultiAppGatewayIntegrationTest {
      * A bundled app under the prefix, end to end: the login page is markup the framework ships,
      * not the application's, and it is the one page an operator meets before anything else.
      *
-     * <p>Its form posted to {@code /_tesseraql/login} at the origin, where the suite gateway
-     * answers 404 — so a suite-hosted application could render a sign-in form that could not
+     * <p>Its form posted to {@code /_tesseraql/login} at the origin, where the stack gateway
+     * answers 404 — so a stack-hosted application could render a sign-in form that could not
      * sign anybody in (docs/base-path.md slice 3).
      */
     @Test

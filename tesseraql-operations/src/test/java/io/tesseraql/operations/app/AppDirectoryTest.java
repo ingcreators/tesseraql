@@ -58,7 +58,7 @@ class AppDirectoryTest {
         assertThat(resolved.applications())
                 .extracting(path -> path.getFileName().toString())
                 .containsExactly("billing", "orders");
-        assertThat(AppDirectory.suite(dir)).hasSize(2);
+        assertThat(AppDirectory.stack(dir)).hasSize(2);
     }
 
     /**
@@ -99,19 +99,34 @@ class AppDirectoryTest {
                 .hasMessageContaining("orders");
     }
 
+    /**
+     * An application home is not a stack — a stack is a directory that holds applications — and
+     * the refusal prints the narrowing that serves just this application from its parent.
+     */
     @Test
-    void suiteOnASingleApplicationPointsAtTheOtherFlag(@TempDir Path dir) throws IOException {
-        Files.createDirectories(dir.resolve("config"));
+    void stackOnAnApplicationHomePrintsTheNarrowing(@TempDir Path dir) throws IOException {
+        writeApplication(dir.resolve("orders"), "orders", null);
 
-        assertThatThrownBy(() -> AppDirectory.suite(dir))
+        assertThatThrownBy(() -> AppDirectory.stack(dir.resolve("orders")))
                 .isInstanceOf(TqlException.class)
-                .hasMessageContaining("one application")
-                .hasMessageContaining("--app");
+                .hasMessageContaining("one application, not a stack")
+                .hasMessageContaining("--stack " + dir.toAbsolutePath().normalize())
+                .hasMessageContaining("--app-name orders");
+    }
+
+    /** A home whose name cannot be read still gets the shape of the fix, with the key to fill in. */
+    @Test
+    void theNarrowingNamesTheKeyWhenTheApplicationDoesNot(@TempDir Path dir) throws IOException {
+        Files.createDirectories(dir.resolve("unnamed/config"));
+
+        assertThatThrownBy(() -> AppDirectory.stack(dir.resolve("unnamed")))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("--app-name <its tesseraql.app.name>");
     }
 
     @Test
     void anEmptyDirectoryNamesAllThreeShapes(@TempDir Path dir) {
-        assertThatThrownBy(() -> AppDirectory.suite(dir))
+        assertThatThrownBy(() -> AppDirectory.stack(dir))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("config/ or web/")
                 .hasMessageContaining("catalog.json");
@@ -144,7 +159,7 @@ class AppDirectoryTest {
 
     /** A single application resolves against itself — an empty relative path is still the root. */
     @Test
-    void oneApplicationIsAOneMemberSuite(@TempDir Path dir) throws IOException {
+    void oneApplicationResolvesAgainstItself(@TempDir Path dir) throws IOException {
         writeApplication(dir, "orders", "1.0.0");
 
         List<InstalledApp> applications = AppDirectory.applications(AppDirectory.resolve(dir));
@@ -167,18 +182,19 @@ class AppDirectoryTest {
     }
 
     /**
-     * A directory that IS one application answers at the origin root — the single-application
-     * shape, with no second mechanism for it (docs/stack-architecture.md Decision 12).
+     * An application has ONE address however it is reached: no address is derived from the shape
+     * the directory was resolved through, or serving it alone and serving it beside neighbours
+     * would change every URL it emits (docs/stack-architecture.md Decision 12, the flag
+     * reversal).
      */
     @Test
-    void oneApplicationTakesTheOriginRootAndAWorkspaceMemberTakesItsPrefix(@TempDir Path dir)
+    void theAddressDoesNotDependOnHowTheApplicationWasResolved(@TempDir Path dir)
             throws IOException {
         writeApplication(dir.resolve("solo"), "solo", null);
 
         assertThat(AppDirectory.applications(AppDirectory.resolve(dir.resolve("solo"))))
                 .singleElement()
-                .satisfies(app -> assertThat(app.basePath())
-                        .as("the origin root, normalised to the empty prefix").isEmpty());
+                .satisfies(app -> assertThat(app.basePath()).isEqualTo("/apps/solo"));
 
         assertThat(AppDirectory.applications(AppDirectory.resolve(dir)))
                 .singleElement()

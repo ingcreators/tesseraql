@@ -5,8 +5,8 @@ package io.tesseraql.security.session;
  *
  * <p>Its {@code Path} is not derivable from the application's base path, because two correct
  * answers conflict: a standalone application behind a proxy should scope its cookie to its own
- * prefix, and a shared suite <em>must</em> scope it to {@code /}, that being what makes one
- * sign-in reach every application in the suite. The value is therefore supplied by whatever
+ * prefix, and a shared stack <em>must</em> scope it to {@code /}, that being what makes one
+ * sign-in reach every application in the stack. The value is therefore supplied by whatever
  * starts the runtime, and read here rather than assembled at each of the places that issue one —
  * there were seven, in five modules, agreeing by copy.
  *

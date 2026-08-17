@@ -39,7 +39,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * identically through the gateway (docs/stack-architecture.md decision 13).
  *
  * <p>Every case here issues the <em>same</em> request twice — once at the app's internal port and
- * once at the gateway's — and asserts the two answers match. In suite mode both legs use the same
+ * once at the gateway's — and asserts the two answers match. In stack mode both legs use the same
  * path, because the app is started serving the prefix it is fronted under
  * (docs/base-path.md decision 5), so the only difference between the legs is the hop under test.
  *
@@ -165,7 +165,7 @@ class MultiAppGatewayDifferentialTest {
      * declares. Measured here as agreement — 8 MB passes both legs, and the 12 MB the app itself
      * refuses is refused identically through the gateway rather than differently. That the door
      * imposes no cap of its own at all is asserted against an origin without one, in
-     * {@link SuiteRelayTest}.
+     * {@link StackRelayTest}.
      */
     @Test
     void theAppsOwnBodyLimitGovernsRatherThanTheGateways() throws Exception {
@@ -218,10 +218,10 @@ class MultiAppGatewayDifferentialTest {
     }
 
     /**
-     * A cookie's {@code Path} decides how far one sign-in reaches, and a suite issues the session
-     * at the origin root on purpose ({@code CookiePath}: "A shared suite wants /, because one
+     * A cookie's {@code Path} decides how far one sign-in reaches, and a stack issues the session
+     * at the origin root on purpose ({@code CookiePath}: "A shared stack wants /, because one
      * sign-in reaching every application is the mode"). A relay that rewrote the attribute would
-     * silently unshare the suite, so the attribute has to survive the hop byte for byte.
+     * silently unshare the stack, so the attribute has to survive the hop byte for byte.
      */
     @Test
     void aCookiesPathIsRelayedVerbatim() throws Exception {

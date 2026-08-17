@@ -12,7 +12,7 @@ import java.util.List;
  * @param entitledTenants tenants allowed to use this app; empty means all tenants (ch. 32.8)
  * @param basePath        the prefix this app is addressed under and serves at, or {@code null} for
  *                        the {@code /apps/<id>} default (docs/stack-architecture.md Decision 12).
- *                        A suite of one may declare {@code /} and answer at the origin root, which
+ *                        A stack of one may declare {@code /} and answer at the origin root, which
  *                        is the single-application shape without a second mechanism for it.
  *                        <b>Absent means the default; present means an address</b> — {@code ""} is
  *                        the origin root, not a second spelling of absent (see {@code normalize})
@@ -40,7 +40,7 @@ public record InstalledApp(String id, String version, String path,
      * function has to be idempotent: the catalogue is JSON on disk, an entry is normalised on the
      * way in and written back out in that same normalised form, and reading {@code ""} as absent
      * made the round trip lossy. Measured — an entry declaring {@code /} was stored as
-     * {@code "basePath": ""} and came back as {@code /apps/<id>}, so a suite of one silently
+     * {@code "basePath": ""} and came back as {@code /apps/<id>}, so a stack of one silently
      * reacquired the prefix it had declared away, one {@code AppCatalog.register} later.
      */
     private static String normalize(String declared, String id) {

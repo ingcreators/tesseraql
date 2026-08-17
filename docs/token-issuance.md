@@ -7,7 +7,7 @@ have would decide better.
 
 **What it implements.** Decisions 4 through 11 of `stack-architecture.md`: an authorization server
 for TesseraQL's own users, colocated with the resource server, signing RS256, issuing refresh
-tokens, registering clients dynamically, and requiring consent. It is a suite-level surface at
+tokens, registering clients dynamically, and requiring consent. It is a stack-level surface at
 `/_tesseraql/oauth`, hosted the way Decision 14 hosts the other framework surfaces.
 
 **What it is not.** Not a general identity provider — no SAML brokering as a product, no federation
@@ -107,7 +107,7 @@ Consent is a page in the same surface, and `stack-architecture.md` Decision 10 f
 properties. It is **mandatory**, because registration is open. Client-supplied metadata is
 **display text chosen by the party asking to be authorised**, rendered escaped and never presented
 as though the framework vouched for it. And it is recorded **per client and per resource**, so
-consenting to one application in a suite is not consenting to the rest.
+consenting to one application in a stack is not consenting to the rest.
 
 **Consent is answered at `/authorize`, which is ours, not inside the grant layer.**
 `getPreauthorizedToken` is not the consent hook it first looks like: `AbstractGrantHandler` calls it
@@ -147,7 +147,7 @@ division of the gateway from the thing in front of it.
 
 ### 6. Metadata is served at the origin, and the resource metadata is the application's
 
-`stack-architecture.md` Decision 6 makes the issuer the suite origin, with no path component, so
+`stack-architecture.md` Decision 6 makes the issuer the stack origin, with no path component, so
 RFC 8414's insertion rule does not apply and authorization-server metadata sits at the bare
 `/.well-known/oauth-authorization-server`. The endpoints it advertises — `/_tesseraql/oauth/authorize`,
 `/token`, `/register` — are listed explicitly and need not share the issuer's path.
@@ -162,7 +162,7 @@ list.
 
 ### 7. Brokering is a login mode, not a second design
 
-Under `stack-architecture.md` Decision 7 case B the suite's identity comes from a customer's
+Under `stack-architecture.md` Decision 7 case B the stack's identity comes from a customer's
 existing provider. Nothing in this module changes: `/authorize` still asks for a session, and
 `OidcRouteBuilder` still obtains one through authorization-code with PKCE against that provider.
 The brokering is entirely upstream of the authorization server.
