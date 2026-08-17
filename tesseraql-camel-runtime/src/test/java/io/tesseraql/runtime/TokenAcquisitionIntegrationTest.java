@@ -29,7 +29,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * A person can get a token (docs/suite-architecture.md Decision 20).
+ * A person can get a token (docs/stack-architecture.md Decision 20).
  *
  * <p>{@link TokenExchangeIntegrationTest} proves the endpoint mints and that what it mints is
  * accepted. This proves the two routes to reaching it, because the endpoint was correct and

@@ -2,7 +2,7 @@ package io.tesseraql.runtime;
 
 /**
  * The settings a host decides on behalf of the runtimes it starts, because only a host can decide
- * them correctly (docs/suite-architecture.md decision 16).
+ * them correctly (docs/stack-architecture.md decision 16).
  *
  * <p>The rule that selects what belongs here: <b>a setting belongs to the host when only the host
  * can know it, or when divergence between applications fails silently.</b> {@link

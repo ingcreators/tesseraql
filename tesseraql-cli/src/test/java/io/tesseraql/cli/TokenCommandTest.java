@@ -102,7 +102,7 @@ class TokenCommandTest {
 
     /**
      * The {@code --url} flow against a stub that behaves like a runtime
-     * (docs/suite-architecture.md Decision 20): sign in, take the CSRF token out of the JSON
+     * (docs/stack-architecture.md Decision 20): sign in, take the CSRF token out of the JSON
      * answer, present it with the cookie, print only the token.
      *
      * <p>The stub asserts the wire sequence rather than the outcome, because the outcome is easy

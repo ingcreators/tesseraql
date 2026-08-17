@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * The addresses the gateway will accept forwarded headers from
- * (docs/suite-architecture.md decision 13).
+ * (docs/stack-architecture.md decision 13).
  *
  * <p>An application that authenticates on a forwarded mTLS header trusts whoever set it, so the
  * header is only worth anything if a caller cannot set it for itself. {@code authentication.md}

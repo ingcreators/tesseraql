@@ -1,11 +1,11 @@
 # Token issuance
 
 Status: **designed 2026-08-16** — nothing shipped. This is the implementation design for the
-authorization server [suite-architecture.md](suite-architecture.md) decided to build. That document
+authorization server [stack-architecture.md](stack-architecture.md) decided to build. That document
 decided *whether* and *what for*; this one decides *how*, and stops where a measurement it does not
 have would decide better.
 
-**What it implements.** Decisions 4 through 11 of `suite-architecture.md`: an authorization server
+**What it implements.** Decisions 4 through 11 of `stack-architecture.md`: an authorization server
 for TesseraQL's own users, colocated with the resource server, signing RS256, issuing refresh
 tokens, registering clients dynamically, and requiring consent. It is a suite-level surface at
 `/_tesseraql/oauth`, hosted the way Decision 14 hosts the other framework surfaces.
@@ -19,14 +19,14 @@ was reversed.
 
 ### 1. The module takes CXF's grant layer and writes its own endpoints
 
-Measured against CXF 4.2.3 in `suite-architecture.md` Decision 5: the endpoint package is 18 of 21
+Measured against CXF 4.2.3 in `stack-architecture.md` Decision 5: the endpoint package is 18 of 21
 classes bound to JAX-RS, the grant layer needs only the `jakarta.ws.rs-api` jar, and of five grant
 families this needs `code` and `refresh`.
 
 A new module — sibling to `tesseraql-oidc`, `tesseraql-security` and `tesseraql-identity` — depends
 on `tesseraql-core`, `tesseraql-yaml`, `tesseraql-security`, CXF's `cxf-rt-rs-security-oauth2` and
 `jakarta.ws.rs-api`. **It must not depend on `tesseraql-camel-runtime`**, which is the rule
-`suite-architecture.md` Decision 15 records and the build check it asks for; the three existing
+`stack-architecture.md` Decision 15 records and the build check it asks for; the three existing
 framework-surface modules already satisfy it, and this one joins them rather than becoming the
 exception.
 
@@ -51,7 +51,7 @@ carries a JAX-RS type.
 | `getRefreshTokens`, `revokeToken` | the refresh-token table |
 | `getPreauthorizedToken` | returns null — see Decision 4 |
 | `getAccessTokens` | see below |
-| `convertScopeToPermissions` | returns nothing — Decision 11 of `suite-architecture.md` |
+| `convertScopeToPermissions` | returns nothing — Decision 11 of `stack-architecture.md` |
 
 **The conflict this design expected between CXF's store-shaped contract and Decision 9's stateless
 access tokens does not exist.** The spike measured it against the 4.2.3 sources on 2026-08-16: the
@@ -78,7 +78,7 @@ reconstructing a `ServerAccessToken` from validated JWT claims is how it should 
 
 ### 3. Signing keys live in the framework datasource, so every replica serves one JWKS
 
-`suite-architecture.md` Decision 8 overturns `session-token-exchange.md`'s premise that no private
+`stack-architecture.md` Decision 8 overturns `session-token-exchange.md`'s premise that no private
 key exists in the tree. Where it lives is this document's to decide.
 
 **The framework datasource**, beside the sessions the `security` migration component already owns.
@@ -103,7 +103,7 @@ no new authentication path: `tesseraql_sid` is the answer however it was obtaine
 own login, OIDC, or SAML — and its absence redirects to `/_tesseraql/login?next=…`, which already
 carries a caller back to where it was going.
 
-Consent is a page in the same surface, and `suite-architecture.md` Decision 10 fixes its three
+Consent is a page in the same surface, and `stack-architecture.md` Decision 10 fixes its three
 properties. It is **mandatory**, because registration is open. Client-supplied metadata is
 **display text chosen by the party asking to be authorised**, rendered escaped and never presented
 as though the framework vouched for it. And it is recorded **per client and per resource**, so
@@ -128,7 +128,7 @@ first refuses `plain` rather than downgrading to it. Single-use codes come free 
 
 ### 5. Registration is open, and the registry is small
 
-Open, because `suite-architecture.md` Decision 3 established that MCP clients cannot present an
+Open, because `stack-architecture.md` Decision 3 established that MCP clients cannot present an
 initial access token — gating registration means not being reachable.
 
 The registry stores what a client sent, what it was issued, and when it was last used: client id and
@@ -136,18 +136,18 @@ secret hash, redirect URIs, the metadata treated as display text, the registrati
 last-seen stamp so that an operator can find registrations nothing ever used. Nothing about a client
 is trusted beyond its redirect URIs, which are matched, and its credentials, which are verified.
 
-**Redirect-URI validation is deliberately unfinished.** `suite-architecture.md` Decision 3 records
+**Redirect-URI validation is deliberately unfinished.** `stack-architecture.md` Decision 3 records
 that Codex appends `/callback/<callback_id>` to the configured callback, so exact-match validation
 will reject it, and the measurement that would show the exact shape has not been taken. The
 placeholder is exact match; the alternative is prefix match confined to a registered origin and
 path, which is weaker and must not be adopted on a guess. Open question 2.
 
-Bounding registration spam belongs to the ingress, per `suite-architecture.md` Decision 13's
+Bounding registration spam belongs to the ingress, per `stack-architecture.md` Decision 13's
 division of the gateway from the thing in front of it.
 
 ### 6. Metadata is served at the origin, and the resource metadata is the application's
 
-`suite-architecture.md` Decision 6 makes the issuer the suite origin, with no path component, so
+`stack-architecture.md` Decision 6 makes the issuer the suite origin, with no path component, so
 RFC 8414's insertion rule does not apply and authorization-server metadata sits at the bare
 `/.well-known/oauth-authorization-server`. The endpoints it advertises — `/_tesseraql/oauth/authorize`,
 `/token`, `/register` — are listed explicitly and need not share the issuer's path.
@@ -156,20 +156,20 @@ RFC 9207's `iss` is included in the authorization response. It is cheap now and 
 it costs nothing to a client that ignores it.
 
 Protected-resource metadata is **not this module's**. It describes an application's MCP surface, is
-produced by that application's runtime, and is relayed by the gateway — `suite-architecture.md`
+produced by that application's runtime, and is relayed by the gateway — `stack-architecture.md`
 Decision 18. This module supplies only the issuer value that appears in the `authorization_servers`
 list.
 
 ### 7. Brokering is a login mode, not a second design
 
-Under `suite-architecture.md` Decision 7 case B the suite's identity comes from a customer's
+Under `stack-architecture.md` Decision 7 case B the suite's identity comes from a customer's
 existing provider. Nothing in this module changes: `/authorize` still asks for a session, and
 `OidcRouteBuilder` still obtains one through authorization-code with PKCE against that provider.
 The brokering is entirely upstream of the authorization server.
 
 The rule that must be stated, because it is easy to reverse by accident: **the token carries
 TesseraQL's roles and permissions, never the provider's assertions.** `OidcUserLinker` already holds
-that line for federated logins, and `suite-architecture.md` Decision 11 restates it for tokens.
+that line for federated logins, and `stack-architecture.md` Decision 11 restates it for tokens.
 
 What this buys is the DCR proxy of Decision 7 — dynamic registration facing the MCP client, an
 ordinary pre-registered client facing the enterprise provider — which is the configuration that
@@ -182,14 +182,14 @@ resolves the deadlock Decision 3 documented, without touching the customer's pro
    measurement, and the risk that this would send the design back to Spring Authorization Server is
    retired.
 2. **The redirect-URI shape Codex actually registers** — *blocks Decision 5's validation.* Pending
-   the connect-and-observe pass `suite-architecture.md` open question 6 describes; not runnable
+   the connect-and-observe pass `stack-architecture.md` open question 6 describes; not runnable
    where this was written, since it needs the client and a browser.
 3. **Whether any client refuses to proceed without `scopes_supported`** — same pass. Decision 11 of
-   `suite-architecture.md` advertises none; this confirms the choice survives contact.
+   `stack-architecture.md` advertises none; this confirms the choice survives contact.
 4. **The error-code range.** Reusing `TQL-SEC-` keeps one meaning per code in one registry; a new
    domain would separate protocol failures from framework authentication failures. OAuth returns its
    own error vocabulary on the wire regardless, so this decides only what the logs and the index say.
-5. **What `TQL-SEC-4146` becomes**, carried over from `suite-architecture.md` open question 5. The
+5. **What `TQL-SEC-4146` becomes**, carried over from `stack-architecture.md` open question 5. The
    refusal was correct while TesseraQL held no private key; once it does, the exchange and the
    authorization server are alternatives within one application rather than one being impossible.
 

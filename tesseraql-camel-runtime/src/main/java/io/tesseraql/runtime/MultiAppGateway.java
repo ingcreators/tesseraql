@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  *
  * <h2>The gateway is a route, not a rewrite</h2>
  *
- * <p>Under docs/suite-architecture.md decision 12 every deployment is a suite, so every request in
+ * <p>Under docs/stack-architecture.md decision 12 every deployment is a suite, so every request in
  * every deployment passes through here. Decision 13 draws the line that follows from it: <b>the
  * gateway routes, the ingress protects</b>. It fronts applications the operator installed, behind
  * whatever reverse proxy the deployment already runs, so body limits, rate limiting and TLS
@@ -70,7 +70,7 @@ public final class MultiAppGateway implements AutoCloseable {
      * The deployment's choices about the front door.
      *
      * <p>A record rather than more positional arguments, on the reasoning
-     * docs/suite-architecture.md decision 16 gives for the host's own settings: the list grows, and
+     * docs/stack-architecture.md decision 16 gives for the host's own settings: the list grows, and
      * a value in position four says nothing at the call site about what it is. This is the
      * gateway's own block and is not decision 16's host context object, which carries what only
      * the host can know about each <em>runtime</em> — that arrives with slice 3.

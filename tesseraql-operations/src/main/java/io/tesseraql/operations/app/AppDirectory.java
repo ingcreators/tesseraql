@@ -148,7 +148,7 @@ public final class AppDirectory {
                     List.of(),
                     // A directory that IS one application is the whole deployment, so it answers at
                     // the origin root — the single-application shape, without a second mechanism
-                    // for it (docs/suite-architecture.md Decision 12). Members of a workspace take
+                    // for it (docs/stack-architecture.md Decision 12). Members of a workspace take
                     // the /apps/<id> default, because they have neighbours to be distinguished
                     // from.
                     resolved.shape() == Shape.APPLICATION ? "/" : null);

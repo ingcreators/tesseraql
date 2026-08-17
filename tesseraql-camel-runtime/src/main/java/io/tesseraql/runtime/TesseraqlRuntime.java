@@ -154,7 +154,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /**
      * Starts with the settings a host decided, overriding whatever the app's own configuration
-     * says about them (docs/base-path.md decisions 1 and 4, docs/suite-architecture.md decision
+     * says about them (docs/base-path.md decisions 1 and 4, docs/stack-architecture.md decision
      * 16). A suite passes the address the catalogue declares and a cookie path of {@code /}; the
      * values belong to the deployment, not to the application's files, so the same package mounts
      * at two prefixes in two places — and only the host knows whether these applications are one
@@ -1762,7 +1762,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
                 context.addRoutes(new TokenExchangeRouteBuilder(sessionStore, sessionTokens));
             }
-            // The console's issue-token page (docs/suite-architecture.md Decision 20), so
+            // The console's issue-token page (docs/stack-architecture.md Decision 20), so
             // acquiring a token stops meaning "read a cookie and a meta tag out of developer
             // tools". Registered whether or not issuing is on, because the page has to be able to
             // name the key that turns it on rather than answer a 500.

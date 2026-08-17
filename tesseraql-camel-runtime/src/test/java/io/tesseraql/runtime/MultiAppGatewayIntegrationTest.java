@@ -137,7 +137,7 @@ class MultiAppGatewayIntegrationTest {
     }
 
     /**
-     * There is one address, and a hostname is not it (docs/suite-architecture.md Decision 12).
+     * There is one address, and a hostname is not it (docs/stack-architecture.md Decision 12).
      *
      * <p>Host-header routing went with independent hosting. Kept as a test because "the gateway
      * ignores the Host header" is the property that replaced a mode, not an absence of one.
@@ -266,7 +266,7 @@ class MultiAppGatewayIntegrationTest {
         String head = response.substring(0, split);
         String body = response.substring(split + 4);
         // The gateway relays the app's framing rather than re-declaring a length of its own, so an
-        // app answering chunked stays chunked on the wire here (docs/suite-architecture.md
+        // app answering chunked stays chunked on the wire here (docs/stack-architecture.md
         // decision 13). Reading the body as-is parsed the chunk sizes as JSON.
         if (head.toLowerCase(java.util.Locale.ROOT).contains("transfer-encoding: chunked")) {
             body = dechunk(body);

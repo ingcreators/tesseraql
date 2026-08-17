@@ -16,7 +16,7 @@ import javax.crypto.spec.SecretKeySpec;
 /**
  * Minting a bearer token from a principal the caller already is
  * (docs/session-token-exchange.md), and the two service providers the console page renders
- * (docs/suite-architecture.md Decision 20).
+ * (docs/stack-architecture.md Decision 20).
  *
  * <p>One signer for both faces. {@link TokenExchangeRouteBuilder} is the JSON endpoint a script
  * calls; {@code ops.token.issue} is the same mint behind a page, so a token copied out of the

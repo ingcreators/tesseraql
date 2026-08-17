@@ -98,7 +98,7 @@
     <camel.version>4.22.0</camel.version>
     <!--
       Vert.x arrives transitively through camel-platform-http-vertx; the gateway's relay
-      (docs/suite-architecture.md decision 13) adds vertx-http-proxy on top of it. The two must be
+      (docs/stack-architecture.md decision 13) adds vertx-http-proxy on top of it. The two must be
       the same version, so both are managed from this one property rather than one being pinned
       and the other inherited — a split is how a proxy ends up loaded beside a core it was not
       built against. Bumping camel.version means checking what vertx-core it resolves and moving

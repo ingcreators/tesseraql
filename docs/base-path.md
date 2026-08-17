@@ -51,7 +51,7 @@ The app's files do not name their mount point. The same `.tqlapp` mounts at two 
 two deployments, and the value is the operator's, not the author's.
 
 **Amended 2026-08-16.** This first said hosting *derives* `/apps/<id>` from the catalog id.
-[suite-architecture.md](suite-architecture.md) Decision 12 made the address **declared**:
+[stack-architecture.md](stack-architecture.md) Decision 12 made the address **declared**:
 `InstalledApp.basePath` carries it, `/apps/<id>` is only its default, and an application may be
 addressed at the origin root. Two consequences that cost a defect each to find:
 

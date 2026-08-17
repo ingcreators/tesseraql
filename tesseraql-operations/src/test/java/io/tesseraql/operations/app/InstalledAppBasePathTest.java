@@ -6,7 +6,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * The prefix an application is addressed under (docs/suite-architecture.md Decision 12).
+ * The prefix an application is addressed under (docs/stack-architecture.md Decision 12).
  *
  * <p>Normalised on the way in so that concatenating it with a route path is always well-formed, and
  * so the gateway compares prefixes rather than parsing them — the origin root is the empty string,

@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The gateway's request half: decide which app answers, refuse what no app answers, and relay
- * everything else verbatim (docs/suite-architecture.md decision 13).
+ * everything else verbatim (docs/stack-architecture.md decision 13).
  *
  * <p>Separate from {@link MultiAppGateway} because the two answer different questions. The gateway
  * owns a {@link MultiAppHost} — real runtimes, real datasources, a Postgres container in any test
@@ -157,7 +157,7 @@ final class SuiteRelay {
     void handle(HttpServerRequest request) {
         try {
             String rawPath = rawPath(request);
-            // One address per application, and one way to reach it (docs/suite-architecture.md
+            // One address per application, and one way to reach it (docs/stack-architecture.md
             // Decision 12). Host-header routing went with independent hosting: it existed so an
             // application could own a whole origin, which is the separation a suite is defined by
             // not having.

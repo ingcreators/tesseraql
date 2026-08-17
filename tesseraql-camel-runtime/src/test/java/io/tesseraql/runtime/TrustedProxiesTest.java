@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
-/** Which peers count as the operator's edge (docs/suite-architecture.md decision 13). */
+/** Which peers count as the operator's edge (docs/stack-architecture.md decision 13). */
 class TrustedProxiesTest {
 
     @Test
