@@ -69,10 +69,10 @@ class SessionCookiePathIntegrationTest {
     @Test
     void aStackHostIssuesTheCookieAtTheOriginRoot() throws Exception {
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort(),
-                HostContext.stack().forApplication("/apps/shop-a"))) {
+                HostContext.stack().forApplication("/shop-a"))) {
             assertThat(setCookieOnLogin(runtime))
                     .contains("Path=/;")
-                    .doesNotContain("Path=/apps/shop-a");
+                    .doesNotContain("Path=/shop-a");
         }
     }
 

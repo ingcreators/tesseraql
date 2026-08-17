@@ -111,17 +111,17 @@ class MultiAppGatewayDifferentialTest {
 
     @Test
     void aJsonRouteAnswersIdenticallyThroughTheGateway() throws Exception {
-        assertSame("/apps/" + APP + "/api/items");
+        assertSame("/" + APP + "/api/items");
     }
 
     @Test
     void aShellPageAnswersIdenticallyThroughTheGateway() throws Exception {
-        assertSame("/apps/" + APP + "/users");
+        assertSame("/" + APP + "/users");
     }
 
     @Test
     void anAssetAnswersIdenticallyThroughTheGateway() throws Exception {
-        assertSame("/apps/" + APP + "/assets/_tesseraql/tesseraql.css");
+        assertSame("/" + APP + "/assets/_tesseraql/tesseraql.css");
     }
 
     // ---------------------------------------------------------------- what a proxy breaks
@@ -134,12 +134,12 @@ class MultiAppGatewayDifferentialTest {
      */
     @Test
     void aChunkedResponseWithNoDeclaredLengthKeepsItsBody() throws Exception {
-        Captured answer = capture(direct, get("/apps/" + APP + "/api/export"));
+        Captured answer = capture(direct, get("/" + APP + "/api/export"));
         assertThat(answer.headers).as("the case is only meaningful without a declared length")
                 .doesNotContainKey("content-length");
         assertThat(answer.length).as("and the app really does answer with a body").isPositive();
 
-        assertSame("/apps/" + APP + "/api/export");
+        assertSame("/" + APP + "/api/export");
     }
 
     /**
@@ -148,12 +148,12 @@ class MultiAppGatewayDifferentialTest {
      */
     @Test
     void aResponsePastTheOldRelayBoundArrivesWhole() throws Exception {
-        Captured answer = capture(front, get("/apps/" + APP + "/api/export-large"));
+        Captured answer = capture(front, get("/" + APP + "/api/export-large"));
 
         assertThat(answer.status).isEqualTo(200);
         assertThat(answer.length).as("larger than the ceiling that used to abort the relay")
                 .isGreaterThan(64L * 1024 * 1024);
-        assertSame("/apps/" + APP + "/api/export-large");
+        assertSame("/" + APP + "/api/export-large");
     }
 
     /**
@@ -182,18 +182,18 @@ class MultiAppGatewayDifferentialTest {
     }
 
     private static Call measure(int bytes) {
-        return post("/apps/" + APP + "/api/measure", "{\"blob\":\"" + "x".repeat(bytes) + "\"}");
+        return post("/" + APP + "/api/measure", "{\"blob\":\"" + "x".repeat(bytes) + "\"}");
     }
 
     @Test
     void headAnswersIdenticallyThroughTheGateway() throws Exception {
-        assertSame(head("/apps/" + APP + "/api/items"));
+        assertSame(head("/" + APP + "/api/items"));
     }
 
     /** A conditional GET still answers 304, and the 304 still carries no body. */
     @Test
     void aConditionalGetStillAnswers304() throws Exception {
-        String asset = "/apps/" + APP + "/assets/_tesseraql/tesseraql.css";
+        String asset = "/" + APP + "/assets/_tesseraql/tesseraql.css";
         String etag = capture(direct, get(asset)).headers.get("etag").getFirst();
         assertThat(etag).isNotBlank();
 
@@ -208,13 +208,13 @@ class MultiAppGatewayDifferentialTest {
     /** A redirect's Location is the app's to choose; the gateway relays it unchanged. */
     @Test
     void aRedirectsLocationIsRelayedVerbatim() throws Exception {
-        Captured answer = capture(front, post("/apps/" + APP + "/api/go", "{}"));
+        Captured answer = capture(front, post("/" + APP + "/api/go", "{}"));
 
         assertThat(answer.status).isEqualTo(303);
         assertThat(answer.headers.get("location"))
                 .as("the app resolved its own base path into the value; the gateway adds nothing")
-                .containsExactly("/apps/" + APP + "/api/items");
-        assertSame(post("/apps/" + APP + "/api/go", "{}"));
+                .containsExactly("/" + APP + "/api/items");
+        assertSame(post("/" + APP + "/api/go", "{}"));
     }
 
     /**
@@ -225,11 +225,11 @@ class MultiAppGatewayDifferentialTest {
      */
     @Test
     void aCookiesPathIsRelayedVerbatim() throws Exception {
-        Captured answer = capture(front, get("/apps/" + APP + "/api/cookie"));
+        Captured answer = capture(front, get("/" + APP + "/api/cookie"));
 
         assertThat(answer.headers.get("set-cookie"))
                 .containsExactly("tesseraql_sid=abc; Path=/; HttpOnly; SameSite=Lax");
-        assertSame("/apps/" + APP + "/api/cookie");
+        assertSame("/" + APP + "/api/cookie");
     }
 
     /**
@@ -242,8 +242,8 @@ class MultiAppGatewayDifferentialTest {
      */
     @Test
     void anApplicationAnswersIdenticallyOverHttp2() throws Exception {
-        for (String path : List.of("/apps/" + APP + "/api/items", "/apps/" + APP + "/users",
-                "/apps/" + APP + "/api/export")) {
+        for (String path : List.of("/" + APP + "/api/items", "/" + APP + "/users",
+                "/" + APP + "/api/export")) {
             Captured straight = capture(direct, get(path));
             Captured overHttp2 = captureOver(h2Front, get(path), HttpClient.Version.HTTP_2);
 

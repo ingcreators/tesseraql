@@ -7,7 +7,7 @@ import org.thymeleaf.linkbuilder.StandardLinkBuilder;
 /**
  * Resolves Thymeleaf link expressions against the application's base path
  * (docs/base-path.md): {@code th:href="@{/assets/x}"} renders {@code /assets/x} normally and
- * {@code /apps/shop-a/assets/x} for an application served under {@code /apps/shop-a}.
+ * {@code /shop-a/assets/x} for an application served under {@code /shop-a}.
  *
  * <p>This is the whole of the prefix logic. The alternative — writing
  * {@code th:href="|${base}/assets/x|"} at every one of the four hundred-odd URLs the framework

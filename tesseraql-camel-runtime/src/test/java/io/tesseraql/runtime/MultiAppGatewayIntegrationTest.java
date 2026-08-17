@@ -31,7 +31,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Integration test for single-port multi-app routing (design ch. 32.7). Two installed apps are
- * fronted by one gateway port and routed by the {@code /apps/<appId>/} prefix; each reaches only
+ * fronted by one gateway port and routed by the derived {@code /<name>/} prefix; each reaches only
  * its own isolated app, and an unknown app returns 404.
  */
 @Testcontainers
@@ -85,14 +85,14 @@ class MultiAppGatewayIntegrationTest {
         MultiAppGateway second = MultiAppGateway.start(installRoot, 0);
         io.vertx.core.Vertx vertx = field(second, "vertx", io.vertx.core.Vertx.class);
         int port = second.port();
-        assertThat(statusOf(second, "/apps/shop-a/api/items")).isEqualTo(200);
+        assertThat(statusOf(second, "/shop-a/api/items")).isEqualTo(200);
 
         second.close();
 
         assertThat(vertx.deploymentIDs()).as("the Vert.x instance is closed").isEmpty();
         assertThatThrownBy(() -> java.net.http.HttpClient.newHttpClient().send(
                 java.net.http.HttpRequest.newBuilder(java.net.URI.create(
-                        "http://localhost:" + port + "/apps/shop-a/api/items")).build(),
+                        "http://localhost:" + port + "/shop-a/api/items")).build(),
                 java.net.http.HttpResponse.BodyHandlers.ofString()))
                 .as("and the port it fronted on is released")
                 .isInstanceOf(java.io.IOException.class);
@@ -115,8 +115,8 @@ class MultiAppGatewayIntegrationTest {
         try (MultiAppGateway narrowed = MultiAppGateway.start(installRoot, 0,
                 new MultiAppGateway.Settings(), "shop-a")) {
             assertThat(narrowed.appNames()).containsExactly("shop-a");
-            assertThat(statusOf(narrowed, "/apps/shop-a/api/items")).isEqualTo(200);
-            assertThat(statusOf(narrowed, "/apps/shop-b/api/items"))
+            assertThat(statusOf(narrowed, "/shop-a/api/items")).isEqualTo(200);
+            assertThat(statusOf(narrowed, "/shop-b/api/items"))
                     .as("the neighbour is not hosted, and the member's address did not move")
                     .isEqualTo(404);
         }
@@ -135,7 +135,7 @@ class MultiAppGatewayIntegrationTest {
 
     @Test
     void unknownAppReturns404() throws Exception {
-        HttpResponse<String> response = get("/apps/nope/api/items");
+        HttpResponse<String> response = get("/nope/api/items");
         assertThat(response.statusCode()).isEqualTo(404);
         assertThat(response.body()).contains("TQL-APP-4040");
     }
@@ -144,15 +144,15 @@ class MultiAppGatewayIntegrationTest {
     void enforcesTenantEntitlementAtTheFrontDoor() throws Exception {
         // shop-b is entitled to tenant-b only; a request declaring another tenant is refused
         // before it reaches the app, while the entitled tenant passes through.
-        HttpResponse<String> denied = getWithTenant("/apps/shop-b/api/items", "tenant-x");
+        HttpResponse<String> denied = getWithTenant("/shop-b/api/items", "tenant-x");
         assertThat(denied.statusCode()).isEqualTo(403);
         assertThat(denied.body()).contains("TQL-APP-4030");
 
-        HttpResponse<String> allowed = getWithTenant("/apps/shop-b/api/items", "tenant-b");
+        HttpResponse<String> allowed = getWithTenant("/shop-b/api/items", "tenant-b");
         assertThat(allowed.statusCode()).isEqualTo(200);
 
         // shop-a has no entitlement list, so every tenant is served.
-        assertThat(getWithTenant("/apps/shop-a/api/items", "tenant-x").statusCode()).isEqualTo(200);
+        assertThat(getWithTenant("/shop-a/api/items", "tenant-x").statusCode()).isEqualTo(200);
     }
 
     private static HttpResponse<String> getWithTenant(String path, String tenantId)
@@ -185,7 +185,7 @@ class MultiAppGatewayIntegrationTest {
      * answer.
      *
      * <p>This is what the base-path design exists for (docs/base-path.md). Before it, a page
-     * under {@code /apps/<id>/} returned 200 with its stylesheet at {@code /assets/…} and
+     * under a prefix returned 200 with its stylesheet at {@code /assets/…} and
      * nothing at that address — a page that loaded and could not be used. The multi-app tests
      * all exercised a JSON route, which emits no links and so survived a prefix by accident.
      *
@@ -196,13 +196,13 @@ class MultiAppGatewayIntegrationTest {
     void aShellPageUnderThePrefixEmitsUrlsThatAnswer() throws Exception {
         java.net.http.HttpResponse<String> page = java.net.http.HttpClient.newHttpClient().send(
                 java.net.http.HttpRequest.newBuilder(java.net.URI.create(
-                        "http://localhost:" + gateway.port() + "/apps/shop-a/users")).build(),
+                        "http://localhost:" + gateway.port() + "/shop-a/users")).build(),
                 java.net.http.HttpResponse.BodyHandlers.ofString());
         assertThat(page.statusCode()).isEqualTo(200);
 
         assertThat(page.body())
                 .as("the shell's asset URLs carry the prefix")
-                .contains("/apps/shop-a/assets/");
+                .contains("/shop-a/assets/");
         assertThat(page.body())
                 .as("and none is left rooted at the origin, where nothing answers")
                 .doesNotContain("href=\"/assets/")
@@ -234,11 +234,11 @@ class MultiAppGatewayIntegrationTest {
     void aBundledAppPageUnderThePrefixPostsBackToItself() throws Exception {
         java.net.http.HttpResponse<String> page = java.net.http.HttpClient.newHttpClient().send(
                 java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:"
-                        + gateway.port() + "/apps/shop-a/_tesseraql/login")).build(),
+                        + gateway.port() + "/shop-a/_tesseraql/login")).build(),
                 java.net.http.HttpResponse.BodyHandlers.ofString());
 
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("action=\"/apps/shop-a/_tesseraql/login\"");
+        assertThat(page.body()).contains("action=\"/shop-a/_tesseraql/login\"");
         assertThat(page.body())
                 .as("no URL is left rooted at the origin, where the gateway answers 404")
                 .doesNotContain("=\"/_tesseraql/")
@@ -252,7 +252,7 @@ class MultiAppGatewayIntegrationTest {
     /** Every {@code href}/{@code src} in the page pointing into the asset tree, de-duplicated. */
     private static List<String> assetUrlsIn(String html) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern
-                .compile("(?:href|src)=\"(/apps/shop-a/assets/[^\"#]+)").matcher(html);
+                .compile("(?:href|src)=\"(/shop-a/assets/[^\"#]+)").matcher(html);
         java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
         while (matcher.find()) {
             urls.add(matcher.group(1));
@@ -271,7 +271,7 @@ class MultiAppGatewayIntegrationTest {
      */
     @Test
     void frameworkEndpointsMoveUnderThePrefixToo() throws Exception {
-        assertThat(statusOf(gateway, "/apps/shop-a/_tesseraql/health"))
+        assertThat(statusOf(gateway, "/shop-a/_tesseraql/health"))
                 .as("a hand-mounted framework endpoint answers under the app's prefix")
                 .isEqualTo(200);
 
@@ -338,7 +338,7 @@ class MultiAppGatewayIntegrationTest {
     }
 
     private static String itemName(String appId) throws Exception {
-        HttpResponse<String> response = get("/apps/" + appId + "/api/items");
+        HttpResponse<String> response = get("/" + appId + "/api/items");
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).get("data");
         assertThat(data).hasSize(1);

@@ -484,9 +484,10 @@ carries no meaning in this repository yet.
 describe the target. The documents that describe the CLI as it *ships today* — `hosting.md`,
 `deployment.md`, `reference-cli.md` — keep saying `--suite` until `HostCommand` changes, since a
 document that describes a flag that does not exist is worse than one using a word that is about to.
-Owed with that change: `SuiteRelay` → `StackRelay`, `SuiteModeIntegrationTest`, the `--suite` flag
-shipped in #832, and the prose in `app-isolation-model.md`, `base-path.md`, `audit-hardening.md`
-and `token-issuance.md`. `TestSuite` and everything around it keeps the word, which is the point.
+Owed with that change — **and shipped with it (#839)**: `SuiteRelay` → `StackRelay`,
+`SuiteModeIntegrationTest` → `StackModeIntegrationTest`, the `--suite` flag shipped in #832, and
+the prose in `app-isolation-model.md`, `base-path.md`, `audit-hardening.md` and
+`token-issuance.md`. `TestSuite` and everything around it keeps the word, which is the point.
 
 ### 8. `new` already creates the layout, so its flag is `--stack` and it writes no stack file
 

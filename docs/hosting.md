@@ -41,9 +41,10 @@ tooling.
 
 ## One address per application
 
-Every application is addressed as `/apps/<appId>/` on one origin, and the stack shares one
-sign-in across them: the runtimes are told the prefix they serve under, so each answers at the
-addresses it emits ([base-path.md](base-path.md)), and the session cookie is issued at the
+Every application is addressed as `/<name>/` on one origin, and the stack shares one
+sign-in across them. The address is derived from `tesseraql.app.name`, always, so an install or an
+upgrade can never move it. The runtimes are told the prefix they serve under, so each answers at
+the addresses it emits ([base-path.md](base-path.md)), and the session cookie is issued at the
 origin root so one sign-in reaches every application.
 
 An earlier `--mode isolated` gave each application its own hostname and no shared session. It is

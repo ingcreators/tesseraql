@@ -1222,10 +1222,9 @@ serves the deployment's root choice without it. So **`basePath: /` is not accept
 root always redirects — to the portal by default, to a named application by configuration — and is
 never an application itself, so the shadow guard never needs to exist.
 
-Rollout note: `/apps/<name>` is the *shipped* default from #834, so `hosting.md` and
-`base-path.md` keep describing it until the code changes the default — the same policy as the
-`stack` rename. The change itself is one line: `InstalledApp.normalize`'s default becomes
-`"/" + name`.
+Rollout note: `/apps/<name>` was the shipped default from #834; the derived `/<name>` address
+shipped with the 0c catch-up PR, which also took `basePath` out of `catalog.json` (a catalogue
+still declaring one is refused) and moved `hosting.md`/`base-path.md` with it.
 
 ### 26. Cross-application configuration: values share through the environment, declarations do not share at all
 
@@ -1415,8 +1414,7 @@ Ordering is by dependency, not by size.
 **Slice 3 carries the largest hidden cost**, and it is not the deletion — but the cost is not where
 this note first put it. It said ② has no CLI entry point and that building one is the slice's main
 body. `tesseraql host` exists and is registered, and Studio behind the gateway shipped as
-`app-isolation-model.md`'s follow-up 5 (#701), verified by `SuiteModeIntegrationTest` opening Studio
-through `/apps/<id>/`. Two of the four items named were already done.
+`app-isolation-model.md`'s follow-up 5 (#701), verified by `StackModeIntegrationTest` (then `SuiteModeIntegrationTest`, at the then-default `/apps/<id>/`) opening Studio. Two of the four items named were already done.
 
 **The measured gap, 2026-08-16.** What `serve` carries and `host` does not: `--env`, `--log-format`,
 `--log-level`, `--watch`, `--modules`, `--embedded-db`, `--embedded-db-port`,

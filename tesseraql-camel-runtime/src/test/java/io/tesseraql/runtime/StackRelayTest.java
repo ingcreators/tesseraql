@@ -80,7 +80,7 @@ class StackRelayTest {
         StackRelay relay = new StackRelay(client, CATALOGUE, appId -> originPort);
         front = vertx.createHttpServer(StackRelay.frontOptions(0, false));
         front.requestHandler(relay::handle);
-        base = "http://localhost:" + await(front.listen()).actualPort() + "/apps/" + APP;
+        base = "http://localhost:" + await(front.listen()).actualPort() + "/" + APP;
 
         // The h2c pair. Enabling it at one end only is what breaks: a body arriving over HTTP/2
         // and piped into an HTTP/1.1 request has neither a declared length nor chunked framing,
@@ -89,7 +89,7 @@ class StackRelayTest {
         StackRelay h2Relay = new StackRelay(h2Client, CATALOGUE, appId -> originPort);
         h2Front = vertx.createHttpServer(StackRelay.frontOptions(0, true));
         h2Front.requestHandler(h2Relay::handle);
-        h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/apps/" + APP;
+        h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/" + APP;
     }
 
     @AfterAll
@@ -213,7 +213,7 @@ class StackRelayTest {
         int port = await(scoped.listen()).actualPort();
         try {
             send(HttpRequest.newBuilder(
-                    URI.create("http://localhost:" + port + "/apps/" + APP + "/echo"))
+                    URI.create("http://localhost:" + port + "/" + APP + "/echo"))
                     .header("X-Client-Cert", "from-the-edge")
                     .header("X-Tenant-Id", "tenant-a"));
             assertThat(lastRequestHeaders)
@@ -338,7 +338,7 @@ class StackRelayTest {
         HttpServer h2FrontToPlain = vertx.createHttpServer(StackRelay.frontOptions(0, true));
         h2FrontToPlain.requestHandler(relay::handle);
         String plainBase = "http://localhost:" + await(h2FrontToPlain.listen()).actualPort()
-                + "/apps/" + APP;
+                + "/" + APP;
         try {
             HttpResponse<String> response = sendOver(Version.HTTP_2,
                     HttpRequest.newBuilder(URI.create(plainBase + "/chunked")));
@@ -366,7 +366,7 @@ class StackRelayTest {
     /** No app answers at this address, and the relay says so rather than proxying. */
     @Test
     void anAddressNoAppAnswersIsRefusedHere() throws Exception {
-        String root = base.substring(0, base.lastIndexOf("/apps/"));
+        String root = base.substring(0, base.lastIndexOf("/" + APP));
         HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(root + "/nope")));
 
         assertThat(response.statusCode()).isEqualTo(404);

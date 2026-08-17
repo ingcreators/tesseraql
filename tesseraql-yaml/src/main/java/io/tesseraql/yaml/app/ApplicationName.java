@@ -11,7 +11,7 @@ import io.tesseraql.yaml.config.AppConfig;
  * <p>It reads as a label and is an <b>identity</b>. It scopes outbox claims and cluster job claim
  * keys, it is the owner recorded against every job execution and therefore what
  * {@code ops.app.<name>} grants are checked against, it names the MCP server, and under
- * docs/stack-architecture.md Decision 12 it is the application's address: {@code /apps/<name>/}.
+ * docs/stack-architecture.md Decision 12 it is the application's address: {@code /<name>/}.
  *
  * <p>It used to default to the literal {@code app} when absent, which made the value <em>required
  * to deploy and optional to run</em> — `AppInstaller` refuses a package without it and a stack

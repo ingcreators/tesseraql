@@ -87,7 +87,7 @@ class MultiAppCanaryIntegrationTest {
     private static String itemName() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
-                        "http://localhost:" + gateway.port() + "/apps/shop/api/items")).build(),
+                        "http://localhost:" + gateway.port() + "/shop/api/items")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();

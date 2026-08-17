@@ -32,7 +32,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Shared-stack hosting, end to end: two applications behind one gateway, addressed as
- * {@code /apps/<id>/} on one origin, each in its own runtime
+ * {@code /<name>/} on one origin, each in its own runtime
  * (docs/app-isolation-model.md decision 2, docs/base-path.md slice 6).
  *
  * <p>This is the case docs/base-path.md opened with. A stack-hosted HTML page returned 200 and was
@@ -77,7 +77,7 @@ class StackModeIntegrationTest {
      */
     @Test
     void anApplicationPageUnderThePrefixIsUsable() throws Exception {
-        HttpResponse<String> page = get("/apps/shop-a/users", sessionCookie);
+        HttpResponse<String> page = get("/shop-a/users", sessionCookie);
 
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(originRootedUrlsIn(page.body()))
@@ -92,7 +92,7 @@ class StackModeIntegrationTest {
     @Test
     void anHtmxFragmentSwapsThroughThePrefix() throws Exception {
         HttpResponse<String> fragment = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(uri("/apps/shop-a/users/fragments/table"))
+                HttpRequest.newBuilder(uri("/shop-a/users/fragments/table"))
                         .header("Cookie", sessionCookie)
                         .header("HX-Request", "true")
                         .build(),
@@ -110,13 +110,13 @@ class StackModeIntegrationTest {
      */
     @Test
     void oneSignInReachesEveryApplicationInTheStack() throws Exception {
-        assertThat(get("/apps/shop-a/users/fragments/table", sessionCookie).statusCode())
+        assertThat(get("/shop-a/users/fragments/table", sessionCookie).statusCode())
                 .isEqualTo(200);
-        assertThat(get("/apps/shop-b/users/fragments/table", sessionCookie).statusCode())
+        assertThat(get("/shop-b/users/fragments/table", sessionCookie).statusCode())
                 .as("the same session, the neighbouring application")
                 .isEqualTo(200);
 
-        assertThat(get("/apps/shop-b/users/fragments/table", null).statusCode())
+        assertThat(get("/shop-b/users/fragments/table", null).statusCode())
                 .as("and it is a session that authorizes, not the stack")
                 .isEqualTo(401);
     }
@@ -128,14 +128,14 @@ class StackModeIntegrationTest {
      */
     @Test
     void studioIsUsableThroughItsApplicationsPrefix() throws Exception {
-        HttpResponse<String> studio = get("/apps/shop-a/_tesseraql/studio/ui", sessionCookie);
+        HttpResponse<String> studio = get("/shop-a/_tesseraql/studio/ui", sessionCookie);
 
         assertThat(studio.statusCode()).isEqualTo(200);
         assertThat(studio.body()).contains("<meta name=\"csrf-token\"");
         assertThat(originRootedUrlsIn(studio.body())).isEmpty();
         assertThat(studio.body())
                 .as("the command palette navigates to addresses this runtime serves")
-                .contains("data-value=\"/apps/shop-a/_tesseraql/studio/ui/docs\"");
+                .contains("data-value=\"/shop-a/_tesseraql/studio/ui/docs\"");
         // Every address it names is served by this runtime. Whether this caller may open it is
         // a separate question — the ops console needs ops.app.* — so the test asks only that the
         // address exists, which is what a prefix can break.
@@ -150,13 +150,13 @@ class StackModeIntegrationTest {
     void theLoginRedirectStaysInsideTheApplication() throws Exception {
         HttpResponse<String> denied = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER).build()
-                .send(HttpRequest.newBuilder(uri("/apps/shop-a/_tesseraql/studio/ui"))
+                .send(HttpRequest.newBuilder(uri("/shop-a/_tesseraql/studio/ui"))
                         .header("Accept", "text/html").build(),
                         HttpResponse.BodyHandlers.ofString());
 
         assertThat(denied.statusCode()).isEqualTo(302);
         assertThat(denied.headers().firstValue("Location").orElse(""))
-                .startsWith("/apps/shop-a/_tesseraql/login?next=")
+                .startsWith("/shop-a/_tesseraql/login?next=")
                 .as("the next target is the address the browser asked for, once")
                 .endsWith("%2F_tesseraql%2Fstudio%2Fui");
     }
@@ -193,15 +193,19 @@ class StackModeIntegrationTest {
         }
     }
 
-    /** {@code href}/{@code src}/{@code action} values that address the origin, not the app. */
+    /**
+     * {@code href}/{@code src}/{@code action} values that address the origin, not the app —
+     * anything rooted outside the application's derived {@code /<name>} prefix, now that the
+     * address is the name rather than an {@code /apps/} wrapper.
+     */
     private static List<String> originRootedUrlsIn(String html) {
         return matches(html, "(?:href|src|action|formaction|data-value|sse-connect"
-                + "|hx-get|hx-post)=\"(/(?!apps/)[^\"]*)\"");
+                + "|hx-get|hx-post)=\"(/(?!shop-a/|shop-b/)[^\"]*)\"");
     }
 
     /** The application's own URLs: prefixed, and therefore addresses the gateway can be asked. */
     private static List<String> prefixedUrlsIn(String html) {
-        return matches(html, "(?:href|src)=\"(/apps/shop-a/[^\"#?]+)\"");
+        return matches(html, "(?:href|src)=\"(/shop-a/[^\"#?]+)\"");
     }
 
     private static List<String> matches(String html, String regex) {
@@ -216,7 +220,7 @@ class StackModeIntegrationTest {
     /** Signs in through one application's prefix, returning the stack-wide session cookie. */
     private static String signIn() throws Exception {
         HttpResponse<String> login = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(uri("/apps/shop-a/_tesseraql/login"))
+                HttpRequest.newBuilder(uri("/shop-a/_tesseraql/login"))
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(
                                 "{\"loginId\":\"admin\",\"password\":\"s3cret\"}"))
