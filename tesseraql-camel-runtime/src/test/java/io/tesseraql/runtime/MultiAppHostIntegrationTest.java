@@ -43,11 +43,16 @@ class MultiAppHostIntegrationTest {
 
     static MultiAppHost host;
     static Path installRoot;
+    /** The fixed internal port shop-a declares, chosen free at fixture time (decision 4a). */
+    static int declaredPort;
 
     @BeforeAll
     static void start() throws Exception {
         seedDatabase();
         installRoot = Files.createTempDirectory("tesseraql-multiapp-it");
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+            declaredPort = probe.getLocalPort();
+        }
         installApp("shop-a", "a", null);
         // shop-b declares a base path of its own, which the derived address has to outrank —
         // an application's address is its name, and its own configuration cannot move it.
@@ -106,6 +111,18 @@ class MultiAppHostIntegrationTest {
     void theDerivedAddressOutranksTheApplicationsOwnBasePath() throws Exception {
         assertThat(get("shop-b", "/legacy/api/items").statusCode()).isEqualTo(404);
         assertThat(get("shop-b", "/shop-b/api/items").statusCode()).isEqualTo(200);
+    }
+
+    /**
+     * A declared {@code server.port} is honoured as the application's internal port
+     * (docs/cli-surface.md decision 4a): the key keeps its one meaning — the port this
+     * application binds — while the front door stays the gateway's {@code --port}. shop-b
+     * declares {@code 0}, the fixtures' pre-hosting idiom for "ephemeral", and stays ephemeral.
+     */
+    @Test
+    void aDeclaredServerPortIsTheApplicationsInternalPort() {
+        assertThat(host.port("shop-a")).isEqualTo(declaredPort);
+        assertThat(host.port("shop-b")).isNotEqualTo(declaredPort);
     }
 
     /**
@@ -179,13 +196,14 @@ class MultiAppHostIntegrationTest {
         }
         Files.writeString(appHome.resolve("config/application.yml"), """
                 server:
-                  port: 0
+                  port: %d
                 db:
                   main:
                     url: %s&currentSchema=%s
                     username: %s
                     password: %s
-                """.formatted(POSTGRES.getJdbcUrl(), schema,
+                """.formatted("shop-a".equals(appId) ? declaredPort : 0,
+                POSTGRES.getJdbcUrl(), schema,
                 POSTGRES.getUsername(), POSTGRES.getPassword())
                 + (ownBasePath == null ? "" : """
                         tesseraql:

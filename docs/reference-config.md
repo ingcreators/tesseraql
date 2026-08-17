@@ -11,7 +11,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `server.port` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
+| `server.port` | [MultiAppHost.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/MultiAppHost.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 
 ## tesseraql.app
 
