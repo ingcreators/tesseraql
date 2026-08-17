@@ -1,7 +1,8 @@
 // MCP registration (docs/vscode-extension.md, Phase 56 slice 4): writes the Phase 24
 // dev-tools server into a client configuration, merging with existing servers. Both
-// configs land in the app home, so `--app .` resolves for any client that runs the
-// server with the config's directory as cwd.
+// configs land in the app home; `mcp` discovers the stack one level up from its cwd
+// (docs/cli-surface.md decision 9), the same way `dev` does, so any client that runs
+// the server with the config's directory as cwd serves the whole stack.
 
 export interface McpMergeResult {
   /** The full file content after the merge (2-space indent, trailing newline). */
@@ -21,12 +22,12 @@ export interface McpMergeResult {
 
 /** `.vscode/mcp.json` — the VS Code MCP client format ({@code servers}). */
 export function mergeVsCodeMcp(existing: string | undefined, cliPath: string): McpMergeResult {
-  return merge(existing, 'servers', { type: 'stdio', command: cliPath, args: ['mcp', '--app', '.'] });
+  return merge(existing, 'servers', { type: 'stdio', command: cliPath, args: ['mcp'] });
 }
 
 /** `.mcp.json` — the Claude Code project format ({@code mcpServers}). */
 export function mergeClaudeMcp(existing: string | undefined, cliPath: string): McpMergeResult {
-  return merge(existing, 'mcpServers', { command: cliPath, args: ['mcp', '--app', '.'] });
+  return merge(existing, 'mcpServers', { command: cliPath, args: ['mcp'] });
 }
 
 function merge(existing: string | undefined, serversKey: string, entry: object): McpMergeResult {

@@ -39,7 +39,7 @@ class McpDevToolsAcceptanceTest {
                 + ";DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE";
         migrate(app, jdbcUrl);
 
-        McpServer server = new McpDevTools(app, false).toServer();
+        McpServer server = new McpDevTools(Map.of("demo", app), false).toServer();
 
         // The agent initializes, then discovers the app.
         assertThat(initialize(server).get("serverInfo").get("name").asText())
@@ -75,13 +75,86 @@ class McpDevToolsAcceptanceTest {
         assertThat(test.get("tests").get("failed").asInt()).isZero();
     }
 
+    /**
+     * One server spans the stack (docs/stack-architecture.md decision 19): every tool carries an
+     * {@code application} argument telling it which member to operate on, required when the server
+     * holds several — an agent that guesses which application it is editing is worse than one that
+     * has to be told.
+     */
+    @Test
+    void oneServerSpansTheStackAndEveryToolNamesItsApplication(@TempDir Path dir)
+            throws Exception {
+        AppScaffolder scaffolder = new AppScaffolder();
+        Path orders = dir.resolve("orders");
+        Path billing = dir.resolve("billing");
+        scaffolder.writeNew(orders, scaffolder.scaffold("orders"));
+        scaffolder.writeNew(billing, scaffolder.scaffold("billing"));
+        java.util.Map<String, Path> stack = new java.util.LinkedHashMap<>();
+        stack.put("orders", orders);
+        stack.put("billing", billing);
+
+        McpServer server = new McpDevTools(stack, false).toServer();
+
+        // Every tool's input schema carries the required application argument, and its
+        // description names the members so the model knows how to choose.
+        JsonNode tools = request(server, "tools/list", null).get("result").get("tools");
+        for (JsonNode tool : tools) {
+            JsonNode schema = tool.get("inputSchema");
+            assertThat(schema.get("properties").has("application"))
+                    .as(() -> tool.get("name").asText() + " lacks the application argument")
+                    .isTrue();
+            java.util.List<String> required = new java.util.ArrayList<>();
+            schema.get("required").forEach(name -> required.add(name.asText()));
+            assertThat(required).contains("application");
+            assertThat(schema.get("properties").get("application").get("description").asText())
+                    .contains("orders").contains("billing");
+        }
+
+        // The argument selects the member; each answers with its own identity.
+        assertThat(callJson(server, "manifest_summary", Map.of("application", "orders"))
+                .get("appName").asText()).isEqualTo("orders");
+        assertThat(callJson(server, "manifest_summary", Map.of("application", "billing"))
+                .get("appName").asText()).isEqualTo("billing");
+
+        // Omitting it, or naming a stranger, is an error that lists what the server holds.
+        ObjectNode missing = mapper.createObjectNode();
+        missing.put("name", "manifest_summary");
+        missing.set("arguments", mapper.createObjectNode());
+        JsonNode missingResult = request(server, "tools/call", missing).get("result");
+        assertThat(missingResult.get("isError").asBoolean()).isTrue();
+        assertThat(missingResult.get("content").toString()).contains("orders")
+                .contains("billing");
+        ObjectNode unknown = mapper.createObjectNode();
+        unknown.put("name", "manifest_summary");
+        unknown.set("arguments", mapper.valueToTree(Map.of("application", "shipping")));
+        JsonNode unknownResult = request(server, "tools/call", unknown).get("result");
+        assertThat(unknownResult.get("isError").asBoolean()).isTrue();
+        assertThat(unknownResult.get("content").toString()).contains("orders")
+                .contains("billing");
+
+        // The copilot prompt asks for the application too, so the guided loop passes it on.
+        JsonNode prompts = request(server, "prompts/list", null).get("result").get("prompts");
+        JsonNode copilot = null;
+        for (JsonNode prompt : prompts) {
+            if ("studio_copilot".equals(prompt.get("name").asText())) {
+                copilot = prompt;
+            }
+        }
+        assertThat(copilot).isNotNull();
+        boolean hasApplicationArg = false;
+        for (JsonNode argument : copilot.get("arguments")) {
+            hasApplicationArg |= "application".equals(argument.get("name").asText());
+        }
+        assertThat(hasApplicationArg).isTrue();
+    }
+
     @Test
     void readOnlyModeHidesTheWriteTools(@TempDir Path dir) throws Exception {
         Path app = dir.resolve("ro");
         AppScaffolder scaffolder = new AppScaffolder();
         scaffolder.writeNew(app, scaffolder.scaffold("ro"));
 
-        McpServer server = new McpDevTools(app, true).toServer();
+        McpServer server = new McpDevTools(Map.of("ro", app), true).toServer();
         JsonNode tools = request(server, "tools/list", null).get("result").get("tools");
         java.util.List<String> names = new java.util.ArrayList<>();
         tools.forEach(tool -> names.add(tool.get("name").asText()));
@@ -98,7 +171,7 @@ class McpDevToolsAcceptanceTest {
         Path app = dir.resolve("copilot");
         AppScaffolder scaffolder = new AppScaffolder();
         scaffolder.writeNew(app, scaffolder.scaffold("copilot"));
-        McpServer server = new McpDevTools(app, false).toServer();
+        McpServer server = new McpDevTools(Map.of("copilot", app), false).toServer();
 
         // The prompt is advertised (Studio backlog G: the describe -> draft -> preview -> apply loop).
         JsonNode prompts = request(server, "prompts/list", null).get("result").get("prompts");
@@ -138,7 +211,7 @@ class McpDevToolsAcceptanceTest {
         Files.createDirectories(app.resolve("work"));
         Files.writeString(app.resolve("work/embedded-db.jdbc"), jdbcUrl + System.lineSeparator());
 
-        McpServer server = new McpDevTools(app, false).toServer();
+        McpServer server = new McpDevTools(Map.of("marker", app), false).toServer();
         JsonNode schema = callJson(server, "schema_introspect", Map.of("table", "items"));
         assertThat(schema.get("versionColumn").asText()).isEqualToIgnoringCase("version");
     }
@@ -163,7 +236,7 @@ class McpDevToolsAcceptanceTest {
                       jdbcUrl: ${db.main.url}
                 """);
 
-        McpServer server = new McpDevTools(app, false).toServer();
+        McpServer server = new McpDevTools(Map.of("unresolvable", app), false).toServer();
         ObjectNode params = mapper.createObjectNode();
         params.put("name", "schema_introspect");
         params.set("arguments", mapper.valueToTree(Map.of("table", "items")));

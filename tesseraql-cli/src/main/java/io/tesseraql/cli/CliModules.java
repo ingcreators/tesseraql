@@ -57,13 +57,24 @@ public final class CliModules {
      * installs nothing and does not fail here: the linter reports the manifest problem itself.
      */
     public static void installAppExtensions(Path app, File explicitModules) {
+        installAppExtensions(List.of(app), explicitModules);
+    }
+
+    /**
+     * The stack-spanning form: every application's resolved {@code tesseraql.modules} cache
+     * composes onto one classloader, the same wiring {@code dev} boots the stack with — interim
+     * until docs/stack-architecture.md decision 28 wires modules per runtime.
+     */
+    public static void installAppExtensions(List<Path> apps, File explicitModules) {
         List<File> moduleDirs = new ArrayList<>();
-        try {
-            new ModulesInstaller()
-                    .install(app, new ManifestLoader().load(app).config(), false)
-                    .ifPresent(result -> moduleDirs.add(result.cacheDir().toFile()));
-        } catch (RuntimeException ex) {
-            // lint of a broken app must still run; modules just stay uninstalled
+        for (Path app : apps) {
+            try {
+                new ModulesInstaller()
+                        .install(app, new ManifestLoader().load(app).config(), false)
+                        .ifPresent(result -> moduleDirs.add(result.cacheDir().toFile()));
+            } catch (RuntimeException ex) {
+                // lint of a broken app must still run; modules just stay uninstalled
+            }
         }
         if (explicitModules != null) {
             moduleDirs.add(explicitModules);

@@ -17,11 +17,20 @@ gate.
 
 ## Running the server
 
+**One server spans the stack.** `tesseraql mcp` resolves what it serves exactly the way
+`tesseraql dev` does: `--stack` names the directory holding the applications — an install root
+(`catalog.json`) or a folder of application homes. When omitted, the stack is discovered one
+level up from the working directory, so running from inside an application home finds the
+stack and its neighbours. `--app-name <name>` narrows to one application without changing
+anything else. Every tool then takes an `application` argument naming which stack member it operates
+on — required when the server holds several, defaulted when it holds one — so an agent working
+across interlocking applications never has to guess which one it is editing.
+
 Two transports. **stdio** is the default — an agent launches the server as a subprocess and
 talks newline-delimited JSON-RPC over its stdin/stdout:
 
 ```bash
-tesseraql mcp --app .
+tesseraql mcp
 ```
 
 A typical client registration (for example a `.mcp.json` an IDE or agent reads):
@@ -31,7 +40,7 @@ A typical client registration (for example a `.mcp.json` an IDE or agent reads):
   "mcpServers": {
     "tesseraql": {
       "command": "tesseraql",
-      "args": ["mcp", "--app", "/path/to/app"]
+      "args": ["mcp", "--stack", "/path/to/stack"]
     }
   }
 }
@@ -45,7 +54,7 @@ into `.vscode/mcp.json` and/or the repo-root `.mcp.json`, merging with any exist
 remote agent or IDE connects over the network:
 
 ```bash
-tesseraql mcp --app . --transport http --port 8765
+tesseraql mcp --transport http --port 8765
 ```
 
 The server prints the URL and serves until interrupted. Point the client at
@@ -59,15 +68,21 @@ requests.
 
 The write tools change source files, so the HTTP transport must not be exposed unguarded.
 
-- **Authentication reuses the app's own bearer tokens.** When the app configures
-  `tesseraql.security.jwt.secret`, every HTTP request must carry a valid
-  `Authorization: Bearer <jwt>` (the same HS256 verification the app's routes use); a missing
-  or invalid token gets `401`. There is no second credential system to manage.
+- **Authentication reuses the applications' own bearer tokens.** When the stack's
+  applications configure `tesseraql.security.jwt`, every HTTP request must carry a valid
+  `Authorization: Bearer <jwt>` (the same verification the applications' routes use); a
+  missing or invalid token gets `401`. There is no second credential system to manage. The
+  members must agree on that contract — the server has one gate, and one that verified each
+  request against whichever application it happened to pick would accept a token another
+  member rejects — so disagreeing JWT settings refuse the HTTP transport with the fix named
+  (align the settings, narrow with `--app-name`, or use stdio).
 - **Loopback by default.** `--bind` defaults to `127.0.0.1`. The server refuses to bind a
   non-loopback address without authentication unless you pass `--insecure` (and warns when it
   runs without auth at all).
 - **`--read-only`** drops the write tools entirely (scaffold and drafts), leaving only the
-  read tools — safe to expose for inspection on a shared host.
+  read tools — safe to expose for inspection on a shared host. It is a property of the
+  server, never of one application: there is no reason to vary it per application, and a
+  mixed-mode server would be hard to reason about.
 
 The stdio transport inherits the trust of the process that launched it; it has no separate
 auth.
@@ -93,6 +108,9 @@ auth.
 | `draft_save` | saves a draft edit under `work/studio/drafts` without touching the source of truth |
 | `draft_preview` | compiles a draft (parse route YAML, render SQL, process templates) without applying it |
 | `draft_apply` | promotes a saved draft to the source of truth — only if it compiles |
+
+Every tool also takes the `application` argument described above, and its description lists
+the stack's members so the connecting model knows how to choose.
 
 `schema_introspect`, `scaffold_crud`, `test`, and `ops_status` use the app's configured main
 datasource unless the call supplies `jdbcUrl` / `username` / `password` — and when the
@@ -121,7 +139,8 @@ of truth.
 
 The dev-tool server offers one MCP **prompt**, `studio_copilot` (in write mode only) — the
 guided "describe → draft → preview → apply" loop a client surfaces as a slash command. Given a
-plain-language `task` (and an optional backing `table`), `prompts/get` returns guidance that
+plain-language `task` (an optional backing `table`, and — when the server spans several
+applications — the `application` to build in), `prompts/get` returns guidance that
 steers the connecting agent's model through the tools above: orient with `manifest_summary` /
 `source_read`, draft with `scaffold_crud` or `draft_save`, verify with `draft_preview` / `lint`
 / `test`, and only then `draft_apply`.

@@ -219,15 +219,15 @@ Three things this decision explicitly does **not** do:
 **But stdio is a second route to the same goal, and it is currently closed.** Two of the named
 clients — Codex and Claude Desktop — mount local stdio servers as a first-class option, and on
 that transport there is no OAuth to implement at all. TesseraQL cannot serve an application's
-MCP surface that way today: `McpCommand` builds `new McpDevTools(app, readOnly).toServer()`, so
+MCP surface that way today: `McpCommand` builds `McpDevTools` over the stack's applications, so
 the CLI's stdio path serves the framework's *development* tools, never the app's declared `mcp/`
 documents. The application surface is assembled by `AppMcpServer.build(appName, apps, producer)`,
 which is package-private, takes a `ProducerTemplate`, and has exactly one caller —
 `TesseraqlRuntime.java:1130`. It therefore requires a started runtime with compiled routes,
 which is the correct dependency and also the reason there is no stdio entry point.
 
-That is worth pricing against Decision 2 rather than assuming OAuth is the only answer. A
-`tesseraql mcp --app` mode that boots the runtime and bridges stdio to the same
+That is worth pricing against Decision 2 rather than assuming OAuth is the only answer. An
+application-surface stdio mode of `tesseraql mcp` that boots the runtime and bridges stdio to the same
 `direct:mcp.*` routes would reach Codex and Claude Desktop with no metadata document, no
 authorization server, and no new config surface — while reaching ChatGPT's hosted connector and
 claude.ai still requires the full OAuth story, because neither offers a local transport. The two
