@@ -958,6 +958,23 @@ prevent. So it is **required when something reads it** — MCP resource metadata
 server's issuer — and absent until then, rather than demanded at boot from every deployment that
 will never use either.
 
+**"No file needed" counted exactly, because review asked for the count.** The beginner paths — one
+application, or `--embedded-db` — need nothing, ever. Two edges legitimately want the file, and
+both are the design working rather than failing: **several applications against real databases**
+whose framework coordinates differ meet TQL-APP-4211, and the refusal's remedy *is* a development
+`stack.yml` — which is why Decision 23's multi-team model already expects team repositories to
+carry one; and **a development gateway addressed by anything other than `localhost`** (a colleague
+across the LAN, a forwarded container port) needs the origin declared, because the default is then
+the wrong string for Decision 6's character-for-character rule. Neither is silent: the first
+refuses naming the fix, the second only matters once MCP or the authorization server is in play.
+
+**And one rule intersection is scoped here so it never has to be discovered:** TQL-APP-4212 —
+an application *explicitly* declaring `tesseraql.framework.datasource` while the stack supplies a
+coordinate is refused — applies to a **`stack.yml` supply only**, not to `--embedded-db`'s. The
+embedded flag is the developer explicitly saying *replace my databases*: it already overrides the
+application's declared `main`, and refusing the framework declaration it also replaces would make
+the one flag that means "override everything" the one place an override is refused.
+
 **The `security.jwt` triple follows the same split, asked directly in review.** Today it does not
 arise: bearer authentication is each application's own HS256 configuration, minted by
 `tesseraql token --app` and the token endpoint, and nothing in this document changes that before
