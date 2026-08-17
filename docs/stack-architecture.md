@@ -1040,8 +1040,9 @@ applications under one operator-owned `stack.yml`. No team reads the other's sta
 coordination meeting assigns addresses, because **the `/apps/<name>` default makes the name the
 inter-team contract** — which is what the migration-history work made names required and unique
 *for*. Cross-application links are absolute `/apps/<name>` paths, so address overrides break
-neighbours' links; overrides are for the deployment's root choice and little else, and with
-Decision 24's portal at the unclaimed root, most stacks override nothing.
+neighbours' links; overrides are for the deployment's root choice and little else — and Decision
+24's `root.redirect` serves that choice *without* an override, keeping the canonical address, so
+most stacks override nothing.
 
 **The walk found a defect.** If names are the namespace, a collision must be refused loudly, and
 `AppCatalog.register` is `apps.put(app.id(), app)` — a second team installing an application under a
@@ -1060,9 +1061,24 @@ URL anyone types into a fresh deployment — or a fresh `dev` — is a 404.
   reach**, filtered, as links. One screen answers "what is here and who am I here" — the intranet
   home page, which for the internal-business-application deployments this architecture serves is a
   product surface rather than a nicety.
-- **It stands at the *unclaimed* root only.** An application declaring `basePath: /` wins, and the
-  portal is not consulted; with Decision 23 making root a deliberate stack.yml declaration, claiming
-  it becomes the exception rather than the habit.
+- **The root can instead be a configured redirect**, suggested in the same review. `stack.yml`
+  declares it by *name*, not by URL:
+
+  ```yaml
+  root:
+    redirect: orders     # /  →  /apps/orders/
+  ```
+
+  For the one-main-application deployment this is **better than claiming root with `basePath: /`**,
+  because the application keeps its canonical `/apps/orders` address — the name contract Decision 23
+  rests on — while the bare origin still lands users somewhere useful. Naming an application the
+  stack does not hold is refused at start, like every other disagreement. The redirect is
+  **temporary (307), deliberately**: a permanent redirect is cached by browsers past the
+  configuration change that retires it, which would turn an operator's edit into a support ticket.
+- **Precedence, one rule:** an application declaring `basePath: /` owns the root outright (the
+  public-site case, where URLs must not carry a prefix) → else `root.redirect` points at one
+  application → else the portal. Three behaviours, one question — "what does the bare origin do" —
+  answered in one place, `stack.yml`, falling back to the portal when it says nothing.
 - **Development and production get the same screen** (Decision 12's parity). This costs the
   development loop nothing new: the five-minute demo already begins with "First login" against a
   seeded identity store, so sign-in-first at `/` is the flow developers already have.
