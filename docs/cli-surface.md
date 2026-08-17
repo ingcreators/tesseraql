@@ -123,8 +123,9 @@ Removing it removes all three. Every suite has a directory, so `suite.yml` is al
 parent check is unnecessary because the invocation it guarded is refused outright, and Decision 22
 loses a special case.
 
-**What it costs is one `mkdir`, once, for a repository holding a single application** — and the
-layout it asks for is the layout every other suite already has:
+**What it costs is one `mkdir`, once, for a repository holding a single application** — and for
+anything `tesseraql new` created, not even that, because `new` already places the application inside
+a parent (Decision 8). The layout it asks for is the layout every other suite already has:
 
 ```
 myrepo/
@@ -440,6 +441,68 @@ So the split is:
 A guard that cannot answer the interesting question is still worth having when it answers the
 question that actually decayed.
 
+### 8. `new` already creates the layout, so its flag is `--suite` and it writes no suite file
+
+**Measured 2026-08-16, and it corrects this document.** The mapping table first said `new --dir`
+becomes `--app`, on the grounds that "it is the directory that becomes an application home". That is
+wrong about the code. `NewCommand` takes the application's name as a positional argument and
+`--dir` as the **parent**:
+
+```java
+@Parameters(index = "0", description = "The app name ([a-z][a-z0-9-]*); also the directory.")
+String appName;
+@Option(names = {"--dir"}, description = "Parent directory to create the app in (default: .).")
+Path dir = Path.of(".");
+```
+
+`home = dir.resolve(appName)`. Renaming that to `--app` would make one command's `--app` mean *the
+parent of* an application home while twenty-five others mean the home itself — the one-flag-two-kinds
+failure Decision 1 exists to prevent, introduced by the rename meant to tidy it.
+
+**It becomes `--suite`.** A directory that a new application is created *inside* is, by definition, a
+directory holding applications. So the same word carries the same directory from creation to
+running:
+
+```bash
+tesseraql new orders --suite ./work    # creates ./work/orders/
+tesseraql dev --suite ./work           # runs it
+```
+
+**And the default already produces the right shape.** `--dir` defaults to `.`, so `tesseraql new
+orders` leaves the current directory holding one application home one level down — a suite, with no
+further step. Decision 2's cost was quoted as "one `mkdir` for a single-application repository"; the
+measurement says it is **zero** for anything created by `new`.
+
+**`new` does not write `suite.yml`**, for three reasons that are the same reason:
+
+- **It has no required content.** Decision 22 puts settings in that file when divergence between
+  applications fails silently, or when only a host can know the value. A workspace being scaffolded
+  has one application and no host in front of it yet, so a generated file would be entirely
+  commented out — a file that says nothing, which is a cost with no reader.
+- **It is outside the directory the command was told to create.** `new orders` writing `./suite.yml`
+  as well as `./orders/` is a surprise, and surprises in a scaffolder are expensive because they are
+  discovered later, in someone else's checkout.
+- **It is shared.** The second `tesseraql new` into the same suite would meet a file the first one
+  wrote, and would have to decide whether to merge, skip or refuse — three answers to a question
+  that does not need asking.
+
+What is owed instead is discoverability, and the command already has a place for it. Its "Next
+steps" are rewritten, which they need anyway: they currently `cd` into the application and run
+`serve --app .`, and after Decision 2 that directory is not a suite, so the obvious next command
+would be refused.
+
+```
+Created app 'orders' at /home/dev/work/orders (14 files).
+
+Next steps:
+  # point orders/config/application.yml at your database, then
+  tesseraql dev --suite .
+  tesseraql scaffold crud --app ./orders --table items
+
+This directory is now a suite. Add ./suite.yml when the applications in it need
+a shared session store, an external URL, or an issuer (docs/hosting.md).
+```
+
 ## The complete mapping
 
 Every command, and what these decisions do to it. `+set` means the command joins a Decision 5 set
@@ -450,7 +513,7 @@ and gains its options.
 | `serve` | **becomes `dev`**; `--app` → **`--suite`**, which is now the only way to name what runs (Decision 1); gains `--app-name` for narrowing (Decision 3); `+config` (already had `--env`) |
 | `host` | `--install-root` → **`--suite`**; **`--mode` deleted** with independent hosting (`suite-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--app-name` (Decision 3); `+config` |
 | `mcp` | gains **`--suite`** and `--app-name` — `suite-architecture.md` Decision 19 makes the development-tool MCP span the suite, and Decision 3 is how it narrows; `--read-only` becomes a property of the server, not of an application; `+config` |
-| `new` | `--dir` → **`--app`**. It is the directory that becomes an application home, and every other command calls that `--app` |
+| `new` | `--dir` → **`--suite`**, not `--app` — see Decision 8; it names the *parent*, which is by definition a directory holding applications. The "Next steps" it prints are rewritten with it |
 | `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |
 | `scaffold` | `+config`, `+connection` (has three of four; gains `--datasource`) |
 | `test` | `+config`, `+connection` (gains `--datasource`) |
@@ -482,7 +545,7 @@ its subject. Everything else is addition or a rename.
 | 3 | `serve` → `dev`, over `--suite`, through the gateway; `--port` as the front door, and `MultiAppHost` honouring a declared `server.port` instead of always calling `freePort()` (Decision 4a) |
 | 3a | `--embedded-db` for a suite (Decision 4b): the coordinates supplied through the environment source, the declared query string carried over, the pool-level backstop and its one line |
 | 4 | The three `@Mixin` sets (Decision 5) applied across every command, `--modules` membership settled per command, and the shape guard of Decision 7 |
-| 5 | `new --dir` → `--app`; `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
+| 5 | `new --dir` → `--suite` and its "Next steps" (Decision 8); `reference-cli.md` regenerated; `hosting.md` and `getting-started.md` rewritten to the new surface |
 
 **The `--app-name` deletion is not in these slices.** It depends on the history-key change of
 Decision 6, which fixes a defect that bites `serve` and every scaffolded application today and has
