@@ -99,14 +99,14 @@ application looking for children, or scanned recursively, would offer the framew
 as if the operator had installed them. Recognising the application and stopping removes that path
 entirely rather than guarding it.
 
-**The second is that a stack has to have somewhere to put `stack.yml`.**
+**The second is that a stack has to have somewhere to put `tesseraql-stack.yml`.**
 
 **Amended twice on 2026-08-16, and this is where the second amendment landed.** An intermediate
 version accepted an application home as "a stack of one", to save a single-application repository
 one directory. It was wrong, and the way it was wrong is worth keeping because the argument for it
 sounded like simplification:
 
-- `stack.yml` lives in the stack's directory ([stack-architecture.md](stack-architecture.md)
+- `tesseraql-stack.yml` lives in the stack's directory ([stack-architecture.md](stack-architecture.md)
   Decision 22), and an application home is not one — a stack file there would ship inside the
   application's package. So a stack of one could hold **no stack settings at all.**
 - The reply written at the time was that a stack of one has no cross-application divergence to
@@ -115,11 +115,11 @@ sounded like simplification:
   applications fails silently — and **the external origin is the first limb.** One application still
   cannot know its own external origin, and Decision 18's MCP `resource` and the authorization
   server's `issuer` both need it. The shape could not supply it and never would.
-- Defending it then cost a second mechanism: a check for a `stack.yml` in the *parent* directory, to
+- Defending it then cost a second mechanism: a check for a `tesseraql-stack.yml` in the *parent* directory, to
   refuse the case where narrowing by path would silently drop the stack's settings. A shape that
   needs a guard to stop it being used the obvious way is a shape, not a saving.
 
-Removing it removes all three. Every stack has a directory, so `stack.yml` is always possible, the
+Removing it removes all three. Every stack has a directory, so `tesseraql-stack.yml` is always possible, the
 parent check is unnecessary because the invocation it guarded is refused outright, and Decision 22
 loses a special case.
 
@@ -129,7 +129,7 @@ a parent (Decision 8). The layout it asks for is the layout every other stack al
 
 ```
 myrepo/
-  stack.yml
+  tesseraql-stack.yml
   orders/
     config/
     web/
@@ -148,7 +148,8 @@ deliberately empty.
 value changes kind depending on a sibling flag.
 
 **Narrowing a stack to one of its applications is `--stack ./work --app-name orders`.** The stack
-directory is still named, so `stack.yml` is read and the application starts at `/apps/orders` — the
+directory is still named, so `tesseraql-stack.yml` is read and the application starts at `/orders`
+(`stack-architecture.md` Decision 25) — the
 address it has when the whole stack runs. Narrowing changes *how many* runtimes start and nothing
 else, which is what [stack-architecture.md](stack-architecture.md) Decision 19 asks for when it
 requires narrowing the development-tool MCP to stay "a scoping flag, not a second mode."
@@ -157,7 +158,7 @@ requires narrowing the development-tool MCP to stay "a scoping flag, not a secon
 narrowing `--app` instead of `--stack`, which changed the application's address while narrowing, so
 the narrow case and the whole case disagreed about where the application answered. The replacement
 made it `--stack ./work/orders` — the member's own directory — which fixed the address and **broke
-the settings**, since `./work/stack.yml` is not reached up for. Decision 2 now refuses that path
+the settings**, since `./work/tesseraql-stack.yml` is not reached up for. Decision 2 now refuses that path
 outright, and narrowing is a flag whose value is the name the application declares.
 
 **`--app-name` is the same word as the configuration key**, `tesseraql.app.name`, which Decision 6
@@ -272,7 +273,7 @@ already does, at bind time, naming the port.
 **The gateway's port has no configuration key, only `--port`.** Under
 [stack-architecture.md](stack-architecture.md) Decision 16 it is the host's setting, not an
 application's, and a stack-level configuration file did not exist when this was written. One does
-now — **Decision 22's `stack.yml`** — and the port deliberately **stays out of it**. That file
+now — **Decision 22's `tesseraql-stack.yml`** — and the port deliberately **stays out of it**. That file
 carries the settings whose divergence fails silently; a wrong port fails at bind, naming the port.
 
 **A consequence found while writing this, which is a pre-existing defect rather than a new one.**
@@ -332,7 +333,7 @@ than deriving it from any application's URL. An application's `currentSchema` mu
 per-application session store is a stack where signing in does not carry.
 
 **Amended 2026-08-17.** "Not part of this" was read as "left alone", and left alone it collides with
-the sentence above it. With no `stack.yml`, Decision 16 falls back to each runtime's own
+the sentence above it. With no `tesseraql-stack.yml`, Decision 16 falls back to each runtime's own
 `tesseraql.framework.datasource` — `main` — so the `currentSchema` this decision recommends makes
 two applications resolve two different coordinates, and the disagreement check refuses the whole
 development stack. So `--embedded-db` **supplies** the framework datasource: the same embedded
@@ -474,7 +475,7 @@ and `testing.md` teaches the same word the same way. A user who read either and 
 `tesseraql host --suite` would be reading one word for two things in one documentation set — the
 defect this document opens by naming.
 
-So the deployment unit is a **stack**: `--stack <dir>`, `stack.yml`, and
+So the deployment unit is a **stack**: `--stack <dir>`, `tesseraql-stack.yml`, and
 [stack-architecture.md](stack-architecture.md). `stack` reads in both places the concept has to
 work — `dev --stack ./work` and `host --stack /opt/apps` — which `workspace` does not, and it
 carries no meaning in this repository yet.
@@ -519,13 +520,13 @@ orders` leaves the current directory holding one application home one level down
 further step. Decision 2's cost was quoted as "one `mkdir` for a single-application repository"; the
 measurement says it is **zero** for anything created by `new`.
 
-**`new` does not write `stack.yml`**, for three reasons that are the same reason:
+**`new` does not write `tesseraql-stack.yml`**, for three reasons that are the same reason:
 
 - **It has no required content.** Decision 22 puts settings in that file when divergence between
   applications fails silently, or when only a host can know the value. A workspace being scaffolded
   has one application and no host in front of it yet, so a generated file would be entirely
   commented out — a file that says nothing, which is a cost with no reader.
-- **It is outside the directory the command was told to create.** `new orders` writing `./stack.yml`
+- **It is outside the directory the command was told to create.** `new orders` writing `./tesseraql-stack.yml`
   as well as `./orders/` is a surprise, and surprises in a scaffolder are expensive because they are
   discovered later, in someone else's checkout.
 - **It is shared.** The second `tesseraql new` into the same stack would meet a file the first one
@@ -545,9 +546,38 @@ Next steps:
   tesseraql dev --stack .
   tesseraql scaffold crud --app ./orders --table items
 
-This directory is now a stack. Add ./stack.yml when the applications in it need
+This directory is now a stack. Add ./tesseraql-stack.yml when the applications in it need
 a shared session store, an external URL, or an issuer (docs/hosting.md).
 ```
+
+### 9. An omitted `--stack` is found the way `cargo` finds a workspace — one level, never further
+
+`cd work/orders && tesseraql dev` is the muscle memory every toolchain trains — `npm run dev`,
+`cargo build`, `git status` all run from inside the thing being worked on. Requiring
+`dev --stack ..` from there is a small persistent toll on the most-typed command in the product.
+
+**On `dev` and `mcp`, when `--stack` is not given:**
+
+- the working directory is stack-shaped (holds applications, or `catalog.json`) → it is the stack;
+- the working directory is an application home and its **parent** is stack-shaped → the parent is
+  the stack;
+- anything else → the refusal Decision 2 already prints, naming both accepted forms.
+
+An explicit `--stack` always wins and is never second-guessed. The search is **one level and never
+further** — the same discipline as Decision 2's one-level scan, for the same reason: a rule that
+walks an arbitrary distance behaves differently depending on where the tree happens to sit. `cargo`
+walks to the filesystem root; this deliberately does not, and the cost is that running from
+`work/orders/web/` is refused rather than resolved, which the refusal message makes a two-second
+fix.
+
+Discovery runs the **whole** stack, not the application the shell happens to be inside. Narrowing
+stays explicit (`--app-name`, Decision 3), because a stack silently missing its neighbours is
+cross-application links answering 404 in exactly the runs that were started for convenience.
+
+**`host` keeps `--stack` required.** It is run by operators and service units, where the working
+directory is an accident of the supervisor and an implicit start is a hazard rather than a
+convenience. The development loop guesses so the developer does not have to type; production does
+not guess.
 
 ## The complete mapping
 
@@ -556,9 +586,9 @@ and gains its options.
 
 | Command | Change |
 | --- | --- |
-| `serve` | **becomes `dev`**; `--app` → **`--stack`**, which is now the only way to name what runs (Decision 1); gains `--app-name` for narrowing (Decision 3); `+config` (already had `--env`) |
-| `host` | `--install-root` → **`--stack`**; **`--mode` deleted** with independent hosting (`stack-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--app-name` (Decision 3); `+config` |
-| `mcp` | gains **`--stack`** and `--app-name` — `stack-architecture.md` Decision 19 makes the development-tool MCP span the stack, and Decision 3 is how it narrows; `--read-only` becomes a property of the server, not of an application; `+config` |
+| `serve` | **becomes `dev`**; `--app` → **`--stack`**, which is now the only way to name what runs (Decision 1), discovered one level up when omitted (Decision 9); gains `--app-name` for narrowing (Decision 3); `+config` (already had `--env`) |
+| `host` | `--install-root` → **`--stack`**, always explicit — production does not guess (Decision 9); **`--mode` deleted** with independent hosting (`stack-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--app-name` (Decision 3); `+config` |
+| `mcp` | gains **`--stack`** (discovered one level up when omitted, Decision 9) and `--app-name` — `stack-architecture.md` Decision 19 makes the development-tool MCP span the stack, and Decision 3 is how it narrows; `--read-only` becomes a property of the server, not of an application; `+config` |
 | `new` | `--dir` → **`--stack`**, not `--app` — see Decision 8; it names the *parent*, which is by definition a directory holding applications. The "Next steps" it prints are rewritten with it |
 | `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |
 | `scaffold` | `+config`, `+connection` (has three of four; gains `--datasource`) |
