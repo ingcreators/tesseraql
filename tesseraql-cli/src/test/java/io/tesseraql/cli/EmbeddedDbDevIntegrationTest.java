@@ -32,12 +32,12 @@ import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 /**
- * Exercises the {@code serve --embedded-db} machinery end to end: the platform PostgreSQL binary is
+ * Exercises the {@code dev --embedded-db} machinery end to end: the platform PostgreSQL binary is
  * resolved on demand and a real embedded instance backs the runtime's {@code main} datasource. The
  * test resolves and runs an actual {@code postgres} process (the linux-amd64 binary is on the test
  * classpath so resolution stays offline), so it is heavier than a unit test.
  */
-class EmbeddedDbServeIntegrationTest {
+class EmbeddedDbDevIntegrationTest {
 
     @Test
     void embeddedDbBootsTheRuntimeAndMigratesAgainstRealPostgres(@TempDir Path dir)

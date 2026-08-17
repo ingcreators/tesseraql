@@ -5,7 +5,7 @@ files on disk that the framework serves, edits them as drafts, and applies a cha
 live process without a restart. It is the fastest loop the framework has, and it is where
 a semi-technical author can do real work without a checkout.
 
-Open it at `/_tesseraql/studio/ui`. `tesseraql serve` prints the URL at startup.
+Open it under your application's address: `/<name>/_tesseraql/studio/ui`. `tesseraql dev` prints each application's URL at startup.
 
 ## The editing model
 
@@ -108,7 +108,7 @@ The screens an operator or reviewer uses:
 
 Both loops are the same loop, and you can move between them freely.
 
-`tesseraql serve --app . --watch` watches the `web/` tree, `workflow/`, and the shared
+`tesseraql dev --watch` watches the `web/` tree, `workflow/`, and the shared
 definitions, and hot-reloads on save. That is exactly what Studio's **Apply** does. Use
 Studio when you want the generated screens, the data browser, and the documentation beside
 the edit; use your editor with `--watch` when you want git, diffs, and your own keymap.

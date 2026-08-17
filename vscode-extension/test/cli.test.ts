@@ -8,7 +8,7 @@ test('lint runs the JSON contract against the app home', () => {
 });
 
 test('terminal verbs run against the current directory', () => {
-  assert.equal(terminalCommand('tesseraql', 'serve'), 'tesseraql serve --app .');
+  assert.equal(terminalCommand('tesseraql', 'dev'), 'tesseraql dev');
   assert.equal(terminalCommand('/opt/t q l/bin/tesseraql', 'test'),
       '"/opt/t q l/bin/tesseraql" test --app .');
 });

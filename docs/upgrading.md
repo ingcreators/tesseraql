@@ -50,7 +50,7 @@ Verify with `tesseraql --version`. The install channels are described in
    coordinates declared without a version (the normal form, e.g.
    `io.tesseraql:tesseraql-pdf`) resolve through the BOM at the CLI's own version, so
    after a CLI upgrade the resolved closure no longer matches the committed lock and
-   `tesseraql serve` refuses to start until it does:
+   `tesseraql dev` refuses to start until it does:
 
    ```sh
    tesseraql modules resolve --app .

@@ -167,7 +167,7 @@ measurements this document has not taken:
 The second is only worth its cost if the first cannot be made to fail loudly when a development
 dependency creeps back in.
 
-### 2. The production image runs `host`, not `serve`
+### 2. The production image runs `host`, not `dev`
 
 `deploy/Dockerfile` ends with `CMD ["serve", "--app", "/app"]`. Under
 [stack-architecture.md](stack-architecture.md) Decision 12 and

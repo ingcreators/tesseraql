@@ -123,7 +123,7 @@ correct answers and they conflict:
   make each app a separate sign-in and delete the mode's reason to exist.
 
 The cookie path is therefore not derivable from the base path, and it is **supplied
-alongside it by whatever starts the runtime**. A standalone `serve` uses the base path; a
+alongside it by whatever starts the runtime**. A standalone runtime start uses the base path; a
 stack-mode gateway passes `/`, because it is the component that knows these applications are
 one stack. An isolated-mode gateway passes each app's own path, since there is nothing to
 share.

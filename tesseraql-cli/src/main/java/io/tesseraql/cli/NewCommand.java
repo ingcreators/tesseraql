@@ -72,7 +72,8 @@ final class NewCommand implements Callable<Integer> {
         System.out.println("Next steps:");
         System.out.println("  cd " + appName);
         System.out.println("  # point config/application.yml at your database, then");
-        System.out.println("  tesseraql serve --app .");
+        System.out.println("  tesseraql dev");
+        System.out.println("  # (or skip the database: tesseraql dev --embedded-db)");
         System.out.println("  tesseraql scaffold crud --app . --table items");
         return 0;
     }

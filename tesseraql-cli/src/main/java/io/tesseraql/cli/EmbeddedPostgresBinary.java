@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /**
  * Maps the running platform to the zonky {@code embedded-postgres-binaries-<os>-<arch>} Maven
- * classifier, so the {@code serve --embedded-db} path can resolve the matching PostgreSQL binary on
+ * classifier, so the {@code dev --embedded-db} path can resolve the matching PostgreSQL binary on
  * demand. The five classifiers below are the ones zonky publishes that TesseraQL targets; anything
  * else (e.g. 32-bit, s390x, or musl/alpine linux which needs the separate {@code -alpine} artifact)
  * is rejected with a clear message rather than resolving a binary that cannot run.

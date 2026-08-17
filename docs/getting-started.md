@@ -42,23 +42,23 @@ Verify: `tesseraql --version`.
 tesseraql new myapp                  # scaffold into your own repo (config, a migration, routes, tests)
 cd myapp
 docker compose up -d                 # a local PostgreSQL (or point config at your own)
-tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio
+tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /<name>/_tesseraql/studio
 tesseraql scaffold crud --app . --table items
 ```
 
 ### First login
 
 [Studio](studio.md) and [the ops console](ops-console.md) sign in against the identity store, which is **not seeded** — while
-no users exist, `serve` says so and prints this step. Create the first administrator once (in a
-second terminal, with `serve` still running):
+no users exist, `dev` says so and prints this step. Create the first administrator once (in a
+second terminal, with `dev` still running):
 
 ```sh
 printf 'change-me' > admin.pw
 tesseraql identity-schema --app . --admin-login admin --admin-password-file admin.pw
 ```
 
-Then open `http://localhost:8080/_tesseraql/studio` and sign in with that login. The same
-command works under `--embedded-db`: `serve` leaves the running embedded database's JDBC URL in
+Then open `http://localhost:8080/myapp/_tesseraql/studio` and sign in with that login. The same
+command works under `--embedded-db`: `dev` leaves the running embedded database's JDBC URL in
 `work/embedded-db.jdbc`, and the database-touching commands (`identity-schema`, `migrate`,
 `scaffold crud`, `test`, ...) fall back to it under `--app .` whenever the configured
 database does not answer (announced as `Using the running embedded database
@@ -72,8 +72,8 @@ To run with no external database at all, add `--embedded-db`. The CLI starts an 
 PostgreSQL and points the app's `main` datasource at it:
 
 ```sh
-tesseraql serve --app . --embedded-db            # ephemeral: a fresh DB, wiped on exit
-tesseraql serve --app . --embedded-db ./pgdata   # persistent: data survives restarts
+tesseraql dev --embedded-db                      # ephemeral: a fresh DB, wiped on exit
+tesseraql dev --embedded-db ./pgdata             # persistent: data survives restarts
 ```
 
 It is a real `postgres`, so everything behaves exactly as it would against a server you run
@@ -100,7 +100,7 @@ tesseraql package --app .            # build a .tqlapp under work/
 `migrate` (apply/info/validate/repair), `schema`, `governance`, `identity-schema`, and `verify`
 round out the surface. Every subcommand calls the same engine as the matching Maven goal.
 
-Prefer your own editor over Studio? `tesseraql serve --app . --watch` watches the `web/`
+Prefer your own editor over Studio? `tesseraql dev --watch` watches the `web/`
 tree — plus `workflow/` and the shared definitions (`decisions/`, `rules/`, `scope/`,
 `domains/`) that bake into routes — and hot-reloads the moment you save: a route edit
 bounces that route, a workflow edit rebuilds its transition endpoints, a shared-definition
@@ -115,7 +115,7 @@ verifies asymmetrically (publicKey/JWKS) has nothing this command could sign wit
 
 ```bash
 curl -H "Authorization: Bearer $(tesseraql token --app . --role ADMIN)" \
-  http://localhost:8080/api/things
+  http://localhost:8080/myapp/api/things
 ```
 
 ## The Maven / CI path
@@ -172,7 +172,7 @@ tesseraql modules add io.tesseraql:tesseraql-pdf --app .     # edits tesseraql.y
 tesseraql modules add com.oracle.database.jdbc:ojdbc11 --app .
 ```
 
-`modules.lock` pins the exact resolved closure (committed, reproducible). `serve` resolves the
+`modules.lock` pins the exact resolved closure (committed, reproducible). `dev` resolves the
 declared set on start.
 
 Non-PostgreSQL drivers are opt-in because their licenses differ: SQL Server (`mssql-jdbc`, MIT)
@@ -189,6 +189,6 @@ bake the cache into your image so production hosts need no repository access.
 - [reference-cli.md](reference-cli.md) — every subcommand and flag.
 - [reference-config.md](reference-config.md) — every configuration key the framework reads.
 - [app-layout.md](app-layout.md) — the application directory and URL mapping.
-- [studio.md](studio.md) — the browser IDE `serve` just opened.
+- [studio.md](studio.md) — the browser IDE `dev` just opened.
 - [deployment.md](deployment.md) — container deployment.
 - [proxy.md](proxy.md) — corporate proxy / internal mirror / air-gapped networks.

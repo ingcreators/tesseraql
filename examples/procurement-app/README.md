@@ -55,7 +55,7 @@ Part of the template gallery; held to the marketplace admission profile
 ## Run it
 
 ```bash
-tesseraql serve --app . --embedded-db     # embedded PostgreSQL, auto-seeded
+tesseraql dev --app-name procurement --embedded-db     # embedded PostgreSQL, auto-seeded
 ```
 
 Mint a dev bearer token (`tesseraql token --app . --role PROCUREMENT`, or `REQUESTER`

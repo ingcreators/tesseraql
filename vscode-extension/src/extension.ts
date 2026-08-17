@@ -19,7 +19,7 @@ import * as path from 'node:path';
 // findings into the Problems panel, the CLI verbs as commands, the app explorer, and
 // error-code hovers. All validation lives in the CLI this extension runs.
 
-const TERMINAL_VERBS = ['serve', 'test', 'migrate', 'admission', 'package'] as const;
+const TERMINAL_VERBS = ['dev', 'test', 'migrate', 'admission', 'package'] as const;
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('TesseraQL');

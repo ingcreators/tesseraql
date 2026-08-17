@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 /**
- * The serve status bar item (docs/vscode-extension.md, Phase 55 slice 5): polls the
+ * The dev-runtime status bar item (docs/vscode-extension.md, Phase 55 slice 5): polls the
  * Phase 45 readiness probe on the configured base URL while an app home is open —
  * up, DOWN (a 503 readiness answer), or offline (unreachable). One click opens the
  * app. Nothing new server-side; the probe is the contract.
@@ -12,7 +12,7 @@ export class ServeStatus {
 
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-    this.item.name = 'TesseraQL serve';
+    this.item.name = 'TesseraQL dev';
     this.item.command = 'tesseraql.openServer';
   }
 

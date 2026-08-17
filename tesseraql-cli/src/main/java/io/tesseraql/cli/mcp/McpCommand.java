@@ -58,7 +58,7 @@ public final class McpCommand implements Callable<Integer> {
     @Override
     public Integer call() throws Exception {
         // The dev tools lint and test the app, so custom expression functions install from the
-        // app's declared tesseraql.modules first (the same wiring serve boots with).
+        // app's declared tesseraql.modules first (the same wiring dev boots with).
         io.tesseraql.cli.CliModules.installAppExtensions(app, null);
         McpServer server = new McpDevTools(app, readOnly).toServer();
         return transport == Transport.http ? serveHttp(server) : serveStdio(server);

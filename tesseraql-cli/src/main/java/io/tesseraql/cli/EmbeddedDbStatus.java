@@ -14,9 +14,9 @@ import java.util.Optional;
 final class EmbeddedDbStatus {
 
     enum State {
-        /** No cluster on disk yet; the first serve creates it at the default version. */
+        /** No cluster on disk yet; the first dev run creates it at the default version. */
         UNINITIALIZED,
-        /** On disk and pinned to the same major as the default — serve runs it as-is. */
+        /** On disk and pinned to the same major as the default — dev runs it as-is. */
         UP_TO_DATE,
         /** On an older major than the default — an upgrade is available via the operator's tools. */
         UPGRADE_AVAILABLE

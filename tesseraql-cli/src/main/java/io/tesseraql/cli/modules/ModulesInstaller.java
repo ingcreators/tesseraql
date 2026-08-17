@@ -13,7 +13,7 @@ import java.util.stream.Stream;
 /**
  * Resolves the declared {@code tesseraql.modules} into the app's module cache
  * ({@code work/modules}) and reconciles {@code modules.lock} (design: app-developer-distribution
- * work item 4). {@code serve} calls it to load the declared modules on start (verifying the lock);
+ * work item 4). {@code dev} calls it to load the declared modules on start (verifying the lock);
  * {@code tesseraql modules add/resolve} calls it to (re)write the lock.
  */
 public final class ModulesInstaller {
@@ -42,7 +42,7 @@ public final class ModulesInstaller {
 
     /**
      * Resolves the declared modules into {@code appHome/work/modules}. When a {@code modules.lock}
-     * exists and {@code writeLock} is false (the {@code serve} path), the resolved closure is
+     * exists and {@code writeLock} is false (the {@code dev} path), the resolved closure is
      * verified against it. When {@code writeLock} is true (the {@code modules} command path), a new
      * lock is written. Returns empty when no modules are declared.
      */

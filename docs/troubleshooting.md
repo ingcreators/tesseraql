@@ -21,7 +21,7 @@ things to check, in order:
 1. Is the database running? `docker compose up -d` starts the one the scaffold ships.
 2. Does `tesseraql.datasources.main.jdbcUrl` point at it? A `--jdbc-url` argument overrides
    both the config and any running embedded database.
-3. Are you expecting an embedded database? A `tesseraql serve --embedded-db` in another
+3. Are you expecting an embedded database? A `tesseraql dev --embedded-db` in another
    terminal leaves a `work/embedded-db.jdbc` marker, and the database commands pick it up —
    but only when you pass `--app .`.
 
@@ -73,7 +73,7 @@ The server does not watch the filesystem by default. Routes mount at start, when
 applies an edit, or when `--watch` sees the file change:
 
 ```sh
-tesseraql serve --app . --watch
+tesseraql dev --watch
 ```
 
 Jobs, queue consumers, and `config/` changes still need a full restart, whichever loop you

@@ -11,7 +11,7 @@ connector policy that governs every other ingress and egress governs these too.
 This page walks the whole loop once, with pointers into each feature's own page. The
 runnable reference is the bundled `examples/inventory-app` — every snippet below is a
 lightly trimmed version of a file in it, and
-`tesseraql serve --app examples/inventory-app --embedded-db` boots the entire story
+`tesseraql dev --stack examples --app-name inventory --embedded-db` boots the entire story
 ([five-minute demo](five-minute-demo.md)).
 
 ## 1. Files become SQL
