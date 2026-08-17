@@ -2,10 +2,10 @@
 #
 #   docker build -f deploy/Dockerfile --build-arg APP_HOME=examples/user-admin-app -t myapp .
 #
-# APP_HOME is the app directory (config/, web/, db/, ...) baked into the image. One image
-# serves one application: mounting further applications into a running runtime was removed
-# (docs/app-isolation-model.md decision 1). To run several applications on one host, install
-# them under an install root and start them with `tesseraql host` (docs/hosting.md).
+# APP_HOME is the app directory (config/, web/, db/, ...) baked into the image, as the one
+# member of the stack directory /stack the container hosts (docs/hosting.md): the application
+# answers at /<its name>/, and the gateway answers the origin's /_tesseraql/health itself. To
+# run several applications, bake them side by side under /stack or mount an install root.
 
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
@@ -25,12 +25,12 @@ COPY --from=build /build/tesseraql-cli/target/tesseraql-cli-*.jar lib/
 COPY --from=build /build/tesseraql-cli/target/dependency/*.jar lib/
 
 ARG APP_HOME
-COPY ${APP_HOME} /app
+COPY ${APP_HOME} /stack/app
 
 # The work directory holds spools, drafts and fetched apps; mount a volume over it so
 # generated exports and downloaded .tqlapp packages survive container replacement.
-RUN mkdir -p /app/work && chown -R tesseraql /app
-VOLUME /app/work
+RUN mkdir -p /stack/app/work && chown -R tesseraql /stack
+VOLUME /stack/app/work
 
 # A class-data-sharing archive, trained here on the baked app's own routes so the classpath it
 # records is the one the container runs (docs/jvm-baseline.md decision 4): time-to-ready -25%,
@@ -46,7 +46,7 @@ VOLUME /app/work
 # is silent at run time, so the container simply starts without one.
 RUN java -XX:+UseCompactObjectHeaders \
       -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa \
-      -cp 'lib/*' io.tesseraql.cli.TesseraqlCli routes --app /app > /dev/null 2>&1 \
+      -cp 'lib/*' io.tesseraql.cli.TesseraqlCli routes --app /stack/app > /dev/null 2>&1 \
       && chown tesseraql /opt/tesseraql/lib/cds.jsa \
     || echo 'CDS training run failed; this image starts without a shared archive'
 
@@ -60,4 +60,4 @@ ENTRYPOINT ["java", \
   "--sun-misc-unsafe-memory-access=allow", \
   "-XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa", \
   "-cp", "lib/*", "io.tesseraql.cli.TesseraqlCli"]
-CMD ["serve", "--app", "/app"]
+CMD ["host", "--stack", "/stack", "--port", "8080"]

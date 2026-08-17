@@ -36,7 +36,7 @@ env:
     - DB_PASSWORD             # referenced from config as ${secret.env.DB_PASSWORD}
 
 volumes:
-  - tesseraql-work:/app/work  # spools, drafts, fetched .tqlapp packages
+  - tesseraql-work:/stack/app/work  # spools, drafts, fetched .tqlapp packages
 
 accessories:
   cloudflared:

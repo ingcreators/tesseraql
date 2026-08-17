@@ -14,7 +14,7 @@ users → Cloudflare (DNS / CDN / WAF / Access)
            │ tunnel (outbound-only; no open HTTP ports on the host)
            ▼
 host: cloudflared → kamal-proxy → tesseraql runtime (:8080)
-                                     └ volume: /app/work
+                                     └ volume: /stack/app/work
 managed PostgreSQL (sessions, jobs, outbox, file transfers all multi-node safe)
 ```
 
