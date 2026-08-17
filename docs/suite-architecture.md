@@ -739,7 +739,9 @@ application argument on each tool. Three consequences:
   server rather than of an application — there is no reason to vary it per application, and a
   mixed-mode server would be hard to reason about.
 - Narrowing to a single application stays available, because someone working on one should not have
-  to see six. That is a scoping flag, not a second mode.
+  to see six. That is a scoping flag, not a second mode — [cli-surface.md](cli-surface.md) Decision
+  3 makes it `--suite <dir> --app-id <id>`, which narrows what starts without changing anything
+  about how it is addressed or configured.
 
 **It does not inherit the authorisation problem Decision 14 records for Studio.** A suite-level
 Studio is reached over HTTP by an authenticated subject, so "which applications may this person
@@ -851,6 +853,13 @@ decision's own test for what belongs in the file. When it does need suite settin
 origin for MCP, an issuer — it gets a directory. That is one `mkdir`, and it is the same shape
 every other suite has.
 
+**Which leaves one way to lose these settings by accident, and it is closed rather than documented.**
+Pointing `--suite` at a member of a real suite — `./work/orders`, with `./work/suite.yml` beside
+it — would start that application with none of them, silently, because the file is not reached up
+for. [cli-surface.md](cli-surface.md) Decision 3 refuses that invocation and prints
+`--suite ./work --app-id orders`, which reads the file and starts the same one application. The
+check is one level up and never further, so it cannot depend on where the tree sits.
+
 #### What goes in the file, and what stays on a flag
 
 The rule is decision 16's own, applied to the operator's surface: **a setting belongs in the file
@@ -960,11 +969,12 @@ source tree being edited, and `host --install-root <dir>` runs installed package
 catalogue. Making the suite the only shape means the development loop has to point at source trees
 without packaging them first.
 
-**That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer is
-that the flag carries the distinction, where a reader can see it: `--app` is one application,
-`--suite` is several — a catalogue or a folder of source trees, both being "the applications here".
-So `--install-root` is replaced by the word this document already uses, narrowing a suite is passing
-`--app` instead of `--suite`, and `serve` becomes `dev`.
+**That is decided in [cli-surface.md](cli-surface.md), which slice 3 now depends on.** Its answer,
+after the amendments of 2026-08-16: the commands that *run* applications take `--suite` only — a
+catalogue, a folder of source trees, or one application home, all being "the applications here" —
+`--install-root` is replaced by the word this document already uses, narrowing is
+`--suite <dir> --app-id <id>`, and `serve` becomes `dev`. `--app` keeps its own meaning on the
+commands that operate on one application, where it never denoted a deployment.
 
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
 campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author
