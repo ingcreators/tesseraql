@@ -21,7 +21,7 @@ JDK does not read on its own), at startup:
 export HTTPS_PROXY=http://user:pass@proxy.example.com:3129
 export HTTP_PROXY=http://proxy.example.com:3128
 export NO_PROXY=.internal.example.com,localhost
-tesseraql serve --app .
+tesseraql dev
 ```
 
 This sets `http(s).proxyHost`/`proxyPort` (and `proxyUser`/`proxyPassword` when present) and
@@ -31,7 +31,7 @@ never overwritten, so `-Dhttp.proxyHost=…` (or `settings.xml`) takes priority 
 Pass JVM options to the launcher via `TESSERAQL_JAVA_OPTS`:
 
 ```sh
-TESSERAQL_JAVA_OPTS="-Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3129" tesseraql serve --app .
+TESSERAQL_JAVA_OPTS="-Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3129" tesseraql dev
 ```
 
 ## Internal Maven mirror / repository
@@ -72,7 +72,7 @@ JDK truststore, or point the JVM at a custom truststore:
 
 ```sh
 TESSERAQL_JAVA_OPTS="-Djavax.net.ssl.trustStore=/etc/ssl/corp.jks -Djavax.net.ssl.trustStorePassword=…" \
-  tesseraql serve --app .
+  tesseraql dev
 ```
 
 ## Air-gapped / offline

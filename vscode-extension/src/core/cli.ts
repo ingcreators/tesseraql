@@ -9,5 +9,7 @@ export function lintArgs(appHome: string): string[] {
 /** The command line a terminal runs for a CLI verb, with cwd at the app home. */
 export function terminalCommand(cliPath: string, verb: string): string {
   const cli = /\s/.test(cliPath) ? `"${cliPath}"` : cliPath;
-  return `${cli} ${verb} --app .`;
+  // dev runs the stack (discovered one level up from the app home); every other verb
+  // operates on this one application.
+  return verb === 'dev' ? `${cli} dev` : `${cli} ${verb} --app .`;
 }

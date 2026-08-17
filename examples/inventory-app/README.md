@@ -10,7 +10,7 @@ of the template gallery (roadmap Phase 47); held to the marketplace admission pr
 ## Run it
 
 ```bash
-tesseraql serve --app . --embedded-db     # embedded PostgreSQL, auto-seeded catalog
+tesseraql dev --app-name inventory --embedded-db     # embedded PostgreSQL, auto-seeded catalog
 ```
 
 - `/products` — list (search, sort, pagination) · `/products/dashboard` — the dashboard ·

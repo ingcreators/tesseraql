@@ -103,6 +103,19 @@ public final class MultiAppHost implements AutoCloseable {
      */
     public static MultiAppHost start(Path installRoot, HostContext stack,
             List<InstalledApp> applications) {
+        return start(installRoot, stack, applications, null);
+    }
+
+    /**
+     * As {@link #start(Path, HostContext, List)}, with the development loop's decisions
+     * (docs/cli-surface.md decision 4b). With an embedded database, the framework datasource is
+     * the embedded server's shared database — supplied by the CLI that started it, not derived
+     * from any application — so decision 22's guards have nothing to check: TQL-APP-4211 is moot
+     * (supplied) and TQL-APP-4212 is deliberately scoped to stack-file supply, because
+     * "override everything" must not be the one place an override is refused.
+     */
+    public static MultiAppHost start(Path installRoot, HostContext stack,
+            List<InstalledApp> applications, DevMode dev) {
         // The stack's own settings — tesseraql-stack.yml in the directory being hosted
         // (docs/stack-architecture.md decision 22). Loaded before any runtime starts, because
         // both of its guards are start-time refusals.
@@ -110,9 +123,14 @@ public final class MultiAppHost implements AutoCloseable {
                 .load(installRoot);
         Map<String, io.tesseraql.yaml.config.AppConfig> configs = loadConfigs(installRoot,
                 applications);
-        com.zaxxer.hikari.HikariDataSource frameworkPool = frameworkPool(configs, settings);
+        boolean embedded = dev != null && dev.embeddedDb() != null;
+        com.zaxxer.hikari.HikariDataSource frameworkPool = embedded
+                ? DataSources.create("tesseraql-stack-framework", dev.embeddedDb())
+                : frameworkPool(configs, settings);
         HostContext context = stack.withStackSettings(
-                settings.externalOrigin().orElse(null), frameworkPool);
+                settings.externalOrigin().orElse(
+                        dev != null ? dev.defaultExternalOrigin() : null),
+                frameworkPool);
         // The stack-wide security schema is migrated ONCE, here, before any runtime starts;
         // the runtimes validate instead of migrating and refuse to start on a mismatch
         // (docs/stack-architecture.md decision 16). On the stack's own pool when the file
@@ -140,7 +158,10 @@ public final class MultiAppHost implements AutoCloseable {
                 // bind, which is a flag-grade failure rather than a silent one.
                 started.put(app.name(), TesseraqlRuntime.start(appHome,
                         declaredPort(configs.get(app.name())).orElseGet(MultiAppHost::freePort),
-                        context.forApplication(app.basePath())));
+                        context.forApplication(app.basePath(), embedded
+                                ? carryingDeclaredQuery(dev.embeddedDb(),
+                                        configs.get(app.name()))
+                                : null)));
                 appNames.add(app.name());
                 LOG.info("Hosting app {} v{} from {}", app.name(), app.version(), appHome);
 
@@ -165,6 +186,28 @@ public final class MultiAppHost implements AutoCloseable {
         }
         return new MultiAppHost(started, Set.copyOf(appNames), Map.copyOf(canaryWeights),
                 frameworkPool);
+    }
+
+    /**
+     * The embedded coordinate, carrying the application's own declared {@code main} query
+     * string — so {@code ?currentSchema=a} declared in the application's URL keeps isolating it
+     * inside the shared embedded database (docs/cli-surface.md decision 4b: the application's
+     * {@code currentSchema} stays in its own URL, and nothing derives it).
+     */
+    private static DataSources.MainDatasourceOverride carryingDeclaredQuery(
+            DataSources.MainDatasourceOverride embedded,
+            io.tesseraql.yaml.config.AppConfig config) {
+        String declared = config == null
+                ? null
+                : config.getString("tesseraql.datasources.main.jdbcUrl").orElse(null);
+        int query = declared == null ? -1 : declared.indexOf('?');
+        if (query < 0) {
+            return embedded;
+        }
+        String base = embedded.jdbcUrl();
+        return new DataSources.MainDatasourceOverride(
+                base + (base.indexOf('?') >= 0 ? "&" : "?") + declared.substring(query + 1),
+                embedded.username(), embedded.password());
     }
 
     /**

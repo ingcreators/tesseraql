@@ -167,7 +167,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // the same app: it gets the same in-process ring every other start path gets.
         return start(appHome, withBasePath(loaded, host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null,
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, host.mainDataSourceOverride(),
                 host.frameworkDataSource(), true, host.cookiePath());
     }
 

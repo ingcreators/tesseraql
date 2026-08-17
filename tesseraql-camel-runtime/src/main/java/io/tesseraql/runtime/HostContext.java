@@ -35,9 +35,16 @@ package io.tesseraql.runtime;
  *                            from the stack file's coordinate and owned by the host; {@code null}
  *                            means the stack supplies none and each runtime resolves its own
  *                            {@code tesseraql.framework.datasource}
+ * @param mainDataSourceOverride the coordinate this application's {@code main} pool is built
+ *                            from instead of its configuration — the development loop's
+ *                            {@code --embedded-db}, carrying the application's own declared
+ *                            query string so its {@code currentSchema} isolation survives
+ *                            (docs/cli-surface.md decision 4b); {@code null} for the ordinary
+ *                            case, the application's own declaration
  */
 public record HostContext(String basePath, String cookiePath, String externalOrigin,
-        javax.sql.DataSource frameworkDataSource) {
+        javax.sql.DataSource frameworkDataSource,
+        DataSources.MainDatasourceOverride mainDataSourceOverride) {
 
     /**
      * The stack's answers, before any one application's prefix is stamped onto them: one sign-in
@@ -48,17 +55,25 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/", null, null);
+        return new HostContext(null, "/", null, null, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
     public HostContext forApplication(String basePath) {
-        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource);
+        return forApplication(basePath, null);
+    }
+
+    /** As {@link #forApplication(String)}, with the development loop's main-pool coordinate. */
+    HostContext forApplication(String basePath,
+            DataSources.MainDatasourceOverride mainDataSourceOverride) {
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
+                mainDataSourceOverride);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
     HostContext withStackSettings(String externalOrigin,
             javax.sql.DataSource frameworkDataSource) {
-        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource);
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
+                mainDataSourceOverride);
     }
 }

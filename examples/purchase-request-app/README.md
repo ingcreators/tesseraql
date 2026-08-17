@@ -9,8 +9,8 @@ the template gallery (roadmap Phase 47); held to the marketplace admission profi
 ## Run it
 
 ```bash
-tesseraql serve --app . --embedded-db        # zero-install: embedded PostgreSQL, auto-seeded
-# or point db.main.* at your PostgreSQL and just: tesseraql serve --app .
+tesseraql dev --app-name purchase-request --embedded-db    # zero-install: embedded PostgreSQL, auto-seeded
+# or point db.main.* at your PostgreSQL and just: tesseraql dev --app-name purchase-request
 ```
 
 Then:

@@ -53,7 +53,7 @@ final class CliDatasource {
     }
 
     /**
-     * Resolves like {@link #resolve(AppConfig)}, plus the {@code serve --embedded-db} first-login
+     * Resolves like {@link #resolve(AppConfig)}, plus the {@code dev --embedded-db} first-login
      * hand-off: when no explicit {@code --jdbc-url} is given and {@code appHome} carries the
      * running-embedded-database marker ({@value EmbeddedDbMarker#RELATIVE_PATH}), the marker's URL
      * backs the command whenever the config's main datasource is missing, unresolvable, or does

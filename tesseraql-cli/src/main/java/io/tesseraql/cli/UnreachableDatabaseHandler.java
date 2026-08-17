@@ -9,7 +9,7 @@ import picocli.CommandLine.ParseResult;
 
 /**
  * Shapes a could-not-reach-the-database failure into a two-line operator message instead of a
- * stack trace — the same recoverable-operator-error stance {@code serve} takes for an
+ * stack trace — the same recoverable-operator-error stance {@code dev} takes for an
  * incompatible {@code --embedded-db} data directory. Every other exception is rethrown, which
  * reproduces picocli's default handling (stack trace on stderr, execution exit code), so
  * genuine bugs keep their full diagnostics.
@@ -29,7 +29,7 @@ final class UnreachableDatabaseHandler implements CommandLine.IExecutionExceptio
         commandLine.getErr().println("Could not connect to the database: " + message);
         commandLine.getErr().println("Check that it is running and that the app's"
                 + " tesseraql.datasources.main.jdbcUrl (or --jdbc-url) points at it; a"
-                + " `tesseraql serve --embedded-db` running in another terminal also works —"
+                + " `tesseraql dev --embedded-db` running in another terminal also works —"
                 + " database commands pick up its " + EmbeddedDbMarker.RELATIVE_PATH
                 + " marker.");
         commandLine.getErr().flush();

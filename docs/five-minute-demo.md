@@ -15,7 +15,7 @@ cd tesseraql
 ## One command
 
 ```bash
-tesseraql serve --app examples/inventory-app --embedded-db
+tesseraql dev --stack examples --app-name inventory --embedded-db
 ```
 
 No database, no compose: an embedded PostgreSQL starts inside the process, the app's
@@ -33,7 +33,7 @@ also works, but compiles the framework from source and takes several minutes.)
 
 ## First login
 
-Studio signs in against the identity store, which the demo does not seed — `serve` says so at
+Studio signs in against the identity store, which the demo does not seed — `dev` says so at
 startup and prints this step. Create an administrator once (second terminal; the CLI finds the
 running embedded database by itself):
 
@@ -50,7 +50,7 @@ the running embedded database.)
 
 ## The Studio tour
 
-Open `http://localhost:8080/_tesseraql/studio` and walk the loop the framework is built
+Open `http://localhost:8080/inventory/_tesseraql/studio` and walk the loop the framework is built
 around — every stop is live against the seeded data:
 
 1. **Explorer** — every route, view, job and workflow the app serves, straight from the
@@ -70,7 +70,7 @@ around — every stop is live against the seeded data:
 5. **Docs portal** — the generated documentation: routes, schema, coverage, the release
    diff. `tesseraql admission --app examples/inventory-app` is the bar a shared app must
    clear ([marketplace admission](admission.md)).
-6. **Dashboards** — open `http://localhost:8080/products/dashboard` in the browser: stats,
+6. **Dashboards** — open `http://localhost:8080/inventory/products/dashboard` in the browser: stats,
    charts and a low-stock table from a handful of SQL files and one `recipe: dashboard`
    document, no HTML anywhere in the app — including a supplier-price table read straight
    off CSV files and a price trend from the lake's snapshots, live database and analytics

@@ -14,7 +14,7 @@ users → Cloudflare (DNS / CDN / WAF / Access)
            │ tunnel (outbound-only; no open HTTP ports on the host)
            ▼
 host: cloudflared → kamal-proxy → tesseraql runtime (:8080)
-                                     └ volume: /app/work
+                                     └ volume: /stack/app/work
 managed PostgreSQL (sessions, jobs, outbox, file transfers all multi-node safe)
 ```
 
@@ -121,7 +121,7 @@ that exposes the runtime directly without an HTTPS edge is misconfigured. See th
 
 ## Embedded database lifecycle
 
-`tesseraql serve --embedded-db [dir]` runs a real PostgreSQL inside the process — for
+`tesseraql dev --embedded-db [dir]` runs a real PostgreSQL inside the process — for
 development and demos, not multi-node production (it is single-process; point multiple app
 nodes at a shared server instead). An ephemeral run gets a fresh database wiped on exit; a
 directory argument makes the data persistent.
@@ -146,7 +146,7 @@ into a fresh one. To graduate embedded data to a standalone server, point
 ## Environment profiles
 
 One switch selects a per-environment overlay layer (see [promotion](promotion.md) for the
-full dev → staging → prod loop): `--env staging` on `tesseraql serve` (or `TESSERAQL_ENV=staging`, or
+full dev → staging → prod loop): `--env staging` on `tesseraql dev` (or `TESSERAQL_ENV=staging`, or
 `-Dtesseraql.env=staging`) merges `config/env/staging.yml` **between** the app's base config
 (`application.yml` → `tesseraql.yml`) and Studio's `overlay.yml` — the profile is the
 environment's tuning, and dev-time Studio edits still win on top. A named profile whose file

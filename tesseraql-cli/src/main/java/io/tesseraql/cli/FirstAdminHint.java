@@ -11,7 +11,7 @@ import java.sql.Statement;
 import java.util.Optional;
 
 /**
- * The first-run hand-off hint for {@code serve}: every entry path stalls at the login form while
+ * The first-run hand-off hint for {@code dev}: every entry path stalls at the login form while
  * the identity store is unseeded, so when the managed schema holds no users (or was never applied)
  * the CLI says how to create the first administrator right after "TesseraQL serving on port ...".
  * The check runs once at startup, never per request, and is best-effort throughout — any error
@@ -28,7 +28,7 @@ final class FirstAdminHint {
      * The hint to print, or empty when users already exist, the password login form is switched
      * off ({@code tesseraql.console.login.password.enabled} — the same gate the bundled login page
      * uses, so the hint only shows when the managed realm is a login path), or the main datasource
-     * is not reachable. {@code override} is the embedded database when {@code serve} runs with
+     * is not reachable. {@code override} is the embedded database when {@code dev} runs with
      * {@code --embedded-db}; otherwise the app config's main datasource is probed.
      */
     static Optional<String> check(AppConfig config, Path app,

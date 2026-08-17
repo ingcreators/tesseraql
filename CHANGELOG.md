@@ -65,6 +65,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`tesseraql serve` is `tesseraql dev`, and it runs the stack** (docs/cli-surface.md
+  Decision 4). `serve` was the gateway-less single-application shape — the second deployment
+  topology Decision 12 removed; development now runs exactly what production runs: every
+  application the stack holds, behind one gateway, one origin, one sign-in.
+  `cd <app> && tesseraql dev` works with nothing named (the stack is discovered one level up
+  by its marker); `--stack` names it explicitly and `--app-name` narrows without moving the
+  member's address. `--port` is the gateway's front door (default 8080).
+  `--watch`/`--modules`/`--env`/`--log-*` carry over; `--watch` now watches every hosted
+  application. **`--embedded-db` supplies the framework datasource** — one server, one shared
+  database started by the CLI, so it is derived from no application and one sign-in carries —
+  while each application's `main` pool points at it carrying the application's **own declared
+  query string**, so `currentSchema` isolation stays in the application's URL (Decision 4b).
+  The explicit-declaration refusal `TQL-APP-4212` deliberately does not fire for
+  `--embedded-db`: "override everything" must not be the one place an override is refused.
+  `dev` also defaults the stack's `externalOrigin` to `http://localhost:<port>` when the stack
+  file declares none — the development gateway knows its own address; a production host never
+  guesses it. The VS Code extension's terminal verb and command follow (`tesseraql.dev`).
+
 - **A hosted application's declared `server.port` is honoured as its internal port**
   (docs/cli-surface.md Decision 4a). The host used to bind every runtime to an ephemeral port
   unconditionally; now `server.port` keeps its one meaning — the port this application binds —

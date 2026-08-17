@@ -44,7 +44,7 @@ resolved Maven artifacts — no need to clone this monorepo. Full guide:
 tesseraql new myapp                  # scaffold into your own repo
 cd myapp
 docker compose up -d                 # a local PostgreSQL (or point config at your own)
-tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio
+tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /<name>/_tesseraql/studio
 tesseraql scaffold crud --app . --table items
 tesseraql lint | test | coverage     # verify, all CLI-native
 tesseraql package --app .            # build a .tqlapp
@@ -67,7 +67,7 @@ and serve the example (the `-Pdist` archive bundles the opt-in pdf/excel codecs 
 ```bash
 ./mvnw -B -ntp -DskipTests -pl tesseraql-cli -am -Pdist package
 ( cd tesseraql-cli/target && unzip -q tesseraql-cli-*-dist.zip )
-tesseraql-cli/target/tesseraql-*/bin/tesseraql serve \
+tesseraql-cli/target/tesseraql-*/bin/tesseraql dev \
   --app examples/user-admin-app --modules tesseraql-cli/target/tesseraql-*/modules
 ```
 
@@ -157,7 +157,7 @@ browsable here under [docs/](docs/).
 | `tesseraql-studio` / `tesseraql-ops-ui` | Bundled Studio and operations console apps |
 | `tesseraql-excel` | Optional Excel codec (fastexcel reads/writes, jxls report templates) |
 | `tesseraql-mcp` | Model Context Protocol server core: JSON-RPC dispatch, tool model, stdio and HTTP transports |
-| `tesseraql-cli` | `tesseraql serve` / `routes` / `new` / `scaffold` / `lint` / `test` / `coverage` / `generate` / `schema` / `governance` / `migrate` / `identity-schema` / `package` / `verify` / `modules` / `mcp` |
+| `tesseraql-cli` | `tesseraql dev` / `routes` / `new` / `scaffold` / `lint` / `test` / `coverage` / `generate` / `schema` / `governance` / `migrate` / `identity-schema` / `package` / `verify` / `modules` / `mcp` |
 | `tesseraql-maven-plugin` | `lint`, `test`, `coverage`, `generate`, `package-app`, `migrate`, `identity-schema`, `release-evidence`, `verify-evidence`, `governance` |
 | `tesseraql-bom` | Dependency BOM for applications |
 

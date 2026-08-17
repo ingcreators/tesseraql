@@ -9,7 +9,7 @@ the template gallery (roadmap Phase 47); held to the marketplace admission profi
 ## Run it
 
 ```bash
-tesseraql serve --app . --embedded-db     # embedded PostgreSQL, auto-seeded queue
+tesseraql dev --app-name helpdesk --embedded-db     # embedded PostgreSQL, auto-seeded queue
 ```
 
 - `/tickets` — the queue (search, sort, pagination); `/tickets/new` opens one;

@@ -156,6 +156,18 @@ final class StackRelay {
     void handle(HttpServerRequest request) {
         try {
             String rawPath = rawPath(request);
+            // The origin's own health, answered by the gateway itself: the operator case a load
+            // balancer needs (docs/stack-architecture.md decision 25 names it) sits inside the
+            // framework's /_tesseraql/ fence at origin scope, which the name grammar's
+            // segment-safety rule keeps unreachable by any application. Liveness and readiness are the same answer here — a
+            // gateway that can respond has started every runtime, or it would not be serving.
+            if ("/_tesseraql/health/live".equals(rawPath)
+                    || "/_tesseraql/health/ready".equals(rawPath)) {
+                request.response().setStatusCode(200)
+                        .putHeader("Content-Type", "application/json; charset=utf-8")
+                        .end("{\"status\":\"UP\"}");
+                return;
+            }
             // One address per application, and one way to reach it (docs/stack-architecture.md
             // Decision 12). Host-header routing went with independent hosting: it existed so an
             // application could own a whole origin, which is the separation a stack is defined by

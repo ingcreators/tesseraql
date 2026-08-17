@@ -30,7 +30,7 @@ layer.
 install the tesseraql CLI            # one of the distribution channels below
 tesseraql new myapp                  # scaffold into the developer's own repo
 cd myapp                             # point config at a PostgreSQL (Docker optional)
-tesseraql serve --app .              # auto-applies db/migration; Studio at /_tesseraql/studio/ui
+tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /<name>/_tesseraql/studio/ui
 tesseraql scaffold crud --table ...  # iterate
 tesseraql lint | test | coverage     # verify, all CLI-native
 tesseraql package                    # build a .tqlapp
@@ -72,7 +72,7 @@ surface by context; neither is more capable than the other once command parity (
 ## Work item 2 — CLI command parity
 
 Every Maven goal whose engine is a reusable library is exposed as a CLI subcommand. Today the
-CLI has only `new`, `scaffold`, `serve`, `routes`, `mcp`; the build/verify/package goals are
+CLI has only `new`, `scaffold`, `dev`, `routes`, `mcp`; the build/verify/package goals are
 Maven-only as terminal commands (though `tesseraql mcp` already drives `lint`/`test`/`coverage`
 through the same engine).
 
@@ -115,7 +115,7 @@ Camel/Spring/CLI/Maven), and is version-managed by the BOM. `AppMigrator` gained
 the `migrate` mojo gained a `tesseraql.migrate.operation` parameter so the Maven and CLI surfaces
 expose the same four operations.
 
-`migrate` is worth exposing despite `serve` auto-migrating on start: it covers non-serving
+`migrate` is worth exposing despite `dev` auto-migrating on start: it covers non-serving
 apply for CI, a single pre-roll apply step in production (so replicas do not race), and
 `info`/`validate`/`repair`.
 
@@ -179,7 +179,7 @@ tesseraql:
   Committed.
 - `tesseraql modules add <coord>` is an ergonomic helper that **edits `tesseraql.yml` and
   refreshes the lock** (like `cargo add`), not a separate imperative cache mutation.
-- `serve` resolves the declared set on start; the resolver verifies repository checksums.
+- `dev` resolves the declared set on start; the resolver verifies repository checksums.
 - This stays distinct from signed third-party `plugins/` (Ed25519, isolated classloader).
 
 ### JDBC driver licensing policy
@@ -262,7 +262,7 @@ auth flows through `settings.xml` (resolution) and the `*.proxyUser`/`Password` 
   `HttpCallClient`, and `WebhookNotifier` (pass a `ProxySelector`); wire S3's
   `ProxyConfiguration` consistently.
 - **Resolve modules at build/CI time and bake `modules.lock` + the cache into the image**, so a
-  production `serve` performs no module-resolution outbound and the proxy concern collapses to
+  a production `host` performs no module-resolution outbound and the proxy concern collapses to
   build time.
 
 ### TLS-intercepting proxy

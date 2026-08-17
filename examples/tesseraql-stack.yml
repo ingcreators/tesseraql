@@ -1,0 +1,5 @@
+# tesseraql-stack.yml — this directory is a TesseraQL stack: it holds the example applications,
+# and `tesseraql dev` finds the stack by this file (run `tesseraql dev --app-name <name>` from
+# inside any example to run just that one). Settings here would apply to every example at once;
+# the examples deliberately declare none — each names its own database, so running several
+# together without --embedded-db is refused (TQL-APP-4211) rather than silently mis-shared.

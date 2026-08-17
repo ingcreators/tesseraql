@@ -5,22 +5,23 @@ Every `tesseraql` subcommand, generated from the command model the binary itself
 
 Most commands take `--app <dir>`, the application home they act on. Every subcommand calls the same engine as the matching Maven goal, so a CLI loop and a CI pipeline do the same work.
 
-[`serve`](#serve) · [`host`](#host) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
+[`dev`](#dev) · [`host`](#host) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
 
-## `serve`
+## `dev`
 
-Start the runtime and serve the app over HTTP.
+Run the development stack over the gateway until interrupted.
 
 | Argument | Required? | Description |
 | --- | --- | --- |
-| `--app <app>` | yes | Path to the external app home. |
-| `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
+| `--stack <dir>` | — | Directory holding the applications to run: an install root (catalog.json) or a folder of application homes. Discovered one level up from the working directory when omitted. |
+| `--app-name <name>` | — | Run only this application from the stack, at the same address it has as a stack member. |
+| `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). Profiles are the applications'; the stack file has none - its location is its environment. |
 | `--log-format <text\|json>` | — | Log line format (default text; json for structured logs). |
 | `--log-level <level>` | — | Log threshold: trace\|debug\|info\|warn\|error (default info). |
-| `--port <port>` | — | Override the configured HTTP port. |
-| `--watch` | — | Watch the app's web/, workflow/, and shared-definition trees (decisions/, rules/, scope/, domains/) and hot-reload on save — the editor-first alternative to Studio's Apply: a route edit bounces that route, a workflow edit rebuilds its transition endpoints, a shared-definition edit rebuilds every route. Jobs, consumers, and config/ changes still need a restart. |
-| `--modules <modules>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs) to load onto the runtime classpath. |
-| `--embedded-db <data-dir>` | — | Run with an embedded PostgreSQL (no external database). Pass a directory to persist data across restarts; omit it for an ephemeral run. |
+| `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
+| `--watch` | — | Watch every application's web/, workflow/, and shared-definition trees (decisions/, rules/, scope/, domains/) and hot-reload on save - the editor-first alternative to Studio's Apply: a route edit bounces that route, a workflow edit rebuilds its transition endpoints, a shared-definition edit rebuilds every route. Jobs, consumers, and config/ changes still need a restart. |
+| `--modules <modules>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs) to load onto the runtime classpath, composed onto every application in the stack. |
+| `--embedded-db <data-dir>` | — | Run with an embedded PostgreSQL (no external database): one server, one database, shared by the stack - applications isolate with currentSchema in their own URLs, and the framework state rides the shared database so one sign-in carries. Pass a directory to persist data across restarts; omit it for an ephemeral run. |
 | `--embedded-db-port <port>` | — | Bind the embedded PostgreSQL to a fixed TCP port (default: a random free port chosen at startup). Use it to connect a local client (e.g. psql) at a stable address. Listens on localhost only. |
 | `--embedded-db-version <version>` | — | Pin the embedded PostgreSQL binary version (e.g. 17.10.0). Default: the CLI's built-in version, or, for a persistent data directory, the version it was created with. A persistent directory records the version that ran it and re-resolves that version on later starts, so bumping the default never breaks an existing directory. |
 

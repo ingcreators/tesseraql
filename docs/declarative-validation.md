@@ -343,7 +343,7 @@ tesseraql:
     - com.example:example-expression-functions
 ```
 
-`serve`, `lint`, `test`, `coverage`, and `mcp` all install the functions from the resolved
+`dev`, `lint`, `test`, `coverage`, and `mcp` all install the functions from the resolved
 modules classpath before parsing (the CLI's `--modules <dir>` composes for local jars; the
 Maven goals discover functions declared as plugin dependencies). Once installed, the function
 is callable wherever the expression language runs — `validate:` rules, 2-way SQL `/*%if*/`

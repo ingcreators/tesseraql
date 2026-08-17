@@ -171,6 +171,16 @@ public final class MultiAppGateway implements AutoCloseable {
      */
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
             Settings settings, String appName) {
+        return start(installRoot, frontPort, settings, appName, null);
+    }
+
+    /**
+     * As {@link #start(java.nio.file.Path, int, Settings, String)}, with the development loop's
+     * decisions — the embedded database's coordinate and the default external origin
+     * (docs/cli-surface.md decisions 4 and 4b). Null for production, where neither exists.
+     */
+    public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort,
+            Settings settings, String appName, DevMode dev) {
         // Whatever the directory holds: a catalogue, or application homes with no catalogue at
         // all (docs/cli-surface.md Decision 2). The entries are shaped the same either way, so
         // nothing below needs to know which it was.
@@ -194,7 +204,8 @@ public final class MultiAppGateway implements AutoCloseable {
         // root of it rather than scoped to each app's prefix. The address is the catalogue's, and
         // the host reads it from there — each app is started serving the prefix it is fronted
         // under, so it answers at the addresses it emits (decision 5).
-        MultiAppHost host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued);
+        MultiAppHost host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued,
+                dev);
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appNames().contains(app.name()))
@@ -228,6 +239,17 @@ public final class MultiAppGateway implements AutoCloseable {
 
     public int port() {
         return port;
+    }
+
+    /**
+     * Watches every hosted application's source tree for the editor-first hot-reload loop —
+     * {@code dev --watch}. Per runtime, because {@code watchRoutes} is: a save under one
+     * application's {@code web/} bounces that application's route and nothing else's.
+     */
+    public void watchRoutes(java.util.function.Consumer<String> out) {
+        for (String name : host.appNames()) {
+            host.app(name).watchRoutes(out);
+        }
     }
 
     public Set<String> appNames() {

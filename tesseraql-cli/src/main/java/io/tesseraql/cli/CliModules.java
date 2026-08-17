@@ -52,7 +52,7 @@ public final class CliModules {
      * Composes the app's resolved {@code tesseraql.modules} cache and an optional explicit
      * {@code --modules} directory onto the thread context classloader and installs the
      * {@link ExpressionFunctions} registry from it — the authoring-tool counterpart of the
-     * {@code serve} wiring, so {@code lint}/{@code test}/{@code coverage}/{@code mcp} parse and
+     * {@code dev} wiring, so {@code lint}/{@code test}/{@code coverage}/{@code mcp} parse and
      * evaluate the same custom functions the runtime serves. A broken app (unreadable manifest)
      * installs nothing and does not fail here: the linter reports the manifest problem itself.
      */

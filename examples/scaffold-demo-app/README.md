@@ -16,7 +16,7 @@ not clone the framework monorepo.
 ## CLI path (interactive dev loop)
 
 ```sh
-tesseraql serve --app .          # auto-applies db/migration; Studio at /_tesseraql/studio
+tesseraql dev                    # runs the stack; this app at /scaffold-demo/, Studio at /scaffold-demo/_tesseraql/studio
 tesseraql scaffold crud --app . --table items
 tesseraql lint --app .
 tesseraql test --app .

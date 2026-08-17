@@ -15,7 +15,7 @@ import org.slf4j.helpers.MessageFormatter;
  * A JDK-only structured logger (roadmap Phase 45): one line per event on stderr, plain text
  * by default or JSON when {@code tesseraql.logging.format=json}, always carrying the MDC —
  * so the runtime's {@code traceId}/{@code spanId} correlate every line with the request that
- * produced it. Settings re-read per line (cheap system-property lookups), so the serve
+ * produced it. Settings re-read per line (cheap system-property lookups), so the dev
  * command's flags apply no matter when the first logger was created.
  */
 public final class TesseraqlLogger extends LegacyAbstractLogger {

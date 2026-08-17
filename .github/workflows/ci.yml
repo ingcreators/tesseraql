@@ -60,9 +60,10 @@ jobs:
 
       # The dist-only failure class (a stale or missing class, a dropped driver, a
       # service file lost in the fat-jar merge) is invisible to in-JVM tests: prove
-      # the shipped archive actually lints, clears admission, and SERVES a gallery
-      # app end to end.
-      - name: Serve a gallery app from the dist archive
+      # the shipped archive actually lints, clears admission, and RUNS a gallery
+      # app end to end — through the dev gateway, at the app's /<name>/ address,
+      # exactly the shape a developer runs (docs/cli-surface.md decision 4).
+      - name: Run a gallery app from the dist archive
         run: |
           tar xzf tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz -C "$RUNNER_TEMP"
           TQL=$(echo "$RUNNER_TEMP"/tesseraql-*/bin/tesseraql)
@@ -71,17 +72,17 @@ jobs:
           # The documented operator step for the app's analytics engine (docs/duckdb.md):
           # provision the offline extension cache before first boot.
           "$TQL" duckdb install-extensions --app examples/inventory-app
-          "$TQL" serve --app examples/inventory-app --embedded-db > serve.log 2>&1 &
-          SERVE_PID=$!
+          "$TQL" dev --stack examples --app-name inventory --embedded-db > dev.log 2>&1 &
+          DEV_PID=$!
           READY=0
           for i in $(seq 1 90); do
-            if curl -sf http://localhost:8080/_tesseraql/health/ready > /dev/null; then READY=1; break; fi
-            kill -0 "$SERVE_PID" 2>/dev/null || break
+            if curl -sf http://localhost:8080/inventory/_tesseraql/health/ready > /dev/null; then READY=1; break; fi
+            kill -0 "$DEV_PID" 2>/dev/null || break
             sleep 2
           done
-          if [ "$READY" != "1" ]; then echo '--- serve.log ---'; cat serve.log; exit 1; fi
-          curl -sf http://localhost:8080/_tesseraql/health/live > /dev/null
-          kill "$SERVE_PID"
+          if [ "$READY" != "1" ]; then echo '--- dev.log ---'; cat dev.log; exit 1; fi
+          curl -sf http://localhost:8080/inventory/_tesseraql/health/live > /dev/null
+          kill "$DEV_PID"
 
   # The default shipping pattern in docs/deployment.md is a baked image, and nothing built
   # deploy/Dockerfile: it had been unbuildable since the copy-dependencies step started
@@ -111,7 +112,7 @@ jobs:
           # The output is asserted, not just the exit code — the same reasoning as the
           # jpackage smoke test: a launcher that starts, prints nothing and exits 0 passes
           # an exit-code-only check while being useless.
-          out=$(docker run --rm tesseraql-deploy-check routes --app /app)
+          out=$(docker run --rm tesseraql-deploy-check routes --app /stack/app)
           printf '%s\n' "$out"
           printf '%s' "$out" | grep -q 'items.search' \
             || { echo "the image listed no routes" >&2; exit 1; }
@@ -123,10 +124,10 @@ jobs:
           # An archive the running JVM refuses (a flag mismatch between the training run and
           # the entrypoint) is worse than none: it costs four error lines per start and buys
           # nothing. Assert the CDS logger stays quiet.
-          noise=$(docker run --rm tesseraql-deploy-check routes --app /app 2>&1 >/dev/null \
+          noise=$(docker run --rm tesseraql-deploy-check routes --app /stack/app 2>&1 >/dev/null \
                   | grep -c '\[cds\]' || true)
           [ "${noise:-0}" = "0" ] || {
-            docker run --rm tesseraql-deploy-check routes --app /app 2>&1 >/dev/null
+            docker run --rm tesseraql-deploy-check routes --app /stack/app 2>&1 >/dev/null
             echo "the shared archive was refused at run time" >&2; exit 1; }
 
   # The documentation site (docs/docs-site.md): the same build command Cloudflare

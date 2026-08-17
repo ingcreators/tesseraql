@@ -363,6 +363,25 @@ class StackRelayTest {
         assertThat(response.body()).isEqualTo("one-two-three");
     }
 
+    /**
+     * The gateway answers the origin's own health itself — the load-balancer case
+     * docs/stack-architecture.md decision 25 names, inside the framework's {@code /_tesseraql/}
+     * fence that no application name can reach. The deployment images' healthchecks call this.
+     */
+    @Test
+    void theOriginsHealthIsTheGatewaysOwn() throws Exception {
+        String root = base.substring(0, base.lastIndexOf("/" + APP));
+
+        HttpResponse<String> live = send(HttpRequest.newBuilder(
+                URI.create(root + "/_tesseraql/health/live")));
+        HttpResponse<String> ready = send(HttpRequest.newBuilder(
+                URI.create(root + "/_tesseraql/health/ready")));
+
+        assertThat(live.statusCode()).isEqualTo(200);
+        assertThat(live.body()).contains("UP");
+        assertThat(ready.statusCode()).isEqualTo(200);
+    }
+
     /** No app answers at this address, and the relay says so rather than proxying. */
     @Test
     void anAddressNoAppAnswersIsRefusedHere() throws Exception {

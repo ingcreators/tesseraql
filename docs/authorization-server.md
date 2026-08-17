@@ -341,7 +341,7 @@ implies narrower ones — a concept with no home here.
    JVM, which makes sharing the one already present the intended shape rather than a trick.
 
    The distribution is published to Maven Central as `org.keycloak:keycloak-quarkus-dist`, a
-   167 MiB zip that unpacks to 184 MiB. That fits the mechanism `serve --embedded-db` already
+   167 MiB zip that unpacks to 184 MiB. That fits the mechanism `dev --embedded-db` already
    uses: nothing is bundled in the CLI, the artifact is resolved on demand through the same
    embedded resolver, pinned to a version property. It is in fact a better fit than the database
    is, because the unpacked tree is platform-independent — the native libraries ship inside the

@@ -13,27 +13,28 @@ you move on.
 tesseraql new tasktracker
 cd tasktracker
 docker compose up -d
-tesseraql serve --app .
+tesseraql dev
 ```
 
 `tesseraql new` writes a runnable skeleton — config, a starter `items` table migration
 (`db/migration/V1__create_items.sql`), a home page, a search route, and a smoke test
 ([scaffolding.md](scaffolding.md)). `docker compose up -d` starts the scaffolded local
-PostgreSQL; `serve` applies `db/migration` on start and stays in the foreground. Expect:
+PostgreSQL; `dev` applies `db/migration` on start and stays in the foreground. Expect:
 
 ```text
-TesseraQL serving on port 8080. Press Ctrl+C to stop.
+TesseraQL dev: 1 app(s) on port 8080. Press Ctrl+C to stop.
+  http://localhost:8080/tasktracker/
 ```
 
-No Docker? Run `tesseraql serve --app . --embedded-db` instead — a real PostgreSQL inside
+No Docker? Run `tesseraql dev --embedded-db` instead — a real PostgreSQL inside
 the process. Every database-touching command below (`identity-schema`, `migrate`,
-`scaffold crud`, `test`, ...) finds the running embedded database on its own: `serve`
+`scaffold crud`, `test`, ...) finds the running embedded database on its own: `dev`
 leaves its JDBC URL in `work/embedded-db.jdbc`, and `--app .` falls back to it whenever
 the configured database does not answer. An explicit `--jdbc-url` still takes precedence.
 
 ### First login
 
-The identity store is not seeded. In a **second terminal** (leave `serve` running), create
+The identity store is not seeded. In a **second terminal** (leave `dev` running), create
 the first administrator — same as [getting-started.md](getting-started.md), plus two roles
 you will need shortly:
 
@@ -51,9 +52,9 @@ the default admin role; `APP_READ`/`APP_WRITE` satisfy the `app.read`/`app.write
 Roles are captured into the session when you sign in, so granting them up front saves a
 sign-out later.
 
-Now open `http://localhost:8080/_tesseraql/studio` and sign in as `admin` / `change-me`.
+Now open `http://localhost:8080/tasktracker/_tesseraql/studio` and sign in as `admin` / `change-me`.
 Studio shows the app: the Explorer lists the scaffolded routes. The starter home page is at
-`http://localhost:8080/`.
+`http://localhost:8080/tasktracker/`.
 
 ## Create the tasks table
 
@@ -88,7 +89,7 @@ tesseraql migrate --app .
 ```
 
 Expect `Applied 1 migration(s) for app tasktracker, datasource main (...)`. (Equivalent
-paths: restarting `serve` auto-applies pending migrations on start, and Studio's migration
+paths: restarting `dev` auto-applies pending migrations on start, and Studio's migration
 author can create a migration and apply it with **Migrate now**.)
 
 ## Scaffold the CRUD slice
@@ -119,10 +120,10 @@ Optionally add the page to the sidebar in `config/menu.yml`:
 ```
 
 The server does **not** watch the filesystem — routes mount at start or when Studio applies
-an edit — so restart to mount the new pages: `Ctrl+C` in the `serve` terminal, then
-`tesseraql serve --app .` again.
+an edit — so restart to mount the new pages: `Ctrl+C` in the `dev` terminal, then
+`tesseraql dev` again.
 
-Open `http://localhost:8080/tasks`. The routes declare `auth: browser` with the `app.read`
+Open `http://localhost:8080/tasktracker/tasks`. The routes declare `auth: browser` with the `app.read`
 policy, so an unauthenticated browser is redirected to the login page and returned after
 signing in; the `APP_READ` role you seeded satisfies the policy (a `403` here means the
 signed-in user lacks it — re-run the `identity-schema` command above and sign out and back
@@ -157,7 +158,7 @@ and at runtime the literal becomes the bound `q` input.
 Press **Apply** in Studio. The instant loop hot-reloads exactly the routes whose sources
 changed — no restart — and the reload result names the rebuilt route. Go back to
 `/tasks` and type `tut`: the row appears. (Editing the file on disk in your own editor is
-equally fine: serve with `tesseraql serve --app . --watch` and every save under `web/`,
+equally fine: run with `tesseraql dev --watch` and every save under `web/`,
 `workflow/`, or a shared-definition tree (`decisions/`, `rules/`, `scope/`, `domains/`)
 hot-reloads the same way, no Apply needed; without `--watch`, disk edits are picked up on
 the next restart or Studio apply. Jobs, consumers, and `config/` changes still need a
@@ -178,7 +179,7 @@ validate:
     code: invalid
 ```
 
-Apply, then open `http://localhost:8080/tasks/new` and submit a task titled `ab`. The
+Apply, then open `http://localhost:8080/tasktracker/tasks/new` and submit a task titled `ab`. The
 command answers `422 Unprocessable Entity` and the form repaints with an inline error against
 the Title field — `Invalid value.`, the built-in text for the `invalid` code. Declare a
 `message:` key plus a `messages/` catalog entry for custom wording

@@ -11,8 +11,8 @@ inputs, so the same schema always produces byte-identical artifacts.
 ```bash
 tesseraql new order-entry
 cd order-entry
-docker compose up -d        # the scaffolded local PostgreSQL (or: serve --embedded-db)
-tesseraql serve --app .
+docker compose up -d        # the scaffolded local PostgreSQL (or: dev --embedded-db)
+tesseraql dev
 ```
 
 The skeleton is a runnable app home:
@@ -55,7 +55,7 @@ tesseraql scaffold crud --app . --table items \
 The table must already exist in the database — apply your migration first (`serve`
 auto-applies `db/migration` on start, or run `tesseraql migrate --app .`). Without
 `--jdbc-url` the app's main datasource is introspected; when it does not answer but a
-`serve --embedded-db` is running, its embedded database is used instead (the
+`dev --embedded-db` is running, its embedded database is used instead (the
 `work/embedded-db.jdbc` hand-off, [getting-started.md](getting-started.md)). The table's
 shape is then read through plain JDBC metadata (columns in ordinal order, primary key,
 single-column unique indexes) and drives the generated slice:

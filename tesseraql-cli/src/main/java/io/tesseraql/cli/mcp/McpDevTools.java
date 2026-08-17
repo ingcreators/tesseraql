@@ -435,7 +435,7 @@ public final class McpDevTools {
     /**
      * Resolves a datasource with the CLI subcommands' precedence: explicit arguments, then the
      * app's main datasource when it resolves and answers, then a running
-     * {@code serve --embedded-db} (its {@code work/embedded-db.jdbc} marker) — so the agent's
+     * {@code dev --embedded-db} (its {@code work/embedded-db.jdbc} marker) — so the agent's
      * database tools work against the embedded database another terminal is serving.
      */
     private Datasource resolve(JsonNode args, AppConfig config) {
@@ -472,9 +472,9 @@ public final class McpDevTools {
             throw new TqlException(NO_DATASOURCE, configFailure == null
                     ? "No jdbcUrl argument, the app config declares no"
                             + " tesseraql.datasources.main.jdbcUrl, and no running"
-                            + " serve --embedded-db was found"
+                            + " dev --embedded-db was found"
                     : "No jdbcUrl argument, the app config's datasource could not be read ("
-                            + configFailure + "), and no running serve --embedded-db was found");
+                            + configFailure + "), and no running dev --embedded-db was found");
         }
         return new Datasource(configUrl, user, password);
     }
