@@ -50,6 +50,11 @@ framework state — sessions, tokens, preferences — rides it, so one sign-in c
 construction. An application that *explicitly* declares `tesseraql.framework.datasource` in that
 arrangement is refused (`TQL-APP-4212`) rather than silently repointed.
 
+The host also migrates the framework's `security` schema **once**, before any application starts;
+each hosted runtime then validates it and refuses to start on a mismatch (`TQL-APP-4214`). A
+runtime pointed at a framework database the host never migrated therefore fails loudly at boot,
+instead of producing a stack where signing in silently does not carry.
+
 Every part of the file is optional, and absence is checked rather than trusted: when the stack
 supplies no framework datasource and more than one application runs, the host compares each
 application's own resolved framework coordinate and refuses to start on disagreement

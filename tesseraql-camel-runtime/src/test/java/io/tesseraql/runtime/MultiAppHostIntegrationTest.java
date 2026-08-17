@@ -108,6 +108,33 @@ class MultiAppHostIntegrationTest {
         assertThat(get("shop-b", "/shop-b/api/items").statusCode()).isEqualTo(200);
     }
 
+    /**
+     * A hosted runtime validates the {@code security} schema instead of migrating it, so a
+     * runtime pointed at a framework datasource the host never migrated fails loudly at boot —
+     * the wrong-framework-datasource guard (docs/stack-architecture.md decision 16). The rest of
+     * this class is the positive half: both runtimes above validated the schema the host
+     * migrated, or nothing here would have started.
+     */
+    @Test
+    void anUnmigratedFrameworkDatasourceIsRefusedNotMigrated() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute("create schema fw_empty");
+        }
+        try (com.zaxxer.hikari.HikariDataSource unmigrated = DataSources.create(
+                "tesseraql-test-wrong-framework",
+                new DataSources.MainDatasourceOverride(
+                        POSTGRES.getJdbcUrl() + "&currentSchema=fw_empty",
+                        POSTGRES.getUsername(), POSTGRES.getPassword()))) {
+            org.assertj.core.api.Assertions
+                    .assertThatThrownBy(() -> FrameworkMigrations.validateSecurity(unmigrated))
+                    .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                    .hasMessageContaining("TQL-APP-4214")
+                    .hasMessageContaining("validates instead of migrating");
+        }
+    }
+
     private static String itemName(String appId, String prefix) throws Exception {
         HttpResponse<String> response = get(appId, prefix + "/api/items");
         assertThat(response.statusCode()).isEqualTo(200);

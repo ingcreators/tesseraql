@@ -25,6 +25,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The host migrates the framework's `security` schema once, and hosted runtimes validate
+  instead of migrating** (docs/stack-architecture.md Decision 16, `TQL-APP-4214`). `security`
+  is stack-wide, so N runtimes taking Flyway's lock on one history in turn was safe rather than
+  correct. The host migrates before any runtime starts — on the stack's pool when
+  `tesseraql-stack.yml` supplies one, otherwise through a migration-only pool on the coordinate
+  the applications agree on — and a hosted runtime that finds the schema at any other version
+  refuses to start. That refusal is the wrong-framework-datasource guard: pointed at a database
+  the host never migrated, a runtime fails loudly at boot instead of producing a stack where
+  signing in silently does not carry. It is also what will refuse a canary expecting a newer
+  framework schema than the host migrated. Standalone starts (`serve`, embedders) keep
+  migrating both components themselves.
+
 - **A stack declares its own settings in `tesseraql-stack.yml`, beside its applications**
   (docs/stack-architecture.md Decision 22). Always `<stack dir>/tesseraql-stack.yml`, loaded
   through the same configuration machinery applications use (`${ENV_VAR:default}` and

@@ -63,6 +63,21 @@ class MultiAppCanaryIntegrationTest {
         upgrader.upgrade(candidate, installRoot, SemanticVersion.parse("0.1.0"), true);
         upgrader.setCanaryWeight("shop", installRoot, 50);
 
+        // Stable and canary isolate their business data by schema, so their main coordinates
+        // differ — and without a shared framework connection the canary would be refused with
+        // TQL-APP-4214, correctly: a session signed in on stable would die on the canary leg.
+        // The stack supplies the framework connection both versions ride.
+        Files.writeString(installRoot.resolve(
+                io.tesseraql.operations.app.StackSettings.FILE_NAME),
+                """
+                        framework:
+                          datasource:
+                            jdbcUrl: %s
+                            username: %s
+                            password: %s
+                        """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                        POSTGRES.getPassword()));
+
         gateway = MultiAppGateway.start(installRoot, 0);
     }
 

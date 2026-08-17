@@ -49,6 +49,15 @@ class SessionCookiePathIntegrationTest {
     static void seed() throws Exception {
         appHome = prepareAppHome();
         seedDatabase();
+        // These tests hand-build a HostContext to exercise cookie paths, so they stand where a
+        // host would — including its duty to have migrated the stack-wide security schema
+        // before any hosted runtime starts (a hosted runtime validates rather than migrates).
+        try (com.zaxxer.hikari.HikariDataSource migration = DataSources.create(
+                "tesseraql-test-framework-migration",
+                new DataSources.MainDatasourceOverride(POSTGRES.getJdbcUrl(),
+                        POSTGRES.getUsername(), POSTGRES.getPassword()))) {
+            FrameworkMigrations.migrateSecurity(migration);
+        }
     }
 
     @AfterAll
