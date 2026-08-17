@@ -24,13 +24,22 @@ final class ApplicationNameRules implements LintRule {
 
     @Override
     public void lint(LintContext context, AppManifest manifest, List<LintFinding> findings) {
-        boolean declared = manifest.config().getString("tesseraql.app.name")
+        String declared = manifest.config().getString("tesseraql.app.name")
                 .map(String::trim)
                 .filter(name -> !name.isEmpty())
-                .isPresent();
-        if (!declared) {
+                .orElse(null);
+        if (declared == null) {
             findings.add(new LintFinding(ApplicationName.MISSING.toString(), ERROR, "config",
                     ApplicationName.MESSAGE));
+            return;
+        }
+        // Segment safety (docs/stack-architecture.md Decision 25): the name becomes the
+        // application's address, so a name no URL space can hold is an error before it is a
+        // failed boot — same division of labour as the presence check above.
+        String violation = ApplicationName.segmentViolation(declared);
+        if (violation != null) {
+            findings.add(new LintFinding(ApplicationName.UNSAFE_SEGMENT.toString(), ERROR,
+                    "config", violation));
         }
     }
 }

@@ -116,15 +116,15 @@ public final class MultiAppGateway implements AutoCloseable {
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
             java.nio.file.Path installRoot, Settings settings, int frontPort) {
         this.host = host;
-        Map<String, InstalledApp> byId = new java.util.HashMap<>();
+        Map<String, InstalledApp> byName = new java.util.HashMap<>();
         Map<String, Set<String>> strip = new java.util.HashMap<>();
         for (InstalledApp app : hostedApps) {
-            byId.put(app.id(), app);
-            strip.put(app.id(), ingressStripHeaders(installRoot, app));
+            byName.put(app.name(), app);
+            strip.put(app.name(), ingressStripHeaders(installRoot, app));
         }
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
-        this.relay = new StackRelay(client, byId, strip,
+        this.relay = new StackRelay(client, byName, strip,
                 settings.trustedProxies(), this::targetPort);
         this.server = vertx.createHttpServer(
                 StackRelay.frontOptions(frontPort, settings.http2()));
@@ -148,7 +148,7 @@ public final class MultiAppGateway implements AutoCloseable {
 
     /**
      * Hosts every app the directory holds and fronts them on {@code frontPort} (0 picks an
-     * ephemeral port), each addressed as {@code /apps/<id>/}.
+     * ephemeral port), each addressed as {@code /apps/<name>/}.
      */
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort) {
         return start(installRoot, frontPort, new Settings());
@@ -178,12 +178,12 @@ public final class MultiAppGateway implements AutoCloseable {
                 io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
         if (appName != null) {
             List<InstalledApp> named = catalogued.stream()
-                    .filter(app -> appName.equals(app.id()))
+                    .filter(app -> appName.equals(app.name()))
                     .toList();
             if (named.isEmpty()) {
                 throw new io.tesseraql.core.error.TqlException(MultiAppHost.UNKNOWN_APP,
                         "The stack holds no application named '" + appName + "'. It holds: "
-                                + catalogued.stream().map(InstalledApp::id)
+                                + catalogued.stream().map(InstalledApp::name)
                                         .collect(java.util.stream.Collectors.joining(", "))
                                 + ".");
             }
@@ -197,7 +197,7 @@ public final class MultiAppGateway implements AutoCloseable {
         MultiAppHost host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued);
         try {
             List<InstalledApp> hosted = catalogued.stream()
-                    .filter(app -> host.appIds().contains(app.id()))
+                    .filter(app -> host.appNames().contains(app.name()))
                     .toList();
             return new MultiAppGateway(host, hosted, installRoot, settings, frontPort);
         } catch (RuntimeException ex) {
@@ -221,7 +221,7 @@ public final class MultiAppGateway implements AutoCloseable {
                     .orElseGet(Set::of);
         } catch (RuntimeException unreadable) {
             LOG.warn("Could not read '{}' configuration for ingress header stripping: {}",
-                    app.id(), unreadable.getMessage());
+                    app.name(), unreadable.getMessage());
             return Set.of();
         }
     }
@@ -230,26 +230,26 @@ public final class MultiAppGateway implements AutoCloseable {
         return port;
     }
 
-    public Set<String> appIds() {
-        return host.appIds();
+    public Set<String> appNames() {
+        return host.appNames();
     }
 
     /**
-     * The internal port {@code appId} serves on, for the differential test's "direct" leg: the
+     * The internal port {@code appName} serves on, for the differential test's "direct" leg: the
      * same request has to be answerable both here and through the gateway, and comparing the two
      * is what makes "the gateway is a route, not a rewrite" checkable rather than asserted.
      */
-    int appPort(String appId) {
-        return host.port(appId);
+    int appPort(String appName) {
+        return host.port(appName);
     }
 
-    /** Resolves the port for {@code appId}, splitting traffic to a canary candidate by its weight. */
-    private int targetPort(String appId) {
-        int stablePort = host.port(appId);
-        if (host.hasCanary(appId)
+    /** Resolves the port for {@code appName}, splitting traffic to a canary candidate by its weight. */
+    private int targetPort(String appName) {
+        int stablePort = host.port(appName);
+        if (host.hasCanary(appName)
                 && java.util.concurrent.ThreadLocalRandom.current().nextInt(100) < host
-                        .canaryWeight(appId)) {
-            return host.canaryPort(appId);
+                        .canaryWeight(appName)) {
+            return host.canaryPort(appName);
         }
         return stablePort;
     }

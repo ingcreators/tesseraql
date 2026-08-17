@@ -44,8 +44,13 @@ public class ReleaseEvidenceMojo extends AbstractMojo {
     @Parameter(property = "tesseraql.appHome", required = true)
     private File appHome;
 
-    @Parameter(property = "tesseraql.appId", defaultValue = "${project.groupId}.${project.artifactId}")
-    private String appId;
+    /**
+     * The application name the evidence records. Defaults to the application's own declared
+     * {@code tesseraql.app.name} — the identity every other surface uses — rather than a Maven
+     * coordinate, which was never the same string as the name anything else checks against.
+     */
+    @Parameter(property = "tesseraql.appName")
+    private String appName;
 
     @Parameter(property = "tesseraql.appVersion", defaultValue = "${project.version}")
     private String appVersion;
@@ -81,12 +86,15 @@ public class ReleaseEvidenceMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException {
         try {
             AppManifest manifest = new ManifestLoader().load(appHome.toPath());
+            String name = appName != null && !appName.isBlank()
+                    ? appName
+                    : io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
             Path dir = evidenceDir.toPath();
             Files.createDirectories(dir);
-            String evidence = new ReleaseEvidence().toJson(manifest, appId, appVersion);
+            String evidence = new ReleaseEvidence().toJson(manifest, name, appVersion);
             Files.writeString(dir.resolve("release-evidence.json"), evidence);
             Files.writeString(dir.resolve("sbom.cyclonedx.json"), new SbomGenerator()
-                    .toJson(manifest, appId, appVersion, mavenComponents()));
+                    .toJson(manifest, name, appVersion, mavenComponents()));
             Files.writeString(dir.resolve("openapi.json"),
                     new OpenApiGenerator().toJson(manifest));
             Files.writeString(dir.resolve("htmx-contract.json"),

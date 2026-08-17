@@ -19,7 +19,7 @@ import java.util.zip.ZipInputStream;
 
 /**
  * Installs a {@code .tqlapp} package into an install root and records it in the {@link AppCatalog}
- * (design ch. 32.4). Extraction is path-confined (zip-slip safe, ch. 20.2); the app id and version
+ * (design ch. 32.4). Extraction is path-confined (zip-slip safe, ch. 20.2); the app name and version
  * come from the packaged config, and an optional config overlay is written so per-install settings
  * take precedence at load time (ch. 32.6).
  */
@@ -79,17 +79,17 @@ public final class AppInstaller {
                 applyOverlay(staging, overlay);
 
                 AppConfig config = loadConfig(staging);
-                String id = config.getString("tesseraql.app.name")
+                String name = config.getString("tesseraql.app.name")
                         .orElseThrow(() -> new TqlException(
                                 INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
                 String version = config.getString("tesseraql.app.version").orElse("0.0.0");
 
-                Path target = installRoot.resolve(id).resolve(version);
+                Path target = installRoot.resolve(name).resolve(version);
                 deleteRecursively(target);
                 Files.createDirectories(target.getParent());
                 Files.move(staging, target, StandardCopyOption.REPLACE_EXISTING);
 
-                return new InstalledApp(id, version,
+                return new InstalledApp(name, version,
                         installRoot.relativize(target).toString().replace('\\', '/'),
                         entitledTenants);
             } finally {
@@ -100,20 +100,20 @@ public final class AppInstaller {
         }
     }
 
-    /** Reads a package's id, version, and required framework range without installing it. */
+    /** Reads a package's name, version, and required framework range without installing it. */
     public PackageInfo peek(Path tqlapp) {
         try {
             Path staging = Files.createTempDirectory("peek-");
             try {
                 extract(tqlapp, staging);
                 AppConfig config = loadConfig(staging);
-                String id = config.getString("tesseraql.app.name")
+                String name = config.getString("tesseraql.app.name")
                         .orElseThrow(() -> new TqlException(
                                 INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
                 String version = config.getString("tesseraql.app.version").orElse("0.0.0");
                 String requiresFramework = config.getString("tesseraql.app.requires.framework")
                         .orElse("*");
-                return new PackageInfo(id, version, requiresFramework);
+                return new PackageInfo(name, version, requiresFramework);
             } finally {
                 deleteRecursively(staging);
             }
@@ -123,7 +123,7 @@ public final class AppInstaller {
     }
 
     /** Package metadata read from a {@code .tqlapp} without installing it. */
-    public record PackageInfo(String id, String version, String requiresFramework) {
+    public record PackageInfo(String name, String version, String requiresFramework) {
     }
 
     private void extract(Path tqlapp, Path target) throws IOException {

@@ -66,7 +66,7 @@ class MultiAppGatewayIntegrationTest {
 
     @Test
     void routesByAppPrefixOnOnePort() throws Exception {
-        assertThat(gateway.appIds()).containsExactlyInAnyOrder("shop-a", "shop-b");
+        assertThat(gateway.appNames()).containsExactlyInAnyOrder("shop-a", "shop-b");
 
         assertThat(itemName("shop-a")).isEqualTo("from-a");
         assertThat(itemName("shop-b")).isEqualTo("from-b");
@@ -114,7 +114,7 @@ class MultiAppGatewayIntegrationTest {
     void narrowingHostsOneMemberAtItsUnchangedAddress() throws Exception {
         try (MultiAppGateway narrowed = MultiAppGateway.start(installRoot, 0,
                 new MultiAppGateway.Settings(), "shop-a")) {
-            assertThat(narrowed.appIds()).containsExactly("shop-a");
+            assertThat(narrowed.appNames()).containsExactly("shop-a");
             assertThat(statusOf(narrowed, "/apps/shop-a/api/items")).isEqualTo(200);
             assertThat(statusOf(narrowed, "/apps/shop-b/api/items"))
                     .as("the neighbour is not hosted, and the member's address did not move")

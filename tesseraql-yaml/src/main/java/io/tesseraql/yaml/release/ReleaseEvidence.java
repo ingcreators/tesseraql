@@ -23,10 +23,10 @@ public final class ReleaseEvidence {
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** Builds the evidence document tree. */
-    public Map<String, Object> build(AppManifest manifest, String appId, String appVersion) {
+    public Map<String, Object> build(AppManifest manifest, String appName, String appVersion) {
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("evidenceVersion", "tesseraql/evidence/v1");
-        evidence.put("app", Map.of("id", appId, "version", appVersion));
+        evidence.put("app", Map.of("name", appName, "version", appVersion));
         evidence.put("manifestSha256", manifest.index().aggregateHash());
         evidence.put("generated", Map.of(
                 "openapiSha256", Hashing.sha256(new OpenApiGenerator().toJson(manifest))));
@@ -34,10 +34,10 @@ public final class ReleaseEvidence {
         return evidence;
     }
 
-    public String toJson(AppManifest manifest, String appId, String appVersion) {
+    public String toJson(AppManifest manifest, String appName, String appVersion) {
         try {
             return mapper.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(build(manifest, appId, appVersion));
+                    .writeValueAsString(build(manifest, appName, appVersion));
         } catch (JsonProcessingException ex) {
             throw new TqlException(ERROR,
                     "Failed to serialize release evidence: " + ex.getMessage());

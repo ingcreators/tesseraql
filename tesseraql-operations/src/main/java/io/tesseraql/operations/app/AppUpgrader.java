@@ -37,7 +37,7 @@ public final class AppUpgrader {
     public UpgradeReport preflight(Path tqlapp, Path installRoot,
             SemanticVersion frameworkVersion) {
         AppInstaller.PackageInfo info = installer.peek(tqlapp);
-        Optional<InstalledApp> current = new AppCatalog(installRoot).find(info.id());
+        Optional<InstalledApp> current = new AppCatalog(installRoot).find(info.name());
         List<String> messages = new ArrayList<>();
 
         SemanticVersion to;
@@ -45,7 +45,7 @@ public final class AppUpgrader {
             to = SemanticVersion.parse(info.version());
         } catch (IllegalArgumentException ex) {
             messages.add("Package version is not a valid version: " + info.version());
-            return new UpgradeReport(false, info.id(),
+            return new UpgradeReport(false, info.name(),
                     current.map(InstalledApp::version).orElse(null), info.version(), messages);
         }
 
@@ -62,7 +62,7 @@ public final class AppUpgrader {
                     + frameworkVersion);
         }
 
-        return new UpgradeReport(messages.isEmpty(), info.id(),
+        return new UpgradeReport(messages.isEmpty(), info.name(),
                 current.map(InstalledApp::version).orElse(null), info.version(), messages);
     }
 
@@ -93,34 +93,35 @@ public final class AppUpgrader {
                     "Upgrade preflight failed: " + String.join("; ", report.messages()));
         }
         AppCatalog catalog = new AppCatalog(installRoot);
-        InstalledApp previous = catalog.find(report.appId()).orElse(null);
+        InstalledApp previous = catalog.find(report.appName()).orElse(null);
         List<String> entitled = previous == null ? List.of() : previous.entitledTenants();
 
         InstalledApp placed = installer.place(tqlapp, installRoot, null, entitled);
         if (canary) {
-            writeState(installRoot, report.appId(),
+            writeState(installRoot, report.appName(),
                     new UpgradeState(previous, placed, DEFAULT_CANARY_WEIGHT));
         } else {
-            catalog.register(placed);
-            writeState(installRoot, report.appId(), new UpgradeState(previous, null, 0));
+            catalog.replace(placed);
+            writeState(installRoot, report.appName(), new UpgradeState(previous, null, 0));
         }
-        return new UpgradeResult(report.appId(), report.fromVersion(), report.toVersion(), canary);
+        return new UpgradeResult(report.appName(), report.fromVersion(), report.toVersion(),
+                canary);
     }
 
     /** Adjusts the percentage of traffic the staged canary candidate should receive (0-100). */
-    public void setCanaryWeight(String appId, Path installRoot, int weightPercent) {
-        UpgradeState state = readState(installRoot, appId);
+    public void setCanaryWeight(String appName, Path installRoot, int weightPercent) {
+        UpgradeState state = readState(installRoot, appName);
         if (state == null || state.candidate() == null) {
-            throw new TqlException(NO_TARGET, "No staged candidate for app: " + appId);
+            throw new TqlException(NO_TARGET, "No staged candidate for app: " + appName);
         }
         int weight = Math.max(0, Math.min(100, weightPercent));
-        writeState(installRoot, appId,
+        writeState(installRoot, appName,
                 new UpgradeState(state.previous(), state.candidate(), weight));
     }
 
     /** The staged canary candidate and its traffic weight, if a canary is in progress. */
-    public Optional<CanaryStatus> canary(String appId, Path installRoot) {
-        UpgradeState state = readState(installRoot, appId);
+    public Optional<CanaryStatus> canary(String appName, Path installRoot) {
+        UpgradeState state = readState(installRoot, appName);
         if (state == null || state.candidate() == null) {
             return Optional.empty();
         }
@@ -128,13 +129,13 @@ public final class AppUpgrader {
     }
 
     /** Activates a previously staged canary version. */
-    public InstalledApp promote(String appId, Path installRoot) {
-        UpgradeState state = readState(installRoot, appId);
+    public InstalledApp promote(String appName, Path installRoot) {
+        UpgradeState state = readState(installRoot, appName);
         if (state == null || state.candidate() == null) {
-            throw new TqlException(NO_TARGET, "No staged candidate to promote for app: " + appId);
+            throw new TqlException(NO_TARGET, "No staged candidate to promote for app: " + appName);
         }
-        new AppCatalog(installRoot).register(state.candidate());
-        writeState(installRoot, appId, new UpgradeState(state.previous(), null, 0));
+        new AppCatalog(installRoot).replace(state.candidate());
+        writeState(installRoot, appName, new UpgradeState(state.previous(), null, 0));
         return state.candidate();
     }
 
@@ -142,42 +143,42 @@ public final class AppUpgrader {
      * Reverts the last upgrade: discards a pending canary, or restores the snapshotted previous
      * version as active. The previous version's files must still be present.
      */
-    public InstalledApp rollback(String appId, Path installRoot) {
-        UpgradeState state = readState(installRoot, appId);
+    public InstalledApp rollback(String appName, Path installRoot) {
+        UpgradeState state = readState(installRoot, appName);
         if (state == null) {
-            throw new TqlException(NO_TARGET, "Nothing to roll back for app: " + appId);
+            throw new TqlException(NO_TARGET, "Nothing to roll back for app: " + appName);
         }
         if (state.candidate() != null) {
             // Canary not promoted: the catalog still points to the previous version; just discard.
-            writeState(installRoot, appId, new UpgradeState(state.previous(), null, 0));
+            writeState(installRoot, appName, new UpgradeState(state.previous(), null, 0));
             return state.previous();
         }
         InstalledApp previous = state.previous();
         if (previous == null) {
             throw new TqlException(NO_TARGET,
-                    "No previous version to roll back to for app: " + appId);
+                    "No previous version to roll back to for app: " + appName);
         }
         if (!Files.isDirectory(installRoot.resolve(previous.path()))) {
             throw new TqlException(NO_TARGET,
-                    "Previous version files are missing for app: " + appId);
+                    "Previous version files are missing for app: " + appName);
         }
-        new AppCatalog(installRoot).register(previous);
-        writeState(installRoot, appId, new UpgradeState(null, null, 0));
+        new AppCatalog(installRoot).replace(previous);
+        writeState(installRoot, appName, new UpgradeState(null, null, 0));
         return previous;
     }
 
-    private void writeState(Path installRoot, String appId, UpgradeState state) {
+    private void writeState(Path installRoot, String appName, UpgradeState state) {
         try {
             Path dir = installRoot.resolve(".upgrade");
             Files.createDirectories(dir);
-            Files.write(dir.resolve(appId + ".json"), MAPPER.writeValueAsBytes(state));
+            Files.write(dir.resolve(appName + ".json"), MAPPER.writeValueAsBytes(state));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
     }
 
-    private UpgradeState readState(Path installRoot, String appId) {
-        Path file = installRoot.resolve(".upgrade").resolve(appId + ".json");
+    private UpgradeState readState(Path installRoot, String appName) {
+        Path file = installRoot.resolve(".upgrade").resolve(appName + ".json");
         if (!Files.isRegularFile(file)) {
             return null;
         }
@@ -189,12 +190,12 @@ public final class AppUpgrader {
     }
 
     /** The result of a preflight check. */
-    public record UpgradeReport(boolean compatible, String appId, String fromVersion,
+    public record UpgradeReport(boolean compatible, String appName, String fromVersion,
             String toVersion, List<String> messages) {
     }
 
     /** The result of an upgrade. */
-    public record UpgradeResult(String appId, String fromVersion, String toVersion,
+    public record UpgradeResult(String appName, String fromVersion, String toVersion,
             boolean canary) {
     }
 
