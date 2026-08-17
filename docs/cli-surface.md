@@ -331,6 +331,14 @@ coordinate for every runtime ([stack-architecture.md](stack-architecture.md) Dec
 than deriving it from any application's URL. An application's `currentSchema` must not reach it: a
 per-application session store is a stack where signing in does not carry.
 
+**Amended 2026-08-17.** "Not part of this" was read as "left alone", and left alone it collides with
+the sentence above it. With no `stack.yml`, Decision 16 falls back to each runtime's own
+`tesseraql.framework.datasource` — `main` — so the `currentSchema` this decision recommends makes
+two applications resolve two different coordinates, and the disagreement check refuses the whole
+development stack. So `--embedded-db` **supplies** the framework datasource: the same embedded
+server's shared database, with no schema qualifier. That is not derived from an application, which
+is what this paragraph actually prohibits.
+
 Schema creation needs nothing from the author. Measured 2026-08-16 against PostgreSQL 16: Flyway
 creates an absent `currentSchema` itself, and each application already migrates under its own
 history table `tql_schema_history_<app>`, so `currentSchema=hd` on a shared database is the whole

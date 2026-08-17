@@ -907,6 +907,81 @@ supplies a coordinate is refused — **TQL-APP-4212**. It asked for framework st
 pool and the host is replacing that pool; ignoring the request would be the silent divergence this
 decision exists to remove. The default (`main`, unstated) is not a request, so the host simply wins.
 
+#### Two authors, two moments — and no generated blank
+
+**The team writes it, checked in beside the applications**, with `${DB_HOST:localhost}` and
+`${secret.env.…}` for anything that varies by environment. **The operator writes it on an install
+root, by hand, once, before the first `host`** — `tesseraql install` puts an application and a
+catalogue entry there and nothing else, and it should not start inventing a stack's settings from
+one application's package.
+
+Nothing generates the file, for the reason [cli-surface.md](cli-surface.md) Decision 8 gives about
+`tesseraql new`: it has no required content, so a generated one would be entirely commented out.
+
+**Discovery is a refusal rather than a blank file.** An operator meets `stack.yml` at the moment it
+matters — when the applications disagree about the framework datasource and TQL-APP-4211 refuses to
+start, naming it — or when they reach for MCP or the authorization server and the documentation
+names it. Until then there is nothing to read and nothing to fill in.
+
+#### The development loop needs no file, and one measurement says why it nearly did
+
+`dev` should require no stack settings at all, and it almost does. Working through
+`--embedded-db` found a collision between two decisions that each read correctly alone.
+
+[cli-surface.md](cli-surface.md) Decision 4b tells applications to isolate themselves inside the
+shared embedded database with `currentSchema` **in their own URL**. With no `stack.yml`, this
+decision falls back to each runtime's own `tesseraql.framework.datasource`, which is `main`. So
+application A resolves `…?currentSchema=a`, application B resolves `…?currentSchema=b`, the two
+coordinates differ, and **TQL-APP-4211 refuses the whole development stack** — over the isolation
+the other decision just recommended. Decision 4b even states the rule that is violated: "an
+application's `currentSchema` must not reach it."
+
+**So `--embedded-db` supplies the framework datasource itself**, as the embedded server's shared
+database with no schema qualifier. It is not derived from any application — which is 4b's actual
+prohibition — it is the same coordinate the CLI already knows because it started the server. One
+sign-in across the development stack, no file, and the per-application `currentSchema` stays where
+it belongs.
+
+**And `dev` can default the external origin, where `host` must not.** `dev` is the gateway, so it
+knows its own address and `http://localhost:<port>` is right by construction. A host behind an
+ingress cannot know it, and defaulting there would hand an MCP client a `resource` of
+`localhost` — the silent misconfiguration Decision 6 requires character-for-character matching to
+prevent. So it is **required when something reads it** — MCP resource metadata, the authorization
+server's issuer — and absent until then, rather than demanded at boot from every deployment that
+will never use either.
+
+#### Open: whether `--env` selects a profile for this file
+
+Applications resolve `config/env/<profile>.yml` through `--env`, `TESSERAQL_ENV` or
+`-Dtesseraql.env`. A stack has no equivalent, and `--env` is on `dev` and `host` under
+[cli-surface.md](cli-surface.md) Decision 5. One flag that selects a profile for the applications
+and silently does not for the stack around them is the shape this document keeps removing.
+
+Both answers are defensible and it is not decided here. Placeholders already cover environment
+variation — `${DB_HOST:localhost}` is the same file in both places — which argues that a second
+profile axis buys little. Against that, the surprise is real, and the loader that merges profiles is
+the one this file is already read through, so the cost of consistency is small. **It is decided
+before the file is implemented, not after**, because the answer changes what a stack directory
+contains.
+
+#### The repository boundary follows the stack, not the application
+
+Guidance rather than a decision, recorded because the file's location makes it unavoidable.
+
+**The source repository should hold a stack.** Decision 12 says a team must develop against the
+topology it deploys; a layout where nobody can check out *the stack* cannot satisfy it. Applications
+in separate repositories need submodules or a meta-repository before `dev --stack` has anything to
+point at, and `stack.yml` — which belongs to the whole — has no home.
+
+**Independent release is not a reason to split**, because it is already available without splitting:
+`.tqlapp` packages and `AppCatalog` exist precisely so applications can be installed at different
+versions into one install root. **The distributable unit is an application; the source unit is a
+stack.**
+
+**When to split is the same question as when to stop being one stack:** applications that no longer
+share an origin and a sign-in are not a stack, and their repositories should part at the same
+boundary their deployment does.
+
 #### Rejected
 
 **Flags alone.** The list reaches eight options, a database password lands in shell history and
