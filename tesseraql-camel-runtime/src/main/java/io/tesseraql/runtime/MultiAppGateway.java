@@ -148,7 +148,7 @@ public final class MultiAppGateway implements AutoCloseable {
 
     /**
      * Hosts every app the directory holds and fronts them on {@code frontPort} (0 picks an
-     * ephemeral port), each addressed as {@code /apps/<name>/}.
+     * ephemeral port), each addressed as {@code /<name>/}.
      */
     public static MultiAppGateway start(java.nio.file.Path installRoot, int frontPort) {
         return start(installRoot, frontPort, new Settings());

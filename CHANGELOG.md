@@ -25,6 +25,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **An application's address is its name — `/orders`, not `/apps/orders` — and it is derived,
+  always** (docs/stack-architecture.md Decision 25). The `/apps/` wrapper defended nothing the
+  name grammar does not already defend (`TQL-YAML-1405`: no leading `_`, so `/_tesseraql/*` is
+  unreachable by any name; no leading `.`, so the dotted root names are; no `/`), and
+  `/orders/invoice/123` is the address a person would have guessed. **`basePath` left
+  `catalog.json`**: what remained of a declarable address was the vanity rename, and a renamed
+  address breaks every neighbour's absolute links — so a catalogue still declaring one is refused
+  loudly rather than quietly re-addressed, and installing a new version of an application cannot
+  change where it answers, because nothing can. The deployment's root choice is the root
+  redirect (Decision 24, a later slice), not an address override. `InstalledApp.basePath()` is
+  now the one producer of an address: `/<name>`.
+
 - **An application's identity is its `name`, and `id` is gone as a synonym** (docs/cli-surface.md
   defect 1: two names for what looks like one thing). The two were the same string by
   construction — the catalogue's `id` was read from `tesseraql.app.name` — so `InstalledApp.id`

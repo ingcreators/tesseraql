@@ -41,7 +41,7 @@ previous image.
 
 **B. Several applications on one host.** `tesseraql host --stack <dir>` starts every application
 the directory holds in its own runtime behind one port — its own Camel context, datasource
-set, Studio and traces. They are addressed as `/apps/<id>/` on one origin and share a sign-in
+set, Studio and traces. They are addressed as `/<name>/` on one origin and share a sign-in
 across them. See [hosting.md](hosting.md).
 
 One runtime serves **one** application plus the framework's own surfaces. Mounting further

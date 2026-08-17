@@ -53,7 +53,16 @@ two deployments, and the value is the operator's, not the author's.
 **Amended 2026-08-16.** This first said hosting *derives* `/apps/<id>` from the catalog id.
 [stack-architecture.md](stack-architecture.md) Decision 12 made the address **declared**:
 `InstalledApp.basePath` carries it, `/apps/<id>` is only its default, and an application may be
-addressed at the origin root. Two consequences that cost a defect each to find:
+addressed at the origin root.
+
+**Amended again 2026-08-17.** Decision 25 reversed the declarability: an application's address is
+**derived from its name, always** — `/<name>`, no `/apps/` wrapper — and the `basePath` field left
+`catalog.json` (a catalogue still declaring one is refused). What remained of a declarable address
+was the vanity rename, which breaks every neighbour's absolute links; the deployment's root choice
+is Decision 24's redirect, not an address override. The two defects below were found while the
+address was declared and stay recorded because their lessons (normalisation idempotence, one
+source for an address) are what the derived design keeps by construction. Consequences as
+recorded then:
 
 - **The empty string is an address, not the absence of one.** The origin root normalises to `""`
   so the gateway can compare prefixes rather than parse them, and a host answer of `""` therefore
@@ -129,7 +138,7 @@ it.
 `restConfiguration().contextPath(basePath)` is set on Camel's **context-wide** REST
 configuration, and every REST route the runtime mounts inherits it — the application's own,
 and the framework's hand-written `/_tesseraql/**` endpoints alike. Verified: with a prefix
-configured, `/apps/shop-a/_tesseraql/health` answers 200 and `/_tesseraql/health` answers
+configured, `/shop-a/_tesseraql/health` answers 200 and `/_tesseraql/health` answers
 404, without any of those endpoints being touched.
 
 `RouteReloader` restates it, because a reloaded or stubbed route re-enters the same
@@ -244,7 +253,7 @@ have been the smaller change.
    follows the *base* path, because it is scoped to endpoints rather than to a sign-in.
 6. **Suite mode end to end**: an HTML page served through `/apps/<id>/` with its assets,
    navigation, forms, and htmx swaps working — the case that opened this document. **Done** —
-   `SuiteModeIntegrationTest` asks for the page, then asks for every URL the page named, which
+   `StackModeIntegrationTest` (renamed from `SuiteModeIntegrationTest` with the #836 vocabulary) asks for the page, then asks for every URL the page named, which
    is the check the original defect would have failed. It also covers Studio behind the gateway
    ([app-isolation-model.md](app-isolation-model.md) slice 5), the sign-in redirect, one
    sign-in reaching both applications, and the converse under independent hosting. The example

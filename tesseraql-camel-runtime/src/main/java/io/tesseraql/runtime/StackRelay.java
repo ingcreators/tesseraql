@@ -123,11 +123,10 @@ final class StackRelay {
     /**
      * The application whose declared prefix addresses {@code rawPath}, longest first, or null.
      *
-     * <p>Longest-first, not first-match, because the prefixes are declared rather than derived: a
-     * stack of one may take the origin root while another application keeps {@code /apps/<name>}, and
-     * a root-addressed application would otherwise swallow its neighbour's traffic. A prefix
-     * matches on a segment boundary, so {@code /apps/orders} never answers for
-     * {@code /apps/orders-archive}.
+     * <p>Every prefix is derived from a name — {@code /<name>}, one segment, the catalogue's one
+     * producer — so at most one can match a given path, and the loop keeps longest-first only as a
+     * defence should a second producer ever appear. A prefix matches on a segment boundary, so
+     * {@code /orders} never answers for {@code /orders-archive}.
      */
     private String appAddressedBy(String rawPath) {
         String best = null;

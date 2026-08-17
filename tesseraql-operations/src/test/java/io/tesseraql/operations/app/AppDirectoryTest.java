@@ -195,10 +195,10 @@ class AppDirectoryTest {
 
         assertThat(AppDirectory.applications(AppDirectory.resolve(dir.resolve("solo"))))
                 .singleElement()
-                .satisfies(app -> assertThat(app.basePath()).isEqualTo("/apps/solo"));
+                .satisfies(app -> assertThat(app.basePath()).isEqualTo("/solo"));
 
         assertThat(AppDirectory.applications(AppDirectory.resolve(dir)))
                 .singleElement()
-                .satisfies(app -> assertThat(app.basePath()).isEqualTo("/apps/solo"));
+                .satisfies(app -> assertThat(app.basePath()).isEqualTo("/solo"));
     }
 }
