@@ -26,18 +26,54 @@ The image copies `tesseraql-cli`'s jar **and its whole dependency set** into `li
 | `tesseraql-camel-runtime` | 192 |
 | `tesseraql-cli` | 249 |
 
-### Problem 1 — the CLI's 57 extra jars include a PostgreSQL server for two operating systems
+### Problem 1 — the platform binaries are bundled against a written intention not to bundle them
 
-| Artifact | Size | Runs in this image? |
+`io.zonky.test:embedded-postgres` is a **compile** dependency of `tesseraql-cli`, for
+`dev --embedded-db` and the `embedded-db` command. Both poms say what is supposed to happen:
+
+> Embedded PostgreSQL process supervisor (**the binary is resolved on demand, not bundled**).
+> — `pom.xml:268`
+
+> the binary is **NOT bundled**; it is resolved on demand via the ShrinkWrap resolver below.
+> — `tesseraql-cli/pom.xml:98`
+
+That is the right design. `embedded-postgres.properties` is filtered at build time from
+`zonky.postgres.binaries.version`, so the CLI asks for **one** platform's binary, the running
+platform's, at the moment it is needed. Only `embedded-postgres-binaries-linux-amd64` is declared,
+at **`test`** scope, so CI does not reach the network.
+
+**The dependency tree does something else.** Measured 2026-08-17:
+
+```
+tesseraql-cli
++- io.zonky.test:embedded-postgres:jar:2.2.2:compile
+|  +- io.zonky.test.postgres:embedded-postgres-binaries-windows-amd64:jar:14.22.0:runtime
+|  +- io.zonky.test.postgres:embedded-postgres-binaries-darwin-amd64:jar:14.22.0:runtime
+|  \- io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64-alpine:jar:14.22.0:runtime
+\- io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64:jar:17.10.0:test
+```
+
+`embedded-postgres` **carries three platform bundles transitively at runtime scope, and nothing
+excludes them.** They are copied into `lib/` by the deployment image and into every distribution.
+
+| Artifact | Size | How it arrives |
 | --- | --- | --- |
-| `embedded-postgres-binaries-windows-amd64` | **21 MB** | no |
-| `embedded-postgres-binaries-darwin-amd64` | **27 MB** | no |
-| `embedded-postgres-binaries-linux-amd64-alpine` | 14 MB | no — the image is `eclipse-temurin:25-jre`, Debian |
+| `embedded-postgres-binaries-windows-amd64` | 21 MB | transitive, unexcluded |
+| `embedded-postgres-binaries-darwin-amd64` | 27 MB | transitive, unexcluded |
+| `embedded-postgres-binaries-linux-amd64-alpine` | 14 MB | transitive, unexcluded |
 
-`io.zonky.test:embedded-postgres` is a **compile** dependency of `tesseraql-cli`. It exists for
-`dev --embedded-db` and the `embedded-db` command, and it is development-only by its own name. Every
-production image carries roughly sixty megabytes of database server binaries, most of which cannot
-execute on the platform they are shipped to.
+**And they are the wrong version.** The project configures **17.10.0**; the bundles are **14.22.0** —
+a different PostgreSQL major. `embedded-db-version-lifecycle` already records that cross-major is
+the case this project chose not to automate, because zonky's binaries are server-only and a data
+directory initialised by one major is refused by another.
+
+**Which of the two wins at runtime is not measured, and it decides what this is.** If the on-demand
+resolver always fetches 17.10.0, the bundles are sixty-two megabytes of dead weight. If zonky's
+resolver prefers a matching platform bundle already on the classpath, then a **Windows** developer
+gets PostgreSQL **14** where every other path in this project means 17 — and a data directory
+written by one and opened by the other fails outright. **Print the value before deciding which:**
+run `dev --embedded-db` on Windows and log the server version. It is a ten-minute measurement and it
+changes the severity by a category.
 
 ### Problem 2 — the runtime carries Studio, and Studio carries a test framework
 
@@ -84,12 +120,15 @@ problems 1 and 2 and added one of its own.
 that runs a test is `ubuntu-latest`. The Windows artifact is built and published; no test observes
 its behaviour on the platform it is published for.
 
-**This corrects a claim made while measuring problem 1.** "Cannot execute in this image" was true of
-`deploy/Dockerfile`, which is `eclipse-temurin:25-jre` on Debian. On Windows Server the Windows
-binaries are the live ones and the Linux and macOS ones become the dead weight. The ratio flips per
-platform; the conclusion does not, because `--embedded-db` is a development feature on every
-platform and a deployment distribution should carry none of them. **The split is development against
-production, not one operating system against another.**
+**Windows is wanted as a production target**, which turns this section from a question into a
+requirement and removes an option decision 2a would otherwise have had.
+
+It also sharpens problem 1 rather than repeating it. A deployment distribution should carry no
+embedded-database binaries on any platform, because `--embedded-db` is a development feature
+everywhere — **the split is development against production, not one operating system against
+another.** What the platform changes is which bundle is the live one in the *developer* CLI, and
+that is exactly the case where 14.22.0 against a configured 17.10.0 stops being dead weight and
+starts being a version a developer actually runs.
 
 **And the Linux image is not the Windows path at all.** Decision 2 below says the deployment image
 runs `host`; a Windows Server deployment never reaches that image. It runs the jpackage launcher or
@@ -118,7 +157,10 @@ The mechanism is deliberately left open between two candidates, because the choi
 measurements this document has not taken:
 
 - **`optional` on the development-only dependencies**, with the deployment image excluding them.
-  Cheapest, one pom change plus an image change, and it keeps one artifact.
+  Cheapest, one pom change plus an image change, and it keeps one artifact. **Problem 1's own fix is
+  smaller still and independent of this choice**: `<exclusions>` on `embedded-postgres` for the three
+  transitive platform bundles, which restores the "resolved on demand" the poms already intend and
+  removes sixty-two megabytes from *every* distribution, developer CLI included.
 - **A `tesseraql-runtime` distribution module** that depends on the runtime and a `host`-only entry
   point. Heavier, and it makes the boundary a build failure rather than a convention.
 
@@ -136,20 +178,23 @@ It becomes `host --stack /app`. The line is one word, and it is worth having as 
 it is the shortest possible statement of what this document is about: **the artifact should say what
 it is for.**
 
-### 2a. Windows Server is tested or it is not offered
+### 2a. Windows Server is a production target, so it is tested
 
-A published release asset, a documented `scoop install`, and no test on the platform is a claim
-nobody verified — the shape this campaign exists to remove, arrived at from the distribution side
-rather than the code side.
+An earlier draft offered a choice — test it or stop offering it — because a published release asset
+and a documented `scoop install` with no test on the platform is a claim nobody verified. **Windows
+is wanted as a supported production target, so the choice collapses to the first branch** and the
+open questions below become work items rather than alternatives.
 
-The cheapest credible answer is not the whole suite on a Windows runner: the Testcontainers
-integration tests dominate the build and are slow and flaky on Windows agents. It is **the modules
-where platform semantics actually live** — `tesseraql-operations` (install, upgrade, catalogue,
-`AppDirectory`) and `tesseraql-cli` (paths, launchers, `--watch`) — run on `windows-latest` as a
-separate job.
+The answer is not the whole suite on a Windows runner: the Testcontainers integration tests dominate
+the build and are slow and flaky on Windows agents, and they exercise a database rather than a
+filesystem. It is **the modules where platform semantics actually live** — `tesseraql-operations`
+(install, upgrade, catalogue, `AppDirectory`) and `tesseraql-cli` (paths, launchers, `--watch`) — as
+a separate `windows-latest` job.
 
-If that is not worth its cost, the honest alternative is to say so in `getting-started.md` and stop
-attaching the asset. Either is defensible. Publishing without testing is the one that is not.
+**And a deployment distribution for Windows is part of decision 1**, not an afterthought to it. A
+Windows deployment never reaches `deploy/Dockerfile`, so "the production image runs `host`" needs a
+sibling statement for the jpackage launcher: what a Windows Server installation runs, and how it is
+supervised. Neither exists today.
 
 ### 3. Studio leaves the runtime's compile scope, which is already the plan
 
@@ -172,10 +217,14 @@ Until then the chain is measured and documented rather than quietly carried.
    image would keep anyway.
 2. **Where `dev --embedded-db` lives** once the distributions split. The developer CLI keeps it; the
    question is whether the `embedded-db` command stays a subcommand of the same binary.
-3. **Whether `AppInstaller`'s replace-the-directory upgrade works on Windows at all**, and what it
-   should do instead if it does not — install beside and switch a pointer, rather than delete and
-   move. Decision 2a's job is what would answer it; until then the upgrade path on Windows is
-   unknown rather than working.
-4. **Whether a guard can assert the boundary.** A test that fails when a development-only artifact
+3. **Which binary the on-demand resolver actually returns on Windows** — the configured 17.10.0 or
+   the transitively bundled 14.22.0. Ten minutes with `dev --embedded-db` and a logged server
+   version, and it decides whether problem 1 is weight or a version defect. **Measure before
+   deciding.**
+4. **`AppInstaller`'s replace-the-directory upgrade on Windows.** Not an open question about whether
+   to care — Windows is a target — but about the shape of the fix. Installing beside and switching a
+   pointer avoids the held-file problem and gives atomic rollback on every platform, which is why it
+   is likely the answer rather than a Windows special case.
+5. **Whether a guard can assert the boundary.** A test that fails when a development-only artifact
    reaches the deployment classpath is what makes decision 1 hold; without one the scoping decays
    the first time a convenient dependency is added, which is how it arrived here.
