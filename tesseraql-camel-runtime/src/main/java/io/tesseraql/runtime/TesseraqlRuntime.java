@@ -168,7 +168,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return start(appHome, withBasePath(loaded, host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null,
-                host.frameworkDataSource(), host.cookiePath());
+                host.frameworkDataSource(), true, host.cookiePath());
     }
 
     /**
@@ -278,7 +278,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override, String cookiePath) {
-        return start(appHome, manifest, port, tracer, meter, override, null, cookiePath);
+        return start(appHome, manifest, port, tracer, meter, override, null, false, cookiePath);
     }
 
     /**
@@ -288,11 +288,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
      *                                 resolves its own {@code tesseraql.framework.datasource} —
      *                                 the host has already refused the explicit-declaration
      *                                 collision, so no name resolution happens when this is set
+     * @param hostedValidatesFramework true when a host migrated the stack-wide {@code security}
+     *                                 schema before this runtime started, so this runtime
+     *                                 VALIDATES it instead of migrating and refuses to start on
+     *                                 a mismatch — the wrong-framework-datasource guard
+     *                                 (docs/stack-architecture.md decision 16)
      */
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override,
-            javax.sql.DataSource stackFrameworkDataSource, String cookiePath) {
+            javax.sql.DataSource stackFrameworkDataSource, boolean hostedValidatesFramework,
+            String cookiePath) {
         DefaultCamelContext context = new DefaultCamelContext();
         // The component policy guards every registration from here on
         // (docs/component-guard.md): baseline-denied components fail boot, config or not.
@@ -531,7 +537,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // The framework's own migrations run before any store touches the schema (versioned
         // history per component, Flyway's lock serializing concurrent node startups); the
         // stores' direct bootstrap below stays as the idempotent fallback for embedders.
-        FrameworkMigrations.migrate(dataSource, frameworkDataSource);
+        // Hosted, the stack-wide security component was migrated once by the host before this
+        // runtime started, so it is VALIDATED here instead — failing to start on a mismatch is
+        // the wrong-framework-datasource guard, and what refuses a canary expecting a newer
+        // schema than the host migrated (docs/stack-architecture.md decision 16).
+        if (hostedValidatesFramework) {
+            FrameworkMigrations.migrateOperations(dataSource);
+            FrameworkMigrations.validateSecurity(frameworkDataSource);
+        } else {
+            FrameworkMigrations.migrate(dataSource, frameworkDataSource);
+        }
         // Browser sessions: "jdbc" by default (docs/contract-bugfixes.md track G) — tql_session
         // shared across all runtime nodes, so a login made on one node resolves on every other
         // (design ch. 11.2) and survives a restart. "memory" is the explicit per-node opt-in

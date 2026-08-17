@@ -108,10 +108,23 @@ public final class MultiAppHost implements AutoCloseable {
         // both of its guards are start-time refusals.
         io.tesseraql.operations.app.StackSettings settings = io.tesseraql.operations.app.StackSettings
                 .load(installRoot);
-        com.zaxxer.hikari.HikariDataSource frameworkPool = frameworkPool(installRoot,
-                applications, settings);
+        Map<String, io.tesseraql.yaml.config.AppConfig> configs = loadConfigs(installRoot,
+                applications);
+        com.zaxxer.hikari.HikariDataSource frameworkPool = frameworkPool(configs, settings);
         HostContext context = stack.withStackSettings(
                 settings.externalOrigin().orElse(null), frameworkPool);
+        // The stack-wide security schema is migrated ONCE, here, before any runtime starts;
+        // the runtimes validate instead of migrating and refuse to start on a mismatch
+        // (docs/stack-architecture.md decision 16). On the stack's own pool when the file
+        // supplies one; otherwise on the coordinate the applications agree on — TQL-APP-4211
+        // above is what makes "the first application's coordinate" the stack's.
+        if (!applications.isEmpty()) {
+            if (frameworkPool != null) {
+                FrameworkMigrations.migrateSecurity(frameworkPool);
+            } else {
+                migrateSecurityOnTheAgreedCoordinate(configs);
+            }
+        }
 
         io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
         Map<String, TesseraqlRuntime> started = new LinkedHashMap<>();
@@ -148,6 +161,44 @@ public final class MultiAppHost implements AutoCloseable {
                 frameworkPool);
     }
 
+    /** Each application's placeholder-resolved configuration, keyed by name, load order kept. */
+    private static Map<String, io.tesseraql.yaml.config.AppConfig> loadConfigs(Path installRoot,
+            List<InstalledApp> applications) {
+        Map<String, io.tesseraql.yaml.config.AppConfig> configs = new LinkedHashMap<>();
+        for (InstalledApp app : applications) {
+            Path appHome = installRoot.resolve(app.path()).normalize();
+            configs.put(app.name(),
+                    new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config());
+        }
+        return configs;
+    }
+
+    /**
+     * Migrates the stack-wide {@code security} schema on the coordinate the applications agree
+     * on, through a pool that exists only for the migration. TQL-APP-4211 has already refused
+     * disagreement, so the first application's resolved coordinate <em>is</em> the stack's; the
+     * runtimes then build their own pools on that same coordinate and validate.
+     */
+    private static void migrateSecurityOnTheAgreedCoordinate(
+            Map<String, io.tesseraql.yaml.config.AppConfig> configs) {
+        io.tesseraql.yaml.config.AppConfig config = configs.values().iterator().next();
+        String datasource = config.getString("tesseraql.framework.datasource").orElse("main");
+        String prefix = "tesseraql.datasources." + datasource + ".";
+        String jdbcUrl = config.getString(prefix + "jdbcUrl").orElse(null);
+        if (jdbcUrl == null) {
+            // Nothing declared: the runtime's own datasource loading will refuse with the
+            // established error, which is the better message than anything this layer could say.
+            return;
+        }
+        try (com.zaxxer.hikari.HikariDataSource migrationPool = DataSources.create(
+                "tesseraql-stack-framework-migration",
+                new DataSources.MainDatasourceOverride(jdbcUrl,
+                        config.getString(prefix + "username").orElse(null),
+                        config.getString(prefix + "password").orElse(null)))) {
+            FrameworkMigrations.migrateSecurity(migrationPool);
+        }
+    }
+
     /**
      * The stack's framework pool when its file supplies a coordinate, after both of decision
      * 22's guards — or {@code null} with the applications checked for agreement.
@@ -158,16 +209,9 @@ public final class MultiAppHost implements AutoCloseable {
      * application, each one's resolved framework coordinate is compared and disagreement refuses
      * the start ({@code TQL-APP-4211}) — absence is a check, never a silence.
      */
-    private static com.zaxxer.hikari.HikariDataSource frameworkPool(Path installRoot,
-            List<InstalledApp> applications,
+    private static com.zaxxer.hikari.HikariDataSource frameworkPool(
+            Map<String, io.tesseraql.yaml.config.AppConfig> configs,
             io.tesseraql.operations.app.StackSettings settings) {
-        Map<String, io.tesseraql.yaml.config.AppConfig> configs = new LinkedHashMap<>();
-        for (InstalledApp app : applications) {
-            Path appHome = installRoot.resolve(app.path()).normalize();
-            configs.put(app.name(),
-                    new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config());
-        }
-
         java.util.Optional<io.tesseraql.operations.app.StackSettings.Coordinate> supplied = settings
                 .frameworkDatasource();
         if (supplied.isPresent()) {

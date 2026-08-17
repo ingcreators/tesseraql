@@ -641,6 +641,15 @@ replicas of one application, not several applications of one stack.
 So the host migrates `security` once, and **runtimes validate instead of migrating**, failing to
 start when the schema is not at the version they expect.
 
+**Status 2026-08-17: shipped.** The host migrates `security` before any runtime starts — on the
+stack's own pool when `tesseraql-stack.yml` supplies one, otherwise through a migration-only pool
+on the coordinate the applications agree on (TQL-APP-4211 is what makes "the first application's
+coordinate" the stack's). Hosted runtimes migrate only their per-application `operations`
+component and **validate** `security`, refusing on a mismatch with **TQL-APP-4214** — which is
+also what refuses a canary whose framework-schema expectation is newer than what the host
+migrated (Decision 29's validate-don't-migrate clause). Standalone starts keep migrating both
+components themselves.
+
 That last clause dissolves a guard this document previously wanted on its own. A runtime pointed at
 the wrong framework datasource finds no migrated schema and **fails loudly at boot** instead of
 producing a stack where sign-in silently does not carry. Validating rather than migrating *is* the
