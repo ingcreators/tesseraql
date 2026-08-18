@@ -122,6 +122,17 @@ parameterized by family; entry permissions (`ops.batch.view`/`ops.batch.run`,
 `iam.admin.view`/`iam.admin.write`) are untouched — a family grant narrows *which
 applications*, an entry permission opens *the surface*.
 
+**The `.app` segment is load-bearing, not decoration** (asked in review: is it always
+needed?). Per-application grants share their namespace with the same family's
+surface-wide permissions — `ops.batch.view` and `ops.batch.run` live beside
+`ops.app.<name>` today — and names can contain dots, so the parser has only constant-prefix
+matching to work with. A `ops.<name>` grammar would read the entry permission
+`ops.batch.view` as a grant for an application named `batch.view`: entry permissions and
+application grants would be parseable as each other. `<family>.app.` reserves a subtree in
+which only names live, for every family alike — which is also why `deploy` and `studio`
+adopt it even though neither has a surface-wide permission yet: the fence must exist before
+the first non-app permission in the family, not be retrofitted after a collision.
+
 `iam.admin.*` deliberately gains no `app` family: the identity store is the stack's
 (Decision 22/24), there is no per-application axis to scope, and inventing one would grant
 words with nothing behind them.
@@ -141,12 +152,20 @@ collapsing them would hand every on-call reader the deploy pen.
 members and mounts into the stack surface runtime instead (the portal config's
 `ops-console.enabled: false` line is deleted; hosted members skip the provider). It answers
 at the origin scope — `/_tesseraql/ops/console`, the address Decision 17 reserved — behind
-the same entry permissions as today. A standalone runtime (`tesseraql migrate`-era single
-process, no host) keeps its per-app console: one runtime, one application, nothing to
-switch between. The skip is keyed on being a hosted member — a topology rule like the
-derived address, not a preference — so a member declaring
+the same entry permissions as today. The skip is keyed on being a hosted member — a
+topology rule like the derived address, not a preference — so a member declaring
 `tesseraql.apps.ops-console.enabled: true` under a host still gets no local copy (open
 question 4).
+
+**A single application is a stack of one, and gets the shell — corrected in review.** An
+earlier draft treated "standalone" as a topology that keeps its per-app console. Under
+Decision 12 there is no such topology: `dev` and `host` are the only ways to run, both
+stand the gateway and the surface runtime up for one member exactly as for five, and the
+one-member stack signs in at the origin and opens the origin shell — whose switcher simply
+lists one entry. The word "standalone" below means only the **unhosted boot**: a
+`TesseraqlRuntime` started directly, with no `HostContext` — integration tests and library
+embedding — where no origin exists to host a surface or bounce to. That boot keeps the SPI
+mounts as a fallback; it is a test-and-embedding footnote, not a deployment shape.
 
 **The switcher is the grant, applied to the member list.** The shell lists the stack's
 members (the surface runtime already holds `stackMembers`) filtered by the caller's
@@ -207,10 +226,11 @@ bounce: a hosted member's 401 redirect becomes **origin-absolute** — `/_tesser
 with the `redirect` parameter carrying the original *prefixed* path, so the round trip
 returns to the member page that bounced. The member knows it is hosted (its `HostContext`
 carries the base path), so the renderer switches target by topology, not by configuration.
-Hosted members then stop mounting `auth-ui` and `account`; standalone runtimes keep both,
-because a standalone runtime *is* its own origin. `dev` hosts through the gateway, so
-development gets the origin bounce too — the shape development and production share is the
-point of the whole campaign.
+Hosted members then stop mounting `auth-ui` and `account` — a stack of one included, since
+its origin serves sign-in like any other stack's; only the unhosted boot (tests, embedding —
+the correction above) keeps the mounts, because it has no origin to bounce to. `dev` hosts
+through the gateway, so development gets the origin bounce too — the shape development and
+production share is the point of the whole campaign.
 
 A side effect worth naming: `servedApps` — the set `OpsScope` ANDs against — shrinks to the
 member itself once the system apps stop mounting, which is what that set always meant.
@@ -249,7 +269,7 @@ Three PRs, each independently green and observable:
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
 | 1 | The vocabulary and the ops shell | `OpsScope` families; `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher filtered by `ops.app.<name>`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack; `hosting.md`'s per-app-console paragraph replaced |
-| 2 | The identity remainder | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; standalone unchanged | One sign-in door and one admin door; `servedApps` = the member |
+| 2 | The identity remainder | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the unhosted boot (tests, embedding) unchanged | One sign-in door and one admin door; `servedApps` = the member |
 | 3 | The deploy surface | `deploy.app.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
 
 Slice 1 first (it lands the vocabulary and the delegation pattern). Slice 2 is independent
@@ -290,8 +310,9 @@ is deliberately not promised here.
   `MultiAppReplaceIntegrationTest` fixture shape).
 - Degradation: stop one member mid-test (`discardCanary`/`retire` machinery), the overview
   renders with that member's card marked unreachable, HTTP 200.
-- A hosted member serves no `/_tesseraql/ops/console` of its own; a standalone runtime
-  still does (the existing per-app console tests keep passing unhosted).
+- A hosted member serves no `/_tesseraql/ops/console` of its own; a one-member stack opens
+  the origin shell with one switcher entry; an unhosted boot still serves its own console
+  (the existing per-app console tests keep passing unhosted).
 - SSE through the delegation: the console's live page streams frame-by-frame through shell +
   relay (the `StackRelayTest` timing shape, one more hop).
 
@@ -301,7 +322,8 @@ is deliberately not promised here.
   member page; the member serves no `/_tesseraql/login` of its own anymore.
 - IAM Admin answers at the origin behind `iam.admin.view`; no member serves
   `/_tesseraql/admin/…`.
-- Standalone: all five surfaces still mount, the base-relative bounce unchanged.
+- A one-member stack signs in at the origin like any other; the unhosted boot keeps all
+  five mounts and the base-relative bounce (the existing direct-runtime tests pin it).
 - `servedApps` shrinkage: `ops.app.<member>` sees the member's rows and nothing about the
   system apps.
 
@@ -355,8 +377,12 @@ Each gated on the slice it blocks, with a recommendation:
    for the staged slot (`orders (canary)`), because runtime-local data is what an operator
    watches a ramp for; the alternative (delegate through the weighted roll the front uses)
    makes the trace page a coin flip.
-3. **Standalone keeps the per-app surfaces** — *gates slice 2.* Recommended: yes. A
-   standalone runtime is its own origin; removing its login or console serves nobody.
+3. **The unhosted boot keeps the per-app surfaces** — *gates slice 2.* Reframed in review:
+   there is no "standalone" deployment topology under Decision 12 — a single application is
+   a stack of one and uses the origin's surfaces like any other stack. What this question
+   covers is only the boot with no host at all (`TesseraqlRuntime` started directly:
+   integration tests, library embedding), which has no origin to host a surface or bounce
+   to. Recommended: that boot keeps the SPI mounts, as a fallback rather than a shape.
 4. **May a hosted member keep its own console by config?** — *gates slice 1.* Recommended:
    no. One console per stack is a topology rule, like the derived address — a per-member
    opt-out would be the two-doors shape this design exists to remove.
