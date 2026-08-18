@@ -1204,6 +1204,10 @@ exactly one thing — redirect — and configuration chooses only the target.**
   surfaces, which is where its two ingredients — the sign-in redirect and the entitlement check —
   already live.
 
+**Implementation design: [root-portal.md](root-portal.md)** (2026-08-18) — the stack surface
+runtime, the relay's origin fence, the slices, guards and tests, and the open questions that gate
+them.
+
 ### 25. An application's address is its name — `/orders`, not `/apps/orders`
 
 Asked in review: framework surfaces are already fenced under `/_tesseraql/`, so why do applications
