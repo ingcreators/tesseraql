@@ -353,6 +353,54 @@ The verb count moves from 25 to 26 (`cli-surface.md`'s mapping table gains one r
 `deploy` takes `--stack` explicitly like `host` does — production does not guess (Decision 9's
 `host` rule applies: the flag is required, no discovery).
 
+## Per-application deploy authorization, asked in review
+
+Stated as a requirement in review: a team should be able to deploy **only the applications it
+manages**. The requirement is recorded here with its measurement, its target shape, and what
+holds the line until that shape exists — because the file protocol alone cannot carry it.
+
+**The measurement: install-root write access is deploy-everything authority.** `catalog.json`
+is one file and `.upgrade/` one directory; POSIX permissions scope files, not entries, so no
+arrangement of ownership expresses "may write app A's entry and not app B's". Per-application
+scope therefore requires an authenticated principal and a policy check — a control plane with
+identity — which is exactly the surface this design twice declined to build on, because its
+authorization model (`ops.app.<name>`, the stack architecture's open question 4) is
+deliberately unresolved until slice 7. The requirement does not break the file-first choice; it confirms it: the
+authenticated surface, when it comes, **authorizes and then writes the same files**, and the
+reconciler stays the one mechanism.
+
+**The target shape**, sketched so the grants work knows deploy is one of its customers:
+
+- The grant is per application in the shared store — `ops.app.<name>` gaining a *deploy*
+  action, exact semantics owned by that grants question rather than invented here ahead of
+  it.
+- The surface is the stack surface runtime (it runs in the host's process with the install
+  root on its filesystem, and it is where authenticated framework surfaces live by Decision
+  24): an endpoint — and later an ops-console page — that authenticates the caller, checks
+  the grant against the *package's declared name*, runs the preflight, and writes the intent
+  files the reconciler already consumes. Upload of the `.tqlapp` rides the existing
+  file-transfer machinery.
+- The CLI grows a remote mode beside the local one — `deploy --url <origin>` with a bearer
+  from `tesseraql token`, the exact dual shape `token` itself already has (`--app` local
+  mint xor `--url` remote) — so a pipeline deploys with a scoped token instead of
+  install-root access.
+
+**Until then, the line is held where teams already differ: the repository and its pipeline.**
+Decision 23 made the name the inter-team contract and the deployment a composition; a CD
+arrangement in which each application's repository can trigger only its own deploy job — repo
+permissions the organization already operates — enforces "only what I manage" at the boundary
+that exists today, with `tesseraql deploy` as the job's tool. What the interim does *not*
+give is per-app scoping for humans logged into the host machine: install-root access stays
+root-equivalent for the stack, stated plainly in `hosting.md` rather than implied.
+
+**And one boundary stated so the grant is not oversold when it arrives:** per-application
+deploy authority is an operational guardrail — who may move which version where — not a
+security isolation between mutually distrusting teams. A deployed application runs in the
+stack's shared process, and stack-scoped configuration values and secret resolution are
+visible to every member by design (Decision 26). Teams that must not be able to affect each
+other do not share a stack; that is Decision 27's definition, not a limitation of this
+design.
+
 ## Slices
 
 Three PRs, each independently green and observable:
@@ -463,9 +511,12 @@ shipped-status note. `upgrading.md` stays what it is (framework upgrades) — a 
 
 ## Deliberately not in this design
 
-- **An ops-console deploy page.** Slice 7 territory: its authorization is open question 4's
-  `ops.app.<name>` semantics. When it comes, it writes the same files this design defines —
-  the reconciler is the mechanism either way, which is why the files are decided first.
+- **An ops-console deploy page, and the authenticated deploy surface generally.** Slice 7
+  territory: its authorization is the stack architecture's open question 4 (`ops.app.<name>`
+  semantics). When it comes,
+  it writes the same files this design defines — the reconciler is the mechanism either way,
+  which is why the files are decided first. The per-application authorization requirement it
+  will carry is recorded in its own section above, with the interim that holds the line.
 - **Live membership changes.** Adding or removing an application recomposes the stack (4211
   agreement, portal membership, root validation) — a stack deploy by Decision 29's own
   boundary. The reconciler logs the owed restart and touches nothing.
@@ -519,3 +570,14 @@ Each gated on the slice it blocks, with a recommendation:
    already knows, and "the swap only ever installs a runtime that answered ready" is a sentence
    worth being able to say in `hosting.md`. A bounded handful of retries over a few seconds,
    then the replace fails as a no-op.
+5. **Per-application deploy authorization: in this design, or gated on the grants work?** —
+   *gates nothing in slices 1–3; shapes what comes after.* The requirement (a team deploys
+   only what it manages) needs an authenticated surface, and its section above records why the
+   file protocol cannot carry it. Recommended: **defer the authenticated surface to the
+   `ops.app.<name>` grants work (open question 4 of the stack architecture / slice 7)** and
+   hold the line with the pipeline boundary in the interim — Decision 23's name contract plus
+   per-repository CD permissions, with `hosting.md` stating plainly that install-root access
+   is stack-root. Building it now would force that grants question's answer from a side door,
+   on an ops shell that is itself still moving — the two-answers-that-add-mechanism signal
+   this campaign stops on. The alternative, a minimal deploy-only grant ahead of the general
+   model, is named for review and not recommended.
