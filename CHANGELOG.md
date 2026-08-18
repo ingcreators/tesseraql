@@ -25,6 +25,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A running host converges to the install root's state — deploying is writing the files**
+  (docs/stack-architecture.md Decision 29, docs/runtime-replace.md). `catalog.json` and
+  `.upgrade/<name>.json` were already the protocol boot reads (a restart mid-canary has always
+  "worked" because boot is a reconciliation); a `StackReconciler` now watches them and
+  converges the running stack to the same function of the same files — a moved catalogue
+  replaces, a catalogue moved onto the staged candidate's version promotes (nothing starts), a
+  staged candidate appears at its written weight, a weight edit reaches the live roll, a
+  cleared stage discards. Event-driven on one serialized thread, idempotent by construction,
+  and failure does not loop: a refused candidate stays refused, recorded in
+  `.upgrade/<name>.status.json` — the file the host alone writes (the CLI writes intent, the
+  host writes outcome, neither touches the other's). Catalogue and upgrade-state writes are
+  atomic moves now, so a concurrent read can be stale but never torn. Membership stays
+  start-time: a name added or removed is the stack changing shape, logged as an owed stack
+  deploy. The reconciler exists only where a catalogue does — a workspace of source trees
+  keeps restart-to-deploy, and `dev`'s `--watch` is a different loop.
+
 - **The host can replace one application's runtime while the stack serves**
   (docs/stack-architecture.md Decision 29, docs/runtime-replace.md). `MultiAppHost` gained the
   operation set the deploy machinery drives: `replace` (admission checks re-running the boot
