@@ -123,9 +123,17 @@ public final class MultiAppGateway implements AutoCloseable {
     private final HttpServer server;
     private final int port;
     private final StackRelay relay;
+    /**
+     * Converges the host to the install root's files while serving (docs/runtime-replace.md).
+     * Only where a catalogue exists — an install root is the deployment shape with versions and
+     * a ledger; a workspace of source trees keeps restart-to-deploy, and {@code dev} has
+     * {@code --watch}, which is a different loop (routes, not versions). {@code null} otherwise.
+     */
+    private final StackReconciler reconciler;
 
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
-            Settings settings, int frontPort, String rootTarget) {
+            java.nio.file.Path installRoot, Settings settings, int frontPort,
+            String rootTarget) {
         this.host = host;
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
@@ -156,6 +164,9 @@ public final class MultiAppGateway implements AutoCloseable {
             throw new IllegalStateException("Could not start the gateway on port " + frontPort,
                     failed);
         }
+        this.reconciler = java.nio.file.Files.isRegularFile(installRoot.resolve("catalog.json"))
+                ? new StackReconciler(installRoot, host)
+                : null;
     }
 
     /**
@@ -245,7 +256,8 @@ public final class MultiAppGateway implements AutoCloseable {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appNames().contains(app.name()))
                     .toList();
-            return new MultiAppGateway(host, hosted, settings, frontPort, rootTarget);
+            return new MultiAppGateway(host, hosted, installRoot, settings, frontPort,
+                    rootTarget);
         } catch (RuntimeException ex) {
             host.close();
             throw ex;
@@ -311,6 +323,11 @@ public final class MultiAppGateway implements AutoCloseable {
      */
     @Override
     public void close() {
+        // The reconciler first: a stop must not race a deploy landing mid-drain, and a closed
+        // watcher simply leaves the files for the next start's boot-time reconciliation.
+        if (reconciler != null) {
+            reconciler.close();
+        }
         relay.beginDrain();
         java.time.Duration bound = host.drainBound();
         int inFlight = relay.inFlight();

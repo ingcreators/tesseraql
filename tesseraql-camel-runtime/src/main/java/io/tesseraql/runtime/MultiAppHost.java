@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * wrong before the swap. Membership itself never changes here: a new or removed application
  * recomposes the stack and is a stack deploy, Decision 29's boundary.
  */
-public final class MultiAppHost implements AutoCloseable {
+public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOperations {
 
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppHost.class);
     // Shared with StackRelay, which answers it as a 404 for the same condition one layer out.
@@ -304,6 +304,7 @@ public final class MultiAppHost implements AutoCloseable {
      * moves back at the next stack start — recorded in {@code hosting.md} rather than engineered
      * around.
      */
+    @Override
     public synchronized void replace(InstalledApp entry) {
         Slot candidate = admitAndStart(entry);
         Slot retired = slots.put(entry.name(), candidate);
@@ -320,6 +321,7 @@ public final class MultiAppHost implements AutoCloseable {
      * and outbox work from its start, claim-arbitrated, exactly as a node that joined a cluster
      * (docs/runtime-replace.md, the overlap window).
      */
+    @Override
     public synchronized void stageCanary(InstalledApp entry, int weightPercent) {
         String name = entry.name();
         if (slots.containsKey(name + CANARY_SLOT)) {
@@ -338,6 +340,7 @@ public final class MultiAppHost implements AutoCloseable {
      * a start-time snapshot, so adjusting a canary's ramp meant restarting the whole stack,
      * which defeats the canary (the measured defect docs/runtime-replace.md opens with).
      */
+    @Override
     public synchronized void setCanaryWeight(String appName, int weightPercent) {
         requireCanary(appName);
         canaryWeights.put(appName, clampWeight(weightPercent));
@@ -349,6 +352,7 @@ public final class MultiAppHost implements AutoCloseable {
      * Nothing starts: the promoted runtime has been serving its weight share already, which is
      * the strongest health check available.
      */
+    @Override
     public synchronized void promoteCanary(String appName) {
         Slot candidate = requireCanary(appName);
         slots.remove(appName + CANARY_SLOT);
@@ -361,6 +365,7 @@ public final class MultiAppHost implements AutoCloseable {
     }
 
     /** Drains and closes the staged candidate; the serving runtime is untouched. */
+    @Override
     public synchronized void discardCanary(String appName) {
         Slot candidate = requireCanary(appName);
         slots.remove(appName + CANARY_SLOT);
@@ -710,6 +715,7 @@ public final class MultiAppHost implements AutoCloseable {
         return app(appName).port();
     }
 
+    @Override
     public Set<String> appNames() {
         return appNames;
     }
@@ -719,8 +725,19 @@ public final class MultiAppHost implements AutoCloseable {
      * replace it is the new version's. {@code null} for a name the stack does not hold; the
      * relay treats that as unaddressed.
      */
-    InstalledApp entry(String appName) {
+    @Override
+    public InstalledApp entry(String appName) {
         Slot slot = slots.get(appName);
+        return slot == null ? null : slot.entry();
+    }
+
+    /**
+     * The entry the staged canary runtime was started from, or {@code null} when none is staged
+     * — what the reconciler diffs the on-disk candidate against.
+     */
+    @Override
+    public InstalledApp canaryEntry(String appName) {
+        Slot slot = slots.get(appName + CANARY_SLOT);
         return slot == null ? null : slot.entry();
     }
 
@@ -749,11 +766,13 @@ public final class MultiAppHost implements AutoCloseable {
     }
 
     /** Whether the app has a staged canary candidate receiving a share of traffic. */
+    @Override
     public boolean hasCanary(String appName) {
         return canaryWeights.containsKey(appName);
     }
 
     /** The percentage of traffic the app's canary candidate should receive (0 if none). */
+    @Override
     public int canaryWeight(String appName) {
         return canaryWeights.getOrDefault(appName, 0);
     }

@@ -171,7 +171,14 @@ public final class AppUpgrader {
         try {
             Path dir = installRoot.resolve(".upgrade");
             Files.createDirectories(dir);
-            Files.write(dir.resolve(appName + ".json"), MAPPER.writeValueAsBytes(state));
+            // Atomic on purpose (docs/runtime-replace.md): fine while only boot read this file
+            // once, not fine once a running host's reconciler reads it concurrently. The temp
+            // file lives in the same directory so the move stays one filesystem operation.
+            Path temp = Files.createTempFile(dir, appName, ".tmp");
+            Files.write(temp, MAPPER.writeValueAsBytes(state));
+            Files.move(temp, dir.resolve(appName + ".json"),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
