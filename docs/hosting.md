@@ -76,9 +76,10 @@ per application version. Baking that directory into a container image gives ever
 identical bytes with nothing to download at boot.
 
 The runtime does not fetch application packages itself. Getting bytes onto a host is a
-deployment concern with better tools than a runtime fetcher. There is no `install` verb on the
-CLI today: a deployment either ships the directory or drives `AppInstaller` from its own
-tooling.
+deployment concern with better tools than a runtime fetcher. A deployment either ships the
+directory, or copies a `.tqlapp` package to the host and runs `tesseraql deploy` (below); the
+`AppInstaller`/`AppUpgrader` library stays for tooling that wants to drive the same lifecycle
+itself.
 
 ### Modules are resolved before the host starts
 
@@ -99,6 +100,64 @@ classloader: module visibility equals runtime scope, so two applications can car
 driver at different versions, and a custom expression function is visible exactly to the
 application that declared it. Changing a member's module set is a redeploy of that member, not a
 live edit.
+
+## Deploying one application
+
+Deploying is writing files. `catalog.json` names each member's active version, and
+`.upgrade/<name>.json` names a staged candidate and its traffic weight. A running host watches
+the install root and converges to what the files say, replacing exactly that member's runtime
+while the stack keeps serving
+([stack-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/stack-architecture.md)
+Decision 29). `tesseraql deploy` is the pen:
+
+```sh
+tesseraql deploy ./orders-2.1.0.tqlapp --stack /opt/tesseraql/apps        # replace
+tesseraql deploy ./orders-2.1.0.tqlapp --stack ... --canary --weight 10   # stage a canary
+tesseraql deploy weight orders 50 --stack ...                             # move the ramp
+tesseraql deploy promote orders --stack ...                               # candidate goes active
+tesseraql deploy rollback orders --stack ...                              # canary or last upgrade
+tesseraql deploy status orders --stack ...                                # read back both files
+```
+
+The package is a local path — getting bytes onto the host stays your deployment's concern — and
+`--sha256 <hex>` verifies it before anything is written. The command works with no host running:
+the state is written, and the next `host` start converges to it. `--stack` must be an install
+root; a workspace of source trees has no version ledger and is refused (`TQL-UPGRADE-4092`),
+because it deploys by restarting the stack.
+
+The host replaces without a gap. The new version's runtime starts beside the old one, with the
+boot guards re-run for it alone: modules resolved, framework-datasource agreement, and the
+framework-schema validation. It migrates its own business schema, and it must answer
+`/_tesseraql/health/ready` before any traffic moves. Then the address swaps to it, and the old
+runtime drains under its own declared `tesseraql.shutdown.timeout` — long-lived streams are cut
+at the force timeout, and their clients reconnect onto the new version. In-flight batch runs are
+asked to stop cooperatively at drain start: a run between steps stops with an exact resume
+point, a chunk step stops at its next committed checkpoint, and a run in its final step
+completes. Rerunning a stopped run goes through the operator's existing rerun, deliberately not
+automatically. **A failed replace is a no-op**: refused admission, a failed start, or a failed
+probe leaves the old runtime serving, and the refusal lands in the status file.
+
+Two windows to know about. First, a staged canary's `--weight` gates **HTTP traffic only**: the
+candidate's jobs, pollers and outbox work from the moment it starts, claim-arbitrated against
+the old version's, so a 10% canary's background participation is not 10%. The overlap also means
+migrations must stay expand/contract — the deploy window's contract, see
+[deployment.md](deployment.md). Second, a replaced runtime answers on an ephemeral internal port
+even when it declares `server.port`; the declared port returns at the next stack start. The
+relay follows the slot either way — a declared port only matters for reaching an application
+beside the gateway.
+
+The host reports each attempt in `.upgrade/<name>.status.json`: applied, or refused with the
+refusal's own message. One file, one writer — the CLI writes intent, the host writes outcome.
+`deploy --wait` (and `promote --wait`) tails that file so a pipeline gets a synchronous exit
+code, and `deploy status` renders both sides. Membership stays start-time: a new name in the
+catalogue, or one removed, is the stack changing shape and waits for the next stack start (the
+host logs the owed restart). Previous versions stay on disk — they are rollback's working
+material.
+
+Install-root write access is deploy authority over the whole stack: `catalog.json` is one file,
+so no permission arrangement scopes it per application. Hold the per-team line where teams
+already differ — each application's repository and its CD pipeline — with `tesseraql deploy` as
+the pipeline's tool.
 
 ## One address per application
 

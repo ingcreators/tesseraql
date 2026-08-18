@@ -56,7 +56,7 @@ class GeneratedReferenceTest {
     void cliReferenceCoversEverySubcommandAndItsFlags() {
         String cli = ReferenceGenerator.cli();
 
-        for (String command : new String[]{"dev", "new", "scaffold", "lint", "test",
+        for (String command : new String[]{"dev", "deploy", "new", "scaffold", "lint", "test",
                 "coverage", "migrate", "package", "admission", "modules", "job", "token",
                 "identity-schema", "embedded-db", "duckdb", "mcp"}) {
             assertThat(cli).as("subcommand " + command).contains("## `" + command + "`");

@@ -1453,6 +1453,14 @@ host reconciling to it, and a `deploy` verb is the operator's pen; the slices, g
 and the open questions (trigger, drain policy, verb shape, ready probe) each carry a
 recommendation there.
 
+**Status 2026-08-18: shipped, in the design's three slices.** The host replaces live —
+admission re-runs the boot guards, the swap follows a ready probe, a failed replace is a
+no-op — and the stack's own stop drains instead of hard-killing; a running host converges to
+the install root's state and reports each outcome in `.upgrade/<name>.status.json`;
+`tesseraql deploy` writes the intent (package, `promote`, `rollback`, `weight`, `status`,
+`--wait`, `--sha256`), refusing a catalogue-less directory (**TQL-UPGRADE-4092**). All five
+open questions closed on their recommendations, the fifth as deferred to the grants work.
+
 ## The scope ledger — what an application owns, what the stack owns
 
 Asked in review, after the decisions accumulated: what, in the end, is application-scoped and
