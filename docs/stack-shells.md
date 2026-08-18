@@ -152,6 +152,21 @@ permissions as the door** — cheap, shipped, and it preserves a two-model vocab
 justifying premise no longer exists; recorded here so it does not come back as a
 convenience.
 
+**The rest of the namespace, mapped** (asked in review: what exists besides `.app`?). After
+the retirement, the four families contain *only* their `.app.` subtree — `studio.` stays
+empty of verbs unless slice 8's design adds one. `iam.admin.view`/`iam.admin.write` is the
+one family with verbs and no `.app` axis, correctly: the identity store has no
+per-application axis to scope. Beyond the framework's vocabulary, the same store holds the
+applications' own policy codes (`tesseraql.security.policies` — free strings the framework
+never parses) and roles (a separate mechanism; Studio's global `editRoles` rides it today
+and retires into `studio.app.<name>` with slice 8). One consequence worth stating: the
+store is a single namespace, so the family prefixes are effectively reserved words — an
+application declaring its own policy named `ops.app.orders` would open its route to ops
+operators; a lint warning on application policies shadowing a family prefix is a candidate
+for the slice, not a blocker. Axes deliberately not invented: `.stack.` (the vitals ride
+any `ops.app` grant instead of a one-consumer axis), tenant axes (entitlement is the
+catalogue's), and portal reach (open question 6).
+
 **The `.app` segment is load-bearing, not decoration** (asked in review: is it always
 needed?). Per-application grants share their namespace with the same family's
 surface-wide permissions — `ops.batch.view` and `ops.batch.run` live beside
@@ -376,7 +391,10 @@ With the code PRs, not before: `hosting.md` (the per-app-console paragraph at
 section gains the endpoint and `--url`), `ops-console.md` (the shell, the switcher, the
 canary entry), `authentication.md`/`account.md` where the login copies are described,
 `deployment.md` (the `--admin-permissions` examples move to the family grants:
-`ops.app.*`, `run.app.*`, `deploy.app.*`; `ops-console.md`'s permission table follows),
+`ops.app.*`, `run.app.*`, `deploy.app.*`; `ops-console.md`'s permission table follows;
+`IdentitySchemaMojo`'s javadoc example is corrected in passing — it spells
+`iam:admin:write` with colons while the iam-admin routes check `iam.admin.write`, so an
+operator following it seeds a permission nothing matches),
 `root-portal.md` (its deliberately-not list shrinks as items land),
 `app-isolation-model.md` (Decision 4's reversal note points at the shipped shell),
 `reference-cli.md` regeneration (`deploy --url`), the error reference for any new codes the
