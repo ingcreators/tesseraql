@@ -62,16 +62,41 @@ class LaneBackpressureIntegrationTest {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/slow")).build();
 
-        // Fire the first request; it occupies the single lane permit for ~1s (pg_sleep).
+        // Fire the first request, then WAIT until its pg_sleep is observably executing —
+        // which means it holds the lane's single permit. A fixed sleep here guessed at how
+        // fast a cold runtime's first request reaches the lane, and on a loaded CI runner it
+        // guessed wrong: the second request arrived first, took the permit, and answered 200.
         CompletableFuture<HttpResponse<String>> first = client.sendAsync(request,
                 HttpResponse.BodyHandlers.ofString());
-        Thread.sleep(300);
+        awaitSlowQueryRunning();
 
         HttpResponse<String> second = client.send(request, HttpResponse.BodyHandlers.ofString());
         assertThat(second.statusCode()).isEqualTo(503);
         assertThat(second.body()).contains("TQL-LANE-5031");
 
         assertThat(first.get().statusCode()).isEqualTo(200);
+    }
+
+    /** Polls pg_stat_activity until the route's pg_sleep is active on the server. */
+    private static void awaitSlowQueryRunning() throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            long deadline = System.nanoTime() + java.time.Duration.ofSeconds(10).toNanos();
+            while (System.nanoTime() < deadline) {
+                try (var active = statement.executeQuery(
+                        "select count(*) from pg_stat_activity where state = 'active'"
+                                + " and pid <> pg_backend_pid()"
+                                + " and query like 'SELECT pg_sleep%'")) {
+                    active.next();
+                    if (active.getLong(1) > 0) {
+                        return;
+                    }
+                }
+                Thread.sleep(25);
+            }
+        }
+        throw new AssertionError("The first request never reached its pg_sleep");
     }
 
     private static void seedDatabase() throws Exception {
@@ -131,7 +156,7 @@ class LaneBackpressureIntegrationTest {
                     body:
                       data: main.rows
                 """);
-        Files.writeString(slowDir.resolve("slow.sql"), "SELECT pg_sleep(1) AS napped\n");
+        Files.writeString(slowDir.resolve("slow.sql"), "SELECT pg_sleep(2) AS napped\n");
         return target;
     }
 
