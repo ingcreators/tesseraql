@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.portal.home
+kind: route
+recipe: query-html
+
+# The stack's portal (docs/stack-architecture.md Decision 24, docs/root-portal.md): one screen
+# answering "what is here and who am I here" — the applications this principal may reach, as
+# links at their derived /<name> addresses. Anonymous browser users meet the standard
+# browser-session bounce to the stack's sign-in and return here; auth and CSRF come from the
+# application's security.defaults.routes.
+
+sources:
+  main:
+    service:
+      name: portal.apps.list
+      params:
+        tenantId: principal.tenantId
+response:
+  html:
+    status: 200
+    template: portal.html
+    model:
+      apps: main
+    headers:
+      Cache-Control: "no-store"

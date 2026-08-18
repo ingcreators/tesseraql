@@ -2,3 +2,5 @@
 # MultiAppHost into <stack>/work/portal — not an AppSourceProvider, so it never mounts
 # into member runtimes.
 config/tesseraql.yml
+web/_tesseraql/portal/get.yml
+web/_tesseraql/portal/portal.html

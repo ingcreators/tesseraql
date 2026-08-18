@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- The shell() form with the portal's own one-item nav, not page()'s system-nav: the
+     system console links (Operations, Studio, IAM Admin) are per-application surfaces and
+     would all dangle at the origin scope until their stack-level slices land
+     (docs/root-portal.md). Member addresses are origin-absolute by definition — /<name> —
+     so hrefs bind plainly rather than through the base-path link helper. -->
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: shell('Portal', ~{:: #portal-nav}, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="portal-nav">
+  <a class="hc-item" th:href="@{/_tesseraql/portal}"><span class="hc-item__title">Portal</span></a>
+</th:block>
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <div class="hc-card__header">Applications</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(apps)}">
+      <p class="hc-empty__title">No applications are reachable from here.</p>
+      <p class="hc-empty__description">Nothing is installed in this stack yet, or none of it is
+        entitled to your tenant.</p>
+    </div>
+    <nav class="hc-stack" th:unless="${#lists.isEmpty(apps)}" aria-label="Applications">
+      <a class="hc-item" th:each="app : ${apps}" th:href="${app.href}">
+        <span class="hc-item__title" th:text="${app.name}"></span>
+      </a>
+    </nav>
+  </div>
+</section>
+</div>
+</html>
