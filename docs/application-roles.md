@@ -583,6 +583,18 @@ block) and name the shape they will take; the rest are stances, not omissions.
   TesseraQL already holds both halves: the approval-workflow engine and the identity
   write contracts; the deferred design is their composition, and the validity window
   shipped in slice 2 is the time-box it will use.
+- **Network/context conditions** — *deferred with direction* (per-role IP allow-lists
+  and login hours — the Salesforce profile shape; a stack- or tenant-wide allow-list —
+  the kintone shape, table stakes on Japanese B2B security checklists). The substrate is
+  already shipped: the gateway's trusted-proxies machinery determines the client address,
+  and sessions record `remote_addr`. The future shape is two layers — a stack- or
+  application-level allow-list on the operator's surface, checked at authentication; and
+  grant-level conditions riding the `roleGrants` attribution slice 2 builds (a role
+  usable only from named networks or during named hours), evaluated per request against
+  the request context — which the frozen principal supports, because the *conditions*
+  freeze at sign-in while the *context* is the request's. That design decides named
+  network zones and login-time-versus-per-request enforcement; device posture stays IdP
+  territory (conditional access).
 - **Per-record sharing ACLs** (an owner shares this record with that person). The
   framework's answer is the scoping predicate: an application declares a shares table and
   an `exists` arm — expressible today, and the docs sweep adds the worked pattern to
@@ -597,8 +609,6 @@ block) and name the shape they will take; the rest are stances, not omissions.
   org-unit subtree scoping; permission inheritance (部長 ⊇ 課長) stays out — groups and
   rules compose bundles flat, and flat is what every attestation tool reduces a
   hierarchy to anyway.
-- **Network/context conditions** (per-role IP restrictions, login hours). Edge and IdP
-  territory (conditional access); recorded so the boundary is a decision.
 - **Per-tenant roles.** `tql_roles` stays tenant-less; tenant entitlement stays the
   catalogue's axis (the stack-shells stance, unchanged).
 - **A permission registry / catalogue UI.** Stack-shells' standing exclusion.
