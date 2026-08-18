@@ -22,8 +22,11 @@ public final class SqlResources {
     /** Renders the resource (resolved against the anchor class) with the given parameters. */
     public static BoundSql render(Class<?> anchor, String resourcePath,
             Map<String, Object> params) {
+        // Built-ins only, pinned: the cache is process-wide and runtimes share it, so a parsed
+        // framework template must never capture one application's custom functions.
         List<SqlNode> nodes = CACHE.computeIfAbsent(anchor.getName() + ":" + resourcePath,
-                key -> Sql2WayParser.parse(SqlScripts.read(anchor, resourcePath)));
+                key -> Sql2WayParser.parse(SqlScripts.read(anchor, resourcePath),
+                        io.tesseraql.core.expr.ExpressionFunctions.builtInsOnly()));
         return SqlRenderer.render(nodes, params);
     }
 

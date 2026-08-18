@@ -102,29 +102,58 @@ class ExpressionFunctionsTest {
                 List.of(new Fn("dup", 1, args -> args), new Fn("dup", 1, args -> args))))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("contributed twice");
-        // A failed installation leaves the registry unchanged (built-ins only).
-        assertThat(ExpressionFunctions.arity("dup")).isNull();
+        // A failed installation leaves the process default unchanged (built-ins only).
+        assertThat(ExpressionFunctions.processDefault().arity("dup")).isNull();
     }
 
     @Test
-    void resetReturnsToTheBuiltinsAndStaleCallsFailClearly() {
-        ExpressionFunctions.install(List.of(new Fn("gone", 0, args -> "here")));
-        Expr parsed = ExpressionParser.parse("gone()");
-        assertThat(parsed.eval(new EvaluationContext(Map.of()))).isEqualTo("here");
+    void aParsedTreeKeepsTheFunctionsItWasParsedUnder() {
+        // Flipped by design (docs/module-scope.md): this test used to pin the opposite — a tree
+        // failing "no longer installed" after reset(). Calls now capture their resolved function
+        // at parse, so the set a tree evaluates with is the set it was parsed under, immune to
+        // later installs and resets on any thread.
+        ExpressionFunctions.install(List.of(new Fn("kept", 0, args -> "first")));
+        Expr parsed = ExpressionParser.parse("kept()");
+        assertThat(parsed.eval(new EvaluationContext(Map.of()))).isEqualTo("first");
+
+        ExpressionFunctions.install(List.of(new Fn("kept", 0, args -> "second")));
+        assertThat(parsed.eval(new EvaluationContext(Map.of()))).isEqualTo("first");
 
         ExpressionFunctions.reset();
-        // Parsing now rejects the name again...
-        assertThatThrownBy(() -> ExpressionParser.parse("gone()"))
+        // Parsing rejects the name again...
+        assertThatThrownBy(() -> ExpressionParser.parse("kept()"))
                 .isInstanceOf(TqlException.class);
-        // ...and a tree parsed before the reset fails loudly instead of guessing.
-        assertThatThrownBy(() -> parsed.eval(new EvaluationContext(Map.of())))
+        // ...while the captured tree still answers.
+        assertThat(parsed.eval(new EvaluationContext(Map.of()))).isEqualTo("first");
+    }
+
+    @Test
+    void anExplicitSetOutranksTheProcessDefault() {
+        ExpressionFunctions.install(List.of(new Fn("mine", 0, args -> "default")));
+        ExpressionFunctions neighbour = ExpressionFunctions.of(
+                List.of(new Fn("theirs", 0, args -> "explicit")));
+
+        assertThat(ExpressionParser.parse("theirs()", neighbour)
+                .eval(new EvaluationContext(Map.of()))).isEqualTo("explicit");
+        // The explicit set does not see the default's functions, and vice versa.
+        assertThatThrownBy(() -> ExpressionParser.parse("mine()", neighbour))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Unknown function 'mine()'");
+        assertThatThrownBy(() -> ExpressionParser.parse("theirs()"))
+                .isInstanceOf(TqlException.class);
+    }
+
+    @Test
+    void aHandBuiltCustomCallWithoutItsFunctionFailsClearly() {
+        assertThatThrownBy(() -> new Expr.Call("ghost", List.of())
+                .eval(new EvaluationContext(Map.of())))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("no longer installed");
+                .hasMessageContaining("without its resolved function");
     }
 
     @Test
     void builtinsAlwaysWinTheNameLookup() {
-        assertThat(ExpressionFunctions.arity("coalesce")).isEqualTo(2);
-        assertThat(ExpressionFunctions.custom("coalesce")).isNull();
+        assertThat(ExpressionFunctions.builtInsOnly().arity("coalesce")).isEqualTo(2);
+        assertThat(ExpressionFunctions.builtInsOnly().custom("coalesce")).isNull();
     }
 }

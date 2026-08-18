@@ -528,20 +528,36 @@ public final class DecisionTables {
 
     /** Compiles one YAML-rows reference's wiring; root-checked at manifest load. */
     public static Use use(String alias, Table table, Map<String, String> wiring) {
-        return new Use(alias, table, null, compileWiring(wiring), null);
+        return use(alias, table, wiring,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+    }
+
+    /** Compiles one YAML-rows reference's wiring against the given function set. */
+    public static Use use(String alias, Table table, Map<String, String> wiring,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
+        return new Use(alias, table, null, compileWiring(wiring, functions), null);
     }
 
     /** Compiles one table-source reference's wiring and {@code effectiveAt:}. */
     public static Use use(String alias, TableSource source, Map<String, String> wiring,
             String effectiveAt) {
-        return new Use(alias, null, source, compileWiring(wiring), ExpressionParser
-                .parse(effectiveAt == null || effectiveAt.isBlank() ? "audit.now" : effectiveAt));
+        return use(alias, source, wiring, effectiveAt,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
     }
 
-    private static Map<String, Expr> compileWiring(Map<String, String> wiring) {
+    /** Compiles one table-source reference's wiring against the given function set. */
+    public static Use use(String alias, TableSource source, Map<String, String> wiring,
+            String effectiveAt, io.tesseraql.core.expr.ExpressionFunctions functions) {
+        return new Use(alias, null, source, compileWiring(wiring, functions), ExpressionParser
+                .parse(effectiveAt == null || effectiveAt.isBlank() ? "audit.now" : effectiveAt,
+                        functions));
+    }
+
+    private static Map<String, Expr> compileWiring(Map<String, String> wiring,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         Map<String, Expr> compiled = new LinkedHashMap<>();
         wiring.forEach((input, expression) -> compiled.put(input,
-                ExpressionParser.parse(expression)));
+                ExpressionParser.parse(expression, functions)));
         return Map.copyOf(compiled);
     }
 

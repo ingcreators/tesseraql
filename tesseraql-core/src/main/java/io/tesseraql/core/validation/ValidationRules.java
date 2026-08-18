@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.ScopeResolver;
@@ -71,22 +72,38 @@ public final class ValidationRules {
     /** Compiles a cross-field expression rule; the expression must hold for the input to be valid. */
     public static Rule expression(String id, String when, String rule, String field, String code,
             String message) {
+        return expression(id, when, rule, field, code, message,
+                ExpressionFunctions.processDefault());
+    }
+
+    /** Compiles a cross-field expression rule against the given function set. */
+    public static Rule expression(String id, String when, String rule, String field, String code,
+            String message, ExpressionFunctions functions) {
         require(id, rule != null && !rule.isBlank(), "an expression rule needs a rule:");
         require(id, field != null && !field.isBlank(), "a field: to report violations against is"
                 + " required");
-        return new Rule(id, guard(when), ExpressionParser.parse(rule), null, null, Map.of(),
-                field, effectiveCode(id, code), message);
+        return new Rule(id, guard(when, functions), ExpressionParser.parse(rule, functions),
+                null, null, Map.of(), field, effectiveCode(id, code), message);
     }
 
     /** Compiles a validation SQL rule; each row the SELECT returns is reported as a violation. */
     public static Rule sql(String id, String when, String sqlText, String sourcePath,
             Map<String, String> params, String field, String code, String message) {
+        return sql(id, when, sqlText, sourcePath, params, field, code, message,
+                ExpressionFunctions.processDefault());
+    }
+
+    /** Compiles a validation SQL rule against the given function set. */
+    public static Rule sql(String id, String when, String sqlText, String sourcePath,
+            Map<String, String> params, String field, String code, String message,
+            ExpressionFunctions functions) {
         require(id, field != null && !field.isBlank(), "a field: to report violations against is"
                 + " required");
         require(id, isSelect(sqlText), "validation SQL must be a SELECT returning violations -"
                 + " it runs inside the command's transaction and must not write");
-        return new Rule(id, guard(when), null, Sql2WayParser.parse(sqlText), sourcePath, params,
-                field, effectiveCode(id, code), message);
+        return new Rule(id, guard(when, functions), null,
+                Sql2WayParser.parse(sqlText, functions), sourcePath, params, field,
+                effectiveCode(id, code), message);
     }
 
     /**
@@ -203,8 +220,8 @@ public final class ValidationRules {
         return violation;
     }
 
-    private static Expr guard(String when) {
-        return when == null || when.isBlank() ? null : ExpressionParser.parse(when);
+    private static Expr guard(String when, ExpressionFunctions functions) {
+        return when == null || when.isBlank() ? null : ExpressionParser.parse(when, functions);
     }
 
     private static String effectiveCode(String id, String code) {

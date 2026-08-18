@@ -8,14 +8,20 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /**
- * The process-wide registry of {@link ExpressionFunction} providers extending the expression
- * language's built-in whitelist ({@link Expr.Call#FUNCTIONS}). Commands install it once at start
- * ({@code serve}, {@code lint}, {@code test}, {@code coverage}, {@code mcp}, the Maven goals)
- * from the composed modules classloader; until then only the built-ins parse. Installation is an
- * explicit, deterministic snapshot — deliberately not a per-thread context-classloader lookup,
- * so hot-reload and worker threads always see the same function set.
+ * An immutable set of {@link ExpressionFunction} providers extending the expression language's
+ * built-in whitelist ({@link Expr.Call#FUNCTIONS}). The set is a value: the parser resolves each
+ * custom call against the set it was handed and the parsed tree captures the resolved function,
+ * so an expression evaluates with the functions it was parsed under — on any thread, across any
+ * reload (docs/module-scope.md).
  *
- * <p>Installation fails fast (TQL-SQL-2110) on a name that is not a Java identifier, shadows a
+ * <p>A <em>process default</em> ({@link #install(ClassLoader)} / {@link #processDefault()})
+ * serves the single-application invocations — the one-app CLI commands ({@code lint},
+ * {@code test}, {@code coverage}, {@code job}, {@code routes}, {@code duckdb}) and the Maven
+ * goals — where one process is one application and the default therefore <em>is</em> that
+ * application's set. Multi-application processes ({@code host}, {@code dev}, {@code mcp}) pass
+ * each application's own set explicitly and never install the default.
+ *
+ * <p>Construction fails fast (TQL-SQL-2110) on a name that is not a Java identifier, shadows a
  * built-in, or is contributed twice — a broken function jar should stop the command, not
  * silently change which functions expressions resolve.
  */
@@ -23,22 +29,30 @@ public final class ExpressionFunctions {
 
     private static final TqlErrorCode INVALID_FUNCTION = new TqlErrorCode(TqlDomain.SQL, 2110);
 
-    /** The installed custom functions by name; empty (built-ins only) until installed. */
-    private static volatile Map<String, ExpressionFunction> custom = Map.of();
+    private static final ExpressionFunctions BUILT_INS_ONLY = new ExpressionFunctions(Map.of());
 
-    private ExpressionFunctions() {
+    /** The process default; built-ins only until a single-application entry point installs. */
+    private static volatile ExpressionFunctions processDefault = BUILT_INS_ONLY;
+
+    /** The custom functions by name; empty means built-ins only. */
+    private final Map<String, ExpressionFunction> custom;
+
+    private ExpressionFunctions(Map<String, ExpressionFunction> custom) {
+        this.custom = custom;
     }
 
-    /**
-     * Discovers every {@link ExpressionFunction} provider visible to {@code loader} and installs
-     * the set, replacing any previous installation.
-     */
-    public static void install(ClassLoader loader) {
-        install(ServiceLoader.load(ExpressionFunction.class, loader));
+    /** The set with no custom functions — only the built-ins parse. */
+    public static ExpressionFunctions builtInsOnly() {
+        return BUILT_INS_ONLY;
     }
 
-    /** Installs exactly the given functions (used by tests and embedded setups). */
-    public static void install(Iterable<ExpressionFunction> functions) {
+    /** Discovers every {@link ExpressionFunction} provider visible to {@code loader}. */
+    public static ExpressionFunctions load(ClassLoader loader) {
+        return of(ServiceLoader.load(ExpressionFunction.class, loader));
+    }
+
+    /** The set holding exactly the given functions, validated. */
+    public static ExpressionFunctions of(Iterable<ExpressionFunction> functions) {
         Map<String, ExpressionFunction> byName = new LinkedHashMap<>();
         for (ExpressionFunction function : functions) {
             String name = function.name();
@@ -61,16 +75,34 @@ public final class ExpressionFunctions {
                         + function.getClass().getName());
             }
         }
-        custom = Map.copyOf(byName);
+        return byName.isEmpty() ? BUILT_INS_ONLY : new ExpressionFunctions(Map.copyOf(byName));
     }
 
-    /** Uninstalls every custom function, back to the built-ins (tests and embedded setups). */
+    /**
+     * Installs the process default from every provider visible to {@code loader}, replacing any
+     * previous installation. Single-application entry points only.
+     */
+    public static void install(ClassLoader loader) {
+        processDefault = load(loader);
+    }
+
+    /** Installs exactly the given functions as the process default (tests, embedded setups). */
+    public static void install(Iterable<ExpressionFunction> functions) {
+        processDefault = of(functions);
+    }
+
+    /** Resets the process default to the built-ins (tests and embedded setups). */
     public static void reset() {
-        custom = Map.of();
+        processDefault = BUILT_INS_ONLY;
     }
 
-    /** The arity of a built-in or installed function, or {@code null} for an unknown name. */
-    public static Integer arity(String name) {
+    /** The process default: what {@code ExpressionParser.parse(String)} resolves against. */
+    public static ExpressionFunctions processDefault() {
+        return processDefault;
+    }
+
+    /** The arity of a built-in or member function, or {@code null} for an unknown name. */
+    public Integer arity(String name) {
         Integer builtin = Expr.Call.FUNCTIONS.get(name);
         if (builtin != null) {
             return builtin;
@@ -79,8 +111,8 @@ public final class ExpressionFunctions {
         return function == null ? null : function.arity();
     }
 
-    /** The installed custom function of that name, or {@code null} (built-ins are not here). */
-    public static ExpressionFunction custom(String name) {
+    /** The member custom function of that name, or {@code null} (built-ins are not here). */
+    public ExpressionFunction custom(String name) {
         return custom.get(name);
     }
 
