@@ -5,10 +5,10 @@ recipe: query-html
 
 # The admin console's login page. Public by design: it must be reachable without a session.
 # Posting the form to POST /_tesseraql/login (runtime-wired) establishes the browser session and
-# redirects to `next`; the SSO buttons start the OIDC/SAML flows when those are enabled. `next` and
-# `error` ride in from the query (set by the redirect-to-login and the post/redirect/get on failure).
+# redirects to `redirect`'s target; the SSO buttons start the OIDC/SAML flows when those are
+# enabled. `redirect` and `error` ride in from the query (set by the redirect-to-login and the post/redirect/get on failure).
 input:
-  next:
+  redirect:
     type: string
     required: false
   error:
@@ -38,7 +38,7 @@ response:
     template: login.html
     model:
       methods: main
-      next: params.next
+      redirect: params.redirect
       error: params.error
       reset: params.reset
       invited: params.invited

@@ -4,7 +4,7 @@ kind: route
 recipe: query-html
 
 security:
-  policy: iam.admin.view
+  policy: tql.iam.admin.view
 
 input:
   invited:

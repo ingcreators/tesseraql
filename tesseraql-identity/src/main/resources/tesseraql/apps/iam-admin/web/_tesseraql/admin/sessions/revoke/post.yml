@@ -6,7 +6,7 @@ recipe: command-json
 # Ends one subject's device from the cross-subject page (docs/session-visibility.md):
 # the same subject-scoped handle contract as the user-page row action.
 security:
-  policy: iam.admin.write
+  policy: tql.iam.admin.write
 
 input:
   subject:

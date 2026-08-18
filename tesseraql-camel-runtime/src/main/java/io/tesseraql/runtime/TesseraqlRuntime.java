@@ -1293,7 +1293,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // the MCP endpoint is wired so their MCP surface joins the main app's on one endpoint and
             // the conflict check spans every hosted app.
             List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome,
-                    hostedMember ? java.util.Set.of("ops-console") : java.util.Set.of());
+                    hostedMember
+                            ? java.util.Set.of("ops-console", "auth-ui", "account", "iam-admin")
+                            : java.util.Set.of());
             SystemApps.requireNoRouteConflicts(manifest, mountedApps);
             for (SystemApps.MountedApp mounted : mountedApps) {
                 // Mounted apps migrate their own schema (per-app history table) before serving.
@@ -1328,11 +1330,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (hostedApps.contains("studio")) {
                 systemNav.put("studioHref", basePath + "/_tesseraql/studio/ui");
             }
-            if (hostedApps.contains("iam-admin")) {
+            if (hostedMember) {
+                // IAM Admin is the stack's, mounted once at the origin scope (docs/stack-shells.md
+                // structural decision 3) — the same origin-absolute shape as the console link.
+                systemNav.put("iamHref", "/_tesseraql/admin/users");
+            } else if (hostedApps.contains("iam-admin")) {
                 systemNav.put("iamHref", basePath + "/_tesseraql/admin/users");
             }
             context.getRegistry().bind(TesseraqlProperties.SYSTEM_NAV_BEAN,
                     java.util.Collections.unmodifiableMap(systemNav));
+            if (hostedMember) {
+                // The one topology signal a hosted member's request handling reads: the login
+                // bounce and the account-surface links switch to the origin scope on its
+                // presence, and the tql.app.use fence refuses on its value
+                // (docs/stack-shells.md structural decision 3).
+                context.getRegistry().bind(TesseraqlProperties.STACK_MEMBER_BEAN, appName);
+            }
             // Application-declared MCP tools, resources, and UI resources (roadmap Phase 24): the
             // compiler emitted a direct:mcp.<id> route per tool, a direct:mcp.resource.<id> route
             // per resource, and a direct:mcp.ui.<id> route per UI resource, for the main app and
@@ -1913,9 +1926,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("ops.token.issue", sessionTokens::issue);
             // The IAM Admin bulk endpoint (docs/hypermedia-ui.md "Bulk actions"): Java
             // because the form posts repeated ids fields, which the Simple-YAML input
-            // surface deliberately does not model. Gated by iam.admin.write like the
-            // per-user routes the iam-admin app compiles.
-            context.addRoutes(new IamAdminRouteBuilder());
+            // surface deliberately does not model. Gated by the store-wide write atom like
+            // the per-user routes the iam-admin app compiles, and mounted only where the app
+            // itself is — a hosted member serves no /_tesseraql/admin of its own
+            // (docs/stack-shells.md structural decision 3).
+            if (hostedApps.contains("iam-admin")) {
+                context.addRoutes(new IamAdminRouteBuilder());
+            }
             // Password recovery (roadmap Phase 50 slice 1): fail-fast validation - a half
             // configuration must not silently produce a reset page that goes nowhere.
             String recoveryChannel = null;

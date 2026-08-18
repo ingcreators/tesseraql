@@ -53,6 +53,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                 case "authorize" -> authorize(exchange);
                 case "csrf" -> csrf(exchange);
                 case "rotate" -> rotate(exchange);
+                case "fence" -> fence(exchange);
                 default -> throw new TqlException(UNSUPPORTED,
                         "Unsupported tesseraql-auth operation: " + operation);
             }
@@ -155,6 +156,31 @@ public class TesseraqlAuthProducer extends DefaultProducer {
             exchange.setProperty(TesseraqlProperties.CSRF_TOKEN, token);
         }
         return principal;
+    }
+
+    /**
+     * The member fence (docs/stack-shells.md structural decision 3): on a hosted stack member,
+     * an authenticated principal without {@code tql.app.use.<member>} is refused before any
+     * application route runs — reach into an application is a property of the principal, not of
+     * knowing a URL. The compiler emits this step after every {@code authenticate}; anywhere but
+     * a hosted member the topology bean is absent and the step is a no-op, which is exactly the
+     * unhosted boot keeping its old behaviour. Public routes never authenticate, so they never
+     * reach the fence; service callers (JWT, API keys, mTLS) meet it exactly as browser sessions
+     * do, because a principal is a principal.
+     */
+    private void fence(Exchange exchange) {
+        String member = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.STACK_MEMBER_BEAN, String.class);
+        if (member == null) {
+            return;
+        }
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+        if (principal != null
+                && !io.tesseraql.security.policy.Atoms.appUse(principal.permissions(), member)) {
+            throw new TqlException(PolicyEngine.FORBIDDEN, "Principal is not granted "
+                    + io.tesseraql.security.policy.Atoms.APP_USE_PREFIX + member
+                    + ", which using this application requires (deny by default)");
+        }
     }
 
     private void authorize(Exchange exchange) {

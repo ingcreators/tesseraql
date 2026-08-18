@@ -190,12 +190,20 @@ The redirect is temporary on purpose. A permanent one would be cached by browser
 configuration change that retires it. Naming an application the stack does not hold refuses the
 start (`TQL-APP-4215`), listing the names it does hold.
 
-The portal, the stack's sign-in and the account pages are served by the stack's own runtime,
-which `host` and `dev` start beside your applications. It answers the origin-scope
-`/_tesseraql/*` and `/assets/*` paths; `/_tesseraql/health/live` and `/_tesseraql/health/ready`
-stay the gateway's own answer, so a load balancer's probe never depends on it. Each application
-still serves its own framework surfaces under its prefix, `/<name>/_tesseraql/…`, exactly as
-before.
+The portal, the stack's sign-in, the account pages and [IAM Admin](iam-admin.md) are served by
+the stack's own runtime, which `host` and `dev` start beside your applications. It answers the
+origin-scope `/_tesseraql/*` and `/assets/*` paths; `/_tesseraql/health/live` and
+`/_tesseraql/health/ready` stay the gateway's own answer, so a load balancer's probe never
+depends on it. These surfaces answer **once, at the origin**: a hosted member serves no sign-in,
+account or IAM Admin copy of its own. An unauthenticated browser on a member page is bounced to
+`/_tesseraql/login?redirect=<the prefixed page>` and returned there after signing in, and member
+pages link the account chip and IAM Admin origin-absolute.
+
+Reach into a member is a grant, not a URL. After authentication, a principal without
+`tql.app.use.<name>` is refused by that member on every route — `auth: public` routes excepted,
+service callers included — and the portal's tiles filter by the same atom beside tenant
+entitlement. Seed `tql.app.use` grants (or a `tql.app.use.*` baseline role) before your users
+sign in; the bootstrap administrator's default permissions carry the wildcard.
 
 ## The gateway routes, the ingress protects
 

@@ -4,7 +4,7 @@ kind: route
 recipe: command-json
 
 security:
-  policy: iam.admin.write
+  policy: tql.iam.admin.write
 
 # A service, not a bare contract (docs/session-administration.md): disabling flips the
 # status AND ends every session of the subject - disabled means disabled now, not at

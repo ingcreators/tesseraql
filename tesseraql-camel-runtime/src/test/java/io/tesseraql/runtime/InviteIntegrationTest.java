@@ -57,7 +57,8 @@ class InviteIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("iam-admin", "iam-admin", "IAM Admin",
-                null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
+                null, List.of(), List.of("ADMIN"),
+                List.of("tql.iam.admin.view", "tql.iam.admin.write"), Map.of()),
                 SessionStore.ClientInfo.NONE);
         adminCookie = sessions.cookieName() + "=" + sid;
         adminCsrf = sessions.session(sid).csrfToken();
@@ -123,7 +124,7 @@ class InviteIntegrationTest {
                 .isEqualTo(409);
     }
 
-    /** The invite action sits behind the iam.admin.write policy. */
+    /** The invite action sits behind the tql.iam.admin.write atom. */
     @Test
     void aSessionWithoutTheRoleIsRefused() throws Exception {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
@@ -243,13 +244,6 @@ class InviteIntegrationTest {
                     # elsewhere is disabled visibly (docs/credential-throttle.md).
                     credentialThrottle:
                       enabled: false
-                    policies:
-                      iam.admin.view:
-                        anyOf:
-                          - role: ADMIN
-                      iam.admin.write:
-                        anyOf:
-                          - role: ADMIN
                   notifications:
                     channels:
                       invite-mail:

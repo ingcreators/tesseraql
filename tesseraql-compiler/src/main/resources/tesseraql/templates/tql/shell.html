@@ -30,6 +30,10 @@
      it reads this tag at request time and attaches the X-CSRF-Token header to every htmx
      request (rendered only when an authenticated session resolved the token). -->
 <meta name="csrf-token" th:if="${_csrf}" th:content="${_csrf}">
+<!-- Where the account surface lives for THIS page: the chrome bakes the full path (a hosted
+     member's is the stack's origin scope, docs/stack-shells.md structural decision 3), and the
+     framework bootstrap posts theme changes to it instead of assuming a local mount. -->
+<meta name="tql-account-base" th:if="${_account != null && _account.accountHref != null}" th:content="${_account.accountHref}">
 <title th:text="${title}">TesseraQL</title>
 <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
 <!-- The neutral variant ramp (enum-validated server-side): hc.min.css carries only the default
@@ -72,7 +76,7 @@
       <span class="hc-spacer"></span>
       <!-- Pin/Unpin the current page (roadmap Phase 51): a pinned URL keeps its query
            string, so pinning a filtered list IS saving the filter. -->
-      <form th:if="${_shortcuts != null}" method="post" th:action="@{/_tesseraql/account/pins/toggle}">
+      <form th:if="${_shortcuts != null}" method="post" th:action="${_shortcuts.toggleHref}">
         <input type="hidden" name="_csrf" th:value="${_csrf}">
         <input type="hidden" name="href" th:value="${_shortcuts.current}">
         <input type="hidden" name="label" th:value="${title}">
@@ -87,7 +91,7 @@
            kit's sse-updates recipe): the bell owns an EventSource to /_tesseraql/events and
            the framework pushes the same pre-rendered fragment the page loaded with
            (InboxBadge, one markup source) whenever the unread count changes. -->
-      <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="@{${_inbox.href}}"
+      <a th:if="${_inbox != null}" class="hc-button" data-variant="ghost" th:href="${_inbox.href}"
          aria-label="Notifications" id="tql-inbox-bell"
          hx-ext="sse" th:sse-connect="@{/_tesseraql/events}">
         <svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#bell}"/></svg>
@@ -112,9 +116,9 @@
         <nav class="hc-menu" th:attr="aria-label=${_account.name}">
           <span class="hc-menu__label" th:text="${_account.name}">User</span>
           <a class="hc-menu__item" th:if="${_account.accountHref != null}"
-             th:href="@{${_account.accountHref}}">Account settings</a>
+             th:href="${_account.accountHref}">Account settings</a>
           <!-- Sign-out is a state change: a CSRF-carrying POST, never a GET link. -->
-          <form method="post" th:action="@{${_account.logoutHref}}">
+          <form method="post" th:action="${_account.logoutHref}">
             <input type="hidden" name="_csrf" th:value="${_csrf}">
             <button class="hc-menu__item" type="submit">Sign out</button>
           </form>
@@ -163,13 +167,16 @@
           th:replace="~{tql/shell :: shell-impl(${title}, ${nav}, ${header}, ${content}, false, null)}"/>
 <th:block th:fragment="page(title, header, content)"
           th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: system-nav}, ${header}, ${content}, true, 'compact')}"/>
-<!-- The 3-app system navigation. Icons come from the self-hosted sprite (/assets/_tesseraql/icons.svg,
+<!-- The system navigation, driven by the `_system` links the runtime binds by topology
+     (docs/stack-shells.md structural decisions 2 and 3): a surface renders only where it is
+     reachable from here, so the shell never links a 404 — a hosted member links the origin's
+     console and IAM Admin, the unhosted boot its own mounts. Icons come from the self-hosted sprite (/assets/_tesseraql/icons.svg,
      served by AssetsRouteBuilder); each label is wrapped in `.hc-shell__label` so it hides in the
      collapsed icon rail while keeping the link's accessible name. -->
 <th:block th:fragment="system-nav">
   <a class="hc-item" th:if="${_system != null && _system.consoleHref != null}" th:attr="href=${_system.consoleHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+  <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+  <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
 </th:block>
 <!-- The Studio app's own section navigation (Studio platform UX, tracks H1 + sidebar IA): the system
      console `page(...)` form only renders the 3-app `system-nav`, leaving Studio with no section nav,
@@ -284,7 +291,7 @@
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-system">
     <p class="tql-nav__group" id="tql-nav-system">System</p>
     <a class="hc-item" th:if="${_system != null && _system.consoleHref != null}" th:attr="href=${_system.consoleHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
-    <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+    <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
 </th:block>
 <!-- The Operations shell's chrome (docs/stack-shells.md structural decision 2): the console is

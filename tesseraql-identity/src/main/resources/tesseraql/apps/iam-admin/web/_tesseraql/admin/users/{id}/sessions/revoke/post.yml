@@ -6,7 +6,7 @@ recipe: command-json
 # Ends every session of this subject now (docs/session-administration.md). Deliberately
 # all-or-nothing: the operator-shaped decision is "end this account's access".
 security:
-  policy: iam.admin.write
+  policy: tql.iam.admin.write
 
 steps:
   - id: main

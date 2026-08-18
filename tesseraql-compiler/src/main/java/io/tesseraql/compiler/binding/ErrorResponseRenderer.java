@@ -183,21 +183,36 @@ public final class ErrorResponseRenderer implements Processor {
         return accept != null && accept.contains("text/html");
     }
 
-    /** Emits a 302 to the login page, preserving the original target as a sanitized {@code next}. */
+    /** Emits a 302 to the login page, preserving the original target as a sanitized {@code redirect}. */
     private static void redirectToLogin(Exchange exchange) {
         String path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
         String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
-        // The request URI is a wire URL and already carries the application's prefix; `next` is
-        // handed back to the redirect helper after sign-in, which prefixes it again, so it is
-        // stored base-relative like every other URL inside the runtime (docs/base-path.md).
-        String next = io.tesseraql.camel.BasePath.relative(exchange,
-                path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path)
-                + (query == null || query.isBlank() ? "" : "?" + query);
+        String wirePath = path == null || !path.startsWith("/") || path.startsWith("//")
+                ? "/"
+                : path;
+        String suffix = query == null || query.isBlank() ? "" : "?" + query;
+        // A hosted stack member has no sign-in door of its own: the bounce goes origin-absolute
+        // to the stack's login, carrying the original *prefixed* path so the round trip returns
+        // to the member page that bounced (docs/stack-shells.md structural decision 3). The
+        // topology bean is the signal; its absence is the unhosted boot, whose bounce stays
+        // base-relative: the request URI is a wire URL already carrying the application's
+        // prefix, and `redirect` is handed back to the redirect helper after sign-in, which
+        // prefixes it again, so it is stored base-relative like every other URL inside the
+        // runtime (docs/base-path.md).
+        boolean hostedMember = exchange.getContext().getRegistry()
+                .lookupByName(io.tesseraql.camel.TesseraqlProperties.STACK_MEMBER_BEAN) != null;
+        String target;
+        String location;
+        if (hostedMember) {
+            target = wirePath + suffix;
+            location = LOGIN_PATH;
+        } else {
+            target = io.tesseraql.camel.BasePath.relative(exchange, wirePath) + suffix;
+            location = io.tesseraql.camel.BasePath.url(exchange, LOGIN_PATH);
+        }
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
-        exchange.getMessage().setHeader("Location", io.tesseraql.camel.BasePath.url(exchange,
-                LOGIN_PATH + "?next="
-                        + java.net.URLEncoder.encode(next,
-                                java.nio.charset.StandardCharsets.UTF_8)));
+        exchange.getMessage().setHeader("Location", location + "?redirect="
+                + java.net.URLEncoder.encode(target, java.nio.charset.StandardCharsets.UTF_8));
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
         exchange.getMessage().setBody("");
     }

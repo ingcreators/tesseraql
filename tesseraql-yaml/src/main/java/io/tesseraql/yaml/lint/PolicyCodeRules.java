@@ -15,9 +15,10 @@ import java.util.Map;
  * <p>The rule binds the codes the application's declared policies reference —
  * {@code tesseraql.security.policies.*.anyOf[].permission} — because those are the strings the
  * identity store grants: two applications both inventing {@code approve} would silently share one
- * grant. Policy <em>ids</em> stay free; they are local to this configuration and never reach the
- * store. Role rules stay free too: roles are the deployment's vocabulary, and a deployment role
- * may bundle any codes it likes.
+ * grant. Policy <em>ids</em> stay free with one exception — an id under the framework's
+ * {@code tql.} mark is the framework's synthesized atom check and cannot be re-declared
+ * ({@link PolicyCodes#idViolation}). Role rules stay free too: roles are the deployment's
+ * vocabulary, and a deployment role may bundle any codes it likes.
  *
  * <p>The boot refusal in {@code SecurityConfigFactory} carries the same message via
  * {@link PolicyCodes#violation}, so the fence holds for a configuration that never linted.
@@ -41,6 +42,11 @@ final class PolicyCodeRules implements LintRule {
             return;
         }
         policies.forEach((id, spec) -> {
+            String idViolation = PolicyCodes.idViolation(String.valueOf(id));
+            if (idViolation != null) {
+                findings.add(new LintFinding(PolicyCodes.OUTSIDE_NAMESPACE.toString(),
+                        ERROR, "config", idViolation));
+            }
             if (spec instanceof Map<?, ?> map && map.get("anyOf") instanceof List<?> anyOf) {
                 for (Object element : anyOf) {
                     if (element instanceof Map<?, ?> rule && rule.get("permission") != null) {

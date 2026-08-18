@@ -91,4 +91,22 @@ class AppLinterPolicyCodeTest {
                 """);
         assertThat(fence(new AppLinter().lint(dir))).isEmpty();
     }
+
+    /**
+     * The one exception: a policy id under the framework's mark is the synthesized atom check
+     * ({@code policy: tql.iam.admin.view} with no declaration behind it), so a user declaration
+     * there would shadow the framework's meaning and is refused instead.
+     */
+    @Test
+    void aPolicyIdUnderTheFrameworksMarkIsRefused(@TempDir Path dir) throws Exception {
+        write(dir, """
+                      tql.iam.admin.view:
+                        anyOf:
+                          - role: READER
+                """);
+        List<LintFinding> findings = fence(new AppLinter().lint(dir));
+        assertThat(findings).hasSize(1);
+        assertThat(findings.get(0).message()).contains("synthesized")
+                .contains("tql.iam.admin.view");
+    }
 }

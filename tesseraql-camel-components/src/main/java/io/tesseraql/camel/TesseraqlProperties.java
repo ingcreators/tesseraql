@@ -143,6 +143,14 @@ public final class TesseraqlProperties {
      * mean the surface is not reachable from here and the shell omits the link.
      */
     public static final String SYSTEM_NAV_BEAN = "tesseraqlSystemNav";
+    /**
+     * Registry bean name for the hosted-member topology signal ({@code String}: this runtime's
+     * own application name). Bound only when this runtime serves one member of a hosted stack
+     * (docs/stack-shells.md structural decision 3); its presence is what switches the login
+     * bounce and the account-surface links to the stack's origin scope, and its value is the
+     * member name the {@code tql.app.use.<name>} fence refuses on.
+     */
+    public static final String STACK_MEMBER_BEAN = "tesseraqlStackMember";
     /** Registry bean name for the operator's default page theme (roadmap Phase 48), if set. */
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
     /** Registry bean name for the app's neutral color ramp (docs/hypermedia-ui.md), if non-default. */

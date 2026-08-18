@@ -135,16 +135,6 @@ tesseraql:
         anyOf:
           - role: USER_WRITE
           - permission: user-admin.users.write
-      # The mounted IAM Admin surface's policies, until it moves to the stack origin with its
-      # tql.iam.admin.* atoms (docs/stack-shells.md slice 2). Role rules only: the colon-spelled
-      # permission codes this block once carried matched nothing the routes check.
-      iam.admin.view:
-        anyOf:
-          - role: ADMIN
-          - role: IAM_ADMIN
-      iam.admin.write:
-        anyOf:
-          - role: ADMIN
-          - role: IAM_ADMIN
-      # The operations console mounts at the stack scope and checks its own atoms
-      # (tql.ops.view.<name> / tql.ops.run.<name>) directly — no ops policies here anymore.
+      # IAM Admin and the operations console are framework surfaces and check their own
+      # granted atoms directly (tql.iam.admin.view/.write, tql.ops.view.<name> /
+      # tql.ops.run.<name>, docs/stack-shells.md) — no framework policies here anymore.

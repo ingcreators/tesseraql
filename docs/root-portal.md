@@ -121,7 +121,10 @@ whitelisted config), so it can and does declare:
 - `tesseraql.apps.studio.enabled: false`, `tesseraql.apps.ops-console.enabled: false`,
   `tesseraql.apps.iam-admin.enabled: false` — a plain `TesseraqlRuntime` mounts all five system
   apps via `ServiceLoader`, and an origin-scope Studio editing the portal's own synthetic source
-  would be worse than useless. `auth-ui` and `account` stay enabled: `auth-ui` is what makes
+  would be worse than useless. *(Amended by docs/stack-shells.md: slice 1 removed the
+  `ops-console` disable — the ops shell mounts at the surface — and slice 2 removed the
+  `iam-admin` disable, one admin door to the stack's one store; only the Studio disable
+  remains, until slice 8's own design.)* `auth-ui` and `account` stay enabled: `auth-ui` is what makes
   `/_tesseraql/login` exist at the origin, and `account` keeps the shell's account chip and
   "change my password" live at stack scope — Decision 14's own example of state that is
   stack-wide, arriving here a slice early because the shell references it;
@@ -165,8 +168,9 @@ visibility today, its shift toward "which applications appear in the switcher" i
 stack-architecture open question 4 and belongs to slice 7. When that model lands, the portal's
 filter widens in one provider. *(Landed for operations — docs/stack-shells.md: the ops shell's
 switcher is the caller's `tql.ops.view.<name>` atoms applied to the member list. The portal's
-own tile grant, `tql.app.use.<name>`, arrives with that design's slice 2, widening exactly this
-filter.)*
+own tile grant, `tql.app.use.<name>`, landed with that design's slice 2: the provider filters by
+tenant entitlement ∧ the caller's `tql.app.use` atoms, deny by default — and the member's own
+fence refuses on the same atom, so the tiles and reach are one answer.)*
 
 **Datasources.** The surface runtime's main datasource is the stack's framework coordinate,
 supplied through the existing `MainDatasourceOverride` path (`HostContext.forApplication(basePath,

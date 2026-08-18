@@ -28,8 +28,18 @@ public final class SecurityConfigFactory {
         Map<String, Policy> policies = new LinkedHashMap<>();
         Object raw = config.navigate("tesseraql.security.policies");
         if (raw instanceof Map<?, ?> policyMap) {
-            policyMap.forEach((id, spec) -> policies.put(String.valueOf(id),
-                    parsePolicy(String.valueOf(id), spec)));
+            policyMap.forEach((id, spec) -> {
+                // A tql.* policy id is the framework's synthesized atom check
+                // (SecurityConfig.policy); a user declaration under the mark would shadow it.
+                // Lint reports the same code; this is the backstop for an unlinted config.
+                String idViolation = io.tesseraql.yaml.app.PolicyCodes
+                        .idViolation(String.valueOf(id));
+                if (idViolation != null) {
+                    throw new io.tesseraql.core.error.TqlException(
+                            io.tesseraql.yaml.app.PolicyCodes.OUTSIDE_NAMESPACE, idViolation);
+                }
+                policies.put(String.valueOf(id), parsePolicy(String.valueOf(id), spec));
+            });
         }
         requireOwnPolicyCodes(config, policies);
         return new SecurityConfig(policies, parseJwt(config), parseApiKeys(config),

@@ -7,7 +7,7 @@ recipe: command-json
 # (docs/session-visibility.md). The handle is a public identifier, never the cookie id;
 # a handle belonging to another subject deletes nothing.
 security:
-  policy: iam.admin.write
+  policy: tql.iam.admin.write
 
 input:
   handle:

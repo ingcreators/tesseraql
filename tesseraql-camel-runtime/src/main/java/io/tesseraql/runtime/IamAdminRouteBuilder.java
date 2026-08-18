@@ -24,7 +24,7 @@ import org.apache.camel.builder.RouteBuilder;
  * checkbox selection as repeated {@code ids} fields. A Java route because the Simple-YAML
  * input surface is deliberately single-valued; multi-value form parsing is a transport
  * concern, like the copilot's content negotiation. Same gate chain the YAML per-user
- * routes compile to: browser session, CSRF, {@code iam.admin.write} — and every submitted
+ * routes compile to: browser session, CSRF, the store-wide write atom — and every submitted
  * id is validated by the identity contract itself. An id that matches no user updates
  * nothing and is <em>not</em> counted as disabled: the redirect carries what actually
  * changed alongside what was selected, so a stale selection cannot read as a completed
@@ -47,7 +47,7 @@ final class IamAdminRouteBuilder extends RouteBuilder {
         from("direct:tql.iamAdmin.users.bulk").routeId("tql.iamAdmin.users.bulk")
                 .to("tesseraql-auth:authenticate?auth=browser")
                 .to("tesseraql-auth:csrf")
-                .to("tesseraql-auth:authorize?policy=iam.admin.write")
+                .to("tesseraql-auth:authorize?policy=tql.iam.admin.write")
                 .process(exchange -> {
                     String action = formValues(exchange, "action").stream()
                             .findFirst().orElse("");

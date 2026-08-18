@@ -125,11 +125,22 @@ final class ShellChrome {
                 Map<String, Object> account = new LinkedHashMap<>();
                 account.put("name", String.valueOf(name));
                 account.put("initials", initials(String.valueOf(name)));
-                if (exchange.getContext().getRegistry()
-                        .lookupByName(TesseraqlProperties.ACCOUNT_SURFACE_BEAN) != null) {
+                // A hosted member's account surface is the stack's, served once at the origin
+                // scope — its own copy no longer mounts (docs/stack-shells.md structural
+                // decision 3) — so the link goes origin-absolute; everywhere else it is this
+                // runtime's own mounted copy at its own prefix. Values are emitted verbatim by
+                // the shell, so the unhosted form carries its prefix here.
+                if (hostedMember()) {
                     account.put("accountHref", "/_tesseraql/account");
+                } else if (exchange.getContext().getRegistry()
+                        .lookupByName(TesseraqlProperties.ACCOUNT_SURFACE_BEAN) != null) {
+                    account.put("accountHref",
+                            io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/account"));
                 }
-                account.put("logoutHref", "/_tesseraql/logout");
+                // Sign-out stays this runtime's own route: the member validates the same shared
+                // session either way, and a drained member must still be able to sign out.
+                account.put("logoutHref",
+                        io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/logout"));
                 model.put("_account", account);
             }
         }
@@ -178,7 +189,12 @@ final class ShellChrome {
                 model.put("_inbox", Map.of(
                         "unread", unread,
                         "badge", InboxBadge.html(unread),
-                        "href", "/_tesseraql/inbox"));
+                        // The inbox page rides the account surface: origin-absolute on a
+                        // hosted member, this runtime's own copy otherwise (see account()).
+                        "href", hostedMember()
+                                ? "/_tesseraql/inbox"
+                                : io.tesseraql.camel.BasePath.url(exchange,
+                                        "/_tesseraql/inbox")));
             }
         }
     }
@@ -214,6 +230,13 @@ final class ShellChrome {
                 shortcuts.put("pins", pins);
                 shortcuts.put("current", currentHref == null ? "/" : currentHref);
                 shortcuts.put("pinnedCurrent", pinnedCurrent);
+                // The pin toggle posts to the account surface's route: the stack's at the
+                // origin on a hosted member, this runtime's own otherwise (see account()).
+                // One store behind both, so a pin toggled at the origin shows here.
+                shortcuts.put("toggleHref", hostedMember()
+                        ? "/_tesseraql/account/pins/toggle"
+                        : io.tesseraql.camel.BasePath.url(exchange,
+                                "/_tesseraql/account/pins/toggle"));
                 model.put("_shortcuts", shortcuts);
                 // Recently viewed records (roadmap Phase 51 slice 2): a detail view render
                 // IS the framework's definition of "viewing a record". Deduped and bumped
@@ -282,6 +305,16 @@ final class ShellChrome {
                     + "; Path=" + CookiePath.of(exchange)
                     + "; Max-Age=31536000; SameSite=Lax");
         }
+    }
+
+    /**
+     * Whether this runtime serves a hosted stack member — the topology signal the runtime binds
+     * (docs/stack-shells.md structural decision 3). The account-family surfaces then live at the
+     * stack's origin scope, and their links leave this member's prefix behind.
+     */
+    private boolean hostedMember() {
+        return exchange.getContext().getRegistry()
+                .lookupByName(TesseraqlProperties.STACK_MEMBER_BEAN) != null;
     }
 
     /** Coerces a resolved {@code principal.roles}/{@code permissions} value to a string list. */

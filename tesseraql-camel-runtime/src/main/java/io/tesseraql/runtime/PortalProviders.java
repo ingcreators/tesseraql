@@ -23,18 +23,25 @@ final class PortalProviders {
     /**
      * The members this principal may reach, as {@code {name, href}} rows in catalogue order.
      *
-     * <p>The filter is the only entitlement model that exists — tenant entitlement — applied with
-     * the relay's own semantics: a principal declaring no tenant is not checked, exactly as the
-     * relay skips the check when no {@code X-Tenant-Id} arrives. Per-principal application grants
-     * are deliberately not invented here; when that model lands (stack-architecture.md open
-     * question 4), this filter widens in one place.
+     * <p>Two filters, two questions (docs/stack-shells.md structural decision 1): the catalogue
+     * says which <em>tenants</em> an application serves — applied with the relay's own
+     * semantics, a principal declaring no tenant is not checked, exactly as the relay skips the
+     * check when no {@code X-Tenant-Id} arrives — and the {@code tql.app.use.<name>} grant says
+     * which <em>people</em> use it, deny by default: no grants, no tiles. The member's own
+     * fence refuses on the same atom, so what a user sees and what they can reach are one
+     * answer.
      */
     private static List<Map<String, Object>> appsFor(List<InstalledApp> members,
             Map<String, Object> params) {
         Object declared = params.get("tenantId");
         String tenantId = declared == null ? null : String.valueOf(declared);
+        List<String> permissions = params.get("permissions") instanceof List<?> codes
+                ? codes.stream().map(String::valueOf).toList()
+                : List.of();
         return members.stream()
                 .filter(member -> tenantId == null || member.isEntitled(tenantId))
+                .filter(member -> io.tesseraql.security.policy.Atoms.appUse(permissions,
+                        member.name()))
                 .map(member -> Map.<String, Object>of(
                         "name", member.name(),
                         "href", member.basePath()))

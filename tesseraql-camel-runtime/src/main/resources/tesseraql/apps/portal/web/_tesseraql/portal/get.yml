@@ -15,6 +15,7 @@ sources:
       name: portal.apps.list
       params:
         tenantId: principal.tenantId
+        permissions: principal.permissions
 response:
   html:
     status: 200

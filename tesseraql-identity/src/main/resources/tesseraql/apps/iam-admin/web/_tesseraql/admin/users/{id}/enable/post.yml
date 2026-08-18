@@ -4,7 +4,7 @@ kind: route
 recipe: command-json
 
 security:
-  policy: iam.admin.write
+  policy: tql.iam.admin.write
 
 steps:
   - id: main

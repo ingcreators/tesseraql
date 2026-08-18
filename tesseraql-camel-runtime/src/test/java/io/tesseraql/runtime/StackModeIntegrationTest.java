@@ -81,8 +81,9 @@ class StackModeIntegrationTest {
 
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(originRootedUrlsIn(page.body()))
-                .as("every URL the page emits addresses the application, not the origin")
-                .isEmpty();
+                .as("the only URLs addressing the origin are the stack's own surfaces —"
+                        + " nothing of the application leaks unprefixed")
+                .allMatch(url -> url.startsWith("/_tesseraql/"));
         for (String url : prefixedUrlsIn(page.body())) {
             assertThat(get(url, sessionCookie).statusCode()).as(url).isEqualTo(200);
         }
@@ -123,7 +124,7 @@ class StackModeIntegrationTest {
 
     /**
      * The portal (docs/root-portal.md): anonymous browser users meet the stack's sign-in at the
-     * origin scope with a {@code next} that brings them back; signed in, one screen lists the
+     * origin scope with a {@code redirect} that brings them back; signed in, one screen lists the
      * members at their derived addresses — and the session that authorizes it is the same one
      * the members share.
      */
@@ -136,7 +137,7 @@ class StackModeIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(anonymous.statusCode()).isEqualTo(302);
         assertThat(anonymous.headers().firstValue("Location").orElseThrow())
-                .startsWith("/_tesseraql/login?next=%2F_tesseraql%2Fportal");
+                .startsWith("/_tesseraql/login?redirect=%2F_tesseraql%2Fportal");
 
         HttpResponse<String> portal = get("/_tesseraql/portal", sessionCookie);
         assertThat(portal.statusCode()).isEqualTo(200);
@@ -165,11 +166,12 @@ class StackModeIntegrationTest {
 
         assertThat(studio.statusCode()).isEqualTo(200);
         assertThat(studio.body()).contains("<meta name=\"csrf-token\"");
-        // The one origin-scope address a member page carries: the operations console lives
-        // at the stack scope now (docs/stack-shells.md structural decision 2), so the shell
-        // chrome links it origin-absolute — everything else stays base-relative.
+        // The origin-scope addresses a member page carries are exactly the stack's own
+        // surfaces (docs/stack-shells.md structural decisions 2 and 3): the operations
+        // console, IAM Admin, and the account family — everything else stays base-relative.
         assertThat(originRootedUrlsIn(studio.body()))
-                .containsOnly("/_tesseraql/ops/console");
+                .containsOnly("/_tesseraql/ops/console", "/_tesseraql/admin/users",
+                        "/_tesseraql/account", "/_tesseraql/account/pins/toggle");
         assertThat(studio.body())
                 .as("the command palette navigates to addresses this runtime serves")
                 .contains("data-value=\"/shop-a/_tesseraql/studio/ui/docs\"");
@@ -181,10 +183,11 @@ class StackModeIntegrationTest {
         }
     }
 
-    /** An unauthenticated browser is bounced to the sign-in page — under the prefix, with a
-     * {@code next} that returns it to where it was going. */
+    /** An unauthenticated browser on a member page is bounced to the stack's origin sign-in —
+     * the member serves no door of its own — with a {@code redirect} carrying the prefixed
+     * address it was going to (docs/stack-shells.md structural decision 3). */
     @Test
-    void theLoginRedirectStaysInsideTheApplication() throws Exception {
+    void theLoginBounceGoesToTheStacksOrigin() throws Exception {
         HttpResponse<String> denied = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER).build()
                 .send(HttpRequest.newBuilder(uri("/shop-a/_tesseraql/studio/ui"))
@@ -193,9 +196,9 @@ class StackModeIntegrationTest {
 
         assertThat(denied.statusCode()).isEqualTo(302);
         assertThat(denied.headers().firstValue("Location").orElse(""))
-                .startsWith("/shop-a/_tesseraql/login?next=")
-                .as("the next target is the address the browser asked for, once")
-                .endsWith("%2F_tesseraql%2Fstudio%2Fui");
+                .startsWith("/_tesseraql/login?redirect=")
+                .as("the redirect target is the prefixed address the browser asked for, once")
+                .endsWith("%2Fshop-a%2F_tesseraql%2Fstudio%2Fui");
     }
 
     private static String cookieFrom(String rawResponse) {
@@ -322,6 +325,17 @@ class StackModeIntegrationTest {
             statement.execute("insert into tql_roles (role_id, role_code, role_name)"
                     + " values ('r1','USER_READ','User Read')");
             statement.execute("insert into tql_user_roles (user_id, role_id) values ('u1','r1')");
+            // The stack's atoms (docs/stack-shells.md structural decision 1): the member fence
+            // and the portal read tql.app.use, the console link tql.ops.view, the IAM Admin
+            // link its store-wide pair — this account exercises pages, so it holds them all.
+            for (String atom : new String[]{"tql.app.use.*", "tql.ops.view.*",
+                    "tql.iam.admin.view", "tql.iam.admin.write"}) {
+                statement.execute("insert into tql_permissions"
+                        + " (permission_id, permission_code, permission_name)"
+                        + " values ('" + atom + "','" + atom + "','" + atom + "')");
+                statement.execute("insert into tql_role_permissions (role_id, permission_id)"
+                        + " values ('r1','" + atom + "')");
+            }
         }
     }
 

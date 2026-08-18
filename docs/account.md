@@ -85,6 +85,12 @@ tesseraql:
       enabled: false   # default true when console login is enabled
 ```
 
+In a hosted stack, both surfaces are the **stack's**, served once at the origin scope by
+the stack's own runtime ([hosting.md](hosting.md)). A hosted member mounts no copy, and its
+pages link the account chip and post theme changes to the origin. The description below is
+the surface itself, wherever it is mounted; the kill switch applies to the runtime doing
+the mounting.
+
 Its pages are ordinary TesseraQL routes (query-html / command-json — the surface uses
 the same DSL as your apps, like Studio), session-authenticated, CSRF-protected on
 writes, and they ride the existing telemetry/audit surfaces like any route. The pages:
@@ -142,7 +148,8 @@ UI kit's one-click theme toggle: it flips the page theme instantly — no round 
 and the framework mirrors the change to the appearance route, so the stored preference
 stays the source of truth. The toggle deliberately carries no `data-persist`: the kit's
 localStorage persistence would shadow the preference and desynchronize devices. It
-renders only when the account app is mounted (same rule as the settings link — the
+renders only where the account surface is reachable — the runtime's own mount, or the
+stack's origin surface on a hosted member (same rule as the settings link — the
 chrome never posts to a 404). See the blessed pattern in
 [hypermedia-ui.md](hypermedia-ui.md) for app-authored toggles.
 

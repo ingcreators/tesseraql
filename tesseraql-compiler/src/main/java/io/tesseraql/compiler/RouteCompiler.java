@@ -1813,6 +1813,12 @@ public final class RouteCompiler {
         }
         if (security.auth() != null && !"public".equals(security.auth())) {
             route.to("tesseraql-auth:authenticate?auth=" + security.auth());
+            // The member fence (docs/stack-shells.md structural decision 3): on a hosted stack
+            // member the runtime binds the topology bean and an authenticated principal without
+            // the member's app-use atom is refused before the route runs; everywhere else the
+            // bean is absent and this is a no-op. Emitted here rather than decided here because
+            // only the runtime knows its own topology, and public routes stay untouched.
+            route.to("tesseraql-auth:fence");
         }
         if (security.csrfEnforced(httpMethod)) {
             route.to("tesseraql-auth:csrf");

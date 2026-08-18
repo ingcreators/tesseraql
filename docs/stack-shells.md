@@ -33,7 +33,19 @@ design five times before approval — the `.app`-marker draft, the standalone-to
 correction, the entry-permission retirement, the structural namespace fence, and the `tql.`
 mark — each recorded in place. **Slice 1 is shipped** (the atom grammar and the name rules,
 `TQL-YAML-1406`'s namespace fence, and the ops shell with its switcher, loopback delegation,
-canary entries and per-member degradation); slices 2 and 3 are pending. One measurement
+canary entries and per-member degradation). **Slice 2 is shipped** (the identity remainder and
+the `tql.app.use` fence): hosted members stop mounting `auth-ui`/`account`/`iam-admin`, IAM
+Admin mounts once at the origin behind `tql.iam.admin.view`/`write`, the 401 bounce goes
+origin-absolute carrying the prefixed path as `redirect` (renamed from `next` across the login
+flow), the member fence refuses authenticated principals without `tql.app.use.<member>`
+(compiled routes only — emitted by the compiler after every `authenticate` step, armed by the
+hosted-member topology bean, so the unhosted boot is untouched), the portal's tiles filter by
+the same atom, and the bootstrap seeds default to the wildcard baseline. One implementation
+decision the design left open, recorded here: iam-admin's YAML routes keep their `policy:`
+lines and the framework *synthesizes* the policy behind any `tql.*` id — the id is the
+atom, checked as a granted permission code (family wildcard honoured) — with user-declared
+`tql.*` policy ids refused at lint and boot (`TQL-YAML-1406` widened), so the atom check needs
+no route-compiler machinery and cannot be shadowed. Slice 3 is pending. One measurement
 correction from implementation: the console's live pages ride htmx polling, not SSE, so the
 delegation carries ordinary requests — the relay's streaming discipline stays proven for the
 surfaces that do stream.

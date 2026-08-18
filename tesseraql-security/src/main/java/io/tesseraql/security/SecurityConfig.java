@@ -32,7 +32,30 @@ public record SecurityConfig(
         this(policies, jwt, apiKeys, null);
     }
 
+    /**
+     * The policy behind {@code id} — declared, or synthesized for a framework atom.
+     *
+     * <p>A policy id under the framework's {@code tql.} mark is the atom itself: it permits
+     * exactly the principals granted that permission code (docs/stack-shells.md structural
+     * decision 1 — framework surfaces check atoms, never roles). Synthesis is what lets a
+     * declarative route say {@code policy: tql.iam.admin.view} with no deployment-declared
+     * policy behind it, and it cannot be shadowed: an application declaring its own policy id
+     * under the mark is refused at lint and boot by the policy-code namespace fence, so the map
+     * below never holds one.
+     */
     public Optional<Policy> policy(String id) {
+        if (id != null && id.startsWith(io.tesseraql.security.policy.Atoms.MARK)) {
+            java.util.List<Policy.Rule> anyOf = new java.util.ArrayList<>();
+            anyOf.add(Policy.Rule.ofPermission(id));
+            // The terminal wildcard of the atom's own family (tql.ops.view.* beside
+            // tql.ops.view.orders) — an exact granted string, not a glob — so a
+            // wildcard-granted principal passes the same check the named grant does.
+            int lastSegment = id.lastIndexOf('.');
+            if (lastSegment > 0 && !id.endsWith(".*")) {
+                anyOf.add(Policy.Rule.ofPermission(id.substring(0, lastSegment + 1) + "*"));
+            }
+            return Optional.of(new Policy(id, anyOf));
+        }
         return Optional.ofNullable(policies.get(id));
     }
 

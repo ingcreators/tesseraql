@@ -450,6 +450,16 @@ class MultiAppReplaceIntegrationTest {
                 + "(user_id, login_id, display_name, status, password_hash, password_algo,"
                 + " password_params) values ('u1','admin','Administrator','ACTIVE','" + hash
                 + "','pbkdf2','" + params + "')");
+        // The member fence (docs/stack-shells.md structural decision 3): an authenticated
+        // principal needs tql.app.use.<member> to reach the member's routes at all.
+        statement.execute("insert into tql_roles (role_id, role_code, role_name)"
+                + " values ('r1','r1','r1')");
+        statement.execute("insert into tql_user_roles (user_id, role_id) values ('u1','r1')");
+        statement.execute("insert into tql_permissions"
+                + " (permission_id, permission_code, permission_name)"
+                + " values ('tql.app.use.*','tql.app.use.*','tql.app.use.*')");
+        statement.execute("insert into tql_role_permissions (role_id, permission_id)"
+                + " values ('r1','tql.app.use.*')");
     }
 
     /** An app home for {@code version} bound to schema {@code schema}, ready to package. */
