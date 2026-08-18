@@ -171,6 +171,18 @@ silently absent. Per-runtime discovery makes an extension a member's own declara
 modes, which is Decision 28's sentence applied to routes-and-beans extensions rather than
 functions.
 
+A boundary these three extensions expose, asked in review: their *wiring* is per-application but
+their *effect* is stack-scoped — an OIDC or SAML login mounted on one member mints a browser
+session in the framework datasource's store, valid across the stack; SCIM provisions the shared
+identity store from one member's scope. That is the pre-stack shape (one runtime was one
+application) carried forward, and it remains coherent in a stack: declare the module on the
+member that fronts sign-in, and the whole stack benefits. Where these extensions *belong* — the
+stack surface runtime at the origin, beside the sign-in screens Decision 24 already moved
+there — is Decision 14's slice-4 remainder and the authorization-server campaign, and moving
+them raises a question this design deliberately does not answer: how the stack level hands
+modules to the surface runtime. Decision 28 only makes wiring follow declaration; it neither
+blesses nor blocks the later move.
+
 One SPI hides *inside* a module and needs a one-line companion fix, found in review: `PdfEngine`.
 `tesseraql-pdf` provides two providers — `PdfFileCodec` (a `FileCodec`) and `OpenHtmlPdfEngine`
 (a `PdfEngine`, selected per deployment by the `tesseraql.pdf.engine` system property) — and the
