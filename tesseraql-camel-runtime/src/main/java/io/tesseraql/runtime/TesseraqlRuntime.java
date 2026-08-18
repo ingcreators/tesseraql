@@ -168,7 +168,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return start(appHome, withBasePath(loaded, host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, host.mainDataSourceOverride(),
-                host.frameworkDataSource(), true, host.cookiePath());
+                host.frameworkDataSource(), true, host.cookiePath(), host.stackMembers());
     }
 
     /**
@@ -278,7 +278,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override, String cookiePath) {
-        return start(appHome, manifest, port, tracer, meter, override, null, false, cookiePath);
+        return start(appHome, manifest, port, tracer, meter, override, null, false, cookiePath,
+                null);
     }
 
     /**
@@ -293,12 +294,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
      *                                 VALIDATES it instead of migrating and refuses to start on
      *                                 a mismatch — the wrong-framework-datasource guard
      *                                 (docs/stack-architecture.md decision 16)
+     * @param stackMembers             the stack's member list, handed only to the stack surface
+     *                                 runtime so the portal can list them (docs/root-portal.md);
+     *                                 null everywhere else, and the portal provider is then
+     *                                 simply not registered
      */
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override,
             javax.sql.DataSource stackFrameworkDataSource, boolean hostedValidatesFramework,
-            String cookiePath) {
+            String cookiePath,
+            java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers) {
         DefaultCamelContext context = new DefaultCamelContext();
         // The component policy guards every registration from here on
         // (docs/component-guard.md): baseline-denied components fail boot, config or not.
@@ -1666,6 +1672,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     context.getRegistry().lookupByNameAndType(
                                             TesseraqlProperties.SESSION_STORE_BEAN,
                                             io.tesseraql.security.session.SessionStore.class)));
+            // The portal's provider, only where the host handed this runtime the member list —
+            // i.e. only on the stack surface runtime (docs/root-portal.md).
+            if (stackMembers != null) {
+                PortalProviders.register(serviceProviders, stackMembers);
+            }
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();

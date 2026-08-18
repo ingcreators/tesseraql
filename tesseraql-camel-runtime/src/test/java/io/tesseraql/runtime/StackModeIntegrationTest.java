@@ -122,6 +122,39 @@ class StackModeIntegrationTest {
     }
 
     /**
+     * The portal (docs/root-portal.md): anonymous browser users meet the stack's sign-in at the
+     * origin scope with a {@code next} that brings them back; signed in, one screen lists the
+     * members at their derived addresses — and the session that authorizes it is the same one
+     * the members share.
+     */
+    @Test
+    void thePortalListsTheStacksApplications() throws Exception {
+        HttpResponse<String> anonymous = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(uri("/_tesseraql/portal"))
+                        .header("Accept", "text/html")
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(anonymous.statusCode()).isEqualTo(302);
+        assertThat(anonymous.headers().firstValue("Location").orElseThrow())
+                .startsWith("/_tesseraql/login?next=%2F_tesseraql%2Fportal");
+
+        HttpResponse<String> portal = get("/_tesseraql/portal", sessionCookie);
+        assertThat(portal.statusCode()).isEqualTo(200);
+        assertThat(portal.body())
+                .contains("href=\"/shop-a\"")
+                .contains("href=\"/shop-b\"");
+        // Every navigable URL the page names beside the tiles is the surface's own scope —
+        // shell assets, the account chip — and at the origin those are real addresses now, so
+        // each must answer. POST targets (the chip's toggles) are not navigated here.
+        for (String url : matches(portal.body(), "(?:href|src)=\"(/[^\"#?]+)\"")) {
+            if (url.equals("/shop-a") || url.equals("/shop-b")) {
+                continue;
+            }
+            assertThat(get(url, sessionCookie).statusCode()).as(url).isEqualTo(200);
+        }
+    }
+
+    /**
      * Studio under the gateway (docs/app-isolation-model.md slice 5): a per-runtime Studio is
      * reached through its application's prefix, and everything it emits — asset URLs, the CSRF
      * token the kit posts back, the command palette's navigation targets — is prefixed with it.

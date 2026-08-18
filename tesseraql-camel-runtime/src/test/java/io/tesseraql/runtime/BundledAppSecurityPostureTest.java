@@ -26,7 +26,8 @@ class BundledAppSecurityPostureTest {
             "tesseraql-identity/src/main/resources/tesseraql/apps/iam-admin",
             "tesseraql-ops-ui/src/main/resources/tesseraql/apps/ops-console",
             "tesseraql-camel-runtime/src/main/resources/tesseraql/apps/account",
-            "tesseraql-camel-runtime/src/main/resources/tesseraql/apps/auth-ui"})
+            "tesseraql-camel-runtime/src/main/resources/tesseraql/apps/auth-ui",
+            "tesseraql-camel-runtime/src/main/resources/tesseraql/apps/portal"})
     void everyBundledRouteResolvesAnExplicitAuthMode(String resourceRoot) {
         Path home = Paths.get("..").resolve(resourceRoot).toAbsolutePath().normalize();
         AppManifest manifest = new ManifestLoader().load(home);

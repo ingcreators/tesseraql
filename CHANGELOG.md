@@ -25,6 +25,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The stack's portal: one screen listing the applications this principal may reach**
+  (docs/stack-architecture.md Decision 24, docs/root-portal.md). `GET /_tesseraql/portal` on the
+  stack surface runtime renders the members as links at their derived `/<name>` addresses,
+  filtered with the relay's own tenant-entitlement semantics — a principal declaring no tenant
+  is not checked, and per-principal application grants are deliberately not invented here (they
+  belong to the ops-permission question slice 7 owns). Anonymous browser users meet the standard
+  bounce to the stack's sign-in with a `next` that brings them back. The backing
+  `portal.apps.list` provider registers only on the surface runtime — the host hands the member
+  list to that runtime alone, so no member can see its siblings.
+
 - **The stack hosts its own runtime at the origin scope — sign-in, the account surface, and the
   portal's home** (docs/stack-architecture.md Decision 24, docs/root-portal.md). `host` and `dev`
   start one framework-owned runtime beside the members, whose main application is the bundled
