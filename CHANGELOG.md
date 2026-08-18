@@ -6,7 +6,38 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **The stack's authenticated deploy surface: `POST /_tesseraql/deploy` and `deploy --url`**
+  (docs/stack-shells.md slice 3; docs/runtime-replace.md open question 5's arrival). The
+  surface runtime serves an endpoint that receives a `.tqlapp` as its request body — bearer
+  from `tesseraql token` or a browser session with its CSRF token — checks the caller's
+  `tql.app.deploy.<name>` grant against the **package's declared name**, runs the same
+  preflight `tesseraql deploy` runs, and writes the same intent on the host's install root; a
+  refused deploy answers as the response and writes nothing, and the running host's
+  reconciler converges as ever. `tesseraql deploy <package> --url <origin>` is the CLI's
+  remote mode (`--stack` xor `--url`, mirroring `token`'s dual shape; bearer via
+  `TESSERAQL_TOKEN` or `--token-file`), so a pipeline deploys only the applications it
+  manages with a scoped short-lived token and no install-root access.
+
+- **The stack file's `security:` subtree configures the stack surface runtime**
+  (docs/stack-shells.md slice 3). `security.jwt.*` and `security.token.enabled` in
+  `tesseraql-stack.yml` graft onto the surface runtime's configuration, turning on the
+  origin's bearer validation, token page and `/_tesseraql/token` exchange — which is what
+  makes `tesseraql token --url <origin>` the stack's token acquisition path. Members keep
+  their own declared JWT configuration. Declare `rolesClaim`/`permissionsClaim` so the
+  caller's grants ride the minted tokens.
+
 ### Changed
+
+- **The bootstrap baseline gains `tql.app.deploy.*`** — `identity-schema`'s default
+  `--admin-permissions` now also carries the deploy wildcard, so a fresh stack's first
+  administrator holds every door the atoms guard, the new deploy pen included.
+
+- **Deploy refusals now have HTTP shapes** for the endpoint: an incompatible preflight is
+  `409` (`TQL-UPGRADE-4090`), a name the catalogue does not hold is `404`
+  (`TQL-UPGRADE-4091`), and an invalid or integrity-failed package is `400`
+  (`TQL-APP-4041`, previously the domain's 404 default).
 
 - **Using an application in a hosted stack is a grant: the `tql.app.use.<name>` fence**
   (docs/stack-shells.md structural decisions 1 and 3). On a hosted stack member, an

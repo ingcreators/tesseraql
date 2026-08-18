@@ -492,7 +492,16 @@ public final class ErrorResponseRenderer implements Processor {
             case TENANT, APP -> switch (code.number()) {
                 case 4001 -> 400;
                 case 4031 -> 403;
+                case 4041 -> 400; // invalid or integrity-failed package — the caller's bytes
                 default -> 404;
+            };
+            // The deploy endpoint's refusals (docs/stack-shells.md, the deploy surface): a
+            // preflight that says no is a state conflict, a name the catalogue does not hold is
+            // not found; everything else in the domain never surfaces over HTTP.
+            case UPGRADE -> switch (code.number()) {
+                case 4090 -> 409;
+                case 4091 -> 404;
+                default -> 500;
             };
             // Approval workflow (roadmap Phase 28): an illegal/concurrent transition is a conflict,
             // a falsy guard an unprocessable entity, an unassigned caller a forbidden.

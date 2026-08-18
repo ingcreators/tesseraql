@@ -17,6 +17,9 @@ public final class Atoms {
     /** The atom prefix granting use of one application ({@code tql.app.use.<name>}). */
     public static final String APP_USE_PREFIX = "tql.app.use.";
 
+    /** The atom prefix granting deployment of one application ({@code tql.app.deploy.<name>}). */
+    public static final String APP_DEPLOY_PREFIX = "tql.app.deploy.";
+
     private Atoms() {
     }
 

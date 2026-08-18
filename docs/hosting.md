@@ -125,6 +125,40 @@ the state is written, and the next `host` start converges to it. `--stack` must 
 root; a workspace of source trees has no version ledger and is refused (`TQL-UPGRADE-4092`),
 because it deploys by restarting the stack.
 
+**Or deploy remotely, with a grant instead of install-root access.** The stack's origin serves
+an authenticated deploy endpoint (`POST /_tesseraql/deploy`), and `deploy --url` is its pen:
+
+```sh
+export TESSERAQL_TOKEN=$(tesseraql token --url https://stack.example.com --login ci | tail -1)
+tesseraql deploy ./orders-2.1.0.tqlapp --url https://stack.example.com
+```
+
+The endpoint checks the caller's `tql.app.deploy.<name>` grant against the **package's declared
+name** — never a request parameter, so a token scoped to `orders` cannot deploy `billing` by
+renaming anything — runs the same preflight, and writes the same intent on its own install
+root; a refused deploy answers as the response and writes nothing. This is how a pipeline
+deploys only the applications it manages, with a scoped short-lived token and no login to the
+host machine. It needs the stack file to carry the token issuer:
+
+```yaml
+# tesseraql-stack.yml
+security:
+  jwt:
+    secret: ${secret.env.STACK_JWT_SECRET}
+    audience: https://stack.example.com
+    rolesClaim: roles
+    permissionsClaim: permissions
+  token:
+    enabled: true
+```
+
+The subtree configures the *stack surface runtime* — the origin's token page, the
+`/_tesseraql/token` exchange, and the deploy endpoint's bearer validation ride it; each member
+keeps its own declared JWT configuration. The authority is an operational guardrail, not
+isolation between distrusting teams: those get separate stacks, which is what a stack means.
+Install-root access on the host machine remains stack-root; the endpoint adds a narrower door,
+it does not narrow the wide one.
+
 The host replaces without a gap. The new version's runtime starts beside the old one, with the
 boot guards re-run for it alone: modules resolved, framework-datasource agreement, and the
 framework-schema validation. It migrates its own business schema, and it must answer

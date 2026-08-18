@@ -46,6 +46,8 @@ Deploy one application into a stack's install root; a running host replaces its 
 | --- | --- | --- |
 | `<package.tqlapp>` | — | The application package to deploy. Its declared name says which member it replaces; its version must be newer than the installed one. |
 | `--stack <dir>` | — | The install root to deploy into: catalog.json plus one unpacked tree per application version. Explicit, never discovered - production does not guess. |
+| `--url <origin>` | — | Deploy remotely instead: the stack's origin, whose authenticated deploy endpoint checks the caller's tql.app.deploy.<name> grant against the package's declared name and writes the same intent. The bearer comes from `tesseraql token` via TESSERAQL_TOKEN or --token-file. |
+| `--token-file <file>` | — | File holding the bearer token for --url (else TESSERAQL_TOKEN) - never a command-line argument, so it cannot leak into shell history or process listings. |
 | `--canary` | — | Stage the new version beside the serving one instead of replacing it, at --weight percent of HTTP traffic (default 10). Promote or roll back when the ramp has said its piece. |
 | `--weight <percent>` | — | The staged canary's share of HTTP traffic, 0-100. Only with --canary; background work participates fully from candidate start regardless. |
 | `--sha256 <hex>` | — | Verify the package's SHA-256 before anything is written; a tampered or corrupted package is rejected. |
@@ -341,7 +343,7 @@ Apply the managed IAM schema and optionally seed an administrator.
 | `--admin-login <adminLogin>` | — | Administrator to create or update after the schema is applied. |
 | `--admin-password-file <adminPasswordFile>` | — | File holding the admin password (else TESSERAQL_ADMIN_PASSWORD). |
 | `--admin-roles <adminRoles>` | — | Role codes assigned to the administrator (default: iam.admin). |
-| `--admin-permissions <adminPermissions>` | — | Permission codes created and granted to the admin roles (default: the framework's bootstrap baseline — tql.app.use.*, tql.ops.view.*, tql.ops.run.*, tql.iam.admin.view, tql.iam.admin.write). |
+| `--admin-permissions <adminPermissions>` | — | Permission codes created and granted to the admin roles (default: the framework's bootstrap baseline — tql.app.use.*, tql.ops.view.*, tql.ops.run.*, tql.app.deploy.*, tql.iam.admin.view, tql.iam.admin.write). |
 
 ## `package`
 
