@@ -591,6 +591,112 @@ class StackRelayTest {
     }
 
     /**
+     * The swap race's second leg, found by the headline replace IT on CI after slice 1 shipped
+     * (docs/runtime-replace.md): a retiring runtime's socket still accepts while its consumer is
+     * suspended, and the suspend gate answers 503 before any route runs — so the
+     * never-connected retry does not fire and the deploy mints a 503 instead of a 502. The
+     * relay re-resolves; the slot has moved away from the port that answered, so it retries
+     * once and the request lands on the runtime now serving.
+     */
+    @Test
+    void aRetiredRuntimesSuspendFiveOhThreeIsRetriedAgainstTheFreshLookup() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger refusals = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer suspended = vertx.createHttpServer();
+        suspended.requestHandler(request -> {
+            refusals.incrementAndGet();
+            request.response().setStatusCode(503).end("Service Unavailable");
+        });
+        int suspendedPort = await(suspended.listen(0, "localhost")).actualPort();
+        java.util.concurrent.atomic.AtomicInteger resolutions = new java.util.concurrent.atomic.AtomicInteger();
+        // The early check and the first send resolve the retired port; the moved-slot check and
+        // the retry resolve the live one — resolved before the swap, answered after it.
+        StackRelay relay = new StackRelay(client, CATALOGUE,
+                appId -> resolutions.incrementAndGet() <= 2 ? suspendedPort : originPort);
+        HttpServer raceFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        raceFront.requestHandler(relay::handle);
+        int frontPort = await(raceFront.listen()).actualPort();
+        try {
+            HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
+                    "http://localhost:" + frontPort + "/" + APP + "/hello")));
+
+            assertThat(response.statusCode())
+                    .as("the retry re-resolves and answers, not the suspend 503").isEqualTo(200);
+            assertThat(response.body()).isEqualTo("ok");
+            assertThat(refusals.get()).as("the retired runtime saw exactly one attempt")
+                    .isEqualTo(1);
+        } finally {
+            await(raceFront.close());
+            await(suspended.close());
+        }
+    }
+
+    /**
+     * The discriminator, from the same paragraph: an application's own 503 — a lane at
+     * capacity, a readiness roll-up — comes from the port the slot still names, and passes
+     * through untouched. Only a slot that moved away from the answering port marks the 503 as
+     * the deploy's.
+     */
+    @Test
+    void aFiveOhThreeFromTheServingRuntimeIsNotRetried() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger refusals = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer busy = vertx.createHttpServer();
+        busy.requestHandler(request -> {
+            refusals.incrementAndGet();
+            request.response().setStatusCode(503).end("Busy");
+        });
+        int busyPort = await(busy.listen(0, "localhost")).actualPort();
+        StackRelay relay = new StackRelay(client, CATALOGUE, appId -> busyPort);
+        HttpServer busyFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        busyFront.requestHandler(relay::handle);
+        int frontPort = await(busyFront.listen()).actualPort();
+        try {
+            HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
+                    "http://localhost:" + frontPort + "/" + APP + "/hello")));
+
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(response.body()).isEqualTo("Busy");
+            assertThat(refusals.get()).as("the application's own answer stands").isEqualTo(1);
+        } finally {
+            await(busyFront.close());
+            await(busy.close());
+        }
+    }
+
+    /**
+     * The 503 leg's boundary: a request body is a stream the first send already consumed, so a
+     * bodied request cannot be replayed and keeps the 503 — its client resubmits, which is
+     * today's behaviour on a window a few milliseconds wide.
+     */
+    @Test
+    void aBodiedRequestKeepsTheSuspendFiveOhThree() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger refusals = new java.util.concurrent.atomic.AtomicInteger();
+        HttpServer suspended = vertx.createHttpServer();
+        suspended.requestHandler(request -> {
+            refusals.incrementAndGet();
+            request.response().setStatusCode(503).end("Service Unavailable");
+        });
+        int suspendedPort = await(suspended.listen(0, "localhost")).actualPort();
+        java.util.concurrent.atomic.AtomicInteger resolutions = new java.util.concurrent.atomic.AtomicInteger();
+        StackRelay relay = new StackRelay(client, CATALOGUE,
+                appId -> resolutions.incrementAndGet() <= 2 ? suspendedPort : originPort);
+        HttpServer raceFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        raceFront.requestHandler(relay::handle);
+        int frontPort = await(raceFront.listen()).actualPort();
+        try {
+            HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
+                    "http://localhost:" + frontPort + "/" + APP + "/hello"))
+                    .POST(HttpRequest.BodyPublishers.ofString("payload")));
+
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(refusals.get()).as("one attempt: a consumed body never replays")
+                    .isEqualTo(1);
+        } finally {
+            await(raceFront.close());
+            await(suspended.close());
+        }
+    }
+
+    /**
      * The strip set is live (docs/runtime-replace.md, relay upkeep): a replaced version that
      * starts declaring a forwarded header gets it stripped from the swap onwards, with no
      * gateway restart — the lookup is consulted per request.

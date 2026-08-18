@@ -120,6 +120,13 @@ final class StackRelay {
      */
     private static final String CONNECTED = "tesseraql.relay.connected";
 
+    /**
+     * The attachment naming the port the send actually targeted, so the retry interceptor can
+     * ask whether the slot has since moved away from it — the discriminator between an
+     * application's own 503 and one minted by a retiring runtime's suspended consumer.
+     */
+    private static final String TARGET = "tesseraql.relay.target";
+
     private final HttpClient client;
     /** The stack's members — a start-time snapshot on purpose; see the class javadoc. */
     private final Set<String> memberNames;
@@ -358,7 +365,7 @@ final class StackRelay {
 
     /**
      * The proxy for one member, its origin resolved per request and its send retried once when
-     * the origin was never reached.
+     * the origin was never reached — or answered 503 from a slot that has since moved on.
      *
      * <p>No header interceptor beyond the posture half. The gateway used to strip the mTLS
      * forwarded header its apps declare, on the reasoning that applications are trusted while
@@ -376,7 +383,7 @@ final class StackRelay {
     private HttpProxy proxyFor(String appName, IntSupplier port) {
         HttpProxy proxy = HttpProxy.reverseProxy(client)
                 .origin(new LiveOrigin(port))
-                .addInterceptor(new RetryOnceWhenNeverConnected())
+                .addInterceptor(new RetryOnceAcrossTheSwap(port))
                 .addInterceptor(new BodylessRequestsHaveZeroLength());
         if (!trustedProxies.isEmpty()) {
             proxy.addInterceptor(new StripUnlessFromATrustedEdge(
@@ -400,6 +407,7 @@ final class StackRelay {
             } catch (RuntimeException unresolvable) {
                 return Future.failedFuture(unresolvable);
             }
+            context.set(TARGET, target);
             return context.client()
                     .request(new RequestOptions()
                             .setServer(SocketAddress.inetSocketAddress(target, "localhost")))
@@ -412,24 +420,58 @@ final class StackRelay {
     }
 
     /**
-     * Closes the swap race (docs/runtime-replace.md): a request can resolve a runtime's port just
-     * before its slot is swapped and reach it only after its consumer suspended — a 502 minted by
-     * the deploy itself. The retry re-resolves the origin (the provider above reads the live
-     * lookup) and happens <b>once</b>, and <b>only when no connection to the origin was ever
-     * established</b>: no byte reached it, so nothing can double. A request whose connection died
-     * mid-flight is <em>not</em> retried — replaying a request the origin may have acted on is a
-     * worse defect than the 502 it would save.
+     * Closes the swap race (docs/runtime-replace.md): a request can resolve a runtime's port
+     * just before its slot is swapped and reach it only after that runtime retired — an error
+     * minted by the deploy itself. The race has two legs, and the retry re-resolves the origin
+     * (the provider above reads the live lookup) and happens <b>once</b> on each:
+     *
+     * <ul>
+     * <li><b>The connection was never established</b> — the retired runtime's socket is gone.
+     * No byte reached it, so nothing can double, and any request is safe to re-send.</li>
+     * <li><b>The retired runtime answered 503</b> — its consumer suspended but its socket still
+     * accepts, and the suspend gate refuses before any route runs. Retried only when the slot
+     * has since moved away from the port that answered (an application's own 503 — a lane at
+     * capacity, a readiness roll-up — comes from the port the slot still names, and passes
+     * through), and only for a bodyless request: a request body is a stream the first send
+     * already consumed, so a bodied request keeps the 503 and its client resubmits.</li>
+     * </ul>
+     *
+     * <p>A request whose connection died mid-flight is <em>not</em> retried — replaying a
+     * request the origin may have acted on is a worse defect than the 502 it would save.
      */
-    private record RetryOnceWhenNeverConnected() implements ProxyInterceptor {
+    private record RetryOnceAcrossTheSwap(IntSupplier port) implements ProxyInterceptor {
 
         @Override
         public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
-            return context.sendRequest().recover(failure -> {
-                if (context.get(CONNECTED, Boolean.class) == null) {
-                    return context.sendRequest();
-                }
-                return Future.failedFuture(failure);
-            });
+            HttpMethod method = context.request().getMethod();
+            boolean replayable = method == HttpMethod.GET || method == HttpMethod.HEAD;
+            return context.sendRequest()
+                    .compose(response -> {
+                        if (replayable && response.getStatusCode() == 503
+                                && slotMovedAwayFrom(context)) {
+                            response.release();
+                            return context.sendRequest();
+                        }
+                        return Future.succeededFuture(response);
+                    })
+                    .recover(failure -> {
+                        if (context.get(CONNECTED, Boolean.class) == null) {
+                            return context.sendRequest();
+                        }
+                        return Future.failedFuture(failure);
+                    });
+        }
+
+        private boolean slotMovedAwayFrom(ProxyContext context) {
+            Integer answered = context.get(TARGET, Integer.class);
+            if (answered == null) {
+                return false;
+            }
+            try {
+                return port.getAsInt() != answered;
+            } catch (RuntimeException unresolvable) {
+                return false;
+            }
         }
     }
 
