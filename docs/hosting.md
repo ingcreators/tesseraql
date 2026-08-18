@@ -289,7 +289,7 @@ The [operations console](ops-console.md) is the stack's, at the origin scope:
 caller's `tql.ops.view.<name>` grants applied to the member list, deny by default, with a
 staged canary as a second entry. Selecting an application delegates that application's pages
 over loopback to its own runtime with the caller's session, so authorization stays at the
-member: `tql.ops.view.<name>` is the authority to see an application's operational data and
+member. `tql.ops.view.<name>` is the authority to see an application's operational data and
 `tql.ops.run.<name>` the authority to act on it — run and cancel jobs, redeliver outbox and
 dead-lettered events — granted separately, so an on-call reader is not an acting pen. The
 wildcard is a terminal `*` (`tql.ops.view.*`).
