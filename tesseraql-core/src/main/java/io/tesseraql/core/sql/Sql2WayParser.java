@@ -44,19 +44,30 @@ public final class Sql2WayParser {
 
     private final String source;
     private final int length;
+    private final io.tesseraql.core.expr.ExpressionFunctions functions;
     private int pos;
     private int line = 1;
     private int depth;
     private Directive pendingTerminator;
 
-    private Sql2WayParser(String source) {
+    private Sql2WayParser(String source, io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.source = source;
         this.length = source.length();
+        this.functions = functions;
     }
 
-    /** Parses a 2-way SQL template string into its node tree. */
+    /**
+     * Parses a 2-way SQL template string into its node tree, resolving directive expressions
+     * against the process-default function set.
+     */
     public static List<SqlNode> parse(String source) {
-        Sql2WayParser parser = new Sql2WayParser(source);
+        return parse(source, io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+    }
+
+    /** Parses a 2-way SQL template string, resolving expressions against {@code functions}. */
+    public static List<SqlNode> parse(String source,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
+        Sql2WayParser parser = new Sql2WayParser(source, functions);
         List<SqlNode> nodes = parser.parseBlock();
         if (parser.pendingTerminator != null) {
             throw parser.error("Unexpected '" + parser.pendingTerminator.keyword()
@@ -146,8 +157,10 @@ public final class Sql2WayParser {
             throw error("Empty bind expression");
         }
         return list
-                ? new SqlNode.ListBind(expr, ExpressionParser.parse(expr), directive.sourceLine())
-                : new SqlNode.Bind(expr, ExpressionParser.parse(expr), directive.sourceLine());
+                ? new SqlNode.ListBind(expr, ExpressionParser.parse(expr, functions),
+                        directive.sourceLine())
+                : new SqlNode.Bind(expr, ExpressionParser.parse(expr, functions),
+                        directive.sourceLine());
     }
 
     /**
@@ -204,14 +217,15 @@ public final class Sql2WayParser {
     private SqlNode parseIf(Directive first) {
         List<SqlNode.If.Branch> branches = new ArrayList<>();
         String ifCondition = first.argument("if");
-        branches.add(new SqlNode.If.Branch(ExpressionParser.parse(ifCondition), ifCondition,
-                first.sourceLine(), parseBlock()));
+        branches.add(new SqlNode.If.Branch(ExpressionParser.parse(ifCondition, functions),
+                ifCondition, first.sourceLine(), parseBlock()));
         while (true) {
             Directive terminator = requireTerminator("if");
             switch (terminator.keyword()) {
                 case "elseif" -> {
                     String elseifCondition = terminator.argument("elseif");
-                    branches.add(new SqlNode.If.Branch(ExpressionParser.parse(elseifCondition),
+                    branches.add(new SqlNode.If.Branch(
+                            ExpressionParser.parse(elseifCondition, functions),
                             elseifCondition, terminator.sourceLine(), parseBlock()));
                 }
                 case "else" -> branches.add(new SqlNode.If.Branch(
@@ -256,8 +270,8 @@ public final class Sql2WayParser {
             throw error("Expected end for 'for', found '" + terminator.keyword() + "'");
         }
         pendingTerminator = null;
-        return new SqlNode.For(itemVar, listExpr, ExpressionParser.parse(listExpr), separator,
-                first.sourceLine(), body);
+        return new SqlNode.For(itemVar, listExpr, ExpressionParser.parse(listExpr, functions),
+                separator, first.sourceLine(), body);
     }
 
     private SqlNode parseScope(Directive directive) {

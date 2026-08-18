@@ -96,6 +96,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **An expression evaluates with the custom functions it was parsed under**
+  (docs/stack-architecture.md Decision 28, docs/module-scope.md). The function set is a value:
+  the parser resolves each custom call against the set it is handed and the parsed tree captures
+  the resolved function, so a later install or reset can no longer change — or break — what an
+  already-parsed expression means. The "no longer installed" evaluation failure is gone with the
+  global-swap design that produced it. Single-application commands and the Maven goals are
+  unchanged: they install the process default the parser falls back to.
+
 - **CLI options come in sets, and a command takes the whole set or none of it**
   (docs/cli-surface.md Decisions 5 and 7). `--env` now exists on every command that loads a
   manifest — `lint`, the command whose missing profile flag was closest to a defect, included —

@@ -37,17 +37,28 @@ public final class ExpressionParser {
     private static final int MAX_DEPTH = 250;
 
     private final List<Token> tokens;
+    private final ExpressionFunctions functions;
     private int position;
     private int depth;
 
-    private ExpressionParser(List<Token> tokens) {
+    private ExpressionParser(List<Token> tokens, ExpressionFunctions functions) {
         this.tokens = tokens;
+        this.functions = functions;
     }
 
-    /** Parses an expression source string into an {@link Expr} tree. */
+    /**
+     * Parses an expression source string into an {@link Expr} tree, resolving custom calls
+     * against the {@linkplain ExpressionFunctions#processDefault() process default} — correct
+     * wherever one process is one application (docs/module-scope.md).
+     */
     public static Expr parse(String source) {
+        return parse(source, ExpressionFunctions.processDefault());
+    }
+
+    /** Parses an expression source string, resolving custom calls against {@code functions}. */
+    public static Expr parse(String source, ExpressionFunctions functions) {
         List<Token> tokens = new Lexer(source).tokenize();
-        ExpressionParser parser = new ExpressionParser(tokens);
+        ExpressionParser parser = new ExpressionParser(tokens, functions);
         Expr expr = parser.or();
         if (!parser.atEnd()) {
             throw parser.error("Unexpected token '" + parser.peek().text() + "'");
@@ -188,7 +199,7 @@ public final class ExpressionParser {
                 // unknown names and wrong arities are parse errors, so lint catches them at
                 // build. Only calls use '(', so an unknown name here is always a mistake.
                 if (!atEnd() && peek().type() == TokenType.LPAREN) {
-                    Integer arity = ExpressionFunctions.arity(first.text());
+                    Integer arity = functions.arity(first.text());
                     if (arity == null) {
                         throw error("Unknown function '" + first.text() + "()' — not a"
                                 + " built-in and no installed custom function of that name"
@@ -208,7 +219,8 @@ public final class ExpressionParser {
                         throw error(first.text() + "() takes " + arity + " argument"
                                 + (arity == 1 ? "" : "s") + ", got " + args.size());
                     }
-                    return new Expr.Call(first.text(), args);
+                    return new Expr.Call(first.text(), args,
+                            functions.custom(first.text()));
                 }
                 List<String> segments = new ArrayList<>();
                 segments.add(first.text());

@@ -136,9 +136,11 @@ public sealed interface Expr {
      * so an expression can never reach outside the built-ins —
      * {@code length lower upper trim contains startsWith endsWith matches abs round floor ceil
      * min max coalesce} — plus any operator-installed {@link ExpressionFunction}s (contract:
-     * side-effect-free and total, see {@link ExpressionFunctions}).
+     * side-effect-free and total, see {@link ExpressionFunctions}). A custom call captures the
+     * resolved function at parse, so the tree evaluates with the set it was parsed under —
+     * {@code custom} is {@code null} exactly when {@code name} is a built-in.
      */
-    record Call(String name, List<Expr> args) implements Expr {
+    record Call(String name, List<Expr> args, ExpressionFunction custom) implements Expr {
 
         /** function name → arity. */
         public static final java.util.Map<String, Integer> FUNCTIONS = java.util.Map.ofEntries(
@@ -155,6 +157,11 @@ public sealed interface Expr {
 
         public Call {
             args = List.copyOf(args);
+        }
+
+        /** A built-in call; custom calls carry their resolved function. */
+        public Call(String name, List<Expr> args) {
+            this(name, args, null);
         }
 
         @Override
@@ -202,21 +209,20 @@ public sealed interface Expr {
         }
 
         /**
-         * Dispatches to the installed {@link ExpressionFunction}. The parser only builds a call
-         * for a name known at parse time, so a miss here means the registry changed since —
-         * a clear error beats evaluating against the wrong function set.
+         * Dispatches to the function captured at parse. A miss here means the node was built
+         * by hand with the built-in constructor for a non-built-in name — a clear error beats
+         * evaluating against the wrong function.
          */
         private Object evalCustom(EvaluationContext context) {
-            ExpressionFunction function = ExpressionFunctions.custom(name);
-            if (function == null) {
+            if (custom == null) {
                 throw new IllegalStateException("Expression function '" + name
-                        + "' is no longer installed");
+                        + "' was constructed without its resolved function");
             }
             List<Object> values = new java.util.ArrayList<>(args.size());
             for (Expr arg : args) {
                 values.add(arg.eval(context));
             }
-            return function.apply(java.util.Collections.unmodifiableList(values));
+            return custom.apply(java.util.Collections.unmodifiableList(values));
         }
     }
 
