@@ -21,7 +21,9 @@ inherits. Review itself reshaped the design five times before approval — the s
 stack's own stop, the overlap window's fine print, the job drain correction, and the
 deploy-authorization boundary — each recorded in place. One count corrected at implementation:
 structural decision 3 said the verb count moves from 25 to 26; the reference stood at 24, so it
-moves to 25.
+moves to 25. And one correction found in production CI after shipping: the swap race has a
+second leg — the retiring runtime's suspend gate answers 503 on an established connection —
+closed in the swap-race section above.
 
 ## What exists today, measured
 
@@ -198,6 +200,20 @@ nothing can double — a `POST` whose connection died mid-flight is *not* retrie
 replaying a request the origin may have acted on is a worse defect than the 502 it saves. The
 headline test below fires requests continuously through the swap precisely so this window is
 observed rather than reasoned about.
+
+**Correction, found by that same headline test on CI after slice 1 shipped: the race has a
+second leg.** A retiring runtime's socket keeps accepting while its Camel consumer is
+suspended, and the suspend gate answers **503** before any route runs — a connection that *was*
+established, so the never-connected retry does not fire, and the deploy mints a 503 instead of
+a 502 (observed as exactly one `503` sample at the swap boundary in #865's first CI run). The
+fix keeps the retry's shape and adds the discriminator the leg needs: on a 503, the relay asks
+whether the slot has **moved away from the port that answered** — an application's own 503 (a
+lane at capacity, a readiness roll-up) comes from the port the slot still names and passes
+through untouched — and retries once, for **bodyless requests only**: a request body is a
+stream the first send already consumed, so a bodied request keeps the 503 and its client
+resubmits, on a window a few milliseconds wide. The ordering that makes the discriminator
+sound is the design's own: the swap precedes the drain, so by the time the suspend gate can
+answer, the slot already names the new runtime.
 
 **One wrinkle, named rather than hidden:** a declared `server.port` (Decision 4a's fixed
 *internal* port) is honoured at stack start, but a replaced runtime answers on an ephemeral port

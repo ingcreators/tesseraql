@@ -77,6 +77,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The swap race's second leg: a 503 from a retiring runtime's suspended consumer is retried
+  against the fresh lookup** (docs/runtime-replace.md, the swap-race correction). The relay's
+  retry fired only when the connection was never established — but a retiring runtime's socket
+  keeps accepting while its Camel consumer suspends, and the suspend gate answers 503 before
+  any route runs, so a request in the swap window got a 503 the deploy minted (caught by the
+  headline replace test on CI). The relay now retries a 503 once when the slot has moved away
+  from the port that answered — an application's own 503, a lane at capacity or a readiness
+  roll-up, comes from the port the slot still names and passes through — and only for bodyless
+  requests, because a consumed body stream cannot be replayed.
+
 - **Stopping a stack now drains it; it used to hard-kill it** (docs/runtime-replace.md, the
   stack's own stop). `tesseraql host` registered no shutdown hook — the deployment image's
   `CMD`, so every container stop cut in-flight work — and even a closed gateway shut its front
