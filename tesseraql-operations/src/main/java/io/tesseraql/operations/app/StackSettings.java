@@ -90,6 +90,16 @@ public final class StackSettings {
         return config.getString("externalOrigin");
     }
 
+    /**
+     * The application the origin root redirects to, by name — {@code root.redirect}
+     * (docs/stack-architecture.md Decision 24). Absent means the default target, the stack's
+     * portal. Validated against the stack's membership at gateway start, not here: this class
+     * reads the file and does not know what the stack holds.
+     */
+    public Optional<String> rootRedirect() {
+        return config.getString("root.redirect");
+    }
+
     /** The whole file, for settings later slices read (the token issuer's {@code security.jwt.*}). */
     public AppConfig config() {
         return config;

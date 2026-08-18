@@ -24,6 +24,8 @@ class StackSettingsTest {
                     username: stack
                     password: secret
                 externalOrigin: https://apps.example.com
+                root:
+                  redirect: orders
                 """);
 
         StackSettings settings = StackSettings.load(dir);
@@ -34,6 +36,7 @@ class StackSettingsTest {
             assertThat(coordinate.password()).isEqualTo("secret");
         });
         assertThat(settings.externalOrigin()).contains("https://apps.example.com");
+        assertThat(settings.rootRedirect()).contains("orders");
     }
 
     /** Placeholders resolve exactly as they do in an application's own configuration. */

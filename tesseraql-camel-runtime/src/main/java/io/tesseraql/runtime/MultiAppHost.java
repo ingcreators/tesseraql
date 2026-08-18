@@ -127,8 +127,18 @@ public final class MultiAppHost implements AutoCloseable {
         // The stack's own settings — tesseraql-stack.yml in the directory being hosted
         // (docs/stack-architecture.md decision 22). Loaded before any runtime starts, because
         // both of its guards are start-time refusals.
-        io.tesseraql.operations.app.StackSettings settings = io.tesseraql.operations.app.StackSettings
-                .load(installRoot);
+        return start(installRoot, stack, applications, dev,
+                io.tesseraql.operations.app.StackSettings.load(installRoot));
+    }
+
+    /**
+     * As {@link #start(Path, HostContext, List, DevMode)}, with the stack's settings already
+     * loaded — the gateway reads the file first (it validates {@code root.redirect} against the
+     * membership it routes by) and hands the same object down, so the file is read once.
+     */
+    public static MultiAppHost start(Path installRoot, HostContext stack,
+            List<InstalledApp> applications, DevMode dev,
+            io.tesseraql.operations.app.StackSettings settings) {
         Map<String, io.tesseraql.yaml.config.AppConfig> configs = loadConfigs(installRoot,
                 applications);
         boolean embedded = dev != null && dev.embeddedDb() != null;

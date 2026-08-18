@@ -683,7 +683,7 @@ triple all need a host-scoped source, and none existed —
 /_tesseraql/iam
 /_tesseraql/studio             application switcher
 /_tesseraql/ops                application switcher
-/_tesseraql/portal/            the stack's portal; / is a 307 to it, or to root.redirect (D. 24)
+/_tesseraql/portal             the stack's portal; / is a 307 to it, or to root.redirect (D. 24)
 /orders/...                    a user application (Decision 25; /apps/orders before it)
 /orders/_tesseraql/mcp         that application's MCP surface
 /.well-known/...               authorization-server and protected-resource metadata
@@ -1164,14 +1164,15 @@ portal**, not a routing gap. Today the relay answers the unclaimed origin root w
 `TQL-APP-4040`, so the first URL anyone types into a fresh deployment — or a fresh `dev` — is a
 404.
 
-**The portal is a framework surface at `/_tesseraql/portal/`**, and `/` is a **307 redirect to it
-by default**. A first draft served the portal *at* the root, and review caught what that was: the
+**The portal is a framework surface at `/_tesseraql/portal`** (slashless like
+`/_tesseraql/login` — routes derive their paths from the `web/` layout, and the earlier drafts'
+trailing slash was cosmetic), and `/` is a **307 redirect to it by default**. A first draft served the portal *at* the root, and review caught what that was: the
 only framework surface outside the `_tesseraql/` fence — the single exception to Decision 17's one
 rule. Placed inside it, the rule has no exceptions, an ingress line fencing `/_tesseraql/` covers
 the portal with everything else, and the root stops being a place where content lives: **`/` does
 exactly one thing — redirect — and configuration chooses only the target.**
 
-- **The portal**: anonymous → the stack's sign-in, `next=/_tesseraql/portal/` — a real address, not
+- **The portal**: anonymous → the stack's sign-in, `next=/_tesseraql/portal` — a real address, not
   `/`. Signed in → the applications this principal may reach, filtered, as links. One screen
   answers "what is here and who am I here" — the intranet home page, which for the
   internal-business-application deployments this architecture serves is a product surface rather
@@ -1181,7 +1182,7 @@ exactly one thing — redirect — and configuration chooses only the target.**
 
   ```yaml
   root:
-    redirect: orders     # /  →  /orders/
+    redirect: orders     # /  →  /orders
   ```
 
   For the one-main-application deployment this keeps the application's canonical `/orders`
@@ -1191,7 +1192,7 @@ exactly one thing — redirect — and configuration chooses only the target.**
   **temporary (307), deliberately**: a permanent redirect is cached by browsers past the
   configuration change that retires it, which would turn an operator's edit into a support ticket.
 - **No precedence, because there is only one mechanism.** `/` 307s to `root.redirect`'s
-  application when `tesseraql-stack.yml` names one, and to `/_tesseraql/portal/` when it does not — one
+  application when `tesseraql-stack.yml` names one, and to `/_tesseraql/portal` when it does not — one
   behaviour with a default target, not branches to order. Two earlier drafts each had a branch more:
   one served the portal at the root as content, and one kept an application *owning* the root via
   `basePath: /` for the public site whose URLs must not carry a prefix. Review removed both — the
@@ -1207,6 +1208,11 @@ exactly one thing — redirect — and configuration chooses only the target.**
 **Implementation design: [root-portal.md](root-portal.md)** (2026-08-18) — the stack surface
 runtime, the relay's origin fence, the slices, guards and tests, and the open questions that gate
 them.
+
+**Status 2026-08-18: shipped, in the design's three slices.** The stack surface runtime and the
+origin fence (with TQL-YAML-1405's `assets` reservation); the portal page and its
+tenant-filtered `portal.apps.list` provider; the root's 307 with `root.redirect` and
+**TQL-APP-4215**. All four of the design's open questions closed on their recommendations.
 
 ### 25. An application's address is its name — `/orders`, not `/apps/orders`
 

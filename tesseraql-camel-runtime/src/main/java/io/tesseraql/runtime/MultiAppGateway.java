@@ -106,6 +106,19 @@ public final class MultiAppGateway implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(MultiAppGateway.class);
     private static final long START_TIMEOUT_SECONDS = 60;
 
+    /**
+     * TQL-APP-4215: {@code root.redirect} names an application the stack does not hold.
+     *
+     * <p>Validated at start against the full membership, before {@code --app-name} narrowing —
+     * the file describes the stack and the flag filters a run — so a typo is one loud refusal
+     * rather than a redirect onto a 404 (docs/stack-architecture.md decision 24).
+     */
+    static final io.tesseraql.core.error.TqlErrorCode UNKNOWN_ROOT_REDIRECT = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.APP, 4215);
+
+    /** Where {@code /} lands when the stack file names no {@code root.redirect} application. */
+    static final String PORTAL_TARGET = "/_tesseraql/portal";
+
     private final MultiAppHost host;
     private final Vertx vertx;
     private final HttpClient client;
@@ -114,7 +127,7 @@ public final class MultiAppGateway implements AutoCloseable {
     private final StackRelay relay;
 
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
-            java.nio.file.Path installRoot, Settings settings, int frontPort) {
+            java.nio.file.Path installRoot, Settings settings, int frontPort, String rootTarget) {
         this.host = host;
         Map<String, InstalledApp> byName = new java.util.HashMap<>();
         Map<String, Set<String>> strip = new java.util.HashMap<>();
@@ -125,7 +138,7 @@ public final class MultiAppGateway implements AutoCloseable {
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
         this.relay = new StackRelay(client, byName, strip,
-                settings.trustedProxies(), this::targetPort, host::surfacePort);
+                settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget);
         this.server = vertx.createHttpServer(
                 StackRelay.frontOptions(frontPort, settings.http2()));
         server.requestHandler(relay::handle);
@@ -186,6 +199,29 @@ public final class MultiAppGateway implements AutoCloseable {
         // nothing below needs to know which it was.
         List<InstalledApp> catalogued = io.tesseraql.operations.app.AppDirectory.applications(
                 io.tesseraql.operations.app.AppDirectory.resolve(installRoot));
+        // The stack's file, read once on the gateway path: root.redirect is validated here,
+        // against the FULL membership before any narrowing — the file describes the stack and
+        // the flag filters a run. A narrowed-away target still redirects and then 404s, exactly
+        // like every other link to a narrowed-away neighbour (docs/root-portal.md).
+        io.tesseraql.operations.app.StackSettings stackSettings = io.tesseraql.operations.app.StackSettings
+                .load(installRoot);
+        List<InstalledApp> members = catalogued;
+        String rootTarget = stackSettings.rootRedirect()
+                .map(name -> {
+                    if (members.stream().noneMatch(app -> name.equals(app.name()))) {
+                        throw new io.tesseraql.core.error.TqlException(UNKNOWN_ROOT_REDIRECT,
+                                io.tesseraql.operations.app.StackSettings.FILE_NAME
+                                        + " names root.redirect: '" + name + "', and the stack"
+                                        + " holds no application by that name. It holds: "
+                                        + members.stream().map(InstalledApp::name)
+                                                .collect(java.util.stream.Collectors
+                                                        .joining(", "))
+                                        + ". Correct the name, or remove root.redirect to let /"
+                                        + " land on the portal.");
+                    }
+                    return "/" + name;
+                })
+                .orElse(PORTAL_TARGET);
         if (appName != null) {
             List<InstalledApp> named = catalogued.stream()
                     .filter(app -> appName.equals(app.name()))
@@ -205,12 +241,13 @@ public final class MultiAppGateway implements AutoCloseable {
         // the host reads it from there — each app is started serving the prefix it is fronted
         // under, so it answers at the addresses it emits (decision 5).
         MultiAppHost host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued,
-                dev);
+                dev, stackSettings);
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appNames().contains(app.name()))
                     .toList();
-            return new MultiAppGateway(host, hosted, installRoot, settings, frontPort);
+            return new MultiAppGateway(host, hosted, installRoot, settings, frontPort,
+                    rootTarget);
         } catch (RuntimeException ex) {
             host.close();
             throw ex;

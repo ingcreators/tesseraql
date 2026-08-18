@@ -298,6 +298,38 @@ class MultiAppGatewayIntegrationTest {
     }
 
     /**
+     * The root does exactly one thing — 307 — and configuration chooses only the target
+     * (docs/stack-architecture.md Decision 24): the portal when the stack file names nothing,
+     * {@code /<name>} when it names an application. The second case restarts a gateway over the
+     * same install root with the pointer added, then restores the file.
+     */
+    @Test
+    void theRootAlwaysRedirects() throws Exception {
+        java.net.http.HttpResponse<String> root = java.net.http.HttpClient.newHttpClient().send(
+                java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                        "http://localhost:" + gateway.port() + "/")).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(root.statusCode()).isEqualTo(307);
+        assertThat(root.headers().firstValue("Location")).contains("/_tesseraql/portal");
+
+        Path stackFile = installRoot.resolve(
+                io.tesseraql.operations.app.StackSettings.FILE_NAME);
+        String original = Files.readString(stackFile);
+        Files.writeString(stackFile, original + "root:\n  redirect: shop-a\n");
+        try (MultiAppGateway pointed = MultiAppGateway.start(installRoot, 0)) {
+            java.net.http.HttpResponse<String> redirected = java.net.http.HttpClient
+                    .newHttpClient().send(
+                            java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+                                    "http://localhost:" + pointed.port() + "/")).build(),
+                            java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(redirected.statusCode()).isEqualTo(307);
+            assertThat(redirected.headers().firstValue("Location")).contains("/shop-a");
+        } finally {
+            Files.writeString(stackFile, original);
+        }
+    }
+
+    /**
      * The origin scope is the stack surface runtime's (docs/root-portal.md): the stack's own
      * sign-in page answers at {@code /_tesseraql/login}, posts back to itself at the origin, and
      * its assets answer at the origin's {@code /assets/*} — the same page every member serves

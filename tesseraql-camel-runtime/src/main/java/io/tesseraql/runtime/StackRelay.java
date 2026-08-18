@@ -111,30 +111,38 @@ final class StackRelay {
      * surface up; production always has one.
      */
     private final java.util.function.IntSupplier surfacePort;
+    /**
+     * Where {@code /} 307s to: {@code /<name>} when the stack file names a {@code root.redirect}
+     * application, else the portal (docs/stack-architecture.md decision 24). Resolved and
+     * validated at start — the relay never looks anything up per request. {@code null} in relay
+     * tests that exercise routing without the root behaviour.
+     */
+    private final String rootTarget;
     /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
     private final Map<Integer, HttpProxy> proxies = new ConcurrentHashMap<>();
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             ToIntFunction<String> portOf) {
-        this(client, appsByName, Map.of(), TrustedProxies.NONE, portOf, null);
+        this(client, appsByName, Map.of(), TrustedProxies.NONE, portOf, null, null);
     }
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf) {
-        this(client, appsByName, ingressStripByApp, trustedProxies, portOf, null);
+        this(client, appsByName, ingressStripByApp, trustedProxies, portOf, null, null);
     }
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf,
-            java.util.function.IntSupplier surfacePort) {
+            java.util.function.IntSupplier surfacePort, String rootTarget) {
         this.client = client;
         this.appsByName = Map.copyOf(appsByName);
         this.ingressStripByApp = Map.copyOf(ingressStripByApp);
         this.trustedProxies = trustedProxies;
         this.portOf = portOf;
         this.surfacePort = surfacePort;
+        this.rootTarget = rootTarget;
     }
 
     /**
@@ -188,6 +196,19 @@ final class StackRelay {
                 request.response().setStatusCode(200)
                         .putHeader("Content-Type", "application/json; charset=utf-8")
                         .end("{\"status\":\"UP\"}");
+                return;
+            }
+            // The root does exactly one thing — redirect — and configuration chooses only the
+            // target (docs/stack-architecture.md decision 24). 307 deliberately: a permanent
+            // redirect is cached by browsers past the configuration change that retires it. The
+            // query string rides along verbatim.
+            if (rootTarget != null && "/".equals(rawPath)) {
+                String uri = request.uri();
+                int query = uri.indexOf('?');
+                request.response().setStatusCode(307)
+                        .putHeader("Location",
+                                query < 0 ? rootTarget : rootTarget + uri.substring(query))
+                        .end();
                 return;
             }
             // The origin fence (docs/root-portal.md): origin-scope framework surfaces —
