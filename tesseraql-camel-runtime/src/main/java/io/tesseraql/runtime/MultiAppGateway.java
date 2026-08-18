@@ -5,8 +5,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpServer;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -127,17 +125,18 @@ public final class MultiAppGateway implements AutoCloseable {
     private final StackRelay relay;
 
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
-            java.nio.file.Path installRoot, Settings settings, int frontPort, String rootTarget) {
+            Settings settings, int frontPort, String rootTarget) {
         this.host = host;
-        Map<String, InstalledApp> byName = new java.util.HashMap<>();
-        Map<String, Set<String>> strip = new java.util.HashMap<>();
-        for (InstalledApp app : hostedApps) {
-            byName.put(app.name(), app);
-            strip.put(app.name(), ingressStripHeaders(installRoot, app));
-        }
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
-        this.relay = new StackRelay(client, byName, strip,
+        // Every per-app lookup is the host's live slot state (docs/runtime-replace.md): a
+        // replace swaps which runtime, which entry and which strip set answer for a member, and
+        // the relay reads all three per request rather than from a start-time copy. Membership
+        // itself is the start-time list — adding or removing an application is a stack deploy.
+        this.relay = new StackRelay(client,
+                hostedApps.stream().map(InstalledApp::name)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet()),
+                host::entry, host::ingressStrip,
                 settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget);
         this.server = vertx.createHttpServer(
                 StackRelay.frontOptions(frontPort, settings.http2()));
@@ -246,31 +245,10 @@ public final class MultiAppGateway implements AutoCloseable {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appNames().contains(app.name()))
                     .toList();
-            return new MultiAppGateway(host, hosted, installRoot, settings, frontPort,
-                    rootTarget);
+            return new MultiAppGateway(host, hosted, settings, frontPort, rootTarget);
         } catch (RuntimeException ex) {
             host.close();
             throw ex;
-        }
-    }
-
-    /**
-     * The headers to drop from a request bound for {@code app} when it did not come from a named
-     * edge: the mTLS forwarded header its configuration says to believe. Best-effort — an app
-     * whose config cannot be read strips nothing extra, because the alternative is refusing to
-     * host it over a header it may not even use.
-     */
-    static Set<String> ingressStripHeaders(java.nio.file.Path installRoot, InstalledApp app) {
-        try {
-            java.nio.file.Path appHome = installRoot.resolve(app.path()).normalize();
-            return new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config()
-                    .getString("tesseraql.security.mtls.forwardedHeader")
-                    .map(header -> Set.of(header.toLowerCase(Locale.ROOT)))
-                    .orElseGet(Set::of);
-        } catch (RuntimeException unreadable) {
-            LOG.warn("Could not read '{}' configuration for ingress header stripping: {}",
-                    app.name(), unreadable.getMessage());
-            return Set.of();
         }
     }
 
@@ -313,18 +291,56 @@ public final class MultiAppGateway implements AutoCloseable {
         return stablePort;
     }
 
-    @Override
-    public void close() {
-        closeQuietly();
-        host.close();
+    /**
+     * The host whose slots this gateway routes to — the surface the replace operations live on
+     * (docs/runtime-replace.md). The reconciler drives it in its slice; tests drive it directly.
+     */
+    public MultiAppHost host() {
+        return host;
     }
 
     /**
-     * Everything this instance opened, in the order it was opened: the front server, the outbound
-     * client, then the Vert.x instance carrying the event loops. A gateway restart used to
-     * accumulate the client's pool and the server's executor, so closing all of it is the point.
+     * The ordered stop (docs/runtime-replace.md, the stack's own stop). First the relay's
+     * readiness flips to 503 while liveness stays 200 — the orchestrator's contract, "stop
+     * routing to me, do not kill me" — and the relay keeps serving everything, new requests
+     * included, while its in-flight count drains to zero under a bound derived from the members'
+     * own declared {@code tesseraql.shutdown.timeout}s. Only then does the front close, the
+     * runtimes drain under their own bounds as today, and the client and Vert.x follow. A
+     * long-lived stream is an in-flight request that never ends; the derived bound cuts it,
+     * which is the same deliberate boundary as the replace's.
      */
+    @Override
+    public void close() {
+        relay.beginDrain();
+        java.time.Duration bound = host.drainBound();
+        int inFlight = relay.inFlight();
+        LOG.info("Stack stopping: readiness now answers 503; draining {} in-flight request(s)"
+                + " for up to {}", inFlight, bound);
+        long deadline = System.nanoTime() + bound.toNanos();
+        while (relay.inFlight() > 0 && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        if (relay.inFlight() > 0) {
+            LOG.warn("Stack stop drain bound {} reached with {} request(s) still in flight;"
+                    + " closing the front now", bound, relay.inFlight());
+        }
+        closeFront();
+        host.close();
+        closeClientAndVertx();
+    }
+
+    /** The boot-failure path: nothing is in flight yet, so no drain — just release what opened. */
     private void closeQuietly() {
+        closeFront();
+        closeClientAndVertx();
+    }
+
+    private void closeFront() {
         try {
             if (server != null) {
                 server.close().toCompletionStage().toCompletableFuture()
@@ -336,6 +352,14 @@ public final class MultiAppGateway implements AutoCloseable {
                 | java.util.concurrent.TimeoutException ignored) {
             LOG.debug("Gateway server did not close cleanly", ignored);
         }
+    }
+
+    /**
+     * The outbound client, then the Vert.x instance carrying the event loops. A gateway restart
+     * used to accumulate the client's pool and the server's executor, so closing all of it is
+     * the point.
+     */
+    private void closeClientAndVertx() {
         try {
             if (client != null) {
                 client.close().toCompletionStage().toCompletableFuture()

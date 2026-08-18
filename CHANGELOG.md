@@ -25,6 +25,42 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The host can replace one application's runtime while the stack serves**
+  (docs/stack-architecture.md Decision 29, docs/runtime-replace.md). `MultiAppHost` gained the
+  operation set the deploy machinery drives: `replace` (admission checks re-running the boot
+  guards for the candidate, a ready probe, swap-then-drain), and the canary lifecycle live —
+  `stageCanary`, `setCanaryWeight` (the weight used to be a start-time snapshot, so moving a
+  canary's traffic share required restarting the whole stack), `promoteCanary` (nothing starts:
+  the candidate runtime becomes the stable slot), `discardCanary`. A failed replace is a no-op:
+  everything before the swap can only abandon the candidate, and the serving runtime is
+  untouched. The gateway's relay resolves each member's port, catalogue entry and ingress-strip
+  set per request, and closes the swap race by retrying once — only when no connection to the
+  origin was ever established, because replaying a request the origin may have acted on is a
+  worse defect than the 502 it would save. Nothing drives the operations in production yet; the
+  reconciler and the `deploy` verb arrive in their own slices.
+
+- **A retiring runtime asks its job runs to stop instead of only waiting for them**
+  (docs/runtime-replace.md). At drain start — a replace or the runtime's own shutdown — every
+  execution the process owns gets the cooperative stop request the batch platform already ships:
+  a run between steps stops before the next one, a chunk step stops at its next committed
+  checkpoint with real counts and an exact resume point, a run in its final step completes. The
+  recorded reason names the deploy (or the shutdown), not a phantom operator action. The force
+  timeout stays, unchanged, as the last resort for a run that ignores the flag.
+
+### Fixed
+
+- **Stopping a stack now drains it; it used to hard-kill it** (docs/runtime-replace.md, the
+  stack's own stop). `tesseraql host` registered no shutdown hook — the deployment image's
+  `CMD`, so every container stop cut in-flight work — and even a closed gateway shut its front
+  before the runtimes drained. `host` now registers the hook `dev` always had, and the
+  gateway's close is an ordered drain: readiness flips to 503 while liveness stays 200, every
+  accepted request is served to completion under a bound derived from the members' own declared
+  `tesseraql.shutdown.timeout`s (their maximum — no new knob), and only then does the front
+  close and the runtimes drain under their own bounds. The platform's grace period
+  (`terminationGracePeriodSeconds` and kin) must exceed that derived bound.
+
+### Added
+
 - **The origin root always redirects — to the portal by default, to `root.redirect`'s
   application by configuration** (docs/stack-architecture.md Decision 24, docs/root-portal.md).
   `/` answers 307 (temporary deliberately: a permanent redirect outlives the configuration edit

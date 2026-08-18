@@ -78,6 +78,23 @@ public final class JobExecutor {
     /** How often a running execution reports; see {@link #heartbeatInterval}. */
     private java.time.Duration heartbeatInterval = java.time.Duration.ofSeconds(30);
 
+    /**
+     * The executions this process is running right now — what a drain has to ask to stop.
+     * Tracked here because ownership is a process fact: the repository knows what is RUNNING
+     * cluster-wide, and a drain must stop only its own runs, never a neighbour node's.
+     */
+    private final java.util.Set<String> ownedExecutions = java.util.concurrent.ConcurrentHashMap
+            .newKeySet();
+
+    /**
+     * The executions a drain asked to stop, each with the drain's reason. The cooperative stop
+     * records that reason instead of the operator wording, so a run stopped by a deploy or a
+     * shutdown says so — per execution, because the flag on the row cannot say who set it and
+     * the reader decides the rerun from what the status says happened
+     * (docs/runtime-replace.md, the job drain).
+     */
+    private final Map<String, String> drainRequested = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** How long a run may go unheard from before it stops counting as an overlap. */
     private java.time.Duration livenessWindow = java.time.Duration.ofMinutes(5);
     private final ObjectMapper mapper = new ObjectMapper();
@@ -159,6 +176,29 @@ public final class JobExecutor {
             this.livenessWindow = window;
         }
         return this;
+    }
+
+    /**
+     * Asks every run this process owns to stop cooperatively, recording {@code reason} on the
+     * stopped executions — the drain's first act (docs/runtime-replace.md): a run between steps
+     * stops before the next one, a chunk step stops at its next committed checkpoint with real
+     * counts and an exact resume point, and a run in its final step simply completes. The rerun
+     * goes through the existing operator path, deliberately not automatic. Best-effort per run:
+     * a request that cannot be written must not stop the drain from asking the rest.
+     */
+    public void requestDrainStop(String reason) {
+        for (String executionId : java.util.List.copyOf(ownedExecutions)) {
+            try {
+                drainRequested.put(executionId, reason);
+                if (repository.requestCancel(executionId)) {
+                    LOG.info("Requested a cooperative stop of execution {}: {}", executionId,
+                            reason);
+                }
+            } catch (RuntimeException ex) {
+                LOG.warn("Could not request a cooperative stop of execution {}: {}", executionId,
+                        ex.getMessage());
+            }
+        }
     }
 
     /** Stops the heartbeat thread; the runtime calls this on shutdown. */
@@ -325,6 +365,7 @@ public final class JobExecutor {
         }
         String executionId = repository.startExecution(job.id(), appName, triggerType,
                 triggeredBy, businessDate, paramsJson(jobParams));
+        ownedExecutions.add(executionId);
         Map<String, Object> stepResults = new LinkedHashMap<>();
         Map<String, Object> context = new HashMap<>();
         // One vocabulary across routes and jobs (docs/unified-sources.md decision 11): declared
@@ -389,9 +430,13 @@ public final class JobExecutor {
                 }
             }
             if (stopped) {
+                // The drain's wording when a drain asked; the operator's when an operator did —
+                // what the status row says happened is what the reader decides the rerun from.
+                String reason = drainRequested.get(executionId);
                 repository.stopExecution(executionId,
-                        "stopped by operator (cooperative stop)");
-                LOG.info("Job {} execution {} stopped by operator", job.id(), executionId);
+                        reason != null ? reason : "stopped by operator (cooperative stop)");
+                LOG.info("Job {} execution {} stopped: {}", job.id(), executionId,
+                        reason != null ? reason : "by operator");
                 return metered(repository.findExecution(executionId).orElseThrow());
             }
             repository.completeExecution(executionId);
@@ -402,6 +447,8 @@ public final class JobExecutor {
             LOG.warn("Job {} execution {} failed: {}", job.id(), executionId, ex.getMessage());
             notifyFailure(job.id(), executionId, appName, ex.getMessage());
         } finally {
+            ownedExecutions.remove(executionId);
+            drainRequested.remove(executionId);
             pulse.cancel(false);
             jobSpan.end();
         }

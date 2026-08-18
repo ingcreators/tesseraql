@@ -524,6 +524,114 @@ class StackRelayTest {
 
     // ---------------------------------------------------------------- machinery
 
+    /**
+     * The swap race, closed rather than tolerated (docs/runtime-replace.md): a request that
+     * resolved a runtime's port just before its slot swapped connects after that runtime's
+     * consumer suspended — connection refused, on a path where every other step was built not to
+     * drop anything. The relay re-resolves the route and retries once, so the request lands on
+     * the runtime now serving instead of surfacing a 502 the deploy minted.
+     */
+    @Test
+    void aSwapRaceRetriesOnceWhenTheConnectionWasNeverEstablished() throws Exception {
+        int retiredPort = freePort();
+        java.util.concurrent.atomic.AtomicInteger resolutions = new java.util.concurrent.atomic.AtomicInteger();
+        // The first resolutions answer the retired port — the early check and the first send —
+        // and the re-resolution after the refused connect answers the live one, which is
+        // exactly the race's shape: resolved before the swap, connected after.
+        StackRelay relay = new StackRelay(client, CATALOGUE,
+                appId -> resolutions.incrementAndGet() <= 2 ? retiredPort : originPort);
+        HttpServer raceFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        raceFront.requestHandler(relay::handle);
+        int frontPort = await(raceFront.listen()).actualPort();
+        try {
+            HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
+                    "http://localhost:" + frontPort + "/" + APP + "/hello")));
+
+            assertThat(response.statusCode())
+                    .as("the retry re-resolves and answers, not the 502").isEqualTo(200);
+            assertThat(response.body()).isEqualTo("ok");
+            assertThat(resolutions.get())
+                    .as("early check, the refused attempt, and exactly one retry").isEqualTo(3);
+        } finally {
+            await(raceFront.close());
+        }
+    }
+
+    /**
+     * The retry's boundary, from the same design paragraph: a connection that died mid-flight is
+     * <em>not</em> retried, because a byte may have reached the origin and replaying a request it
+     * may have acted on is a worse defect than the 502 it would save.
+     */
+    @Test
+    void aConnectionThatDiesMidFlightIsNotRetried() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger connections = new java.util.concurrent.atomic.AtomicInteger();
+        io.vertx.core.net.NetServer breaker = vertx.createNetServer();
+        breaker.connectHandler(socket -> {
+            connections.incrementAndGet();
+            // Accept the connection, read the request's first bytes, hang up before answering:
+            // established, then dead — the case that must surface rather than replay.
+            socket.handler(bytes -> socket.close());
+        });
+        int breakerPort = await(breaker.listen(0, "localhost")).actualPort();
+        StackRelay relay = new StackRelay(client, CATALOGUE, appId -> breakerPort);
+        HttpServer breakerFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        breakerFront.requestHandler(relay::handle);
+        int frontPort = await(breakerFront.listen()).actualPort();
+        try {
+            HttpResponse<String> response = send(HttpRequest.newBuilder(URI.create(
+                    "http://localhost:" + frontPort + "/" + APP + "/hello")));
+
+            assertThat(response.statusCode()).isEqualTo(502);
+            assertThat(connections.get()).as("one attempt: mid-flight death never replays")
+                    .isEqualTo(1);
+        } finally {
+            await(breakerFront.close());
+            await(breaker.close());
+        }
+    }
+
+    /**
+     * The strip set is live (docs/runtime-replace.md, relay upkeep): a replaced version that
+     * starts declaring a forwarded header gets it stripped from the swap onwards, with no
+     * gateway restart — the lookup is consulted per request.
+     */
+    @Test
+    void aStripSetChangeTakesEffectWithoutARestart() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<Set<String>> strip = new java.util.concurrent.atomic.AtomicReference<>(
+                Set.of());
+        // 10.0.0.0/8 names an edge this loopback client is not, so the strip applies to it.
+        StackRelay relay = new StackRelay(client, Set.of(APP), CATALOGUE::get,
+                appId -> strip.get(), TrustedProxies.parse("10.0.0.0/8"),
+                appId -> originPort, null, null);
+        HttpServer liveFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        liveFront.requestHandler(relay::handle);
+        String liveBase = "http://localhost:" + await(liveFront.listen()).actualPort()
+                + "/" + APP;
+        try {
+            send(HttpRequest.newBuilder(URI.create(liveBase + "/hello"))
+                    .header("X-Client-Cert", "before-the-swap"));
+            assertThat(lastRequestHeaders)
+                    .as("the serving version declares no forwarded header, nothing is stripped")
+                    .containsEntry("x-client-cert", "before-the-swap");
+
+            strip.set(Set.of("x-client-cert"));
+            send(HttpRequest.newBuilder(URI.create(liveBase + "/hello"))
+                    .header("X-Client-Cert", "after-the-swap"));
+            assertThat(lastRequestHeaders)
+                    .as("the replaced version's declared header is stripped from the swap on")
+                    .doesNotContainKey("x-client-cert");
+        } finally {
+            await(liveFront.close());
+        }
+    }
+
+    /** A port nothing listens on: bound to learn the number, closed so a connect is refused. */
+    private static int freePort() throws java.io.IOException {
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
     private static <T> T await(io.vertx.core.Future<T> future) throws Exception {
         return future.toCompletionStage().toCompletableFuture().get(30, TimeUnit.SECONDS);
     }
