@@ -247,4 +247,6 @@ export const EXCLUDED = [
   'root-portal.md',
   // How per-application modules reach each hosted runtime, 2026-08-18.
   'module-scope.md',
+  // How deploying one application replaces its runtime without restarting the stack, 2026-08-18.
+  'runtime-replace.md',
 ];

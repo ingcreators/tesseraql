@@ -1447,6 +1447,12 @@ different layer.
 requests on the retiring runtime. The mechanism candidates all sit behind the same host operation,
 so the trigger can be chosen last.
 
+**Implementation design: [runtime-replace.md](runtime-replace.md)** (2026-08-18) — replace is
+the canary lifecycle with the ramp collapsed, the trigger is the install root's state with the
+host reconciling to it, and a `deploy` verb is the operator's pen; the slices, guards and tests,
+and the open questions (trigger, drain policy, verb shape, ready probe) each carry a
+recommendation there.
+
 ## The scope ledger — what an application owns, what the stack owns
 
 Asked in review, after the decisions accumulated: what, in the end, is application-scoped and
