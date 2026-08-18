@@ -121,87 +121,98 @@ checks atoms, never roles.** Roles are the deployment's vocabulary (a department
 duty); atoms are the framework's. Studio's `editRoles` violates this today — a role
 allow-list read by a framework surface — and retires with slice 8.
 
-**The atom grammar: exactly three dot-separated segments, `<family>.<verb>.<name|*>`, and
-the name can no longer contain dots.** `tesseraql.app.name` gains one character to its fence:
-TQL-YAML-1405 also refuses interior `.` (non-ASCII stays legal; the address, outbox claims
-and history-table guard are indifferent). With names dot-free, an atom parses by splitting
-on dots into exactly `[family, verb, name]` — no reserved `.app.` marker, no prefix
-gymnastics, no ambiguity between a name and a name-plus-action. Store-wide atoms (no
-application axis) are exact strings and are simply not in the per-application families.
+**The atom grammar: the framework's mark, then family, verb and name —
+`tql.<family>.<verb>.<name|*>` — and the name can no longer contain dots.**
+`tesseraql.app.name` gains one character to its fence: TQL-YAML-1405 also refuses interior
+`.` (non-ASCII stays legal; the address, outbox claims and history-table guard are
+indifferent). With names dot-free, an atom parses by splitting on dots — `[tql, family,
+verb, name]` — with no ambiguity between a name and a name-plus-action. The leading `tql.`
+is the same move the URL space makes with `/_tesseraql/` (settled in review, correcting a
+draft that reserved the family words instead): **the framework marks its own space rather
+than squatting on the user's** — `tql` is already the framework's short mark (the CLI
+alias), one word the name grammar reserves once, and every future family lands inside the
+mark without touching the name rules again. Store-wide atoms (no application axis) are
+exact strings under the same mark.
 
 The atoms, one row per authority, mapped to the personas:
 
 | Atom | Sentence | Persona | Checked by |
 | --- | --- | --- | --- |
-| `app.use.<name>` | may use this application | business user | the portal's tiles, and the member's fence (below) |
-| `ops.view.<name>` | may see this application's operational data | operator | the shell's switcher and pages, re-checked by the member |
-| `ops.run.<name>` | may act on it: run/cancel/rerun jobs, redeliver outbox and dead-lettered events, cancel transfers | operator | the member, on every action |
-| `app.deploy.<name>` | may deploy this application | operator / CD pipeline | the deploy endpoint, against the package's declared name |
-| `studio.edit.<name>` | may edit this application in Studio | developer | slice 8's shell and delegation (reserved here) |
-| `iam.admin.view` / `iam.admin.write` | may see / change the identity store | identity admin | IAM Admin (store-wide: the store has no application axis) |
+| `tql.app.use.<name>` | may use this application | business user | the portal's tiles, and the member's fence (below) |
+| `tql.ops.view.<name>` | may see this application's operational data | operator | the shell's switcher and pages, re-checked by the member |
+| `tql.ops.run.<name>` | may act on it: run/cancel/rerun jobs, redeliver outbox and dead-lettered events, cancel transfers | operator | the member, on every action |
+| `tql.app.deploy.<name>` | may deploy this application | operator / CD pipeline | the deploy endpoint, against the package's declared name |
+| `tql.studio.edit.<name>` | may edit this application in Studio | developer | slice 8's shell and delegation (reserved here) |
+| `tql.iam.admin.view` / `tql.iam.admin.write` | may see / change the identity store | identity admin | IAM Admin (store-wide: the store has no application axis) |
 
-The wildcard is a terminal `*` (`ops.view.*`, `app.deploy.*`). What each persona's setup
+The wildcard is a terminal `*` (`tql.ops.view.*`, `tql.app.deploy.*`). What each persona's setup
 looks like, so the model is judged by its sentences:
 
 - **A business user** holds roles their deployment defines — `経理部` bundling
-  `app.use.受注管理` and the *application's own* codes (`tesseraql.security.policies`
+  `tql.app.use.受注管理` and the *application's own* codes (`tesseraql.security.policies`
   vocabulary, free strings the framework never parses, checked by the application's routes
   as today). The portal shows the tiles their grants and tenant allow; an application they
   cannot use refuses them at its fence, not after four clicks.
-- **A developer** holds `studio.edit.<name>` for the applications they own — per
+- **A developer** holds `tql.studio.edit.<name>` for the applications they own — per
   application, which the global `editRoles` never was. `dev`'s bootstrap admin bundles the
   wildcards so the development loop stays frictionless; production seeds narrow bundles.
-- **An operator** holds `ops.view.*` and the `ops.run.<name>`/`app.deploy.<name>` set their
+- **An operator** holds `tql.ops.view.*` and the `tql.ops.run.<name>`/`tql.app.deploy.<name>` set their
   duty actually needs — view broadly, act narrowly, the asymmetry the retired model could
   not express. The on-call reader is not the deploy pen.
 
 **What retires, all pre-1.0 clean breaks:** `ops.batch.view` and `ops.batch.run` (the verbs
-move into `ops.view.<name>`/`ops.run.<name>`); the `ops.app.<name>` *string* (its meaning
-lives on as `ops.view.<name>`); Studio's `editRoles` (with slice 8); and the interior-dot
+move into `tql.ops.view.<name>`/`tql.ops.run.<name>`); the `ops.app.<name>` *string* (its meaning
+lives on as `tql.ops.view.<name>`); Studio's `editRoles` (with slice 8); and the interior-dot
 freedom in application names. Eleven console route policies, the identity-pack seeds, the
 lint and boot name rules and the docs move together, with changelog lines and no migration
 steps. Stack-wide vitals (JVM pinning, the gateway's health) render on the shell's overview
-for any holder of any `ops.view` grant — they describe the shared substrate the caller's
+for any holder of any `tql.ops.view` grant — they describe the shared substrate the caller's
 application runs on; no `.stack.` axis is invented for one consumer.
 
-**`app.use.<name>` is enforced at two points, and the second is the real one.** The portal's
+**`tql.app.use.<name>` is enforced at two points, and the second is the real one.** The portal's
 tiles filter by it (beside tenant entitlement — the two axes are different questions: the
 catalogue says which *tenants* an application serves, the grant says which *people* use it).
 And the member's own security layer refuses an authenticated principal without the grant,
 fence-wide, before any route — so reach is a property of the principal, not of knowing a
 URL. Routes declaring `auth: none` are untouched (a public page is public); service callers
 (JWT, API keys) pass the same check, because a principal is a principal. Deny-by-default is
-the recommendation, with its cost stated plainly: adopting stacks must seed `app.use`
-grants (or an `app.use.*` baseline role) before their users sign in — open question 6.
+the recommendation, with its cost stated plainly: adopting stacks must seed `tql.app.use`
+grants (or a `tql.app.use.*` baseline role) before their users sign in — open question 6.
 
-**The namespace fence is structural, not advisory — tightened in review.** Framework atoms
-are the table above and nothing else; the four families (`app`, `ops`, `studio`, `iam`)
-hold only what the table shows, and new verbs arrive only with the surface that checks
-them. The same store also holds the applications' own policy codes and the deployment's
-roles, and an earlier draft guarded the boundary with a lint *warning*; review asked for
-better, and the dot-free grammar makes better cheap:
+**The namespace fence is structural, not advisory — tightened twice in review.** Framework
+atoms are the table above and nothing else; the families hold only what the table shows,
+and new verbs arrive only with the surface that checks them. The same store also holds the
+applications' own policy codes and the deployment's roles. An earlier draft guarded the
+boundary with a lint *warning*; the next draft reserved the family words as forbidden
+application names; review caught that the second contradicts the URL fence's own
+philosophy — the framework marks its own space, it does not enumerate words users may not
+have — and the `tql.` mark is that philosophy applied to atoms:
 
-- **The family words are reserved application names.** TQL-YAML-1405's reserved list
-  (`assets` today) gains `app`, `ops`, `studio` and `iam`. With names dot-free, a
-  framework atom's first segment is a family word and an application's code's first
-  segment is its name — and a name that cannot *be* a family word makes the two
-  vocabularies disjoint by construction, not by review.
+- **`tql` is the one reserved application name.** TQL-YAML-1405's reserved list (`assets`
+  today) gains exactly `tql`, once, forever — every framework atom lives under the mark,
+  and a future family is a new second segment inside it, never a new reservation. An
+  application named `ops` or `studio` stays legal, exactly as `/ops/...` is a legal
+  application address beside `/_tesseraql/...`.
 - **An application's own permission codes must begin with its own name** — `orders.approve`,
   not `approve` — enforced at lint and boot like the name rule itself. Explicit, not
   auto-prefixed: silently rewriting codes would make the store show strings the author
-  never wrote and break every grep. A concept two applications share (one approval
+  never wrote and break every grep. This is what keeps *applications* disjoint from each
+  other (two apps both inventing `approve` would silently share one grant); disjointness
+  from the framework is the mark's job. A concept two applications share (one approval
   authority across interlocking apps) is expressed where sharing lives — a *role* bundling
   `orders.approve` and `billing.approve` — which is Decision 26's rule (declarations never
   share) applied to authorization.
 - The system applications are framework surfaces and speak framework atoms; the rule binds
   user applications' declared policies.
 
-**Rejected: a `_tesseraql.` prefix on framework atoms** (proposed in review as an
-alternative marking). The URL fence needs `_tesseraql` because URL space is open-ended and
-user-authored; the atom families are a closed, framework-controlled set, so an enumerated
-reservation buys the same disjointness without every grant reading
-`_tesseraql.ops.view.orders` — and without churning every seed and doc for a marker the
-reserved names already provide.
+**Rejected: reserving the family words as application names** (this document's second
+draft) — it inverts the fence's burden onto the user's namespace and grows by one reserved
+word per future family; caught in review against the `/_tesseraql/` precedent.
+**Rejected: `_tesseraql.` as the atom mark** — the right shape, the wrong length; `tql` is
+already the framework's short mark (the CLI alias), and a grant reads
+`tql.ops.view.orders`, not `_tesseraql.ops.view.orders`. (A leading underscore also sits
+oddly in a permission list UI; the URL space keeps `_tesseraql` because it is already
+shipped there and segment-visibility rules differ.)
 
 **Rejected: the `.app`-marker draft** (`<family>.app.<name>` with dotted names kept legal) —
 this document's own first answer, superseded in review by the simpler question "is the dot
@@ -244,7 +255,7 @@ host assigned it, and there the surfaces have moved to the origin.
 
 **The switcher is the grant, applied to the member list.** The shell lists the stack's
 members (the surface runtime already holds `stackMembers`) filtered by the caller's
-`ops.view.<name>`/`ops.view.*` atoms — the filter `OpsScope` runs today, applied to
+`tql.ops.view.<name>`/`tql.ops.view.*` atoms — the filter `OpsScope` runs today, applied to
 membership instead of rows. During a canary, a staged member shows **two entries** —
 `orders` and `orders (canary)` — because runtime-local data (traces, lanes, slow SQL) is
 exactly what an operator watches a ramp for, and neither a weighted roll nor a stable pin
@@ -292,7 +303,7 @@ arrives, which is also `runtime-footprint.md`'s direction for the deploy image.
 of `iam-admin` were five doors to one store, each under a different member's prefix. The
 surface runtime mounts it (the portal config's disable is deleted), it answers at the origin
 `/_tesseraql/admin/…` — where `shell.html`'s system-nav already points, base-relative — and
-hosted members stop mounting it. `iam.admin.view`/`iam.admin.write` are unchanged.
+hosted members stop mounting it. The pair moves under the mark — `tql.iam.admin.view`/`tql.iam.admin.write` — with its semantics unchanged.
 
 **The per-member `auth-ui`/`account` copies retire, and the bounce goes to the origin.**
 Decision 24 put sign-in and the account surface at the origin; the member copies stayed as
@@ -307,8 +318,8 @@ the correction above) keeps the mounts, because it has no origin to bounce to. `
 through the gateway, so development gets the origin bounce too — the shape development and
 production share is the point of the whole campaign.
 
-**The `app.use` fence lands here too**, because it is the same member security layer: after
-authentication, before any route, an authenticated principal without `app.use.<member>` is
+**The `tql.app.use` fence lands here too**, because it is the same member security layer: after
+authentication, before any route, an authenticated principal without `tql.app.use.<member>` is
 refused — the business-user half of structural decision 1, enforced where the application's
 own authentication already runs. The portal's tile filter reads the same atom, so what a
 user sees and what they can reach are one answer.
@@ -321,13 +332,13 @@ member itself once the system apps stop mounting, which is what that set always 
 runtime-replace.md closed its open question 5 as "deferred to the grants work" and left a
 target-shape sketch; this design is that work, and the sketch lands as the third slice:
 
-- **The atom is `app.deploy.<name>`** (structural decision 1) in the shared store, seeded
+- **The atom is `tql.app.deploy.<name>`** (structural decision 1) in the shared store, seeded
   like every other permission code. (runtime-replace.md sketched it as "`ops.app.<name>`
   gaining a *deploy* action" — honoured in substance, renamed by the model: deploying is an
   authority over the application as a unit, not a row-scope modifier.)
 - **The surface is the stack surface runtime**: an authenticated endpoint that receives a
   `.tqlapp` (upload rides the existing file-transfer machinery), checks the caller's
-  `app.deploy.<name>` against the **package's declared name**, runs `AppUpgrader.preflight`,
+  `tql.app.deploy.<name>` against the **package's declared name**, runs `AppUpgrader.preflight`,
   and writes the same intent files the reconciler already consumes. The reconciler stays the
   one mechanism; the endpoint is a pen with authentication, exactly as the file protocol's
   design promised. Refusals surface as the endpoint's response *and* are not written — a
@@ -351,14 +362,14 @@ Three PRs, each independently green and observable:
 
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
-| 1 | The model and the ops shell | The atom grammar in `OpsScope` (families/verbs); TQL-YAML-1405 gains the interior-dot refusal and the reserved family words (lint + boot + docs); application policy codes must carry the application's name as their first segment (lint + boot); `ops.batch.view`/`ops.batch.run`/`ops.app.<name>` retire into `ops.view.<name>`/`ops.run.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher by `ops.view`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one atom grammar, disjoint vocabularies; `hosting.md`'s per-app-console paragraph replaced |
-| 2 | The identity remainder and the `app.use` fence | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the member fence refuses authenticated principals without `app.use.<member>`; the portal's tiles filter by the same atom beside tenant entitlement; seeds gain the baseline; the unhosted boot (tests, embedding) unchanged | One sign-in door, one admin door; who may use an application is a grant, not a URL |
-| 3 | The deploy surface | `app.deploy.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
+| 1 | The model and the ops shell | The atom grammar in `OpsScope` (families/verbs); TQL-YAML-1405 gains the interior-dot refusal and the reserved name `tql` (lint + boot + docs); application policy codes must carry the application's name as their first segment (lint + boot); `ops.batch.view`/`ops.batch.run`/`ops.app.<name>` retire into `tql.ops.view.<name>`/`tql.ops.run.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher by `tql.ops.view`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one atom grammar, disjoint vocabularies; `hosting.md`'s per-app-console paragraph replaced |
+| 2 | The identity remainder and the `tql.app.use` fence | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the member fence refuses authenticated principals without `tql.app.use.<member>`; the portal's tiles filter by the same atom beside tenant entitlement; seeds gain the baseline; the unhosted boot (tests, embedding) unchanged | One sign-in door, one admin door; who may use an application is a grant, not a URL |
+| 3 | The deploy surface | `tql.app.deploy.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
 
 Slice 1 first (it lands the model and the delegation pattern). Slice 2 needs 1's grammar
 only; slice 3 needs 1's grammar and the surface runtime, nothing from 2. **Slice 8 — the
 Studio shell — gets its own design after slice 1 ships**, on the delegation pattern and the
-`studio.edit.<name>` atom this document fixes; `runtime-footprint.md`'s payoff (the test
+`tql.studio.edit.<name>` atom this document fixes; `runtime-footprint.md`'s payoff (the test
 framework, GreenMail and JUnit leaving every deployment) arrives with that extraction, and
 is deliberately not promised here.
 
@@ -370,8 +381,8 @@ is deliberately not promised here.
 - **Authorization never moves to the shell.** Every delegated call carries the caller's own
   credentials and the member re-checks the caller's atoms; a shell bug can widen
   what is *listed*, never what is *answered*. Pinned by a test, not by review.
-- **The switcher and the portal are deny-by-default**: no `ops.view` atoms → an empty
-  switcher; no `app.use` atoms → no tiles and no fence crossing.
+- **The switcher and the portal are deny-by-default**: no `tql.ops.view` atoms → an empty
+  switcher; no `tql.app.use` atoms → no tiles and no fence crossing.
 - **The deploy endpoint checks the atom against the package's declared name** — not a
   request parameter — so a token scoped to `orders` cannot deploy `billing` by renaming an
   upload field. A refused deploy writes no intent.
@@ -388,13 +399,13 @@ is deliberately not promised here.
 
 **Slice 1**
 - The headline IT, in the `MultiAppGatewayIntegrationTest` arrangement: two members, a
-  principal granted `ops.view.a` only — the switcher lists `a`, member `b`'s pages answer
+  principal granted `tql.ops.view.a` only — the switcher lists `a`, member `b`'s pages answer
   404-shaped refusals through the shell exactly as `OpsActions.notFound` answers today, and
   the same principal's delegated `a` pages show `a`'s jobs.
 - Authorization stays at the member: a delegated call forged with a different application's
   name reaches the member and is refused by the member's own scope check (assert the
   member's refusal, not the shell's).
-- The verbs are per application now: a principal with `ops.view.a` + `ops.run.b` sees `a`
+- The verbs are per application now: a principal with `tql.ops.view.a` + `tql.ops.run.b` sees `a`
   and cannot act on it, can act on `b` — the asymmetry the retired two-axis model could
   not express, pinned as its regression test.
 - Canary entry: stage a canary (the #862 operations), the switcher gains the second entry,
@@ -408,30 +419,30 @@ is deliberately not promised here.
 - SSE through the delegation: the console's live page streams frame-by-frame through shell +
   relay (the `StackRelayTest` timing shape, one more hop).
 - The name rule: `tesseraql.app.name: orders.eu` is refused at lint and at boot naming the
-  atom grammar; `tesseraql.app.name: ops` is refused as a reserved family word; `受注管理`
-  stays legal.
+  atom grammar; `tesseraql.app.name: tql` is refused as the reserved mark, while `ops` and `studio` stay legal names; `受注管理`
+  stays legal too.
 - The code rule: an application policy referencing a permission code that does not start
   with the application's own name is refused at lint and boot; `orders.approve` passes,
-  `approve` and `ops.view.orders` are refused with the fence named.
+  `approve` and `tql.ops.view.orders` are refused with the fence named.
 
 **Slice 2**
 - The bounce: an unauthenticated browser GET on `/<member>/page` 302s to
   `/_tesseraql/login?redirect=%2F<member>%2Fpage`; signing in at the origin returns to the
   member page; the member serves no `/_tesseraql/login` of its own anymore.
-- The fence: an authenticated principal without `app.use.<member>` is refused by the member
+- The fence: an authenticated principal without `tql.app.use.<member>` is refused by the member
   on every route; with the grant, served; a route declaring `auth: none` answers either way;
   a JWT service caller meets the same fence.
-- The portal: tiles = tenant entitlement ∧ `app.use` atoms; a user with no `app.use` grants
+- The portal: tiles = tenant entitlement ∧ `tql.app.use` atoms; a user with no `tql.app.use` grants
   sees an empty portal, not every entitled member.
-- IAM Admin answers at the origin behind `iam.admin.view`; no member serves
+- IAM Admin answers at the origin behind `tql.iam.admin.view`; no member serves
   `/_tesseraql/admin/…`.
 - A one-member stack signs in at the origin like any other; the unhosted boot keeps all
   five mounts and the base-relative bounce (the existing direct-runtime tests pin it).
-- `servedApps` shrinkage: `ops.view.<member>` sees the member's rows and nothing about the
+- `servedApps` shrinkage: `tql.ops.view.<member>` sees the member's rows and nothing about the
   system apps.
 
 **Slice 3**
-- The endpoint: a bearer with `app.deploy.orders` deploys an `orders` package (intent files
+- The endpoint: a bearer with `tql.app.deploy.orders` deploys an `orders` package (intent files
   land exactly as `tesseraql deploy` writes them; the reconciler IT arrangement picks them
   up); the same bearer refused for a `billing` package; no atom → 403; a preflight
   refusal (not newer) surfaces and writes nothing.
@@ -444,16 +455,16 @@ is deliberately not promised here.
 With the code PRs, not before: `hosting.md` (the per-app-console paragraph at
 `hosting.md:287-297` is replaced by the shell + switcher + atom sentences; the deploy
 section gains the endpoint and `--url`), `ops-console.md` (the shell, the switcher, the
-canary entry, the permission table moving to `ops.view`/`ops.run`),
+canary entry, the permission table moving to `tql.ops.view`/`tql.ops.run`),
 `authentication.md`/`account.md` where the login copies are described,
 `deployment.md` (the `--admin-permissions` examples move to the atoms:
-`ops.view.*`, `ops.run.*`, `app.deploy.*`, `app.use.*`;
+`tql.ops.view.*`, `tql.ops.run.*`, `tql.app.deploy.*`, `tql.app.use.*`;
 `IdentitySchemaMojo`'s javadoc example is corrected in passing — it spells
 `iam:admin:write` with colons while the iam-admin routes check `iam.admin.write`, so an
 operator following it seeds a permission nothing matches),
 `identity.md`/`iam-admin.md` wherever roles-versus-permissions is taught (the personas and
 the canonical bundles belong there), `root-portal.md` (its deliberately-not list shrinks as
-items land, and its tile-filter sentence gains the `app.use` axis),
+items land, and its tile-filter sentence gains the `tql.app.use` axis),
 `app-isolation-model.md` (Decision 4's reversal note points at the shipped shell),
 TQL-YAML-1405's reference row (the widened rule), `reference-cli.md` regeneration
 (`deploy --url`), the error reference for any new codes the slices mint, `CHANGELOG.md` per
@@ -464,7 +475,7 @@ arrival note, and its `ops.app.<name>`-gains-a-deploy-action sketch the rename n
 ## Deliberately not in this design
 
 - **The Studio shell (slice 8).** Its own design, after slice 1: the delegation pattern and
-  `studio.edit.<name>` are fixed here; everything else — preview, edit, apply, the test
+  `tql.studio.edit.<name>` are fixed here; everything else — preview, edit, apply, the test
   runner, the extraction that fixes `runtime-footprint.md`'s dependency complaint — is that
   document's scope.
 - **A permission registry.** Atoms stay strings in the store; a catalogue of valid codes
@@ -483,12 +494,14 @@ arrival note, and its `ops.app.<name>`-gains-a-deploy-action sketch the rename n
 
 Each gated on the slice it blocks, with a recommendation:
 
-1. **The atom grammar and the name rule** — *gates slice 1.* Three-segment atoms over
-   dot-free names, versus the `.app`-marker draft that kept dotted names legal.
-   Recommended: the three-segment grammar — the dot freedom buys nothing measured, and
-   withdrawing it deletes a reserved marker, a fence argument and an ambiguity in one move.
-   (Direction set in review; recorded as a question so the reversal of the shipped 1405
-   javadoc sentence is an explicit decision.)
+1. **The atom grammar and the name rules** — *gates slice 1.* Marked atoms
+   (`tql.<family>.<verb>.<name|*>`) over dot-free names with `tql` as the one reserved
+   name, versus the two earlier drafts: the `.app`-marker grammar that kept dotted names
+   legal, and the family-word reservation the `tql.` mark replaced. Recommended: the
+   marked grammar — the dot freedom buys nothing measured, the mark follows the
+   `/_tesseraql/` philosophy (the framework marks its own space), and future families
+   never touch the name rules again. (Direction set in review twice; recorded as a
+   question so the reversal of the shipped 1405 javadoc sentence is an explicit decision.)
 2. **What a canary shows in the switcher** — *gates slice 1.* Recommended: a second entry
    for the staged slot (`orders (canary)`), because runtime-local data is what an operator
    watches a ramp for; the alternative (delegate through the weighted roll the front uses)
@@ -505,12 +518,12 @@ Each gated on the slice it blocks, with a recommendation:
 5. **Does the deploy endpoint land with the ops page or before it?** — *gates slice 3's
    internal ordering only.* Recommended: endpoint first, page with or after it; the
    endpoint is the contract, the page is chrome.
-6. **`app.use` enforcement: the full member fence, or the portal's tiles only?** — *gates
+6. **`tql.app.use` enforcement: the full member fence, or the portal's tiles only?** — *gates
    slice 2.* Recommended: the full fence, deny-by-default for every authenticated
    principal (browser and service alike; `auth: none` routes untouched) — reach as a
    grant is the business-user half of the model, and a tiles-only filter would be
    decoration over an open door. The cost is stated in structural decision 1: adopting
-   stacks seed `app.use` grants or an `app.use.*` baseline role before users sign in;
+   stacks seed `tql.app.use` grants or a `tql.app.use.*` baseline role before users sign in;
    `dev`'s bootstrap admin carries the wildcard.
 7. **Are the canonical role bundles shipped as seeds, or documented only?** — *gates
    nothing; shapes the identity pack.* Recommended: documented only (the deliberately-not
