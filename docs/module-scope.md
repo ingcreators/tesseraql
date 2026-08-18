@@ -156,6 +156,20 @@ owner:
   `AppSourceProvider`, `AttachmentScanner`, `RuntimeExtension` — deliberately stay on the base
   classpath and the plugin mechanism (open question 1).
 
+One SPI hides *inside* a module and needs a one-line companion fix, found in review: `PdfEngine`.
+`tesseraql-pdf` provides two providers — `PdfFileCodec` (a `FileCodec`) and `OpenHtmlPdfEngine`
+(a `PdfEngine`, selected per deployment by the `tesseraql.pdf.engine` system property) — and the
+engine lookup happens from within the codec (`PdfFileCodec.java:99` → `PdfEngines.selected()`)
+via `ServiceLoader.load(PdfEngine.class)` with no explicit loader, i.e. the TCCL. Today `dev`'s
+union TCCL makes that resolve by accident; delete the TCCL mutation and a module-loaded
+`PdfFileCodec` can no longer see the engine sitting in its own jar — PDF export would fail with
+"No pdf engine 'openhtml'". The fix is self-reference, not a wider SPI list:
+`PdfEngines.selected()` resolves against its own defining loader
+(`ServiceLoader.load(PdfEngine.class, PdfEngines.class.getClassLoader())`), which *is* the
+application's module loader when the jar arrived as a module and the base classpath when it did
+not. Slice 2 carries it; the engine-selection property stays process-global (a packaging call, as
+its javadoc says).
+
 **The runtime reads `work/modules`; it never resolves.** Resolution reaches Maven repositories,
 and the split follows the network assumption, as Decision 28's deployment note states:
 
@@ -230,7 +244,7 @@ Four PRs, each independently green and observable:
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
 | 1 | The registry becomes a value | `ExpressionFunctions` instance-ification + retained process default; `parse(String, ExpressionFunctions)`; `Expr.Call` capture; `Sql2WayParser` threading; `SqlResources` pinned to `builtInsOnly()`; delegating overloads on `ValidationRules`/`DecisionTables` | Behaviour identical everywhere; the seam exists; `evalCustom`'s "no longer installed" path deleted |
-| 2 | The runtime owns its modules | `AppModules` + close ordering; `FUNCTIONS_BEAN` + `TesseraqlSqlProducer` lookup; `RouteCompiler.functions(...)` threading through the binding processors; codec discovery takes the loader; `dev` drops the union/TCCL; `DevMode` carries `--modules`; `host` gains TQL-APP-4216/4217 | Each hosted runtime parses and evaluates with its own functions; `host` runs modules for the first time, or refuses loudly |
+| 2 | The runtime owns its modules | `AppModules` + close ordering; `FUNCTIONS_BEAN` + `TesseraqlSqlProducer` lookup; `RouteCompiler.functions(...)` threading through the binding processors; codec discovery takes the loader; `PdfEngines` resolves against its own defining loader; `dev` drops the union/TCCL; `DevMode` carries `--modules`; `host` gains TQL-APP-4216/4217 | Each hosted runtime parses and evaluates with its own functions; `host` runs modules for the first time, or refuses loudly |
 | 3 | Drivers bind at the pool | `DriverBackedDataSource`; `DataSources`/`TenantDataSources` accept the loader; DuckDB pool path; stack pools explicitly unchanged | Two applications, two driver versions, no `DriverManager` arbitration |
 | 4 | MCP per-application context | Per-app loader+registry in `McpDevTools`; the `AppLinter`/`AppTestRunner`/`StudioService` registry parameter; union call + "interim" comments deleted; `schema_introspect`/`ops_status` on the per-app driver path | Every MCP tool answers from the named application's modules, exactly as `dev` serves it |
 
@@ -289,6 +303,10 @@ Per slice, naming the existing files they extend:
   `URLClassLoader.close` observability or a seam on `AppModules`).
 - `dev`: the existing ci dist smoke already boots `dev --stack examples`; no example declares
   modules, so behaviour is unchanged there by construction.
+- The PDF self-reference: with `tesseraql-pdf` on a member's module path and the TCCL left
+  untouched, a PDF export renders — the engine resolves from the codec's own jar (the runtime
+  module already proves codec `ServiceLoader` discovery with test-scoped `tesseraql-pdf`/`-excel`;
+  the case extends that arrangement).
 
 **Slice 3**
 - `DataSourcesTest`: a fixture jar with a stub `Driver` accepting a fake URL scheme — the pool
@@ -335,9 +353,10 @@ Each gated on the slice it blocks, with a recommendation:
 
 1. **The module SPI surface** — *gates slice 2.* Which `ServiceLoader` SPIs does the per-runtime
    loader feed? Recommended: exactly the three modules are documented to provide —
-   `ExpressionFunction`, `FileCodec`, `java.sql.Driver`. Everything else stays base classpath +
-   plugins. Widening later is additive; starting wide is the union loader's silent-divergence
-   risk wearing a new coat.
+   `ExpressionFunction`, `FileCodec`, `java.sql.Driver`. (`PdfEngine` is provided by a module too
+   but resolves *inside* it via the self-reference fix above, so it does not widen this list.)
+   Everything else stays base classpath + plugins. Widening later is additive; starting wide is
+   the union loader's silent-divergence risk wearing a new coat.
 2. **Refuse or warn on declared-but-unresolved modules at `host` start** — *gates slice 2.*
    Recommended: refuse (TQL-APP-4216). A warning that scrolls past while routes later fail — or
    silently mis-answer — at parse is the fail-open shape; the refusal names a two-command fix.
