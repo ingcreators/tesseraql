@@ -150,7 +150,8 @@ class DelegationIntegrationTest {
         SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("ops-admin", "ops-admin", "Ops", null,
-                List.of(), List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
+                List.of(), List.of("ADMIN"), List.of("tql.iam.admin.view"), Map.of()),
+                SessionStore.ClientInfo.NONE);
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
                         + "/_tesseraql/admin/delegations"))
@@ -289,10 +290,6 @@ class DelegationIntegrationTest {
                       secret: %s
                       audience: https://app.example.com
                       rolesClaim: roles
-                    policies:
-                      iam.admin.view:
-                        anyOf:
-                          - role: ADMIN
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword(), JWT_SECRET));
         Path workflowDir = home.resolve("workflow");

@@ -23,7 +23,7 @@ input:
     maxLength: 320
 
 security:
-  policy: iam.admin.write
+  policy: tql.iam.admin.write
 
 steps:
   - id: main

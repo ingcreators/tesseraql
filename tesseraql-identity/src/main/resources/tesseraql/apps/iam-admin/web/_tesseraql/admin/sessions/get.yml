@@ -6,7 +6,7 @@ recipe: query-html
 # The cross-subject sessions view (docs/session-visibility.md): who holds live sessions,
 # on what device, since when - each subject linking to its user page, each row endable.
 security:
-  policy: iam.admin.view
+  policy: tql.iam.admin.view
 
 input:
   q:

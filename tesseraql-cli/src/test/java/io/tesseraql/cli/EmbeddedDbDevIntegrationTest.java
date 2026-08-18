@@ -114,13 +114,13 @@ class EmbeddedDbDevIntegrationTest {
                     .followRedirects(HttpClient.Redirect.NEVER).build();
 
             // A browser opening a protected Studio page with no session is bounced to the login page
-            // (post/redirect/get), carrying the original target as ?next=.
+            // (post/redirect/get), carrying the original target as ?redirect=.
             HttpResponse<Void> unauth = client.send(HttpRequest.newBuilder()
                     .uri(URI.create(base + "/_tesseraql/studio/ui")).header("Accept", "text/html")
                     .GET().build(), HttpResponse.BodyHandlers.discarding());
             assertThat(unauth.statusCode()).isEqualTo(302);
             assertThat(unauth.headers().firstValue("location").orElseThrow())
-                    .startsWith("/_tesseraql/login?next=");
+                    .startsWith("/_tesseraql/login?redirect=");
 
             // A valid browser session (any of password/OIDC/SAML would create one) grants access.
             io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()

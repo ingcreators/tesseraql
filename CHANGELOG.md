@@ -8,6 +8,42 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Using an application in a hosted stack is a grant: the `tql.app.use.<name>` fence**
+  (docs/stack-shells.md structural decisions 1 and 3). On a hosted stack member, an
+  authenticated principal — browser session and service caller (JWT/API key/mTLS) alike —
+  without `tql.app.use.<member>` (or the `tql.app.use.*` wildcard) is refused 403 before any
+  route runs; routes declaring `auth: public` are untouched, and the unhosted boot
+  (`TesseraqlRuntime` started directly) is unchanged. The portal's tiles filter by the same
+  atom beside tenant entitlement, deny by default, so what a user sees and what they can
+  reach are one answer. Adopting stacks must seed `tql.app.use` grants (or a baseline role
+  bundling the wildcard) before their users sign in; the `identity-schema` bootstrap's
+  `--admin-permissions` now defaults to the wildcard baseline (`tql.app.use.*`,
+  `tql.ops.view.*`, `tql.ops.run.*`, `tql.iam.admin.view`, `tql.iam.admin.write`) instead
+  of empty.
+
+- **One sign-in door and one admin door per stack: hosted members stop mounting `auth-ui`,
+  `account` and `iam-admin`** (docs/stack-shells.md structural decision 3). IAM Admin mounts
+  once into the stack surface runtime at the origin's `/_tesseraql/admin/…`; its authority
+  moves under the mark as the store-wide atoms `tql.iam.admin.view` / `tql.iam.admin.write`
+  (the `iam.admin.*` policy ids in a deployment's `tesseraql.security.policies` stop being
+  read — pre-1.0, no migration steps). A hosted member's 401 bounce goes origin-absolute —
+  `/_tesseraql/login?redirect=<the prefixed page>` — and returns to the member page after
+  sign-in; member pages link the account chip, inbox and IAM Admin at the origin, and the
+  pin toggle and theme persistence post there too. The unhosted boot keeps all five mounts
+  and its base-relative bounce.
+
+- **The login round-trip's parameter is `redirect`, renamed from `next`** (docs/stack-shells.md
+  structural decision 3). The 401 bounce, the login page's hidden field and the login POST all
+  carry the original target as `redirect`; the reset/invite forms' `next` (a new password
+  field) is unrelated and unchanged, as are OIDC's cookie relay and SAML's RelayState.
+
+- **A `tql.*` policy id is the framework's atom check, synthesized — and cannot be declared**
+  (docs/stack-shells.md structural decision 1, TQL-YAML-1406 widened). A route's
+  `security.policy` naming an id under the framework's mark (`policy: tql.iam.admin.view`)
+  checks that granted atom directly, family wildcard honoured, with no
+  `tesseraql.security.policies` entry behind it; a configuration declaring its own policy id
+  under `tql.` is refused at lint and boot so the synthesized meaning cannot be shadowed.
+
 - **One authorization grammar for the framework's surfaces: marked atoms
   `tql.<family>.<verb>.<name|*>`, and the ops entry permissions retire into them**
   (docs/stack-shells.md structural decision 1, closing stack-architecture open question 4).

@@ -24,7 +24,7 @@ import org.apache.camel.builder.RouteBuilder;
  *   <li>{@code POST /_tesseraql/login} — authenticates and creates a browser session. A JSON caller
  *       (an API client) gets {@code {ok:true,...}} with the session cookie; a browser form post
  *       (the bundled login page, {@code application/x-www-form-urlencoded}) is redirected to its
- *       sanitized {@code next} target (post/redirect/get), or back to the login page on failure.</li>
+ *       sanitized {@code redirect} target (post/redirect/get), or back to the login page on failure.</li>
  *   <li>{@code GET /_tesseraql/logout} — invalidates the session, clears the cookie, redirects to
  *       the login page.</li>
  * </ul>
@@ -73,7 +73,7 @@ final class LoginRouteBuilder extends RouteBuilder {
             redirect(exchange, 303, LOGIN_PATH + "?error=rate"
                     + (next == null
                             ? ""
-                            : "&next="
+                            : "&redirect="
                                     + URLEncoder.encode(next, StandardCharsets.UTF_8)));
             return;
         }
@@ -122,7 +122,7 @@ final class LoginRouteBuilder extends RouteBuilder {
         String loginId = str(body.get("loginId"));
         String password = str(body.get("password"));
         String tenantId = str(body.get("tenantId"));
-        String next = safeNext(body.get("next"));
+        String next = safeNext(body.get("redirect"));
 
         // Before any existence check or hash computation (docs/credential-throttle.md):
         // a throttled request pays nothing and learns nothing about the account.
@@ -165,7 +165,7 @@ final class LoginRouteBuilder extends RouteBuilder {
             if (browserForm) {
                 // Post/redirect/get: bounce back to the login page with an error flag and the
                 // original target, so a refresh does not re-submit the credentials.
-                redirect(exchange, 303, LOGIN_PATH + "?error=1&next="
+                redirect(exchange, 303, LOGIN_PATH + "?error=1&redirect="
                         + URLEncoder.encode(next, StandardCharsets.UTF_8));
                 return;
             }
@@ -280,9 +280,9 @@ final class LoginRouteBuilder extends RouteBuilder {
     }
 
     /**
-     * Sanitizes a post-login {@code next} target: only a same-origin absolute path is honored, so a
-     * crafted {@code next} cannot redirect the freshly-authenticated browser off-site (an open
-     * redirect). Anything else falls back to the app root.
+     * Sanitizes the post-login {@code redirect} target: only a same-origin absolute path is
+     * honored, so a crafted {@code redirect} cannot send the freshly-authenticated browser
+     * off-site (an open redirect). Anything else falls back to the app root.
      */
     private static String safeNext(Object raw) {
         return LoginRedirects.sanitize(str(raw), "/");

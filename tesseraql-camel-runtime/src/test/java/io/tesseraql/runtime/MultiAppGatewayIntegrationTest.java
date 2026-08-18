@@ -237,36 +237,50 @@ class MultiAppGatewayIntegrationTest {
     }
 
     /**
-     * A bundled app under the prefix, end to end: the login page is markup the framework ships,
-     * not the application's, and it is the one page an operator meets before anything else.
-     *
-     * <p>Its form posted to {@code /_tesseraql/login} at the origin, where the stack gateway
-     * answers 404 — so a stack-hosted application could render a sign-in form that could not
-     * sign anybody in (docs/base-path.md slice 3).
+     * The stack's sign-in page, end to end: the login page is markup the framework ships, not
+     * the application's, and it is the one page an operator meets before anything else. It is
+     * the <em>stack's</em> now — served once at the origin scope; a hosted member mounts no
+     * copy (docs/stack-shells.md structural decision 3) — so the page must post back to itself
+     * at the origin, and every asset it names must answer there.
      */
     @Test
-    void aBundledAppPageUnderThePrefixPostsBackToItself() throws Exception {
+    void theStacksSignInPagePostsBackToItselfAtTheOrigin() throws Exception {
         java.net.http.HttpResponse<String> page = java.net.http.HttpClient.newHttpClient().send(
                 java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:"
-                        + gateway.port() + "/shop-a/_tesseraql/login")).build(),
+                        + gateway.port() + "/_tesseraql/login")).build(),
                 java.net.http.HttpResponse.BodyHandlers.ofString());
 
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("action=\"/shop-a/_tesseraql/login\"");
+        assertThat(page.body()).contains("action=\"/_tesseraql/login\"");
         assertThat(page.body())
-                .as("no URL is left rooted at the origin, where the gateway answers 404")
-                .doesNotContain("=\"/_tesseraql/")
-                .doesNotContain("=\"/assets/");
+                .as("nothing on the origin's page is rooted under a member's prefix")
+                .doesNotContain("=\"/shop-a/")
+                .doesNotContain("=\"/shop-b/");
 
-        for (String url : assetUrlsIn(page.body())) {
+        for (String url : originAssetUrlsIn(page.body())) {
             assertThat(statusOf(gateway, url)).as(url).isEqualTo(200);
         }
+
+        assertThat(statusOf(gateway, "/shop-a/_tesseraql/login"))
+                .as("the member's own login page copy is gone; only the POST transport remains")
+                .isIn(404, 405);
     }
 
     /** Every {@code href}/{@code src} in the page pointing into the asset tree, de-duplicated. */
     private static List<String> assetUrlsIn(String html) {
         java.util.regex.Matcher matcher = java.util.regex.Pattern
                 .compile("(?:href|src)=\"(/shop-a/assets/[^\"#]+)").matcher(html);
+        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
+        while (matcher.find()) {
+            urls.add(matcher.group(1));
+        }
+        return List.copyOf(urls);
+    }
+
+    /** The origin-scope form of {@link #assetUrlsIn}: the stack surface runtime's asset tree. */
+    private static List<String> originAssetUrlsIn(String html) {
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(?:href|src)=\"(/assets/[^\"#]+)").matcher(html);
         java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
         while (matcher.find()) {
             urls.add(matcher.group(1));

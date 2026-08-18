@@ -180,9 +180,14 @@ document.addEventListener("hc:themechange", (event) => {
     if (!csrf) {
         return;
     }
-    // A fetch resolves against the document, not this module, so the endpoint is built
-    // from import.meta.url — the one URL here that carries the application's base path.
-    fetch(new URL("../../_tesseraql/account/appearance", import.meta.url), {
+    // The shell says where the account surface lives for this page (a hosted stack member's
+    // is the stack's origin scope, docs/stack-shells.md structural decision 3); the
+    // import.meta.url fallback covers pages rendered outside the shared shell, where the
+    // module URL is the one URL that carries the application's base path.
+    const accountBase = document.querySelector('meta[name="tql-account-base"]');
+    fetch(accountBase
+        ? accountBase.content + "/appearance"
+        : new URL("../../_tesseraql/account/appearance", import.meta.url), {
         method: "POST",
         redirect: "manual",
         headers: {

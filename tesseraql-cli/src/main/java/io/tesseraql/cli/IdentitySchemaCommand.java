@@ -53,8 +53,11 @@ final class IdentitySchemaCommand implements Callable<Integer> {
     String adminRoles = "iam.admin";
 
     @Option(names = {
-            "--admin-permissions"}, description = "Permission codes created and granted to the admin roles.")
-    String adminPermissions = "";
+            "--admin-permissions"}, description = "Permission codes created and granted to the "
+                    + "admin roles (default: the framework's bootstrap baseline — tql.app.use.*, "
+                    + "tql.ops.view.*, tql.ops.run.*, tql.iam.admin.view, tql.iam.admin.write).")
+    String adminPermissions = "tql.app.use.*,tql.ops.view.*,tql.ops.run.*,"
+            + "tql.iam.admin.view,tql.iam.admin.write";
 
     @Override
     public Integer call() throws Exception {

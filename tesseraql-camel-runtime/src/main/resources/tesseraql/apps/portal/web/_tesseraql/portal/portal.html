@@ -18,8 +18,9 @@
   <div class="hc-card__body hc-stack">
     <div class="hc-empty" th:if="${#lists.isEmpty(apps)}">
       <p class="hc-empty__title">No applications are reachable from here.</p>
-      <p class="hc-empty__description">Nothing is installed in this stack yet, or none of it is
-        entitled to your tenant.</p>
+      <p class="hc-empty__description">Nothing is installed in this stack yet, none of it is
+        entitled to your tenant, or you hold no application grants — an administrator assigns
+        them in IAM Admin.</p>
     </div>
     <nav class="hc-stack" th:unless="${#lists.isEmpty(apps)}" aria-label="Applications">
       <a class="hc-item" th:each="app : ${apps}" th:href="${app.href}">

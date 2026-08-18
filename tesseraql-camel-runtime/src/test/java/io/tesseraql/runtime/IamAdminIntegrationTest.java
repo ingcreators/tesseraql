@@ -62,7 +62,8 @@ class IamAdminIntegrationTest {
                 .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal("iam-admin", "iam-admin",
-                "IAM Admin", null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
+                "IAM Admin", null, List.of(), List.of("ADMIN"),
+                List.of("tql.iam.admin.view", "tql.iam.admin.write"), Map.of()),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         adminCookie = sessions.cookieName() + "=" + sid;
         adminCsrf = sessions.session(sid).csrfToken();

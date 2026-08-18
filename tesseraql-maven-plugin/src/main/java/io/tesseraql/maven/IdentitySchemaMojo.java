@@ -60,10 +60,16 @@ public class IdentitySchemaMojo extends AbstractMojo {
     private String adminRoles;
 
     /**
-     * Permission codes created and granted to the admin roles, e.g.
-     * {@code tql.ops.view.*,tql.ops.run.*}. Empty by default.
+     * Permission codes created and granted to the admin roles. Defaults to the framework's
+     * bootstrap baseline (docs/stack-shells.md structural decision 1): the wildcard atoms a
+     * first administrator needs before anyone else can sign in usefully — every application's
+     * fence and portal tile ({@code tql.app.use.*}), stack-wide operational reach
+     * ({@code tql.ops.view.*}/{@code tql.ops.run.*}), and the identity store's own door
+     * ({@code tql.iam.admin.view}/{@code tql.iam.admin.write}). Narrow production roles are the
+     * deployment's own vocabulary, granted afterwards through IAM Admin.
      */
-    @Parameter(property = "tesseraql.adminPermissions", defaultValue = "")
+    @Parameter(property = "tesseraql.adminPermissions", defaultValue = "tql.app.use.*,"
+            + "tql.ops.view.*,tql.ops.run.*,tql.iam.admin.view,tql.iam.admin.write")
     private String adminPermissions;
 
     @Override

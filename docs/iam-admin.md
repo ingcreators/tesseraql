@@ -4,17 +4,22 @@ IAM Admin is the console for **people**: who has an account, who is signed in ri
 and who is standing in for whom. It is the administrative counterpart to the self-service
 [account surface](account.md), where users manage their own profile and sessions.
 
-Open it at `/_tesseraql/admin/users`.
+Open it at `/_tesseraql/admin/users`. In a hosted stack it answers once, at the stack's
+origin — the identity store is stack-scoped, so there is one admin door to it, exactly as
+there is one sign-in door ([hosting.md](hosting.md)). An unhosted runtime serves its own
+copy as before.
 
 ## Who can open it
 
-| Policy | Grants |
+| Granted atom | Grants |
 | --- | --- |
-| `iam.admin.view` | The user list, user detail, the sessions page, and delegations. |
-| `iam.admin.write` | Inviting, enabling and disabling users, and revoking sessions. |
+| `tql.iam.admin.view` | The user list, user detail, the sessions page, and delegations. |
+| `tql.iam.admin.write` | Inviting, enabling and disabling users, and revoking sessions. |
 
-These are ordinary policies, granted through roles like any other
-([authentication.md](authentication.md)).
+These are framework atoms — permission codes in the identity store, granted to a user
+directly or bundled into whatever roles your deployment defines
+([authentication.md](authentication.md)). They are store-wide exact strings: the store has
+no per-application axis, so neither do they.
 
 ## Users
 

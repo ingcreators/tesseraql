@@ -4,7 +4,7 @@ kind: route
 recipe: query-html
 
 security:
-  policy: iam.admin.view
+  policy: tql.iam.admin.view
 
 # The post/redirect/get flash flags: each action lands back here naming what it did, and
 # the page confirms it (docs/console-ux-refresh.md slice 2).

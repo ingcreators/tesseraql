@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * menu:
  *   - { label: Home,  href: /,            icon: home }
  *   - { label: Users, href: /users,       roles: [ADMIN, STAFF] }
- *   - { label: Admin, href: /admin/users, permissions: [iam.admin] }
+ *   - { label: Admin, href: /admin/users, permissions: [orders.admin] }
  * </pre>
  * An item with neither {@code roles} nor {@code permissions} is public; otherwise it is shown when
  * the caller holds at least one listed role or permission. {@code icon} is an optional sprite id.

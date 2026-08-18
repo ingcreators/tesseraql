@@ -418,7 +418,10 @@ The bundled admin console — **Studio** (`/_tesseraql/studio/ui`), the **Operat
 ([the ops console](ops-console.md)), and **[IAM Admin](iam-admin.md)** (`/_tesseraql/admin/users`) — authenticates with a
 **browser session** (`auth: browser`): it is opened in a browser, not with a hand-minted token.
 Opening a protected page without a session redirects (302) to the login page,
-`GET /_tesseraql/login?next=<original-path>`; after signing in, the browser returns to `next`.
+`GET /_tesseraql/login?redirect=<original-path>`; after signing in, the browser returns to the
+`redirect` target. In a hosted stack the bounce is origin-absolute — a member serves no sign-in
+of its own, so the stack's one login answers and `redirect` carries the member page's prefixed
+path back through the round trip ([hosting.md](hosting.md)).
 
 A session is established the same way regardless of method — password, OIDC, and SAML all create one
 session cookie (`tesseraql_sid`) — so a route's `auth: browser` is satisfied however the user signed
@@ -462,7 +465,7 @@ token as `<meta name="csrf-token">`, the Hypermedia Components kit replays it as
 header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
 
 > **Returning to the requested page.** The page the user originally opened is threaded through
-> every method: password login carries `next`, OIDC carries it across the IdP round-trip in a
+> every method: password login carries `redirect`, OIDC carries it across the IdP round-trip in a
 > short-lived cookie, and SAML uses RelayState. The target is always sanitized to a same-origin
 > path (no open redirect); `tesseraql.oidc.postLoginUrl` is the fallback when none was requested.
 

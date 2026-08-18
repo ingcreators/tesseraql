@@ -54,4 +54,36 @@ class PolicyEngineTest {
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-SEC-4031");
     }
+
+    /**
+     * A policy id under the framework's {@code tql.} mark is the atom itself, synthesized with
+     * no declaration behind it (docs/stack-shells.md structural decision 1): it permits exactly
+     * the principals granted that permission code — or the family's terminal wildcard — and
+     * roles never satisfy it, because a framework surface checks atoms, never roles.
+     */
+    @Test
+    void aMarkedPolicyIdIsTheSynthesizedAtomCheck() {
+        assertThat(engine().permits("tql.iam.admin.view",
+                principal(List.of(), List.of("tql.iam.admin.view")))).isTrue();
+        assertThat(engine().permits("tql.iam.admin.view",
+                principal(List.of("ADMIN"), List.of()))).isFalse();
+    }
+
+    @Test
+    void theSynthesizedAtomHonoursTheFamilysTerminalWildcard() {
+        assertThat(engine().permits("tql.app.use.orders",
+                principal(List.of(), List.of("tql.app.use.*")))).isTrue();
+        assertThat(engine().permits("tql.app.use.orders",
+                principal(List.of(), List.of("tql.app.use.billing")))).isFalse();
+    }
+
+    /** {@code tql.app.use.<name>} honours the exact grant and the wildcard, nothing looser. */
+    @Test
+    void appUseMatchesTheGrantOrTheWildcard() {
+        assertThat(Atoms.appUse(List.of("tql.app.use.orders"), "orders")).isTrue();
+        assertThat(Atoms.appUse(List.of("tql.app.use.*"), "orders")).isTrue();
+        assertThat(Atoms.appUse(List.of("tql.app.use.orders"), "billing")).isFalse();
+        assertThat(Atoms.appUse(List.of(), "orders")).isFalse();
+        assertThat(Atoms.appUse(null, "orders")).isFalse();
+    }
 }

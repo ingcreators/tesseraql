@@ -25,7 +25,9 @@ public final class PolicyCodes {
     /**
      * TQL-YAML-1406: a policy rule references a permission code outside the application's own
      * namespace — it does not begin with the application's name, or it sits under the framework's
-     * {@code tql.} mark.
+     * {@code tql.} mark — or the configuration declares a policy <em>id</em> under the mark,
+     * which would shadow the framework's synthesized atom check (a route may reference a
+     * {@code tql.*} policy id; a configuration may not re-declare one).
      *
      * <p>Reported at lint and refused at boot, like the name rule itself, so the fence holds for
      * a configuration that never ran through the linter. It binds the codes an application's
@@ -35,6 +37,24 @@ public final class PolicyCodes {
     public static final TqlErrorCode OUTSIDE_NAMESPACE = new TqlErrorCode(TqlDomain.YAML, 1406);
 
     private PolicyCodes() {
+    }
+
+    /**
+     * Why {@code id} cannot be one of the application's own policy <em>ids</em>, or {@code null}
+     * when it can. Policy ids stay free with one exception: an id under the framework's
+     * {@code tql.} mark resolves to the synthesized atom policy — {@code policy:
+     * tql.iam.admin.view} checks that granted atom with no declaration behind it
+     * (docs/stack-shells.md structural decision 1) — so a user-declared policy under the mark
+     * would shadow the framework's meaning and is refused instead.
+     */
+    public static String idViolation(String id) {
+        if (id.equals("tql") || id.startsWith("tql.")) {
+            return "policy id '" + id + "' sits under the framework's own mark — a tql.* policy"
+                    + " id is the framework's atom check, synthesized from the granted atom"
+                    + " itself (a route may reference it; a configuration may not re-declare"
+                    + " it). Declare your own policies outside tql.";
+        }
+        return null;
     }
 
     /**
