@@ -403,7 +403,7 @@ class StackRelayTest {
         surface.requestHandler(request -> request.response().end("surface:" + request.path()));
         int surfacePort = await(surface.listen()).actualPort();
         StackRelay relay = new StackRelay(client, CATALOGUE, Map.of(), TrustedProxies.NONE,
-                appId -> originPort, () -> surfacePort);
+                appId -> originPort, () -> surfacePort, "/_tesseraql/portal");
         HttpServer fencedFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
         fencedFront.requestHandler(relay::handle);
         String root = "http://localhost:" + await(fencedFront.listen()).actualPort();
@@ -427,6 +427,35 @@ class StackRelayTest {
         } finally {
             await(fencedFront.close());
             await(surface.close());
+        }
+    }
+
+    /**
+     * The root does exactly one thing — 307 — and configuration chooses only the target
+     * (docs/stack-architecture.md decision 24): the portal by default, {@code /<name>} when the
+     * stack file names an application. Temporary deliberately, so an operator's edit is not
+     * cached away; the query string rides along verbatim.
+     */
+    @Test
+    void theRootAlwaysRedirects() throws Exception {
+        for (String target : new String[]{"/_tesseraql/portal", "/" + APP}) {
+            StackRelay relay = new StackRelay(client, CATALOGUE, Map.of(), TrustedProxies.NONE,
+                    appId -> originPort, () -> originPort, target);
+            HttpServer front = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+            front.requestHandler(relay::handle);
+            String root = "http://localhost:" + await(front.listen()).actualPort();
+            try {
+                HttpResponse<String> plain = send(HttpRequest.newBuilder(URI.create(root + "/")));
+                assertThat(plain.statusCode()).as(target).isEqualTo(307);
+                assertThat(plain.headers().firstValue("Location")).as(target).contains(target);
+
+                HttpResponse<String> withQuery = send(
+                        HttpRequest.newBuilder(URI.create(root + "/?from=bookmark")));
+                assertThat(withQuery.headers().firstValue("Location"))
+                        .contains(target + "?from=bookmark");
+            } finally {
+                await(front.close());
+            }
         }
     }
 

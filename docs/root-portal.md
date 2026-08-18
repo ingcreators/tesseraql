@@ -9,6 +9,16 @@ guards, the tests, and what is deliberately left out. Written 2026-08-18, before
 
 Everything below was measured against main at #849 unless marked otherwise.
 
+**Status 2026-08-18: all three slices shipped as designed.** Slice 1 (the surface runtime and
+the origin fence), slice 2 (the portal page and provider), slice 3 (the root's 307,
+`root.redirect`, TQL-APP-4215). The open questions below were each closed on their
+recommendation; two implementation details the design flagged resolved cleanly (`createAll`
+already treats an override as permission for `main` to be absent from config, so the portal
+declares no datasources; `new` now writes a stack-level `.gitignore` covering `work/`). One
+defect the design did not predict: the portal's first empty-state markup invented an
+`hc-empty__body` class, which `HcMarkupContractTest` caught — the kit's word is
+`hc-empty__description`.
+
 ## What exists today, measured
 
 - The origin scope serves exactly two framework paths, both answered by the gateway itself:
@@ -304,7 +314,9 @@ stays true and untouched — the portal is not an `AppSourceProvider`.
 
 ## Open questions
 
-Each gated on the slice it blocks, with a recommendation:
+Each gated on the slice it blocks, with a recommendation. **All four were closed on their
+recommendations at review (2026-08-18)** — kept as written because the alternatives they weighed
+are the ones a reader is likely to propose again:
 
 1. **The `assets` reserved segment** — *gates slice 1.* Recommended: yes, extend TQL-YAML-1405.
    The alternative (letting a member named `assets` shadow the surface shell's stylesheets) is a

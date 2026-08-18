@@ -43,6 +43,8 @@ framework:
     username: ${secret.env.STACK_DB_USER}
     password: ${secret.env.STACK_DB_PASSWORD}
 externalOrigin: https://apps.example.com
+root:
+  redirect: orders       # /  ->  /orders; omitted, / lands on the portal
 ```
 
 When the stack supplies `framework.datasource`, the host builds one pool and every application's
@@ -92,6 +94,29 @@ second deployment shape to reason about, document and test — which
 [stack-architecture.md](https://github.com/ingcreators/tesseraql/blob/main/docs/stack-architecture.md)
 Decision 12 removes so that development and production have one topology between them. An
 application that must not share a session with its neighbours gets its own stack.
+
+## The root, the portal, and the origin scope
+
+The origin root does exactly one thing: it answers `307`. By default it redirects to the
+stack's portal at `/_tesseraql/portal` — sign in, and the portal lists the applications you may
+reach, each at its `/<name>` address. A stack whose users should land in one main application
+declares that in `tesseraql-stack.yml` instead:
+
+```yaml
+root:
+  redirect: orders       # /  ->  /orders
+```
+
+The redirect is temporary on purpose. A permanent one would be cached by browsers past the
+configuration change that retires it. Naming an application the stack does not hold refuses the
+start (`TQL-APP-4215`), listing the names it does hold.
+
+The portal, the stack's sign-in and the account pages are served by the stack's own runtime,
+which `host` and `dev` start beside your applications. It answers the origin-scope
+`/_tesseraql/*` and `/assets/*` paths; `/_tesseraql/health/live` and `/_tesseraql/health/ready`
+stay the gateway's own answer, so a load balancer's probe never depends on it. Each application
+still serves its own framework surfaces under its prefix, `/<name>/_tesseraql/…`, exactly as
+before.
 
 ## The gateway routes, the ingress protects
 

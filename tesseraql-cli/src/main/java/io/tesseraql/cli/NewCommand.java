@@ -49,6 +49,9 @@ final class NewCommand implements Callable<Integer> {
             # externalOrigin: https://apps.example.com   # required only when MCP or the token
             #                                            # issuer reads it; dev defaults it
             #
+            # root:
+            #   redirect: orders           # /  ->  /orders; omitted, / lands on the portal
+            #
             # security:
             #   jwt:
             #     algorithm: RS256

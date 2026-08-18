@@ -25,6 +25,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The origin root always redirects — to the portal by default, to `root.redirect`'s
+  application by configuration** (docs/stack-architecture.md Decision 24, docs/root-portal.md).
+  `/` answers 307 (temporary deliberately: a permanent redirect outlives the configuration edit
+  that retires it) to `/_tesseraql/portal`, or to `/<name>` when `tesseraql-stack.yml` declares
+  `root.redirect: <name>`. The first URL anyone types into a fresh stack now lands somewhere
+  useful instead of a 404. Naming an application the stack does not hold refuses the start
+  (`TQL-APP-4215`), validated against the full membership before `--app-name` narrowing — the
+  file describes the stack, the flag filters a run.
+
 - **The stack's portal: one screen listing the applications this principal may reach**
   (docs/stack-architecture.md Decision 24, docs/root-portal.md). `GET /_tesseraql/portal` on the
   stack surface runtime renders the members as links at their derived `/<name>` addresses,
