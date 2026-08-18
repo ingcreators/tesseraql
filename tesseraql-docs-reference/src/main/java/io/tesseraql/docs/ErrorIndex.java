@@ -545,7 +545,8 @@ final class ErrorIndex {
             "session-token-exchange.md", "stack-architecture.md", "token-issuance.md",
             "runtime-footprint.md",
             "lint-restructure.md", "prompt-as-recipe.md", "cli-surface.md", "root-portal.md",
-            "module-scope.md", "runtime-replace.md", "stack-shells.md");
+            "module-scope.md", "runtime-replace.md", "stack-shells.md",
+            "application-roles.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
