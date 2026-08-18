@@ -4,6 +4,7 @@ import io.tesseraql.runtime.MultiAppGateway;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -33,6 +34,9 @@ final class HostCommand implements Callable<Integer> {
             + " application from the stack, at the same address it has as a stack member.")
     String appName;
 
+    @Mixin
+    ConfigOptions configOptions;
+
     @Option(names = {
             "--port"}, description = "The port the gateway fronts every app on (default 8080).")
     int port = 8080;
@@ -54,6 +58,7 @@ final class HostCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         // Resolved here rather than inside the gateway, because only the caller knows which flag
         // was typed and therefore which refusal is the useful one
         // (docs/cli-surface.md Decision 3).

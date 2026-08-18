@@ -19,6 +19,7 @@ import java.util.concurrent.Callable;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -54,9 +55,8 @@ public final class TokenCommand implements Callable<Integer> {
             + "if the application has one.")
     String url;
 
-    @Option(names = {
-            "--env"}, paramLabel = "<profile>", description = "Environment profile (also TESSERAQL_ENV).")
-    String envProfile;
+    @Mixin
+    ConfigOptions configOptions;
 
     @Option(names = {"--sub"}, description = "Subject claim (default dev).")
     String subject = "dev";
@@ -219,7 +219,7 @@ public final class TokenCommand implements Callable<Integer> {
         if (!"24h".equals(ttl)) {
             given.add("--ttl");
         }
-        if (envProfile != null) {
+        if (configOptions.env != null) {
             given.add("--env");
         }
         return given;
@@ -283,9 +283,7 @@ public final class TokenCommand implements Callable<Integer> {
     }
 
     private Integer mintLocally() throws Exception {
-        if (envProfile != null) {
-            System.setProperty("tesseraql.env", envProfile);
-        }
+        configOptions.apply();
         AppConfig config = new ManifestLoader().load(app).config();
         String secret = config.getString("tesseraql.security.jwt.secret").orElse(null);
         if (secret == null || secret.isBlank()) {

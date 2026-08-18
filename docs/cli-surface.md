@@ -366,6 +366,19 @@ outage — but a flag that exists on `serve` and not on `lint` reads as "lint do
 `--realm` stays on `test` and `coverage` only. It is not part of the connection set: it names an
 identity realm to run as, which is a property of those two commands and of nothing else.
 
+**Shipped 2026-08-18, and the connection set's `--datasource` fixed two latent bugs on the way
+in.** `schema --datasource reporting` used to introspect `main` while labelling the result
+`reporting`, and `migrate --datasource reporting` migrated the `reporting` migration set against
+the `main` database — both because the flag keyed datasource-scoped work while the connection
+mixin resolved `main` regardless. The set's `--datasource` selects the connection *and* keys the
+scoped work from one value, so the flag cannot mean two databases again.
+
+**`--modules` membership, settled per command as this decision asked:** `lint`, `test`,
+`coverage`, `job`, `routes` and `mcp` carry it (each installs module extensions before parsing),
+and `dev` already did. `duckdb` deliberately does not: its subcommands never parse a route, and
+the engine already composes the application's *declared* modules — an explicit directory would
+run SQL over a driver the deploy will not have.
+
 ### 6. Vocabulary is not flattened where the concepts differ — and *is* where they do not
 
 `--out` takes a file path. `--report-dir` takes a directory. Two names for two things is correct,
@@ -449,6 +462,12 @@ So the split is:
 
 A guard that cannot answer the interesting question is still worth having when it answers the
 question that actually decayed.
+
+**Shipped 2026-08-18, with one named exemption the rule did not foresee.** `token --password` is
+the password a person signs in with — not a database credential — and renaming a documented auth
+flag to satisfy a shape rule would trade a real name for a tidy one (Decision 6's own logic, in
+the other direction). The guard carries it as a spelled-out exemption list of one, so a second
+entry is a review question rather than a drift.
 
 ### 7a. The deployment unit is a **stack**, because "suite" already means a test file here
 

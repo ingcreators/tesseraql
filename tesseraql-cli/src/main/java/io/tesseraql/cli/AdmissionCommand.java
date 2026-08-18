@@ -4,6 +4,7 @@ import io.tesseraql.yaml.governance.AdmissionProfile;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -17,8 +18,12 @@ public final class AdmissionCommand implements Callable<Integer> {
     @Option(names = {"--app"}, required = true, description = "Path to the app home.")
     Path app;
 
+    @Mixin
+    ConfigOptions configOptions;
+
     @Override
     public Integer call() {
+        configOptions.apply();
         AdmissionProfile.Report report = AdmissionProfile.check(app);
         for (AdmissionProfile.Finding note : report.notes()) {
             System.out.println("NOTE [" + note.subject() + "] " + note.reason());

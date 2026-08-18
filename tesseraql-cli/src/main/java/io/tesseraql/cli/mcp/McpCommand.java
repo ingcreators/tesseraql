@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -57,6 +58,12 @@ public final class McpCommand implements Callable<Integer> {
             + " application's tools from the stack.")
     String appName;
 
+    @Mixin
+    io.tesseraql.cli.ConfigOptions configOptions;
+
+    @Mixin
+    io.tesseraql.cli.CompileOptions compile;
+
     @Option(names = {
             "--transport"}, defaultValue = "stdio", description = "Transport: stdio (default) or http.")
     Transport transport;
@@ -77,6 +84,7 @@ public final class McpCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         // The stack: named, or discovered one level up from the working directory
         // (docs/cli-surface.md decision 9) - the same resolution dev runs, because the agent's
         // view of what exists should match what dev serves.
@@ -93,7 +101,8 @@ public final class McpCommand implements Callable<Integer> {
         // The dev tools lint and test the applications, so custom expression functions install
         // from every member's declared tesseraql.modules (the same wiring dev boots with,
         // composed onto one classloader - interim until decision 28 wires modules per runtime).
-        io.tesseraql.cli.CliModules.installAppExtensions(List.copyOf(applications.values()), null);
+        io.tesseraql.cli.CliModules.installAppExtensions(List.copyOf(applications.values()),
+                compile.modules);
         McpServer server = new McpDevTools(applications, readOnly).toServer();
         return transport == Transport.http
                 ? serveHttp(server, applications)

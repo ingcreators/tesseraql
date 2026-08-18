@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -20,6 +21,9 @@ final class VerifyCommand implements Callable<Integer> {
 
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
     Path app;
+
+    @Mixin
+    ConfigOptions configOptions;
 
     @Option(names = {
             "--evidence-file"}, required = true, description = "The release-evidence.json to verify (its sibling .sig is auto-detected).")
@@ -35,6 +39,7 @@ final class VerifyCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         Path home = SingleApplication.resolve(app, "tesseraql verify");
         if (home == null) {
             return 2;

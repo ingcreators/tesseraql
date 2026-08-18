@@ -30,13 +30,14 @@ final class MigrateCommand implements Callable<Integer> {
     Path app;
 
     @Mixin
-    CliDatasource datasource;
+    ConnectionOptions datasource;
 
-    @Option(names = {"--datasource"}, description = "Migration set to act on (default: main).")
-    String datasourceName = "main";
+    @Mixin
+    ConfigOptions configOptions;
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         AppConfig config = new ManifestLoader().load(app).config();
         DriverManagerDataSource dataSource = datasource.resolve(config, app);
         // The application declares its own history key, so this command and the runtime record
@@ -45,14 +46,14 @@ final class MigrateCommand implements Callable<Integer> {
         String name = SchemaHistoryName.of(config);
 
         switch (operation.toLowerCase(Locale.ROOT)) {
-            case "apply" -> AppMigrator.migrate(app, name, datasourceName, dataSource)
+            case "apply" -> AppMigrator.migrate(app, name, datasource.name, dataSource)
                     .ifPresentOrElse(
                             result -> System.out.println("Applied " + result.applied()
                                     + " migration(s) for app " + name + ", datasource "
-                                    + datasourceName + " (history table " + result.historyTable()
+                                    + datasource.name + " (history table " + result.historyTable()
                                     + ")"),
                             this::logNoDirectory);
-            case "info" -> AppMigrator.info(app, name, datasourceName, dataSource).ifPresentOrElse(
+            case "info" -> AppMigrator.info(app, name, datasource.name, dataSource).ifPresentOrElse(
                     info -> {
                         info.migrations().forEach(migration -> System.out.printf("%-12s %-10s %s%n",
                                 migration.version(), migration.state(), migration.description()));
@@ -62,7 +63,7 @@ final class MigrateCommand implements Callable<Integer> {
                     this::logNoDirectory);
             case "validate" -> {
                 AppMigrator.ValidateResult result = AppMigrator
-                        .validate(app, name, datasourceName, dataSource).orElse(null);
+                        .validate(app, name, datasource.name, dataSource).orElse(null);
                 if (result == null) {
                     logNoDirectory();
                 } else if (result.valid()) {
@@ -75,7 +76,7 @@ final class MigrateCommand implements Callable<Integer> {
                     return 1;
                 }
             }
-            case "repair" -> AppMigrator.repair(app, name, datasourceName, dataSource)
+            case "repair" -> AppMigrator.repair(app, name, datasource.name, dataSource)
                     .ifPresentOrElse(
                             summary -> System.out.println("TesseraQL migrate repair: removed "
                                     + summary.removed() + ", deleted " + summary.deleted()
@@ -92,7 +93,7 @@ final class MigrateCommand implements Callable<Integer> {
     }
 
     private void logNoDirectory() {
-        System.out.println("No migration directory for datasource '" + datasourceName + "' in "
+        System.out.println("No migration directory for datasource '" + datasource.name + "' in "
                 + app + "; nothing to do");
     }
 }

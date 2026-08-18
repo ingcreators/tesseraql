@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -37,15 +38,18 @@ final class LintCommand implements Callable<Integer> {
             "--format"}, defaultValue = "text", description = "Output format: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}).")
     Format format;
 
-    @Option(names = {"--modules"}, description = "Directory of extra module jars (composes with"
-            + " the app's declared tesseraql.modules).")
-    java.io.File modules;
+    @Mixin
+    CompileOptions compile;
+
+    @Mixin
+    ConfigOptions configOptions;
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         // Custom expression functions must install before parsing, or their call sites lint as
-        // unknown functions (the same modules wiring serve boots with).
-        CliModules.installAppExtensions(app, modules);
+        // unknown functions (the same modules wiring dev boots with).
+        CliModules.installAppExtensions(app, compile.modules);
         List<LintFinding> findings = new AppLinter().lint(app);
         long errors = findings.stream().filter(LintFinding::isError).count();
         switch (format) {

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -104,11 +105,8 @@ public final class TesseraqlCli implements Runnable {
                 + " application from the stack, at the same address it has as a stack member.")
         String appName;
 
-        @Option(names = {"--env"}, paramLabel = "<profile>", description = "Environment "
-                + "profile: merges config/env/<profile>.yml between the base config and "
-                + "the Studio overlay (also TESSERAQL_ENV). Profiles are the applications'; "
-                + "the stack file has none - its location is its environment.")
-        String envProfile;
+        @Mixin
+        ConfigOptions configOptions;
 
         @Option(names = {
                 "--log-format"}, paramLabel = "<text|json>", description = "Log line format (default text; json for structured logs).")
@@ -130,10 +128,8 @@ public final class TesseraqlCli implements Runnable {
                 + "consumers, and config/ changes still need a restart.")
         boolean watch;
 
-        @Option(names = {"--modules"}, description = "Directory of optional plugin module jars "
-                + "(e.g. the pdf/excel file-format codecs) to load onto the runtime classpath, "
-                + "composed onto every application in the stack.")
-        File modules;
+        @Mixin
+        CompileOptions compile;
 
         @Option(names = {
                 "--embedded-db"}, arity = "0..1", paramLabel = "<data-dir>", fallbackValue = "", description = "Run with an embedded PostgreSQL (no external "
@@ -178,9 +174,7 @@ public final class TesseraqlCli implements Runnable {
             }
             Path stackDir = resolved.root();
 
-            if (envProfile != null) {
-                System.setProperty("tesseraql.env", envProfile);
-            }
+            configOptions.apply();
             // The structured log provider reads these per line (roadmap Phase 45).
             if (logFormat != null) {
                 System.setProperty("tesseraql.logging.format", logFormat);
@@ -203,8 +197,8 @@ public final class TesseraqlCli implements Runnable {
                             + " tesseraql.modules artifact(s) for " + home.getFileName() + ".");
                 });
             }
-            if (modules != null) {
-                moduleDirs.add(modules);
+            if (compile.modules != null) {
+                moduleDirs.add(compile.modules);
             }
             Thread.currentThread().setContextClassLoader(CliModules.classLoaderOver(moduleDirs,
                     Thread.currentThread().getContextClassLoader()));
@@ -305,8 +299,17 @@ public final class TesseraqlCli implements Runnable {
         @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
         Path app;
 
+        @Mixin
+        ConfigOptions configOptions;
+
+        @Mixin
+        CompileOptions compile;
+
         @Override
         public Integer call() {
+            configOptions.apply();
+            // Route documents parse expressions, so module-provided functions install first.
+            CliModules.installAppExtensions(app, compile.modules);
             AppManifest manifest = new ManifestLoader().load(app);
             for (RouteFile route : manifest.routes()) {
                 System.out.printf("%-6s %-30s %s%n",

@@ -32,7 +32,10 @@ final class IdentitySchemaCommand implements Callable<Integer> {
     Path app;
 
     @Mixin
-    CliDatasource datasource;
+    ConnectionOptions datasource;
+
+    @Mixin
+    ConfigOptions configOptions;
 
     @Option(names = {"--dialect"}, description = "SQL dialect (default: postgres).")
     String dialect = "postgres";
@@ -55,6 +58,7 @@ final class IdentitySchemaCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         AppConfig config = app != null ? new ManifestLoader().load(app).config() : null;
         DriverManagerDataSource dataSource = datasource.resolve(config, app);
         IdentityBootstrap bootstrap = new IdentityBootstrap(dataSource);
