@@ -19,7 +19,16 @@ campaign is complete, so the `tql.<family>.<verb>.<name|*>` atom grammar, the `t
 fence, the origin surfaces and the policy-code namespace fence (TQL-YAML-1406) are all
 shipped ground this design stands on, not assumptions.
 
-**Status: awaiting review. No slice is implemented.**
+**Status 2026-08-18: design approved in review; no slice is implemented yet.** All eight
+open questions closed on their recommendations — slice 1 ships first; the `_as/<role>`
+address; one acting role per member per tab; requests without the segment run with no
+application role active; orphaned declared roles report-only; sign-in materialization;
+the origin picker; declared-map SSO re-sync. Review then added four user-directed
+extensions, each recorded in place: the coverage direction below; network/context
+conditions moving to deferred-with-direction; scoped token minting (activation's three
+faces — the section after structural decision 5), which grew out of the review question
+"what capacity does an MCP or web-API caller act in"; and immutable federated identity
+keys (structural decision 3), answering the review question about OIDC/SAML user keying.
 
 **Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
 application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,
@@ -255,6 +264,22 @@ shipped changes meaning). Three writers, one shape:
   re-syncs at every login, fixing the measured never-re-synced gap. Unmapped claims stay
   discarded — capture is declared, not promiscuous.
 
+**Federated users get an immutable key, because re-sync makes the mutable one untenable.**
+Both linkers resolve today by `login_id` — a mutable value (a name change at the IdP, a
+mail-domain migration) — so the user this design starts re-syncing would simply *duplicate*
+the moment their login id changes upstream: resolve-by-login finds nobody, and JIT
+provisioning mints a second account with none of the first one's grants. The fix is the
+mainstream account-link shape (Keycloak's federated identities): a new
+`tql_user_identities` table (`user_id`, `provider`, `external_subject`, unique
+provider+subject), where OIDC links by `iss`+`sub` and SAML by the persistent NameID (or
+a configured assertion attribute). First login links and provisions as today; every later
+login resolves through the link, and `login_id`, display name and email become what they
+always should have been — mutable attributes that re-sync. The internal `user_id` stays
+the opaque key it already is for JIT-provisioned users; the seeder's `userId = loginId`
+shortcut retires in the same slice, because an internal key derived from a login is the
+same mistake one table over. SCIM keeps its own outbound map (`tql_scim_resource_map`);
+the link table serves the SSO path.
+
 **Assignment rules are store data, managed in IAM Admin, evaluated at sign-in.** A rule
 grants one role when its conditions all match the user's attributes:
 
@@ -423,6 +448,36 @@ is the one place already parsing member addresses per request, and normalizing t
 member route matching byte-identical to today; recorded because the unhosted boot skipping
 activation follows from it.
 
+## Scoped token minting: activation's three faces
+
+**Every kind of caller can state a capacity, and all three statements are one
+computation — select from the union, mint or act from the active view.** The browser
+states it per tab (structural decision 5). A script, pipeline or MCP client states it
+per token: `tesseraql token` — the `--url` mode and the ops token page alike — gains an
+optional narrowing, `--as <role>` and a role selector on the page, minting the active
+view's roles and permissions instead of the union, plus an `acting_role` claim so the
+member's audit writes the same capacity sentence for a machine caller as for a tab.
+Nothing selected mints the union, exactly as today (the mint reads the session
+principal's `roleGrants`; the ambient map's closed field set is untouched). Web pages
+need none of this: an htmx or fetch call from a page resolves against the document's
+address and inherits the tab's `_as` segment structurally — the fallback of open
+question 4 applies only to callers arriving at the bare address.
+
+And an OAuth client states it per connection: the authorization server's consent screen
+(token-issuance.md Decision 4) is the picker's OAuth face — it holds the store-resolved
+`roleGrants` and the `resource` parameter's member, renders the acting-role selection
+beside consent for a 兼務 user (a single holder auto-confirms, the browser's one-role
+302 in consent form), records the narrowing on the grant so refreshed access tokens
+keep the capacity, and re-resolves the store at refresh, which propagates grant
+changes, validity windows and rule recomputation at refresh cadence — faster than a
+frozen session. Changing a connection's capacity is a re-authorization: the connection
+is the machine-side analogue of the tab. **Client-requested scopes are deliberately not
+the carrier** — the measured MCP clients (ChatGPT Desktop, Codex) let no user type a
+scope and their scope-sending behavior is unobserved; a server-side selection depends
+on neither. The CLI and page narrowing ship with slice 5; the consent-screen face
+belongs to the authorization-server campaign, against the contract paragraph recorded
+in token-issuance.md Decision 4.
+
 ## Structural decision 6: the admin surface answers per application
 
 IAM Admin grows from user administration to grant administration, in the model's own
@@ -469,8 +524,8 @@ on 2, and 5 does not need 3 or 4:
 | 1 | The per-application grant views | Read-only IAM Admin pages derived from the atom grammar + existing store; zero schema | An admin answers "who may do what in this application" from one page |
 | 2 | The store axis and direct grants | `tql_roles.application`, `tql_user_permissions`, `tql_user_roles.source`, validity windows (`starts_at`/`ends_at` on both assignment tables, filtered at resolution), `Principal.roleGrants`/`directPermissions`, widened contracts (optional for `sql` realms), IAM role/grant editors incl. windows, `roleManagement` capability enforced (TQL-IAM-4031) | Roles belong to applications; exceptions are grants with expiry dates, not synthetic roles |
 | 3 | Declared application roles | `tesseraql.security.roles` + TQL-YAML-1407 (lint + boot), boot reconciliation with the implicit `tql.app.use` atom, orphan report | An application ships its duty shapes; the deployment assigns people |
-| 4 | Attributes and assignment rules | `tql_user_attributes` + IAM editing, SCIM enterprise capture + update-path upsert, SAML/OIDC attribute maps + re-sync on login, `tql_role_rules`/`_conditions` with the six kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` (TQL-IAM-4032), sign-in materialization with provenance, rules UI + recompute | 部署/役職 arrive with the user; the store assigns roles by rule |
-| 5 | Activation | The `_as` address + relay normalization + internal header + ingress strip, `tesseraql-auth:activate` + active-view principal, picker + switcher chrome, TQL-SEC-4148, `acting_role` audit column | A 兼務 user acts as one role per tab, and the trail says which |
+| 4 | Attributes and assignment rules | `tql_user_attributes` + IAM editing, SCIM enterprise capture + update-path upsert, SAML/OIDC attribute maps + re-sync on login, `tql_user_identities` immutable federated keys (linkers resolve by `iss`+`sub` / persistent NameID; login id becomes mutable; seeder's `userId = loginId` retires), `tql_role_rules`/`_conditions` with the six kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` (TQL-IAM-4032), sign-in materialization with provenance, rules UI + recompute | 部署/役職 arrive with the user; the store assigns roles by rule |
+| 5 | Activation | The `_as` address + relay normalization + internal header + ingress strip, `tesseraql-auth:activate` + active-view principal, picker + switcher chrome, TQL-SEC-4148, `acting_role` audit column, `token --as` + token-page role selector (active-view mint + `acting_role` claim) | A 兼務 user acts as one role per tab — or per token — and the trail says which |
 
 ## Guards
 
@@ -517,7 +572,9 @@ changes an attribute on second login; a rule assigns at sign-in; attribute chang
 at next sign-in; manual assignment survives recompute; `in` and `subtree` kinds; a
 negative condition (`neq` 派遣) excludes a user an affirmative condition would match; a
 `group` condition follows store group membership; rule-save refusal without managed org
-units; recompute-all converges a cold store.
+units; recompute-all converges a cold store; a changed login id at the IdP re-syncs the
+same account through the identity link instead of provisioning a duplicate, and the
+account keeps its roles and grants across the change.
 
 **Slice 5, the headline IT** (the `StackIdentityIntegrationTest` arrangement): one 兼務
 user, two roles in one member — two "tabs" (two paths under different `_as` segments, one
@@ -527,7 +584,11 @@ Plus: single-role auto-302; multi-role picker redirect for HTML, no-redirect sta
 view for JSON; forged `_as`/header with an unheld role → TQL-SEC-4148 (403 / picker);
 emitted links and `Location` headers carry the segment, asset URLs do not; a bearer with
 claim roles and no `roleGrants` refused activation; unhosted boot serves no activation
-step; switcher swaps in place, new tab keeps the old role — the zero-mixing pin.
+step; switcher swaps in place, new tab keeps the old role — the zero-mixing pin. Plus
+the token face: a token minted `--as` carries the active view and the `acting_role`
+claim, the member's audit row records it, and unnarrowed minting stays the union; an
+htmx call from an activated page reaches the member with the page's role (the
+address-inheritance pin).
 
 ## What moves in the docs, and when
 
@@ -538,9 +599,9 @@ its pages; the direct-grant sentence becomes true), `data-scoping.md` (scope arm
 active view — one paragraph — and the worked per-record sharing pattern: a shares table
 plus an `exists` arm), `account.md` (the switcher), `deployment.md` (seed examples
 gain an application-role bundle), `glossary.md` (application role, acting role,
-activation), `scim.md`/`saml.md`/`oidc.md` (attribute capture and re-sync),
+activation), `scim.md`/`saml.md`/`oidc.md` (attribute capture, re-sync, and the identity link),
 `reference-error-codes.md` regeneration (1407, 4031, 4032, 4148), `reference-yaml-surface`
-(the `roles:` block), the found-defect fixes (`approval-workflow.md:403`,
+(the `roles:` block), `reference-cli.md` (`token --as`), the found-defect fixes (`approval-workflow.md:403`,
 `decision-tables.md:127`), `CHANGELOG.md` per slice, and this document's status block per
 slice. Pre-1.0: each breaking change (the widened `RouteAuditSink` record, the
 `ScimUser` shape, the linker re-sync behavior) gets a changelog line and no migration
@@ -621,7 +682,8 @@ block) and name the shape they will take; the rest are stances, not omissions.
 
 ## Open questions
 
-Each gated on the slice it blocks, with a recommendation:
+Each gated on the slice it blocks, with a recommendation. **All eight were closed on
+their recommendations in review (2026-08-18); kept for the record:**
 
 1. **Does slice 1 ship immediately, before the rest is reviewed?** — *gates sequencing
    only.* Recommended: yes; it is read-only, zero-schema, derived entirely from shipped
