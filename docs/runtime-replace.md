@@ -11,6 +11,14 @@ out. Written 2026-08-18, before implementation.
 
 Everything below was measured against main at #860 unless marked otherwise.
 
+**Status 2026-08-18: design approved in review.** Open questions 1–4 each closed on their
+recommendation (the file-state trigger, the declared drain bound with the cooperative stop
+requested at drain start, the single `deploy` verb, the ready probe before the swap); question
+5 closed as deferred, its section standing as the record the grants work inherits. Review
+itself reshaped the design five times before approval — the swap race, the stack's own stop,
+the overlap window's fine print, the job drain correction, and the deploy-authorization
+boundary — each recorded in place. Implementation pending, in the three slices below.
+
 ## What exists today, measured
 
 **`MultiAppHost` has no replace operation, and its state is immutable.** The host's fields are
