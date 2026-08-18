@@ -16,7 +16,7 @@ file transfers, observability, and supply-chain tooling.
   No Camel DSL in application code.
 - **Security by default** - deny-by-default policies (role/permission/claim), JWT bearer and
   session auth, CSRF, field-level authorization, data masking, CSP, and per-app operations
-  scopes (`ops.app.<name>`).
+  scopes (`tql.ops.view.<name>`).
 - **Identity and federation** - a managed identity schema with SQL-contract realms, an admin
   UI, SAML SP (replay protection, signed redirects, SLO), and SCIM inbound/outbound
   provisioning.

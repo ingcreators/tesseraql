@@ -332,16 +332,18 @@ public final class AppScaffolder {
                   tenantClaim: tenant_id
 
                 # The starter policies every scaffolded route references; rename or split them
-                # per domain as the app grows (e.g. items.read / items.write).
+                # per domain as the app grows (e.g. items.read / items.write). Permission codes
+                # carry the application's own name as their first segment (TQL-YAML-1406), so no
+                # two applications silently share one grant.
                 policies:
                   app.read:
                     anyOf:
                       - role: APP_READ
-                      - permission: app:read
+                      - permission: __APP_NAME__.read
                   app.write:
                     anyOf:
                       - role: APP_WRITE
-                      - permission: app:write
+                      - permission: __APP_NAME__.write
             """;
 
     private static final String MIGRATION_SQL = """

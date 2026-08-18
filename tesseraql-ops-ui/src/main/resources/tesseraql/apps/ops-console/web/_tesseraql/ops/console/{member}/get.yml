@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: tql.opsConsole.overview
+kind: route
+recipe: query-html
+
+# One member's overview, delegated over loopback to the selected member's own runtime with the
+# caller's session (docs/stack-shells.md structural decision 2). ?slot=canary addresses the
+# staged canary runtime — runtime-local data (traces, lanes, slow SQL) is exactly what an
+# operator watches a ramp for.
+
+input:
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: ops.shell.overview
+      params:
+        member: path.member
+        slot: params.slot
+        permissions: principal.permissions
+        cookie: params.Cookie
+response:
+  html:
+    status: 200
+    template: overview.html
+    model:
+      ops: main

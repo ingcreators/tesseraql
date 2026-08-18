@@ -305,10 +305,10 @@ alerts channel — and stay visible until an operator acts:
 
 - the **Outbox** screen of the [operations console](ops-console.md) (`/_tesseraql/ops/console/outbox`):
   recent deliveries with status, attempts, and last error, scoped to the caller's
-  `ops.app.<name>` grants
-- `GET /_tesseraql/ops/outbox` — the same delivery log as JSON (`ops.batch.view`)
+  `tql.ops.view.<name>` grants
+- `GET /_tesseraql/ops/outbox` — the same delivery log as JSON (view-scoped)
 - `POST /_tesseraql/ops/outbox/{id}/redeliver` — requeues a `FAILED`/`DEAD` event
-  (`ops.batch.run`); the attempt count is kept so the history stays honest
+  (requiring `tql.ops.run.<name>`); the attempt count is kept so the history stays honest
 
 Delivered events are swept by the standard retention job (`tesseraql.retention.outbox`).
 

@@ -2,8 +2,8 @@
 -- PostgreSQL syntax (on conflict); other dialects override with a <dialect>.sql variant.
 insert into tql_permissions (permission_id, permission_code, permission_name)
 values
-  ( /* permissionId */ 'ops.app.*',
-    /* permissionCode */ 'ops.app.*',
-    /* permissionName */ 'ops.app.*' )
+  ( /* permissionId */ 'tql.ops.view.*',
+    /* permissionCode */ 'tql.ops.view.*',
+    /* permissionName */ 'tql.ops.view.*' )
 on conflict (permission_code) do nothing
 ;

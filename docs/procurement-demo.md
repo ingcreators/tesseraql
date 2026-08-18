@@ -105,7 +105,7 @@ Field policies / masking:
   requester sees quantities and dates but masked prices on the detail view — masking
   demonstrated on a screen the tour actually visits, not a synthetic example.
 
-Console access rides the standard per-app scope (`ops.app.procurement`).
+Console access rides the standard per-app scope (`tql.ops.view.procurement`).
 
 ## Data model
 

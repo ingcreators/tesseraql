@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-member-page(|Route Audit — ${audit.shell.label}|, ${audit.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${audit.shell.base}${audit.shell.slotQuery}|}">&larr; overview</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card">
+  <div class="hc-card__header">Route audit trail</div>
+  <div class="hc-card__body hc-stack">
+    <!-- The store is flag-gated; a disabled store names its flag instead of rendering an
+         empty table that pretends nothing happened (docs/ops-console-coverage.md). -->
+    <div class="hc-empty" th:unless="${audit.enabled}">
+      <p class="hc-empty__title">Route audit is not enabled.</p>
+      <p>Set <code>tesseraql.audit.routes.enabled: true</code> to record business-route
+        writes; the newest entries appear here.</p>
+    </div>
+    <th:block th:if="${audit.enabled}">
+      <!-- Server-side narrowing of the fetched window (docs/console-ux-refresh.md
+           slice 5). The form sits outside the auto-refreshing results region below, so
+           the 15s refresh can never discard what the operator is typing. -->
+      <form method="get" th:action="@{|${audit.shell.base}/audit|}" class="hc-cluster">
+        <input type="hidden" name="slot" th:value="${audit.shell.canary ? 'canary' : ''}">
+        <label class="hc-field">
+          <span class="hc-field__label">Route contains</span>
+          <input class="hc-input" data-size="sm" name="route" th:value="${route}">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">Actor contains</span>
+          <input class="hc-input" data-size="sm" name="actor" th:value="${actor}">
+        </label>
+        <label class="hc-field">
+          <span class="hc-field__label">Status starts with</span>
+          <input class="hc-input" data-size="sm" name="status" th:value="${status}">
+        </label>
+        <button class="hc-button" data-size="sm" type="submit">Filter</button>
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:if="${route != null or actor != null or status != null}"
+           th:href="@{|${audit.shell.base}/audit${audit.shell.slotQuery}|}">Clear</a>
+      </form>
+      <div id="audit-results" class="hc-stack" hx-trigger="every 15s"
+           hx-select="#audit-results" hx-target="this" hx-swap="outerHTML"
+           th:attr="hx-get=@{|${audit.shell.base}/audit?slot=${audit.shell.canary ? 'canary' : ''}&amp;route=${#uris.escapeQueryParam(route != null ? route : '')}&amp;actor=${#uris.escapeQueryParam(actor != null ? actor : '')}&amp;status=${#uris.escapeQueryParam(status != null ? status : '')}|}">
+      <div class="hc-empty" th:unless="${audit.hasRows}"><p class="hc-empty__title">No audited requests recorded yet.</p></div>
+      <div class="hc-datagrid" th:if="${audit.hasRows}">
+        <div class="hc-datagrid__scroll">
+          <table class="hc-datagrid__table">
+            <thead class="hc-datagrid__head"><tr>
+              <th class="hc-datagrid__headcell">When</th>
+              <th class="hc-datagrid__headcell">App</th>
+              <th class="hc-datagrid__headcell">Route</th>
+              <th class="hc-datagrid__headcell">Request</th>
+              <th class="hc-datagrid__headcell">Actor</th>
+              <th class="hc-datagrid__headcell">Status</th>
+              <th class="hc-datagrid__headcell" data-numeric>Duration (ms)</th>
+              <th class="hc-datagrid__headcell">Params</th>
+              <th class="hc-datagrid__headcell">Trace</th>
+            </tr></thead>
+            <tbody class="hc-datagrid__body">
+              <tr class="hc-datagrid__row" th:each="a : ${audit.rows}">
+                <td class="hc-datagrid__cell" th:text="${a.occurredAt}"></td>
+                <td class="hc-datagrid__cell" th:text="${a.app}"></td>
+                <td class="hc-datagrid__cell" th:text="${a.routeId}"></td>
+                <td class="hc-datagrid__cell">[[${a.method}]] <code th:text="${a.path}"></code></td>
+                <td class="hc-datagrid__cell" th:text="${a.actor}"></td>
+                <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${a.statusVariant}" th:text="${a.status}"></span></td>
+                <td class="hc-datagrid__cell" data-numeric th:text="${a.durationMs}"></td>
+                <td class="hc-datagrid__cell"><code th:text="${a.params}"></code></td>
+                <td class="hc-datagrid__cell" th:text="${a.traceId}"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="hc-field__message">The newest 200 audited requests, narrowed to the apps
+        your <code>tql.ops.view</code> grants cover; the filter narrows within that window.</p>
+      </div>
+    </th:block>
+  </div>
+</section>
+</div>
+</html>

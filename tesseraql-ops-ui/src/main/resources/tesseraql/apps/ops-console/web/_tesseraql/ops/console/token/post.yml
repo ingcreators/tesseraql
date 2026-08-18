@@ -14,6 +14,11 @@ recipe: query-html
 # page that can make the browser POST could convert a visitor's session into a bearer token.
 
 sources:
+  nav:
+    service:
+      name: ops.shell.nav
+      params:
+        permissions: principal.permissions
   main:
     service:
       name: ops.token.issue
@@ -29,3 +34,4 @@ response:
     template: token.html
     model:
       issue: main
+      shellnav: nav

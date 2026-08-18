@@ -96,9 +96,9 @@ class RouteAuditAndErrorPagesIntegrationTest {
         JsonNode rows = MAPPER.readTree(ops.body());
         assertThat(rows.toString()).contains("things").contains("audit-caller");
 
-        // A caller without the ops.app grant for this app sees nothing (deny-by-default).
+        // A caller without the tql.ops.view grant for this app sees nothing (deny-by-default).
         HttpResponse<String> unscoped = get("/_tesseraql/ops/audit",
-                token(List.of("OPS"), List.of("ops.app.other")), null);
+                token(List.of("OPS"), List.of("tql.ops.view.other")), null);
         assertThat(unscoped.statusCode()).isEqualTo(200);
         assertThat(unscoped.body()).doesNotContain("audit-caller");
     }
@@ -115,12 +115,12 @@ class RouteAuditAndErrorPagesIntegrationTest {
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal(
                 "console-op", "console-op", "Console Op", null,
-                List.of(), List.of("OPS"), List.of("ops.app.*"), java.util.Map.of()),
+                List.of(), List.of("OPS"), List.of("tql.ops.view.*"), java.util.Map.of()),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
 
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
-                        + "/_tesseraql/ops/console/audit"))
+                        + "/_tesseraql/ops/console/audit-it/audit"))
                 .header("Cookie", sessions.cookieName() + "=" + sid)
                 .build();
         HttpResponse<String> page = HttpClient.newHttpClient().send(request,
@@ -209,7 +209,7 @@ class RouteAuditAndErrorPagesIntegrationTest {
     }
 
     private static String token(List<String> roles) throws Exception {
-        return token(roles, List.of("ops.app.*"));
+        return token(roles, List.of("tql.ops.view.*"));
     }
 
     private static String token(List<String> roles, List<String> permissions) throws Exception {
@@ -263,9 +263,6 @@ class RouteAuditAndErrorPagesIntegrationTest {
                       rolesClaim: roles
                       permissionsClaim: permissions
                     policies:
-                      ops.batch.view:
-                        anyOf:
-                          - role: OPS
                       things.read:
                         anyOf:
                           - role: OPS

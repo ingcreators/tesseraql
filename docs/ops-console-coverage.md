@@ -21,11 +21,11 @@ remaining candidates are one coherent wave over the machinery that now exists:
 
 Bundled-app routes are static YAML — a `.tqlapp` cannot mount a page conditionally on the
 host's configuration — so `GET /_tesseraql/ops/console/audit` always exists
-(`ops.batch.view`, an *Audit* entry in ops-nav), and the provider reports whether the
+(view-scoped, an *Audit* entry in the console nav), and the provider reports whether the
 store is on. Disabled renders one line naming `tesseraql.audit.routes.enabled` instead of
 an empty table pretending there was nothing to show — the "corrupt reads become visible"
 stance from the Studio schema work, applied to a flag-gated store. Enabled renders
-`routeAudit.recent(200, scope)`: the same rows, the same `ops.app.<name>` narrowing, the
+`routeAudit.recent(200, scope)`: the same rows, the same `tql.ops.view.<name>` narrowing, the
 same policy as the JSON API. The params JSON column is shown — the JSON API already
 returns it to the same policy holders, so the console adds no new exposure.
 

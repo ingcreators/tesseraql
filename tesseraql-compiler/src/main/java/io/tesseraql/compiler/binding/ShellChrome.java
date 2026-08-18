@@ -45,6 +45,21 @@ final class ShellChrome {
     }
 
     /**
+     * Publishes the reserved {@code _system} variable: where this runtime's pages link the
+     * system surfaces (operations console, Studio, IAM Admin), bound by the runtime
+     * topology-aware — a hosted member links the stack's origin-scope console, the unhosted
+     * boot its own mounted copy, and an unmounted surface has no entry so the shell omits the
+     * link (docs/stack-shells.md structural decision 2).
+     */
+    void system() {
+        Object nav = exchange.getContext().getRegistry()
+                .lookupByName(TesseraqlProperties.SYSTEM_NAV_BEAN);
+        if (nav instanceof Map<?, ?> links && !links.isEmpty()) {
+            model.put("_system", links);
+        }
+    }
+
+    /**
      * The browser-session principal: non-null only when the request rides a browser session (the
      * CSRF token stashed on authentication is the marker, the same one {@code _csrf} keys off)
      * AND the request principal is present. The one guard the per-user contributors (theme

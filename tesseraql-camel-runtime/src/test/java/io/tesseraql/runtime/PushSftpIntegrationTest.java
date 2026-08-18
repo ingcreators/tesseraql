@@ -220,7 +220,7 @@ class PushSftpIntegrationTest {
         String header = enc.encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = enc.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
                 Map.of("sub", "ops", "roles", List.of("BATCH_OPERATOR"),
-                        "permissions", List.of("ops.app.*")))));
+                        "permissions", List.of("tql.ops.view.*", "tql.ops.run.*")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

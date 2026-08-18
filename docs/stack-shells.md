@@ -31,7 +31,12 @@ mounts, no per-member console opt-out, the deploy endpoint before its page, the 
 `tql.app.use` fence, and role bundles documented rather than seeded. Review reshaped the
 design five times before approval — the `.app`-marker draft, the standalone-topology
 correction, the entry-permission retirement, the structural namespace fence, and the `tql.`
-mark — each recorded in place. Implementation pending, in the three slices below.
+mark — each recorded in place. **Slice 1 is shipped** (the atom grammar and the name rules,
+`TQL-YAML-1406`'s namespace fence, and the ops shell with its switcher, loopback delegation,
+canary entries and per-member degradation); slices 2 and 3 are pending. One measurement
+correction from implementation: the console's live pages ride htmx polling, not SSE, so the
+delegation carries ordinary requests — the relay's streaming discipline stays proven for the
+surfaces that do stream.
 
 ## What exists today, measured
 
@@ -399,8 +404,9 @@ is deliberately not promised here.
 - **No new atoms without a surface.** The table in structural decision 1 is exhaustive;
   a verb arrives only with the surface that checks it.
 - **TQL-YAML-1405 (widened twice)** — an application name containing `.` is refused, and
-  the family words `app`/`ops`/`studio`/`iam` join `assets` as reserved names; both at lint
-  and at boot, with the atom grammar named as the reason.
+  `tql` joins `assets` as a reserved name (the mark, not the family words — the second
+  draft's family-word reservation is rejected in structural decision 1); both at lint and
+  at boot, with the atom grammar named as the reason.
 - **An application's permission codes carry its own name as their first segment** — lint
   and boot, so the framework's atoms and every application's codes are disjoint by
   construction; cross-application sharing happens in roles.

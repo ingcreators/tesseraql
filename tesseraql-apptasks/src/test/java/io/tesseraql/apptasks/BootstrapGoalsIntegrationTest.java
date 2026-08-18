@@ -174,10 +174,10 @@ class BootstrapGoalsIntegrationTest {
         bootstrap.applySchema("postgres");
 
         bootstrap.seedAdmin("admin", "first-password", List.of("iam.admin"),
-                List.of("ops.app.*"));
+                List.of("tql.ops.view.*"));
         // Re-seeding rotates the password in place instead of failing on the unique login.
         bootstrap.seedAdmin("admin", "rotated-password", List.of("iam.admin"),
-                List.of("ops.app.*"));
+                List.of("tql.ops.view.*"));
 
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();
@@ -209,7 +209,7 @@ class BootstrapGoalsIntegrationTest {
                                 + " join tql_users u on u.user_id = ur.user_id"
                                 + " where u.login_id = 'admin'")) {
             assertThat(permissions.next()).isTrue();
-            assertThat(permissions.getString(1)).isEqualTo("ops.app.*");
+            assertThat(permissions.getString(1)).isEqualTo("tql.ops.view.*");
             assertThat(permissions.next()).isFalse();
         }
     }

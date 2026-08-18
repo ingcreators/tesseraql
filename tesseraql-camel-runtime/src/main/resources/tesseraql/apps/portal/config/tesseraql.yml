@@ -5,15 +5,13 @@ tesseraql:
   app:
     name: portal
   # This application is the main application of the stack surface runtime — the one runtime
-  # the host starts at the origin scope (docs/root-portal.md). Sign-in and the account surface
-  # mount into it through the ordinary discovery below; the per-application development
-  # surfaces do not, because an origin-scope Studio would edit this application's own
-  # extracted tree, and the ops console and IAM Admin arrive at the stack scope with their
-  # own slices.
+  # the host starts at the origin scope (docs/root-portal.md). Sign-in, the account surface
+  # and the ops shell (docs/stack-shells.md) mount into it through the ordinary discovery
+  # below; the per-application development surface does not, because an origin-scope Studio
+  # would edit this application's own extracted tree (its stack shell is slice 8's own
+  # design), and IAM Admin arrives at the stack scope with slice 2.
   apps:
     studio:
-      enabled: false
-    ops-console:
       enabled: false
     iam-admin:
       enabled: false

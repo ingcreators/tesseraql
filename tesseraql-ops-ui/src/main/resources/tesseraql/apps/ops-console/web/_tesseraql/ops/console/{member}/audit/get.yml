@@ -1,0 +1,50 @@
+version: tesseraql/v1
+id: tql.opsConsole.audit
+kind: route
+recipe: query-html
+
+# The business-route audit trail (docs/ops-console-coverage.md): the same rows and scope
+# narrowing as the member's GET /_tesseraql/ops/audit. The page is always mounted; the
+# member's provider reports whether the flag-gated store is on.
+
+# The filter narrows the fetched newest-200 window (route/actor contains, status
+# starts-with); the page states the window.
+input:
+  route:
+    type: string
+    required: false
+  actor:
+    type: string
+    required: false
+  status:
+    type: string
+    required: false
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: ops.shell.audit
+      params:
+        member: path.member
+        slot: params.slot
+        # The member re-narrows to the caller's tql.ops.view.<name> grants (deny by default).
+        permissions: principal.permissions
+        cookie: params.Cookie
+        route: params.route
+        actor: params.actor
+        status: params.status
+response:
+  html:
+    status: 200
+    template: audit.html
+    model:
+      audit: main
+      route: params.route
+      actor: params.actor
+      status: params.status

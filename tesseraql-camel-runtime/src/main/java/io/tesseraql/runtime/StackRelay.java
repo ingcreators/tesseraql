@@ -314,7 +314,7 @@ final class StackRelay {
             // The origin fence (docs/root-portal.md): origin-scope framework surfaces —
             // sign-in, the account surface, the portal — and their assets are the stack surface
             // runtime's, and the name grammar keeps both segments unreachable by any member
-            // (`_tesseraql` by the leading-underscore rule, `assets` as its one reserved word).
+            // (`_tesseraql` by the leading-underscore rule, `assets` as a reserved word).
             // The health pair above deliberately stays the gateway's own answer, so a
             // load-balancer probe does not depend on the surface runtime being up.
             if (surfacePort != null && insideTheOriginFence(rawPath)) {

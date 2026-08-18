@@ -163,7 +163,10 @@ and the source-tree/dev path synthesises empty lists, so in `dev` every member l
 application grants are deliberately **not** invented here: `ops.app.<name>` means operational
 visibility today, its shift toward "which applications appear in the switcher" is
 stack-architecture open question 4 and belongs to slice 7. When that model lands, the portal's
-filter widens in one provider.
+filter widens in one provider. *(Landed for operations — docs/stack-shells.md: the ops shell's
+switcher is the caller's `tql.ops.view.<name>` atoms applied to the member list. The portal's
+own tile grant, `tql.app.use.<name>`, arrives with that design's slice 2, widening exactly this
+filter.)*
 
 **Datasources.** The surface runtime's main datasource is the stack's framework coordinate,
 supplied through the existing `MainDatasourceOverride` path (`HostContext.forApplication(basePath,
@@ -181,9 +184,9 @@ it (no leading underscore is *forbidden*, not reserved-for-framework), and a res
 would be a second mechanism defending a shape. The overlap, measured: a member named `portal` owns
 `/portal` (no URL collision — the surface lives under the fence); its history table lives on its
 own business database (no collision unless an operator points a business datasource at the
-framework database, which is already their own doing); the residual overlap is that an
-`ops.app.portal` grant names both, and the surface runtime's ops surface is disabled, so the grant
-reaches nothing extra today. Revisit if the framework ever wants a fenced identity namespace —
+framework database, which is already their own doing); the residual overlap is that a
+`tql.ops.view.portal` grant names both, and the ops shell's switcher lists members only — the
+surface runtime is not a member — so the grant reaches nothing extra today. Revisit if the framework ever wants a fenced identity namespace —
 that question belongs to the AS slices, which mint framework identities anyway.
 
 ### The root redirect

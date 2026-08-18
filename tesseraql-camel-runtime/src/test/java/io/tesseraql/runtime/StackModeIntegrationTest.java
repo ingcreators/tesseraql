@@ -165,13 +165,17 @@ class StackModeIntegrationTest {
 
         assertThat(studio.statusCode()).isEqualTo(200);
         assertThat(studio.body()).contains("<meta name=\"csrf-token\"");
-        assertThat(originRootedUrlsIn(studio.body())).isEmpty();
+        // The one origin-scope address a member page carries: the operations console lives
+        // at the stack scope now (docs/stack-shells.md structural decision 2), so the shell
+        // chrome links it origin-absolute — everything else stays base-relative.
+        assertThat(originRootedUrlsIn(studio.body()))
+                .containsOnly("/_tesseraql/ops/console");
         assertThat(studio.body())
                 .as("the command palette navigates to addresses this runtime serves")
                 .contains("data-value=\"/shop-a/_tesseraql/studio/ui/docs\"");
         // Every address it names is served by this runtime. Whether this caller may open it is
-        // a separate question — the ops console needs ops.app.* — so the test asks only that the
-        // address exists, which is what a prefix can break.
+        // a separate question — the ops shell needs tql.ops.view atoms — so the test asks only
+        // that the address exists, which is what a prefix can break.
         for (String url : prefixedUrlsIn(studio.body())) {
             assertThat(get(url, sessionCookie).statusCode()).as(url).isNotEqualTo(404);
         }

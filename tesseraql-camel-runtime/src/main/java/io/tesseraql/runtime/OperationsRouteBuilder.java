@@ -19,14 +19,22 @@ import org.apache.camel.builder.RouteBuilder;
 
 /**
  * Builds the Operations API for batch jobs under {@code /_tesseraql/ops/batch} (design ch. 26.7,
- * 43.7). All endpoints require a bearer principal and a {@code ops.batch.*} policy; data attributed
- * to an app (jobs, executions, traces) additionally narrows to the caller's
- * {@code ops.app.<name>} grants, deny by default (design ch. 26.11). Runtime-wide diagnostics
- * (lanes, slow SQL, pinning, aggregate metrics, alerts) stay behind the entry permission only.
+ * 43.7), and the browser-face console data endpoints under {@code /_tesseraql/ops/data} the stack
+ * shell delegates to (docs/stack-shells.md structural decision 2).
+ *
+ * <p>Authorization is the atoms, checked here rather than through a deployment-declared policy —
+ * a framework surface checks atoms, never roles (docs/stack-shells.md structural decision 1).
+ * Data attributed to an app (jobs, executions, traces) narrows to the caller's
+ * {@code tql.ops.view.<name>} grants, deny by default; actions require
+ * {@code tql.ops.run.<name>}, and out-of-scope reads exactly like unknown. Runtime-wide
+ * diagnostics (lanes, slow SQL, pinning, aggregate metrics, alerts) describe the shared substrate
+ * and open to any holder of any {@code tql.ops.view} grant.
  */
 final class OperationsRouteBuilder extends RouteBuilder {
 
     private static final String VIEW = "tesseraql-auth:authenticate?auth=bearer";
+    private static final String BROWSER = "tesseraql-auth:authenticate?auth=browser";
+    private static final String CSRF = "tesseraql-auth:csrf";
 
     /** The app's code catalogs, or null when it declares none (docs/lookups.md, decision 14). */
     private static io.tesseraql.core.catalog.CatalogStore catalogStore(
@@ -120,14 +128,14 @@ final class OperationsRouteBuilder extends RouteBuilder {
         rest().get("/_tesseraql/ops/traces/metrics").to("direct:ops.traceMetrics");
         rest().get("/_tesseraql/ops/alerts").to("direct:ops.alerts");
         rest().get("/_tesseraql/ops/pinning").to("direct:ops.pinning");
-        // The business-route audit trail read surface (roadmap Phase 45): bearer + policy
-        // gated and narrowed to the caller's ops.app.<name> grants like every ops read.
+        // The business-route audit trail read surface (roadmap Phase 45): bearer-gated and
+        // narrowed to the caller's tql.ops.view.<name> grants like every ops read.
         if (routeAudit != null) {
             rest().get("/_tesseraql/ops/audit").to("direct:ops.audit");
             from("direct:ops.audit").routeId("ops.audit")
-                    .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                    .to(VIEW).process(requireAnyOpsView())
                     .process(jsonProcessor(
-                            exchange -> routeAudit.recent(200, scope(exchange))));
+                            exchange -> routeAudit.recent(200, viewScope(exchange))));
         }
 
         // What each code catalog holds and a manual refresh (docs/lookups.md, decision 14).
@@ -186,9 +194,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
         }
 
         from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
-                    Predicate<String> scope = scope(exchange);
+                    Predicate<String> scope = viewScope(exchange);
                     // Objects since 0.11 (docs/jobs.md): the trigger story and the
                     // operational promises, so the API is at least as told as the CLI.
                     return jobOwners.entrySet().stream()
@@ -198,9 +206,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         from("direct:ops.batch.executions").routeId("ops.batch.executions")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
-                    Predicate<String> scope = scope(exchange);
+                    Predicate<String> scope = viewScope(exchange);
                     return repository.listExecutions(50).stream()
                             .filter(execution -> scope.test(execution.appName()))
                             .map(this::executionMap)
@@ -208,17 +216,17 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         from("direct:ops.batch.executionDetail").routeId("ops.batch.executionDetail")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(this::executionDetail));
 
         from("direct:ops.batch.run").routeId("ops.batch.run")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .to(VIEW)
                 .process(jsonProcessor(this::runJob));
 
         // The cooperative stop (docs/jobs.md "Stopping a run"): sets the flag the running
         // executor polls at step and chunk-commit boundaries; gated like starting a run.
         from("direct:ops.batch.cancel").routeId("ops.batch.cancel")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .to(VIEW)
                 .process(jsonProcessor(this::cancelExecution));
 
         // A job-produced export has no route-scoped download URL, so it is fetched here
@@ -227,56 +235,55 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // faces, one handler: the API for machine callers, the console for the browser
         // session behind the transfers page.
         from("direct:ops.batch.transferFile").routeId("ops.batch.transferFile")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(this::transferFile);
         from("direct:ops.console.transferFile").routeId("ops.console.transferFile")
-                .to("tesseraql-auth:authenticate?auth=browser")
-                .to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(BROWSER).process(requireAnyOpsView())
                 .process(this::transferFile);
 
         from("direct:ops.overview").routeId("ops.overview")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> dashboard.overview(20, scope(exchange))));
+                .to(VIEW).process(requireAnyOpsView())
+                .process(jsonProcessor(exchange -> dashboard.overview(20, viewScope(exchange))));
 
         from("direct:ops.lanes").routeId("ops.lanes")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.overview(0).lanes()));
 
         from("direct:ops.slowSql").routeId("ops.slowSql")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.slowSql(),
                         OperationsRouteBuilder::sqlExecutionWire)));
 
         from("direct:ops.traces").routeId("ops.traces")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> mapList(dashboard.traces(scope(exchange)),
+                .to(VIEW).process(requireAnyOpsView())
+                .process(jsonProcessor(exchange -> mapList(dashboard.traces(viewScope(exchange)),
                         OperationsRouteBuilder::spanWire)));
 
         from("direct:ops.traceTree").routeId("ops.traceTree")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
-                .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(scope(exchange)),
+                .to(VIEW).process(requireAnyOpsView())
+                .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(viewScope(exchange)),
                         OperationsRouteBuilder::traceNodeWire)));
 
         from("direct:ops.traceSummary").routeId("ops.traceSummary")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceSummaries(
                         exchange.getMessage().getHeader("filter", String.class),
-                        scope(exchange))));
+                        viewScope(exchange))));
 
         from("direct:ops.traceMetrics").routeId("ops.traceMetrics")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceMetrics()));
 
         from("direct:ops.alerts").routeId("ops.alerts")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.alerts()));
 
         from("direct:ops.pinning").routeId("ops.pinning")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> pinningWire(dashboard.pinning())));
 
         from("direct:ops.catalogs").routeId("ops.catalogs")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
                     return store == null
@@ -286,12 +293,16 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         from("direct:ops.catalogs.refresh").routeId("ops.catalogs.refresh")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .to(VIEW)
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
                     String name = exchange.getMessage().getHeader("name", String.class);
-                    if (store == null || store.status().stream()
-                            .noneMatch(status -> status.name().equals(name))) {
+                    // A catalog belongs to the application this runtime serves, so refreshing
+                    // one is acting on that application: tql.ops.run.<thisApp>, and out of
+                    // scope reads exactly like unknown.
+                    if (store == null || !runScope(exchange).test(actions.mainApp())
+                            || store.status().stream()
+                                    .noneMatch(status -> status.name().equals(name))) {
                         throw OpsActions.notFound("Catalog '" + name + "'");
                     }
                     // reload() re-reads whatever the hold says, which is the whole point of a
@@ -305,34 +316,150 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         from("direct:ops.outbox").routeId("ops.outbox")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(
-                        actions.recentOutbox(scope(exchange)), this::outboxEventMap)));
+                        actions.recentOutbox(viewScope(exchange)), this::outboxEventMap)));
 
         from("direct:ops.outbox.redeliver").routeId("ops.outbox.redeliver")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .to(VIEW)
                 .process(jsonProcessor(this::redeliverOutboxEvent));
 
         from("direct:ops.events").routeId("ops.events")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.view")
+                .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(
-                        actions.recentEvents(scope(exchange)), this::channelEventMap)));
+                        actions.recentEvents(viewScope(exchange)), this::channelEventMap)));
 
         from("direct:ops.events.redeliver").routeId("ops.events.redeliver")
-                .to(VIEW).to("tesseraql-auth:authorize?policy=ops.batch.run")
+                .to(VIEW)
                 .process(jsonProcessor(this::redeliverChannelEvent));
+
+        // --- The stack shell's delegation face (docs/stack-shells.md structural decision 2) ---
+        // Browser-authenticated JSON endpoints answering the same template-ready view models the
+        // console's ops.* providers shape, so the origin shell can render this member's pages
+        // without the member carrying the console's chrome. The session store is shared across
+        // the stack, so the shell forwards the caller's own cookie and this runtime
+        // authenticates the same principal and re-runs its own grant checks — the shell adds
+        // reach, never authority. A caller without tql.ops.view.<thisApp> is refused with the
+        // 404-shaped TQL-BATCH-4040, the same answer an unknown resource gives.
+        rest().get("/_tesseraql/ops/data/overview").to("direct:ops.data.overview");
+        rest().get("/_tesseraql/ops/data/jobs").to("direct:ops.data.jobs");
+        rest().get("/_tesseraql/ops/data/traces").to("direct:ops.data.traces");
+        rest().get("/_tesseraql/ops/data/transfers").to("direct:ops.data.transfers");
+        rest().get("/_tesseraql/ops/data/outbox").to("direct:ops.data.outbox");
+        rest().get("/_tesseraql/ops/data/events").to("direct:ops.data.events");
+        rest().get("/_tesseraql/ops/data/audit").to("direct:ops.data.audit");
+        rest().get("/_tesseraql/ops/data/executions/{id}").to("direct:ops.data.execution");
+        rest().post("/_tesseraql/ops/data/jobs/run").to("direct:ops.data.jobRun");
+        rest().post("/_tesseraql/ops/data/outbox/{id}/redeliver")
+                .to("direct:ops.data.outboxRedeliver");
+        rest().post("/_tesseraql/ops/data/events/{id}/redeliver")
+                .to("direct:ops.data.eventsRedeliver");
+
+        from("direct:ops.data.overview").routeId("ops.data.overview")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(
+                        exchange -> invokeProvider(exchange, "ops.overview", Map.of())));
+        from("direct:ops.data.jobs").routeId("ops.data.jobs")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(
+                        exchange -> invokeProvider(exchange, "ops.jobs", Map.of())));
+        from("direct:ops.data.traces").routeId("ops.data.traces")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(
+                        exchange -> invokeProvider(exchange, "ops.traces", Map.of())));
+        from("direct:ops.data.transfers").routeId("ops.data.transfers")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(
+                        exchange -> invokeProvider(exchange, "ops.transfers", Map.of())));
+        from("direct:ops.data.outbox").routeId("ops.data.outbox")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(
+                        exchange -> invokeProvider(exchange, "ops.outbox", Map.of())));
+        from("direct:ops.data.events").routeId("ops.data.events")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(
+                        exchange -> invokeProvider(exchange, "ops.events", Map.of())));
+        from("direct:ops.data.audit").routeId("ops.data.audit")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(exchange -> invokeProvider(exchange, "ops.audit",
+                        headerParams(exchange, "route", "actor", "status"))));
+        from("direct:ops.data.execution").routeId("ops.data.execution")
+                .to(BROWSER).process(requireMemberView())
+                .process(jsonProcessor(exchange -> invokeProvider(exchange, "ops.execution",
+                        headerParams(exchange, "id"))));
+        // Actions: CSRF-validated (the shell forwards the caller's X-CSRF-Token beside the
+        // cookie), and the tql.ops.run.<name> check lives in the provider's run scope — out of
+        // scope reads exactly like unknown.
+        from("direct:ops.data.jobRun").routeId("ops.data.jobRun")
+                .to(BROWSER).to(CSRF)
+                .process(jsonProcessor(exchange -> {
+                    Map<String, Object> values = new LinkedHashMap<>();
+                    if (exchange.getMessage().getBody() instanceof Map<?, ?> form) {
+                        form.forEach((key, value) -> values.put(String.valueOf(key), value));
+                    }
+                    Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
+                            Principal.class);
+                    Map<String, Object> params = new LinkedHashMap<>();
+                    params.put("id", exchange.getMessage().getHeader("id", String.class));
+                    params.put("values", values);
+                    params.put("actor", principal == null ? null : principal.loginId());
+                    return invokeProvider(exchange, "ops.jobRun", params);
+                }));
+        from("direct:ops.data.outboxRedeliver").routeId("ops.data.outboxRedeliver")
+                .to(BROWSER).to(CSRF)
+                .process(jsonProcessor(exchange -> invokeProvider(exchange,
+                        "ops.outboxRedeliver", headerParams(exchange, "id"))));
+        from("direct:ops.data.eventsRedeliver").routeId("ops.data.eventsRedeliver")
+                .to(BROWSER).to(CSRF)
+                .process(jsonProcessor(exchange -> invokeProvider(exchange,
+                        "ops.eventsRedeliver", headerParams(exchange, "id"))));
+    }
+
+    /**
+     * The delegation face's own fence: the caller must hold {@code tql.ops.view.<thisApp>} —
+     * refused with the 404-shaped TQL-BATCH-4040 so an out-of-scope member reads exactly like
+     * an unknown one, whichever side of the shell the probe comes from.
+     */
+    private Processor requireMemberView() {
+        return exchange -> {
+            if (!viewScope(exchange).test(actions.mainApp())) {
+                throw OpsActions.notFound("Application '" + actions.mainApp() + "'");
+            }
+        };
+    }
+
+    /** The console's view-model provider, invoked with the session principal's own facts. */
+    private Object invokeProvider(Exchange exchange, String name, Map<String, Object> extra) {
+        io.tesseraql.core.service.ServiceProviders providers = exchange.getContext().getRegistry()
+                .lookupByNameAndType(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
+                        io.tesseraql.core.service.ServiceProviders.class);
+        Map<String, Object> params = new LinkedHashMap<>(extra);
+        params.put("permissions", permissions(exchange));
+        return providers.require(name).invoke(params);
+    }
+
+    /** The named headers (path/query/form values) as provider params, nulls kept out. */
+    private static Map<String, Object> headerParams(Exchange exchange, String... names) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        for (String name : names) {
+            Object value = exchange.getMessage().getHeader(name);
+            if (value != null) {
+                params.put(name, value);
+            }
+        }
+        return params;
     }
 
     /** Requeues a FAILED/DEAD event; outside the caller's scope it reads as unknown. */
     private Object redeliverOutboxEvent(Exchange exchange) {
         return actions.redeliverOutbox(
-                exchange.getMessage().getHeader("id", String.class), scope(exchange));
+                exchange.getMessage().getHeader("id", String.class), runScope(exchange));
     }
 
     /** Requeues a DEAD queue message; outside the caller's scope it reads as unknown. */
     private Object redeliverChannelEvent(Exchange exchange) {
         return actions.redeliverEvent(
-                exchange.getMessage().getHeader("id", String.class), scope(exchange));
+                exchange.getMessage().getHeader("id", String.class), runScope(exchange));
     }
 
     private Map<String, Object> channelEventMap(io.tesseraql.core.messaging.ChannelEvent event) {
@@ -365,13 +492,38 @@ final class OperationsRouteBuilder extends RouteBuilder {
         return map;
     }
 
-    /**
-     * The caller's per-app scope: what this runtime serves, narrowed by the bearer
-     * principal's {@code ops.app.*} grants (docs/app-isolation-model.md decision 4).
-     */
-    private Predicate<String> scope(Exchange exchange) {
+    private static Object permissions(Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
-        return actions.scope(principal == null ? null : principal.permissions());
+        return principal == null ? null : principal.permissions();
+    }
+
+    /**
+     * The caller's per-app view scope: what this runtime serves, narrowed by the principal's
+     * {@code tql.ops.view.<name>} grants (docs/stack-shells.md structural decision 1).
+     */
+    private Predicate<String> viewScope(Exchange exchange) {
+        return actions.viewScope(permissions(exchange));
+    }
+
+    /** The caller's per-app run scope — acting, not seeing ({@code tql.ops.run.<name>}). */
+    private Predicate<String> runScope(Exchange exchange) {
+        return actions.runScope(permissions(exchange));
+    }
+
+    /**
+     * The entry gate for data that belongs to no single application — lanes, slow SQL, pinning,
+     * aggregate trace metrics, alerts, the catalog listing. They describe the shared substrate
+     * the caller's applications run on, so any {@code tql.ops.view} grant opens them; a caller
+     * with none is refused rather than shown an empty page, exactly as the retired entry
+     * permission refused (TQL-SEC-4031).
+     */
+    private Processor requireAnyOpsView() {
+        return exchange -> {
+            if (!io.tesseraql.opsui.OpsScope.holdsAnyView(permissions(exchange))) {
+                throw new TqlException(io.tesseraql.security.policy.PolicyEngine.FORBIDDEN,
+                        "Principal holds no tql.ops.view grant (deny by default)");
+            }
+        };
     }
 
     /** One declared job for the API listing: identity, trigger story, and policies. */
@@ -400,7 +552,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         String jobId = exchange.getMessage().getHeader("jobId", String.class);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         JobExecution execution = actions.runJob(jobId, () -> parseBody(exchange),
-                principal == null ? null : principal.loginId(), scope(exchange));
+                principal == null ? null : principal.loginId(), runScope(exchange));
         // Work accepted, poll the execution: the same 202 + Location contract the
         // file-transfer start answers (docs/vocabulary-cleanup.md slice 3).
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
@@ -422,7 +574,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     private Object cancelExecution(Exchange exchange) {
         String id = exchange.getMessage().getHeader("id", String.class);
-        JobExecution execution = actions.findExecution(id, scope(exchange));
+        JobExecution execution = actions.findExecution(id, runScope(exchange));
         if (execution == null) {
             throw OpsActions.notFound("Execution '" + id + "'");
         }
@@ -440,7 +592,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     private Object executionDetail(Exchange exchange) {
         String id = exchange.getMessage().getHeader("id", String.class);
-        JobExecution execution = actions.findExecution(id, scope(exchange));
+        JobExecution execution = actions.findExecution(id, viewScope(exchange));
         if (execution == null) {
             throw OpsActions.notFound("Execution '" + id + "'");
         }
@@ -539,7 +691,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     /**
      * Streams one completed export (docs/analytics-experience.md track 3). Unknown ids and
-     * transfers outside the caller's {@code ops.app.<name>} scope read the same 404; a
+     * transfers outside the caller's {@code tql.ops.view.<name>} scope read the same 404; a
      * transfer that is not a completed export is a 409 ({@code TQL-LD-2823}, the route
      * download's refusal).
      */
@@ -547,7 +699,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         String id = exchange.getMessage().getHeader("id", String.class);
         io.tesseraql.core.files.FileTransferService.TransferStatus status = transfers
                 .status(id).orElse(null);
-        if (status == null || !scope(exchange).test(status.appName())) {
+        if (status == null || !viewScope(exchange).test(status.appName())) {
             throw OpsActions.notFound("Transfer '" + id + "'");
         }
         io.tesseraql.core.files.FileTransferService.Download download = transfers.download(id)

@@ -26,7 +26,7 @@ public interface EventChannelStore {
     /**
      * Publishes a durable message to {@code channel}/{@code topic}; returns the new message id.
      * {@code appName} tags the row with the publishing app, so operators holding a per-app
-     * {@code ops.app.<name>} scope see exactly their events.
+     * {@code tql.ops.view.<name>} scope see exactly their events.
      */
     String publish(String channel, String topic, String key, String payloadJson, String appName);
 

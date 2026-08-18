@@ -338,6 +338,8 @@ edits (logging that it did, so the operator learns the restart is owed).
 relay is I/O-free by design (Decision 13; the portal could not be gateway content for the same
 reason), so it would land on the surface runtime as an ops action — whose authorization
 semantics (`ops.app.<name>`) are exactly open question 4, deliberately unresolved until slice 7.
+*(Since resolved: docs/stack-shells.md's atoms — `tql.ops.view.<name>`/`tql.ops.run.<name>`, with
+`tql.app.deploy.<name>` for this endpoint, arriving in that design's slice 3.)*
 A control plane whose auth model is pending is not a foundation; the filesystem's permission
 model is the same trust boundary `host --stack` already runs under. **Rejected: the ops-console
 action as the mechanism** — same reason, and it is not lost: an ops-console deploy page, when
@@ -394,7 +396,9 @@ arrangement of ownership expresses "may write app A's entry and not app B's". Pe
 scope therefore requires an authenticated principal and a policy check — a control plane with
 identity — which is exactly the surface this design twice declined to build on, because its
 authorization model (`ops.app.<name>`, the stack architecture's open question 4) is
-deliberately unresolved until slice 7. The requirement does not break the file-first choice; it confirms it: the
+deliberately unresolved until slice 7. *(Since resolved by docs/stack-shells.md, which is that
+grants work: the authenticated deploy surface is its slice 3, on the `tql.app.deploy.<name>`
+atom.)* The requirement does not break the file-first choice; it confirms it: the
 authenticated surface, when it comes, **authorizes and then writes the same files**, and the
 reconciler stays the one mechanism.
 
@@ -402,7 +406,9 @@ reconciler stays the one mechanism.
 
 - The grant is per application in the shared store — `ops.app.<name>` gaining a *deploy*
   action, exact semantics owned by that grants question rather than invented here ahead of
-  it.
+  it. *(Honoured in substance, renamed by the model: the atom is `tql.app.deploy.<name>` —
+  deploying is an authority over the application as a unit, not a row-scope modifier —
+  docs/stack-shells.md structural decision 1.)*
 - The surface is the stack surface runtime (it runs in the host's process with the install
   root on its filesystem, and it is where authenticated framework surfaces live by Decision
   24): an endpoint — and later an ops-console page — that authenticates the caller, checks
@@ -600,7 +606,9 @@ Each gated on the slice it blocks, with a recommendation:
    worth being able to say in `hosting.md`. A bounded handful of retries over a few seconds,
    then the replace fails as a no-op.
 5. **Per-application deploy authorization: in this design, or gated on the grants work?** —
-   *gates nothing in slices 1–3; shapes what comes after.* The requirement (a team deploys
+   *gates nothing in slices 1–3; shapes what comes after.* *(Closed as recommended: the
+   grants work is docs/stack-shells.md, and the authenticated deploy surface is its slice 3
+   on `tql.app.deploy.<name>`.)* The requirement (a team deploys
    only what it manages) needs an authenticated surface, and its section above records why the
    file protocol cannot carry it. Recommended: **defer the authenticated surface to the
    `ops.app.<name>` grants work (open question 4 of the stack architecture / slice 7)** and

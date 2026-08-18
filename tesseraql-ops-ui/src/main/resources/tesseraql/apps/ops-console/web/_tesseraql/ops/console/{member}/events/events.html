@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-member-page(|Queue Events — ${events.shell.label}|, ${events.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{|${events.shell.base}${events.shell.slotQuery}|}">&larr; overview</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack" th:hx-get="@{|${events.shell.base}/events${events.shell.slotQuery}|}" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<section class="hc-card">
+  <div class="hc-card__header">Queue events</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-alert" data-variant="success" role="status" th:if="${!#strings.isEmpty(redelivered)}">Requeued
+      &mdash; the consumer picks the message up on its next drain.</p>
+    <ul class="hc-chips">
+      <li th:each="s : ${events.byStatus}" class="hc-badge"
+          th:attr="data-variant=${s.statusVariant}">[[${s.status}]]: [[${s.count}]]</li>
+    </ul>
+    <div class="hc-empty" th:unless="${events.hasRows}"><p class="hc-empty__title">No queue events recorded.</p></div>
+    <div class="hc-datagrid" th:if="${events.hasRows}">
+      <div class="hc-datagrid__scroll">
+        <table class="hc-datagrid__table">
+          <thead class="hc-datagrid__head"><tr>
+            <th class="hc-datagrid__headcell">Event</th>
+            <th class="hc-datagrid__headcell">Channel</th>
+            <th class="hc-datagrid__headcell">Topic</th>
+            <th class="hc-datagrid__headcell">Key</th>
+            <th class="hc-datagrid__headcell">App</th>
+            <th class="hc-datagrid__headcell">Status</th>
+            <th class="hc-datagrid__headcell" data-numeric>Attempts</th>
+            <th class="hc-datagrid__headcell">Last error</th>
+            <th class="hc-datagrid__headcell">Published</th>
+            <th class="hc-datagrid__headcell">Consumed</th>
+            <th class="hc-datagrid__headcell"></th>
+          </tr></thead>
+          <tbody class="hc-datagrid__body">
+            <tr class="hc-datagrid__row" th:each="e : ${events.rows}">
+              <td class="hc-datagrid__cell" th:text="${e.id}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.channel}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.topic}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.key}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.app}"></td>
+              <td class="hc-datagrid__cell"><span class="hc-badge" th:attr="data-variant=${e.statusVariant}" th:text="${e.status}"></span></td>
+              <td class="hc-datagrid__cell" data-numeric th:text="${e.attempts}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.lastError}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.publishedAt}"></td>
+              <td class="hc-datagrid__cell" th:text="${e.consumedAt}"></td>
+              <td class="hc-datagrid__cell">
+                <!-- DEAD rows only: failed-but-not-dead messages are still PENDING and retry on their own. -->
+                <form th:if="${e.dead}" method="post" th:action="@{|${events.shell.base}/events/redeliver|}">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}">
+                  <input type="hidden" name="slot" th:value="${events.shell.canary ? 'canary' : ''}">
+                  <input type="hidden" name="id" th:value="${e.id}">
+                  <button class="hc-button" data-size="sm" type="submit">Redeliver</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="hc-field__message">Redeliver requeues a dead-lettered message; failed messages
+      below their attempt limit retry on their own.</p>
+  </div>
+</section>
+</div>
+</html>

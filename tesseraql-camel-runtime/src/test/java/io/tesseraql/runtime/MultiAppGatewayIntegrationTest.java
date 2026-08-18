@@ -352,13 +352,18 @@ class MultiAppGatewayIntegrationTest {
             assertThat(statusOf(gateway, assets.group(1))).as(assets.group(1)).isEqualTo(200);
         } while (assets.find());
 
-        // The per-application development surfaces deliberately do not mount at the origin: an
-        // origin-scope Studio would edit the portal application's own extracted tree, and the
-        // ops console and IAM Admin arrive at the stack scope with their own slices.
+        // The development surface deliberately does not mount at the origin: an origin-scope
+        // Studio would edit the portal application's own extracted tree (its stack shell is
+        // slice 8's own design). The ops shell IS an origin-scope surface now
+        // (docs/stack-shells.md structural decision 2): unauthenticated, it demands the
+        // origin's own sign-in rather than reading as unserved.
         assertThat(statusOf(gateway, "/_tesseraql/studio/ui"))
                 .as("Studio is not an origin-scope surface").isEqualTo(404);
         assertThat(statusOf(gateway, "/_tesseraql/ops/console"))
-                .as("nor is the ops console").isEqualTo(404);
+                .as("the ops shell answers at the origin").isEqualTo(401);
+        // And a hosted member serves no console of its own anymore — one console per stack.
+        assertThat(statusOf(gateway, "/shop-a/_tesseraql/ops/console"))
+                .as("a hosted member carries no per-member console").isEqualTo(404);
     }
 
     private static int statusOf(MultiAppGateway target, String path) throws Exception {

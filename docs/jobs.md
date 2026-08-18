@@ -170,7 +170,7 @@ deny-by-default host allow-list. Polling is part of the managed-connector surfac
 
 **Manual runs** go through the operations API: `POST /_tesseraql/ops/batch/jobs/{jobId}/run`
 (a **202** whose `Location` points at the execution detail — accepted, poll there)
-(gated by the `ops.batch.run` policy) runs the job immediately and answers with the
+(requiring the caller's `tql.ops.run.<name>` atom for the owning application) runs the job immediately and answers with the
 execution id and final status. The JSON request body becomes the job's parameters. Declared
 `input:` on the job document the expected names and types; each value is available to steps
 as `params.<name>` — the same name a route's declared inputs bind under. Scheduled firings
@@ -477,7 +477,8 @@ pipeline:
   (`TQL-YAML-1041` at build time).
 - **Retrieval is the [operations console](ops-console.md)**: the transfers page links every completed
   export, and machine callers fetch
-  `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under `ops.batch.view`. The
+  `GET /_tesseraql/ops/batch/transfers/{transferId}/file` under the caller's
+  `tql.ops.view.<name>` scope. The
   step publishes `transferId`, `rows`, and `filename` into the step context, so a
   follow-up `notify:` carries the pointer — or, on a mail channel, the file itself:
   `attach: steps.report.transferId` sends the produced file as a mail attachment
@@ -657,7 +658,7 @@ running execution can be asked to stop — **cooperatively**:
 
 ```console
 $ tesseraql job cancel <executionId> --app .          # or:
-$ curl -X POST …/_tesseraql/ops/batch/executions/{id}/cancel   # policy ops.batch.run
+$ curl -X POST …/_tesseraql/ops/batch/executions/{id}/cancel   # requires tql.ops.run.<name>
 ```
 
 The request sets a flag in the execution row (so it reaches a run on any node, or another
@@ -688,7 +689,7 @@ Every run is persisted as an execution with its steps, visible three ways:
 - the **operations API**: `GET /_tesseraql/ops/batch/jobs` (declared jobs as
   `{id, app, trigger, overlap, sla}` objects — the same trigger story the CLI prints),
   `GET /_tesseraql/ops/batch/executions` and `.../executions/{id}` (runs and step detail),
-  all bearer-authenticated and gated by the `ops.batch.view` policy. `ops.app.<name>`
+  all bearer-authenticated. `tql.ops.view.<name>`
   grants scope which apps' jobs and executions a caller sees;
 - **logs and traces**: each run logs its completion or failure, every job and step is a
   span in the trace tree (with the owning app and affected rows), and slow step SQL shows

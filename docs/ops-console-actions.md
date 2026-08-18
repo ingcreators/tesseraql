@@ -1,5 +1,12 @@
 # Ops Console Actions
 
+> **2026-08-18:** the entry policies this document names (`ops.batch.view`/`ops.batch.run`)
+> have since retired into the per-application atoms `tql.ops.view.<name>`/`tql.ops.run.<name>`,
+> and the console became the stack shell at the origin scope
+> ([stack-shells.md](stack-shells.md)). The decisions below stand — plain YAML routes, parity
+> with the JSON API, plain forms, buttons rendering unconditionally — with the authorization
+> checks moved from deployment-declared policies to the framework's own atoms.
+
 Design document. The ops console today is a read-only telemetry surface: five GET
 pages over `ops.batch.view`. Every write an operator actually needs during an
 incident already exists — as a bearer-token JSON API in `OperationsRouteBuilder`

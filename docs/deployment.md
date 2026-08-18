@@ -66,18 +66,20 @@ buffer for all of them ([app-isolation-model.md](app-isolation-model.md) decisio
    apps whose names share a long prefix would then record into one history.
 
    `tesseraql.app.name` is **required**. It is an identity rather than a label — it scopes
-   outbox claims and job ownership, it is what `ops.app.<name>` grants are checked against,
+   outbox claims and job ownership, it is what `tql.ops.view.<name>` grants are checked against,
    and in a stack it is the app's address — so an app declaring none is refused at start
    (`TQL-YAML-1404`) rather than run under a name every unnamed app would share.
 2. `tesseraql identity-schema --jdbc-url ... --admin-login admin
-   --admin-password-file ./admin.pw --admin-roles ADMIN --admin-permissions ops.app.*`
+   --admin-password-file ./admin.pw --admin-roles ADMIN
+   --admin-permissions tql.ops.view.*,tql.ops.run.*,tql.app.deploy.*,tql.app.use.*`
    applies the managed IAM schema and seeds the first administrator; the
    `tesseraql:identity-schema` Maven goal is the CI alternative. There are no default
    credentials; the role names must match the app's `tesseraql.security.policies`.
-   `ops.app.<name>` permissions scope what an operator sees in the [ops console](ops-console.md) and the
-   `/_tesseraql/ops` API: [batch jobs](jobs.md), executions, and traces are attributed to their
-   owning app
-   and hidden outside the caller's grants (deny by default); `ops.app.*` grants everything.
+   `tql.ops.view.<name>` permissions scope what an operator sees in the
+   [ops console](ops-console.md) and the `/_tesseraql/ops` API: [batch jobs](jobs.md),
+   executions, and traces are attributed to their owning app and hidden outside the caller's
+   grants (deny by default), and acting — running jobs, redelivering events — is granted
+   separately as `tql.ops.run.<name>`; the terminal `*` grants a verb everywhere.
 3. `kamal setup` / `kamal deploy`.
 
 Old and new versions briefly overlap in every deploy shape — Kamal swaps containers with both
@@ -173,8 +175,8 @@ row in `tql_route_audit` — who (`actor`, `tenant_id`), what (`route_id`, metho
 status, duration), when, correlated by `trace_id` — with the **declared** input params as
 JSON. Fields carrying a `mask:` or `classification:` are excluded wholesale, so sensitive
 values can never reach the trail; a failed audit insert never fails the request.
-`GET /_tesseraql/ops/audit` reads the newest rows, bearer + `ops.batch.view` gated and
-narrowed to the caller's `ops.app.<name>` grants like every other per-app ops read.
+`GET /_tesseraql/ops/audit` reads the newest rows, bearer-gated (any `tql.ops.view` grant) and
+narrowed to the caller's `tql.ops.view.<name>` grants like every other per-app ops read.
 
 **Custom error pages** are app-authoring content: drop `templates/errors/<status>.html` into
 the app to brand what a failed browser navigation renders — see

@@ -31,8 +31,41 @@ public final class SecurityConfigFactory {
             policyMap.forEach((id, spec) -> policies.put(String.valueOf(id),
                     parsePolicy(String.valueOf(id), spec)));
         }
+        requireOwnPolicyCodes(config, policies);
         return new SecurityConfig(policies, parseJwt(config), parseApiKeys(config),
                 parseMtls(config));
+    }
+
+    /**
+     * The namespace fence (docs/stack-shells.md structural decision 1): every permission code the
+     * application's policies reference begins with the application's own name, and never with the
+     * framework's {@code tql.} mark. Lint reports the same code with the same message at build
+     * time; this is the backstop for a config that never ran through it. An absent or unsafe name
+     * is not judged here — the name rule owns that refusal.
+     */
+    private static void requireOwnPolicyCodes(AppConfig config, Map<String, Policy> policies) {
+        String appName = config.getString("tesseraql.app.name").map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .filter(name -> io.tesseraql.yaml.app.ApplicationName
+                        .segmentViolation(name) == null)
+                .orElse(null);
+        if (appName == null) {
+            return;
+        }
+        for (Policy policy : policies.values()) {
+            for (Policy.Rule rule : policy.anyOf()) {
+                if (rule.permission() == null) {
+                    continue;
+                }
+                String violation = io.tesseraql.yaml.app.PolicyCodes.violation(appName,
+                        rule.permission());
+                if (violation != null) {
+                    throw new io.tesseraql.core.error.TqlException(
+                            io.tesseraql.yaml.app.PolicyCodes.OUTSIDE_NAMESPACE,
+                            "Policy '" + policy.id() + "': " + violation);
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

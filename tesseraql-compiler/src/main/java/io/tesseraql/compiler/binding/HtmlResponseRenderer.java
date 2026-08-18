@@ -240,6 +240,7 @@ public final class HtmlResponseRenderer implements Processor {
         // write), and finally the resolved theme + UI defaults with the theme-cookie re-sync.
         ShellChrome chrome = new ShellChrome(exchange, evaluation, model, csrfToken);
         chrome.menu(appHome);
+        chrome.system();
         chrome.account();
         chrome.readThemePreference();
         chrome.inbox();

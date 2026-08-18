@@ -47,19 +47,19 @@ final class DialectIdentityChecks {
         identity.executeUpdate(realm, IdentityContracts.ENSURE_ROLE,
                 Map.of("roleId", "ADMIN", "roleCode", "ADMIN", "roleName", "ADMIN"));
         identity.executeUpdate(realm, IdentityContracts.ENSURE_PERMISSION,
-                Map.of("permissionId", "ops.app.*", "permissionCode", "ops.app.*",
-                        "permissionName", "ops.app.*"));
+                Map.of("permissionId", "tql.ops.view.*", "permissionCode", "tql.ops.view.*",
+                        "permissionName", "tql.ops.view.*"));
         identity.executeUpdate(realm, IdentityContracts.ASSIGN_USER_ROLE,
                 Map.of("userId", "admin", "roleCode", "ADMIN"));
         identity.executeUpdate(realm, IdentityContracts.ASSIGN_USER_ROLE,
                 Map.of("userId", "admin", "roleCode", "ADMIN"));
         identity.executeUpdate(realm, IdentityContracts.ASSIGN_ROLE_PERMISSION,
-                Map.of("roleCode", "ADMIN", "permissionCode", "ops.app.*"));
+                Map.of("roleCode", "ADMIN", "permissionCode", "tql.ops.view.*"));
 
         var principal = new PasswordAuthenticator(identity)
                 .authenticate(realm, "admin", "s3cret", null);
         assertThat(principal).isPresent();
         assertThat(principal.get().roles()).contains("ADMIN");
-        assertThat(principal.get().permissions()).contains("ops.app.*");
+        assertThat(principal.get().permissions()).contains("tql.ops.view.*");
     }
 }

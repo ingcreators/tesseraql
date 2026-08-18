@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.opsConsole.execution
+kind: route
+recipe: query-html
+
+input:
+  started:
+    type: string
+    required: false
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: ops.shell.execution
+      params:
+        member: path.member
+        slot: params.slot
+        id: path.id
+        # Executions outside the caller's tql.ops.view.<name> grants render as not found.
+        permissions: principal.permissions
+        cookie: params.Cookie
+response:
+  html:
+    status: 200
+    template: execution.html
+    model:
+      execution: main
+      started: params.started
