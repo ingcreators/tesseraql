@@ -100,12 +100,15 @@ the prose moves with the code.
 
 ## Structural decision 1: the grant vocabulary is fixed-prefix families
 
-The vocabulary is **`<family>.app.<name>`**, one family per surface capability:
+The vocabulary is **`<family>.app.<name>`**, one family per authority:
 
-- **`ops.app.<name>`** — unchanged string, unchanged meaning, wider window: *may see this
-  application's operational data*. Today that narrows rows inside one runtime; under the
-  shell it also decides which applications appear in the switcher. Same grant, same
-  sentence, read in one more place.
+- **`ops.app.<name>`** — unchanged string, widened sentence: *may see this application's
+  operational data*. Today that narrows rows inside one runtime; under the shell it also
+  decides which applications appear in the switcher, and (the correction below) it absorbs
+  the read-entry role `ops.batch.view` used to play.
+- **`run.app.<name>`** — *may perform operational actions on this application* (run,
+  cancel and rerun jobs; redeliver outbox messages and dead-lettered events; cancel
+  transfers). Added by the review correction below; absorbs `ops.batch.run`.
 - **`studio.app.<name>`** — *may edit this application in Studio*. Reserved here, consumed
   by slice 8's own design; Decision 14 already states Studio "needs per-application edit
   authorisation on the switch rather than a single may-open-Studio role".
@@ -118,9 +121,36 @@ name can contain dots, so an action *suffix* (`ops.app.<name>.deploy`) is ambigu
 parser cannot tell `orders.deploy` the application from `orders` plus an action. A fixed
 prefix keeps the name whole, keeps `OpsScope`'s exact-string membership semantics, and adds
 no parsing beyond the prefix compare that already exists. `OpsScope` stays the one parser,
-parameterized by family; entry permissions (`ops.batch.view`/`ops.batch.run`,
-`iam.admin.view`/`iam.admin.write`) are untouched — a family grant narrows *which
-applications*, an entry permission opens *the surface*.
+parameterized by family.
+
+**Corrected in review: the ops entry permissions retire, because their premise retired
+first.** `ops.batch.view` (every page, read-only) and `ops.batch.run` (the write actions:
+run a job, redeliver an outbox message or a dead-lettered event) are surface-wide *verbs*
+that `ops.app.<name>` then scopes — a two-axis model whose justification was the
+mounted-apps era, when a runtime's own diagnostics (lanes, slow SQL, the trace ring,
+alerts) belonged to no single application. One runtime is one application now, so that data
+*is* the member's data; what genuinely belongs to no member is only the shared process (JVM
+pinning) and the gateway. And the two axes cannot express the asymmetry an operator
+actually wants — view broadly, act narrowly — because one `ops.app` set scopes both verbs.
+So the verbs move into the families, where the design's own rule ("seeing and moving are
+different authorities") already points:
+
+- **`ops.app.<name>` absorbs view**: holding it opens the shell and shows this
+  application's pages, rows and runtime diagnostics. `ops.batch.view` retires.
+- **`run.app.<name>` is the action family**: *may perform operational actions on this
+  application* — run/cancel/rerun jobs, redeliver outbox messages and dead-lettered
+  events, cancel transfers. `ops.batch.run` retires.
+- **Stack-wide vitals** (JVM pinning, the gateway's own health) render on the overview for
+  any holder of any `ops.app` grant — they describe the shared substrate the caller's
+  application runs on.
+- `iam.admin.view`/`iam.admin.write` stay: the identity store is the stack's, and a
+  surface with no application axis keeps its surface-wide verbs.
+
+Pre-1.0 clean break: eleven console route policies, the identity-pack seeds and the docs
+move together, with a changelog line and no migration steps. **Rejected: keeping the entry
+permissions as the door** — cheap, shipped, and it preserves a two-model vocabulary whose
+justifying premise no longer exists; recorded here so it does not come back as a
+convenience.
 
 **The `.app` segment is load-bearing, not decoration** (asked in review: is it always
 needed?). Per-application grants share their namespace with the same family's
@@ -152,7 +182,7 @@ collapsing them would hand every on-call reader the deploy pen.
 members and mounts into the stack surface runtime instead (the portal config's
 `ops-console.enabled: false` line is deleted; hosted members skip the provider). It answers
 at the origin scope — `/_tesseraql/ops/console`, the address Decision 17 reserved — behind
-the same entry permissions as today. The skip is keyed on being a hosted member — a
+the family grants of structural decision 1. The skip is keyed on being a hosted member — a
 topology rule like the derived address, not a preference — so a member declaring
 `tesseraql.apps.ops-console.enabled: true` under a host still gets no local copy (open
 question 4).
@@ -181,7 +211,7 @@ precedent), and those providers make real HTTP calls (Decision 15) to the select
 internal port at its prefixed address — `http://localhost:<port><basePath>/_tesseraql/ops/…`
 — forwarding the caller's session cookie (and CSRF token on actions). Sessions live in the
 shared framework store, so the member authenticates the same principal and **re-runs its own
-entry-permission and scope checks**: authorization stays at the member, and the shell adds
+grant checks**: authorization stays at the member, and the shell adds
 reach, not authority. The member's ops JSON API and providers are untouched — a member
 still knows how to answer everything about itself; what it no longer carries is the
 console's chrome. `HostContext.forSurface` grows the member-origin lookup (name and slot →
@@ -268,7 +298,7 @@ Three PRs, each independently green and observable:
 
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
-| 1 | The vocabulary and the ops shell | `OpsScope` families; `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher filtered by `ops.app.<name>`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack; `hosting.md`'s per-app-console paragraph replaced |
+| 1 | The vocabulary and the ops shell | `OpsScope` families; `ops.batch.view`/`ops.batch.run` retire into `ops.app.<name>`/`run.app.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher filtered by `ops.app.<name>`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one grant model; `hosting.md`'s per-app-console paragraph replaced |
 | 2 | The identity remainder | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the unhosted boot (tests, embedding) unchanged | One sign-in door and one admin door; `servedApps` = the member |
 | 3 | The deploy surface | `deploy.app.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
 
@@ -283,7 +313,7 @@ is deliberately not promised here.
 ## Guards
 
 - **Authorization never moves to the shell.** Every delegated call carries the caller's own
-  credentials and the member re-checks entry permission and scope; a shell bug can widen
+  credentials and the member re-checks the caller's grants; a shell bug can widen
   what is *listed*, never what is *answered*. Pinned by a test, not by review.
 - **The switcher is deny-by-default**, like the rows today: no `ops.app.*` grants → an empty
   switcher, not every member.
@@ -305,6 +335,9 @@ is deliberately not promised here.
 - Authorization stays at the member: a delegated call forged with a different application's
   name reaches the member and is refused by the member's own scope check (assert the
   member's refusal, not the shell's).
+- The verbs are per application now: a principal with `ops.app.a` + `run.app.b` sees `a`
+  and cannot act on it, can act on `b` — the asymmetry the retired two-axis model could
+  not express, pinned as its regression test.
 - Canary entry: stage a canary (the #862 operations), the switcher gains the second entry,
   and its trace page answers from the canary runtime's ring (distinct marker, the
   `MultiAppReplaceIntegrationTest` fixture shape).
@@ -342,7 +375,8 @@ With the code PRs, not before: `hosting.md` (the per-app-console paragraph at
 `hosting.md:287-297` is replaced by the shell + switcher + grant sentences; the deploy
 section gains the endpoint and `--url`), `ops-console.md` (the shell, the switcher, the
 canary entry), `authentication.md`/`account.md` where the login copies are described,
-`deployment.md` (the `--admin-permissions` examples gain `deploy.app.*`),
+`deployment.md` (the `--admin-permissions` examples move to the family grants:
+`ops.app.*`, `run.app.*`, `deploy.app.*`; `ops-console.md`'s permission table follows),
 `root-portal.md` (its deliberately-not list shrinks as items land),
 `app-isolation-model.md` (Decision 4's reversal note points at the shipped shell),
 `reference-cli.md` regeneration (`deploy --url`), the error reference for any new codes the
@@ -392,3 +426,10 @@ Each gated on the slice it blocks, with a recommendation:
 6. **Portal tiles narrowed by a grant family** — *gates nothing; recorded so the portal's
    one-place comment has an answer.* Recommended: not now, for the reach-versus-authority
    reason above; tenant entitlement stays the tile filter.
+7. **Retire the ops entry permissions now, or keep them as the door** — *gates slice 1;
+   raised in review ("aren't view and run per-application in substance?").* Recommended:
+   retire (`ops.app.<name>` absorbs view, `run.app.<name>` carries the actions), because
+   the two-axis model's premise — runtime diagnostics belonging to no application — died
+   with mounted apps, and the axes cannot express view-broadly-act-narrowly. The
+   alternative (keep `ops.batch.view`/`ops.batch.run` as entry, scope both with `ops.app`)
+   is cheaper today and preserves a vocabulary whose justification is gone.
