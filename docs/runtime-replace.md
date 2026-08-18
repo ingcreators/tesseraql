@@ -174,6 +174,48 @@ lore to save the relay a map update it already does per request. **Rejected: a s
 and a whole-stack blue/green**: that is deploying the stack, which exists, is Decision 29's
 boundary, and needs no design.
 
+## The stack's own stop, measured — and brought inside the design
+
+Asked in review: the application's replace is graceful — is the stack's own stop? Measured, it
+is not, twice over, and Decision 29's own exclusions depend on it being so: "a fleet deploys by
+rolling node replacement" is only graceful if replacing a *node* is, and the deployment image's
+`CMD` is `tesseraql host --stack /stack`.
+
+- **`host` never drains at all.** `HostCommand` holds the process open with
+  `Thread.currentThread().join()` inside try-with-resources and registers **no shutdown hook**
+  (`HostCommand.java:80`) — on SIGTERM the JVM runs hooks and exits; a parked thread's
+  try-with-resources never runs, so `gateway.close()` is never called. Every runtime's drain
+  machinery — the declared `tesseraql.shutdown.timeout`, the close ordering Decision 28
+  finished — is reachable only through `close()`, and nothing on the production signal path
+  calls it. Every container stop is a hard kill. `dev` *does* register the hook
+  (`TesseraqlCli.java:247`) — the asymmetry points the wrong way.
+- **Even when `close()` runs, the front cuts in-flight work before the runtimes drain.**
+  `MultiAppGateway.close()` closes the front server first, and Vert.x 4.5's `HttpServer` has
+  `close()` only — no grace-period `shutdown()` (that is Vert.x 5; verified against 4.5.31) —
+  so open front connections are cut, and the runtimes then dutifully drain exchanges whose
+  callers are already gone.
+
+The repair is small and belongs to slice 1, because it is the same drain story:
+
+- **`host` registers the shutdown hook** `dev` already has. One asymmetry, deleted.
+- **The gateway's close becomes an ordered drain.** First the relay's own readiness answer
+  flips to 503 while liveness stays 200 (the orchestrator's contract: "stop routing to me, do
+  not kill me") — the health pair is already the relay's own answer, so this is a flag, not a
+  feature. The relay keeps serving *everything else*, new requests included, while its
+  in-flight count drains to zero under a bound **derived** from the members' own declared
+  `tesseraql.shutdown.timeout`s (their maximum — no new knob; the stack's stop cannot need
+  longer than its slowest member is allowed to take). Then the front closes, the runtimes drain
+  under their own bounds as today, and the client, Vert.x and the framework pool follow in the
+  existing order. Long-lived streams are in-flight requests that never end; the derived bound
+  cuts them, which is the same deliberate boundary as the replace's.
+- **The docs owe the orchestrator one sentence**: the platform's grace period
+  (`terminationGracePeriodSeconds` and kin) must exceed the derived bound, or the platform's
+  SIGKILL wins — stated in `deployment.md` where the image is taught.
+
+A single-node stack stopping is downtime by definition; graceful here means nothing in flight
+is cut before the bound, on the replace path and the stop path alike — one drain contract,
+observed from two directions.
+
 ## Structural decision 2: the trigger is the state on disk, and the host reconciles
 
 Decision 29 left the trigger open across three candidates — an ops-console action, an `install`
@@ -280,7 +322,7 @@ Three PRs, each independently green and observable:
 
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
-| 1 | The host operation | Live slots holding entry+runtime; `replace`/`stageCanary`/`setCanaryWeight`/`promoteCanary`/`discardCanary` with admission checks, ready probe, swap-then-drain; relay live entry/strip lookups + proxy eviction | The library-level replace exists and is proven under load; nothing calls it in production yet (the #831 `AppDirectory` precedent) |
+| 1 | The host operation | Live slots holding entry+runtime; `replace`/`stageCanary`/`setCanaryWeight`/`promoteCanary`/`discardCanary` with admission checks, ready probe, swap-then-drain; relay live entry/strip lookups + proxy eviction + swap-race retry; the stack's own graceful stop (`host` shutdown hook, ordered gateway drain with the readiness flip and the derived bound) | The library-level replace exists and is proven under load; a stack stop drains instead of hard-killing; nothing calls the replace in production yet (the #831 `AppDirectory` precedent) |
 | 2 | Reconciliation | `StackReconciler` (watch, debounce, serialized diff-and-act, status write-back); atomic state writes in `AppUpgrader`; membership-edit logging | A running host converges to the install root's state; boot and live are one function of the same files |
 | 3 | The `deploy` verb + docs | `DeployCommand` (package, promote, rollback, weight, status, `--wait`, `--sha256`); TQL-UPGRADE-4092; `hosting.md` deploy section, `deployment.md`, `cli-surface.md` row, reference regen, CHANGELOG, Decision 29 shipped note | An operator deploys one application with one command and the stack never restarts |
 
@@ -332,6 +374,12 @@ into 2.
   the fresh lookup and answers 200 (a relay-level test with a stub origin that refuses the
   connection, the `SuiteRelay` seam's shape); a connection that dies mid-response is *not*
   retried and surfaces as the 502 it is.
+- The stack's stop: `gateway.close()` with an in-flight slow request — readiness answers 503
+  during the drain while liveness stays 200, the slow request completes, a new request arriving
+  mid-drain is served, and the close returns within the derived bound (gateway-level, the same
+  observe-don't-guess shape). The `host` hook itself is a registration nothing exercises in
+  JUnit; the dist smoke's stop path observes the drain log line so the signal path is not
+  review-only.
 
 **Slice 2**
 - Reconciler unit tests against a host test-double: each diff rule fires the right operation;
@@ -359,7 +407,9 @@ into 2.
 With the code PRs, not before: `hosting.md` gains the deploy section (the verb, the canary ramp,
 the drain contract and its declared timeout, the ephemeral-port wrinkle, the two-file protocol
 and where status lands) and updates the "drives `AppInstaller` from its own tooling" sentence;
-`deployment.md`'s expand/contract paragraph is restated as the deploy window's contract;
+`deployment.md`'s expand/contract paragraph is restated as the deploy window's contract, and it
+gains the stop-path sentences (SIGTERM drains; the platform's grace period must exceed the
+stack's derived drain bound);
 `cli-surface.md` gains the mapping row (and its verb-count sentences move to 26);
 `reference-cli.md` regenerates; the error reference gains TQL-UPGRADE-4092; `CHANGELOG.md`
 (Added: `deploy`, live replace under `host`; the state-file format change if any is a pre-1.0
@@ -384,7 +434,9 @@ shipped-status note. `upgrading.md` stays what it is (framework upgrades) — a 
   design until someone asks otherwise.
 - **Multi-node coordination.** A stack is one process (Decision 27); a fleet of nodes sharing
   an install root via image bake deploys by rolling node replacement, which is the
-  orchestrator's job, stated in `deployment.md` already.
+  orchestrator's job, stated in `deployment.md` already. That exclusion leans on a node's stop
+  being graceful — which is why the stack's own stop is *inside* this design (the section
+  above), not out here.
 - **Replacing the surface runtime or the gateway.** Decision 29's boundary, restated: those are
   the stack, and replacing them is deploying it.
 
