@@ -1441,6 +1441,65 @@ different layer.
 requests on the retiring runtime. The mechanism candidates all sit behind the same host operation,
 so the trigger can be chosen last.
 
+## The scope ledger — what an application owns, what the stack owns
+
+Asked in review, after the decisions accumulated: what, in the end, is application-scoped and
+what is stack-scoped? The two rules that draw the line are already decided — **a thing belongs
+to the application when it is part of the application's declaration** (in its tree, lintable and
+packageable alone — Decision 26's three names), and **to the stack when it defines how far one
+sign-in reaches** (Decision 27) **or when only the host can know it or divergence fails
+silently** (Decision 16, the `tesseraql-stack.yml` admission rule). This section is the ledger
+those rules produce, kept here so a new surface gets classified by rule rather than by habit.
+
+**The application owns** — declared in its tree, effective in its runtime:
+
+- Every declaration: routes, schema and migrations (history `tql_schema_history_<name>` on its
+  own business datasource), views, jobs, decision tables, MCP tools, tests.
+- Its name — the one identity (Decision 23's inter-team contract), from which its address
+  `/<name>` is derived, always (Decision 25).
+- Its datasources and pools — and with Decision 28, the JDBC drivers those pools bind, from its
+  own module loader.
+- Its modules, end to end: the `tesseraql.modules` declaration, `modules.lock`, `work/modules`,
+  the classloader over them, the expression-function registry, its file codecs and blob-store
+  provider, its runtime extensions, its `plugins/` directory.
+- Its egress declarations: `http.outbound` and `connectors.poll` allow-lists, webhook verifiers,
+  messaging channels — the *permissions* for capabilities the framework ships.
+- Its per-runtime operational state: the Camel context, tracer, lanes — and its unit of
+  deployment, the runtime a replace swaps (Decision 29).
+
+**The stack owns** — known only at the host, or defining the reach of a sign-in:
+
+- The gateway and everything on the operator's flags: the front `--port`, `--trusted-proxies`,
+  `--http2`, and the root's behaviour (`root.redirect`, the portal — Decision 24).
+- The framework datasource — one pool, one stack, never shared further (Decisions 22 and 27) —
+  and the `security` schema's migration, which the host runs once and every runtime validates.
+- Sessions and the identity store, and therefore sign-in itself: the surface runtime at the
+  origin with the portal, `auth-ui` and `account` (Decision 24), growing toward IAM Admin and
+  the Studio/ops shells (slices 4, 7, 8).
+- `tesseraql-stack.yml`'s values — `framework.datasource`, `externalOrigin`, `security.jwt.*`,
+  `root.redirect` — and the catalogue: membership, the name registry and its collision refusals.
+- The process environment: `${ENV}` values and secret resolvers (Decision 26 — one stack is one
+  process, so these are stack-scoped by construction).
+- The base classpath: the framework's own jars, the framework datasource's driver, the Camel
+  components under `ComponentGuard`'s baseline.
+- The process itself. Replacing any of these *is* deploying the stack (Decision 29's boundary).
+
+**Wired to one, effective for the other — the honest middle, named so it is not misread:**
+
+- **Identity extensions** (`tesseraql-oidc`/`-saml`/`-scim`): declared and mounted per
+  application, but a login they complete or an account they provision lands in the framework
+  datasource — stack-wide effect. Interim shape: declare them on the member that fronts
+  sign-in; their destination is the surface runtime (Decision 14's slice-4 remainder and the
+  authorization-server work), and the move will need a mechanism for the stack to hand the
+  surface runtime modules — deliberately not designed in Decision 28.
+- **Framework connector capabilities** (SFTP/FTPS polling, HTTP egress, mail): the capability
+  ships on the base classpath and is stack-level by residence; which hosts may be reached and
+  which jobs poll is each application's declaration.
+- **`--modules <dir>`** on `dev`/`mcp`: a development override composed onto every runtime — the
+  one deliberately stack-wide module input, because it overrides rather than declares.
+- **Per-application grants in the shared store** (`ops.app.<name>`): the store is the stack's,
+  the grant names one application; their exact semantics are open question 4 (slice 7).
+
 ## Slices
 
 Ordering is by dependency, not by size.
