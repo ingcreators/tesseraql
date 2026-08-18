@@ -1403,6 +1403,12 @@ that.
 parse and the registry becomes a value, the runtime owns its module loader, drivers bind at the
 pool, the slices, guards and tests, and the open questions that gate them.
 
+**Status 2026-08-18: shipped, in the design's four slices** (2 and 3 merged as one — the design
+doc records why). The function set is a value captured at parse; each hosted runtime owns and
+closes its module loader; `host` refuses declared-but-unresolved modules (**TQL-APP-4216**) and
+a lock-diverged `work/modules` (**TQL-APP-4217**); pools bind module-defined drivers; the MCP
+dev tools answer per application. All four open questions closed on their recommendations.
+
 ### 29. Deploying an application replaces its runtime, not the stack
 
 Stated as a requirement in review: deploying one application must not affect the others. Measured

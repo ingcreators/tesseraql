@@ -110,7 +110,7 @@ final class MessagingRules {
      * config knows, and its {@code when:} guard parses.
      */
     static void lintNotify(AppConfig config, RouteDefinition definition, String source,
-            List<LintFinding> findings) {
+            List<LintFinding> findings, io.tesseraql.core.expr.ExpressionFunctions functions) {
         if (definition.notifications().isEmpty()) {
             return;
         }
@@ -120,11 +120,13 @@ final class MessagingRules {
                             + definition.recipe() + "'"));
         }
         definition.notifications()
-                .forEach((id, spec) -> lintNotifySpec(config, id, spec, source, findings));
+                .forEach((id, spec) -> lintNotifySpec(config, id, spec, source, findings,
+                        functions));
     }
 
     static void lintNotifySpec(AppConfig config, String id,
-            io.tesseraql.yaml.model.NotifySpec spec, String source, List<LintFinding> findings) {
+            io.tesseraql.yaml.model.NotifySpec spec, String source, List<LintFinding> findings,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         if (spec.channel() == null || spec.channel().isBlank()) {
             findings.add(new LintFinding(LintCodes.STEP_WORK_SHAPE, ERROR, source,
                     "Notification '" + id + "' needs a channel:"));
@@ -138,7 +140,7 @@ final class MessagingRules {
         }
         if (spec.when() != null && !spec.when().isBlank()) {
             try {
-                io.tesseraql.core.expr.ExpressionParser.parse(spec.when());
+                io.tesseraql.core.expr.ExpressionParser.parse(spec.when(), functions);
             } catch (RuntimeException ex) {
                 findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
                         "Notification '" + id + "' has a malformed when: expression: "

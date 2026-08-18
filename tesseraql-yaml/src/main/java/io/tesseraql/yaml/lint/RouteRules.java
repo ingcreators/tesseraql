@@ -138,7 +138,7 @@ final class RouteRules implements LintRule {
         EnrichRules.lintEnrich(context, config, route.source(), definition, source, findings);
         RateLimitRules.lintRateLimitScope(definition, source, findings);
         HttpCacheRules.lintHttpCache(definition, source, findings);
-        MessagingRules.lintNotify(config, definition, source, findings);
+        MessagingRules.lintNotify(config, definition, source, findings, context.functions());
         MessagingRules.lintWebhook(config, definition, source, findings);
         MessagingRules.lintPublish(config, definition, source, findings);
         // Everything that rides the command transaction needs the command: publish:, notify:,

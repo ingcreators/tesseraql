@@ -1,5 +1,6 @@
 package io.tesseraql.report;
 
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.coverage.ItemCoverage;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.coverage.SqlCoverageReport;
@@ -58,6 +59,13 @@ public final class AppTestRunner {
         return run(appHome, dataSource, realm, reportDir, Set.of());
     }
 
+    /** As {@link #run(Path, DataSource, RealmConfig, Path)}, resolving custom expression calls
+     * against {@code functions}. */
+    public RunResult run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir,
+            ExpressionFunctions functions) {
+        return run(appHome, dataSource, realm, reportDir, Set.of(), functions);
+    }
+
     /**
      * Runs the suites filtered to the named cases (all cases when {@code caseNames} is empty) —
      * the single-case granularity the editor Test Explorer re-runs a failing case with
@@ -66,9 +74,18 @@ public final class AppTestRunner {
      */
     public RunResult run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir,
             Set<String> caseNames) {
+        return run(appHome, dataSource, realm, reportDir, caseNames,
+                ExpressionFunctions.processDefault());
+    }
+
+    /** As {@link #run(Path, DataSource, RealmConfig, Path, Set)}, resolving custom expression
+     * calls against {@code functions}. */
+    public RunResult run(Path appHome, DataSource dataSource, RealmConfig realm, Path reportDir,
+            Set<String> caseNames, ExpressionFunctions functions) {
         IdentityService identity = new IdentityService(name -> dataSource);
         SqlCoverage coverage = new SqlCoverage();
-        TestRunner runner = new TestRunner(dataSource, appHome, identity, realm, coverage);
+        TestRunner runner = new TestRunner(dataSource, appHome, identity, realm, coverage,
+                functions);
         TestSuiteLoader loader = new TestSuiteLoader();
 
         List<TestReport.TestResult> results = new ArrayList<>();
@@ -85,7 +102,7 @@ public final class AppTestRunner {
             suites.add(suite);
             results.addAll(runner.run(suite).results());
         }
-        List<ItemCoverage> kinds = coverageKinds(appHome, suites);
+        List<ItemCoverage> kinds = coverageKinds(appHome, suites, functions);
 
         TestReport report = new TestReport(results);
         writeReports(report, reportDir);
@@ -95,11 +112,12 @@ public final class AppTestRunner {
     }
 
     /** Derives the item-coverage kinds; the manifest-based ones need a loadable manifest. */
-    private static List<ItemCoverage> coverageKinds(Path appHome, List<TestSuite> suites) {
+    private static List<ItemCoverage> coverageKinds(Path appHome, List<TestSuite> suites,
+            ExpressionFunctions functions) {
         List<ItemCoverage> kinds = new ArrayList<>();
         kinds.add(SuiteCoverage.assertions(suites));
         kinds.add(SuiteCoverage.contracts(suites));
-        AppManifest manifest = loadManifest(appHome);
+        AppManifest manifest = loadManifest(appHome, functions);
         if (manifest != null) {
             kinds.add(ManifestCoverage.routes(manifest, suites));
             kinds.add(ManifestCoverage.security(manifest, suites));
@@ -137,8 +155,8 @@ public final class AppTestRunner {
      * measured them. An app whose manifest cannot load has a real error to surface, not coverage
      * to under-report.
      */
-    private static AppManifest loadManifest(Path appHome) {
-        return new ManifestLoader().load(appHome);
+    private static AppManifest loadManifest(Path appHome, ExpressionFunctions functions) {
+        return new ManifestLoader().load(appHome, functions);
     }
 
     /** Writes coverage gaps as SARIF so CI code-scanning can annotate them (design ch. 15). */

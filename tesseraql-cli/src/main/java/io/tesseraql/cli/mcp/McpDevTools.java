@@ -5,6 +5,7 @@ import io.tesseraql.cli.EmbeddedDbMarker;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.coverage.CoverageGate;
 import io.tesseraql.coverage.CoverageThresholds;
@@ -24,6 +25,8 @@ import io.tesseraql.operations.outbox.JdbcOutboxStore;
 import io.tesseraql.report.AppTestRunner;
 import io.tesseraql.report.CoverageThresholdResolver;
 import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.runtime.DataSources;
+import io.tesseraql.runtime.DriverBackedDataSource;
 import io.tesseraql.studio.StudioService;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.config.ResponseHeaderDefaults;
@@ -40,7 +43,6 @@ import io.tesseraql.yaml.scaffold.TableSchema;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,6 +50,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
+import javax.sql.DataSource;
 
 /**
  * Exposes TesseraQL's developer surfaces - manifest, sources, schema introspection, lint, tests,
@@ -77,8 +81,23 @@ public final class McpDevTools {
     /** The applications this server spans, name to home, in the stack's stable order. */
     private final Map<String, Path> applications;
     private final boolean readOnly;
+    /** Each application's expression-function set, name-keyed like {@link #applications}. */
+    private final Map<String, ExpressionFunctions> functions;
+    /** Each application's module classloader, name-keyed like {@link #applications}. */
+    private final Map<String, ClassLoader> loaders;
 
     public McpDevTools(Map<String, Path> applications, boolean readOnly) {
+        this(applications, readOnly,
+                perApplication(applications, ExpressionFunctions.processDefault()),
+                perApplication(applications, McpDevTools.class.getClassLoader()));
+    }
+
+    /**
+     * As the two-argument form, with each application's own expression-function set and module
+     * classloader (docs/module-scope.md).
+     */
+    public McpDevTools(Map<String, Path> applications, boolean readOnly,
+            Map<String, ExpressionFunctions> functions, Map<String, ClassLoader> loaders) {
         if (applications.isEmpty()) {
             throw new IllegalArgumentException("The MCP dev-tool server needs at least one"
                     + " application.");
@@ -88,6 +107,15 @@ public final class McpDevTools {
                 (name, home) -> normalized.put(name, home.toAbsolutePath().normalize()));
         this.applications = Collections.unmodifiableMap(normalized);
         this.readOnly = readOnly;
+        this.functions = Collections.unmodifiableMap(new LinkedHashMap<>(functions));
+        this.loaders = Collections.unmodifiableMap(new LinkedHashMap<>(loaders));
+    }
+
+    /** The same value for every application, for the default-wiring constructor. */
+    private static <V> Map<String, V> perApplication(Map<String, Path> applications, V value) {
+        Map<String, V> shared = new LinkedHashMap<>();
+        applications.keySet().forEach(name -> shared.put(name, value));
+        return shared;
     }
 
     /**
@@ -155,20 +183,34 @@ public final class McpDevTools {
 
     /** Resolves a call's {@code application} argument to its home directory. */
     private Path appHome(JsonNode args) {
+        return applications.get(appName(args));
+    }
+
+    /** Resolves a call's {@code application} argument to its expression-function set. */
+    private ExpressionFunctions functions(JsonNode args) {
+        return functions.get(appName(args));
+    }
+
+    /** Resolves a call's {@code application} argument to its module classloader. */
+    private ClassLoader loader(JsonNode args) {
+        return loaders.get(appName(args));
+    }
+
+    /** Resolves a call's {@code application} argument to its name, defaulted for a sole app. */
+    private String appName(JsonNode args) {
         String name = textOrNull(args, "application");
         if (name == null || name.isBlank()) {
             if (applications.size() == 1) {
-                return applications.values().iterator().next();
+                return soleName();
             }
             throw new TqlException(BAD_ARGS, "Missing required argument: application. This server"
                     + " spans " + names() + " - name the one the request concerns.");
         }
-        Path home = applications.get(name);
-        if (home == null) {
+        if (!applications.containsKey(name)) {
             throw new TqlException(BAD_ARGS, "Unknown application '" + name + "'. This server"
                     + " holds: " + names());
         }
-        return home;
+        return name;
     }
 
     private String names() {
@@ -188,8 +230,9 @@ public final class McpDevTools {
                 .inputSchema(schema())
                 .handler((args, ctx) -> {
                     Path app = appHome(args);
-                    AppManifest manifest = new ManifestLoader().load(app);
-                    StudioService.Explorer explorer = new StudioService(manifest, true).explorer();
+                    AppManifest manifest = new ManifestLoader().load(app, functions(args));
+                    StudioService.Explorer explorer = new StudioService(manifest, true,
+                            functions(args)).explorer();
                     return McpToolResult.json(obj(
                             "appName", explorer.appName(),
                             "appHome", app.toString(),
@@ -207,8 +250,9 @@ public final class McpDevTools {
                 .inputSchema(schema()
                         .required("path", "string", "app-home-relative file path"))
                 .handler((args, ctx) -> {
-                    AppManifest manifest = new ManifestLoader().load(appHome(args));
-                    String content = new StudioService(manifest, true)
+                    AppManifest manifest = new ManifestLoader().load(appHome(args),
+                            functions(args));
+                    String content = new StudioService(manifest, true, functions(args))
                             .source(requireText(args, "path"));
                     return McpToolResult.text(content);
                 })
@@ -244,7 +288,8 @@ public final class McpDevTools {
                         + " report findings.")
                 .inputSchema(schema())
                 .handler((args, ctx) -> {
-                    List<LintFinding> findings = new AppLinter().lint(appHome(args));
+                    List<LintFinding> findings = new AppLinter().lint(appHome(args),
+                            functions(args));
                     long errors = findings.stream().filter(LintFinding::isError).count();
                     return McpToolResult.json(obj(
                             "errors", errors,
@@ -277,8 +322,8 @@ public final class McpDevTools {
                 .resolve("mcp/reports");
         Files.createDirectories(reportDir);
         AppTestRunner.RunResult result = new AppTestRunner().run(app,
-                new DriverManagerDataSource(ds.url(), ds.user(), ds.password()),
-                RealmConfig.managed(realm, "main"), reportDir);
+                dataSource(ds.url(), ds.user(), ds.password(), loader(args)),
+                RealmConfig.managed(realm, "main"), reportDir, functions(args));
 
         CoverageThresholds thresholds = CoverageThresholdResolver.resolve(config, 0, 0);
         CoverageGate.Result gate = CoverageGate.check(result.coverage(), result.kinds(),
@@ -322,8 +367,8 @@ public final class McpDevTools {
                 .handler((args, ctx) -> {
                     Path app = appHome(args);
                     Datasource ds = resolve(args, app, config(app));
-                    DriverManagerDataSource dataSource = new DriverManagerDataSource(ds.url(),
-                            ds.user(), ds.password());
+                    DataSource dataSource = dataSource(ds.url(), ds.user(), ds.password(),
+                            loader(args));
                     int limit = args.path("limit").isNumber() ? args.get("limit").asInt() : 20;
                     try {
                         JdbcOutboxStore outbox = new JdbcOutboxStore(dataSource);
@@ -399,7 +444,7 @@ public final class McpDevTools {
                         .required("path", "string", "app-home-relative file path")
                         .required("content", "string", "new file content"))
                 .handler((args, ctx) -> {
-                    StudioService studio = studio(appHome(args));
+                    StudioService studio = studio(appHome(args), functions(args));
                     studio.saveDraft(requireText(args, "path"), requireText(args, "content"));
                     return McpToolResult.json(obj("saved", requireText(args, "path")));
                 })
@@ -415,7 +460,7 @@ public final class McpDevTools {
                         .property("content", "string", "content to validate (default: saved draft"
                                 + " or current source)"))
                 .handler((args, ctx) -> {
-                    StudioService.PreviewResult preview = studio(appHome(args))
+                    StudioService.PreviewResult preview = studio(appHome(args), functions(args))
                             .preview(requireText(args, "path"), textOrNull(args, "content"));
                     return McpToolResult.json(obj(
                             "valid", preview.valid(), "kind", preview.kind(),
@@ -432,7 +477,7 @@ public final class McpDevTools {
                         .required("path", "string", "app-home-relative file path"))
                 .handler((args, ctx) -> {
                     String path = requireText(args, "path");
-                    studio(appHome(args)).applyDraft(path);
+                    studio(appHome(args), functions(args)).applyDraft(path);
                     return McpToolResult.json(obj("applied", path));
                 })
                 .build();
@@ -522,13 +567,33 @@ public final class McpDevTools {
         return new ManifestLoader().load(app).config();
     }
 
-    private StudioService studio(Path app) {
-        return new StudioService(new ManifestLoader().load(app), readOnly);
+    private StudioService studio(Path app, ExpressionFunctions functions) {
+        return new StudioService(new ManifestLoader().load(app, functions), readOnly, functions);
     }
 
     private Connection connect(JsonNode args, Path app) throws java.sql.SQLException {
         Datasource ds = resolve(args, app, config(app));
-        return DriverManager.getConnection(ds.url(), ds.user(), ds.password());
+        return dataSource(ds.url(), ds.user(), ds.password(), loader(args)).getConnection();
+    }
+
+    /**
+     * A datasource over the application's module-defined driver when one accepts the URL
+     * (docs/module-scope.md), else over {@code DriverManager}.
+     */
+    private static DataSource dataSource(String url, String user, String password,
+            ClassLoader loader) {
+        java.sql.Driver driver = DataSources.moduleDriver(url, loader);
+        if (driver == null) {
+            return new DriverManagerDataSource(url, user, password);
+        }
+        Properties properties = new Properties();
+        if (user != null) {
+            properties.setProperty("user", user);
+        }
+        if (password != null) {
+            properties.setProperty("password", password);
+        }
+        return new DriverBackedDataSource(driver, url, properties);
     }
 
     /**

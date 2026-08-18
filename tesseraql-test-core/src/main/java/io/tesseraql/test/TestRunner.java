@@ -1,5 +1,6 @@
 package io.tesseraql.test;
 
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.coverage.SqlCoverage;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
@@ -53,7 +54,15 @@ public final class TestRunner {
     public TestRunner(DataSource dataSource, Path appHome, IdentityService identity,
             RealmConfig realm,
             SqlCoverage coverage) {
-        this.context = new SuiteContext(dataSource, appHome, identity, realm, coverage);
+        this(dataSource, appHome, identity, realm, coverage,
+                ExpressionFunctions.processDefault());
+    }
+
+    /** As the five-argument form, resolving custom expression calls against {@code functions}. */
+    public TestRunner(DataSource dataSource, Path appHome, IdentityService identity,
+            RealmConfig realm,
+            SqlCoverage coverage, ExpressionFunctions functions) {
+        this.context = new SuiteContext(dataSource, appHome, identity, realm, coverage, functions);
         this.sqlCases = new SqlCases(context);
         this.workflowCases = new WorkflowCases(context, sqlCases);
         this.validationCases = new ValidationCases(context);

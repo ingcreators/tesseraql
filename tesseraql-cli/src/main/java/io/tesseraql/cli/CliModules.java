@@ -86,6 +86,26 @@ public final class CliModules {
         ModuleDrivers.register(loader);
     }
 
+    /**
+     * The per-application module classloader the MCP dev tools resolve one application's
+     * extensions with (docs/module-scope.md): its resolved {@code tesseraql.modules} cache and
+     * an optional explicit {@code --modules} directory over the CLI's own classpath.
+     */
+    public static ClassLoader appLoader(Path app, File explicitModules) {
+        List<File> moduleDirs = new ArrayList<>();
+        try {
+            new ModulesInstaller()
+                    .install(app, new ManifestLoader().load(app).config(), false)
+                    .ifPresent(result -> moduleDirs.add(result.cacheDir().toFile()));
+        } catch (RuntimeException ex) {
+            // a broken app must still serve its tools; modules just stay uninstalled
+        }
+        if (explicitModules != null) {
+            moduleDirs.add(explicitModules);
+        }
+        return classLoaderOver(moduleDirs, CliModules.class.getClassLoader());
+    }
+
     /** The {@code *.jar} files in {@code modulesDir} as URLs, sorted for a stable classpath order. */
     static URL[] jars(File modulesDir) {
         if (modulesDir == null || !modulesDir.isDirectory()) {

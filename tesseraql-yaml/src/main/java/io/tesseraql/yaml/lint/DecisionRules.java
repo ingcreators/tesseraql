@@ -187,7 +187,7 @@ final class DecisionRules implements LintRule {
             def.steps().forEach((name, step) -> {
                 if (step.when() != null && !step.when().isBlank()) {
                     checkDecisionExpression(source, "step '" + name + "' when:", step.when(),
-                            def.decide(), findings);
+                            def.decide(), findings, context.functions());
                 }
             });
         }
@@ -200,7 +200,8 @@ final class DecisionRules implements LintRule {
                         && !transition.guard().expression().isBlank()) {
                     checkDecisionExpression(source, "transition '" + transition.id()
                             + "' guard", transition.guard().expression(),
-                            effectiveDecide(workflow.definition(), transition), findings);
+                            effectiveDecide(workflow.definition(), transition), findings,
+                            context.functions());
                 }
                 byFrom.computeIfAbsent(transition.from(), unused -> new ArrayList<>())
                         .add(transition);
@@ -237,10 +238,10 @@ final class DecisionRules implements LintRule {
 
     private static void checkDecisionExpression(String source, String where, String expression,
             Map<String, io.tesseraql.yaml.model.DecisionUse> decide,
-            List<LintFinding> findings) {
+            List<LintFinding> findings, io.tesseraql.core.expr.ExpressionFunctions functions) {
         Expr parsed;
         try {
-            parsed = io.tesseraql.core.expr.ExpressionParser.parse(expression);
+            parsed = io.tesseraql.core.expr.ExpressionParser.parse(expression, functions);
         } catch (RuntimeException unparseable) {
             // A malformed expression is its own lint's concern.
             return;

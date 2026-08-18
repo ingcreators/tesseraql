@@ -2,6 +2,7 @@ package io.tesseraql.yaml.lint;
 
 import static io.tesseraql.yaml.lint.LintFinding.Severity.WARNING;
 
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
 import java.io.IOException;
@@ -33,6 +34,7 @@ final class LintContext {
     private final Path appHome;
     private final List<LintFinding> findings;
     private final Set<String> catalogTables;
+    private final ExpressionFunctions functions;
     private final io.tesseraql.yaml.SimpleYamlParser parser = new io.tesseraql.yaml.SimpleYamlParser();
     private final Map<Path, Optional<String>> contents = new HashMap<>();
     private final Map<Path, Optional<Map<String, Object>>> trees = new HashMap<>();
@@ -40,12 +42,14 @@ final class LintContext {
     private io.tesseraql.yaml.calendar.Calendars calendars = io.tesseraql.yaml.calendar.Calendars
             .empty();
 
-    LintContext(Path appHome, List<LintFinding> findings, Set<String> catalogTables) {
+    LintContext(Path appHome, List<LintFinding> findings, Set<String> catalogTables,
+            ExpressionFunctions functions) {
         this.appHome = appHome;
         this.findings = findings;
         // Not Set.copyOf: the declaration order feeds finding messages, and copyOf randomizes it.
         this.catalogTables = java.util.Collections
                 .unmodifiableSet(new java.util.LinkedHashSet<>(catalogTables));
+        this.functions = functions;
     }
 
     /**
@@ -54,6 +58,11 @@ final class LintContext {
      */
     Path appHome() {
         return appHome;
+    }
+
+    /** The expression-function set every parse of this run resolves custom calls against. */
+    ExpressionFunctions functions() {
+        return functions;
     }
 
     /**
@@ -149,7 +158,7 @@ final class LintContext {
                 return Optional.empty();
             }
             try {
-                return Optional.of(Sql2WayParser.parse(text));
+                return Optional.of(Sql2WayParser.parse(text, functions));
             } catch (RuntimeException unparseable) {
                 return Optional.empty();
             }

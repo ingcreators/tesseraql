@@ -45,7 +45,7 @@ final class RuleSetRules implements LintRule {
                     io.tesseraql.yaml.model.RuleSetsDocument.class, Set.of(), findings);
         }
         io.tesseraql.yaml.rules.ValidationRuleSets sets = io.tesseraql.yaml.rules.ValidationRuleSets
-                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser());
+                .load(appHome, new io.tesseraql.yaml.SimpleYamlParser(), context.functions());
         if (sets.isEmpty()) {
             return;
         }

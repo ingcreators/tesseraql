@@ -99,7 +99,7 @@ final class ConsumerRules implements LintRule {
         LiveViewRules.lintEmit(definition, source, findings);
         DocumentRules.lintInvalidates(context, definition, source, findings);
         MessagingRules.lintPublish(config, definition, source, findings);
-        MessagingRules.lintNotify(config, definition, source, findings);
+        MessagingRules.lintNotify(config, definition, source, findings, context.functions());
         DocumentRules.lintDatasource(context, config, consumer.source(), definition, source,
                 findings);
         // A consumer's SQL is fed by an external message payload — as untrusted as an HTTP body —

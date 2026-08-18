@@ -19,7 +19,7 @@ import javax.sql.DataSource;
  * <p>The properties carry the pool's {@code dataSourceProperties} plus {@code user}/{@code
  * password}, exactly what Hikari's own {@code DriverManager} path would pass.
  */
-final class DriverBackedDataSource implements DataSource {
+public final class DriverBackedDataSource implements DataSource {
 
     private final Driver driver;
     private final String url;
@@ -27,7 +27,7 @@ final class DriverBackedDataSource implements DataSource {
     private PrintWriter logWriter;
     private int loginTimeoutSeconds;
 
-    DriverBackedDataSource(Driver driver, String url, Properties properties) {
+    public DriverBackedDataSource(Driver driver, String url, Properties properties) {
         this.driver = driver;
         this.url = url;
         this.properties = properties;
