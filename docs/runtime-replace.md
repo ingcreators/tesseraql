@@ -148,12 +148,33 @@ is real work, exactly as if a node had joined and left.
 **The drain is the one the application already declared.** The swap happens first, so new
 requests reach the new runtime; the old runtime then gets `close()`, whose Camel shutdown
 strategy drains in-flight exchanges under the application's own `tesseraql.shutdown.timeout` and
-force-stops at the bound it declared. In-flight job runs stop cooperatively (the batch
-platform's stop, as on any node shutdown) and the reaper covers stranded rows, as it does today.
-Long-lived streams — SSE, exports — are cut at the force timeout; their clients reconnect and
-land on the new version. No second drain knob is introduced: the timeout is part of the
-application's declaration (Decision 26's classification), and a stack-level override would be
-two numbers for one bound.
+force-stops at the bound it declared. Long-lived streams — SSE, exports — are cut at the force
+timeout; their clients reconnect and land on the new version. No second drain knob is
+introduced: the timeout is part of the application's declaration (Decision 26's classification),
+and a stack-level override would be two numbers for one bound.
+
+**A running job is drained by asking, not only by waiting — a correction, found in review.**
+An earlier draft of this paragraph said in-flight job runs "stop cooperatively, as on any node
+shutdown"; measured, they do not. Scheduled runs execute on Camel exchanges
+(`SchedulingRouteBuilder.java:84-91`), so the drain *waits* for them — but the cooperative stop
+the batch platform ships (`repository.requestCancel`, polled at step and chunk boundaries, a
+committed checkpoint the rerun resumes exactly from) is wired to the operator's cancel action
+**only** (`OperationsRouteBuilder.java:429`); `JobExecutor.close()` stops the heartbeat thread
+and requests nothing. So today a run longer than the drain bound is force-cut: an exception and
+a failure alert, or a stranded RUNNING row the reaper later marks abandoned — recovery
+machinery, on a path where the graceful machinery already exists unused. The design wires it:
+**at drain start, the retiring runtime requests the cooperative stop for every execution it
+owns**, with a stop reason naming the deploy rather than "stopped by operator". A run between
+steps stops before the next one; a chunk step stops at its next committed checkpoint — real
+counts, an exact resume point — comfortably inside a bound that would otherwise force-cut it;
+a run in its final step simply completes. The rerun that resumes from the checkpoint goes
+through the existing rerun path (and lands on the new version), deliberately not automatic:
+which business date to rerun and whether tonight's window still wants it is the operator's
+call, and the status the stop recorded is what they decide from. Force-cut at the bound and
+the reaper stay, unchanged, as the last resort for a run that ignores the flag. The heartbeat's
+close ordering already supports all of this — it outlives the Camel drain precisely so a run
+winding down during it keeps saying so. The same request-then-drain applies on the stack's own
+stop (the section below), because it is the same `close()`.
 
 **The swap leaves one race, closed rather than tolerated** (asked in review: is the handling
 graceful end to end?). The relay resolves the target port per request, so a request that
@@ -390,6 +411,12 @@ into 2.
   the fresh lookup and answers 200 (a relay-level test with a stub origin that refuses the
   connection, the `SuiteRelay` seam's shape); a connection that dies mid-response is *not*
   retried and surfaces as the 502 it is.
+- The job drain: a chunk-step run in flight when `replace` fires stops at a committed
+  checkpoint with the deploy-named stop reason, its counts real and its rerun resuming exactly
+  there (the batch platform's existing stopped-checkpoint tests extend to the deploy trigger);
+  a firing that lands during the overlap is claimed exactly once between the two runtimes (the
+  existing claim-key tests' arrangement); a run in its final step completes and records
+  completion.
 - The stack's stop: `gateway.close()` with an in-flight slow request — readiness answers 503
   during the drain while liveness stays 200, the slow request completes, a new request arriving
   mid-drain is served, and the close returns within the derived bound (gateway-level, the same
@@ -473,7 +500,12 @@ Each gated on the slice it blocks, with a recommendation:
    classification), it is already deliberate and visible (audit-hardening Decision 6), and a
    deploy that needs a different bound than a shutdown is a distinction without an operator who
    asked for it. Long-lived streams cut at the force timeout, clients reconnect — stated in
-   `hosting.md`.
+   `hosting.md`. For jobs, recommended: request the cooperative stop **at drain start** (the
+   correction above). The alternative — wait most of the bound hoping the run completes, then
+   ask — leaves a chunk step no time to reach its next checkpoint, converting deliberate
+   checkpoint stops back into force-cuts, which is the opposite of the intent; and the cost of
+   asking early is small and bounded (a run between steps stops cleanly with a resume point, a
+   run in its final step completes anyway).
 3. **The CLI verb's shape** — *gates slice 3.* Recommended: one `deploy` command with a
    positional package and lifecycle subcommands (`promote`, `rollback`, `weight`, `status`), as
    sketched above. Alternatives named for review: a separate `rollout` verb for the lifecycle
