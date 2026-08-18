@@ -132,6 +132,13 @@ reviewed can be run, so a third-party app still may not carry bytecode.
 
 ### 4. The ops console is per-app, and scoped
 
+> **Reversed by stack-architecture Decision 14, shipped as the stack shell
+> (docs/stack-shells.md).** One console per stack now mounts at the origin scope with an
+> application switcher — the caller's `tql.ops.view.<name>` atoms applied to the member
+> list — and each application's pages delegate to its own runtime, so what this decision
+> protected (a runtime's data shown by that runtime) survives the reversal. The scope
+> clauses in the queries stay, exactly as written below.
+
 Like Studio, the ops console shows **one application** — the one whose runtime serves it —
 and its queries stay scoped to that app even when several apps share a business database.
 `ops.app.<name>` becomes the permission to open an app's console rather than a filter

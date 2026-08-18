@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -10,17 +9,13 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -29,9 +24,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Integration test for the bundled operations console app (design ch. 26.11, 32, 47): the
- * yaml/template app shipped in tesseraql-ops-ui mounts automatically and renders the ops.* service
- * providers under a strict content security policy; callers without a bearer principal are denied.
+ * Integration test for the bundled operations console app on the unhosted boot — a stack of one,
+ * where the shell's one member is this runtime itself (docs/stack-shells.md structural
+ * decision 2). The app shipped in tesseraql-ops-ui mounts as the fallback, its pages answer under
+ * a strict content security policy, and authorization is the caller's tql.ops.view.<name> /
+ * tql.ops.run.<name> atoms: no atoms, no reach.
  */
 @Testcontainers
 class OpsConsoleIntegrationTest {
@@ -39,18 +36,16 @@ class OpsConsoleIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
     static TesseraqlRuntime runtime;
     static Path appHome;
 
-    // The ops console is now browser-session auth; an authenticated GET carries this admin cookie.
+    // An authenticated session with no ops atoms at all: an empty switcher, 404 member pages.
     static String adminCookie;
     static String adminCsrf;
-    // A scope-granted operator (ops.app.*): sees every app's rows and may act on them.
+    // A full operator (tql.ops.view.* + tql.ops.run.*): sees every member and may act.
     static String scopedCookie;
     static String scopedCsrf;
-    // Sees rows (view policy + scope) but holds no run policy.
+    // View broadly, act nowhere (tql.ops.view.* only) — the asymmetry the atoms exist for.
     static String viewerCookie;
     static String viewerCsrf;
 
@@ -69,13 +64,14 @@ class OpsConsoleIntegrationTest {
         adminCsrf = sessions.session(adminSid).csrfToken();
         String scopedSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-admin", "ops-admin", "Ops Admin", null,
-                        List.of(), List.of("ADMIN"), List.of("ops.app.*"), Map.of()),
+                        List.of(), List.of("ADMIN"),
+                        List.of("tql.ops.view.*", "tql.ops.run.*"), Map.of()),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         scopedCookie = sessions.cookieName() + "=" + scopedSid;
         scopedCsrf = sessions.session(scopedSid).csrfToken();
         String viewerSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-viewer", "ops-viewer", "Ops Viewer",
-                        null, List.of(), List.of("BATCH_VIEWER"), List.of("ops.app.*"), Map.of()),
+                        null, List.of(), List.of(), List.of("tql.ops.view.*"), Map.of()),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         viewerCookie = sessions.cookieName() + "=" + viewerSid;
         viewerCsrf = sessions.session(viewerSid).csrfToken();
@@ -93,7 +89,8 @@ class OpsConsoleIntegrationTest {
 
     @Test
     void rendersHtmlDashboardForAuthorizedCaller() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/ops/console", true);
+        HttpResponse<String> response = getWith("/_tesseraql/ops/console/user-admin",
+                scopedCookie);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
@@ -102,10 +99,25 @@ class OpsConsoleIntegrationTest {
                 .hasValueSatisfying(value -> assertThat(value).contains("default-src 'self'"));
         assertThat(response.headers().firstValue("x-frame-options")).hasValue("DENY");
         assertThat(response.body()).startsWith("<!DOCTYPE html>");
-        assertThat(response.body()).contains("TesseraQL Operations Console");
+        assertThat(response.body()).contains("user-admin");
         assertThat(response.body()).contains("Execution lanes");
         // Long dashboard gets an in-page "jump to section" nav (sidebar IA).
         assertThat(response.body()).contains("Jump to").contains("href=\"#batch\"");
+    }
+
+    @Test
+    void theShellHomeIsTheSwitcherWithOneEntry() throws Exception {
+        // A stack of one: the home page lists exactly this runtime's application as a card.
+        String body = getWith("/_tesseraql/ops/console", scopedCookie).body();
+        assertThat(body).contains("TesseraQL Operations")
+                .contains("/_tesseraql/ops/console/user-admin");
+
+        // Deny by default: a session with no tql.ops.view atoms sees an empty switcher —
+        // and no member page at all.
+        assertThat(getWith("/_tesseraql/ops/console", adminCookie).body())
+                .contains("No applications in your operations scope");
+        assertThat(getWith("/_tesseraql/ops/console/user-admin", adminCookie).statusCode())
+                .isEqualTo(404);
     }
 
     @Test
@@ -113,9 +125,9 @@ class OpsConsoleIntegrationTest {
         // The console mounts its own section nav in the shell sidebar (sidebar IA), like Studio: the
         // sub-views are reachable from anywhere, with the other system apps linked below. Renders on
         // the overview and a deep sub-page alike.
-        for (String path : new String[]{"/_tesseraql/ops/console",
-                "/_tesseraql/ops/console/traces"}) {
-            String body = get(path, true).body();
+        for (String path : new String[]{"/_tesseraql/ops/console/user-admin",
+                "/_tesseraql/ops/console/user-admin/traces"}) {
+            String body = getWith(path, scopedCookie).body();
             assertThat(body).contains("hc-shell__sidebar").contains("data-hc-nav-current")
                     .contains(">Overview<").contains(">Jobs<").contains(">Traces<")
                     .contains(">Transfers<").contains(">Outbox<").contains(">Events<")
@@ -131,7 +143,7 @@ class OpsConsoleIntegrationTest {
     void overviewShowsTheHealthPanelAndTheVersion() throws Exception {
         // The health() roll-up, its per-datasource probe map, and the deployed version
         // join the operator's first screen (docs/ops-console-coverage.md).
-        String body = get("/_tesseraql/ops/console", true).body();
+        String body = getWith("/_tesseraql/ops/console/user-admin", scopedCookie).body();
 
         assertThat(body).contains("id=\"health\"")
                 .contains("main: reachable")
@@ -145,7 +157,8 @@ class OpsConsoleIntegrationTest {
         // This runtime does not enable tesseraql.audit.routes.enabled: the page must say
         // so instead of rendering an empty table that pretends nothing happened
         // (docs/ops-console-coverage.md).
-        HttpResponse<String> response = get("/_tesseraql/ops/console/audit", true);
+        HttpResponse<String> response = getWith("/_tesseraql/ops/console/user-admin/audit",
+                scopedCookie);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Route audit is not enabled")
@@ -156,14 +169,15 @@ class OpsConsoleIntegrationTest {
 
     @Test
     void overviewUsesSelfHostedHtmxForPolling() throws Exception {
-        HttpResponse<String> page = get("/_tesseraql/ops/console", true);
+        HttpResponse<String> page = getWith("/_tesseraql/ops/console/user-admin",
+                scopedCookie);
         assertThat(page.body())
                 .contains("/assets/vendor/htmx.org/dist/htmx.min.js")
                 .contains("hx-trigger=\"every 15s\"");
 
         // The vendored libraries serve from classpath WebJars at version-less URLs - no external
         // CDN, and upgrades are a pom version bump with templates unchanged.
-        HttpResponse<String> htmx = get("/assets/vendor/htmx.org/dist/htmx.min.js", false);
+        HttpResponse<String> htmx = get("/assets/vendor/htmx.org/dist/htmx.min.js");
         assertThat(htmx.statusCode()).isEqualTo(200);
         assertThat(htmx.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/javascript"));
@@ -172,7 +186,7 @@ class OpsConsoleIntegrationTest {
         assertThat(page.body())
                 .contains("/assets/vendor/hypermedia-components__core/dist/hc.min.css");
         HttpResponse<String> hc = get(
-                "/assets/vendor/hypermedia-components__core/dist/hc.min.css", false);
+                "/assets/vendor/hypermedia-components__core/dist/hc.min.css");
         assertThat(hc.statusCode()).isEqualTo(200);
         assertThat(hc.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/css"));
@@ -181,32 +195,33 @@ class OpsConsoleIntegrationTest {
 
     @Test
     void rendersFileTransfersPage() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/ops/console/transfers", true);
+        HttpResponse<String> response = getWith("/_tesseraql/ops/console/user-admin/transfers",
+                scopedCookie);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).startsWith("<!DOCTYPE html>");
-        // No ops.app.* grant on this caller: deny-by-default leaves the table empty.
         assertThat(response.body()).contains("File transfers")
                 .contains("No file transfers recorded");
     }
 
     @Test
     void rendersTraceTreePage() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/ops/console/traces", true);
+        HttpResponse<String> response = getWith("/_tesseraql/ops/console/user-admin/traces",
+                scopedCookie);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
         assertThat(response.body()).startsWith("<!DOCTYPE html>");
-        // No ops.app.* grant on this caller: deny-by-default leaves the trace table empty.
-        assertThat(response.body()).contains("Traces").contains("No traces retained");
+        assertThat(response.body()).contains("Traces");
         // Refreshes like every other console page - traces used to be the one static view.
         assertThat(response.body()).contains("hx-trigger=\"every 15s\"");
     }
 
     @Test
     void rendersNotFoundPageForUnknownExecution() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/ops/console/executions/missing", true);
+        HttpResponse<String> response = getWith(
+                "/_tesseraql/ops/console/user-admin/executions/missing", scopedCookie);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Execution not found.");
@@ -214,8 +229,8 @@ class OpsConsoleIntegrationTest {
 
     @Test
     void requiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/ops/console", false).statusCode()).isEqualTo(401);
-        assertThat(get("/_tesseraql/ops/console/traces", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/ops/console").statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/ops/console/user-admin/traces").statusCode()).isEqualTo(401);
     }
 
     @Test
@@ -223,11 +238,12 @@ class OpsConsoleIntegrationTest {
         String deadId = seedDeadEvent();
         String pendingId = outboxStore().insert(outboxEvent());
 
-        String body = getWith("/_tesseraql/ops/console/outbox", scopedCookie).body();
+        String body = getWith("/_tesseraql/ops/console/user-admin/outbox", scopedCookie).body();
 
         // The row-level form carries the event id; FAILED/PENDING rows stay button-free
         // (docs/ops-console-actions.md: not-yet-dead events are the dispatcher's to retry).
-        assertThat(body).contains("action=\"/_tesseraql/ops/console/outbox/redeliver\"")
+        assertThat(body)
+                .contains("action=\"/_tesseraql/ops/console/user-admin/outbox/redeliver\"")
                 .contains("name=\"id\" value=\"" + deadId + "\"")
                 .doesNotContain("name=\"id\" value=\"" + pendingId + "\"");
     }
@@ -236,7 +252,8 @@ class OpsConsoleIntegrationTest {
     void redeliverRequeuesADeadEvent() throws Exception {
         String deadId = seedDeadEvent();
 
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/outbox/redeliver",
                 "id=" + deadId, scopedCookie, scopedCsrf);
 
         assertThat(response.statusCode()).isEqualTo(303);
@@ -249,9 +266,10 @@ class OpsConsoleIntegrationTest {
     void redeliverOutOfScopeReadsAsUnknown() throws Exception {
         String deadId = seedDeadEvent();
 
-        // The plain admin session holds no ops.app.* grant: deny-by-default hides the
-        // event, and out-of-scope answers exactly like unknown (the JSON API's stance).
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+        // The plain admin session holds no tql.ops atoms: the member itself is out of
+        // reach, and out-of-scope answers exactly like unknown (the JSON API's stance).
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/outbox/redeliver",
                 "id=" + deadId, adminCookie, adminCsrf);
 
         assertThat(response.statusCode()).isEqualTo(404);
@@ -259,14 +277,17 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
-    void redeliverRequiresTheRunPolicy() throws Exception {
+    void redeliverRequiresTheRunVerb() throws Exception {
         String deadId = seedDeadEvent();
 
-        // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+        // tql.ops.view.* sees the row; acting needs tql.ops.run.<name>, and out of the run
+        // scope reads exactly like unknown — the asymmetry the retired two-axis model
+        // could not express.
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/outbox/redeliver",
                 "id=" + deadId, viewerCookie, viewerCsrf);
 
-        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.statusCode()).isEqualTo(404);
         assertThat(outboxStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
     }
 
@@ -274,7 +295,8 @@ class OpsConsoleIntegrationTest {
     void redeliverRequiresACsrfToken() throws Exception {
         String deadId = seedDeadEvent();
 
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/outbox/redeliver",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/outbox/redeliver",
                 "id=" + deadId, scopedCookie, null);
 
         assertThat(response.statusCode()).isEqualTo(403);
@@ -290,12 +312,12 @@ class OpsConsoleIntegrationTest {
         String pendingId = eventStore().publish("events", "items.changed", "K-2", "{}",
                 "user-admin");
 
-        String body = getWith("/_tesseraql/ops/console/events", scopedCookie).body();
+        String body = getWith("/_tesseraql/ops/console/user-admin/events", scopedCookie).body();
 
         assertThat(body).contains("Queue events")
                 .contains(deadId)
                 .contains("the consumer kept throwing")
-                .contains("action=\"/_tesseraql/ops/console/events/redeliver\"")
+                .contains("action=\"/_tesseraql/ops/console/user-admin/events/redeliver\"")
                 .contains("name=\"id\" value=\"" + deadId + "\"")
                 .doesNotContain("name=\"id\" value=\"" + pendingId + "\"");
         assertThat(runtime.opsDashboard().alerts())
@@ -306,7 +328,8 @@ class OpsConsoleIntegrationTest {
     void eventsRedeliverRequeuesADeadMessage() throws Exception {
         String deadId = seedDeadQueueEvent();
 
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/events/redeliver",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/events/redeliver",
                 "id=" + deadId, scopedCookie, scopedCsrf);
 
         assertThat(response.statusCode()).isEqualTo(303);
@@ -319,9 +342,10 @@ class OpsConsoleIntegrationTest {
     void eventsRedeliverOutOfScopeReadsAsUnknown() throws Exception {
         String deadId = seedDeadQueueEvent();
 
-        // The plain admin session holds no ops.app.* grant: deny-by-default hides the
-        // message, and out-of-scope answers exactly like unknown (the JSON API's stance).
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/events/redeliver",
+        // The plain admin session holds no tql.ops atoms: the member itself is out of
+        // reach, and out-of-scope answers exactly like unknown (the JSON API's stance).
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/events/redeliver",
                 "id=" + deadId, adminCookie, adminCsrf);
 
         assertThat(response.statusCode()).isEqualTo(404);
@@ -329,37 +353,39 @@ class OpsConsoleIntegrationTest {
     }
 
     @Test
-    void eventsRedeliverRequiresTheRunPolicy() throws Exception {
+    void eventsRedeliverRequiresTheRunVerb() throws Exception {
         String deadId = seedDeadQueueEvent();
 
-        // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/events/redeliver",
+        // tql.ops.view.* sees the row; acting needs tql.ops.run.<name>.
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/events/redeliver",
                 "id=" + deadId, viewerCookie, viewerCsrf);
 
-        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.statusCode()).isEqualTo(404);
         assertThat(eventStore().find(deadId).orElseThrow().status()).isEqualTo("DEAD");
     }
 
     @Test
     void jobsPageListsTheScopedCatalogWithRunButtons() throws Exception {
-        String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
+        String body = getWith("/_tesseraql/ops/console/user-admin/jobs", scopedCookie).body();
 
         assertThat(body).contains("Batch jobs").contains("user.dailyMaintenance")
                 .contains("cron 0 0 2 * * ?")
-                .contains("action=\"/_tesseraql/ops/console/jobs/run\"");
-        // Deny-by-default: a caller without ops.app.* grants sees an empty catalog.
-        assertThat(getWith("/_tesseraql/ops/console/jobs", adminCookie).body())
-                .contains("No jobs declared.");
+                .contains("action=\"/_tesseraql/ops/console/user-admin/jobs/run\"");
+        // Deny-by-default: a caller without tql.ops.view atoms has no reach at all.
+        assertThat(getWith("/_tesseraql/ops/console/user-admin/jobs", adminCookie)
+                .statusCode()).isEqualTo(404);
     }
 
     @Test
     void runStartsAJobRecordsTheActorAndRedirectsToItsExecution() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/ops/console/jobs/run",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/ops/console/user-admin/jobs/run",
                 "id=user.dailyMaintenance", scopedCookie, scopedCsrf);
 
         assertThat(response.statusCode()).isEqualTo(303);
         String location = response.headers().firstValue("location").orElseThrow();
-        assertThat(location).contains("/_tesseraql/ops/console/executions/")
+        assertThat(location).contains("/_tesseraql/ops/console/user-admin/executions/")
                 .contains("started=1");
 
         String detail = getWith(location, scopedCookie).body();
@@ -369,7 +395,7 @@ class OpsConsoleIntegrationTest {
 
     @Test
     void jobsPageRendersTheDeclaredParamsForm() throws Exception {
-        String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
+        String body = getWith("/_tesseraql/ops/console/user-admin/jobs", scopedCookie).body();
 
         assertThat(body).contains("ops.probe")
                 .contains("name=\"param.businessDate\"")
@@ -388,7 +414,7 @@ class OpsConsoleIntegrationTest {
      */
     @Test
     void jobsAutoRefreshRegionContainsNoForms() throws Exception {
-        String body = getWith("/_tesseraql/ops/console/jobs", scopedCookie).body();
+        String body = getWith("/_tesseraql/ops/console/user-admin/jobs", scopedCookie).body();
         assertThat(body).contains("hx-select=\"#jobs-status\"");
         String refreshed = body.substring(body.indexOf("id=\"jobs-status\""),
                 body.indexOf("Run a job"));
@@ -399,28 +425,33 @@ class OpsConsoleIntegrationTest {
     void runBindsDeclaredParamsAndRefusesAMissingRequiredOne() throws Exception {
         // The posted param.* fields reach the runner coerced and validated by
         // bindJobParams - the same single binding point the ops API uses.
-        HttpResponse<String> started = postForm("/_tesseraql/ops/console/jobs/run",
+        HttpResponse<String> started = postForm(
+                "/_tesseraql/ops/console/user-admin/jobs/run",
                 "id=ops.probe&param.businessDate=2026-07-26&param.limit=5",
                 scopedCookie, scopedCsrf);
         assertThat(started.statusCode()).isEqualTo(303);
         assertThat(started.headers().firstValue("location").orElseThrow())
-                .contains("/_tesseraql/ops/console/executions/");
+                .contains("/_tesseraql/ops/console/user-admin/executions/");
 
         // A missing required parameter is refused before the job starts, with the
         // field-error envelope the ops API speaks.
-        HttpResponse<String> refused = postForm("/_tesseraql/ops/console/jobs/run",
+        HttpResponse<String> refused = postForm(
+                "/_tesseraql/ops/console/user-admin/jobs/run",
                 "id=ops.probe", scopedCookie, scopedCsrf);
         assertThat(refused.statusCode()).isIn(400, 422);
         assertThat(refused.body()).contains("businessDate");
     }
 
     @Test
-    void runRequiresTheRunPolicyAndScope() throws Exception {
-        // BATCH_VIEWER satisfies ops.batch.view but not ops.batch.run.
-        assertThat(postForm("/_tesseraql/ops/console/jobs/run", "id=user.dailyMaintenance",
-                viewerCookie, viewerCsrf).statusCode()).isEqualTo(403);
-        // No ops.app.* grant: the job reads exactly like an unknown one.
-        assertThat(postForm("/_tesseraql/ops/console/jobs/run", "id=user.dailyMaintenance",
+    void runRequiresTheRunVerbAndScope() throws Exception {
+        // tql.ops.view.* sees the catalog; acting needs tql.ops.run.<name>, and out of the
+        // run scope the job reads exactly like an unknown one.
+        assertThat(postForm("/_tesseraql/ops/console/user-admin/jobs/run",
+                "id=user.dailyMaintenance",
+                viewerCookie, viewerCsrf).statusCode()).isEqualTo(404);
+        // No atoms at all: the member itself is out of reach.
+        assertThat(postForm("/_tesseraql/ops/console/user-admin/jobs/run",
+                "id=user.dailyMaintenance",
                 adminCookie, adminCsrf).statusCode()).isEqualTo(404);
     }
 
@@ -480,30 +511,11 @@ class OpsConsoleIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    private static HttpResponse<String> get(String path, boolean auth) throws Exception {
+    private static HttpResponse<String> get(String path) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path));
-        if (auth) {
-            request.header("Authorization", "Bearer " + token()).header("Cookie", adminCookie);
-        }
         return HttpClient.newHttpClient().send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
-    }
-
-    private static String token() throws Exception {
-        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder
-                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = encoder.encodeToString(
-                MAPPER.writeValueAsBytes(TestClaims.addressed(TestClaims
-                        .addressed(Map.of("sub", "ops-user", "roles", List.of("ADMIN"))))));
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(
-                "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
-                "HmacSHA256"));
-        String signature = encoder.encodeToString(
-                mac.doFinal((header + "." + payload).getBytes(StandardCharsets.US_ASCII)));
-        return header + "." + payload + "." + signature;
     }
 
     private static Path prepareAppHome() throws IOException {

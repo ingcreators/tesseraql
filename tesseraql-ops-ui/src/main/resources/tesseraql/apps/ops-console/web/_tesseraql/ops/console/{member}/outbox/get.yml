@@ -1,0 +1,33 @@
+version: tesseraql/v1
+id: tql.opsConsole.outbox
+kind: route
+recipe: query-html
+
+input:
+  redelivered:
+    type: string
+    required: false
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: ops.shell.outbox
+      params:
+        member: path.member
+        slot: params.slot
+        # The member re-narrows to the caller's tql.ops.view.<name> grants (deny by default).
+        permissions: principal.permissions
+        cookie: params.Cookie
+response:
+  html:
+    status: 200
+    template: outbox.html
+    model:
+      outbox: main
+      redelivered: params.redelivered

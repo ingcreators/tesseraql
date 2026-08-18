@@ -206,7 +206,8 @@ catalogs at once.
 **An operator can look and refresh.** `GET /_tesseraql/ops/catalogs` reports what each
 catalog holds, when it last loaded, and the message of its last failed refresh. A
 catalog serving a previous load while its refresh keeps failing shows both facts.
-`POST /_tesseraql/ops/catalogs/{name}/refresh` re-reads one, gated by `ops.batch.run`.
+`POST /_tesseraql/ops/catalogs/{name}/refresh` re-reads one, requiring the caller's
+`tql.ops.run.<name>` atom for the application.
 
 None of this is the guarantee. `invalidates:` is an optimization — a master written by
 another system raises nothing. Underneath sit the hold's expiry and the validation

@@ -1,0 +1,51 @@
+version: tesseraql/v1
+id: tql.opsConsole.jobs.run
+kind: route
+recipe: command-json
+
+# Runs one declared job now (docs/ops-console-actions.md), delegated to the selected member
+# with the caller's session and CSRF token — the member validates both and requires the
+# caller's tql.ops.run.<name> atom, out of scope reading exactly like unknown. Declared job
+# parameters post as param.<name> fields (docs/ops-console-coverage.md): their names are
+# per-job and cannot be declared statically here, so unknown fields pass through and the body
+# rides to the member whole — bindJobParams inside the runner stays the single validation
+# point.
+
+input:
+  id:
+    type: string
+    required: true
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+
+# Dynamic param.<name> fields cannot be declared statically; they pass through to the
+# member and bindJobParams validates them against the job's declaration.
+inputPolicy:
+  unknownFields: ignore
+
+steps:
+  - id: main
+    service:
+      name: ops.shell.jobRun
+      params:
+        member: path.member
+        slot: params.slot
+        id: params.id
+        values: body
+        # The execution row records who started it. The in-process (unhosted) target reads
+        # this; a delegated member derives the same answer from the forwarded session itself.
+        actor: principal.loginId
+        permissions: principal.permissions
+        cookie: params.Cookie
+        csrf: params._csrf
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/ops/console/{path.member}/executions/{steps.main.executionId}?started=1&slot={params.slot}

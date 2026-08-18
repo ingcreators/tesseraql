@@ -99,6 +99,63 @@ class MultiAppCanaryIntegrationTest {
         assertThat(served).containsExactlyInAnyOrder("stable", "canary");
     }
 
+    /**
+     * The ops shell shows a staged member twice — the stable entry and the canary's own —
+     * because runtime-local data is exactly what an operator watches a ramp for, and neither a
+     * weighted roll nor a stable pin can show the canary's ring on purpose
+     * (docs/stack-shells.md structural decision 2). Addressing is proved by acting: a job run
+     * on the canary slot lands in the canary runtime's own store, so the stable slot's pages
+     * read that execution as unknown while the canary's show it.
+     */
+    @Test
+    void theShellShowsTheCanaryAsASecondEntryAndAddressesItsSlot() throws Exception {
+        HttpResponse<String> login = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + gateway.port()
+                        + "/_tesseraql/login"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"loginId\":\"operator\",\"password\":\"s3cret\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
+        String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
+        String cookie = setCookie.substring(0, setCookie.indexOf(';'));
+        String csrf = MAPPER.readTree(login.body()).path("csrfToken").asText();
+
+        String home = shellGet("/_tesseraql/ops/console", cookie).body();
+        assertThat(home).contains(">shop<").contains(">shop (canary)<")
+                .contains("/_tesseraql/ops/console/shop?slot=canary");
+
+        HttpResponse<String> started = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER).build().send(
+                        HttpRequest.newBuilder(URI.create("http://localhost:" + gateway.port()
+                                + "/_tesseraql/ops/console/shop/jobs/run"))
+                                .header("Cookie", cookie)
+                                .header("Content-Type", "application/x-www-form-urlencoded")
+                                .POST(HttpRequest.BodyPublishers.ofString(
+                                        "id=user.dailyMaintenance&slot=canary&_csrf=" + csrf))
+                                .build(),
+                        HttpResponse.BodyHandlers.ofString());
+        assertThat(started.statusCode()).as(started.body()).isEqualTo(303);
+        String location = started.headers().firstValue("location").orElseThrow();
+        assertThat(location).contains("/_tesseraql/ops/console/shop/executions/")
+                .contains("slot=canary");
+
+        // The canary slot shows its own execution…
+        assertThat(shellGet(location, cookie).body()).contains("Job started.");
+        // …and the stable slot reads the same id as unknown: two runtimes, two rings/stores.
+        String stableLocation = location.replace("&slot=canary", "").replace("?slot=canary", "");
+        assertThat(shellGet(stableLocation, cookie).body()).contains("Execution not found.");
+    }
+
+    private static HttpResponse<String> shellGet(String path, String cookie) throws Exception {
+        return HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create(
+                        "http://localhost:" + gateway.port() + path))
+                        .header("Cookie", cookie).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private static String itemName() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
@@ -118,6 +175,33 @@ class MultiAppCanaryIntegrationTest {
                         + ".items (id serial primary key, name varchar(200) not null)");
                 statement.execute("insert into " + tag + ".items (name) values ('" + tag + "')");
             }
+            // The ops shell's operator: signs in at the origin against the shared framework
+            // store, granted the full atoms (docs/stack-shells.md structural decision 1).
+            for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres")
+                    .split(";")) {
+                if (!ddl.isBlank()) {
+                    statement.execute(ddl);
+                }
+            }
+            String hash = new io.tesseraql.security.password.Pbkdf2PasswordEncoder()
+                    .encode("s3cret");
+            String params = new io.tesseraql.security.password.Pbkdf2PasswordEncoder()
+                    .defaultParams();
+            statement.execute("insert into tql_users "
+                    + "(user_id, login_id, display_name, status, password_hash, password_algo,"
+                    + " password_params) values ('u-op','operator','Operator','ACTIVE','" + hash
+                    + "','pbkdf2','" + params + "')");
+            statement.execute("insert into tql_roles (role_id, role_code, role_name)"
+                    + " values ('r-op','r-op','r-op')");
+            statement.execute(
+                    "insert into tql_user_roles (user_id, role_id) values ('u-op','r-op')");
+            for (String permission : new String[]{"tql.ops.view.*", "tql.ops.run.*"}) {
+                statement.execute("insert into tql_permissions"
+                        + " (permission_id, permission_code, permission_name) values ('"
+                        + permission + "','" + permission + "','" + permission + "')");
+                statement.execute("insert into tql_role_permissions (role_id, permission_id)"
+                        + " values ('r-op','" + permission + "')");
+            }
         }
     }
 
@@ -128,6 +212,11 @@ class MultiAppCanaryIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, home, path));
         }
+        // The overlay renames the copied example to `shop`, so its permission codes must carry
+        // that name too (TQL-YAML-1406): a code is `<app>.<what>`.
+        Path exampleConfig = home.resolve("config/tesseraql.yml");
+        Files.writeString(exampleConfig, Files.readString(exampleConfig)
+                .replace("permission: user-admin.", "permission: shop."));
         Files.writeString(home.resolve("config/overlay.yml"), """
                 tesseraql:
                   app:

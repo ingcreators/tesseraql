@@ -24,9 +24,9 @@ import org.apache.maven.plugins.annotations.Parameter;
  * (or equivalent provisioning) runs. The role codes in {@code tesseraql.adminRoles} are only
  * meaningful if the app's {@code tesseraql.security.policies} reference the same names - check
  * the app's policy block and pass matching roles (e.g. {@code -Dtesseraql.adminRoles=ADMIN}).
- * Permission codes in {@code tesseraql.adminPermissions} (e.g. {@code ops.app.*} for runtime-wide
- * operations visibility) are created and granted to those roles, flowing into the principal's
- * permissions through the standard role-permission join.
+ * Permission codes in {@code tesseraql.adminPermissions} (e.g. {@code tql.ops.view.*} for
+ * stack-wide operations visibility) are created and granted to those roles, flowing into the
+ * principal's permissions through the standard role-permission join.
  */
 @Mojo(name = "identity-schema", threadSafe = true)
 public class IdentitySchemaMojo extends AbstractMojo {
@@ -61,7 +61,7 @@ public class IdentitySchemaMojo extends AbstractMojo {
 
     /**
      * Permission codes created and granted to the admin roles, e.g.
-     * {@code ops.app.*,iam:admin:write}. Empty by default.
+     * {@code tql.ops.view.*,tql.ops.run.*}. Empty by default.
      */
     @Parameter(property = "tesseraql.adminPermissions", defaultValue = "")
     private String adminPermissions;

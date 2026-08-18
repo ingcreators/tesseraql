@@ -277,7 +277,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                         TesseraqlRuntime.start(surfaceHome, freePort(),
                                 context.forSurface(
                                         surfaceMainOverride(settings, configs, dev, embedded),
-                                        applications)),
+                                        applications, host.memberOrigins())),
                         Set.of()));
                 LOG.info("Hosting the stack surface (sign-in, account, portal) at the origin"
                         + " scope from {}", surfaceHome);
@@ -780,6 +780,26 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     /** The HTTP port of the app's canary candidate; only valid when {@link #hasCanary} is true. */
     public int canaryPort(String appName) {
         return app(appName + CANARY_SLOT).port();
+    }
+
+    /**
+     * The live member-origin lookup handed to the surface runtime's context, so the ops shell's
+     * delegated calls resolve ports through the live slots per call — exactly as the relay
+     * resolves per request, which is what keeps a delegation correct across replaces
+     * (docs/stack-shells.md structural decision 2).
+     */
+    HostContext.MemberOrigins memberOrigins() {
+        return new HostContext.MemberOrigins() {
+            @Override
+            public int port(String member, boolean canary) {
+                return canary ? canaryPort(member) : MultiAppHost.this.port(member);
+            }
+
+            @Override
+            public boolean hasCanary(String member) {
+                return MultiAppHost.this.hasCanary(member);
+            }
+        };
     }
 
     @Override

@@ -142,7 +142,7 @@ class OpsDashboardTest {
         assertThat(dashboard.traceSummaries(null, ordersOnly)).singleElement()
                 .satisfies(summary -> assertThat(summary.rootSpan()).isEqualTo("tesseraql.route"));
 
-        // The wildcard scope (ops.app.*) sees everything, including unattributed traces.
+        // The wildcard scope (tql.ops.view.*) sees everything, including unattributed traces.
         assertThat(dashboard.traceTree(app -> true)).hasSize(3);
         assertThat(dashboard.traces(app -> true)).hasSize(5);
     }

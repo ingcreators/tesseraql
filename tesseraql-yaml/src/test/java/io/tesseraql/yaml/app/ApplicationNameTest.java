@@ -43,11 +43,14 @@ class ApplicationNameTest {
     /**
      * The name is the application's address (docs/stack-architecture.md Decision 25), so it must
      * be one safe path segment: no slash, no leading underscore (the framework's fence), no
-     * leading dot.
+     * leading dot. It is also an atom position: {@code tql.<family>.<verb>.<name>} parses by
+     * splitting on dots, so a dotted name is refused, and {@code tql} — the framework's mark — is
+     * reserved outright (docs/stack-shells.md structural decision 1).
      */
     @Test
     void aNameThatCannotBeAnAddressSegmentIsRefused() {
-        for (String unsafe : new String[]{"a/b", "_admin", ".hidden", "assets"}) {
+        for (String unsafe : new String[]{"a/b", "_admin", ".hidden", "assets", "orders.eu",
+                "v1.2", "tql"}) {
             assertThatThrownBy(() -> ApplicationName.of(config(Map.of(
                     "tesseraql", Map.of("app", Map.of("name", unsafe))))))
                     .as(unsafe)
@@ -59,12 +62,14 @@ class ApplicationNameTest {
     /**
      * Segment safety is not the scaffolder's ASCII pattern: non-ASCII names are legal — the
      * migration history guard measures them in UTF-8 bytes for exactly that reason — and an inner
-     * underscore or dot fences nothing.
+     * underscore fences nothing. The atom families ({@code ops}, {@code studio}) stay legal names
+     * too: the framework marks its own space with {@code tql.} rather than enumerating words users
+     * may not have.
      */
     @Test
     void segmentSafetyIsNotAnAsciiPattern() {
         // "assets-portal" beside the reserved "assets": the reservation is one word, not a stem.
-        for (String legal : new String[]{"受注管理", "my_app", "v1.2", "assets-portal"}) {
+        for (String legal : new String[]{"受注管理", "my_app", "ops", "studio", "assets-portal"}) {
             assertThat(ApplicationName.of(config(Map.of(
                     "tesseraql", Map.of("app", Map.of("name", legal))))))
                     .as(legal)

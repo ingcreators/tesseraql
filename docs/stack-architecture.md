@@ -574,7 +574,9 @@ them.
 developers, operators), the identity
 remainder of Decision 24's slice 4, and the authenticated deploy surface runtime-replace.md
 deferred to the grants work. The Studio shell (slice 8) is deliberately left to its own
-design on the delegation pattern established there.
+design on the delegation pattern established there. **Its slice 1 — the atom grammar and the
+ops shell with its switcher, delegation and per-member canary entries — is shipped**; the
+identity remainder and the deploy surface follow as its slices 2 and 3.
 
 ### 15. Process separation is not built, and the boundary is kept shaped so it stays available
 
@@ -1611,7 +1613,8 @@ could invalidate a design assumption.
    rather than anything application-relative. A host resolves exactly what a runtime would.
 4. **The permission vocabulary after Decision 14** — *gates slice 7.* `ops.app.<name>` shifts
    meaning, and Studio needs per-application edit authorisation that has no equivalent today.
-   **Answered in [stack-shells.md](stack-shells.md)** (2026-08-18, design pending review;
+   **Answered in [stack-shells.md](stack-shells.md)** (2026-08-18, design approved; the
+   grammar, the ops atoms and the shell shipped with its slice 1;
    reshaped in review into a persona model): marked atoms `tql.<family>.<verb>.<name>`
    over dot-free application names (TQL-YAML-1405 widens; `tql` is the one reserved name,
    the `/_tesseraql/` philosophy applied to permissions) — `tql.app.use` for business

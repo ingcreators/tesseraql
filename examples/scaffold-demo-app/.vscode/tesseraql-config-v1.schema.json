@@ -13,7 +13,7 @@
           "properties": {
             "name": {
               "type": "string",
-              "description": "The application name: tags job executions, outbox events, and per-app operations scope (ops.app.<name>)."
+              "description": "The application name: tags job executions, outbox events, and per-app operations scope (tql.ops.view.<name>)."
             },
             "home": {
               "type": "string"

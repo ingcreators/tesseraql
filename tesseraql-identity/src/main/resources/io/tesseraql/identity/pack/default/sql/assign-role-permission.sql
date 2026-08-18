@@ -6,6 +6,6 @@ select r.role_id, p.permission_id
 from tql_roles r
   cross join tql_permissions p
 where r.role_code = /* roleCode */ 'iam.admin'
-  and p.permission_code = /* permissionCode */ 'ops.app.*'
+  and p.permission_code = /* permissionCode */ 'tql.ops.view.*'
 on conflict do nothing
 ;

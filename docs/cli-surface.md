@@ -394,7 +394,7 @@ Measured 2026-08-16:
 | --- | --- | --- |
 | Configuration keys | `tesseraql.app.name` (47), `tesseraql.apps.<name>.*` | none — `tesseraql.app.id` does not exist |
 | Java identifiers in main code | `appName` (358) | `appId` (66) |
-| Permissions, MCP server, outbox scoping, job ownership | `ops.app.<name>` | — |
+| Permissions, MCP server, outbox scoping, job ownership | `tql.ops.view.<name>` | — |
 | The catalogue | — | `InstalledApp.id`, `catalog.json`'s `"id"` |
 
 **And the two are the same string by construction, in every case.** `AppInstaller` reads
@@ -411,7 +411,7 @@ a changelog line and nothing else.
 
 The direction is not arbitrary. `name` is what the application's author writes and what
 [stack-architecture.md](stack-architecture.md) made **required** rather than defaulted, on the
-grounds that it is an identity — outbox claim scoping, cluster job claim keys, `ops.app.<name>`, the
+grounds that it is an identity — outbox claim scoping, cluster job claim keys, `tql.ops.view.<name>`, the
 MCP server name, and now the stack address. `id` appears only in artefacts derived from it.
 
 `migrate --app-name` was going to be renamed here, for sitting one character from `--app` while

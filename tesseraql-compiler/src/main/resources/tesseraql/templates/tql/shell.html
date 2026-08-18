@@ -167,7 +167,7 @@
      served by AssetsRouteBuilder); each label is wrapped in `.hc-shell__label` so it hides in the
      collapsed icon rail while keeping the link's accessible name. -->
 <th:block th:fragment="system-nav">
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
+  <a class="hc-item" th:if="${_system != null && _system.consoleHref != null}" th:attr="href=${_system.consoleHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
   <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
   <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
 </th:block>
@@ -233,7 +233,7 @@
           <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/connectors}">Connectors</div>
           <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/calendars}">Calendars</div>
           <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/studio/ui/jobs}">Job policies</div>
-          <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/ops/console}">Operations console</div>
+          <div class="hc-command__item" role="option" th:if="${_system != null && _system.consoleHref != null}" th:attr="data-value=${_system.consoleHref}">Operations console</div>
           <div class="hc-command__item" role="option" th:data-value="@{/_tesseraql/admin/users}">IAM Admin</div>
         </div>
         <div th:hx-get="@{/_tesseraql/studio/ui/command}" hx-trigger="intersect once"
@@ -283,29 +283,53 @@
   </div>
   <div class="tql-nav__section" role="group" aria-labelledby="tql-nav-system">
     <p class="tql-nav__group" id="tql-nav-system">System</p>
-    <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
+    <a class="hc-item" th:if="${_system != null && _system.consoleHref != null}" th:attr="href=${_system.consoleHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Operations</span></a>
     <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
 </th:block>
-<!-- The Operations console's own section navigation (sidebar IA, mirroring studio-nav): the console
-     is a multi-page monitoring app, so `ops-page(...)` mounts this sidebar instead of the bare 3-app
-     system-nav — Overview and the sub-views (Traces / Transfers / Outbox) become reachable from
-     anywhere, with the other system apps linked below. installNavCurrent marks the active link. -->
-<th:block th:fragment="ops-page(title, header, content)"
-          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-nav}, ${header}, ${content}, true, 'compact')}"/>
-<th:block th:fragment="ops-nav">
+<!-- The Operations shell's chrome (docs/stack-shells.md structural decision 2): the console is
+     one application at the stack's origin scope, and its sidebar is the switcher — the caller's
+     tql.ops.view.<name> grants applied to the member list, a staged canary as a second entry.
+     `shell` is the map every ops.shell.* provider returns: `entries` always; on a member's own
+     pages also `label`, `base` and `slotQuery` for the member's section nav.
+     installNavCurrent marks the active link. -->
+<th:block th:fragment="ops-shell-page(title, shell, header, content)"
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-shell-nav(${shell})}, ${header}, ${content}, true, 'compact')}"/>
+<th:block th:fragment="ops-shell-nav(shell)">
   <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console/jobs}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#timer}"/></svg></span><span class="hc-item__title hc-shell__label">Jobs</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console/traces}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Traces</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console/transfers}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#arrow-left-right}"/></svg></span><span class="hc-item__title hc-shell__label">Transfers</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console/outbox}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#send}"/></svg></span><span class="hc-item__title hc-shell__label">Outbox</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console/events}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#share-2}"/></svg></span><span class="hc-item__title hc-shell__label">Events</span></a>
-  <a class="hc-item" th:href="@{/_tesseraql/ops/console/audit}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#scroll-text}"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
+  <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-apps">
+    <p class="tql-nav__group" id="ops-nav-apps">Applications</p>
+    <a class="hc-item" th:each="entry : ${shell.entries}" th:attr="href=@{${entry.href}}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#blocks}"/></svg></span><span class="hc-item__title hc-shell__label" th:text="${entry.label}">app</span></a>
+  </div>
   <a class="hc-item" th:href="@{/_tesseraql/ops/console/token}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Token</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
     <p class="tql-nav__group" id="ops-nav-system">System</p>
-    <a class="hc-item" th:href="@{/_tesseraql/studio/ui}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
-    <a class="hc-item" th:href="@{/_tesseraql/admin/users}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+    <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+    <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
+  </div>
+</th:block>
+<!-- One member's pages: the member's own section nav (Overview and the sub-views), the way back
+     to the stack, and the switcher's other entries below. `base`/`slotQuery` keep every link on
+     the selected member and slot — a canary's pages address the canary throughout. -->
+<th:block th:fragment="ops-member-page(title, shell, header, content)"
+          th:replace="~{tql/shell :: shell-impl(${title}, ~{tql/shell :: ops-member-nav(${shell})}, ${header}, ${content}, true, 'compact')}"/>
+<th:block th:fragment="ops-member-nav(shell)">
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#activity}"/></svg></span><span class="hc-item__title hc-shell__label">Stack</span></a>
+  <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-member">
+    <p class="tql-nav__group" id="ops-nav-member" th:text="${shell.label}">app</p>
+    <a class="hc-item" th:attr="href=@{|${shell.base}${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Overview</span></a>
+    <a class="hc-item" th:attr="href=@{|${shell.base}/jobs${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#timer}"/></svg></span><span class="hc-item__title hc-shell__label">Jobs</span></a>
+    <a class="hc-item" th:attr="href=@{|${shell.base}/traces${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#waypoints}"/></svg></span><span class="hc-item__title hc-shell__label">Traces</span></a>
+    <a class="hc-item" th:attr="href=@{|${shell.base}/transfers${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#arrow-left-right}"/></svg></span><span class="hc-item__title hc-shell__label">Transfers</span></a>
+    <a class="hc-item" th:attr="href=@{|${shell.base}/outbox${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#send}"/></svg></span><span class="hc-item__title hc-shell__label">Outbox</span></a>
+    <a class="hc-item" th:attr="href=@{|${shell.base}/events${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#share-2}"/></svg></span><span class="hc-item__title hc-shell__label">Events</span></a>
+    <a class="hc-item" th:attr="href=@{|${shell.base}/audit${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#scroll-text}"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
+  </div>
+  <a class="hc-item" th:href="@{/_tesseraql/ops/console/token}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Token</span></a>
+  <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
+    <p class="tql-nav__group" id="ops-nav-system">System</p>
+    <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
+    <a class="hc-item" th:if="${_system != null && _system.iamHref != null}" th:attr="href=${_system.iamHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg></span><span class="hc-item__title hc-shell__label">IAM Admin</span></a>
   </div>
 </th:block>
 <!-- Renders the app's declarative, role-filtered menu (the `_menu` model variable = a list of

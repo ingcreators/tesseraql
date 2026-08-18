@@ -135,6 +135,14 @@ public final class TesseraqlProperties {
     public static final String PREFERENCE_STORE_BEAN = "tesseraqlPreferenceStore";
     /** Marker bean: present when the bundled account surface is mounted (roadmap Phase 48). */
     public static final String ACCOUNT_SURFACE_BEAN = "tesseraqlAccountSurface";
+    /**
+     * Registry bean name for the shell chrome's system-surface links ({@code Map<String,String>}):
+     * where this runtime's pages should link the operations console, Studio and IAM Admin —
+     * topology-aware, because a hosted member's console lives at the stack's origin scope while
+     * an unhosted boot's is its own (docs/stack-shells.md structural decision 2). Absent entries
+     * mean the surface is not reachable from here and the shell omits the link.
+     */
+    public static final String SYSTEM_NAV_BEAN = "tesseraqlSystemNav";
     /** Registry bean name for the operator's default page theme (roadmap Phase 48), if set. */
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
     /** Registry bean name for the app's neutral color ramp (docs/hypermedia-ui.md), if non-default. */

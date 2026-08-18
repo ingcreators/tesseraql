@@ -1,0 +1,38 @@
+version: tesseraql/v1
+id: tql.opsConsole.events.redeliver
+kind: route
+recipe: command-json
+
+# Requeues one dead-lettered queue message (docs/silent-tolerance.md O1), delegated to the
+# selected member with the caller's session and CSRF token — the member requires the
+# caller's tql.ops.run.<name> atom, out of scope reading exactly like unknown.
+
+input:
+  id:
+    type: string
+    required: true
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: ops.shell.eventsRedeliver
+      params:
+        member: path.member
+        slot: params.slot
+        id: params.id
+        permissions: principal.permissions
+        cookie: params.Cookie
+        csrf: params._csrf
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/ops/console/{path.member}/events?redelivered=1&slot={params.slot}

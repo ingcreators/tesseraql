@@ -13,7 +13,7 @@ import java.util.function.Supplier;
  * The find&rarr;scope&rarr;act cores the operations surface serves from two faces: the JSON
  * API ({@link OperationsRouteBuilder}) and the bundled console's {@code ops.*} service
  * providers (registered in {@code TesseraqlRuntime.start}). Each pair used to duplicate the
- * lookup, the {@code ops.app.<name>} scope gate, and the action; the {@code transferFile}
+ * lookup, the per-application scope gate, and the action; the {@code transferFile}
  * handler was already explicitly shared ("two faces, one handler"), and this class applies
  * the same rule to the rest. Callers keep only what is genuinely surface-specific: how the
  * request's parameters arrive and how the result is shaped — wire maps for the API, view
@@ -29,9 +29,10 @@ final class OpsActions {
 
     /**
      * TQL-BATCH-4040: the requested operations resource (job, execution, trace, or event) is
-     * unknown — or outside the caller's {@code ops.app.<name>} scope, which reads the same.
-     * Thrown, so the standard error path answers 404 with the framework envelope (the shape
-     * {@code ErrorResponseRenderer.httpStatus} always promised for this code).
+     * unknown — or outside the caller's {@code tql.ops.view.<name>}/{@code tql.ops.run.<name>}
+     * scope, which reads the same. Thrown, so the standard error path answers 404 with the
+     * framework envelope (the shape {@code ErrorResponseRenderer.httpStatus} always promised for
+     * this code).
      */
     private static final io.tesseraql.core.error.TqlErrorCode UNKNOWN = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.BATCH, 4040);
@@ -39,7 +40,7 @@ final class OpsActions {
     /** The 404 refusal for an unknown — or out-of-scope, which reads the same — resource. */
     static TqlException notFound(String what) {
         return TqlException.builder(UNKNOWN)
-                .message(what + " is unknown or outside the caller's ops.app scope")
+                .message(what + " is unknown or outside the caller's tql.ops scope")
                 .build();
     }
 
@@ -60,29 +61,47 @@ final class OpsActions {
     private final JobRunner runner;
     /** Job id -> owning app, every declared job (main-app default already applied). */
     private final Map<String, String> jobOwners;
+    /** The application this runtime exists to serve. */
+    private final String mainApp;
     /** The applications this runtime serves; ops never reports on another runtime's rows. */
     private final java.util.Set<String> servedApps;
 
     OpsActions(io.tesseraql.operations.outbox.JdbcOutboxStore outbox,
             io.tesseraql.core.messaging.EventChannelStore events, JobRepository repository,
-            JobRunner runner, Map<String, String> jobOwners, java.util.Set<String> servedApps) {
+            JobRunner runner, Map<String, String> jobOwners, String mainApp,
+            java.util.Set<String> servedApps) {
         this.outbox = outbox;
         this.events = events;
         this.repository = repository;
         this.runner = runner;
         this.jobOwners = java.util.Collections
                 .unmodifiableMap(new LinkedHashMap<>(jobOwners));
+        this.mainApp = mainApp;
         this.servedApps = java.util.Set.copyOf(servedApps);
     }
 
     /**
-     * The caller's per-app scope: what this runtime serves, narrowed by the principal's
-     * {@code ops.app.*} grants (docs/app-isolation-model.md decision 4). The API face passes
-     * the bearer principal's permissions; the console face passes the {@code permissions}
-     * value its routes bind from the session principal.
+     * The caller's per-app <em>view</em> scope: what this runtime serves, narrowed by the
+     * principal's {@code tql.ops.view.<name>} grants (docs/stack-shells.md structural
+     * decision 1). The API face passes the bearer principal's permissions; the console face
+     * passes the {@code permissions} value its routes bind from the session principal.
      */
-    Predicate<String> scope(Object permissions) {
-        return io.tesseraql.opsui.OpsScope.allowedApps(permissions, servedApps);
+    Predicate<String> viewScope(Object permissions) {
+        return io.tesseraql.opsui.OpsScope.view(permissions, servedApps);
+    }
+
+    /**
+     * The caller's per-app <em>run</em> scope — acting, not seeing: run/cancel jobs, redeliver
+     * outbox and dead-lettered events. Granted separately ({@code tql.ops.run.<name>}), so an
+     * on-call reader is not an acting pen.
+     */
+    Predicate<String> runScope(Object permissions) {
+        return io.tesseraql.opsui.OpsScope.run(permissions, servedApps);
+    }
+
+    /** The application this runtime exists to serve — what a runtime-level action acts on. */
+    String mainApp() {
+        return mainApp;
     }
 
     /** The most recent outbox events within the caller's scope, newest first. */

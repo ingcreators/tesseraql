@@ -6,6 +6,58 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **One authorization grammar for the framework's surfaces: marked atoms
+  `tql.<family>.<verb>.<name|*>`, and the ops entry permissions retire into them**
+  (docs/stack-shells.md structural decision 1, closing stack-architecture open question 4).
+  `ops.batch.view`, `ops.batch.run` and the `ops.app.<name>` scope string are gone; seeing an
+  application's operational data is `tql.ops.view.<name>` and acting on it — run/cancel jobs,
+  redeliver outbox and dead-lettered events, refresh a catalog — is `tql.ops.run.<name>`,
+  granted separately so *view broadly, act narrowly* is finally expressible. The wildcard is
+  a terminal `*` (`tql.ops.view.*`). Framework surfaces check atoms directly and never
+  deployment-declared policies (or roles): the `ops.batch.*` blocks in a deployment's
+  `tesseraql.security.policies` stop being read, and the identity pack's sample rows seed
+  `tql.ops.view.*` instead of `ops.app.*`. Pre-1.0, no migration steps: grants named in the
+  old vocabulary simply no longer match anything.
+
+- **An application's name can no longer contain dots, and `tql` is reserved**
+  (TQL-YAML-1405, widened; docs/stack-shells.md). An atom parses by splitting on dots —
+  `tql.<family>.<verb>.<name>` — so a dotted name would be ambiguous against a
+  name-plus-verb, and `tql` is the framework's mark, reserved exactly as `/_tesseraql/`
+  fences the URL space. Non-ASCII names stay legal; `ops` and `studio` stay legal names.
+
+- **The operations console is the stack's, at the origin scope** (docs/stack-shells.md
+  structural decision 2; stack-architecture Decision 14, reversing app-isolation-model
+  Decision 4). `ops-console` stops mounting into hosted members — a topology rule, not a
+  preference; a member declaring it enabled still gets no local copy — and mounts into the
+  stack surface runtime at `/_tesseraql/ops/console`. Its sidebar is an application switcher
+  (the caller's `tql.ops.view.<name>` atoms applied to the member list, deny by default,
+  empty without grants), a staged canary shows as a second entry (`orders (canary)`,
+  `?slot=canary`) whose pages answer from the canary runtime's own ring, and the fan-out
+  overview renders one card per member under a short timeout — an unreachable member's card
+  says so while the page renders (TQL-BATCH-5030 only when a selected member's own page
+  cannot be answered). Every page and action delegates over loopback HTTP to the selected
+  member's runtime with the caller's own session (the store is shared), and the member
+  re-runs its own grant checks: authorization stays at the member, the shell adds reach, not
+  authority. Members grow a browser-face delegation API under `/_tesseraql/ops/data/…`; the
+  bearer JSON API is unchanged in address and shape. The unhosted boot (tests, embedding)
+  keeps the console locally as a stack of one — same shell, one switcher entry. A member
+  page's chrome links the console origin-absolute — the one origin-scope URL a member page
+  carries.
+
+### Added
+
+- **`TQL-YAML-1406` — an application's permission codes carry its own name as their first
+  segment** (docs/stack-shells.md structural decision 1). Every permission code an
+  application's policies reference must begin with the application's name
+  (`orders.approve`, not `approve`), and never with the framework's `tql.` mark — enforced
+  at lint and at boot, so two applications cannot silently share one grant and no
+  application can squat on the framework's vocabulary. Policy *ids* stay free (they never
+  reach the identity store), role rules stay free (roles are the deployment's vocabulary),
+  and grants are untouched — a deployment may hand any code, framework atoms included, to a
+  role or a service client. The scaffolder's starter policies emit `<name>.read`/`<name>.write`.
+
 ### Removed
 
 - **Independent hosting — `tesseraql host --mode isolated` — is gone, and with it host-header

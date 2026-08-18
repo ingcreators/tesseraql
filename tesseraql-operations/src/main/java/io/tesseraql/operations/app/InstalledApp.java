@@ -9,7 +9,7 @@ import java.util.List;
  * A record of an app installed from a {@code .tqlapp} package (design ch. 32.4, 32.5).
  *
  * <p>The application's identity is its <b>name</b> — the same string {@code tesseraql.app.name}
- * declares, that {@code ops.app.<name>} grants are checked against, and that the stack addresses
+ * declares, that {@code tql.ops.view.<name>} grants are checked against, and that the stack addresses
  * the application by. The catalogue used to call this field {@code id}; the two were the same
  * string by construction everywhere in the tree, and two names for one thing is the defect
  * docs/cli-surface.md opens with, so the synonym is gone. Pre-1.0 format change: a

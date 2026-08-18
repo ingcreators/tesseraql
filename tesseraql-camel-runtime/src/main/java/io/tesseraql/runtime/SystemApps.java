@@ -49,10 +49,25 @@ final class SystemApps {
 
     /** Loads every enabled app source as a manifest sharing the main app's config. */
     static List<MountedApp> load(AppConfig mainConfig, Path mainAppHome) {
+        return load(mainConfig, mainAppHome, java.util.Set.of());
+    }
+
+    /**
+     * As {@link #load(AppConfig, Path)}, minus {@code topologySkips} — the framework surfaces
+     * a hosted member never mounts because they live at the stack's origin scope
+     * (docs/stack-shells.md structural decision 2). A topology rule like the derived address,
+     * not a preference: it applies before the {@code tesseraql.apps.<name>.enabled} flag is
+     * read, so a member declaring the surface enabled still gets no local copy.
+     */
+    static List<MountedApp> load(AppConfig mainConfig, Path mainAppHome,
+            java.util.Set<String> topologySkips) {
         Path workRoot = io.tesseraql.yaml.config.WorkHome.resolve(mainAppHome, mainConfig)
                 .resolve("apps");
         List<MountedApp> apps = new ArrayList<>();
         for (AppSource source : AppSources.discover(mainConfig)) {
+            if (topologySkips.contains(source.name())) {
+                continue;
+            }
             Path root = source.materialize(workRoot);
             AppManifest loaded = new ManifestLoader().load(root);
             AppConfig mounted = withOwnResponseHeaders(mainConfig, loaded.config());

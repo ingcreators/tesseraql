@@ -21,6 +21,38 @@ class SecurityConfigFactoryTest {
         assertThat(config.policies().get("app.read").anyOf()).hasSize(1);
     }
 
+    /**
+     * The namespace fence (docs/stack-shells.md structural decision 1, TQL-YAML-1406) holds at
+     * boot as well as at lint: a policy referencing a permission code that does not begin with
+     * the application's own name — or that sits under the framework's {@code tql.} mark — fails
+     * the start. Role rules stay free, and without a declared name the name rule owns the
+     * refusal, so nothing is judged against a namespace that does not exist.
+     */
+    @Test
+    void aPolicyCodeOutsideTheApplicationsNamespaceFailsTheBoot() {
+        java.util.function.Function<String, AppConfig> config = code -> new AppConfig(Map.of(
+                "tesseraql", Map.of(
+                        "app", Map.of("name", "orders"),
+                        "security", Map.of("policies", Map.of(
+                                "orders.read",
+                                Map.of("anyOf", List.of(Map.of("permission", code))))))));
+
+        assertThat(SecurityConfigFactory.build(config.apply("orders.approve")).policies())
+                .containsKey("orders.read");
+        for (String refused : new String[]{"approve", "tql.ops.view.orders", "billing.approve"}) {
+            org.assertj.core.api.Assertions
+                    .assertThatThrownBy(() -> SecurityConfigFactory.build(config.apply(refused)))
+                    .as(refused)
+                    .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                    .hasMessageContaining("TQL-YAML-1406");
+        }
+        // No declared name: parsed without the fence — the name rule reports separately.
+        assertThat(SecurityConfigFactory.build(new AppConfig(Map.of(
+                "tesseraql", Map.of("security", Map.of("policies", Map.of(
+                        "x", Map.of("anyOf", List.of(Map.of("permission", "loose"))))))))))
+                .isNotNull();
+    }
+
     @Test
     void anUnrecognizedRuleYieldsAZeroRuleDenyAllPolicy() {
         // `permissions:` (plural) is a typo for `permission:`; the rule is unrecognized and

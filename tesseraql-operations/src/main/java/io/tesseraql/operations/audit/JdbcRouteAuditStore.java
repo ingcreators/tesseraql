@@ -17,7 +17,7 @@ import javax.sql.DataSource;
 /**
  * The JDBC business-route audit log (roadmap Phase 45): one row per audited invocation in
  * {@code tql_route_audit}, stamped with the owning app so the ops read surface narrows to the
- * caller's {@code ops.app.<name>} grants like every other per-app ops table. A failed insert
+ * caller's {@code tql.ops.view.<name>} grants like every other per-app ops table. A failed insert
  * never fails the request — the audit log observes traffic, it does not gate it.
  */
 public final class JdbcRouteAuditStore implements RouteAuditSink {
@@ -74,7 +74,7 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
         }
     }
 
-    /** The newest audit rows, scoped to the apps the caller may see (ops.app.* grants). */
+    /** The newest audit rows, scoped to the apps the caller may see (tql.ops.view grants). */
     public List<Map<String, Object>> recent(int limit, Predicate<String> appFilter) {
         List<Map<String, Object>> out = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();

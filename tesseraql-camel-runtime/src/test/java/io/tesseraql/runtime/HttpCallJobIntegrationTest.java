@@ -128,6 +128,11 @@ class HttpCallJobIntegrationTest {
         try (Stream<Path> files = Files.walk(source)) {
             files.forEach(path -> copy(source, target, path));
         }
+        // The fixture renames the copied example, so its permission codes must carry the new
+        // name too (TQL-YAML-1406): a code is `<app>.<what>`.
+        Path exampleConfig = target.resolve("config/tesseraql.yml");
+        Files.writeString(exampleConfig, Files.readString(exampleConfig)
+                .replace("permission: user-admin.", "permission: http-call-job."));
         Files.writeString(target.resolve("config/application.yml"), """
                 server:
                   port: 0

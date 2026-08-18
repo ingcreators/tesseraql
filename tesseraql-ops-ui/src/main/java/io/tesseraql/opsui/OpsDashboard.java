@@ -167,7 +167,7 @@ public final class OpsDashboard {
 
     /**
      * Builds the overview with the batch executions and traces narrowed to the apps the caller may
-     * operate (design ch. 26.11 {@code ops.app.<name>} scope); runtime-wide diagnostics (lanes,
+     * operate ({@code tql.ops.view.<name>} scope); runtime-wide diagnostics (lanes,
      * slow SQL, pinning, aggregate trace metrics) stay unfiltered behind the entry permission.
      */
     public Overview overview(int recentLimit, java.util.function.Predicate<String> appFilter) {
@@ -388,7 +388,7 @@ public final class OpsDashboard {
      * when the root of its retained trace carries an {@code app} attribute the filter accepts.
      * Spans without app attribution (framework-internal work, or traces whose attributed root has
      * been evicted from the ring) are visible only to callers the filter lets see everything
-     * ({@code ops.app.*}).
+     * ({@code tql.ops.view.*}).
      */
     public List<SpanSample> traces(java.util.function.Predicate<String> appFilter) {
         java.util.Set<String> visible = new java.util.HashSet<>();

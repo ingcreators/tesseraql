@@ -42,10 +42,18 @@ package io.tesseraql.runtime;
  *                            (docs/cli-surface.md decision 4b); {@code null} for the ordinary
  *                            case, the application's own declaration
  * @param stackMembers        the stack's member list, set only on the stack surface runtime's
- *                            context so the portal can list them (docs/root-portal.md);
- *                            {@code null} for every member runtime — an application cannot see
- *                            its siblings, which keeps docs/stack-architecture.md decision 26's
- *                            no-shared-declarations rule untouched
+ *                            context so the portal and the ops shell can list them
+ *                            (docs/root-portal.md, docs/stack-shells.md); {@code null} for every
+ *                            member runtime — an application cannot see its siblings, which keeps
+ *                            docs/stack-architecture.md decision 26's no-shared-declarations rule
+ *                            untouched
+ * @param memberOrigins       the live member-origin lookup (name and slot &rarr; internal port),
+ *                            set beside {@link #stackMembers} only on the surface runtime's
+ *                            context so the ops shell's delegated calls resolve ports through the
+ *                            host's live slots — which stays correct across replaces, exactly as
+ *                            the relay's per-request resolution does (docs/stack-shells.md
+ *                            structural decision 2); {@code null} wherever {@code stackMembers}
+ *                            is
  * @param extraModules        the development loop's {@code --modules} directory, composed onto
  *                            every member runtime's own module loader (docs/module-scope.md) —
  *                            an override, not a declaration, which is why it is the one
@@ -56,7 +64,26 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         javax.sql.DataSource frameworkDataSource,
         DataSources.MainDatasourceOverride mainDataSourceOverride,
         java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
+        MemberOrigins memberOrigins,
         java.io.File extraModules) {
+
+    /**
+     * The host's live member-origin lookup: which internal port answers for a member's stable or
+     * canary slot right now. Reads the host's live slot state per call, so a shell that resolved
+     * a port yesterday cannot delegate to a retired runtime today.
+     */
+    public interface MemberOrigins {
+
+        /**
+         * The internal port serving {@code member}'s stable slot — or its staged canary when
+         * {@code canary} — throwing the host's TQL-APP-4040 for a member or slot that does not
+         * exist.
+         */
+        int port(String member, boolean canary);
+
+        /** Whether {@code member} has a staged canary slot right now. */
+        boolean hasCanary(String member);
+    }
 
     /**
      * The stack's answers, before any one application's prefix is stamped onto them: one sign-in
@@ -67,7 +94,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/", null, null, null, null, null);
+        return new HostContext(null, "/", null, null, null, null, null, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -79,31 +106,33 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null, extraModules);
+                mainDataSourceOverride, null, null, extraModules);
     }
 
     /**
      * These settings, for the stack surface runtime: the origin root, the framework coordinate
-     * as its {@code main}, and the member list the portal exists to show (docs/root-portal.md).
+     * as its {@code main}, the member list the portal exists to show (docs/root-portal.md), and
+     * the live member-origin lookup the ops shell delegates through (docs/stack-shells.md).
      * The surface carries no {@code --modules} override — it serves the framework's own
      * declarations, not the stack's.
      */
     HostContext forSurface(DataSources.MainDatasourceOverride mainDataSourceOverride,
-            java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers) {
+            java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
+            MemberOrigins memberOrigins) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, java.util.List.copyOf(stackMembers), null);
+                mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
     HostContext withStackSettings(String externalOrigin,
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, extraModules);
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, extraModules);
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules);
     }
 }

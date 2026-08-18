@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.opsConsole.events
+kind: route
+recipe: query-html
+
+# The messaging-channel queue events log (docs/silent-tolerance.md O1): the outbox page's
+# mirror for queue-consume dead-letters, so a consumer that keeps throwing is visible here.
+
+input:
+  redelivered:
+    type: string
+    required: false
+  slot:
+    type: string
+    required: false
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: ops.shell.events
+      params:
+        member: path.member
+        slot: params.slot
+        # The member re-narrows to the caller's tql.ops.view.<name> grants (deny by default).
+        permissions: principal.permissions
+        cookie: params.Cookie
+response:
+  html:
+    status: 200
+    template: events.html
+    model:
+      events: main
+      redelivered: params.redelivered

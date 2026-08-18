@@ -298,7 +298,8 @@ class CodeCatalogIntegrationTest {
         // Assembled as raw JSON rather than a claim map, so it names the audience and the expiry
         // directly (docs/audit-hardening.md Decision 1) instead of going through TestClaims.
         String payload = encoder.encodeToString(
-                ("{\"sub\":\"ops-user\",\"roles\":[\"ADMIN\"],\"aud\":\""
+                ("{\"sub\":\"ops-user\",\"roles\":[\"ADMIN\"],"
+                        + "\"permissions\":[\"tql.ops.view.*\",\"tql.ops.run.*\"],\"aud\":\""
                         + TestClaims.INLINE_FIXTURE + "\",\"exp\":"
                         + (System.currentTimeMillis() / 1000 + 3600) + "}")
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -360,13 +361,7 @@ class CodeCatalogIntegrationTest {
                       secret: dev-only-secret-change-me-in-production
                       audience: https://app.example.com
                       rolesClaim: roles
-                    policies:
-                      ops.batch.view:
-                        anyOf:
-                          - role: ADMIN
-                      ops.batch.run:
-                        anyOf:
-                          - role: ADMIN
+                      permissionsClaim: permissions
                   app:
                     name: catalog-it
                   datasources:

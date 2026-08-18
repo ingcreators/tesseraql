@@ -772,7 +772,8 @@ class BatchJobIntegrationTest {
                 token(List.of("BATCH_OPERATOR")), "{}");
 
         // A grant for a different app sees nothing: deny by default (design ch. 26.11).
-        String scoped = token(List.of("BATCH_OPERATOR"), List.of("ops.app.other-app"));
+        String scoped = token(List.of("BATCH_OPERATOR"),
+                List.of("tql.ops.view.other-app", "tql.ops.run.other-app"));
         assertThat(MAPPER.readTree(
                 send("GET", "/_tesseraql/ops/batch/jobs", scoped, null).body())).isEmpty();
         assertThat(MAPPER.readTree(
@@ -787,7 +788,8 @@ class BatchJobIntegrationTest {
         assertThat(denied.path("error").path("code").asText()).isEqualTo("TQL-BATCH-4040");
 
         // The matching per-app grant restores visibility, and executions carry their app.
-        String granted = token(List.of("BATCH_OPERATOR"), List.of("ops.app.user-admin"));
+        String granted = token(List.of("BATCH_OPERATOR"),
+                List.of("tql.ops.view.user-admin", "tql.ops.run.user-admin"));
         JsonNode executions = MAPPER.readTree(
                 send("GET", "/_tesseraql/ops/batch/executions", granted, null).body());
         assertThat(executions).isNotEmpty();
@@ -805,11 +807,20 @@ class BatchJobIntegrationTest {
     }
 
     @Test
-    void operationsApiForbidsInsufficientRole() throws Exception {
-        HttpResponse<String> response = send("POST",
-                "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run",
-                token(List.of("SOME_OTHER_ROLE")), "{}");
-        assertThat(response.statusCode()).isEqualTo(403);
+    void operationsApiChecksAtomsNeverRoles() throws Exception {
+        // Roles are the deployment's vocabulary; the ops API checks atoms
+        // (docs/stack-shells.md structural decision 1). A caller with no tql.ops.view grant
+        // is refused the surface, and acting without the run verb reads exactly like an
+        // unknown job.
+        String noAtoms = token(List.of("ADMIN"), List.of());
+        assertThat(send("GET", "/_tesseraql/ops/batch/executions", noAtoms, null)
+                .statusCode()).isEqualTo(403);
+        assertThat(send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run",
+                noAtoms, "{}").statusCode()).isEqualTo(404);
+        // View broadly, act narrowly: the view wildcard alone runs nothing.
+        String viewOnly = token(List.of("ADMIN"), List.of("tql.ops.view.*"));
+        assertThat(send("POST", "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run",
+                viewOnly, "{}").statusCode()).isEqualTo(404);
     }
 
     private static HttpResponse<String> send(String method, String path, String bearer, String body)
@@ -829,9 +840,9 @@ class BatchJobIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    /** An operator token with full per-app visibility ({@code ops.app.*}). */
+    /** An operator token with the full atoms ({@code tql.ops.view.*} + {@code tql.ops.run.*}). */
     private static String token(List<String> roles) throws Exception {
-        return token(roles, List.of("ops.app.*"));
+        return token(roles, List.of("tql.ops.view.*", "tql.ops.run.*"));
     }
 
     private static String token(List<String> roles, List<String> permissions) throws Exception {

@@ -5,26 +5,33 @@ now?** It is the screen an operator opens during an incident, and the one they k
 during a release. Every page is live against the running application, and every action it
 offers is a face over an ops API that already exists.
 
-Open it at `/_tesseraql/ops/console`. It is mounted by default in every application, and
-its pages refresh themselves every 15 seconds.
+Open it at `/_tesseraql/ops/console` — the stack's origin scope. The console is one shell
+per stack ([hosting.md](hosting.md)): its sidebar is an application switcher, one entry per
+application the caller may see, with a staged canary as a second entry
+(`orders (canary)`, addressed by `?slot=canary`). Selecting an application delegates its
+pages over loopback to that application's own runtime with the caller's session, so what
+each page shows is that runtime's own data — its trace ring, its lanes, its jobs. The
+pages refresh themselves every 15 seconds. On an unhosted boot (integration tests, library
+embedding) the console mounts locally and the switcher simply lists that one application.
 
 ## Who can open it
 
-Two policies gate the console:
+The console checks the framework's permission atoms, per application
+([stack-shells.md's model](hosting.md#operating-a-host)):
 
-| Policy | Grants |
+| Atom | Grants |
 | --- | --- |
-| `ops.batch.view` | Every page. Read-only. |
-| `ops.batch.run` | The write actions: run a job, redeliver an outbox message or a dead-lettered event. |
+| `tql.ops.view.<name>` | Seeing that application's operational data: its switcher entry and every read page. |
+| `tql.ops.run.<name>` | Acting on it: run a job, redeliver an outbox message or a dead-lettered event. |
 
-Grant them like any other policy ([authentication.md](authentication.md)). A viewer sees
-every button, including the ones they may not press: templates cannot evaluate policies,
-so an unauthorized action is refused by the route rather than hidden. The refusal is the
-real gate.
-
-In a deployment that hosts several applications, an operator holding `ops.app.<name>`
-sees only that application's rows. The narrowing happens in the service layer, so it
-holds for the JSON ops API and the console alike.
+The wildcard is a terminal `*` (`tql.ops.view.*`). The verbs are granted separately —
+*view broadly, act narrowly* — and deny by default: a caller with no `tql.ops.view` atoms
+sees an empty switcher. A viewer sees every button, including the ones they may not press:
+templates cannot evaluate grants, so an unauthorized action is refused by the selected
+application's own runtime rather than hidden. The refusal is the real gate, and it stays at
+the member — the shell forwards the caller's own session and the member re-runs its own
+checks, so the shell adds reach, never authority. Stack-wide vitals on each application's
+overview (lanes, JVM pinning, slow SQL) open to any holder of any `tql.ops.view` grant.
 
 ## Overview
 

@@ -43,7 +43,7 @@ public final class IdentityBootstrap {
 
     /**
      * Creates or updates the administrator, assigns the given role codes and grants the given
-     * permission codes to those roles - so e.g. {@code ops.app.*} flows into the principal's
+     * permission codes to those roles - so e.g. {@code tql.ops.view.*} flows into the principal's
      * permissions through the standard role-permission join.
      */
     public void seedAdmin(String loginId, String password, List<String> roleCodes,

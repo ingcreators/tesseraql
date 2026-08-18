@@ -284,15 +284,20 @@ be run.
 
 ## Operating a host
 
-The [operations console](ops-console.md) is per application, like Studio: it reports on the
-runtime that serves it, and its queries stay scoped to that application even when several
-share a business database. `ops.app.<name>` is the permission to open an application's
-console.
+The [operations console](ops-console.md) is the stack's, at the origin scope:
+`/_tesseraql/ops/console` is one shell whose sidebar is an application switcher — the
+caller's `tql.ops.view.<name>` grants applied to the member list, deny by default, with a
+staged canary as a second entry. Selecting an application delegates that application's pages
+over loopback to its own runtime with the caller's session, so authorization stays at the
+member: `tql.ops.view.<name>` is the authority to see an application's operational data and
+`tql.ops.run.<name>` the authority to act on it — run and cancel jobs, redeliver outbox and
+dead-lettered events — granted separately, so an on-call reader is not an acting pen. The
+wildcard is a terminal `*` (`tql.ops.view.*`).
 
-An operator running a stack therefore has one console per application rather than one screen
-listing every application's jobs. Cross-application monitoring belongs to the
-[metrics exposition](deployment.md#metrics-prometheus), which already labels job runs by
-application.
+One console per stack is a topology rule, like the derived address: a hosted member serves no
+console of its own. Cross-application aggregate views beyond the switcher and the overview's
+per-member cards belong to the [metrics exposition](deployment.md#metrics-prometheus), which
+already labels job runs by application.
 
 ## Next
 

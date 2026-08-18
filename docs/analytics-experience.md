@@ -160,7 +160,7 @@ pipeline:
   (an inbox or mail message linking the console) and a follow-up `httpCall:` can
   tell a partner system the drop is ready.
 - **Retrieval is the ops console.** The transfers page already lists every
-  `tql_file_transfer` row under `ops.batch.view`; it gains a download action through
+  `tql_file_transfer` row under the caller's `tql.ops.view.<name>` scope; it gains a download action through
   the same service `download()` the route endpoints use, policy-gated like the rest
   of the console. A route-produced transfer keeps its route-scoped download URL; the
   console action covers the job-produced ones that have no route.

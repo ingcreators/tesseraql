@@ -17,9 +17,17 @@ sources:
   main:
     service:
       name: ops.token.status
+  # The shell's switcher entries, so this page carries the same sidebar as the rest of the
+  # console (docs/stack-shells.md structural decision 2).
+  nav:
+    service:
+      name: ops.shell.nav
+      params:
+        permissions: principal.permissions
 response:
   html:
     status: 200
     template: token.html
     model:
       issue: main
+      shellnav: nav

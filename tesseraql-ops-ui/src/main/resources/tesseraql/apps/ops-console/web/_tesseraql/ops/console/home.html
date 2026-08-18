@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-shell-page('TesseraQL Operations', ${ops.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+</th:block>
+<div id="page-content" class="hc-stack" th:hx-get="@{/_tesseraql/ops/console}" hx-trigger="every 15s"
+     hx-select="#page-content" hx-target="this" hx-swap="outerHTML">
+<!-- One card per visible member (docs/stack-shells.md structural decision 2): each filled by a
+     delegated call under a short per-member timeout, and an unreachable member's card says so
+     while the page renders — a replace in progress must never 500 the shell. -->
+<div class="hc-empty" th:if="${#lists.isEmpty(ops.cards)}">
+  <p class="hc-empty__title">No applications in your operations scope.</p>
+  <p class="hc-field__message">Visibility is per application: ask for the
+    <code>tql.ops.view.&lt;name&gt;</code> grants your duty needs.</p>
+</div>
+<section class="hc-card" th:each="card : ${ops.cards}">
+  <div class="hc-card__header">
+    <a th:attr="href=@{${card.href}}" th:text="${card.label}">app</a>
+    <span class="hc-spacer"></span>
+    <span class="hc-badge" data-variant="warning" th:if="${card.canary}">canary</span>
+    <th:block th:if="${!card.unreachable}">
+      <span class="hc-badge" data-variant="success" th:if="${card.data.ok}">UP</span>
+      <span class="hc-badge" data-variant="warning" th:if="${card.data.warning}">WARN</span>
+    </th:block>
+    <span class="hc-badge" data-variant="error" th:if="${card.unreachable}">unreachable</span>
+  </div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message" th:if="${card.unreachable}">
+      This member's runtime did not answer — a replace in progress, or a runtime that is down.
+      Its pages will answer again when it does.
+    </p>
+    <th:block th:if="${!card.unreachable}">
+      <div class="hc-cluster">
+        <span class="hc-badge" th:text="|${card.data.batchTotal} executions|">0 executions</span>
+        <span class="hc-badge" data-variant="error" th:if="${card.data.hasAlerts}"
+              th:text="|${#lists.size(card.data.alerts)} alerts|">alerts</span>
+        <span class="hc-badge" th:if="${card.data.version}"
+              th:text="${card.data.version}">version</span>
+      </div>
+      <nav class="hc-cluster" th:with="slotQuery=${card.slotQuery}">
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:attr="href=@{|${card.base}${slotQuery}|}">Overview</a>
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:attr="href=@{|${card.base}/jobs${slotQuery}|}">Jobs</a>
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:attr="href=@{|${card.base}/traces${slotQuery}|}">Traces</a>
+        <a class="hc-button" data-variant="ghost" data-size="sm"
+           th:attr="href=@{|${card.base}/outbox${slotQuery}|}">Outbox</a>
+      </nav>
+    </th:block>
+  </div>
+</section>
+</div>
+</html>

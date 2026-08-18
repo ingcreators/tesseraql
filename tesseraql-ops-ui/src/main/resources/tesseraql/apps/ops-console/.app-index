@@ -1,25 +1,28 @@
 # Each route folder is the complete unit: yml + colocated template.
-# Operations console app (design ch. 26.11): served by the runtime as a mounted system app.
+# Operations shell app (docs/stack-shells.md): mounted into the stack surface runtime at the
+# origin scope; the unhosted boot (tests, embedding) mounts it locally as a fallback.
 config/tesseraql.yml
-web/_tesseraql/ops/console/executions/{id}/execution.html
-web/_tesseraql/ops/console/executions/{id}/get.yml
-web/_tesseraql/ops/console/audit/audit.html
-web/_tesseraql/ops/console/audit/get.yml
-web/_tesseraql/ops/console/events/events.html
-web/_tesseraql/ops/console/events/get.yml
-web/_tesseraql/ops/console/events/redeliver/post.yml
 web/_tesseraql/ops/console/get.yml
-web/_tesseraql/ops/console/jobs/get.yml
-web/_tesseraql/ops/console/jobs/jobs.html
-web/_tesseraql/ops/console/jobs/run/post.yml
-web/_tesseraql/ops/console/outbox/get.yml
-web/_tesseraql/ops/console/outbox/outbox.html
-web/_tesseraql/ops/console/outbox/redeliver/post.yml
-web/_tesseraql/ops/console/overview.html
+web/_tesseraql/ops/console/home.html
 web/_tesseraql/ops/console/token/get.yml
 web/_tesseraql/ops/console/token/post.yml
 web/_tesseraql/ops/console/token/token.html
-web/_tesseraql/ops/console/traces/get.yml
-web/_tesseraql/ops/console/traces/traces.html
-web/_tesseraql/ops/console/transfers/get.yml
-web/_tesseraql/ops/console/transfers/transfers.html
+web/_tesseraql/ops/console/{member}/get.yml
+web/_tesseraql/ops/console/{member}/overview.html
+web/_tesseraql/ops/console/{member}/audit/audit.html
+web/_tesseraql/ops/console/{member}/audit/get.yml
+web/_tesseraql/ops/console/{member}/events/events.html
+web/_tesseraql/ops/console/{member}/events/get.yml
+web/_tesseraql/ops/console/{member}/events/redeliver/post.yml
+web/_tesseraql/ops/console/{member}/executions/{id}/execution.html
+web/_tesseraql/ops/console/{member}/executions/{id}/get.yml
+web/_tesseraql/ops/console/{member}/jobs/get.yml
+web/_tesseraql/ops/console/{member}/jobs/jobs.html
+web/_tesseraql/ops/console/{member}/jobs/run/post.yml
+web/_tesseraql/ops/console/{member}/outbox/get.yml
+web/_tesseraql/ops/console/{member}/outbox/outbox.html
+web/_tesseraql/ops/console/{member}/outbox/redeliver/post.yml
+web/_tesseraql/ops/console/{member}/traces/get.yml
+web/_tesseraql/ops/console/{member}/traces/traces.html
+web/_tesseraql/ops/console/{member}/transfers/get.yml
+web/_tesseraql/ops/console/{member}/transfers/transfers.html

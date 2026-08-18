@@ -198,7 +198,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return start(appHome, withBasePath(app.manifest(), host.basePath()), port,
                 new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, host.mainDataSourceOverride(),
-                host.frameworkDataSource(), true, host.cookiePath(), host.stackMembers(),
+                host.frameworkDataSource(), true, host.cookiePath(), host,
                 app.modules());
     }
 
@@ -310,7 +310,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override, String cookiePath, AppModules modules) {
         return start(appHome, manifest, port, tracer, meter, override, null, false, cookiePath,
-                null, modules);
+                (HostContext) null, modules);
     }
 
     /**
@@ -325,10 +325,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
      *                                 VALIDATES it instead of migrating and refuses to start on
      *                                 a mismatch — the wrong-framework-datasource guard
      *                                 (docs/stack-architecture.md decision 16)
-     * @param stackMembers             the stack's member list, handed only to the stack surface
-     *                                 runtime so the portal can list them (docs/root-portal.md);
-     *                                 null everywhere else, and the portal provider is then
-     *                                 simply not registered
+     * @param hostContext              the host's settings record, when a host started this
+     *                                 runtime; null for the unhosted boot (tests, embedding).
+     *                                 The surface runtime's context carries the member list and
+     *                                 the live member-origin lookup (docs/root-portal.md,
+     *                                 docs/stack-shells.md), so the portal and ops-shell
+     *                                 providers register only there; a hosted member's context
+     *                                 carries neither, which is also what keys the mount skip
+     *                                 for the surfaces that moved to the origin scope
      * @param modules                  this application's modules, loaded before its manifest
      *                                 (docs/module-scope.md): the function set its expressions
      *                                 parse with, the loader its codecs discover from, and a
@@ -339,8 +343,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             DataSources.MainDatasourceOverride override,
             javax.sql.DataSource stackFrameworkDataSource, boolean hostedValidatesFramework,
             String cookiePath,
-            java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
+            HostContext hostContext,
             AppModules modules) {
+        java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers = hostContext == null
+                ? null
+                : hostContext.stackMembers();
+        // A hosted member (a host is speaking and handed it no member list): the framework
+        // surfaces that live at the stack's origin scope never mount into it
+        // (docs/stack-shells.md structural decision 2).
+        boolean hostedMember = hostContext != null && stackMembers == null;
         DefaultCamelContext context = new DefaultCamelContext();
         // The component policy guards every registration from here on
         // (docs/component-guard.md): baseline-denied components fail boot, config or not.
@@ -1110,7 +1121,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));
         // Required, not defaulted: the name scopes outbox claims, job ownership and
-        // ops.app.<name>, so a shared fallback is a shared identity (io.tesseraql.yaml.app
+        // tql.ops.view.<name>, so a shared fallback is a shared identity (io.tesseraql.yaml.app
         // .ApplicationName).
         String appName = io.tesseraql.yaml.app.ApplicationName.of(manifest.config());
         // The owning app per job id (main app jobs default), so execution records are tagged with
@@ -1281,7 +1292,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // are plain yaml/sql/template trees compiled exactly like the main app. They load before
             // the MCP endpoint is wired so their MCP surface joins the main app's on one endpoint and
             // the conflict check spans every hosted app.
-            List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome);
+            List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome,
+                    hostedMember ? java.util.Set.of("ops-console") : java.util.Set.of());
             SystemApps.requireNoRouteConflicts(manifest, mountedApps);
             for (SystemApps.MountedApp mounted : mountedApps) {
                 // Mounted apps migrate their own schema (per-app history table) before serving.
@@ -1302,6 +1314,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
                 hostedApps.add(mounted.name());
             }
+            // Where this runtime's pages link the system surfaces (docs/stack-shells.md
+            // structural decision 2): the ops console is the stack's, so a hosted member links
+            // the origin scope — the one origin-absolute URL a member page carries — while the
+            // unhosted boot links its own mounted copy. Studio and IAM Admin link only where
+            // they are mounted, so the shell never links a 404.
+            java.util.Map<String, String> systemNav = new LinkedHashMap<>();
+            if (hostedMember) {
+                systemNav.put("consoleHref", "/_tesseraql/ops/console");
+            } else if (hostedApps.contains("ops-console")) {
+                systemNav.put("consoleHref", basePath + "/_tesseraql/ops/console");
+            }
+            if (hostedApps.contains("studio")) {
+                systemNav.put("studioHref", basePath + "/_tesseraql/studio/ui");
+            }
+            if (hostedApps.contains("iam-admin")) {
+                systemNav.put("iamHref", basePath + "/_tesseraql/admin/users");
+            }
+            context.getRegistry().bind(TesseraqlProperties.SYSTEM_NAV_BEAN,
+                    java.util.Collections.unmodifiableMap(systemNav));
             // Application-declared MCP tools, resources, and UI resources (roadmap Phase 24): the
             // compiler emitted a direct:mcp.<id> route per tool, a direct:mcp.resource.<id> route
             // per resource, and a direct:mcp.ui.<id> route per UI resource, for the main app and
@@ -1365,16 +1396,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
             // What this runtime serves: the host app plus anything mounted into it. The ops
-            // tables live in a business database several runtimes may share, so the console
-            // scopes to its own apps before the caller's grants narrow it further
-            // (docs/app-isolation-model.md decision 4).
+            // tables live in a business database several runtimes may share, so the ops surface
+            // scopes to its own apps before the caller's grants narrow it further.
             java.util.Set<String> servedApps = new java.util.LinkedHashSet<>();
             servedApps.add(appName);
             mountedApps.forEach(mounted -> servedApps.add(mounted.name()));
             // The find/scope/act cores both operations faces call: the JSON routes below and
             // the console's ops.* providers shape the same actions differently.
             OpsActions opsActions = new OpsActions(outboxStore, eventChannelStore,
-                    jobRepository, jobRunner, ownedJobs, servedApps);
+                    jobRepository, jobRunner, ownedJobs, appName, servedApps);
             context.addRoutes(new OperationsRouteBuilder(
                     opsActions, jobRepository, ownedJobs, jobDefinitions, opsDashboard,
                     metricsSettings, routeAuditStore, fileTransfers));
@@ -1383,11 +1413,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.opsui.OpsDashboard dashboardRef = opsDashboard;
             io.tesseraql.operations.audit.JdbcRouteAuditStore auditStoreRef = routeAuditStore;
             io.tesseraql.core.service.ServiceProviders serviceProviders = new io.tesseraql.core.service.ServiceProviders()
-                    // Batch visibility narrows to the caller's ops.app.<name> grants,
+                    // Batch visibility narrows to the caller's tql.ops.view.<name> grants,
                     // bound by the console routes as principal.permissions (ch. 26.11).
                     .register("ops.overview",
                             params -> io.tesseraql.opsui.OpsViews.overview(dashboardRef.overview(20,
-                                    opsActions.scope(params.get("permissions"))),
+                                    opsActions.viewScope(params.get("permissions"))),
                                     dashboardRef.health(),
                                     io.tesseraql.core.TesseraqlVersion.current()))
                     // The audit page is always mounted; the provider owns the honest
@@ -1399,16 +1429,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             auditStoreRef == null
                                                     ? null
                                                     : auditStoreRef.recent(200, opsActions
-                                                            .scope(params.get("permissions"))),
+                                                            .viewScope(params.get("permissions"))),
                                             params.get("route"), params.get("actor"),
                                             params.get("status")),
                                     auditStoreRef != null))
                     .register("ops.traces",
                             params -> io.tesseraql.opsui.OpsViews.traces(dashboardRef.traceTree(
-                                    opsActions.scope(params.get("permissions")))))
+                                    opsActions.viewScope(params.get("permissions")))))
                     .register("ops.transfers", params -> {
                         java.util.function.Predicate<String> scope = opsActions
-                                .scope(params.get("permissions"));
+                                .viewScope(params.get("permissions"));
                         return io.tesseraql.opsui.OpsViews.transfers(
                                 fileTransfers.recent(50).stream()
                                         .filter(transfer -> scope.test(transfer.appName()))
@@ -1416,25 +1446,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     })
                     .register("ops.outbox",
                             params -> io.tesseraql.opsui.OpsViews.outbox(opsActions.recentOutbox(
-                                    opsActions.scope(params.get("permissions")))))
+                                    opsActions.viewScope(params.get("permissions")))))
                     // Out of scope reads exactly like unknown - the shared core's stance
                     // (docs/ops-console-actions.md); 4040 renders as a plain 404.
                     .register("ops.outboxRedeliver",
                             params -> opsActions.redeliverOutbox(
                                     String.valueOf(params.get("id")),
-                                    opsActions.scope(params.get("permissions"))))
+                                    opsActions.runScope(params.get("permissions"))))
                     // The queue events log and its redelivery: the messaging mirror of the
                     // ops.outbox pair (docs/silent-tolerance.md O1).
                     .register("ops.events",
                             params -> io.tesseraql.opsui.OpsViews.events(opsActions.recentEvents(
-                                    opsActions.scope(params.get("permissions")))))
+                                    opsActions.viewScope(params.get("permissions")))))
                     .register("ops.eventsRedeliver",
                             params -> opsActions.redeliverEvent(
                                     String.valueOf(params.get("id")),
-                                    opsActions.scope(params.get("permissions"))))
+                                    opsActions.runScope(params.get("permissions"))))
                     .register("ops.jobs", params -> {
                         java.util.function.Predicate<String> scope = opsActions
-                                .scope(params.get("permissions"));
+                                .viewScope(params.get("permissions"));
                         List<io.tesseraql.opsui.OpsViews.JobCatalogEntry> entries = new java.util.ArrayList<>();
                         jobs.forEach((id, jobFile) -> {
                             String owner = jobOwners.getOrDefault(id, appName);
@@ -1470,7 +1500,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         }, params.get("actor") == null
                                 ? null
                                 : String.valueOf(params.get("actor")),
-                                opsActions.scope(params.get("permissions")));
+                                opsActions.runScope(params.get("permissions")));
                         return java.util.Map.of("executionId", execution.id(),
                                 "status", execution.status().name());
                     })
@@ -1480,7 +1510,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 : String.valueOf(params.get("id"));
                         // An execution outside the caller's scope renders as not found.
                         JobExecution execution = opsActions.findExecution(id,
-                                opsActions.scope(params.get("permissions")));
+                                opsActions.viewScope(params.get("permissions")));
                         return io.tesseraql.opsui.OpsViews.execution(id, execution,
                                 execution == null ? List.of() : jobRepository.findSteps(id));
                     })
@@ -1721,6 +1751,22 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // i.e. only on the stack surface runtime (docs/root-portal.md).
             if (stackMembers != null) {
                 PortalProviders.register(serviceProviders, stackMembers);
+            }
+            // The ops shell's delegating providers (docs/stack-shells.md structural decision 2).
+            // On the surface runtime the members and their live ports come from the host; on the
+            // unhosted boot (tests, embedding — no host, no origin) the console mounts locally
+            // as a fallback and the shell delegates to this runtime itself, a stack of one.
+            OpsShellProviders.Targets shellTargets = null;
+            if (stackMembers != null) {
+                shellTargets = OpsShellProviders.Targets.of(stackMembers,
+                        hostContext.memberOrigins());
+            } else if (hostContext == null) {
+                io.tesseraql.core.service.ServiceProviders selfProviders = serviceProviders;
+                shellTargets = OpsShellProviders.Targets.self(appName, () -> selfProviders);
+            }
+            if (shellTargets != null) {
+                OpsShellProviders.register(serviceProviders, shellTargets);
+                context.addRoutes(new OpsShellRouteBuilder(shellTargets));
             }
             context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);

@@ -237,7 +237,7 @@ class NotificationIntegrationTest {
                 Map.of("sub", "u1", "preferred_username", "admin",
                         "roles", List.of("USER_WRITE", "ADMIN"),
                         // The ops endpoints additionally scope per app (design ch. 26.11).
-                        "permissions", List.of("ops.app.*")))));
+                        "permissions", List.of("tql.ops.view.*", "tql.ops.run.*")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),

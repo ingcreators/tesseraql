@@ -454,6 +454,10 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4040 -> 404;
                 case 4041, 4043 -> 400; // 4043: manual run body is not valid JSON
                 case 4042 -> 409; // cancel target is not running - nothing left to stop
+                // 5030: a member's runtime did not answer the ops shell's delegated call —
+                // a replace in progress or a crashed runtime, not caller misbehavior
+                // (docs/stack-shells.md structural decision 2).
+                case 5030 -> 503;
                 default -> 500;
             };
             case ACCOUNT -> switch (code.number()) {

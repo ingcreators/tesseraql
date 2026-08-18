@@ -1,21 +1,31 @@
 version: tesseraql/v1
-id: tql.opsConsole.overview
+id: tql.opsConsole.home
 kind: route
 recipe: query-html
 
-security:
-  policy: ops.batch.view
+# The stack shell's home (docs/stack-shells.md structural decision 2): the switcher — the
+# caller's tql.ops.view.<name> grants applied to the member list, deny by default — and one
+# overview card per visible member, each filled by a delegated call under a short per-member
+# timeout. An unreachable member's card says so and the page renders; no ops policy id — the
+# shell checks atoms, and a caller with no grants sees an empty switcher, not an open door.
+
+input:
+  # The caller's own session, forwarded on every delegated call so the member authenticates
+  # the same principal and re-runs its own grant checks (the shell adds reach, not authority).
+  Cookie:
+    type: string
+    required: false
 
 sources:
   main:
     service:
-      name: ops.overview
+      name: ops.shell.home
       params:
-        # Narrows batch visibility to the caller's ops.app.<name> grants (deny by default).
         permissions: principal.permissions
+        cookie: params.Cookie
 response:
   html:
     status: 200
-    template: overview.html
+    template: home.html
     model:
       ops: main
