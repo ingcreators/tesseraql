@@ -139,6 +139,17 @@ land on the new version. No second drain knob is introduced: the timeout is part
 application's declaration (Decision 26's classification), and a stack-level override would be
 two numbers for one bound.
 
+**The swap leaves one race, closed rather than tolerated** (asked in review: is the handling
+graceful end to end?). The relay resolves the target port per request, so a request that
+resolved the old port just before the swap can reach the old runtime after its consumer
+suspended — and would surface as a 502 minted by the deploy itself, on a path where every other
+step was built not to drop anything. The relay therefore re-resolves the route and retries
+**once**, and **only when the connection was never established**: no byte reached the origin, so
+nothing can double — a `POST` whose connection died mid-flight is *not* retried, because
+replaying a request the origin may have acted on is a worse defect than the 502 it saves. The
+headline test below fires requests continuously through the swap precisely so this window is
+observed rather than reasoned about.
+
 **One wrinkle, named rather than hidden:** a declared `server.port` (Decision 4a's fixed
 *internal* port) is honoured at stack start, but a replaced runtime answers on an ephemeral port
 — the old runtime holds the declared one until it closes, which is after the new one binds. The
@@ -317,6 +328,10 @@ into 2.
 - Drain: an in-flight slow request on the old runtime completes after the swap while new
   requests land on the new runtime (the lane-test polling shape from #860 — observe, don't
   guess timing).
+- The swap race: a request routed to a port whose runtime is already draining is retried against
+  the fresh lookup and answers 200 (a relay-level test with a stub origin that refuses the
+  connection, the `SuiteRelay` seam's shape); a connection that dies mid-response is *not*
+  retried and surfaces as the 502 it is.
 
 **Slice 2**
 - Reconciler unit tests against a host test-double: each diff rule fires the right operation;
