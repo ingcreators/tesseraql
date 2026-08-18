@@ -125,7 +125,7 @@ public final class MultiAppGateway implements AutoCloseable {
         this.vertx = Vertx.vertx();
         this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
         this.relay = new StackRelay(client, byName, strip,
-                settings.trustedProxies(), this::targetPort);
+                settings.trustedProxies(), this::targetPort, host::surfacePort);
         this.server = vertx.createHttpServer(
                 StackRelay.frontOptions(frontPort, settings.http2()));
         server.requestHandler(relay::handle);

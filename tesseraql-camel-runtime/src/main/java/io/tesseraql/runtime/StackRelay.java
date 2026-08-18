@@ -95,6 +95,9 @@ final class StackRelay {
     /** TQL-APP-5020: the gateway failed to forward the request to the app's runtime (HTTP 502). */
     private static final String GATEWAY_ERROR = "TQL-APP-5020";
 
+    /** The surface's key in the per-app proxy lookups; {@code #} is outside every legal name. */
+    private static final String SURFACE = "#portal";
+
     private final HttpClient client;
     private final Map<String, InstalledApp> appsByName;
     /** Per app, the forwarded header its configuration tells it to believe, lowercased. */
@@ -102,22 +105,36 @@ final class StackRelay {
     private final TrustedProxies trustedProxies;
     /** App name to the internal port that answers for it now — canary weighting included. */
     private final ToIntFunction<String> portOf;
+    /**
+     * The stack surface runtime's internal port — the origin scope's {@code /_tesseraql/*} and
+     * {@code /assets/*} (docs/root-portal.md) — or {@code null} in relay tests that stand no
+     * surface up; production always has one.
+     */
+    private final java.util.function.IntSupplier surfacePort;
     /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
     private final Map<Integer, HttpProxy> proxies = new ConcurrentHashMap<>();
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             ToIntFunction<String> portOf) {
-        this(client, appsByName, Map.of(), TrustedProxies.NONE, portOf);
+        this(client, appsByName, Map.of(), TrustedProxies.NONE, portOf, null);
     }
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf) {
+        this(client, appsByName, ingressStripByApp, trustedProxies, portOf, null);
+    }
+
+    StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
+            Map<String, Set<String>> ingressStripByApp,
+            TrustedProxies trustedProxies, ToIntFunction<String> portOf,
+            java.util.function.IntSupplier surfacePort) {
         this.client = client;
         this.appsByName = Map.copyOf(appsByName);
         this.ingressStripByApp = Map.copyOf(ingressStripByApp);
         this.trustedProxies = trustedProxies;
         this.portOf = portOf;
+        this.surfacePort = surfacePort;
     }
 
     /**
@@ -144,6 +161,11 @@ final class StackRelay {
         return best;
     }
 
+    /** Whether {@code rawPath} is the origin scope's framework claim: the fence, or its assets. */
+    private static boolean insideTheOriginFence(String rawPath) {
+        return addresses("/_tesseraql", rawPath) || addresses("/assets", rawPath);
+    }
+
     /** Whether {@code prefix} addresses {@code path}: equal, or followed by a segment boundary. */
     private static boolean addresses(String prefix, String path) {
         if (prefix.isEmpty()) {
@@ -166,6 +188,16 @@ final class StackRelay {
                 request.response().setStatusCode(200)
                         .putHeader("Content-Type", "application/json; charset=utf-8")
                         .end("{\"status\":\"UP\"}");
+                return;
+            }
+            // The origin fence (docs/root-portal.md): origin-scope framework surfaces —
+            // sign-in, the account surface, the portal — and their assets are the stack surface
+            // runtime's, and the name grammar keeps both segments unreachable by any member
+            // (`_tesseraql` by the leading-underscore rule, `assets` as its one reserved word).
+            // The health pair above deliberately stays the gateway's own answer, so a
+            // load-balancer probe does not depend on the surface runtime being up.
+            if (surfacePort != null && insideTheOriginFence(rawPath)) {
+                proxyFor(SURFACE, surfacePort.getAsInt()).handle(request);
                 return;
             }
             // One address per application, and one way to reach it (docs/stack-architecture.md

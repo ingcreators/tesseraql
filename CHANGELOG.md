@@ -25,6 +25,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The stack hosts its own runtime at the origin scope — sign-in, the account surface, and the
+  portal's home** (docs/stack-architecture.md Decision 24, docs/root-portal.md). `host` and `dev`
+  start one framework-owned runtime beside the members, whose main application is the bundled
+  `portal` application riding the stack's framework coordinate; the gateway forwards origin-scope
+  `/_tesseraql/*` and `/assets/*` to it, so `/_tesseraql/login` now answers at the origin — the
+  address a stack's sign-in belongs at — where it used to 404. The health pair stays the
+  gateway's own answer, members keep their prefixes, and the per-application development
+  surfaces (Studio, ops console, IAM Admin) deliberately do not mount at the origin yet. The
+  application name `assets` is now refused (`TQL-YAML-1405`): the framework serves its asset
+  bundle at `<scope>/assets` at every scope, and a member named after it would shadow the
+  stack's own stylesheets.
+
 - **The host migrates the framework's `security` schema once, and hosted runtimes validate
   instead of migrating** (docs/stack-architecture.md Decision 16, `TQL-APP-4214`). `security`
   is stack-wide, so N runtimes taking Flyway's lock on one history in turn was safe rather than

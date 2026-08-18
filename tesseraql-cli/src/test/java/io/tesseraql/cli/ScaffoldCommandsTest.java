@@ -23,6 +23,10 @@ class ScaffoldCommandsTest {
         assertThat(dir.resolve("demo/config/tesseraql.yml")).exists();
         assertThat(dir.resolve("demo/db/migration/V1__create_items.sql")).exists();
         assertThat(dir.resolve("demo/tests/smoke-test.yml")).exists();
+        // A fresh stack ignores the stack-level work/ the host materializes the portal surface
+        // into (docs/root-portal.md), under the marker's own never-overwrite rule.
+        assertThat(dir.resolve(".gitignore")).exists()
+                .content().contains("work/");
 
         int second = execute("new", "demo", "--stack", dir.toString());
         assertThat(second).isNotZero();

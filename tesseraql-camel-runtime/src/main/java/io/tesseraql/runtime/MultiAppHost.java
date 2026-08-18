@@ -56,6 +56,14 @@ public final class MultiAppHost implements AutoCloseable {
 
     private static final String CANARY_SLOT = "#canary";
 
+    /**
+     * The stack surface runtime's slot in the runtime map (docs/root-portal.md). Not a member —
+     * never in {@link #appNames}, so nothing narrows it away, nothing watches it, and no
+     * catalogue entry addresses it. {@code #} keeps it out of any legal application name's way,
+     * like the canary slot.
+     */
+    private static final String SURFACE_SLOT = "#portal";
+
     private final Map<String, TesseraqlRuntime> runtimes;
     private final Set<String> appNames;
     private final Map<String, Integer> canaryWeights;
@@ -177,6 +185,22 @@ public final class MultiAppHost implements AutoCloseable {
                             app.name(), canary.candidate().version(), canary.weightPercent());
                 });
             }
+            // The stack surface runtime, after the members so a datasource misconfiguration
+            // fails with a member's own message first (docs/root-portal.md). Its main
+            // application is the bundled portal app, its main pool is the stack's framework
+            // coordinate, and its failure fails the stack — it is the stack's sign-in, and a
+            // stack that comes up without it would be a silent degradation.
+            if (!applications.isEmpty()) {
+                Path surfaceHome = new io.tesseraql.yaml.apps.ClasspathAppSource("portal",
+                        "tesseraql/apps/portal", MultiAppHost.class.getClassLoader())
+                        .materialize(installRoot.resolve("work"));
+                started.put(SURFACE_SLOT, TesseraqlRuntime.start(surfaceHome, freePort(),
+                        context.forSurface(
+                                surfaceMainOverride(settings, configs, dev, embedded),
+                                applications)));
+                LOG.info("Hosting the stack surface (sign-in, account, portal) at the origin"
+                        + " scope from {}", surfaceHome);
+            }
         } catch (RuntimeException ex) {
             started.values().forEach(MultiAppHost::closeQuietly);
             if (frameworkPool != null) {
@@ -208,6 +232,41 @@ public final class MultiAppHost implements AutoCloseable {
         return new DataSources.MainDatasourceOverride(
                 base + (base.indexOf('?') >= 0 ? "&" : "?") + declared.substring(query + 1),
                 embedded.username(), embedded.password());
+    }
+
+    /**
+     * The coordinate the stack surface runtime's {@code main} pool is built from: the stack's
+     * framework coordinate, however this start resolved it (docs/root-portal.md). The portal
+     * application declares no datasources of its own, so this override is its whole answer —
+     * and its {@code security} component then validates against the schema the host migrated
+     * on the same coordinate.
+     */
+    private static DataSources.MainDatasourceOverride surfaceMainOverride(
+            io.tesseraql.operations.app.StackSettings settings,
+            Map<String, io.tesseraql.yaml.config.AppConfig> configs,
+            DevMode dev, boolean embedded) {
+        if (embedded) {
+            return dev.embeddedDb();
+        }
+        java.util.Optional<io.tesseraql.operations.app.StackSettings.Coordinate> supplied = settings
+                .frameworkDatasource();
+        if (supplied.isPresent()) {
+            io.tesseraql.operations.app.StackSettings.Coordinate coordinate = supplied.get();
+            return new DataSources.MainDatasourceOverride(coordinate.jdbcUrl(),
+                    coordinate.username(), coordinate.password());
+        }
+        // The coordinate the applications agree on — TQL-APP-4211 has already refused
+        // disagreement, so the first application's resolved coordinate is the stack's. Nothing
+        // declared at all cannot be reached here: a member with no main jdbcUrl has already
+        // failed its own start with the established error.
+        io.tesseraql.yaml.config.AppConfig config = configs.values().iterator().next();
+        String datasource = config.getString("tesseraql.framework.datasource").orElse("main");
+        String prefix = "tesseraql.datasources." + datasource + ".";
+        return config.getString(prefix + "jdbcUrl")
+                .map(jdbcUrl -> new DataSources.MainDatasourceOverride(jdbcUrl,
+                        config.getString(prefix + "username").orElse(null),
+                        config.getString(prefix + "password").orElse(null)))
+                .orElse(null);
     }
 
     /**
@@ -339,6 +398,15 @@ public final class MultiAppHost implements AutoCloseable {
 
     public Set<String> appNames() {
         return appNames;
+    }
+
+    /**
+     * The internal port the stack surface runtime answers on — the origin scope's sign-in,
+     * account surface and portal (docs/root-portal.md). Throws {@code TQL-APP-4040} when this
+     * host started no applications and therefore no surface.
+     */
+    public int surfacePort() {
+        return app(SURFACE_SLOT).port();
     }
 
     /** Whether the app has a staged canary candidate receiving a share of traffic. */

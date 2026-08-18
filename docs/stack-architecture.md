@@ -1239,7 +1239,10 @@ decision by accident. The scaffolder's stricter pattern remains what `new` gener
 
 **What is honestly given up, from Decision 17's own grounds** (its "two root names" note is amended
 to point here): the framework's claim on the origin root goes from two fixed names to
-`/_tesseraql/` plus *every application name*, so the root is no longer "left to the operator". The
+`/_tesseraql/`, `/assets/` — the stack surface runtime's asset bundle, the same per-scope claim
+every application scope already carries, with `assets` reserved as a name by TQL-YAML-1405 so no
+member can shadow it ([root-portal.md](root-portal.md)) — plus *every application name*, so the
+root is no longer "left to the operator". The
 operator case Decision 17 imagined — `/health` for a load balancer — is already served by
 `/_tesseraql/health/live`, which is what the deployment image's own healthcheck calls; and an edge
 that wants to fence application traffic wholesale writes "everything except `/_tesseraql/`" instead
