@@ -348,7 +348,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Every datasource declared under tesseraql.datasources gets a pool, registered by name
         // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
         Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),
-                override, appHome);
+                override, appHome, modules.present() ? modules.loader() : null);
         HikariDataSource dataSource = dataSources.get("main");
         dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
         // Ambient framework state - sessions, tokens, replay guards, rate leases, audit,
@@ -450,7 +450,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     pinningMonitor, java.time.Duration.ofMillis(pinMs));
         }
 
-        TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config());
+        TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config(),
+                modules.present() ? modules.loader() : null);
         if (!tenantDataSources.isEmpty()) {
             context.getRegistry().bind(
                     TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN, tenantDataSources);

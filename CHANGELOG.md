@@ -106,6 +106,14 @@ All notable changes to TesseraQL are documented here. The format follows
   what used to be running an application silently without its declared modules.
   `tesseraql modules resolve` gained `--stack <dir>` to resolve every member in one command.
 
+- **A pool binds the driver its application's modules define** (docs/module-scope.md).
+  `DataSources` used to set only the JDBC URL, so Hikari fell back to `DriverManager` —
+  JVM-global and first-wins per URL, which arbitrated between two applications declaring the
+  same driver at different versions. A driver defined by the application's own module loader
+  that accepts the pool's URL is now bound to the pool directly (per-tenant pools included),
+  carrying the pool's datasource properties; base-classpath drivers and the stack's framework
+  pool keep the existing path unchanged.
+
 ### Changed
 
 - **`dev` no longer composes every member's modules onto one classloader.** The union loader

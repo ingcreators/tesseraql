@@ -39,6 +39,11 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
     }
 
     static TenantDataSources load(AppConfig config) {
+        return load(config, null);
+    }
+
+    /** As {@link #load(AppConfig)}, binding each tenant pool's driver from the module loader. */
+    static TenantDataSources load(AppConfig config, ClassLoader moduleLoader) {
         String mode = config.getString("tenancy.mode").orElse("");
         boolean perTenant = "database-per-tenant".equals(mode) || "schema-per-tenant".equals(mode);
         Object node = config.navigate("tenancy.datasources");
@@ -49,7 +54,8 @@ final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable
         for (Object key : datasources.keySet()) {
             String tenant = String.valueOf(key);
             built.put(tenant, DataSources.create(
-                    config, "tesseraql-tenant-" + tenant, "tenancy.datasources." + tenant + "."));
+                    config, "tesseraql-tenant-" + tenant, "tenancy.datasources." + tenant + ".",
+                    moduleLoader));
         }
         return new TenantDataSources(Map.copyOf(built), perTenant);
     }
