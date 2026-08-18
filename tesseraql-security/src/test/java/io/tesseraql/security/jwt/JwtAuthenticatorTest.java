@@ -89,7 +89,15 @@ class JwtAuthenticatorTest {
     @Test
     void rejectsTamperedSignature() throws Exception {
         String jwt = token(Map.of("sub", "u001"));
-        String tampered = jwt.substring(0, jwt.length() - 2) + "xy";
+        // The signature's FIRST character, changed to a DIFFERENT one: six leading bits of the
+        // decoded signature are guaranteed to move. Overwriting the trailing characters looked
+        // equivalent and was not — the last base64url character of a 32-byte signature carries
+        // only two effective bits (the decoder ignores the rest), so about one minted token in
+        // a thousand kept verifying and the test flaked instead of failing.
+        int signature = jwt.lastIndexOf('.') + 1;
+        char first = jwt.charAt(signature);
+        String tampered = jwt.substring(0, signature) + (first == 'A' ? 'B' : 'A')
+                + jwt.substring(signature + 1);
 
         assertThatThrownBy(() -> new JwtAuthenticator(config()).authenticate("Bearer " + tampered))
                 .isInstanceOf(TqlException.class);
