@@ -105,6 +105,23 @@ public final class StackSettings {
         return config;
     }
 
+    /**
+     * The stack's {@code security:} subtree — the token issuer's {@code security.jwt.*} and
+     * {@code security.token.enabled} — or {@code null} when the stack supplies none.
+     *
+     * <p>The host grafts it onto the <em>surface runtime's</em> configuration (as
+     * {@code tesseraql.security.*}), because the surface is where the stack's own authenticated
+     * endpoints live: the origin token page and exchange, and the deploy endpoint
+     * (docs/stack-shells.md, the deploy surface). Members keep their own declared JWT
+     * configuration — unifying the stack's issuer across members is the authorization server's
+     * slice, not this key's.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> surfaceSecurity() {
+        Object security = config.navigate("security");
+        return security instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+    }
+
     /** A JDBC connection declared by the stack: url, and credentials when not carried in it. */
     public record Coordinate(String jdbcUrl, String username, String password) {
     }

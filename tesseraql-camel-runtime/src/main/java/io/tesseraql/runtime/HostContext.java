@@ -59,13 +59,25 @@ package io.tesseraql.runtime;
  *                            an override, not a declaration, which is why it is the one
  *                            deliberately stack-wide module input; {@code null} in production
  *                            and on the surface runtime
+ * @param surfaceSecurity     the stack file's {@code security:} subtree, set only on the surface
+ *                            runtime's context and grafted onto its configuration as
+ *                            {@code tesseraql.security.*} — the origin's token issuing and the
+ *                            deploy endpoint's bearer validation ride it (docs/stack-shells.md,
+ *                            the deploy surface); {@code null} everywhere else, and members keep
+ *                            their own declared JWT configuration
+ * @param deployPen           the host's narrow deploy pen, set only on the surface runtime's
+ *                            context so the authenticated deploy endpoint can write the install
+ *                            root's intent through the host that owns it; {@code null} everywhere
+ *                            else — no pen, no endpoint
  */
 public record HostContext(String basePath, String cookiePath, String externalOrigin,
         javax.sql.DataSource frameworkDataSource,
         DataSources.MainDatasourceOverride mainDataSourceOverride,
         java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
         MemberOrigins memberOrigins,
-        java.io.File extraModules) {
+        java.io.File extraModules,
+        java.util.Map<String, Object> surfaceSecurity,
+        DeployPen deployPen) {
 
     /**
      * The host's live member-origin lookup: which internal port answers for a member's stable or
@@ -86,6 +98,24 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     }
 
     /**
+     * The host's deploy pen: what the surface runtime's authenticated deploy endpoint may do to
+     * the install root, and nothing else (docs/stack-shells.md, the deploy surface). One method,
+     * because deploying IS writing intent — the reconciler stays the one mechanism that moves a
+     * runtime, and every refusal the CLI's local mode meets refuses here identically, before
+     * anything is written.
+     */
+    public interface DeployPen {
+
+        /**
+         * Verifies, preflights and writes the intent for one package — {@code AppUpgrader}'s
+         * whole lifecycle, on the install root the host serves. {@code weightPercent} applies
+         * only with {@code canary}; {@code sha256} is verified before the preflight when given.
+         */
+        io.tesseraql.operations.app.AppUpgrader.UpgradeResult deploy(java.nio.file.Path tqlapp,
+                boolean canary, Integer weightPercent, String sha256);
+    }
+
+    /**
      * The stack's answers, before any one application's prefix is stamped onto them: one sign-in
      * across one origin.
      *
@@ -94,7 +124,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/", null, null, null, null, null, null);
+        return new HostContext(null, "/", null, null, null, null, null, null, null, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -106,7 +136,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null, null, extraModules);
+                mainDataSourceOverride, null, null, extraModules, null, null);
     }
 
     /**
@@ -118,21 +148,26 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     HostContext forSurface(DataSources.MainDatasourceOverride mainDataSourceOverride,
             java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
-            MemberOrigins memberOrigins) {
+            MemberOrigins memberOrigins,
+            java.util.Map<String, Object> surfaceSecurity,
+            DeployPen deployPen) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null);
+                mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null,
+                surfaceSecurity, deployPen);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
     HostContext withStackSettings(String externalOrigin,
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules);
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                surfaceSecurity, deployPen);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules);
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                surfaceSecurity, deployPen);
     }
 }

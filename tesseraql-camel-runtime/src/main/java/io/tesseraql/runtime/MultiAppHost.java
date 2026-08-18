@@ -277,7 +277,8 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                         TesseraqlRuntime.start(surfaceHome, freePort(),
                                 context.forSurface(
                                         surfaceMainOverride(settings, configs, dev, embedded),
-                                        applications, host.memberOrigins())),
+                                        applications, host.memberOrigins(),
+                                        settings.surfaceSecurity(), host.deployPen())),
                         Set.of()));
                 LOG.info("Hosting the stack surface (sign-in, account, portal) at the origin"
                         + " scope from {}", surfaceHome);
@@ -780,6 +781,33 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     /** The HTTP port of the app's canary candidate; only valid when {@link #hasCanary} is true. */
     public int canaryPort(String appName) {
         return app(appName + CANARY_SLOT).port();
+    }
+
+    /**
+     * The narrow pen the surface runtime's authenticated deploy endpoint writes through
+     * (docs/stack-shells.md, the deploy surface): {@code AppUpgrader}'s whole lifecycle on this
+     * host's install root — sha verification, preflight, then the intent write — so every
+     * refusal {@code tesseraql deploy}'s local mode meets refuses here identically, before
+     * anything is written. The reconciler watching the same root stays the one mechanism that
+     * moves a runtime.
+     */
+    HostContext.DeployPen deployPen() {
+        return (tqlapp, canary, weightPercent, sha256) -> {
+            io.tesseraql.operations.app.AppUpgrader upgrader = new io.tesseraql.operations.app.AppUpgrader();
+            io.tesseraql.operations.app.AppUpgrader.UpgradeResult result = sha256 != null
+                    ? upgrader.upgrade(tqlapp, installRoot,
+                            io.tesseraql.core.version.SemanticVersion.parse(
+                                    io.tesseraql.core.TesseraqlVersion.current()),
+                            canary, sha256)
+                    : upgrader.upgrade(tqlapp, installRoot,
+                            io.tesseraql.core.version.SemanticVersion.parse(
+                                    io.tesseraql.core.TesseraqlVersion.current()),
+                            canary);
+            if (canary && weightPercent != null) {
+                upgrader.setCanaryWeight(result.appName(), installRoot, weightPercent);
+            }
+            return result;
+        };
     }
 
     /**

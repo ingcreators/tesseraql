@@ -420,6 +420,10 @@ reconciler stays the one mechanism.
   mint xor `--url` remote) — so a pipeline deploys with a scoped token instead of
   install-root access.
 
+*(Arrived — docs/stack-shells.md slice 3: the endpoint, the `tql.app.deploy.<name>` atom
+checked against the package's declared name, and `deploy --url` shipped as sketched; the
+interim below is no longer the only line, though the repository boundary remains a fine one.)*
+
 **Until then, the line is held where teams already differ: the repository and its pipeline.**
 Decision 23 made the name the inter-team contract and the deployment a composition; a CD
 arrangement in which each application's repository can trigger only its own deploy job — repo

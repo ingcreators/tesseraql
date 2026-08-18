@@ -45,7 +45,21 @@ decision the design left open, recorded here: iam-admin's YAML routes keep their
 lines and the framework *synthesizes* the policy behind any `tql.*` id — the id is the
 atom, checked as a granted permission code (family wildcard honoured) — with user-declared
 `tql.*` policy ids refused at lint and boot (`TQL-YAML-1406` widened), so the atom check needs
-no route-compiler machinery and cannot be shadowed. Slice 3 is pending. One measurement
+no route-compiler machinery and cannot be shadowed. **Slice 3 is shipped** (the deploy
+surface): `POST /_tesseraql/deploy` on the surface runtime — bearer or browser session — checks
+`tql.app.deploy.<name>` against the package's declared name and writes the intent through the
+host's narrow pen (`AppUpgrader`'s own lifecycle, so a refusal writes nothing and the
+reconciler stays the one mechanism); `deploy --url <origin>` is the CLI's remote mode
+(`--stack` xor `--url`, bearer via `TESSERAQL_TOKEN`/`--token-file`); and the stack file's
+`security:` subtree now grafts onto the *surface runtime's* configuration — `security.jwt.*`
+(with `rolesClaim`/`permissionsClaim` so grants ride tokens) plus `security.token.enabled`
+turn on the origin's bearer validation and token issuing, which is what makes `token --url
+<origin>` the acquisition path; members keep their own declared JWT configuration until the
+authorization-server slices unify the issuer. Three deviations from this document's sketch,
+measured and recorded: the upload rides the request body spooled to disk (the tabular
+`FileTransferService` is import/export machinery, not a package channel); the bootstrap
+baseline gained `tql.app.deploy.*`; and the ops-console deploy page is a follow-up, as open
+question 5 allowed — the endpoint is the contract. One measurement
 correction from implementation: the console's live pages ride htmx polling, not SSE, so the
 delegation carries ordinary requests — the relay's streaming discipline stays proven for the
 surfaces that do stream.

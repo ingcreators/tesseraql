@@ -338,13 +338,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
      *                                 parse with, the loader its codecs discover from, and a
      *                                 resource this runtime owns and closes after its pools
      */
-    private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
+    private static TesseraqlRuntime start(Path appHome, AppManifest loaded, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override,
             javax.sql.DataSource stackFrameworkDataSource, boolean hostedValidatesFramework,
             String cookiePath,
             HostContext hostContext,
             AppModules modules) {
+        // The stack file's security subtree arrives on the surface runtime's context and is
+        // grafted over its configuration before anything reads it (docs/stack-shells.md, the
+        // deploy surface): the origin's JWT validation, token issuing and deploy endpoint all
+        // configure from the merged tree, through the same keys an application would declare.
+        final AppManifest manifest = hostContext != null && hostContext.surfaceSecurity() != null
+                ? loaded.withConfig(withStackSecurity(loaded.config(),
+                        hostContext.surfaceSecurity()))
+                : loaded;
         java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers = hostContext == null
                 ? null
                 : hostContext.stackMembers();
@@ -1917,6 +1925,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 }
                 context.addRoutes(new TokenExchangeRouteBuilder(sessionStore, sessionTokens));
             }
+            // The stack's authenticated deploy endpoint (docs/stack-shells.md, the deploy
+            // surface): mounted only where the host handed a pen — the surface runtime — so a
+            // member, an unhosted boot, and every other runtime shape simply have no endpoint.
+            if (hostContext != null && hostContext.deployPen() != null) {
+                context.addRoutes(new DeployRouteBuilder(hostContext.deployPen(), sessionStore));
+            }
             // The console's issue-token page (docs/stack-architecture.md Decision 20), so
             // acquiring a token stops meaning "read a cookie and a meta tag out of developer
             // tools". Registered whether or not issuing is on, because the page has to be able to
@@ -3076,5 +3090,34 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 dataSource);
         store.ensureSchema();
         return new io.tesseraql.core.account.CachingPreferenceStore(store);
+    }
+
+    /**
+     * The surface runtime's configuration with the stack file's {@code security:} subtree
+     * deep-merged over {@code tesseraql.security} (docs/stack-shells.md, the deploy surface).
+     * Stack values win per leaf; everything the portal app declares and the stack does not —
+     * the security defaults, the response headers — stands untouched.
+     */
+    private static io.tesseraql.yaml.config.AppConfig withStackSecurity(
+            io.tesseraql.yaml.config.AppConfig config,
+            java.util.Map<String, Object> security) {
+        java.util.Map<String, Object> root = SystemApps.deepCopy(config.root());
+        java.util.Map<String, Object> tesseraql = SystemApps.childMap(root, "tesseraql");
+        mergeOver(SystemApps.childMap(tesseraql, "security"), security);
+        return new io.tesseraql.yaml.config.AppConfig(root);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void mergeOver(java.util.Map<String, Object> target,
+            java.util.Map<String, Object> values) {
+        values.forEach((key, value) -> {
+            if (value instanceof java.util.Map<?, ?> nested
+                    && target.get(key) instanceof java.util.Map<?, ?>) {
+                mergeOver(SystemApps.childMap(target, String.valueOf(key)),
+                        (java.util.Map<String, Object>) nested);
+            } else {
+                target.put(String.valueOf(key), value);
+            }
+        });
     }
 }

@@ -61,6 +61,18 @@ final class DeployCommand implements Callable<Integer> {
             + " never discovered - production does not guess.")
     Path stack;
 
+    @Option(names = {"--url"}, paramLabel = "<origin>", description = "Deploy remotely instead:"
+            + " the stack's origin, whose authenticated deploy endpoint checks the caller's"
+            + " tql.app.deploy.<name> grant against the package's declared name and writes the"
+            + " same intent. The bearer comes from `tesseraql token` via TESSERAQL_TOKEN or"
+            + " --token-file.")
+    String url;
+
+    @Option(names = {"--token-file"}, paramLabel = "<file>", description = "File holding the"
+            + " bearer token for --url (else TESSERAQL_TOKEN) - never a command-line argument,"
+            + " so it cannot leak into shell history or process listings.")
+    Path tokenFile;
+
     @Option(names = {"--canary"}, description = "Stage the new version beside the serving one"
             + " instead of replacing it, at --weight percent of HTTP traffic (default 10)."
             + " Promote or roll back when the ramp has said its piece.")
@@ -89,9 +101,25 @@ final class DeployCommand implements Callable<Integer> {
             CommandLine.usage(this, System.out);
             return 2;
         }
-        if (stack == null) {
-            System.err.println("Pass --stack <dir>: the install root to deploy into."
-                    + " It is explicit, never discovered - production does not guess.");
+        // The dual shape token itself has (docs/stack-shells.md, the deploy surface):
+        // --stack writes the install root directly, --url asks the running stack's
+        // authenticated endpoint to. One or the other, never both, never neither.
+        if (stack != null && url != null) {
+            System.err.println("Choose one: --stack <dir> writes the install root on this"
+                    + " machine, --url <origin> deploys through the running stack's"
+                    + " authenticated endpoint.");
+            return 2;
+        }
+        if (stack == null && url == null) {
+            System.err.println("Pass --stack <dir> (the install root to deploy into - explicit,"
+                    + " never discovered) or --url <origin> (a running stack's deploy"
+                    + " endpoint).");
+            return 2;
+        }
+        if (url != null && wait) {
+            System.err.println("--wait tails the install root's status file, which --url cannot"
+                    + " see. The endpoint already answers refusals synchronously; watch"
+                    + " convergence with `deploy status --stack <dir>` on the host.");
             return 2;
         }
         if (weight != null && !canary) {
@@ -103,6 +131,9 @@ final class DeployCommand implements Callable<Integer> {
         if (!Files.isRegularFile(tqlapp)) {
             System.err.println("No such package: " + tqlapp);
             return 2;
+        }
+        if (url != null) {
+            return deployRemotely();
         }
         try {
             requireInstallRoot(stack);
@@ -140,6 +171,92 @@ final class DeployCommand implements Callable<Integer> {
     /** The framework version the preflight gates on ({@code requires.framework}). */
     static SemanticVersion frameworkVersion() {
         return SemanticVersion.parse(TesseraqlVersion.current());
+    }
+
+    /**
+     * The remote mode: the package rides the request body to the stack's authenticated deploy
+     * endpoint, which checks the caller's {@code tql.app.deploy.<name>} against the package's
+     * declared name, preflights, and writes the intent on its own install root — so a pipeline
+     * deploys one application with a scoped token and no install-root access
+     * (docs/stack-shells.md, the deploy surface).
+     */
+    private Integer deployRemotely() {
+        String token;
+        try {
+            token = bearerToken();
+        } catch (Exception missing) {
+            System.err.println(missing.getMessage());
+            return 2;
+        }
+        StringBuilder query = new StringBuilder();
+        if (canary) {
+            query.append("canary=true");
+            if (weight != null) {
+                query.append("&weight=").append(weight);
+            }
+        }
+        if (sha256 != null) {
+            query.append(query.isEmpty() ? "" : "&").append("sha256=").append(sha256);
+        }
+        String target = url.replaceAll("/+$", "") + "/_tesseraql/deploy"
+                + (query.isEmpty() ? "" : "?" + query);
+        try {
+            java.net.http.HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()
+                    .send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(target))
+                            .header("Authorization", "Bearer " + token)
+                            .header("Content-Type", "application/octet-stream")
+                            .POST(java.net.http.HttpRequest.BodyPublishers.ofFile(tqlapp))
+                            .build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                Map<?, ?> body = MAPPER.readValue(response.body(), Map.class);
+                boolean staged = Boolean.TRUE.equals(body.get("canary"));
+                System.out.println((staged ? "Staged '" : "Deployed '") + body.get("name")
+                        + "' " + body.get("toVersion")
+                        + (body.get("fromVersion") == null
+                                ? ""
+                                : (staged ? " beside the serving " : " (was ")
+                                        + body.get("fromVersion") + (staged ? "" : ")"))
+                        + ". The stack's host converges to it.");
+                return 0;
+            }
+            System.err.println("The stack refused it (HTTP " + response.statusCode() + "): "
+                    + refusalMessage(response.body()));
+            return 2;
+        } catch (IOException unreachable) {
+            System.err.println("Could not reach " + target + ": " + unreachable.getMessage());
+            return 2;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return 1;
+        }
+    }
+
+    /** {@code --token-file}, then {@code TESSERAQL_TOKEN} — never a command-line argument. */
+    private String bearerToken() throws IOException {
+        if (tokenFile != null) {
+            return Files.readString(tokenFile).trim();
+        }
+        String env = System.getenv("TESSERAQL_TOKEN");
+        if (env != null && !env.isBlank()) {
+            return env.trim();
+        }
+        throw new IOException("No bearer for --url: set TESSERAQL_TOKEN or pass --token-file"
+                + " <file>. `tesseraql token --url " + url + " --login <id>` mints one from"
+                + " your account.");
+    }
+
+    /** The refusal's message out of the endpoint's error envelope, else the raw body. */
+    private static String refusalMessage(String body) {
+        try {
+            Map<?, ?> parsed = MAPPER.readValue(body, Map.class);
+            if (parsed.get("error") instanceof Map<?, ?> error
+                    && error.get("message") != null) {
+                return error.get("code") + " " + error.get("message");
+            }
+        } catch (IOException notJson) {
+            // fall through to the raw body
+        }
+        return body;
     }
 
     /**
