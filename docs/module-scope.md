@@ -151,10 +151,12 @@ owner:
   its own.
 - Feeds exactly the SPIs modules are documented to provide: `ExpressionFunction`, `FileCodec`
   (the codec discovery at `TesseraqlRuntime.java:772` gains an explicit-loader overload, the shape
-  `RuntimeExtensions` already uses for plugins), and `java.sql.Driver` (decision 3 below). The
-  TCCL-resolved SPIs that modules do *not* provide — `SecretResolver`, `BlobStoreProvider`,
-  `AppSourceProvider`, `AttachmentScanner`, `RuntimeExtension` — deliberately stay on the base
-  classpath and the plugin mechanism (open question 1).
+  `RuntimeExtensions` already uses for plugins), `BlobStoreProvider` (the `tesseraql-s3` module —
+  `BlobStores.create(config, appHome)` is already per-application in its inputs and its own error
+  message names the module mechanism; it gains the same explicit-loader overload), and
+  `java.sql.Driver` (decision 3 below). The TCCL-resolved SPIs that modules do *not* provide —
+  `SecretResolver`, `AppSourceProvider`, `AttachmentScanner`, `RuntimeExtension` — deliberately
+  stay on the base classpath and the plugin mechanism (open question 1).
 
 One SPI hides *inside* a module and needs a one-line companion fix, found in review: `PdfEngine`.
 `tesseraql-pdf` provides two providers — `PdfFileCodec` (a `FileCodec`) and `OpenHtmlPdfEngine`
@@ -244,7 +246,7 @@ Four PRs, each independently green and observable:
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
 | 1 | The registry becomes a value | `ExpressionFunctions` instance-ification + retained process default; `parse(String, ExpressionFunctions)`; `Expr.Call` capture; `Sql2WayParser` threading; `SqlResources` pinned to `builtInsOnly()`; delegating overloads on `ValidationRules`/`DecisionTables` | Behaviour identical everywhere; the seam exists; `evalCustom`'s "no longer installed" path deleted |
-| 2 | The runtime owns its modules | `AppModules` + close ordering; `FUNCTIONS_BEAN` + `TesseraqlSqlProducer` lookup; `RouteCompiler.functions(...)` threading through the binding processors; codec discovery takes the loader; `PdfEngines` resolves against its own defining loader; `dev` drops the union/TCCL; `DevMode` carries `--modules`; `host` gains TQL-APP-4216/4217 | Each hosted runtime parses and evaluates with its own functions; `host` runs modules for the first time, or refuses loudly |
+| 2 | The runtime owns its modules | `AppModules` + close ordering; `FUNCTIONS_BEAN` + `TesseraqlSqlProducer` lookup; `RouteCompiler.functions(...)` threading through the binding processors; codec and blob-store discovery take the loader; `PdfEngines` resolves against its own defining loader; `dev` drops the union/TCCL; `DevMode` carries `--modules`; `host` gains TQL-APP-4216/4217 | Each hosted runtime parses and evaluates with its own functions; `host` runs modules for the first time, or refuses loudly |
 | 3 | Drivers bind at the pool | `DriverBackedDataSource`; `DataSources`/`TenantDataSources` accept the loader; DuckDB pool path; stack pools explicitly unchanged | Two applications, two driver versions, no `DriverManager` arbitration |
 | 4 | MCP per-application context | Per-app loader+registry in `McpDevTools`; the `AppLinter`/`AppTestRunner`/`StudioService` registry parameter; union call + "interim" comments deleted; `schema_introspect`/`ops_status` on the per-app driver path | Every MCP tool answers from the named application's modules, exactly as `dev` serves it |
 
@@ -339,9 +341,9 @@ in slice 1 in passing.
   territory; this design leaves a named operator step (`modules resolve`) and a refusal that
   points at it.
 - **Module hot-swap under `--watch`.** Restart is the contract, stated in the docs sweep.
-- **Widening the module SPI surface** (secret resolvers, blob stores, scanners, runtime
-  extensions from module jars). Plugins already cover per-app extension jars with an allowlist;
-  merging the two mechanisms is its own decision.
+- **Widening the module SPI surface** (secret resolvers, scanners, runtime extensions from
+  module jars). Plugins already cover per-app extension jars with an allowlist; merging the two
+  mechanisms is its own decision.
 - **Making `modules.lock` mandatory.** 4217 verifies it when present; requiring it changes the
   authoring loop and deserves its own yes/no.
 - **Camel component jars as modules.** `ComponentGuard` governs components per context already;
@@ -352,11 +354,12 @@ in slice 1 in passing.
 Each gated on the slice it blocks, with a recommendation:
 
 1. **The module SPI surface** — *gates slice 2.* Which `ServiceLoader` SPIs does the per-runtime
-   loader feed? Recommended: exactly the three modules are documented to provide —
-   `ExpressionFunction`, `FileCodec`, `java.sql.Driver`. (`PdfEngine` is provided by a module too
-   but resolves *inside* it via the self-reference fix above, so it does not widen this list.)
-   Everything else stays base classpath + plugins. Widening later is additive; starting wide is
-   the union loader's silent-divergence risk wearing a new coat.
+   loader feed? Recommended: exactly the four modules are documented to provide —
+   `ExpressionFunction`, `FileCodec`, `BlobStoreProvider` (the `tesseraql-s3` module),
+   `java.sql.Driver`. (`PdfEngine` is provided by a module too but resolves *inside* it via the
+   self-reference fix above, so it does not widen this list.) Everything else stays base
+   classpath + plugins. Widening later is additive; starting wide is the union loader's
+   silent-divergence risk wearing a new coat.
 2. **Refuse or warn on declared-but-unresolved modules at `host` start** — *gates slice 2.*
    Recommended: refuse (TQL-APP-4216). A warning that scrolls past while routes later fail — or
    silently mis-answer — at parse is the fail-open shape; the refusal names a two-command fix.
