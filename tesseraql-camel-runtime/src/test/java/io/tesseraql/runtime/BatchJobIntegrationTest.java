@@ -655,6 +655,48 @@ class BatchJobIntegrationTest {
                 java.time.LocalDate.parse("2026-08-06"))).isEmpty();
     }
 
+    /**
+     * A running job is drained by asking, not only by waiting (docs/runtime-replace.md): a
+     * replace or a stack stop requests the cooperative stop of every run this runtime owns, and
+     * the stop lands on a committed chunk checkpoint with the drain's own reason recorded — the
+     * operator reads the deploy, not a phantom operator action, and reruns from the checkpoint
+     * on the new version through the existing rerun path.
+     */
+    @Test
+    void aDrainStopsAChunkRunAtItsCheckpointNamingTheDeploy() throws Exception {
+        java.util.concurrent.CompletableFuture<JobExecution> run = java.util.concurrent.CompletableFuture
+                .supplyAsync(() -> runtime.runJob("user.chunkSlowDrain",
+                        Map.of("businessDate", "2026-08-07")));
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline && countOf("chunk_results_g") < 3) {
+            Thread.sleep(50);
+        }
+
+        runtime.jobExecutor().requestDrainStop(
+                "stopped: a deploy replaced batch-job with v2.0.0 (cooperative stop)");
+
+        JobExecution stopped = run.get(60, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(stopped.status()).isEqualTo(JobStatus.STOPPED);
+        assertThat(stopped.exitMessage()).contains("a deploy replaced batch-job")
+                .doesNotContain("by operator");
+        long committed = countOf("chunk_results_g");
+        // The stop landed exactly on a committed chunk: real counts, an exact resume point.
+        assertThat(committed % 5).isZero();
+        assertThat(committed).isLessThan(60);
+        StepExecution step = runtime.jobRepository().findSteps(stopped.id()).get(0);
+        assertThat(step.status()).isEqualTo(StepStatus.STOPPED);
+        assertThat(runtime.jobRepository().findCheckpoint("user.chunkSlowDrain", "load",
+                java.time.LocalDate.parse("2026-08-07"))).isPresent();
+
+        // The rerun resumes at the checkpoint — the results table's primary key proves nothing
+        // reprocessed — and a run the drain never touched keeps the operator wording, so the
+        // attribution is per execution rather than a sticky executor state.
+        JobExecution rerun = runtime.runJob("user.chunkSlowDrain",
+                Map.of("businessDate", "2026-08-07"));
+        assertThat(rerun.status()).isEqualTo(JobStatus.COMPLETED);
+        assertThat(countOf("chunk_results_g")).isEqualTo(60);
+    }
+
     @Test
     void theCancelEndpointGatesOnScopeStatusAndExistence() throws Exception {
         String token = token(List.of("BATCH_OPERATOR"));
@@ -1228,6 +1270,16 @@ class BatchJobIntegrationTest {
             chunkFixtures.append("insert into chunk_items_c values ('c%02d', '1');%n"
                     .formatted(i));
         }
+        // The drain's cooperative stop (docs/runtime-replace.md): its own tables, because the
+        // operator-stop chunk test above asserts a table-wide count.
+        chunkFixtures.append("create table chunk_items_g"
+                + " (item_key varchar(32) primary key, payload varchar(32) not null);\n")
+                .append("create table chunk_results_g"
+                        + " (item_key varchar(32) primary key, val integer not null);\n");
+        for (int i = 1; i <= 60; i++) {
+            chunkFixtures.append("insert into chunk_items_g values ('g%02d', '1');%n"
+                    .formatted(i));
+        }
         Files.writeString(target.resolve("db/migration/V3__chunk_fixtures.sql"),
                 chunkFixtures.toString());
         Files.writeString(target.resolve("batch/chunk/extract-e.sql"),
@@ -1363,6 +1415,35 @@ class BatchJobIntegrationTest {
                 """);
         Files.writeString(target.resolve("batch/chunk/writer-c.sql"),
                 "insert into chunk_results_c (item_key, val)"
+                        + " select /* row.item_key */ 'x00', 1 from pg_sleep(0.05)\n");
+        // The same slow-chunk shape for the drain's cooperative stop, over its own tables.
+        Files.writeString(target.resolve("batch/chunk/slow-drain.yml"), """
+                version: tesseraql/v1
+                id: user.chunkSlowDrain
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader:
+                        sql:
+                          file: reader-g.sql
+                      writer:
+                        sql:
+                          file: writer-g.sql
+                      key: item_key
+                      commitEvery: 5
+                """);
+        Files.writeString(target.resolve("batch/chunk/reader-g.sql"), """
+                select item_key, payload
+                from chunk_items_g
+                /*%if chunk.after != null */
+                where item_key > /* chunk.after */ 'x00'
+                /*%end*/
+                order by item_key
+                """);
+        Files.writeString(target.resolve("batch/chunk/writer-g.sql"),
+                "insert into chunk_results_g (item_key, val)"
                         + " select /* row.item_key */ 'x00', 1 from pg_sleep(0.05)\n");
         // A pipeline whose first step cancels its own execution through the ambient
         // batch.executionId bind: the step boundary must stop the run.

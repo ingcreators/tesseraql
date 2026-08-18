@@ -69,8 +69,21 @@ final class HostCommand implements Callable<Integer> {
             return 2;
         }
 
-        try (MultiAppGateway gateway = MultiAppGateway.start(stack, port,
-                new MultiAppGateway.Settings(http2, trustedProxies), appName)) {
+        MultiAppGateway gateway;
+        try {
+            gateway = MultiAppGateway.start(stack, port,
+                    new MultiAppGateway.Settings(http2, trustedProxies), appName);
+        } catch (io.tesseraql.core.error.TqlException refused) {
+            System.err.println(refused.getMessage());
+            return 2;
+        }
+        // SIGTERM must drain, not kill (docs/runtime-replace.md, the stack's own stop): the
+        // command parks on join() below, so a try-with-resources close would never run on a
+        // signal — the deployment image's CMD is this command, and without the hook every
+        // container stop was a hard kill that cut in-flight work. The hook is the same one
+        // `dev` has always registered; the gateway's close is the ordered drain.
+        Runtime.getRuntime().addShutdownHook(new Thread(gateway::close));
+        try {
             System.out.println("TesseraQL hosting " + gateway.appNames().size()
                     + " app(s) on port " + gateway.port() + (http2 ? " (h2c)" : ""));
             for (String name : gateway.appNames()) {
@@ -78,11 +91,9 @@ final class HostCommand implements Callable<Integer> {
             }
             // The gateway serves on its own threads; hold the command open until interrupted.
             Thread.currentThread().join();
-        } catch (io.tesseraql.core.error.TqlException refused) {
-            System.err.println(refused.getMessage());
-            return 2;
         } catch (InterruptedException stopped) {
             Thread.currentThread().interrupt();
+            gateway.close();
         }
         return 0;
     }

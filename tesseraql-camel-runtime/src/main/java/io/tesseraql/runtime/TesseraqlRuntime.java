@@ -72,6 +72,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final io.tesseraql.opsui.OpsDashboard opsDashboard;
     private final io.tesseraql.core.outbox.OutboxEventSink outboxSink;
     private final AppModules appModules;
+    /**
+     * The reason recorded on job runs the drain stops cooperatively (docs/runtime-replace.md):
+     * {@code close()} asks every run this runtime owns to stop at its next checkpoint before the
+     * Camel drain begins, and this string is what the stopped execution says happened. The host
+     * names the deploy here before retiring a replaced runtime; anything else drains under the
+     * shutdown wording.
+     */
+    private volatile String drainReason = "stopped: the runtime is shutting down"
+            + " (cooperative stop)";
 
     private TesseraqlRuntime(CamelContext camelContext, Map<String, HikariDataSource> dataSources,
             int port,
@@ -2924,11 +2933,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return camelContext;
     }
 
+    /** Names what the drain is for on the runs it stops; see {@link #drainReason}. */
+    void drainReason(String reason) {
+        this.drainReason = reason;
+    }
+
+    /** The job executor, for tests that exercise the drain's cooperative stop directly. */
+    JobExecutor jobExecutor() {
+        return jobExecutor;
+    }
+
     @Override
     public void close() {
         // Stop the --watch file watcher first so no reload races the context shutdown.
         closeQuietly(camelContext.getRegistry()
                 .lookupByNameAndType(RouteWatcher.BEAN, RouteWatcher.class));
+        // A running job is drained by asking, not only by waiting (docs/runtime-replace.md):
+        // before the Camel drain starts waiting on the exchanges that carry job runs, every run
+        // this runtime owns is asked to stop at its next step or chunk boundary — a committed
+        // checkpoint and an exact resume point, comfortably inside a bound that would otherwise
+        // force-cut it. The force timeout stays, unchanged, as the last resort for a run that
+        // ignores the flag.
+        closeQuietly(() -> jobExecutor.requestDrainStop(drainReason));
         try {
             camelContext.stop();
         } finally {

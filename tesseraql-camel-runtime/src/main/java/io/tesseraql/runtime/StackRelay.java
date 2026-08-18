@@ -11,9 +11,11 @@ import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.http.HttpVersion;
+import io.vertx.core.http.RequestOptions;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.httpproxy.Body;
 import io.vertx.httpproxy.HttpProxy;
+import io.vertx.httpproxy.OriginRequestProvider;
 import io.vertx.httpproxy.ProxyContext;
 import io.vertx.httpproxy.ProxyInterceptor;
 import io.vertx.httpproxy.ProxyRequest;
@@ -23,6 +25,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
 import java.util.function.ToIntFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +47,16 @@ import org.slf4j.LoggerFactory;
  * <p><b>This runs on an event loop.</b> Every decision here is an in-memory lookup on purpose.
  * Adding a call that reads a database, a file or a lock to this path stalls every other connection
  * sharing the loop — it must go to {@code executeBlocking} instead.
+ *
+ * <h2>The per-app state is live</h2>
+ *
+ * <p>A replace (docs/runtime-replace.md) swaps which runtime answers for a member while the stack
+ * serves. The relay therefore resolves everything per request through the functions the gateway
+ * wires to the host's live slots — the port, the catalogue entry, the ingress-strip set — and
+ * caches its proxies by <em>member</em>, never by port: a proxy's origin is re-resolved on every
+ * request, so a retired runtime's port simply stops being answered with, and there is no
+ * per-port cache to evict. Membership itself stays start-time (adding or removing an application
+ * is a stack deploy), which is why the member set is still a snapshot.
  */
 final class StackRelay {
 
@@ -98,10 +114,19 @@ final class StackRelay {
     /** The surface's key in the per-app proxy lookups; {@code #} is outside every legal name. */
     private static final String SURFACE = "#portal";
 
+    /**
+     * The attachment the origin provider sets the moment a connection to the origin exists, so
+     * the retry interceptor can tell "never reached the origin" from "died talking to it".
+     */
+    private static final String CONNECTED = "tesseraql.relay.connected";
+
     private final HttpClient client;
-    private final Map<String, InstalledApp> appsByName;
-    /** Per app, the forwarded header its configuration tells it to believe, lowercased. */
-    private final Map<String, Set<String>> ingressStripByApp;
+    /** The stack's members — a start-time snapshot on purpose; see the class javadoc. */
+    private final Set<String> memberNames;
+    /** Member name to its live catalogue entry — after a replace, the new version's. */
+    private final Function<String, InstalledApp> entryOf;
+    /** Member name to the forwarded header its <em>current</em> version says to believe. */
+    private final Function<String, Set<String>> stripOf;
     private final TrustedProxies trustedProxies;
     /** App name to the internal port that answers for it now — canary weighting included. */
     private final ToIntFunction<String> portOf;
@@ -110,7 +135,7 @@ final class StackRelay {
      * {@code /assets/*} (docs/root-portal.md) — or {@code null} in relay tests that stand no
      * surface up; production always has one.
      */
-    private final java.util.function.IntSupplier surfacePort;
+    private final IntSupplier surfacePort;
     /**
      * Where {@code /} 307s to: {@code /<name>} when the stack file names a {@code root.redirect}
      * application, else the portal (docs/stack-architecture.md decision 24). Resolved and
@@ -118,8 +143,24 @@ final class StackRelay {
      * tests that exercise routing without the root behaviour.
      */
     private final String rootTarget;
-    /** One proxy per internal port; a port belongs to exactly one app, stable or canary. */
-    private final Map<Integer, HttpProxy> proxies = new ConcurrentHashMap<>();
+    /**
+     * One proxy per member (and one for the surface), its origin re-resolved per request through
+     * {@link #portOf} — which is what keeps a swap effective mid-stream and leaves no retired
+     * port cached anywhere.
+     */
+    private final Map<String, HttpProxy> proxies = new ConcurrentHashMap<>();
+    /**
+     * Requests accepted and not yet fully answered. The stack's stop drains this to zero before
+     * the front closes (docs/runtime-replace.md, the stack's own stop) — counted here because the
+     * relay is the one place every request passes through.
+     */
+    private final AtomicInteger inFlight = new AtomicInteger();
+    /**
+     * Flipped by the gateway's ordered stop: readiness answers 503 while liveness stays 200 —
+     * the orchestrator's contract, "stop routing to me, do not kill me". Everything else keeps
+     * being served while the in-flight count drains.
+     */
+    private volatile boolean draining;
 
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             ToIntFunction<String> portOf) {
@@ -132,17 +173,46 @@ final class StackRelay {
         this(client, appsByName, ingressStripByApp, trustedProxies, portOf, null, null);
     }
 
+    /** The snapshot shape, for tests whose per-app state never changes mid-test. */
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             Map<String, Set<String>> ingressStripByApp,
             TrustedProxies trustedProxies, ToIntFunction<String> portOf,
-            java.util.function.IntSupplier surfacePort, String rootTarget) {
+            IntSupplier surfacePort, String rootTarget) {
+        this(client, Set.copyOf(appsByName.keySet()), Map.copyOf(appsByName)::get,
+                stripLookup(Map.copyOf(ingressStripByApp)),
+                trustedProxies, portOf, surfacePort, rootTarget);
+    }
+
+    private static Function<String, Set<String>> stripLookup(
+            Map<String, Set<String>> ingressStripByApp) {
+        return name -> ingressStripByApp.getOrDefault(name, Set.of());
+    }
+
+    /** The live shape the gateway wires: every per-app lookup answers from the host's slots. */
+    StackRelay(HttpClient client, Set<String> memberNames, Function<String, InstalledApp> entryOf,
+            Function<String, Set<String>> stripOf, TrustedProxies trustedProxies,
+            ToIntFunction<String> portOf, IntSupplier surfacePort, String rootTarget) {
         this.client = client;
-        this.appsByName = Map.copyOf(appsByName);
-        this.ingressStripByApp = Map.copyOf(ingressStripByApp);
+        this.memberNames = Set.copyOf(memberNames);
+        this.entryOf = entryOf;
+        this.stripOf = stripOf;
         this.trustedProxies = trustedProxies;
         this.portOf = portOf;
         this.surfacePort = surfacePort;
         this.rootTarget = rootTarget;
+    }
+
+    /**
+     * Starts the ordered stop: readiness flips to 503 so a balancer stops sending new traffic,
+     * while everything that still arrives is served in full.
+     */
+    void beginDrain() {
+        draining = true;
+    }
+
+    /** Requests accepted and not yet fully answered — what the stop drains to zero. */
+    int inFlight() {
+        return inFlight.get();
     }
 
     /**
@@ -156,13 +226,17 @@ final class StackRelay {
     private String appAddressedBy(String rawPath) {
         String best = null;
         String bestPrefix = null;
-        for (Map.Entry<String, InstalledApp> entry : appsByName.entrySet()) {
-            String prefix = entry.getValue().basePath();
+        for (String name : memberNames) {
+            InstalledApp entry = entryOf.apply(name);
+            if (entry == null) {
+                continue;
+            }
+            String prefix = entry.basePath();
             if (!addresses(prefix, rawPath)) {
                 continue;
             }
             if (bestPrefix == null || prefix.length() > bestPrefix.length()) {
-                best = entry.getKey();
+                best = name;
                 bestPrefix = prefix;
             }
         }
@@ -184,18 +258,37 @@ final class StackRelay {
 
     /** Routes one request to the app that answers for it, or refuses it here. */
     void handle(HttpServerRequest request) {
+        // Counted before any answer, released exactly once however the response ends — the
+        // close handler covers a caller that hangs up mid-stream, which would otherwise hold
+        // the stop's drain open forever.
+        inFlight.incrementAndGet();
+        AtomicBoolean released = new AtomicBoolean();
+        Runnable release = () -> {
+            if (released.compareAndSet(false, true)) {
+                inFlight.decrementAndGet();
+            }
+        };
+        request.response().endHandler(v -> release.run());
+        request.response().closeHandler(v -> release.run());
         try {
             String rawPath = rawPath(request);
             // The origin's own health, answered by the gateway itself: the operator case a load
             // balancer needs (docs/stack-architecture.md decision 25 names it) sits inside the
             // framework's /_tesseraql/ fence at origin scope, which the name grammar's
-            // segment-safety rule keeps unreachable by any application. Liveness and readiness are the same answer here — a
-            // gateway that can respond has started every runtime, or it would not be serving.
-            if ("/_tesseraql/health/live".equals(rawPath)
-                    || "/_tesseraql/health/ready".equals(rawPath)) {
+            // segment-safety rule keeps unreachable by any application. Liveness is the process
+            // answering; readiness is whether new traffic should be routed here, which a
+            // draining stack answers no to while it finishes what it accepted.
+            if ("/_tesseraql/health/live".equals(rawPath)) {
                 request.response().setStatusCode(200)
                         .putHeader("Content-Type", "application/json; charset=utf-8")
                         .end("{\"status\":\"UP\"}");
+                return;
+            }
+            if ("/_tesseraql/health/ready".equals(rawPath)) {
+                boolean stopping = draining;
+                request.response().setStatusCode(stopping ? 503 : 200)
+                        .putHeader("Content-Type", "application/json; charset=utf-8")
+                        .end(stopping ? "{\"status\":\"DRAINING\"}" : "{\"status\":\"UP\"}");
                 return;
             }
             // The root does exactly one thing — redirect — and configuration chooses only the
@@ -218,7 +311,8 @@ final class StackRelay {
             // The health pair above deliberately stays the gateway's own answer, so a
             // load-balancer probe does not depend on the surface runtime being up.
             if (surfacePort != null && insideTheOriginFence(rawPath)) {
-                proxyFor(SURFACE, surfacePort.getAsInt()).handle(request);
+                proxies.computeIfAbsent(SURFACE, key -> proxyFor(key, surfacePort::getAsInt))
+                        .handle(request);
                 return;
             }
             // One address per application, and one way to reach it (docs/stack-architecture.md
@@ -233,25 +327,29 @@ final class StackRelay {
 
             // Tenant entitlement at the front door (ch. 32.8): when the request declares its
             // tenant, an app with an entitlement list only serves the tenants on it. Claim-based
-            // tenants are still enforced inside the app's own tenancy resolution.
+            // tenants are still enforced inside the app's own tenancy resolution. The entry is
+            // the live one, so a replace's entitlement change takes effect with the swap.
             String tenant = request.getHeader(TENANT_HEADER);
-            InstalledApp app = appsByName.get(appName);
+            InstalledApp app = entryOf.apply(appName);
             if (tenant != null && app != null && !app.isEntitled(tenant)) {
                 respond(request, 403, NOT_ENTITLED);
                 return;
             }
 
-            int appPort;
             try {
-                appPort = portOf.applyAsInt(appName);
+                portOf.applyAsInt(appName);
             } catch (RuntimeException unknown) {
                 respond(request, 404, MultiAppHost.UNKNOWN_APP.toString());
                 return;
             }
             // The URI is forwarded verbatim — the app serves the address it is
             // fronted at (docs/base-path.md decision 5) — so there is nothing to rewrite here,
-            // only an origin to choose.
-            proxyFor(appName, appPort).handle(request);
+            // only an origin to choose. The proxy resolves the port again itself: the value
+            // checked above is only the early 404, never the routing decision, so a swap between
+            // the two reads cannot strand the request on a retired runtime.
+            proxies.computeIfAbsent(appName,
+                    name -> proxyFor(name, () -> portOf.applyAsInt(name)))
+                    .handle(request);
         } catch (RuntimeException ex) {
             LOG.warn("Gateway error: {}", ex.getMessage());
             respond(request, 502, GATEWAY_ERROR);
@@ -259,27 +357,80 @@ final class StackRelay {
     }
 
     /**
-     * The proxy for one internal port.
+     * The proxy for one member, its origin resolved per request and its send retried once when
+     * the origin was never reached.
      *
-     * <p>No header interceptor. The gateway used to strip the mTLS forwarded header its apps
-     * declare, on the reasoning that applications are trusted while callers are not — but it
-     * stripped unconditionally, including the value the edge had just set, so mTLS forwarded-header
-     * authentication could not work behind the gateway at all. docs/authentication.md already
-     * assigns that duty where it can be discharged: "the edge must overwrite (or strip) the
-     * forwardedHeader on every inbound request, and the runtime must not be reachable except
-     * through that edge." That is the division this class exists to draw — the gateway routes, the
-     * ingress protects.
+     * <p>No header interceptor beyond the posture half. The gateway used to strip the mTLS
+     * forwarded header its apps declare, on the reasoning that applications are trusted while
+     * callers are not — but it stripped unconditionally, including the value the edge had just
+     * set, so mTLS forwarded-header authentication could not work behind the gateway at all.
+     * docs/authentication.md already assigns that duty where it can be discharged: "the edge must
+     * overwrite (or strip) the forwardedHeader on every inbound request, and the runtime must not
+     * be reachable except through that edge." That is the division this class exists to draw —
+     * the gateway routes, the ingress protects.
+     *
+     * <p>The strip set is installed whenever an edge is named and consulted per request, because
+     * a replace can change it: a version that starts declaring a forwarded header gets it
+     * stripped from the swap onwards, without the gateway restarting.
      */
-    private HttpProxy proxyFor(String appName, int appPort) {
-        Set<String> strip = ingressStripByApp.getOrDefault(appName, Set.of());
-        return proxies.computeIfAbsent(appPort, target -> {
-            HttpProxy proxy = HttpProxy.reverseProxy(client).origin(target, "localhost")
-                    .addInterceptor(new BodylessRequestsHaveZeroLength());
-            if (!trustedProxies.isEmpty() && !strip.isEmpty()) {
-                proxy.addInterceptor(new StripUnlessFromATrustedEdge(strip, trustedProxies));
+    private HttpProxy proxyFor(String appName, IntSupplier port) {
+        HttpProxy proxy = HttpProxy.reverseProxy(client)
+                .origin(new LiveOrigin(port))
+                .addInterceptor(new RetryOnceWhenNeverConnected())
+                .addInterceptor(new BodylessRequestsHaveZeroLength());
+        if (!trustedProxies.isEmpty()) {
+            proxy.addInterceptor(new StripUnlessFromATrustedEdge(
+                    () -> stripOf.apply(appName), trustedProxies));
+        }
+        return proxy;
+    }
+
+    /**
+     * Resolves the origin at send time — the live lookup that makes a swap effective — and
+     * records on the context that a connection exists, which is the fact the retry interceptor
+     * needs.
+     */
+    private record LiveOrigin(IntSupplier port) implements OriginRequestProvider {
+
+        @Override
+        public Future<io.vertx.core.http.HttpClientRequest> create(ProxyContext context) {
+            int target;
+            try {
+                target = port.getAsInt();
+            } catch (RuntimeException unresolvable) {
+                return Future.failedFuture(unresolvable);
             }
-            return proxy;
-        });
+            return context.client()
+                    .request(new RequestOptions()
+                            .setServer(SocketAddress.inetSocketAddress(target, "localhost")))
+                    .andThen(connected -> {
+                        if (connected.succeeded()) {
+                            context.set(CONNECTED, Boolean.TRUE);
+                        }
+                    });
+        }
+    }
+
+    /**
+     * Closes the swap race (docs/runtime-replace.md): a request can resolve a runtime's port just
+     * before its slot is swapped and reach it only after its consumer suspended — a 502 minted by
+     * the deploy itself. The retry re-resolves the origin (the provider above reads the live
+     * lookup) and happens <b>once</b>, and <b>only when no connection to the origin was ever
+     * established</b>: no byte reached it, so nothing can double. A request whose connection died
+     * mid-flight is <em>not</em> retried — replaying a request the origin may have acted on is a
+     * worse defect than the 502 it would save.
+     */
+    private record RetryOnceWhenNeverConnected() implements ProxyInterceptor {
+
+        @Override
+        public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+            return context.sendRequest().recover(failure -> {
+                if (context.get(CONNECTED, Boolean.class) == null) {
+                    return context.sendRequest();
+                }
+                return Future.failedFuture(failure);
+            });
+        }
     }
 
     /**
@@ -322,20 +473,25 @@ final class StackRelay {
      * so nothing is stripped and the trust contract stays where {@code authentication.md} puts it.
      *
      * <p>The comparison is against the <em>peer of the connection</em>, never a header — a caller
-     * can write {@code X-Forwarded-For}, and cannot write the socket it connected from.
+     * can write {@code X-Forwarded-For}, and cannot write the socket it connected from. The strip
+     * set itself is resolved per request, because a replace can change what the current version
+     * declares.
      */
-    private record StripUnlessFromATrustedEdge(Set<String> stripOnIngress, TrustedProxies edges)
+    private record StripUnlessFromATrustedEdge(
+            java.util.function.Supplier<Set<String>> stripOnIngress, TrustedProxies edges)
             implements
                 ProxyInterceptor {
 
         @Override
         public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+            Set<String> strip = stripOnIngress.get();
             SocketAddress peer = context.request().proxiedRequest().remoteAddress();
-            if (!edges.includes(peer == null ? null : peer.hostAddress())) {
+            if (!strip.isEmpty()
+                    && !edges.includes(peer == null ? null : peer.hostAddress())) {
                 MultiMap headers = context.request().headers();
                 // Collected first: removing while iterating the names mutates what is being read.
                 List<String> present = headers.names().stream()
-                        .filter(name -> stripOnIngress.contains(name.toLowerCase(Locale.ROOT)))
+                        .filter(name -> strip.contains(name.toLowerCase(Locale.ROOT)))
                         .toList();
                 present.forEach(headers::remove);
             }

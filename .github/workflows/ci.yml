@@ -82,7 +82,16 @@ jobs:
           done
           if [ "$READY" != "1" ]; then echo '--- dev.log ---'; cat dev.log; exit 1; fi
           curl -sf http://localhost:8080/inventory/_tesseraql/health/live > /dev/null
+          # The stop path is part of the contract (docs/runtime-replace.md, the stack's own
+          # stop): SIGTERM must reach the gateway's ordered drain, not hard-kill the JVM.
+          # JUnit can only test close(); observing the drain log line here is what proves the
+          # signal path end to end.
           kill "$DEV_PID"
+          wait "$DEV_PID" || true
+          if ! grep -q "Stack stopping" dev.log; then
+            echo 'SIGTERM did not reach the ordered drain (no "Stack stopping" line):'
+            echo '--- dev.log ---'; cat dev.log; exit 1
+          fi
 
   # The default shipping pattern in docs/deployment.md is a baked image, and nothing built
   # deploy/Dockerfile: it had been unbuildable since the copy-dependencies step started
