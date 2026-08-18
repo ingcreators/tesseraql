@@ -174,14 +174,34 @@ URL. Routes declaring `auth: none` are untouched (a public page is public); serv
 the recommendation, with its cost stated plainly: adopting stacks must seed `app.use`
 grants (or an `app.use.*` baseline role) before their users sign in — open question 6.
 
-**The namespace, mapped.** Framework atoms are the table above and nothing else; the four
-families (`app`, `ops`, `studio`, `iam`) hold only what the table shows, and new verbs
-arrive only with the surface that checks them. The same store also holds the applications'
-own policy codes and the deployment's roles. The store is one namespace, so the framework's
-family prefixes are effectively reserved words — an application declaring its own policy
-named `ops.view.orders` would open its route to operators; a lint warning on application
-policies shadowing a framework family is a slice candidate, not a blocker. Application
-authors are pointed at their own application's name as *their* natural prefix.
+**The namespace fence is structural, not advisory — tightened in review.** Framework atoms
+are the table above and nothing else; the four families (`app`, `ops`, `studio`, `iam`)
+hold only what the table shows, and new verbs arrive only with the surface that checks
+them. The same store also holds the applications' own policy codes and the deployment's
+roles, and an earlier draft guarded the boundary with a lint *warning*; review asked for
+better, and the dot-free grammar makes better cheap:
+
+- **The family words are reserved application names.** TQL-YAML-1405's reserved list
+  (`assets` today) gains `app`, `ops`, `studio` and `iam`. With names dot-free, a
+  framework atom's first segment is a family word and an application's code's first
+  segment is its name — and a name that cannot *be* a family word makes the two
+  vocabularies disjoint by construction, not by review.
+- **An application's own permission codes must begin with its own name** — `orders.approve`,
+  not `approve` — enforced at lint and boot like the name rule itself. Explicit, not
+  auto-prefixed: silently rewriting codes would make the store show strings the author
+  never wrote and break every grep. A concept two applications share (one approval
+  authority across interlocking apps) is expressed where sharing lives — a *role* bundling
+  `orders.approve` and `billing.approve` — which is Decision 26's rule (declarations never
+  share) applied to authorization.
+- The system applications are framework surfaces and speak framework atoms; the rule binds
+  user applications' declared policies.
+
+**Rejected: a `_tesseraql.` prefix on framework atoms** (proposed in review as an
+alternative marking). The URL fence needs `_tesseraql` because URL space is open-ended and
+user-authored; the atom families are a closed, framework-controlled set, so an enumerated
+reservation buys the same disjointness without every grant reading
+`_tesseraql.ops.view.orders` — and without churning every seed and doc for a marker the
+reserved names already provide.
 
 **Rejected: the `.app`-marker draft** (`<family>.app.<name>` with dotted names kept legal) —
 this document's own first answer, superseded in review by the simpler question "is the dot
@@ -216,7 +236,11 @@ one-member stack signs in at the origin and opens the origin shell — whose swi
 lists one entry. The word "standalone" below means only the **unhosted boot**: a
 `TesseraqlRuntime` started directly, with no `HostContext` — integration tests and library
 embedding — where no origin exists to host a surface or bounce to. That boot keeps the SPI
-mounts as a fallback; it is a test-and-embedding footnote, not a deployment shape.
+mounts as a fallback; it is a test-and-embedding footnote, not a deployment shape. Its
+addresses are the pre-stack ones, stated so nobody expects a prefix (asked in review): with
+no host to assign one, the runtime is the root of its own port — application routes at
+`/…`, framework surfaces at `/_tesseraql/…` on that port. `/<name>/` exists only where a
+host assigned it, and there the surfaces have moved to the origin.
 
 **The switcher is the grant, applied to the member list.** The shell lists the stack's
 members (the surface runtime already holds `stackMembers`) filtered by the caller's
@@ -327,7 +351,7 @@ Three PRs, each independently green and observable:
 
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
-| 1 | The model and the ops shell | The atom grammar in `OpsScope` (families/verbs); TQL-YAML-1405 gains the interior-dot refusal (lint + boot + docs); `ops.batch.view`/`ops.batch.run`/`ops.app.<name>` retire into `ops.view.<name>`/`ops.run.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher by `ops.view`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one atom grammar; `hosting.md`'s per-app-console paragraph replaced |
+| 1 | The model and the ops shell | The atom grammar in `OpsScope` (families/verbs); TQL-YAML-1405 gains the interior-dot refusal and the reserved family words (lint + boot + docs); application policy codes must carry the application's name as their first segment (lint + boot); `ops.batch.view`/`ops.batch.run`/`ops.app.<name>` retire into `ops.view.<name>`/`ops.run.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher by `ops.view`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one atom grammar, disjoint vocabularies; `hosting.md`'s per-app-console paragraph replaced |
 | 2 | The identity remainder and the `app.use` fence | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the member fence refuses authenticated principals without `app.use.<member>`; the portal's tiles filter by the same atom beside tenant entitlement; seeds gain the baseline; the unhosted boot (tests, embedding) unchanged | One sign-in door, one admin door; who may use an application is a grant, not a URL |
 | 3 | The deploy surface | `app.deploy.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
 
@@ -353,8 +377,12 @@ is deliberately not promised here.
   upload field. A refused deploy writes no intent.
 - **No new atoms without a surface.** The table in structural decision 1 is exhaustive;
   a verb arrives only with the surface that checks it.
-- **TQL-YAML-1405 (widened)** — an application name containing `.` is refused at lint and
-  at boot, with the atom grammar named as the reason.
+- **TQL-YAML-1405 (widened twice)** — an application name containing `.` is refused, and
+  the family words `app`/`ops`/`studio`/`iam` join `assets` as reserved names; both at lint
+  and at boot, with the atom grammar named as the reason.
+- **An application's permission codes carry its own name as their first segment** — lint
+  and boot, so the framework's atoms and every application's codes are disjoint by
+  construction; cross-application sharing happens in roles.
 
 ## Test plan
 
@@ -380,7 +408,11 @@ is deliberately not promised here.
 - SSE through the delegation: the console's live page streams frame-by-frame through shell +
   relay (the `StackRelayTest` timing shape, one more hop).
 - The name rule: `tesseraql.app.name: orders.eu` is refused at lint and at boot naming the
-  atom grammar; `受注管理` stays legal.
+  atom grammar; `tesseraql.app.name: ops` is refused as a reserved family word; `受注管理`
+  stays legal.
+- The code rule: an application policy referencing a permission code that does not start
+  with the application's own name is refused at lint and boot; `orders.approve` passes,
+  `approve` and `ops.view.orders` are refused with the fence named.
 
 **Slice 2**
 - The bounce: an unauthenticated browser GET on `/<member>/page` 302s to
