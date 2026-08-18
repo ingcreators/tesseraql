@@ -64,6 +64,10 @@ correction from implementation: the console's live pages ride htmx polling, not 
 delegation carries ordinary requests — the relay's streaming discipline stays proven for the
 surfaces that do stream.
 
+The role side of this model — roles gaining a per-application axis, rule-based assignment,
+per-user direct grants and acting-role activation (兼務) — is designed separately in
+[application-roles.md](application-roles.md), on this document's atom grammar.
+
 ## What exists today, measured
 
 **Every framework surface mounts per member, by SPI.** Five `AppSourceProvider`s — `auth-ui`

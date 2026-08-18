@@ -251,4 +251,6 @@ export const EXCLUDED = [
   'runtime-replace.md',
   // The ops shell, the grant vocabulary, and the identity remainder at stack scope, 2026-08-18.
   'stack-shells.md',
+  // Per-application roles: the app axis, assignment rules, direct grants, activation, 2026-08-18.
+  'application-roles.md',
 ];
