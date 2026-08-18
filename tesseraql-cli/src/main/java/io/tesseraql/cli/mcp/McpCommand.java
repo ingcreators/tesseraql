@@ -1,5 +1,6 @@
 package io.tesseraql.cli.mcp;
 
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.mcp.HttpTransport;
 import io.tesseraql.mcp.McpAuthenticator;
 import io.tesseraql.mcp.McpHttpHandler;
@@ -16,7 +17,6 @@ import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -98,12 +98,17 @@ public final class McpCommand implements Callable<Integer> {
         if (applications == null) {
             return 2;
         }
-        // The dev tools lint and test the applications, so custom expression functions install
-        // from every member's declared tesseraql.modules (the same wiring dev boots with,
-        // composed onto one classloader - interim until decision 28 wires modules per runtime).
-        io.tesseraql.cli.CliModules.installAppExtensions(List.copyOf(applications.values()),
-                compile.modules);
-        McpServer server = new McpDevTools(applications, readOnly).toServer();
+        // The dev tools lint and test the applications, so each member gets its own module
+        // classloader and expression-function set from its declared tesseraql.modules
+        // (docs/stack-architecture.md decision 28).
+        Map<String, ExpressionFunctions> functions = new LinkedHashMap<>();
+        Map<String, ClassLoader> loaders = new LinkedHashMap<>();
+        applications.forEach((name, home) -> {
+            ClassLoader loader = io.tesseraql.cli.CliModules.appLoader(home, compile.modules);
+            functions.put(name, ExpressionFunctions.load(loader));
+            loaders.put(name, loader);
+        });
+        McpServer server = new McpDevTools(applications, readOnly, functions, loaders).toServer();
         return transport == Transport.http
                 ? serveHttp(server, applications)
                 : serveStdio(server);

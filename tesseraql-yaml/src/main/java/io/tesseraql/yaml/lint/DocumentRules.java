@@ -283,9 +283,9 @@ final class DocumentRules {
                         "Validation rule '" + id + "' needs a field: to report violations"
                                 + " against"));
             }
-            lintRuleExpression(id, rule.when(), source, findings);
+            lintRuleExpression(id, rule.when(), source, findings, context.functions());
             if (rule.isExpression()) {
-                lintRuleExpression(id, rule.rule(), source, findings);
+                lintRuleExpression(id, rule.rule(), source, findings, context.functions());
                 return;
             }
             Path sqlFile = file.getParent().resolve(rule.file());
@@ -408,12 +408,12 @@ final class DocumentRules {
     }
 
     static void lintRuleExpression(String ruleId, String expression, String source,
-            List<LintFinding> findings) {
+            List<LintFinding> findings, io.tesseraql.core.expr.ExpressionFunctions functions) {
         if (expression == null || expression.isBlank()) {
             return;
         }
         try {
-            io.tesseraql.core.expr.ExpressionParser.parse(expression);
+            io.tesseraql.core.expr.ExpressionParser.parse(expression, functions);
         } catch (RuntimeException ex) {
             findings.add(new LintFinding(LintCodes.MALFORMED_EXPRESSION, ERROR, source,
                     "Validation rule '" + ruleId + "' has a malformed expression: "

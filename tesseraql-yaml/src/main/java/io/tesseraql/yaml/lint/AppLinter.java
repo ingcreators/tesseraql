@@ -1,5 +1,6 @@
 package io.tesseraql.yaml.lint;
 
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Path;
@@ -103,17 +104,23 @@ public final class AppLinter {
 
     /** Loads and lints the app home, returning all findings. */
     public List<LintFinding> lint(Path appHome) {
+        return lint(appHome, ExpressionFunctions.processDefault());
+    }
+
+    /** As {@link #lint(Path)}, resolving custom expression calls against {@code functions}. */
+    public List<LintFinding> lint(Path appHome, ExpressionFunctions functions) {
         // The manifest loader absolutizes every source path; a relative app home (the
         // documented `tesseraql lint --app .` form) must match, or relativizing the
         // sources for finding locations throws.
         appHome = appHome.toAbsolutePath().normalize();
-        AppManifest manifest = new ManifestLoader().load(appHome);
+        AppManifest manifest = new ManifestLoader().load(appHome, functions);
         List<LintFinding> findings = new ArrayList<>();
         LintContext context = new LintContext(appHome, findings,
                 io.tesseraql.yaml.catalog.Catalogs.load(appHome).all().values().stream()
                         .flatMap(spec -> spec.sourceTables().stream())
                         .collect(java.util.stream.Collectors
-                                .toCollection(java.util.LinkedHashSet::new)));
+                                .toCollection(java.util.LinkedHashSet::new)),
+                functions);
         for (LintRule rule : rules()) {
             rule.lint(context, manifest, findings);
         }

@@ -148,6 +148,83 @@ class McpDevToolsAcceptanceTest {
         assertThat(hasApplicationArg).isTrue();
     }
 
+    /**
+     * Decision 28's slice-4 property (docs/module-scope.md): every tool answers from the named
+     * application's own function set. Both members carry the same route SQL calling
+     * {@code taxcode()}; only orders declares the function, so orders lints clean where billing
+     * reports the unknown call — under the retired stack-wide union, both would have passed.
+     */
+    @Test
+    void lintAnswersFromTheNamedApplicationsOwnFunctions(@TempDir Path dir) throws Exception {
+        AppScaffolder scaffolder = new AppScaffolder();
+        Path orders = dir.resolve("orders");
+        Path billing = dir.resolve("billing");
+        scaffolder.writeNew(orders, scaffolder.scaffold("orders"));
+        scaffolder.writeNew(billing, scaffolder.scaffold("billing"));
+        for (Path app : java.util.List.of(orders, billing)) {
+            Path tax = app.resolve("web/api/tax");
+            Files.createDirectories(tax);
+            // requiredWhen is a surface lint parses (InputRules) — the main query's binds are
+            // the compiler's, so the per-application set must show up here or lint lies.
+            Files.writeString(tax.resolve("get.yml"), """
+                    version: tesseraql/v1
+                    id: tax.code
+                    kind: route
+                    recipe: query-json
+                    security:
+                      auth: public
+                    input:
+                      region:
+                        type: string
+                        requiredWhen: "taxcode() == 'T1'"
+                    sources:
+                      main:
+                        sql:
+                          file: tax.sql
+                          mode: query
+                    response:
+                      json:
+                        status: 200
+                        body:
+                          data: main.rows
+                    """);
+            Files.writeString(tax.resolve("tax.sql"),
+                    "select 'placeholder' as code\n");
+        }
+        java.util.Map<String, Path> stack = new java.util.LinkedHashMap<>();
+        stack.put("orders", orders);
+        stack.put("billing", billing);
+        io.tesseraql.core.expr.ExpressionFunction taxcode = new io.tesseraql.core.expr.ExpressionFunction() {
+            @Override
+            public String name() {
+                return "taxcode";
+            }
+
+            @Override
+            public int arity() {
+                return 0;
+            }
+
+            @Override
+            public Object apply(java.util.List<Object> args) {
+                return "T1";
+            }
+        };
+
+        McpServer server = new McpDevTools(stack, false,
+                Map.of("orders", io.tesseraql.core.expr.ExpressionFunctions
+                        .of(java.util.List.of(taxcode)),
+                        "billing", io.tesseraql.core.expr.ExpressionFunctions.builtInsOnly()),
+                Map.of("orders", getClass().getClassLoader(),
+                        "billing", getClass().getClassLoader()))
+                .toServer();
+
+        assertThat(callJson(server, "lint", Map.of("application", "orders")).toString())
+                .doesNotContain("taxcode");
+        assertThat(callJson(server, "lint", Map.of("application", "billing")).toString())
+                .contains("Unknown function 'taxcode()'");
+    }
+
     @Test
     void readOnlyModeHidesTheWriteTools(@TempDir Path dir) throws Exception {
         Path app = dir.resolve("ro");

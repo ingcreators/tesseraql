@@ -211,7 +211,7 @@ public final class DataSources {
      * First-wins is per application here — deterministic via the loader's sorted jar order —
      * never across the JVM.
      */
-    static java.sql.Driver moduleDriver(String url, ClassLoader moduleLoader) {
+    public static java.sql.Driver moduleDriver(String url, ClassLoader moduleLoader) {
         ClassLoader base = DataSources.class.getClassLoader();
         for (java.util.ServiceLoader.Provider<java.sql.Driver> provider : (Iterable<java.util.ServiceLoader.Provider<java.sql.Driver>>) java.util.ServiceLoader
                 .load(java.sql.Driver.class, moduleLoader).stream()::iterator) {

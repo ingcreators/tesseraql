@@ -464,7 +464,7 @@ final class WorkflowRules implements LintRule {
         }
         Expr expr;
         try {
-            expr = ExpressionParser.parse(guard.expression());
+            expr = ExpressionParser.parse(guard.expression(), context.functions());
         } catch (RuntimeException ex) {
             findings.add(new LintFinding(INVALID_GUARD_EXPRESSION, ERROR, source,
                     where + " guard is not a valid expression: " + ex.getMessage()));

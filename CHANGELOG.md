@@ -116,6 +116,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The MCP dev-tool server answers every tool from the named application's own modules**
+  (docs/module-scope.md). `tesseraql mcp` used to compose every member's modules onto one
+  classloader, so `lint` accepted a function only a neighbour declared and `test` ran with the
+  union's semantics; each application now gets its own loader and function set — lint, tests,
+  Studio drafts, and the schema/ops connections included, with module-defined JDBC drivers
+  bound per application instead of through the process-global registry.
+
 - **`dev` no longer composes every member's modules onto one classloader.** The union loader
   made every runtime see every neighbour's extension jars and let the last-loaded application's
   functions answer for all of them; each member runtime now builds its own loader over its own

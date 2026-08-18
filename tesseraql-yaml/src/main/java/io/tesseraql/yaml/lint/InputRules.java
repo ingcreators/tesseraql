@@ -108,7 +108,7 @@ final class InputRules implements LintRule {
         var response = route.definition().response();
         for (io.tesseraql.yaml.model.ResponseSpec.StatusWhen arm : statusArms(response)) {
             try {
-                io.tesseraql.core.expr.ExpressionParser.parse(arm.when());
+                io.tesseraql.core.expr.ExpressionParser.parse(arm.when(), context.functions());
             } catch (RuntimeException ex) {
                 findings.add(new LintFinding(INVALID_STATUS_WHEN, ERROR, source,
                         "statusWhen: condition does not parse: " + ex.getMessage(),
@@ -139,7 +139,8 @@ final class InputRules implements LintRule {
             }
             if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
                 try {
-                    io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen());
+                    io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen(),
+                            context.functions());
                 } catch (RuntimeException ex) {
                     findings.add(new LintFinding(INVALID_REQUIRED_WHEN, ERROR, source,
                             "input " + name + ": requiredWhen does not parse: "

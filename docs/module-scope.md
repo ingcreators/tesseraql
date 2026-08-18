@@ -10,6 +10,16 @@ implementation.
 
 Everything below was measured against main at #853 unless marked otherwise.
 
+**Status 2026-08-18: all four slices shipped.** Slice 1 (the registry becomes a value,
+capture-at-parse); slices 2 and 3 together (per-runtime `AppModules`, the host's
+TQL-APP-4216/4217 refusals, pool-bound drivers — see the correction note in the slices section
+for why they merged as one); slice 4 (MCP per-application contexts). The four open questions
+were each closed on their recommendation before implementation. Two things the design did not
+predict: the slice 2/3 coupling CI caught (`dev`'s DuckDB smoke failed with "No suitable driver"
+in the gap between removing the shim and adding the pool binding), and the shared-rule
+bind-contract check (`ValidationRuleSets`) turning out to silently no-op on custom functions —
+threaded rather than left as the flagged gap.
+
 ## What exists today, measured
 
 **The wiring is three lines, and every line is process-global.** `CliModules.installAppExtensions`

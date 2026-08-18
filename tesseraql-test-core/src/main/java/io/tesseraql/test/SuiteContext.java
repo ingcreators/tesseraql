@@ -1,5 +1,6 @@
 package io.tesseraql.test;
 
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.BoundParameter;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
@@ -38,16 +39,18 @@ final class SuiteContext {
     private final IdentityService identity;
     private final RealmConfig realm;
     private final SqlCoverage coverage;
+    private final ExpressionFunctions functions;
     private AppManifest manifest;
     private io.tesseraql.core.sql.ScopeResolver scopeResolver;
 
     SuiteContext(DataSource dataSource, Path appHome, IdentityService identity, RealmConfig realm,
-            SqlCoverage coverage) {
+            SqlCoverage coverage, ExpressionFunctions functions) {
         this.dataSource = dataSource;
         this.appHome = appHome;
         this.identity = identity;
         this.realm = realm;
         this.coverage = coverage;
+        this.functions = functions;
     }
 
     DataSource dataSource() {
@@ -70,9 +73,14 @@ final class SuiteContext {
         return coverage;
     }
 
+    /** The expression-function set every parse of this run resolves custom calls against. */
+    ExpressionFunctions functions() {
+        return functions;
+    }
+
     AppManifest manifest() {
         if (manifest == null) {
-            manifest = new ManifestLoader().load(appHome);
+            manifest = new ManifestLoader().load(appHome, functions);
         }
         return manifest;
     }
@@ -127,7 +135,7 @@ final class SuiteContext {
 
     /** Executes a 2-way SQL file on the given (case-transaction) connection, recording coverage. */
     SqlOutcome executeSql(Connection connection, Path sqlFile, Map<String, Object> params) {
-        List<SqlNode> nodes = Sql2WayParser.parse(read(sqlFile));
+        List<SqlNode> nodes = Sql2WayParser.parse(read(sqlFile), functions);
         BoundSql bound = SqlRenderer.render(nodes, params, scopeResolver(), params);
         if (coverage != null) {
             coverage.record(sqlId(sqlFile), bound.coverageTrace(),

@@ -134,7 +134,7 @@ final class JobRules implements LintRule {
             // Each remaining axis is linted on its own.
             if (step.notification() != null) {
                 MessagingRules.lintNotifySpec(config, step.id(), step.notification(), source,
-                        findings);
+                        findings, context.functions());
             }
             if (calls) {
                 HttpSourceRules.lintHttpCall(config, step.id(), step.sql().http().call(), source,
