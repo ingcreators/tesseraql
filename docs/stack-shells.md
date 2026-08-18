@@ -23,6 +23,16 @@ direction: design the ideal model first — business users, developers and opera
 gettable right — and change the application-name grammar if that simplifies it. It does, and
 it is changed below.
 
+**Status 2026-08-18: design approved in review.** All seven open questions closed on their
+recommendations — the marked atom grammar with dot-free names and `tql` as the one reserved
+name (direction set in review twice: the persona-first rework, then the mark replacing the
+family-word reservation), the canary's second switcher entry, the unhosted boot's fallback
+mounts, no per-member console opt-out, the deploy endpoint before its page, the full
+`tql.app.use` fence, and role bundles documented rather than seeded. Review reshaped the
+design five times before approval — the `.app`-marker draft, the standalone-topology
+correction, the entry-permission retirement, the structural namespace fence, and the `tql.`
+mark — each recorded in place. Implementation pending, in the three slices below.
+
 ## What exists today, measured
 
 **Every framework surface mounts per member, by SPI.** Five `AppSourceProvider`s — `auth-ui`
