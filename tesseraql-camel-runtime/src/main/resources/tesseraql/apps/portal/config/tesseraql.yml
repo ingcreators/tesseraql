@@ -1,0 +1,38 @@
+tesseraql:
+  # Its own name, matching the name it is mounted under. The mount is what the runtime
+  # identifies it by; declaring it here keeps the application honest about itself and lets
+  # the linter require the key of every application (docs/cli-surface.md Decision 6).
+  app:
+    name: portal
+  # This application is the main application of the stack surface runtime — the one runtime
+  # the host starts at the origin scope (docs/root-portal.md). Sign-in and the account surface
+  # mount into it through the ordinary discovery below; the per-application development
+  # surfaces do not, because an origin-scope Studio would edit this application's own
+  # extracted tree, and the ops console and IAM Admin arrive at the stack scope with their
+  # own slices.
+  apps:
+    studio:
+      enabled: false
+    ops-console:
+      enabled: false
+    iam-admin:
+      enabled: false
+  # No tools are declared and the origin needs no empty MCP endpoint before the
+  # authorization-server slices give it a purpose.
+  mcp:
+    enabled: false
+  security:
+    # Path-matched route security defaults (docs/route-defaults.md): every page and
+    # fragment of this bundled app is a browser-session surface with CSRF on writes.
+    defaults:
+      routes:
+        - match: /**
+          auth: browser
+          csrf: auto
+    # The security header block every HTML page of this bundled app sends
+    # (docs/response-shaping.md "Default response headers").
+    responseHeaders:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      Referrer-Policy: no-referrer

@@ -47,7 +47,7 @@ class ApplicationNameTest {
      */
     @Test
     void aNameThatCannotBeAnAddressSegmentIsRefused() {
-        for (String unsafe : new String[]{"a/b", "_admin", ".hidden"}) {
+        for (String unsafe : new String[]{"a/b", "_admin", ".hidden", "assets"}) {
             assertThatThrownBy(() -> ApplicationName.of(config(Map.of(
                     "tesseraql", Map.of("app", Map.of("name", unsafe))))))
                     .as(unsafe)
@@ -63,7 +63,8 @@ class ApplicationNameTest {
      */
     @Test
     void segmentSafetyIsNotAnAsciiPattern() {
-        for (String legal : new String[]{"受注管理", "my_app", "v1.2"}) {
+        // "assets-portal" beside the reserved "assets": the reservation is one word, not a stem.
+        for (String legal : new String[]{"受注管理", "my_app", "v1.2", "assets-portal"}) {
             assertThat(ApplicationName.of(config(Map.of(
                     "tesseraql", Map.of("app", Map.of("name", legal))))))
                     .as(legal)

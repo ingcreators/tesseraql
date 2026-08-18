@@ -1,0 +1,4 @@
+# The stack surface runtime's main application (docs/root-portal.md). Materialized by
+# MultiAppHost into <stack>/work/portal — not an AppSourceProvider, so it never mounts
+# into member runtimes.
+config/tesseraql.yml

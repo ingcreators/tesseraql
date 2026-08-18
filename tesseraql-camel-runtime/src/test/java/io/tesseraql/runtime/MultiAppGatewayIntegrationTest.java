@@ -231,8 +231,9 @@ class MultiAppGatewayIntegrationTest {
         }
 
         assertThat(statusOf(gateway, "/assets/_tesseraql/tesseraql.css"))
-                .as("and the asset tree is not left mounted at the origin as well")
-                .isEqualTo(404);
+                .as("the origin's asset tree is the stack surface runtime's, not this app's"
+                        + " (docs/root-portal.md)")
+                .isEqualTo(200);
     }
 
     /**
@@ -288,9 +289,44 @@ class MultiAppGatewayIntegrationTest {
                 .as("a hand-mounted framework endpoint answers under the app's prefix")
                 .isEqualTo(200);
 
+        // The origin used to be a 404 here; since docs/root-portal.md it is the stack surface
+        // runtime's scope, so the same endpoint answers there as the stack's own — a different
+        // runtime, not this application's leaked out.
         assertThat(statusOf(gateway, "/_tesseraql/health"))
-                .as("and is not left exposed at the origin as well")
-                .isEqualTo(404);
+                .as("the origin scope answers from the stack surface runtime")
+                .isEqualTo(200);
+    }
+
+    /**
+     * The origin scope is the stack surface runtime's (docs/root-portal.md): the stack's own
+     * sign-in page answers at {@code /_tesseraql/login}, posts back to itself at the origin, and
+     * its assets answer at the origin's {@code /assets/*} — the same page every member serves
+     * under its prefix, at the scope the portal will send anonymous users to.
+     */
+    @Test
+    void theOriginScopeIsTheSurfaceRuntimes() throws Exception {
+        java.net.http.HttpResponse<String> page = java.net.http.HttpClient.newHttpClient().send(
+                java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:"
+                        + gateway.port() + "/_tesseraql/login")).build(),
+                java.net.http.HttpResponse.BodyHandlers.ofString());
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(page.body()).contains("action=\"/_tesseraql/login\"");
+
+        java.util.regex.Matcher assets = java.util.regex.Pattern
+                .compile("(?:href|src)=\"(/assets/[^\"#]+)").matcher(page.body());
+        assertThat(assets.find()).as("the page references origin-scope assets").isTrue();
+        do {
+            assertThat(statusOf(gateway, assets.group(1))).as(assets.group(1)).isEqualTo(200);
+        } while (assets.find());
+
+        // The per-application development surfaces deliberately do not mount at the origin: an
+        // origin-scope Studio would edit the portal application's own extracted tree, and the
+        // ops console and IAM Admin arrive at the stack scope with their own slices.
+        assertThat(statusOf(gateway, "/_tesseraql/studio/ui"))
+                .as("Studio is not an origin-scope surface").isEqualTo(404);
+        assertThat(statusOf(gateway, "/_tesseraql/ops/console"))
+                .as("nor is the ops console").isEqualTo(404);
     }
 
     private static int statusOf(MultiAppGateway target, String path) throws Exception {

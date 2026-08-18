@@ -91,6 +91,25 @@ class MultiAppHostIntegrationTest {
     }
 
     /**
+     * The host also starts the stack surface runtime — the origin scope's sign-in, account
+     * surface and portal (docs/root-portal.md). It is not a member: it has no name in
+     * {@link MultiAppHost#appNames()}, and it rides the stack's framework coordinate, so its
+     * {@code security} validation passing is what proves it joined the same schema the host
+     * migrated.
+     */
+    @Test
+    void theStackSurfaceServesTheOriginScope() throws Exception {
+        assertThat(host.appNames()).doesNotContain("portal", "#portal");
+
+        HttpResponse<String> login = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + host.surfacePort()
+                        + "/_tesseraql/login")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(login.statusCode()).isEqualTo(200);
+        assertThat(login.body()).contains("action=\"/_tesseraql/login\"");
+    }
+
+    /**
      * The address is derived from the name and the host starts the runtime serving it, so the app
      * answers on its own port at the same path the gateway forwards (docs/base-path.md decision 5).
      * Hosting used to leave the prefix to the caller, and this entry point passed none at all.

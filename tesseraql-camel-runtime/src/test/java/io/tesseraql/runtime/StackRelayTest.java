@@ -392,6 +392,44 @@ class StackRelayTest {
         assertThat(response.body()).contains("TQL-APP-4040");
     }
 
+    /**
+     * The origin fence (docs/root-portal.md): origin-scope {@code /_tesseraql/*} and
+     * {@code /assets/*} are the stack surface runtime's, on a segment boundary; members keep
+     * their prefixes, health stays the gateway's own answer, and everything else still 404s.
+     */
+    @Test
+    void theOriginFenceForwardsToTheSurfaceRuntime() throws Exception {
+        HttpServer surface = vertx.createHttpServer(new HttpServerOptions().setPort(0));
+        surface.requestHandler(request -> request.response().end("surface:" + request.path()));
+        int surfacePort = await(surface.listen()).actualPort();
+        StackRelay relay = new StackRelay(client, CATALOGUE, Map.of(), TrustedProxies.NONE,
+                appId -> originPort, () -> surfacePort);
+        HttpServer fencedFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        fencedFront.requestHandler(relay::handle);
+        String root = "http://localhost:" + await(fencedFront.listen()).actualPort();
+        try {
+            HttpResponse<String> login = send(HttpRequest.newBuilder(
+                    URI.create(root + "/_tesseraql/login")));
+            HttpResponse<String> asset = send(HttpRequest.newBuilder(
+                    URI.create(root + "/assets/vendor/hc.min.css")));
+            HttpResponse<String> member = send(HttpRequest.newBuilder(
+                    URI.create(root + "/" + APP + "/page")));
+            HttpResponse<String> health = send(HttpRequest.newBuilder(
+                    URI.create(root + "/_tesseraql/health/live")));
+            HttpResponse<String> boundary = send(HttpRequest.newBuilder(
+                    URI.create(root + "/assets-archive")));
+
+            assertThat(login.body()).isEqualTo("surface:/_tesseraql/login");
+            assertThat(asset.body()).isEqualTo("surface:/assets/vendor/hc.min.css");
+            assertThat(member.body()).isEqualTo("ok");
+            assertThat(health.body()).contains("UP");
+            assertThat(boundary.statusCode()).isEqualTo(404);
+        } finally {
+            await(fencedFront.close());
+            await(surface.close());
+        }
+    }
+
     // ---------------------------------------------------------------- the origin
 
     private static void serveStub(io.vertx.core.http.HttpServerRequest request) {

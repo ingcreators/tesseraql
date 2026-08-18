@@ -81,7 +81,9 @@ final class NewCommand implements Callable<Integer> {
     /**
      * Writes the marker beside the application, never over an existing one — a stack that
      * already declares settings keeps them, and creating a second application in it changes
-     * nothing.
+     * nothing. A fresh stack also gets a {@code .gitignore} for the stack-level {@code work/}
+     * directory the host materializes the portal surface into (docs/root-portal.md), under the
+     * same never-overwrite rule: a stack that already manages its ignores keeps them.
      */
     private boolean writeStackMarker() {
         Path marker = stack.resolve(io.tesseraql.operations.app.StackSettings.FILE_NAME);
@@ -90,6 +92,13 @@ final class NewCommand implements Callable<Integer> {
         }
         try {
             Files.writeString(marker, STACK_FILE_TEMPLATE);
+            Path gitignore = stack.resolve(".gitignore");
+            if (!Files.exists(gitignore)) {
+                Files.writeString(gitignore, """
+                        # Stack-level runtime scratch (the hosted portal surface); never committed.
+                        work/
+                        """);
+            }
             return true;
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);

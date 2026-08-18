@@ -46,9 +46,12 @@ public final class ApplicationName {
      * <p>The rule is segment safety, not the scaffolder's ASCII pattern: the name becomes the
      * application's address, so it must be one path segment (no {@code /}) and must not open the
      * framework's fence (no leading {@code _} — {@code /_tesseraql/} is the framework's) or hide
-     * as a dotted segment (no leading {@code .}). Names are deliberately not confined to ASCII —
-     * the migration history guard measures them in UTF-8 bytes for exactly that reason — so a
-     * character-class pattern here would outlaw what that guard exists to measure.
+     * as a dotted segment (no leading {@code .}). One word is reserved outright: {@code assets},
+     * because the framework serves its asset bundle at {@code <scope>/assets} at every scope and
+     * a member named after it would shadow the stack's own stylesheets (docs/root-portal.md).
+     * Names are deliberately not confined to ASCII — the migration history guard measures them
+     * in UTF-8 bytes for exactly that reason — so a character-class pattern here would outlaw
+     * what that guard exists to measure.
      */
     public static final TqlErrorCode UNSAFE_SEGMENT = new TqlErrorCode(TqlDomain.YAML, 1405);
 
@@ -82,6 +85,11 @@ public final class ApplicationName {
         }
         if (name.startsWith(".")) {
             return unsafe(name, "a leading '.' hides it as a dotted segment");
+        }
+        if (name.equals("assets")) {
+            return unsafe(name, "'assets' is the framework's own claim — every scope serves its"
+                    + " asset bundle at <scope>/assets, so a member named after it would shadow"
+                    + " the stack's stylesheets");
         }
         return null;
     }
