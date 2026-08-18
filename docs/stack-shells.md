@@ -2,21 +2,26 @@
 
 Implementation design for what remains of [stack-architecture.md](stack-architecture.md)
 Decision 14: the ops console becomes a stack-level shell with an application switcher
-(slice 7), the permission vocabulary that shell forces is decided (open question 4), and the
-identity surfaces finish their move to the origin scope (Decision 24's slice-4 remainder:
-IAM Admin at the origin, the per-member `auth-ui`/`account` copies retired). It also designs
-the authenticated deploy surface that [runtime-replace.md](runtime-replace.md) deferred here —
-its open question 5 closed as "deferred to the grants work", and this is the grants work.
+(slice 7), the authorization model the stack's surfaces share is decided (open question 4 —
+reshaped in review from "a grant vocabulary" into a model that serves all three kinds of
+user: business users, developers, operators), and the identity surfaces finish their move to
+the origin scope (Decision 24's slice-4 remainder: IAM Admin at the origin, the per-member
+`auth-ui`/`account` copies retired). It also designs the authenticated deploy surface that
+[runtime-replace.md](runtime-replace.md) deferred here — its open question 5 closed as
+"deferred to the grants work", and this is the grants work.
 
 **Studio (slice 8) is deliberately not designed here.** The stack architecture's own slices
 section says why: "slice 8 is a campaign, not a slice" — `StudioService` couples preview,
 editing, apply/reload, the scaffolder, the migration author and the test runner to a runtime,
 and it is designed separately **on the delegation pattern this document establishes**. What
-this document does decide for Studio is its grant family (structural decision 1), so the
-vocabulary is settled once.
+this document does decide for Studio is its atom (structural decision 1), so the vocabulary
+is settled once.
 
 Written 2026-08-18, before implementation. Everything below was measured against main at #865
-unless marked otherwise.
+unless marked otherwise. Structural decision 1 was rewritten in review at the user's
+direction: design the ideal model first — business users, developers and operators each
+gettable right — and change the application-name grammar if that simplifies it. It does, and
+it is changed below.
 
 ## What exists today, measured
 
@@ -38,30 +43,41 @@ context, so no member can see its siblings (`HostContext.java:44-49`) — and
 `PortalProviders.register` is the one-place provider registration this design extends
 (`TesseraqlRuntime.java:1720-1724`).
 
-**`ops.app.<name>` has exactly one parser, and its semantics are two ANDed filters.**
-`OpsScope.allowedApps(permissions, servedApps)` (`tesseraql-ops-ui`, `OpsScope.java:44-48`)
-returns `served.contains(app) && granted.test(app)`: what this runtime serves, and what the
-caller was granted — `ops.app.*` for everything, else exact string membership. Entry
-permissions are separate: every console route carries `ops.batch.view` (reads) or
-`ops.batch.run` (actions), and the scoped grants narrow rows. Out-of-scope and unknown are
-indistinguishable by design (TQL-BATCH-4040, `OpsActions.java:33-42`). Trace visibility keys
-on the root span's `app` attribute (`OpsDashboard.java:387-397`); lanes, slow SQL, pinning
-and aggregate metrics are deliberately runtime-wide behind the entry permission only.
-`servedApps` today includes the mounted system apps (`TesseraqlRuntime.java:1370-1378`), not
-just the member.
+**Each kind of user is authorized by a different mechanism today.** A business user reaches
+an application if their *tenant* is entitled (the catalogue's `entitledTenants`, checked by
+the relay and the portal — no per-principal model exists, and `PortalProviders` says so in a
+comment pointing at open question 4). A developer's Studio authority is a *role* allow-list,
+global and per-runtime (`StudioAccess.canEdit` reads `principal.roles`, knows nothing about
+application names; `tesseraql.studio.readOnly` and `editRoles`). An operator holds
+*permissions* in a two-axis model: `ops.batch.view`/`ops.batch.run` open the console
+surface-wide, and `ops.app.<name>` narrows rows per application
+(`OpsScope.allowedApps` — `served.contains(app) && granted.test(app)`,
+`OpsScope.java:44-48`; out-of-scope and unknown indistinguishable by design, TQL-BATCH-4040).
+Three personas, three mechanisms — the model below replaces the three with one.
+
+**The two-axis ops model's own premise has already died.** The entry/scope split was
+justified when a runtime hosted several applications and its diagnostics (lanes, slow SQL,
+the trace ring, alerts) belonged to no single one. One runtime is one application now, so
+that data *is* the member's data (`OpsDashboard.java:169-172` keeps it "runtime-wide" behind
+the entry permission only — a mounted-apps-era stance); what genuinely belongs to no member
+is the shared process (JVM pinning) and the gateway. And two axes cannot express *view
+broadly, act narrowly*, because one `ops.app` set scopes both verbs. `servedApps` today even
+includes the mounted system apps (`TesseraqlRuntime.java:1370-1378`), not just the member.
 
 **The permission is a free string; no registry exists.** `ops.app.<name>` is compared by
 prefix in `OpsScope` and nowhere else; the identity pack's sample rows literally grant
-`ops.app.*`; IAM Admin uses a flat `iam.admin.view`/`iam.admin.write` pair. There is no
-action sub-grammar anywhere — relevant because runtime-replace.md's deploy authorization
-sketch wants `ops.app.<name>` "gaining a *deploy* action".
+`ops.app.*`; IAM Admin uses a flat `iam.admin.view`/`iam.admin.write` pair. (A found defect
+rides along: `IdentitySchemaMojo`'s javadoc example spells `iam:admin:write` with colons
+while the iam-admin routes check `iam.admin.write` — an operator following it seeds a
+permission nothing matches. Corrected in the docs sweep.)
 
-**And an application's name can contain dots.** `ApplicationName.segmentViolation` fences
-`/`, a leading `_` or `.`, and the reserved word `assets` — nothing else, and non-ASCII is
-deliberately legal (TQL-YAML-1405's own javadoc). So `orders.eu` is a valid name, and any
-grammar that appends an action after the name — `ops.app.orders.eu` versus
-`ops.app.orders.deploy` — cannot tell a name from a name-plus-action. This measurement
-decides structural decision 1.
+**An application's name can contain dots — a freedom the model below withdraws.**
+`ApplicationName.segmentViolation` fences `/`, a leading `_` or `.`, and the reserved word
+`assets` — nothing else; non-ASCII is deliberately legal (TQL-YAML-1405's javadoc). So
+`orders.eu` is a valid name today, and any dotted permission grammar that carries a name in a
+dotted position is ambiguous against it. Nothing else in the tree *needs* interior dots: the
+address is one segment either way, the migration-history guard measures bytes not characters,
+and no example or fixture uses a dotted name.
 
 **Aggregation must happen over runtimes, not over databases.** Decision 14's decisive ground
 stands: `RingTracer` is an in-memory ring inside each runtime, so no database connection can
@@ -84,12 +100,6 @@ out — `ErrorResponseRenderer.java:133,168-171`), which works because each memb
 own `auth-ui` copy. Decision 24 called the copies "duplicates against one session store —
 harmless, and shared by construction", and deferred their removal here.
 
-**The portal's filter widens in one place.** `PortalProviders` filters tiles by tenant
-entitlement only, with the comment: "Per-principal application grants are deliberately not
-invented here; when that model lands (stack-architecture.md open question 4), this filter
-widens in one place." This design decides what that model is — and recommends *not* widening
-the portal yet (open question 6).
-
 **What `hosting.md` currently promises moves with this design.** "The operations console is
 per application … `ops.app.<name>` is the permission to open an application's console. An
 operator running a stack therefore has one console per application rather than one screen
@@ -98,98 +108,94 @@ design replaces, and `app-isolation-model.md` Decision 4 ("the ops console is pe
 formally reversed by stack-architecture Decision 14 — the reversal is recorded there already;
 the prose moves with the code.
 
-## Structural decision 1: the grant vocabulary is fixed-prefix families
+## Structural decision 1: one authorization model for three kinds of user
 
-The vocabulary is **`<family>.app.<name>`**, one family per authority:
+Designed from the personas outward, per the review direction, and then checked against the
+code rather than derived from it.
 
-- **`ops.app.<name>`** — unchanged string, widened sentence: *may see this application's
-  operational data*. Today that narrows rows inside one runtime; under the shell it also
-  decides which applications appear in the switcher, and (the correction below) it absorbs
-  the read-entry role `ops.batch.view` used to play.
-- **`run.app.<name>`** — *may perform operational actions on this application* (run,
-  cancel and rerun jobs; redeliver outbox messages and dead-lettered events; cancel
-  transfers). Added by the review correction below; absorbs `ops.batch.run`.
-- **`studio.app.<name>`** — *may edit this application in Studio*. Reserved here, consumed
-  by slice 8's own design; Decision 14 already states Studio "needs per-application edit
-  authorisation on the switch rather than a single may-open-Studio role".
-- **`deploy.app.<name>`** — *may deploy this application*: the action
-  runtime-replace.md's authorization section sketched, carried by the deploy surface below.
+**The model is two levels, kept: permissions are atoms the framework and the applications
+define; roles are bundles the deployment composes.** The identity store already has both
+with the role→permission join; what it lacks is a single atom grammar and the per-application
+axis everywhere it belongs. One rule binds every framework surface: **a framework surface
+checks atoms, never roles.** Roles are the deployment's vocabulary (a department, a team, a
+duty); atoms are the framework's. Studio's `editRoles` violates this today — a role
+allow-list read by a framework surface — and retires with slice 8.
 
-`<name>` is the **verbatim remainder after the constant prefix**, and the wildcard is
-`<family>.app.*`. That is the whole grammar, and it is dictated by the measurement above: a
-name can contain dots, so an action *suffix* (`ops.app.<name>.deploy`) is ambiguous — the
-parser cannot tell `orders.deploy` the application from `orders` plus an action. A fixed
-prefix keeps the name whole, keeps `OpsScope`'s exact-string membership semantics, and adds
-no parsing beyond the prefix compare that already exists. `OpsScope` stays the one parser,
-parameterized by family.
+**The atom grammar: exactly three dot-separated segments, `<family>.<verb>.<name|*>`, and
+the name can no longer contain dots.** `tesseraql.app.name` gains one character to its fence:
+TQL-YAML-1405 also refuses interior `.` (non-ASCII stays legal; the address, outbox claims
+and history-table guard are indifferent). With names dot-free, an atom parses by splitting
+on dots into exactly `[family, verb, name]` — no reserved `.app.` marker, no prefix
+gymnastics, no ambiguity between a name and a name-plus-action. Store-wide atoms (no
+application axis) are exact strings and are simply not in the per-application families.
 
-**Corrected in review: the ops entry permissions retire, because their premise retired
-first.** `ops.batch.view` (every page, read-only) and `ops.batch.run` (the write actions:
-run a job, redeliver an outbox message or a dead-lettered event) are surface-wide *verbs*
-that `ops.app.<name>` then scopes — a two-axis model whose justification was the
-mounted-apps era, when a runtime's own diagnostics (lanes, slow SQL, the trace ring,
-alerts) belonged to no single application. One runtime is one application now, so that data
-*is* the member's data; what genuinely belongs to no member is only the shared process (JVM
-pinning) and the gateway. And the two axes cannot express the asymmetry an operator
-actually wants — view broadly, act narrowly — because one `ops.app` set scopes both verbs.
-So the verbs move into the families, where the design's own rule ("seeing and moving are
-different authorities") already points:
+The atoms, one row per authority, mapped to the personas:
 
-- **`ops.app.<name>` absorbs view**: holding it opens the shell and shows this
-  application's pages, rows and runtime diagnostics. `ops.batch.view` retires.
-- **`run.app.<name>` is the action family**: *may perform operational actions on this
-  application* — run/cancel/rerun jobs, redeliver outbox messages and dead-lettered
-  events, cancel transfers. `ops.batch.run` retires.
-- **Stack-wide vitals** (JVM pinning, the gateway's own health) render on the overview for
-  any holder of any `ops.app` grant — they describe the shared substrate the caller's
-  application runs on.
-- `iam.admin.view`/`iam.admin.write` stay: the identity store is the stack's, and a
-  surface with no application axis keeps its surface-wide verbs.
+| Atom | Sentence | Persona | Checked by |
+| --- | --- | --- | --- |
+| `app.use.<name>` | may use this application | business user | the portal's tiles, and the member's fence (below) |
+| `ops.view.<name>` | may see this application's operational data | operator | the shell's switcher and pages, re-checked by the member |
+| `ops.run.<name>` | may act on it: run/cancel/rerun jobs, redeliver outbox and dead-lettered events, cancel transfers | operator | the member, on every action |
+| `app.deploy.<name>` | may deploy this application | operator / CD pipeline | the deploy endpoint, against the package's declared name |
+| `studio.edit.<name>` | may edit this application in Studio | developer | slice 8's shell and delegation (reserved here) |
+| `iam.admin.view` / `iam.admin.write` | may see / change the identity store | identity admin | IAM Admin (store-wide: the store has no application axis) |
 
-Pre-1.0 clean break: eleven console route policies, the identity-pack seeds and the docs
-move together, with a changelog line and no migration steps. **Rejected: keeping the entry
-permissions as the door** — cheap, shipped, and it preserves a two-model vocabulary whose
-justifying premise no longer exists; recorded here so it does not come back as a
-convenience.
+The wildcard is a terminal `*` (`ops.view.*`, `app.deploy.*`). What each persona's setup
+looks like, so the model is judged by its sentences:
 
-**The rest of the namespace, mapped** (asked in review: what exists besides `.app`?). After
-the retirement, the four families contain *only* their `.app.` subtree — `studio.` stays
-empty of verbs unless slice 8's design adds one. `iam.admin.view`/`iam.admin.write` is the
-one family with verbs and no `.app` axis, correctly: the identity store has no
-per-application axis to scope. Beyond the framework's vocabulary, the same store holds the
-applications' own policy codes (`tesseraql.security.policies` — free strings the framework
-never parses) and roles (a separate mechanism; Studio's global `editRoles` rides it today
-and retires into `studio.app.<name>` with slice 8). One consequence worth stating: the
-store is a single namespace, so the family prefixes are effectively reserved words — an
-application declaring its own policy named `ops.app.orders` would open its route to ops
-operators; a lint warning on application policies shadowing a family prefix is a candidate
-for the slice, not a blocker. Axes deliberately not invented: `.stack.` (the vitals ride
-any `ops.app` grant instead of a one-consumer axis), tenant axes (entitlement is the
-catalogue's), and portal reach (open question 6).
+- **A business user** holds roles their deployment defines — `経理部` bundling
+  `app.use.受注管理` and the *application's own* codes (`tesseraql.security.policies`
+  vocabulary, free strings the framework never parses, checked by the application's routes
+  as today). The portal shows the tiles their grants and tenant allow; an application they
+  cannot use refuses them at its fence, not after four clicks.
+- **A developer** holds `studio.edit.<name>` for the applications they own — per
+  application, which the global `editRoles` never was. `dev`'s bootstrap admin bundles the
+  wildcards so the development loop stays frictionless; production seeds narrow bundles.
+- **An operator** holds `ops.view.*` and the `ops.run.<name>`/`app.deploy.<name>` set their
+  duty actually needs — view broadly, act narrowly, the asymmetry the retired model could
+  not express. The on-call reader is not the deploy pen.
 
-**The `.app` segment is load-bearing, not decoration** (asked in review: is it always
-needed?). Per-application grants share their namespace with the same family's
-surface-wide permissions — `ops.batch.view` and `ops.batch.run` live beside
-`ops.app.<name>` today — and names can contain dots, so the parser has only constant-prefix
-matching to work with. A `ops.<name>` grammar would read the entry permission
-`ops.batch.view` as a grant for an application named `batch.view`: entry permissions and
-application grants would be parseable as each other. `<family>.app.` reserves a subtree in
-which only names live, for every family alike — which is also why `deploy` and `studio`
-adopt it even though neither has a surface-wide permission yet: the fence must exist before
-the first non-app permission in the family, not be retrofitted after a collision.
+**What retires, all pre-1.0 clean breaks:** `ops.batch.view` and `ops.batch.run` (the verbs
+move into `ops.view.<name>`/`ops.run.<name>`); the `ops.app.<name>` *string* (its meaning
+lives on as `ops.view.<name>`); Studio's `editRoles` (with slice 8); and the interior-dot
+freedom in application names. Eleven console route policies, the identity-pack seeds, the
+lint and boot name rules and the docs move together, with changelog lines and no migration
+steps. Stack-wide vitals (JVM pinning, the gateway's health) render on the shell's overview
+for any holder of any `ops.view` grant — they describe the shared substrate the caller's
+application runs on; no `.stack.` axis is invented for one consumer.
 
-`iam.admin.*` deliberately gains no `app` family: the identity store is the stack's
-(Decision 22/24), there is no per-application axis to scope, and inventing one would grant
-words with nothing behind them.
+**`app.use.<name>` is enforced at two points, and the second is the real one.** The portal's
+tiles filter by it (beside tenant entitlement — the two axes are different questions: the
+catalogue says which *tenants* an application serves, the grant says which *people* use it).
+And the member's own security layer refuses an authenticated principal without the grant,
+fence-wide, before any route — so reach is a property of the principal, not of knowing a
+URL. Routes declaring `auth: none` are untouched (a public page is public); service callers
+(JWT, API keys) pass the same check, because a principal is a principal. Deny-by-default is
+the recommendation, with its cost stated plainly: adopting stacks must seed `app.use`
+grants (or an `app.use.*` baseline role) before their users sign in — open question 6.
 
-**Rejected: action suffixes on `ops.app.<name>`** — ambiguous, measured above; this is also
-a small correction to runtime-replace.md's sketch ("`ops.app.<name>` gaining a deploy
-action"), which is honoured in substance (a per-application deploy grant in the shared
-store) with a grammar that survives dotted names. **Rejected: structured grants** (JSON
-claims with fields) — a second permission model beside the flat codes every surface,
-seeder and identity pack already speaks. **Rejected: one super-grant** ("`ops.app.<name>`
-implies deploy") — seeing operational data and moving versions are different authorities;
-collapsing them would hand every on-call reader the deploy pen.
+**The namespace, mapped.** Framework atoms are the table above and nothing else; the four
+families (`app`, `ops`, `studio`, `iam`) hold only what the table shows, and new verbs
+arrive only with the surface that checks them. The same store also holds the applications'
+own policy codes and the deployment's roles. The store is one namespace, so the framework's
+family prefixes are effectively reserved words — an application declaring its own policy
+named `ops.view.orders` would open its route to operators; a lint warning on application
+policies shadowing a framework family is a slice candidate, not a blocker. Application
+authors are pointed at their own application's name as *their* natural prefix.
+
+**Rejected: the `.app`-marker draft** (`<family>.app.<name>` with dotted names kept legal) —
+this document's own first answer, superseded in review by the simpler question "is the dot
+freedom worth anything?": it is not, and withdrawing it deletes the marker segment, the
+fence argument, and the name-versus-action ambiguity in one move. Kept here as the record
+that the marker was load-bearing *only because* names could contain dots. **Rejected:
+action suffixes on one family** (`ops.app.<name>.deploy`) — the shape that started the
+grammar question; moot under the dot ban but rejected on its own terms too, since view and
+act are different authorities to grant, not modifiers of one. **Rejected: structured
+grants** (JSON claims) — a second permission model beside the flat codes every surface,
+seeder and identity pack speaks. **Rejected: framework surfaces checking roles** — roles
+are the deployment's words; a framework that assigns them meaning turns every deployment's
+role list into an API. **Rejected: one super-grant** — seeing, acting, deploying and
+editing collapse into "admin", and the on-call reader gets the deploy pen.
 
 ## Structural decision 2: the ops shell is the ops-console app, hosted by the surface runtime, delegating over loopback
 
@@ -197,7 +203,7 @@ collapsing them would hand every on-call reader the deploy pen.
 members and mounts into the stack surface runtime instead (the portal config's
 `ops-console.enabled: false` line is deleted; hosted members skip the provider). It answers
 at the origin scope — `/_tesseraql/ops/console`, the address Decision 17 reserved — behind
-the family grants of structural decision 1. The skip is keyed on being a hosted member — a
+the atoms of structural decision 1. The skip is keyed on being a hosted member — a
 topology rule like the derived address, not a preference — so a member declaring
 `tesseraql.apps.ops-console.enabled: true` under a host still gets no local copy (open
 question 4).
@@ -214,7 +220,7 @@ mounts as a fallback; it is a test-and-embedding footnote, not a deployment shap
 
 **The switcher is the grant, applied to the member list.** The shell lists the stack's
 members (the surface runtime already holds `stackMembers`) filtered by the caller's
-`ops.app.<name>`/`ops.app.*` grants — the same filter `OpsScope` runs today, applied to
+`ops.view.<name>`/`ops.view.*` atoms — the filter `OpsScope` runs today, applied to
 membership instead of rows. During a canary, a staged member shows **two entries** —
 `orders` and `orders (canary)` — because runtime-local data (traces, lanes, slow SQL) is
 exactly what an operator watches a ramp for, and neither a weighted roll nor a stable pin
@@ -277,6 +283,12 @@ the correction above) keeps the mounts, because it has no origin to bounce to. `
 through the gateway, so development gets the origin bounce too — the shape development and
 production share is the point of the whole campaign.
 
+**The `app.use` fence lands here too**, because it is the same member security layer: after
+authentication, before any route, an authenticated principal without `app.use.<member>` is
+refused — the business-user half of structural decision 1, enforced where the application's
+own authentication already runs. The portal's tile filter reads the same atom, so what a
+user sees and what they can reach are one answer.
+
 A side effect worth naming: `servedApps` — the set `OpsScope` ANDs against — shrinks to the
 member itself once the system apps stop mounting, which is what that set always meant.
 
@@ -285,11 +297,13 @@ member itself once the system apps stop mounting, which is what that set always 
 runtime-replace.md closed its open question 5 as "deferred to the grants work" and left a
 target-shape sketch; this design is that work, and the sketch lands as the third slice:
 
-- **The grant is `deploy.app.<name>`** (family, structural decision 1) in the shared store,
-  seeded like every other permission code.
+- **The atom is `app.deploy.<name>`** (structural decision 1) in the shared store, seeded
+  like every other permission code. (runtime-replace.md sketched it as "`ops.app.<name>`
+  gaining a *deploy* action" — honoured in substance, renamed by the model: deploying is an
+  authority over the application as a unit, not a row-scope modifier.)
 - **The surface is the stack surface runtime**: an authenticated endpoint that receives a
   `.tqlapp` (upload rides the existing file-transfer machinery), checks the caller's
-  `deploy.app.<name>` against the **package's declared name**, runs `AppUpgrader.preflight`,
+  `app.deploy.<name>` against the **package's declared name**, runs `AppUpgrader.preflight`,
   and writes the same intent files the reconciler already consumes. The reconciler stays the
   one mechanism; the endpoint is a pen with authentication, exactly as the file protocol's
   design promised. Refusals surface as the endpoint's response *and* are not written — a
@@ -313,44 +327,46 @@ Three PRs, each independently green and observable:
 
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
-| 1 | The vocabulary and the ops shell | `OpsScope` families; `ops.batch.view`/`ops.batch.run` retire into `ops.app.<name>`/`run.app.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher filtered by `ops.app.<name>`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one grant model; `hosting.md`'s per-app-console paragraph replaced |
-| 2 | The identity remainder | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the unhosted boot (tests, embedding) unchanged | One sign-in door and one admin door; `servedApps` = the member |
-| 3 | The deploy surface | `deploy.app.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
+| 1 | The model and the ops shell | The atom grammar in `OpsScope` (families/verbs); TQL-YAML-1405 gains the interior-dot refusal (lint + boot + docs); `ops.batch.view`/`ops.batch.run`/`ops.app.<name>` retire into `ops.view.<name>`/`ops.run.<name>` (routes, seeds, packs); `ops-console` mounts at the surface and delegates over loopback (providers + member-origin lookup on `HostContext`); switcher by `ops.view`, canary as a second entry; per-member consoles retired under a host; fan-out overview with per-member degradation | One console per stack, one atom grammar; `hosting.md`'s per-app-console paragraph replaced |
+| 2 | The identity remainder and the `app.use` fence | `iam-admin` at the origin; hosted members stop mounting `auth-ui`/`account`/`iam-admin`; the 401 bounce goes origin-absolute with the prefixed `redirect`; the member fence refuses authenticated principals without `app.use.<member>`; the portal's tiles filter by the same atom beside tenant entitlement; seeds gain the baseline; the unhosted boot (tests, embedding) unchanged | One sign-in door, one admin door; who may use an application is a grant, not a URL |
+| 3 | The deploy surface | `app.deploy.<name>`; the surface runtime's authenticated deploy endpoint writing the intent files; `deploy --url` with a bearer; the ops deploy page | A pipeline deploys one application with a scoped token and no install-root access |
 
-Slice 1 first (it lands the vocabulary and the delegation pattern). Slice 2 is independent
-of 1 in code but reads better after it (the origin's surfaces arrive together). Slice 3
-needs 1's vocabulary and the surface runtime, nothing from 2. **Slice 8 — the Studio
-shell — gets its own design after slice 1 ships**, on the delegation pattern and the
-`studio.app.<name>` family this document fixes; `runtime-footprint.md`'s payoff (the test
+Slice 1 first (it lands the model and the delegation pattern). Slice 2 needs 1's grammar
+only; slice 3 needs 1's grammar and the surface runtime, nothing from 2. **Slice 8 — the
+Studio shell — gets its own design after slice 1 ships**, on the delegation pattern and the
+`studio.edit.<name>` atom this document fixes; `runtime-footprint.md`'s payoff (the test
 framework, GreenMail and JUnit leaving every deployment) arrives with that extraction, and
 is deliberately not promised here.
 
 ## Guards
 
+- **A framework surface checks atoms, never roles.** Roles stay the deployment's
+  vocabulary; the one violation (Studio's `editRoles`) retires with slice 8. Pinned by the
+  slices' tests as each surface lands.
 - **Authorization never moves to the shell.** Every delegated call carries the caller's own
-  credentials and the member re-checks the caller's grants; a shell bug can widen
+  credentials and the member re-checks the caller's atoms; a shell bug can widen
   what is *listed*, never what is *answered*. Pinned by a test, not by review.
-- **The switcher is deny-by-default**, like the rows today: no `ops.app.*` grants → an empty
-  switcher, not every member.
-- **The deploy endpoint checks the grant against the package's declared name** — not a
+- **The switcher and the portal are deny-by-default**: no `ops.view` atoms → an empty
+  switcher; no `app.use` atoms → no tiles and no fence crossing.
+- **The deploy endpoint checks the atom against the package's declared name** — not a
   request parameter — so a token scoped to `orders` cannot deploy `billing` by renaming an
   upload field. A refused deploy writes no intent.
-- **No new grant families without a surface.** The vocabulary admits exactly the three
-  families with a consumer (`ops`, `studio` reserved for slice 8, `deploy`); the portal's
-  tile filter stays tenant-entitlement (open question 6) rather than growing a fourth family
-  speculatively.
+- **No new atoms without a surface.** The table in structural decision 1 is exhaustive;
+  a verb arrives only with the surface that checks it.
+- **TQL-YAML-1405 (widened)** — an application name containing `.` is refused at lint and
+  at boot, with the atom grammar named as the reason.
 
 ## Test plan
 
 **Slice 1**
 - The headline IT, in the `MultiAppGatewayIntegrationTest` arrangement: two members, a
-  principal granted `ops.app.a` only — the switcher lists `a`, member `b`'s pages answer
+  principal granted `ops.view.a` only — the switcher lists `a`, member `b`'s pages answer
   404-shaped refusals through the shell exactly as `OpsActions.notFound` answers today, and
   the same principal's delegated `a` pages show `a`'s jobs.
 - Authorization stays at the member: a delegated call forged with a different application's
   name reaches the member and is refused by the member's own scope check (assert the
   member's refusal, not the shell's).
-- The verbs are per application now: a principal with `ops.app.a` + `run.app.b` sees `a`
+- The verbs are per application now: a principal with `ops.view.a` + `ops.run.b` sees `a`
   and cannot act on it, can act on `b` — the asymmetry the retired two-axis model could
   not express, pinned as its regression test.
 - Canary entry: stage a canary (the #862 operations), the switcher gains the second entry,
@@ -363,22 +379,29 @@ is deliberately not promised here.
   (the existing per-app console tests keep passing unhosted).
 - SSE through the delegation: the console's live page streams frame-by-frame through shell +
   relay (the `StackRelayTest` timing shape, one more hop).
+- The name rule: `tesseraql.app.name: orders.eu` is refused at lint and at boot naming the
+  atom grammar; `受注管理` stays legal.
 
 **Slice 2**
 - The bounce: an unauthenticated browser GET on `/<member>/page` 302s to
   `/_tesseraql/login?redirect=%2F<member>%2Fpage`; signing in at the origin returns to the
   member page; the member serves no `/_tesseraql/login` of its own anymore.
+- The fence: an authenticated principal without `app.use.<member>` is refused by the member
+  on every route; with the grant, served; a route declaring `auth: none` answers either way;
+  a JWT service caller meets the same fence.
+- The portal: tiles = tenant entitlement ∧ `app.use` atoms; a user with no `app.use` grants
+  sees an empty portal, not every entitled member.
 - IAM Admin answers at the origin behind `iam.admin.view`; no member serves
   `/_tesseraql/admin/…`.
 - A one-member stack signs in at the origin like any other; the unhosted boot keeps all
   five mounts and the base-relative bounce (the existing direct-runtime tests pin it).
-- `servedApps` shrinkage: `ops.app.<member>` sees the member's rows and nothing about the
+- `servedApps` shrinkage: `ops.view.<member>` sees the member's rows and nothing about the
   system apps.
 
 **Slice 3**
-- The endpoint: a bearer with `deploy.app.orders` deploys an `orders` package (intent files
+- The endpoint: a bearer with `app.deploy.orders` deploys an `orders` package (intent files
   land exactly as `tesseraql deploy` writes them; the reconciler IT arrangement picks them
-  up); the same bearer refused for a `billing` package; no grant → 403; a preflight
+  up); the same bearer refused for a `billing` package; no atom → 403; a preflight
   refusal (not newer) surfaces and writes nothing.
 - `deploy --url` end-to-end against a running stack: token → upload → intent → reconciler →
   new version serving (the #864 IT arrangement plus the endpoint).
@@ -387,33 +410,39 @@ is deliberately not promised here.
 ## What moves in the docs, and when
 
 With the code PRs, not before: `hosting.md` (the per-app-console paragraph at
-`hosting.md:287-297` is replaced by the shell + switcher + grant sentences; the deploy
+`hosting.md:287-297` is replaced by the shell + switcher + atom sentences; the deploy
 section gains the endpoint and `--url`), `ops-console.md` (the shell, the switcher, the
-canary entry), `authentication.md`/`account.md` where the login copies are described,
-`deployment.md` (the `--admin-permissions` examples move to the family grants:
-`ops.app.*`, `run.app.*`, `deploy.app.*`; `ops-console.md`'s permission table follows;
+canary entry, the permission table moving to `ops.view`/`ops.run`),
+`authentication.md`/`account.md` where the login copies are described,
+`deployment.md` (the `--admin-permissions` examples move to the atoms:
+`ops.view.*`, `ops.run.*`, `app.deploy.*`, `app.use.*`;
 `IdentitySchemaMojo`'s javadoc example is corrected in passing — it spells
 `iam:admin:write` with colons while the iam-admin routes check `iam.admin.write`, so an
 operator following it seeds a permission nothing matches),
-`root-portal.md` (its deliberately-not list shrinks as items land),
+`identity.md`/`iam-admin.md` wherever roles-versus-permissions is taught (the personas and
+the canonical bundles belong there), `root-portal.md` (its deliberately-not list shrinks as
+items land, and its tile-filter sentence gains the `app.use` axis),
 `app-isolation-model.md` (Decision 4's reversal note points at the shipped shell),
-`reference-cli.md` regeneration (`deploy --url`), the error reference for any new codes the
-slices mint, `CHANGELOG.md` per slice, and the shipped-status notes: stack-architecture
-Decision 14 + open question 4, and runtime-replace.md's authorization section (its "until
-then" interim paragraph gets the arrival note).
+TQL-YAML-1405's reference row (the widened rule), `reference-cli.md` regeneration
+(`deploy --url`), the error reference for any new codes the slices mint, `CHANGELOG.md` per
+slice, and the shipped-status notes: stack-architecture Decision 14 + open question 4, and
+runtime-replace.md's authorization section (its "until then" interim paragraph gets the
+arrival note, and its `ops.app.<name>`-gains-a-deploy-action sketch the rename note).
 
 ## Deliberately not in this design
 
 - **The Studio shell (slice 8).** Its own design, after slice 1: the delegation pattern and
-  `studio.app.<name>` are fixed here; everything else — preview, edit, apply, the test
+  `studio.edit.<name>` are fixed here; everything else — preview, edit, apply, the test
   runner, the extraction that fixes `runtime-footprint.md`'s dependency complaint — is that
   document's scope.
-- **Portal tile narrowing by grants.** The tiles are reach for end users; `ops`/`studio`/
-  `deploy` are operator authorities. Conflating them would hide a business application from
-  its users because they cannot administer it. If per-principal reach is ever wanted, it is
-  its own family and its own yes/no (open question 6 records the recommendation: not now).
-- **A permission registry.** Grants stay free strings compared by prefix; a catalogue of
-  valid codes is a different feature with its own UI implications.
+- **A permission registry.** Atoms stay strings in the store; a catalogue of valid codes
+  with UI affordances is a different feature. The grammar makes them *predictable*, which
+  is the registry's cheapest half.
+- **Shipped role bundles.** The canonical bundles (operator, deployer, developer, per-app
+  user roles) are documented, not seeded — a deployment's roles are its own words, and a
+  framework that seeds them turns examples into API (open question 7).
+- **Per-tenant atoms.** Tenant entitlement stays the catalogue's axis; the store's atoms are
+  per-principal. Two questions, two mechanisms, deliberately.
 - **Cross-application aggregate views beyond the switcher and the overview cards** — the
   stack architecture's standing exclusion.
 - **Multi-stack ops.** Nothing above a stack (Decision 27).
@@ -422,9 +451,12 @@ then" interim paragraph gets the arrival note).
 
 Each gated on the slice it blocks, with a recommendation:
 
-1. **The grammar** — *gates slice 1.* Fixed-prefix families (`<family>.app.<name>`) versus
-   action suffixes on `ops.app.<name>`. Recommended: families — the dotted-name measurement
-   makes suffixes ambiguous, and the sketch in runtime-replace.md is honoured in substance.
+1. **The atom grammar and the name rule** — *gates slice 1.* Three-segment atoms over
+   dot-free names, versus the `.app`-marker draft that kept dotted names legal.
+   Recommended: the three-segment grammar — the dot freedom buys nothing measured, and
+   withdrawing it deletes a reserved marker, a fence argument and an ambiguity in one move.
+   (Direction set in review; recorded as a question so the reversal of the shipped 1405
+   javadoc sentence is an explicit decision.)
 2. **What a canary shows in the switcher** — *gates slice 1.* Recommended: a second entry
    for the staged slot (`orders (canary)`), because runtime-local data is what an operator
    watches a ramp for; the alternative (delegate through the weighted roll the front uses)
@@ -441,13 +473,14 @@ Each gated on the slice it blocks, with a recommendation:
 5. **Does the deploy endpoint land with the ops page or before it?** — *gates slice 3's
    internal ordering only.* Recommended: endpoint first, page with or after it; the
    endpoint is the contract, the page is chrome.
-6. **Portal tiles narrowed by a grant family** — *gates nothing; recorded so the portal's
-   one-place comment has an answer.* Recommended: not now, for the reach-versus-authority
-   reason above; tenant entitlement stays the tile filter.
-7. **Retire the ops entry permissions now, or keep them as the door** — *gates slice 1;
-   raised in review ("aren't view and run per-application in substance?").* Recommended:
-   retire (`ops.app.<name>` absorbs view, `run.app.<name>` carries the actions), because
-   the two-axis model's premise — runtime diagnostics belonging to no application — died
-   with mounted apps, and the axes cannot express view-broadly-act-narrowly. The
-   alternative (keep `ops.batch.view`/`ops.batch.run` as entry, scope both with `ops.app`)
-   is cheaper today and preserves a vocabulary whose justification is gone.
+6. **`app.use` enforcement: the full member fence, or the portal's tiles only?** — *gates
+   slice 2.* Recommended: the full fence, deny-by-default for every authenticated
+   principal (browser and service alike; `auth: none` routes untouched) — reach as a
+   grant is the business-user half of the model, and a tiles-only filter would be
+   decoration over an open door. The cost is stated in structural decision 1: adopting
+   stacks seed `app.use` grants or an `app.use.*` baseline role before users sign in;
+   `dev`'s bootstrap admin carries the wildcard.
+7. **Are the canonical role bundles shipped as seeds, or documented only?** — *gates
+   nothing; shapes the identity pack.* Recommended: documented only (the deliberately-not
+   entry above); the identity pack keeps seeding one admin with the wildcards it already
+   teaches.
