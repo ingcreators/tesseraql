@@ -21,6 +21,15 @@ shipped ground this design stands on, not assumptions.
 
 **Status: awaiting review. No slice is implemented.**
 
+**Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
+application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,
+Workday, Keycloak, kintone), and the direction is to adopt the generally-available features
+over time, each on its recommended shape. Two consequences fold into the slices below —
+validity windows on explicit assignments (structural decision 2) and negative/group
+condition kinds on assignment rules (structural decision 3). The rest are recorded as
+*deferred with direction* in "Deliberately not in this design": each names the shape it
+will take, so the deferral is a decision with a landing point, not a blind spot.
+
 ## What exists today, measured
 
 **The store has both halves of a two-level model and no application axis anywhere.** Eight
@@ -190,7 +199,7 @@ be held at once, every consumer needs qualification anyway, so qualify the code 
 too) — cross-application bundling is real (経理部 spans apps) and is exactly what
 stack-wide roles are for; the two kinds coexist with different owners.
 
-## Structural decision 2: a person can hold a permission directly
+## Structural decision 2: direct grants, and validity windows on every explicit assignment
 
 **New table `tql_user_permissions` (`user_id`, `permission_id`), and a third arm on
 `find-permissions-by-user-id.sql`.** The Salesforce shape: roles carry the common bundles,
@@ -209,6 +218,25 @@ The identity contracts grow read/write pairs (`find-direct-permissions-by-user-i
 grants (the arm contributes nothing), and IAM Admin's grant editor renders read-only for
 it. The nine required standard contracts do not grow — an existing `sql` realm keeps
 working untouched.
+
+**Every explicit assignment carries an optional validity window.** `tql_user_roles` and
+`tql_user_permissions` gain nullable `starts_at`/`ends_at` columns, and the resolution
+queries filter to the open window at sign-in. This is the assignment-level shape the
+enterprise mainstream uses — SAP's valid-from/valid-to on every user-role row, Salesforce's
+expiration date on exactly the permission-set layer — and it serves both Japanese needs at
+once: a bounded exception (期間限定権限) is an `ends_at`, and a future-dated appointment
+(発令日) is a `starts_at` on a manual assignment. The attribute-driven form of 発令 —
+HR updates the department on the effective date and the rules follow — is the Workday
+shape and needs no column at all; both routes work and the docs teach both.
+Rule-materialized rows (`source = rule`) carry **no** window: a rule's output is
+reconverged at every sign-in, so its currency is the rule's own. The semantics are stated
+plainly rather than oversold: TesseraQL resolves authority at sign-in, so a window takes
+effect at the caller's next resolution — the same moment every other grant change takes
+effect today — unlike GCP's per-request conditional bindings. Strict mid-session expiry
+would reuse the disable-user session-invalidation pattern (an expiry sweep ending the
+holder's sessions) and is deliberately not built until a deployment asks for it. IAM
+Admin's assignment and grant editors expose the window fields; empty means what every
+existing row means.
 
 ## Structural decision 3: attributes arrive with the user; rules assign the roles
 
@@ -233,9 +261,15 @@ grants one role when its conditions all match the user's attributes:
 - `tql_role_rules` (`rule_id`, `role_id`, `enabled`)
 - `tql_role_rule_conditions` (`rule_id`, `attribute_name`, `match_kind`, `value`) — kinds
   `eq`, `in` (rows sharing a rule and attribute OR together; distinct attributes AND),
-  and `subtree` (the attribute holds an org-unit id; matches descendants via
-  `tql_org_closure`, available when the org-unit foundation runs `managed` — refused at
-  rule-save otherwise, TQL-IAM-4032 on a malformed or unsatisfiable rule).
+  `neq` and `not-in` (negative conditions — 経理部 except 派遣, the Entra dynamic-group
+  `-ne`/`-notIn` shape; a negative *condition* is an ordinary predicate and keeps the
+  rule enumerable, which is exactly what a negative *grant* would not be — the
+  additive-only stance is untouched), `group` (membership in a store group, `value` =
+  the group code and `attribute_name` null — so IdP-provisioned groups drive assignment
+  the moment group provisioning lands), and `subtree` (the attribute holds an org-unit
+  id; matches descendants via `tql_org_closure`, available when the org-unit foundation
+  runs `managed` — refused at rule-save otherwise, TQL-IAM-4032 on a malformed or
+  unsatisfiable rule).
 
 The condition vocabulary is deliberately the decision-table discipline — comparisons, never
 expressions — so rules stay enumerable, their overlap stays computable, and the admin page
@@ -433,9 +467,9 @@ on 2, and 5 does not need 3 or 4:
 | # | Slice | Contents | End state |
 | --- | --- | --- | --- |
 | 1 | The per-application grant views | Read-only IAM Admin pages derived from the atom grammar + existing store; zero schema | An admin answers "who may do what in this application" from one page |
-| 2 | The store axis and direct grants | `tql_roles.application`, `tql_user_permissions`, `tql_user_roles.source`, `Principal.roleGrants`/`directPermissions`, widened contracts (optional for `sql` realms), IAM role/grant editors, `roleManagement` capability enforced (TQL-IAM-4031) | Roles belong to applications; exceptions are grants, not synthetic roles |
+| 2 | The store axis and direct grants | `tql_roles.application`, `tql_user_permissions`, `tql_user_roles.source`, validity windows (`starts_at`/`ends_at` on both assignment tables, filtered at resolution), `Principal.roleGrants`/`directPermissions`, widened contracts (optional for `sql` realms), IAM role/grant editors incl. windows, `roleManagement` capability enforced (TQL-IAM-4031) | Roles belong to applications; exceptions are grants with expiry dates, not synthetic roles |
 | 3 | Declared application roles | `tesseraql.security.roles` + TQL-YAML-1407 (lint + boot), boot reconciliation with the implicit `tql.app.use` atom, orphan report | An application ships its duty shapes; the deployment assigns people |
-| 4 | Attributes and assignment rules | `tql_user_attributes` + IAM editing, SCIM enterprise capture + update-path upsert, SAML/OIDC attribute maps + re-sync on login, `tql_role_rules`/`_conditions` (TQL-IAM-4032), sign-in materialization with provenance, rules UI + recompute | 部署/役職 arrive with the user; the store assigns roles by rule |
+| 4 | Attributes and assignment rules | `tql_user_attributes` + IAM editing, SCIM enterprise capture + update-path upsert, SAML/OIDC attribute maps + re-sync on login, `tql_role_rules`/`_conditions` with the six kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` (TQL-IAM-4032), sign-in materialization with provenance, rules UI + recompute | 部署/役職 arrive with the user; the store assigns roles by rule |
 | 5 | Activation | The `_as` address + relay normalization + internal header + ingress strip, `tesseraql-auth:activate` + active-view principal, picker + switcher chrome, TQL-SEC-4148, `acting_role` audit column | A 兼務 user acts as one role per tab, and the trail says which |
 
 ## Guards
@@ -452,7 +486,8 @@ on 2, and 5 does not need 3 or 4:
 - **The active role rides the address and nothing else** — no session field, no cookie.
   Pinned by the headline IT: two tabs, two roles, interleaved requests, zero mixing.
 - **Grants are additive everywhere**: no deny rows in roles, rules, or direct grants;
-  absence denies.
+  absence denies. A negative rule *condition* (`neq`/`not-in`) is a predicate deciding
+  whether a grant is produced, never a subtraction from one already held.
 - **Recompute owns only its provenance**: rule materialization never inserts, deletes or
   updates a `source = admin` row.
 - **A pre-upgrade session keeps its meaning**: empty `roleGrants` ⇒ active view = union.
@@ -465,9 +500,12 @@ on 2, and 5 does not need 3 or 4:
 (deny-by-default look); `tql.ops.view.*` holders listed under the wildcard row.
 
 **Slice 2** — store round trip (application column, direct grant reaches
-`principal.permissions` and a route policy); provenance backfill; capability refusal for a
-`sql` realm (TQL-IAM-4031) and the read-only rendering; pre-upgrade `principal_json`
-deserializes.
+`principal.permissions` and a route policy); provenance backfill; the window: an expired
+role and a not-yet-started grant do not reach the principal at sign-in, a future-dated
+assignment arrives at the first sign-in after its `starts_at`, and an open session keeps
+its resolved authority past an expiry (the stated semantics, pinned so nobody oversells
+them); capability refusal for a `sql` realm (TQL-IAM-4031) and the read-only rendering;
+pre-upgrade `principal_json` deserializes.
 
 **Slice 3** — a declared role reconciles (row, bundle, implicit `tql.app.use` atom);
 re-declaration converges the bundle; removal orphans-and-reports; lint/boot refusals:
@@ -476,8 +514,10 @@ refuses reconciliation.
 
 **Slice 4** — SCIM create *and update* land enterprise attributes; SAML/OIDC re-sync
 changes an attribute on second login; a rule assigns at sign-in; attribute change flips it
-at next sign-in; manual assignment survives recompute; `in` and `subtree` kinds; rule-save
-refusal without managed org units; recompute-all converges a cold store.
+at next sign-in; manual assignment survives recompute; `in` and `subtree` kinds; a
+negative condition (`neq` 派遣) excludes a user an affirmative condition would match; a
+`group` condition follows store group membership; rule-save refusal without managed org
+units; recompute-all converges a cold store.
 
 **Slice 5, the headline IT** (the `StackIdentityIntegrationTest` arrangement): one 兼務
 user, two roles in one member — two "tabs" (two paths under different `_as` segments, one
@@ -495,7 +535,8 @@ With the code PRs, not before: `authentication.md` (roles/realm section gains th
 application axis, declared roles, direct grants and the activation model),
 `iam-admin.md` (its "does not do" list shrinks — roles/grants/attributes/rules become
 its pages; the direct-grant sentence becomes true), `data-scoping.md` (scope arms read the
-active view — one paragraph), `account.md` (the switcher), `deployment.md` (seed examples
+active view — one paragraph — and the worked per-record sharing pattern: a shares table
+plus an `exists` arm), `account.md` (the switcher), `deployment.md` (seed examples
 gain an application-role bundle), `glossary.md` (application role, acting role,
 activation), `scim.md`/`saml.md`/`oidc.md` (attribute capture and re-sync),
 `reference-error-codes.md` regeneration (1407, 4031, 4032, 4148), `reference-yaml-surface`
@@ -507,16 +548,59 @@ steps.
 
 ## Deliberately not in this design
 
+Entries marked *deferred with direction* are wanted (the coverage direction in the status
+block) and name the shape they will take; the rest are stances, not omissions.
+
+- **Separation-of-duties constraints** — *deferred with direction.* Two facts frame the
+  future design: the object-level SoD most business apps actually ship — the submitter
+  cannot approve their own request — is **already expressible today** in a workflow guard
+  (a data predicate over the acting principal), and that is where most of the real-world
+  value lives; and when static SoD (mutually exclusive roles) arrives, its checkpoints
+  are already determined — the rule-materialization converge and the IAM assignment
+  write, the only two paths that create a role assignment. Dynamic SoD's substrate (one
+  acting role, `acting_role` in the audit) is this design. Constraint tables, risk
+  analysis and mitigations (the SAP GRC shape) are the deferred design's scope, together
+  with JIT/time-boxed privilege elevation (the Entra PIM eligible-versus-active shape) —
+  the same audit-heavy family.
+- **Per-application admin delegation** — *deferred with direction* (letting `orders`
+  staff administer `orders` roles: the Entra app-owner / Okta resource-set / kintone
+  app-admin shape). The store-wide `tql.iam.admin.*` pair stays for now. The future
+  shape: a scoped write atom arriving with its surface (the no-new-atoms-without-a-surface
+  rule), landing on slice 1's per-application pages, with containment as the design's
+  core — a delegated admin touches only rows classified to their application and only
+  that application's own codes, never stack-wide roles or `tql.*` atoms.
+- **Group provisioning and management** — *deferred with direction.* The schema is
+  complete (`tql_groups`, memberships, group→role) and nothing writes it: no SCIM Groups
+  endpoint, no admin UI, no write contracts. The deferred design adds all three (and
+  decides group membership windows there, not here); the rules' `group` condition kind
+  lands now so provisioned groups drive assignment the day that design ships.
+- **Grant-change history and access review (棚卸し)** — *deferred with direction.* IAM
+  Admin's writes ride routes, so the existing opt-in route audit already records who
+  changed what; the deferred design adds the dedicated append-only grant history and the
+  attestation surface (the IGA certification-campaign shape) on top of it.
+- **Self-service access requests** — *deferred with direction* (request a role, the
+  owner approves, the grant lands time-boxed — the Entra entitlement-management shape).
+  TesseraQL already holds both halves: the approval-workflow engine and the identity
+  write contracts; the deferred design is their composition, and the validity window
+  shipped in slice 2 is the time-box it will use.
+- **Per-record sharing ACLs** (an owner shares this record with that person). The
+  framework's answer is the scoping predicate: an application declares a shares table and
+  an `exists` arm — expressible today, and the docs sweep adds the worked pattern to
+  `data-scoping.md`. Framework ACL machinery is not planned; the pattern is the shape.
+- **Deny/negative grants** — permanent stance. Additive only, like the mainstream's core
+  (Salesforce, Entra, Okta); a deny row makes every "why can't X" answer an evaluation
+  order. What deployments actually need from "deny" ships in slice 4 as negative rule
+  *conditions* (`neq`/`not-in`) — predicates, not subtractions.
+- **Role hierarchy / composite roles** — permanent stance, with the two meanings named
+  so the exclusion is legible: the visibility hierarchy people usually mean (a manager
+  sees subordinates' records — Salesforce's "role hierarchy") **already exists** as
+  org-unit subtree scoping; permission inheritance (部長 ⊇ 課長) stays out — groups and
+  rules compose bundles flat, and flat is what every attestation tool reduces a
+  hierarchy to anyway.
+- **Network/context conditions** (per-role IP restrictions, login hours). Edge and IdP
+  territory (conditional access); recorded so the boundary is a decision.
 - **Per-tenant roles.** `tql_roles` stays tenant-less; tenant entitlement stays the
   catalogue's axis (the stack-shells stance, unchanged).
-- **Deny/negative grants and role hierarchy.** Additive flat bundles only; a hierarchy is
-  a UI convenience this store does not need yet.
-- **Separation-of-duties constraints** (mutually exclusive roles, approval-vs-entry
-  conflicts). Activation is the *substrate* SoD needs — the audit sentence exists now —
-  but constraint enforcement is its own design.
-- **Per-application admin delegation** (letting `orders` staff administer `orders` roles).
-  The store-wide `tql.iam.admin.*` pair stays; the per-app *views* land, the per-app
-  *write* authority does not.
 - **A permission registry / catalogue UI.** Stack-shells' standing exclusion.
 - **Workflow assignee resolution by role.** Assignees stay app-authored SQL and groups;
   the org-unit seam stays where Phase 28 left it.
