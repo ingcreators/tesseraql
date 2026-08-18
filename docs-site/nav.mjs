@@ -249,4 +249,6 @@ export const EXCLUDED = [
   'module-scope.md',
   // How deploying one application replaces its runtime without restarting the stack, 2026-08-18.
   'runtime-replace.md',
+  // The ops shell, the grant vocabulary, and the identity remainder at stack scope, 2026-08-18.
+  'stack-shells.md',
 ];

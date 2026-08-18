@@ -568,6 +568,12 @@ One collision class disappears as a by-product: with framework surfaces at the g
 applications under `/apps/<appId>/`, `requireNoRouteConflicts` has nothing left to catch between
 them.
 
+**Implementation design: [stack-shells.md](stack-shells.md)** (2026-08-18) — the ops shell
+(slice 7), the grant vocabulary that closes open question 4 (fixed-prefix families, because an
+application's name can contain dots), the identity remainder of Decision 24's slice 4, and the
+authenticated deploy surface runtime-replace.md deferred to the grants work. The Studio shell
+(slice 8) is deliberately left to its own design on the delegation pattern established there.
+
 ### 15. Process separation is not built, and the boundary is kept shaped so it stays available
 
 `app-isolation-model.md` lists splitting ② across processes as out of scope with the note that "the
@@ -1603,6 +1609,10 @@ could invalidate a design assumption.
    rather than anything application-relative. A host resolves exactly what a runtime would.
 4. **The permission vocabulary after Decision 14** — *gates slice 7.* `ops.app.<name>` shifts
    meaning, and Studio needs per-application edit authorisation that has no equivalent today.
+   **Answered in [stack-shells.md](stack-shells.md)** (2026-08-18, design pending review):
+   fixed-prefix families — `ops.app.<name>` unchanged and read by the switcher,
+   `studio.app.<name>` reserved for slice 8, `deploy.app.<name>` for the deploy surface —
+   because a name can contain dots, which makes action suffixes ambiguous.
 5. **What `TQL-SEC-4146` becomes** once TesseraQL holds a private key — *gates slice 5.* The refusal
    was correct under a premise Decision 8 removes.
 6. **How Codex actually behaves on connection** — *measurement; gates slice 5.* It appends
