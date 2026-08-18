@@ -245,4 +245,6 @@ export const EXCLUDED = [
   'cli-surface.md',
   // How the root redirect and the stack portal are built, 2026-08-18.
   'root-portal.md',
+  // How per-application modules reach each hosted runtime, 2026-08-18.
+  'module-scope.md',
 ];

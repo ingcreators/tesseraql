@@ -1399,6 +1399,10 @@ loop where the network is already assumed. The explicit `--modules <dir>` stays 
 development override composed onto **every** runtime in the stack, and is documented as exactly
 that.
 
+**Implementation design: [module-scope.md](module-scope.md)** (2026-08-18) — functions bind at
+parse and the registry becomes a value, the runtime owns its module loader, drivers bind at the
+pool, the slices, guards and tests, and the open questions that gate them.
+
 ### 29. Deploying an application replaces its runtime, not the stack
 
 Stated as a requirement in review: deploying one application must not affect the others. Measured
