@@ -55,8 +55,23 @@ class NotificationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
+    // A port chosen here, not ServerSetupTest's fixed 3025 and not GreenMail's dynamicPort():
+    // parallel surefire forks must not race for one fixed port, but the runtime's mail channel
+    // is configured in @BeforeAll — before the extension first starts the server — and the
+    // extension's per-method restarts would re-roll a dynamic port under the running runtime.
+    static final int SMTP_PORT = chooseSmtpPort();
+
     @RegisterExtension
-    static final GreenMailExtension MAIL = new GreenMailExtension(ServerSetupTest.SMTP);
+    static final GreenMailExtension MAIL = new GreenMailExtension(
+            ServerSetupTest.SMTP.port(SMTP_PORT));
+
+    private static int chooseSmtpPort() {
+        try {
+            return freePort();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String WEBHOOK_SECRET = "dev-only-webhook-secret";
@@ -262,7 +277,7 @@ class NotificationIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(ServerSetupTest.SMTP.getPort(), receiver.getAddress().getPort(),
+                """.formatted(SMTP_PORT, receiver.getAddress().getPort(),
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
 
         Path config = target.resolve("config/tesseraql.yml");

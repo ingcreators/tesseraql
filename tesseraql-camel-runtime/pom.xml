@@ -13,6 +13,10 @@
   <artifactId>tesseraql-camel-runtime</artifactId>
   <name>Tesseraql Camel Runtime</name>
 
+  <properties>
+    <surefire.forkCount>1C</surefire.forkCount>
+  </properties>
+
   <dependencies>
     <!-- QR rendering for the TOTP enrollment page (docs/credential-lifecycle.md): zxing core
          only (the matrix); the SVG is assembled by QrSvg, so no imaging stack rides along. -->
@@ -319,6 +323,15 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <!--
+            The suite is ~150 independent test classes, most booting their own PostgreSQL
+            container and runtime on dynamic ports; run sequentially they dominate the whole
+            reactor (11 of 14.5 minutes on CI). One fork per core keeps class-level process
+            isolation while running them concurrently. Overridable from the command line
+            (-Dsurefire.forkCount=6) to bound load on a shared machine.
+          -->
+          <forkCount>${surefire.forkCount}</forkCount>
+          <reuseForks>true</reuseForks>
           <systemPropertyVariables>
             <!--
               docker-java defaults to an API version (1.32) older than the minimum required by

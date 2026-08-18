@@ -36,7 +36,10 @@ import org.junit.jupiter.api.io.TempDir;
 class NotificationDeliveryTest {
 
     @RegisterExtension
-    static final GreenMailExtension MAIL = new GreenMailExtension(ServerSetupTest.SMTP);
+    // A dynamic port, not ServerSetupTest's fixed 3025: test classes from parallel surefire
+    // forks run concurrently in separate JVMs, and two mail suites must not race for one port.
+    static final GreenMailExtension MAIL = new GreenMailExtension(
+            ServerSetupTest.SMTP.dynamicPort());
 
     @TempDir
     static Path appHome;
