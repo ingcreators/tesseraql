@@ -24,7 +24,16 @@ package io.tesseraql.runtime;
  *                             place an override is refused
  * @param defaultExternalOrigin the origin to fall back to when the stack file declares none —
  *                             the development gateway's own address, never a production guess
+ * @param extraModules         the {@code --modules} directory, composed onto every member
+ *                             runtime's own module loader (docs/module-scope.md) — a
+ *                             development override, never a declaration; {@code null} when the
+ *                             flag is not given
  */
 public record DevMode(DataSources.MainDatasourceOverride embeddedDb,
-        String defaultExternalOrigin) {
+        String defaultExternalOrigin, java.io.File extraModules) {
+
+    /** The pre-decision-28 shape, kept for callers without a modules override. */
+    public DevMode(DataSources.MainDatasourceOverride embeddedDb, String defaultExternalOrigin) {
+        this(embeddedDb, defaultExternalOrigin, null);
+    }
 }

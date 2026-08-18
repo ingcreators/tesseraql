@@ -334,7 +334,8 @@ Resolve tesseraql.modules and (re)write modules.lock.
 
 | Argument | Required? | Description |
 | --- | --- | --- |
-| `--app <app>` | yes | Path to the external app home. |
+| `--app <app>` | — | Path to the external app home. |
+| `--stack <dir>` | — | Resolve every member of the stack: an install root (catalog.json) or a folder of application homes — the operator step a host's declared-but-unresolved refusal names. |
 | `--env <profile>` | — | Environment profile: merges config/env/<profile>.yml between the base config and the Studio overlay (also TESSERAQL_ENV). |
 | `--offline` | — | Resolve only from the local repository. |
 

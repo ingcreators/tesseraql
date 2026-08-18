@@ -8,9 +8,7 @@ import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
-import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
@@ -183,33 +181,18 @@ public final class TesseraqlCli implements Runnable {
                 System.setProperty("tesseraql.logging.level", logLevel);
             }
 
-            // Every stack member's declared tesseraql.modules set, resolved into work/modules
-            // (lock-verified) and composed with an explicit --modules directory into ONE
-            // classloader for the process. Interim until decision 28 wires modules per runtime:
-            // the same process-wide seam serve used for one application, widened to the stack.
-            List<File> moduleDirs = new ArrayList<>();
+            // Every stack member's declared tesseraql.modules set, resolved into its own
+            // work/modules (lock-verified) before any runtime starts. Nothing is composed onto
+            // the process: each runtime builds its own loader over what this resolve left on
+            // disk, so module visibility equals runtime scope (docs/module-scope.md).
             List<Path> homes = resolved.applications();
             for (Path home : homes) {
                 AppConfig config = new ManifestLoader().load(home).config();
-                new ModulesInstaller().install(home, config, false).ifPresent(result -> {
-                    moduleDirs.add(result.cacheDir().toFile());
-                    System.out.println("Resolved " + result.artifacts().size()
-                            + " tesseraql.modules artifact(s) for " + home.getFileName() + ".");
-                });
+                new ModulesInstaller().install(home, config, false).ifPresent(
+                        result -> System.out.println("Resolved " + result.artifacts().size()
+                                + " tesseraql.modules artifact(s) for " + home.getFileName()
+                                + "."));
             }
-            if (compile.modules != null) {
-                moduleDirs.add(compile.modules);
-            }
-            Thread.currentThread().setContextClassLoader(CliModules.classLoaderOver(moduleDirs,
-                    Thread.currentThread().getContextClassLoader()));
-            // Custom expression functions (ExpressionFunction SPI) install from the same composed
-            // classloader, so routes parse and evaluate with the full function set from boot.
-            io.tesseraql.core.expr.ExpressionFunctions
-                    .install(Thread.currentThread().getContextClassLoader());
-            // JDBC drivers arriving as module jars register through a base-classpath shim;
-            // DriverManager refuses drivers whose class the caller's classloader cannot see.
-            io.tesseraql.cli.modules.ModuleDrivers
-                    .register(Thread.currentThread().getContextClassLoader());
 
             // Optionally start an embedded PostgreSQL: one server, one database, shared by the
             // stack (docs/cli-surface.md decision 4b). It supplies the framework datasource -
@@ -246,8 +229,10 @@ public final class TesseraqlCli implements Runnable {
 
             // dev may default the external origin, because the development gateway knows its own
             // address by construction; host must not (docs/stack-architecture.md decision 22).
+            // --modules rides along as the one deliberately stack-wide module input: an override
+            // composed onto every member runtime's own loader, never a declaration.
             io.tesseraql.runtime.DevMode dev = new io.tesseraql.runtime.DevMode(dbOverride,
-                    "http://localhost:" + port);
+                    "http://localhost:" + port, compile.modules);
             io.tesseraql.runtime.MultiAppGateway gateway;
             try {
                 gateway = io.tesseraql.runtime.MultiAppGateway.start(stackDir, port,

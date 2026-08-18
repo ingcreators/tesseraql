@@ -51,7 +51,8 @@ final class StepContext {
             io.tesseraql.core.diag.SqlExecutionLog slowSqlLog,
             io.tesseraql.core.telemetry.Tracer tracer,
             io.tesseraql.core.telemetry.Meter meter,
-            java.util.function.Function<DataSource, String> dialects) {
+            java.util.function.Function<DataSource, String> dialects,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
     }
 
     /** The bounds every step inherits from the runtime: the SQL timeout and the result caps. */
@@ -108,6 +109,10 @@ final class StepContext {
 
     io.tesseraql.core.telemetry.Tracer tracer() {
         return services.tracer();
+    }
+
+    io.tesseraql.core.expr.ExpressionFunctions functions() {
+        return services.functions();
     }
 
     int sqlTimeoutSeconds() {
@@ -234,7 +239,8 @@ final class StepContext {
     BoundSql renderStepSql(io.tesseraql.yaml.model.Binding binding, DataSource dataSource,
             io.tesseraql.core.sql.FilePathResolver filePathResolver) {
         Path sqlPath = sqlPath(binding.file(), dataSource);
-        return SqlRenderer.render(io.tesseraql.core.sql.Sql2WayParser.parse(read(sqlPath)),
+        return SqlRenderer.render(
+                io.tesseraql.core.sql.Sql2WayParser.parse(read(sqlPath), functions()),
                 resolveParams(binding), io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED,
                 context(), filePathResolver);
     }
@@ -317,7 +323,8 @@ final class StepContext {
             java.nio.file.Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
                     jobFile().source().getParent().resolve(spec.sql().file()).normalize(), dialect);
             references.add(new io.tesseraql.yaml.enrich.KeyedReference(name, spec,
-                    io.tesseraql.core.sql.Sql2WayParser.parse(read(file)), file.toString(),
+                    io.tesseraql.core.sql.Sql2WayParser.parse(read(file), functions()),
+                    file.toString(),
                     spec.sql().datasource(), dialect,
                     new io.tesseraql.yaml.enrich.KeyedReference.Bounds(sqlTimeoutSeconds(), -1),
                     io.tesseraql.yaml.http.HttpRows::of));

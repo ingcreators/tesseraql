@@ -25,7 +25,11 @@ final class PdfEngines {
     static PdfEngine selected() {
         String id = System.getProperty(PROPERTY, DEFAULT);
         List<String> available = new ArrayList<>();
-        for (PdfEngine engine : ServiceLoader.load(PdfEngine.class)) {
+        // Resolved against this class's own defining loader, not the TCCL: when the pdf jar
+        // arrives as a module, the engine sits in the same jar as the codec that calls this,
+        // and the thread's context loader knows nothing about it (docs/module-scope.md).
+        for (PdfEngine engine : ServiceLoader.load(PdfEngine.class,
+                PdfEngines.class.getClassLoader())) {
             if (engine.id().equals(id)) {
                 return engine;
             }

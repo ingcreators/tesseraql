@@ -40,6 +40,12 @@ pinned by `modules.lock`.
 Modules are the reviewed, lock-pinned channel, which is exactly why expression functions load
 from there and never from `plugins/`.
 
+Module visibility equals runtime scope: in a stack, each application's runtime loads its own
+`work/modules` on its own classloader, so your function is visible exactly to the application
+that declared it — a neighbour declaring a same-named function keeps its own semantics, and
+neither can shadow the other. Changing the declared set is a restart (`dev` re-resolves on
+start; a hosted member is redeployed), never a live swap.
+
 ## Rung 2: a service provider
 
 A **service provider** exposes runtime state that SQL cannot reach — execution lanes, traces,

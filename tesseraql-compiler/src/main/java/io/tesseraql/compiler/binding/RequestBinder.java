@@ -47,15 +47,17 @@ public final class RequestBinder implements Processor {
     private final Map<String, io.tesseraql.core.expr.Expr> requiredWhen = new LinkedHashMap<>();
 
     public RequestBinder(RouteDefinition route) {
-        this(route, java.util.List.of(), null);
+        this(route, java.util.List.of(), null,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
     }
 
     public RequestBinder(RouteDefinition route, java.util.List<String> pathParams) {
-        this(route, pathParams, null);
+        this(route, pathParams, null,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
     }
 
     public RequestBinder(RouteDefinition route, java.util.List<String> pathParams,
-            java.nio.file.Path appHome) {
+            java.nio.file.Path appHome, io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.route = route;
         this.pathParams = java.util.List.copyOf(pathParams);
         this.wireNames = WireNames.of(this.pathParams);
@@ -63,7 +65,8 @@ public final class RequestBinder implements Processor {
         route.input().forEach((name, field) -> {
             if (field.requiredWhen() != null && !field.requiredWhen().isBlank()) {
                 requiredWhen.put(name,
-                        io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen()));
+                        io.tesseraql.core.expr.ExpressionParser.parse(field.requiredWhen(),
+                                functions));
             }
         });
     }

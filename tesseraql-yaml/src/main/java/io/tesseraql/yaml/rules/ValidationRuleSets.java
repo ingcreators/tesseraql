@@ -50,6 +50,12 @@ public final class ValidationRuleSets {
 
     /** Loads every {@code rules/*.yml} under the app home; duplicate names fail the load. */
     public static ValidationRuleSets load(Path appHome, SimpleYamlParser parser) {
+        return load(appHome, parser, io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+    }
+
+    /** As {@link #load(Path, SimpleYamlParser)}, resolving custom calls against {@code functions}. */
+    public static ValidationRuleSets load(Path appHome, SimpleYamlParser parser,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         Path dir = appHome.resolve("rules");
         Map<String, RuleSetsDocument.RuleSet> rules = new LinkedHashMap<>();
         if (!Files.isDirectory(dir)) {
@@ -70,7 +76,7 @@ public final class ValidationRuleSets {
         }
         rules.forEach((name, rule) -> {
             checkDeclaredTypes(name, rule);
-            checkDeclaredContract(dir, name, rule);
+            checkDeclaredContract(dir, name, rule, functions);
         });
         return new ValidationRuleSets(dir, rules);
     }
@@ -99,7 +105,7 @@ public final class ValidationRuleSets {
      * because the whole point is that N routes agree with one definition.
      */
     private static void checkDeclaredContract(Path rulesDir, String name,
-            RuleSetsDocument.RuleSet rule) {
+            RuleSetsDocument.RuleSet rule, io.tesseraql.core.expr.ExpressionFunctions functions) {
         if (rule.file() == null) {
             // An expression rule reads the route's own inputs; there is nothing to wire, so a
             // contract on one is a mistake that today dies per-reference at compile time.
@@ -117,7 +123,7 @@ public final class ValidationRuleSets {
         }
         Set<String> actual = new LinkedHashSet<>();
         try {
-            collectBinds(Sql2WayParser.parse(Files.readString(sqlFile)), actual);
+            collectBinds(Sql2WayParser.parse(Files.readString(sqlFile), functions), actual);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         } catch (TqlException unparseable) {

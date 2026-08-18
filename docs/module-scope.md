@@ -280,6 +280,12 @@ and 4 are independent of each other; both need 2 (slice 4 needs 2 only for `AppM
 reuses from the CLI side — `tesseraql-cli` already depends on the runtime module). If review
 prefers, 3 can merge before or after 4.
 
+**Correction, found by CI at implementation (2026-08-18): slices 2 and 3 are one deployable
+unit.** Slice 2 deletes `dev`'s `ModuleDrivers.register` — the global shim that made
+module-delivered JDBC drivers reachable — while the pool-level binding that replaces it is
+slice 3's. Between the two, `dev` with a driver module (the DuckDB smoke) fails with "No
+suitable driver". The split stands for review, but they merge together.
+
 ## Guards
 
 - **TQL-APP-4216** — an application declares `tesseraql.modules` and its `work/modules` holds no

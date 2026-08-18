@@ -43,10 +43,11 @@ public final class JsonResponseRenderer implements Processor {
          * {@link HtmlResponseRenderer}: both response kinds carry the same block.
          */
         static List<CompiledStatus> compileAll(
-                List<ResponseSpec.StatusWhen> arms) {
+                List<ResponseSpec.StatusWhen> arms,
+                io.tesseraql.core.expr.ExpressionFunctions functions) {
             return arms.stream()
                     .map(arm -> new CompiledStatus(
-                            io.tesseraql.core.expr.ExpressionParser.parse(arm.when()),
+                            io.tesseraql.core.expr.ExpressionParser.parse(arm.when(), functions),
                             arm.status()))
                     .toList();
         }
@@ -67,10 +68,20 @@ public final class JsonResponseRenderer implements Processor {
     }
 
     public JsonResponseRenderer(ResponseSpec.JsonResponse response) {
+        this(response, io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #JsonResponseRenderer(ResponseSpec.JsonResponse)}, resolving custom calls
+     * against {@code functions}.
+     */
+    public JsonResponseRenderer(ResponseSpec.JsonResponse response,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.response = response;
-        this.compiledBody = compile(response.body());
-        this.statusWhen = CompiledStatus.compileAll(response.statusWhen());
-        this.headers = new ResponseHeaders(response.headers(), response.headersWhen());
+        this.compiledBody = compile(response.body(), functions);
+        this.statusWhen = CompiledStatus.compileAll(response.statusWhen(), functions);
+        this.headers = new ResponseHeaders(response.headers(), response.headersWhen(),
+                functions);
     }
 
     /**
@@ -80,22 +91,24 @@ public final class JsonResponseRenderer implements Processor {
      * leaf the parser rejects falls back to legacy dotted-path resolution, so pre-Phase-41
      * bodies keep their exact behavior.
      */
-    private static Object compile(Object template) {
+    private static Object compile(Object template,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         return switch (template) {
             case null -> null;
             case Map<?, ?> map -> {
                 Map<String, Object> compiled = new LinkedHashMap<>();
-                map.forEach((key, value) -> compiled.put(String.valueOf(key), compile(value)));
+                map.forEach((key, value) -> compiled.put(String.valueOf(key),
+                        compile(value, functions)));
                 yield compiled;
             }
             case List<?> list -> {
                 List<Object> compiled = new ArrayList<>(list.size());
-                list.forEach(element -> compiled.add(compile(element)));
+                list.forEach(element -> compiled.add(compile(element, functions)));
                 yield compiled;
             }
             case String expression -> {
                 try {
-                    yield io.tesseraql.core.expr.ExpressionParser.parse(expression);
+                    yield io.tesseraql.core.expr.ExpressionParser.parse(expression, functions);
                 } catch (RuntimeException ex) {
                     yield new io.tesseraql.core.expr.Expr.Path(
                             Arrays.asList(expression.split("\\.")));

@@ -7,6 +7,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.yaml.model.NotifySpec;
@@ -48,16 +49,28 @@ public final class NotifyEvents {
      * @param id     the notification id within the declaring {@code notify:} block or pipeline
      */
     public static CompiledNotify compile(String source, String id, NotifySpec spec) {
+        return compile(source, id, spec, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #compile(String, String, NotifySpec)}, resolving custom calls against
+     * {@code functions}.
+     *
+     * @param source the declaring route or job id
+     * @param id     the notification id within the declaring {@code notify:} block or pipeline
+     */
+    public static CompiledNotify compile(String source, String id, NotifySpec spec,
+            ExpressionFunctions functions) {
         if (spec.channel() == null || spec.channel().isBlank()) {
             throw new TqlException(INVALID_NOTIFY,
                     "Notification '" + id + "' of '" + source + "' needs a channel:");
         }
         Expr when = spec.when() == null || spec.when().isBlank()
                 ? null
-                : ExpressionParser.parse(spec.when());
+                : ExpressionParser.parse(spec.when(), functions);
         Expr recipient = spec.recipient() == null || spec.recipient().isBlank()
                 ? null
-                : ExpressionParser.parse(spec.recipient());
+                : ExpressionParser.parse(spec.recipient(), functions);
         String attach = spec.attach() == null || spec.attach().isBlank()
                 ? null
                 : spec.attach();
@@ -237,9 +250,17 @@ public final class NotifyEvents {
 
     /** Compiles a route's whole {@code notify:} block in its authored order. */
     public static List<CompiledNotify> compileAll(String source, Map<String, NotifySpec> block) {
+        return compileAll(source, block, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #compileAll(String, Map)}, resolving custom calls against {@code functions}.
+     */
+    public static List<CompiledNotify> compileAll(String source, Map<String, NotifySpec> block,
+            ExpressionFunctions functions) {
         List<CompiledNotify> compiled = new java.util.ArrayList<>();
         (block == null ? Map.<String, NotifySpec>of() : block)
-                .forEach((id, spec) -> compiled.add(compile(source, id, spec)));
+                .forEach((id, spec) -> compiled.add(compile(source, id, spec, functions)));
         return List.copyOf(compiled);
     }
 

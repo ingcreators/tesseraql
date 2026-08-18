@@ -47,7 +47,8 @@ final class SqlStepRunner {
         // File placeholders (docs/duckdb.md) resolve against the job's datasource; the job
         // context doubles as the resolver context, so a perTenant run's tenant partitions scopes.
         io.tesseraql.core.sql.FilePathResolver filePathResolver = context.filePathResolver();
-        BoundSql bound = SqlRenderer.render(io.tesseraql.core.sql.Sql2WayParser.parse(source),
+        BoundSql bound = SqlRenderer.render(
+                io.tesseraql.core.sql.Sql2WayParser.parse(source, context.functions()),
                 sqlParams, io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, context.context(),
                 filePathResolver);
         String mode = step.sql().effectiveMode();

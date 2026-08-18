@@ -6,6 +6,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.ScopeResolver;
@@ -110,14 +111,24 @@ public final class TransitionExecutor {
      */
     public static CompiledTransition compile(WorkflowDefinition def, TransitionSpec transition,
             boolean managed, String dialect, Path workflowDir) {
+        return compile(def, transition, managed, dialect, workflowDir,
+                ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #compile(WorkflowDefinition, TransitionSpec, boolean, String, Path)}, resolving
+     * custom calls against {@code functions}.
+     */
+    public static CompiledTransition compile(WorkflowDefinition def, TransitionSpec transition,
+            boolean managed, String dialect, Path workflowDir, ExpressionFunctions functions) {
         Expr guard = null;
         List<SqlNode> guardNodes = null;
         if (transition.guard() != null && transition.guard().expression() != null) {
-            guard = ExpressionParser.parse(transition.guard().expression());
+            guard = ExpressionParser.parse(transition.guard().expression(), functions);
         } else if (transition.guard() != null && transition.guard().file() != null) {
             Path guardFile = workflowDir.resolve(transition.guard().file());
             try {
-                guardNodes = Sql2WayParser.parse(Files.readString(guardFile));
+                guardNodes = Sql2WayParser.parse(Files.readString(guardFile), functions);
             } catch (java.io.IOException unreadable) {
                 throw new IllegalStateException("Workflow '" + def.id() + "' transition '"
                         + transition.id() + "': guard file '" + transition.guard().file()
@@ -138,7 +149,7 @@ public final class TransitionExecutor {
                 transition.guard() == null ? null : transition.guard().code(),
                 transition.guard() == null ? null : transition.guard().message(),
                 transition.stamp(),
-                DecisionSets.compileUses(transition.decide(), dialect), dialect);
+                DecisionSets.compileUses(transition.decide(), dialect, functions), dialect);
     }
 
     /**

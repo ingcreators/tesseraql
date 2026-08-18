@@ -54,6 +54,7 @@ public final class JobExecutor {
     private final TempStore tempStore;
     private final io.tesseraql.core.diag.SqlExecutionLog slowSqlLog;
     private final io.tesseraql.core.telemetry.Tracer tracer;
+    private final io.tesseraql.core.expr.ExpressionFunctions functions;
 
     /**
      * Drives the heartbeat of every run this process owns
@@ -114,10 +115,24 @@ public final class JobExecutor {
     public JobExecutor(JobRepository repository, TempStore tempStore,
             io.tesseraql.core.diag.SqlExecutionLog slowSqlLog,
             io.tesseraql.core.telemetry.Tracer tracer) {
+        this(repository, tempStore, slowSqlLog, tracer,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #JobExecutor(JobRepository, TempStore,
+     * io.tesseraql.core.diag.SqlExecutionLog, io.tesseraql.core.telemetry.Tracer)}, resolving
+     * custom calls in step SQL against {@code functions}.
+     */
+    public JobExecutor(JobRepository repository, TempStore tempStore,
+            io.tesseraql.core.diag.SqlExecutionLog slowSqlLog,
+            io.tesseraql.core.telemetry.Tracer tracer,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.repository = repository;
         this.tempStore = tempStore;
         this.slowSqlLog = slowSqlLog;
         this.tracer = tracer;
+        this.functions = functions;
     }
 
     /**
@@ -531,7 +546,7 @@ public final class JobExecutor {
             io.tesseraql.core.telemetry.SpanContext stepSpan) {
         return new StepContext(
                 new StepContext.Services(repository, tempStore, mapper, slowSqlLog, tracer, meter,
-                        this::dialectOf),
+                        this::dialectOf, functions),
                 new StepContext.Bounds(sqlTimeoutSeconds, maxRows, onOverflow),
                 new StepContext.Collaborators(notificationOutbox, httpCallClient, preferenceStore,
                         fileTransfers, appHome, filePusher, filePathResolvers, connectors),

@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.BoundSql;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlRenderer;
@@ -54,15 +55,17 @@ final class PreviewRenderer {
     private final Function<String, String> source;
     private final Function<String, String> sourceIfExists;
     private final Function<String, Path> resolve;
+    private final ExpressionFunctions functions;
 
     PreviewRenderer(Supplier<Path> appHome, Supplier<AppManifest> manifest,
             Function<String, String> source, Function<String, String> sourceIfExists,
-            Function<String, Path> resolve) {
+            Function<String, Path> resolve, ExpressionFunctions functions) {
         this.appHome = appHome;
         this.manifest = manifest;
         this.source = source;
         this.sourceIfExists = sourceIfExists;
         this.resolve = resolve;
+        this.functions = functions;
     }
 
     /**
@@ -85,7 +88,8 @@ final class PreviewRenderer {
         String text = content != null ? content : source.apply(relativePath);
         if (relativePath.endsWith(".sql")) {
             try {
-                BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(text), Map.of());
+                BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(text, functions),
+                        Map.of());
                 return PreviewResult.valid("sql", bound.sql());
             } catch (RuntimeException ex) {
                 return PreviewResult.invalid("sql", ex.getMessage());

@@ -22,7 +22,8 @@ final class DocsProviders {
      * effectively-final local {@code TesseraqlRuntime.start(...)} built, captured by value
      * exactly as the inline lambdas did.
      */
-    record Deps(AppManifest manifest, Path appHome, StudioAccess studioAccess) {
+    record Deps(AppManifest manifest, Path appHome, StudioAccess studioAccess,
+            ClassLoader modulesLoader) {
     }
 
     /** Registers every {@code docs.*} provider on {@code serviceProviders}, in boot order. */
@@ -182,7 +183,8 @@ final class DocsProviders {
                 // table through the canonical PDF codec, shown as a data: URL (degrades to a
                 // note when the optional tesseraql-pdf module is absent, like the editor).
                 .register("docs.routesPdf", params -> {
-                    byte[] pdf = renderRoutesPdf(doc.routeCatalog(), appHome);
+                    byte[] pdf = renderRoutesPdf(doc.routeCatalog(), appHome,
+                            deps.modulesLoader());
                     return io.tesseraql.studio.DocViews.routesPdf(doc.appName(),
                             pdf == null
                                     ? null

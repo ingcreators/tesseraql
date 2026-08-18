@@ -29,6 +29,17 @@ public final class FileCodecs {
         return new FileCodecs(codecs);
     }
 
+    /**
+     * Discovers codecs visible to {@code loader} — a hosted runtime passes its own module
+     * loader so each application's codecs are its own declarations (docs/module-scope.md).
+     */
+    public static FileCodecs discover(ClassLoader loader) {
+        Map<String, FileCodec> codecs = new LinkedHashMap<>();
+        ServiceLoader.load(FileCodec.class, loader)
+                .forEach(codec -> codecs.put(codec.format(), codec));
+        return new FileCodecs(codecs);
+    }
+
     public static FileCodecs of(FileCodec... codecs) {
         Map<String, FileCodec> byFormat = new LinkedHashMap<>();
         for (FileCodec codec : codecs) {

@@ -46,11 +46,17 @@ package io.tesseraql.runtime;
  *                            {@code null} for every member runtime — an application cannot see
  *                            its siblings, which keeps docs/stack-architecture.md decision 26's
  *                            no-shared-declarations rule untouched
+ * @param extraModules        the development loop's {@code --modules} directory, composed onto
+ *                            every member runtime's own module loader (docs/module-scope.md) —
+ *                            an override, not a declaration, which is why it is the one
+ *                            deliberately stack-wide module input; {@code null} in production
+ *                            and on the surface runtime
  */
 public record HostContext(String basePath, String cookiePath, String externalOrigin,
         javax.sql.DataSource frameworkDataSource,
         DataSources.MainDatasourceOverride mainDataSourceOverride,
-        java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers) {
+        java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
+        java.io.File extraModules) {
 
     /**
      * The stack's answers, before any one application's prefix is stamped onto them: one sign-in
@@ -61,7 +67,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/", null, null, null, null);
+        return new HostContext(null, "/", null, null, null, null, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -73,23 +79,31 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null);
+                mainDataSourceOverride, null, extraModules);
     }
 
     /**
      * These settings, for the stack surface runtime: the origin root, the framework coordinate
      * as its {@code main}, and the member list the portal exists to show (docs/root-portal.md).
+     * The surface carries no {@code --modules} override — it serves the framework's own
+     * declarations, not the stack's.
      */
     HostContext forSurface(DataSources.MainDatasourceOverride mainDataSourceOverride,
             java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, java.util.List.copyOf(stackMembers));
+                mainDataSourceOverride, java.util.List.copyOf(stackMembers), null);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
     HostContext withStackSettings(String externalOrigin,
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers);
+                mainDataSourceOverride, stackMembers, extraModules);
+    }
+
+    /** These settings, carrying the development loop's {@code --modules} override. */
+    HostContext withExtraModules(java.io.File extraModules) {
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
+                mainDataSourceOverride, stackMembers, extraModules);
     }
 }
