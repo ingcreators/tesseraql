@@ -568,6 +568,14 @@ One collision class disappears as a by-product: with framework surfaces at the g
 applications under `/apps/<appId>/`, `requireNoRouteConflicts` has nothing left to catch between
 them.
 
+**Implementation design: [stack-shells.md](stack-shells.md)** (2026-08-18) — the ops shell
+(slice 7), the authorization model that closes open question 4 (marked atoms
+`tql.<family>.<verb>.<name>` over dot-free names, designed persona-first: business users,
+developers, operators), the identity
+remainder of Decision 24's slice 4, and the authenticated deploy surface runtime-replace.md
+deferred to the grants work. The Studio shell (slice 8) is deliberately left to its own
+design on the delegation pattern established there.
+
 ### 15. Process separation is not built, and the boundary is kept shaped so it stays available
 
 `app-isolation-model.md` lists splitting ② across processes as out of scope with the note that "the
@@ -1603,6 +1611,15 @@ could invalidate a design assumption.
    rather than anything application-relative. A host resolves exactly what a runtime would.
 4. **The permission vocabulary after Decision 14** — *gates slice 7.* `ops.app.<name>` shifts
    meaning, and Studio needs per-application edit authorisation that has no equivalent today.
+   **Answered in [stack-shells.md](stack-shells.md)** (2026-08-18, design pending review;
+   reshaped in review into a persona model): marked atoms `tql.<family>.<verb>.<name>`
+   over dot-free application names (TQL-YAML-1405 widens; `tql` is the one reserved name,
+   the `/_tesseraql/` philosophy applied to permissions) — `tql.app.use` for business
+   users, `tql.ops.view`/`tql.ops.run` for operators (the `ops.batch.*` entry pair and the
+   `ops.app.<name>` string retire with the mounted-apps premise that justified them),
+   `tql.app.deploy` for the deploy surface, `tql.studio.edit` reserved for slice 8,
+   `tql.iam.admin.*` store-wide; roles remain the deployment's bundles, and a framework
+   surface checks atoms, never roles.
 5. **What `TQL-SEC-4146` becomes** once TesseraQL holds a private key — *gates slice 5.* The refusal
    was correct under a premise Decision 8 removes.
 6. **How Codex actually behaves on connection** — *measurement; gates slice 5.* It appends
