@@ -6,6 +6,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,13 +40,14 @@ final class ResponseHeaders {
      * Pre-compiles each header's optional guard, so a syntax error fails the build rather than a
      * request.
      */
-    ResponseHeaders(Map<String, Object> declared, Map<String, String> headersWhen) {
+    ResponseHeaders(Map<String, Object> declared, Map<String, String> headersWhen,
+            ExpressionFunctions functions) {
         this.declared = declared == null ? Map.of() : Map.copyOf(declared);
         Map<String, Expr> compiled = new LinkedHashMap<>();
         if (headersWhen != null) {
             headersWhen.forEach((name, when) -> {
                 if (when != null && !when.isBlank()) {
-                    compiled.put(name, ExpressionParser.parse(when));
+                    compiled.put(name, ExpressionParser.parse(when, functions));
                 }
             });
         }

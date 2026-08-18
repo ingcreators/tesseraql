@@ -3,6 +3,7 @@ package io.tesseraql.yaml.manifest;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.config.SecurityDefaults;
@@ -56,7 +57,12 @@ public final class ManifestLoader {
 
     /** Loads the manifest rooted at {@code appHome}. */
     public AppManifest load(Path appHome) {
-        return load(appHome, null);
+        return load(appHome, null, ExpressionFunctions.processDefault());
+    }
+
+    /** As {@link #load(Path)}, resolving custom calls against {@code functions}. */
+    public AppManifest load(Path appHome, ExpressionFunctions functions) {
+        return load(appHome, null, functions);
     }
 
     /**
@@ -89,6 +95,14 @@ public final class ManifestLoader {
      * document on disk cannot take the whole apply-and-reload loop down; startup stays strict.
      */
     public AppManifest load(Path appHome, List<BrokenRoute> brokenSink) {
+        return load(appHome, brokenSink, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #load(Path, List)}, resolving custom calls against {@code functions}.
+     */
+    public AppManifest load(Path appHome, List<BrokenRoute> brokenSink,
+            ExpressionFunctions functions) {
         Path home = appHome.toAbsolutePath().normalize();
         if (!Files.isDirectory(home)) {
             throw new TqlException(LOAD_ERROR, "App home is not a directory: " + home);
@@ -101,11 +115,11 @@ public final class ManifestLoader {
         io.tesseraql.yaml.domain.FieldDomains domains = io.tesseraql.yaml.domain.FieldDomains
                 .load(home);
         io.tesseraql.yaml.rules.ValidationRuleSets ruleSets = io.tesseraql.yaml.rules.ValidationRuleSets
-                .load(home, parser);
+                .load(home, parser, functions);
         io.tesseraql.yaml.decision.DecisionSets decisions = io.tesseraql.yaml.decision.DecisionSets
                 .load(home, parser);
         List<RouteFile> routes = applySharedDefinitions(domains, ruleSets, decisions,
-                applySecurityDefaults(config, loadRoutes(home, brokenSink)));
+                applySecurityDefaults(config, loadRoutes(home, brokenSink)), functions);
         List<JobFile> jobs = loadJobs(home);
         List<ToolFile> tools = new ArrayList<>();
         List<ResourceFile> resources = new ArrayList<>();
@@ -137,14 +151,15 @@ public final class ManifestLoader {
         }
         tools.replaceAll(tool -> new ToolFile(tool.source(),
                 resolveSharedDefinitions(domains, ruleSets, decisions, tool.source(),
-                        tool.definition()),
+                        tool.definition(), functions),
                 tool.description(), tool.uiResource()));
         List<RouteFile> consumers = applySharedDefinitions(domains, ruleSets, decisions,
-                loadConsumers(home));
+                loadConsumers(home), functions);
         List<ScopeFile> scopes = loadScopes(home);
         List<WorkflowFile> workflows = new ArrayList<>(loadWorkflows(home));
         workflows.replaceAll(workflow -> new WorkflowFile(workflow.source(),
-                withWorkflowDecisions(decisions, workflow.source(), workflow.definition())));
+                withWorkflowDecisions(decisions, workflow.source(), workflow.definition(),
+                        functions)));
         List<AttachmentFile> attachments = loadAttachments(home);
         List<MigrationFile> migrations = loadMigrations(home);
         List<ViewFile> views = loadViews(home);
@@ -456,7 +471,8 @@ public final class ManifestLoader {
     private static List<RouteFile> applySharedDefinitions(
             io.tesseraql.yaml.domain.FieldDomains domains,
             io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
-            io.tesseraql.yaml.decision.DecisionSets decisions, List<RouteFile> files) {
+            io.tesseraql.yaml.decision.DecisionSets decisions, List<RouteFile> files,
+            ExpressionFunctions functions) {
         // No wholesale skip when the shared-definition trees are empty: a `domain:` or
         // `use:` reference in an app that declares none must fail the load, not silently
         // drop the constraints it names (docs/vocabulary-cleanup.md wave D closure of
@@ -465,7 +481,7 @@ public final class ManifestLoader {
         for (RouteFile file : files) {
             resolved.add(new RouteFile(file.httpMethod(), file.urlPath(), file.source(),
                     resolveSharedDefinitions(domains, ruleSets, decisions, file.source(),
-                            file.definition())));
+                            file.definition(), functions)));
         }
         return resolved;
     }
@@ -481,9 +497,10 @@ public final class ManifestLoader {
             io.tesseraql.yaml.domain.FieldDomains domains,
             io.tesseraql.yaml.rules.ValidationRuleSets ruleSets,
             io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
-            RouteDefinition def) {
+            RouteDefinition def, ExpressionFunctions functions) {
         return withDecisions(decisions, source,
-                withRuleSets(ruleSets, source, withFieldDomains(domains, source, def)));
+                withRuleSets(ruleSets, source, withFieldDomains(domains, source, def)),
+                functions);
     }
 
     /**
@@ -493,7 +510,7 @@ public final class ManifestLoader {
      */
     private static io.tesseraql.yaml.model.WorkflowDefinition withWorkflowDecisions(
             io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
-            io.tesseraql.yaml.model.WorkflowDefinition def) {
+            io.tesseraql.yaml.model.WorkflowDefinition def, ExpressionFunctions functions) {
         if (def.transitions().stream().allMatch(transition -> transition.decide().isEmpty())
                 && def.dispatch().stream().allMatch(dispatch -> dispatch.decide().isEmpty())) {
             return def;
@@ -502,7 +519,7 @@ public final class ManifestLoader {
         for (io.tesseraql.yaml.model.TransitionSpec transition : def.transitions()) {
             Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
             transition.decide().forEach((alias, use) -> merged.put(alias,
-                    decisions.resolveForWorkflow(alias, use, source.toString())));
+                    decisions.resolveForWorkflow(alias, use, source.toString(), functions)));
             resolved.add(new io.tesseraql.yaml.model.TransitionSpec(transition.id(),
                     transition.from(), transition.to(), transition.guard(),
                     transition.command(), transition.assign(),
@@ -514,7 +531,7 @@ public final class ManifestLoader {
         for (io.tesseraql.yaml.model.DispatchSpec dispatch : def.dispatch()) {
             Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
             dispatch.decide().forEach((alias, use) -> merged.put(alias,
-                    decisions.resolveForWorkflow(alias, use, source.toString())));
+                    decisions.resolveForWorkflow(alias, use, source.toString(), functions)));
             dispatches.add(new io.tesseraql.yaml.model.DispatchSpec(dispatch.id(), merged,
                     dispatch.oneOf()));
         }
@@ -526,13 +543,13 @@ public final class ManifestLoader {
 
     private static RouteDefinition withDecisions(
             io.tesseraql.yaml.decision.DecisionSets decisions, Path source,
-            RouteDefinition def) {
+            RouteDefinition def, ExpressionFunctions functions) {
         if (def.decide().isEmpty()) {
             return def;
         }
         Map<String, io.tesseraql.yaml.model.DecisionUse> merged = new java.util.LinkedHashMap<>();
         def.decide().forEach((alias, use) -> merged.put(alias,
-                decisions.resolve(alias, use, source.toString())));
+                decisions.resolve(alias, use, source.toString(), functions)));
         return def.withDecide(merged);
     }
 

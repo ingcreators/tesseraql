@@ -141,14 +141,21 @@ public final class MultiAppHost implements AutoCloseable {
             io.tesseraql.operations.app.StackSettings settings) {
         Map<String, io.tesseraql.yaml.config.AppConfig> configs = loadConfigs(installRoot,
                 applications);
+        // Declared modules must be resolved on disk before anything boots: the host runs
+        // offline, and an application silently missing its modules is the fail-open shape
+        // decision 28 removes. dev resolves before starting, so it never meets these refusals.
+        ModulesGuard.requireResolved(installRoot, applications, configs);
         boolean embedded = dev != null && dev.embeddedDb() != null;
         com.zaxxer.hikari.HikariDataSource frameworkPool = embedded
                 ? DataSources.create("tesseraql-stack-framework", dev.embeddedDb())
                 : frameworkPool(configs, settings);
-        HostContext context = stack.withStackSettings(
+        HostContext settled = stack.withStackSettings(
                 settings.externalOrigin().orElse(
                         dev != null ? dev.defaultExternalOrigin() : null),
                 frameworkPool);
+        HostContext context = dev != null && dev.extraModules() != null
+                ? settled.withExtraModules(dev.extraModules())
+                : settled;
         // The stack-wide security schema is migrated ONCE, here, before any runtime starts;
         // the runtimes validate instead of migrating and refuse to start on a mismatch
         // (docs/stack-architecture.md decision 16). On the stack's own pool when the file

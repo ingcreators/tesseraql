@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.ResponseHeaderDefaults;
 import io.tesseraql.yaml.config.SecurityDefaults;
@@ -83,18 +84,28 @@ public final class StudioService {
     private final CalendarForms calendarForms;
     private final JobPolicyForms jobPolicyForms;
     private final RouteForms routeForms;
+    private final ExpressionFunctions functions;
     private AppManifest manifest;
     private Path appHome;
 
     public StudioService(AppManifest manifest, boolean readOnly) {
+        this(manifest, readOnly, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #StudioService(AppManifest, boolean)}, resolving custom calls against
+     * {@code functions}.
+     */
+    public StudioService(AppManifest manifest, boolean readOnly, ExpressionFunctions functions) {
         this.manifest = manifest;
         this.appHome = manifest.appHome();
         this.readOnly = readOnly;
+        this.functions = functions;
         // The collaborators read the app home through a supplier — reload() reassigns the field,
         // and a captured value would pin them to a stale manifest.
         this.auditTrail = new AuditTrail(() -> appHome);
         this.renderer = new PreviewRenderer(() -> appHome, () -> manifest, this::source,
-                this::sourceIfExists, this::resolve);
+                this::sourceIfExists, this::resolve, functions);
 
         this.draftStore = new DraftStore(() -> appHome, readOnly, this::preview,
                 this::recordAudit);
@@ -1168,7 +1179,8 @@ public final class StudioService {
     public Explorer reload() {
         // Tolerant of unparseable route documents (they surface through the hot reloader's
         // failure report; the explorer keeps showing everything that still parses).
-        this.manifest = new ManifestLoader().load(appHome, new java.util.ArrayList<>());
+        this.manifest = new ManifestLoader().load(appHome, new java.util.ArrayList<>(),
+                functions);
         this.appHome = manifest.appHome();
         return explorer();
     }

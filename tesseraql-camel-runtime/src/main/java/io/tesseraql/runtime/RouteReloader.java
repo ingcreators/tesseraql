@@ -59,6 +59,7 @@ final class RouteReloader {
      * (docs/base-path.md).
      */
     private final String basePath;
+    private final io.tesseraql.core.expr.ExpressionFunctions functions;
     private AppManifest current;
     /** Per-route content fingerprints (source-directory digests) from the last good reload. */
     private Map<String, String> fingerprints;
@@ -68,8 +69,10 @@ final class RouteReloader {
     private String workflowFingerprint;
 
     RouteReloader(CamelContext context, Path appHome, AppManifest current, StudioService studio,
-            String appName, List<SystemApps.MountedApp> mountedApps, StudioDocCache docCache) {
+            String appName, List<SystemApps.MountedApp> mountedApps, StudioDocCache docCache,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.context = context;
+        this.functions = functions;
         this.appHome = appHome;
         this.current = current;
         this.studio = studio;
@@ -111,7 +114,7 @@ final class RouteReloader {
         // Tolerant load: an unparseable route document is a per-route failure like a compile
         // error, not a reason to abort — only app.yml/config problems still fail the load.
         List<ManifestLoader.BrokenRoute> broken = new ArrayList<>();
-        AppManifest reloaded = new ManifestLoader().load(appHome, broken);
+        AppManifest reloaded = new ManifestLoader().load(appHome, broken, functions);
         // The structural guard spans every hosted app (startup parity): a new route colliding
         // with another app's endpoint aborts the reload with the conflict named.
         SystemApps.requireNoRouteConflicts(reloaded, mountedApps);
@@ -195,7 +198,7 @@ final class RouteReloader {
         for (String id : changes) {
             try {
                 stopAndRemove(id);
-                context.addRoutes(new RouteCompiler().appName(appName)
+                context.addRoutes(new RouteCompiler().appName(appName).functions(functions)
                         .compile(reloaded, true, Set.of(id)));
                 (before.containsKey(id) ? reloadedIds : addedIds).add(id);
             } catch (Exception ex) {
@@ -233,7 +236,7 @@ final class RouteReloader {
             for (Map.Entry<String, String> transition : nowWorkflow.entrySet()) {
                 String id = transition.getKey();
                 try {
-                    context.addRoutes(new RouteCompiler().appName(appName)
+                    context.addRoutes(new RouteCompiler().appName(appName).functions(functions)
                             .compile(reloaded, true, Set.of(id)));
                     (beforeWorkflow.containsKey(id) ? reloadedIds : addedIds).add(id);
                 } catch (Exception ex) {

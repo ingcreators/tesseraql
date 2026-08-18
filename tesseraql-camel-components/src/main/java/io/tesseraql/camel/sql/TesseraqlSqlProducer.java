@@ -78,7 +78,21 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         super.doStart();
         Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
                 Path.of(endpoint.getSqlPath()), endpoint.getDialect());
-        this.nodes = Sql2WayParser.parse(Files.readString(file));
+        this.nodes = Sql2WayParser.parse(Files.readString(file), functions());
+    }
+
+    /**
+     * This runtime's function set, bound beside the tracer and lanes; a hand-built context
+     * without the bean falls back to the process default (docs/module-scope.md).
+     */
+    private io.tesseraql.core.expr.ExpressionFunctions functions() {
+        io.tesseraql.core.expr.ExpressionFunctions bound = endpoint.getCamelContext()
+                .getRegistry().lookupByNameAndType(TesseraqlProperties.FUNCTIONS_BEAN,
+                        io.tesseraql.core.expr.ExpressionFunctions.class);
+        return bound != null
+                ? bound
+                : io.tesseraql.core.expr.ExpressionFunctions
+                        .processDefault();
     }
 
     @Override
@@ -361,7 +375,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             try {
                 return Sql2WayParser.parse(Files.readString(
                         io.tesseraql.core.dialect.DialectSqlResolver.resolve(file,
-                                endpoint.getDialect())));
+                                endpoint.getDialect())),
+                        functions());
             } catch (java.io.IOException ex) {
                 throw new TqlException(EXECUTION_ERROR,
                         "Cannot read export query '" + query.name() + "': " + ex.getMessage());

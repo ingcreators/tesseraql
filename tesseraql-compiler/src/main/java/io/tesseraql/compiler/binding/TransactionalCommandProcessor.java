@@ -9,6 +9,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.outbox.OutboxStore;
 import io.tesseraql.core.sequence.DocumentSequences;
 import io.tesseraql.core.sql.BoundSql;
@@ -160,6 +161,19 @@ public final class TransactionalCommandProcessor implements Processor {
             java.util.function.Function<String, Path> stepFile, String datasourceName,
             String dialect, String appName, WorkflowBinding workflow,
             ExecutionBounds defaultBounds) {
+        this(routeId, declared, stepFile, datasourceName, dialect, appName, workflow,
+                defaultBounds, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #TransactionalCommandProcessor(String, CommandDeclaration,
+     * java.util.function.Function, String, String, String, WorkflowBinding, ExecutionBounds)},
+     * resolving custom calls against {@code functions}.
+     */
+    public TransactionalCommandProcessor(String routeId, CommandDeclaration declared,
+            java.util.function.Function<String, Path> stepFile, String datasourceName,
+            String dialect, String appName, WorkflowBinding workflow,
+            ExecutionBounds defaultBounds, ExpressionFunctions functions) {
         this.defaultBounds = defaultBounds;
         this.workflow = workflow;
         this.routeId = routeId;
@@ -168,7 +182,7 @@ public final class TransactionalCommandProcessor implements Processor {
                 ? null
                 : new OutboxEvents(declared.outbox(), appName);
         this.notifications = io.tesseraql.yaml.notify.NotifyEvents.compileAll(routeId,
-                declared.notifications());
+                declared.notifications(), functions);
         this.publish = declared.publish() == null
                 ? null
                 : io.tesseraql.yaml.messaging.PublishEvents.compile(routeId, declared.publish());
@@ -183,18 +197,19 @@ public final class TransactionalCommandProcessor implements Processor {
         if (declared.steps().isEmpty() && workflow == null) {
             throw invalid("a command route needs a steps: declaration");
         }
-        this.steps = compile(declared.steps(), stepFile);
-        this.validation = compileValidation(declared.validate(), stepFile);
+        this.steps = compile(declared.steps(), stepFile, functions);
+        this.validation = compileValidation(declared.validate(), stepFile, functions);
         // The one decide: compile (docs/decision-tables.md), shared with the transition
         // executor — a workflow transition's decisions ride its CompiledTransition instead
         // and evaluate inside the executor's pipeline.
         this.decisions = io.tesseraql.yaml.decision.DecisionSets.compileUses(declared.decide(),
-                dialect);
+                dialect, functions);
     }
 
     /** Compiles the validate: block, failing fast on misdeclared rules (roadmap Phase 19). */
     private ValidationRules compileValidation(Map<String, ValidationRule> validate,
-            java.util.function.Function<String, Path> ruleFile) {
+            java.util.function.Function<String, Path> ruleFile,
+            ExpressionFunctions functions) {
         List<ValidationRules.Rule> compiled = new ArrayList<>();
         (validate == null ? Map.<String, ValidationRule>of() : validate)
                 .forEach((id, rule) -> {
@@ -208,19 +223,20 @@ public final class TransactionalCommandProcessor implements Processor {
                                     + "': params apply to SQL rules only");
                         }
                         compiled.add(ValidationRules.expression(id, rule.when(), rule.rule(),
-                                rule.field(), rule.code(), rule.message()));
+                                rule.field(), rule.code(), rule.message(), functions));
                     } else {
                         Path file = ruleFile.apply(rule.file());
                         compiled.add(ValidationRules.sql(id, rule.when(), read(file),
                                 file.toString(), rule.params(), rule.field(), rule.code(),
-                                rule.message()));
+                                rule.message(), functions));
                     }
                 });
         return new ValidationRules(compiled);
     }
 
     private List<Step> compile(Map<String, Binding> declaredSteps,
-            java.util.function.Function<String, Path> stepFile) {
+            java.util.function.Function<String, Path> stepFile,
+            ExpressionFunctions functions) {
         Map<String, Binding> bindings = declaredSteps;
         List<Step> compiled = new ArrayList<>();
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
@@ -230,7 +246,7 @@ public final class TransactionalCommandProcessor implements Processor {
             validate(name, binding, seen);
             io.tesseraql.core.expr.Expr when = binding.when() == null || binding.when().isBlank()
                     ? null
-                    : io.tesseraql.core.expr.ExpressionParser.parse(binding.when());
+                    : io.tesseraql.core.expr.ExpressionParser.parse(binding.when(), functions);
             if (binding.isSequence()) {
                 compiled.add(new Step(name, null, null, "sequence",
                         binding.params(), List.of(), null, binding.sequence(),
@@ -247,7 +263,7 @@ public final class TransactionalCommandProcessor implements Processor {
                     throw invalid("step '" + name + "': expect/keys need an update statement -"
                             + " declare mode: update");
                 }
-                compiled.add(new Step(name, Sql2WayParser.parse(read(file)),
+                compiled.add(new Step(name, Sql2WayParser.parse(read(file), functions),
                         file.toString(), mode,
                         binding.params(), binding.keys(), binding.expect(), null,
                         boundsFor(binding), when));

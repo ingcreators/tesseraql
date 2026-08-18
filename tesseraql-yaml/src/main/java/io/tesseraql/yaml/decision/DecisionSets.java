@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.model.DecisionUse;
@@ -164,6 +165,15 @@ public final class DecisionSets {
      */
     public static DecisionTables compileUses(
             Map<String, io.tesseraql.yaml.model.DecisionUse> decide, String dialect) {
+        return compileUses(decide, dialect, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #compileUses(Map, String)}, resolving custom calls against {@code functions}.
+     */
+    public static DecisionTables compileUses(
+            Map<String, io.tesseraql.yaml.model.DecisionUse> decide, String dialect,
+            ExpressionFunctions functions) {
         List<DecisionTables.Use> uses = new java.util.ArrayList<>();
         (decide == null ? Map.<String, io.tesseraql.yaml.model.DecisionUse>of() : decide)
                 .forEach((alias, use) -> {
@@ -175,9 +185,9 @@ public final class DecisionSets {
                     uses.add(use.decision().source() != null
                             ? DecisionTables.use(alias,
                                     compileSource(use.use(), use.decision(), dialect),
-                                    use.params(), use.effectiveAt())
+                                    use.params(), use.effectiveAt(), functions)
                             : DecisionTables.use(alias, compile(use.use(), use.decision()),
-                                    use.params()));
+                                    use.params(), functions));
                 });
         return new DecisionTables(uses);
     }
@@ -458,7 +468,16 @@ public final class DecisionSets {
      * and before the guard consumes the outputs.
      */
     public DecisionUse resolveForWorkflow(String alias, DecisionUse declared, String source) {
-        return resolve(alias, declared, source, true);
+        return resolve(alias, declared, source, true, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #resolveForWorkflow(String, DecisionUse, String)}, resolving custom calls
+     * against {@code functions}.
+     */
+    public DecisionUse resolveForWorkflow(String alias, DecisionUse declared, String source,
+            ExpressionFunctions functions) {
+        return resolve(alias, declared, source, true, functions);
     }
 
     /**
@@ -467,11 +486,20 @@ public final class DecisionSets {
      * decisions evaluate (before the document loads and before any step runs).
      */
     public DecisionUse resolve(String alias, DecisionUse declared, String source) {
-        return resolve(alias, declared, source, false);
+        return resolve(alias, declared, source, false, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #resolve(String, DecisionUse, String)}, resolving custom calls against
+     * {@code functions}.
+     */
+    public DecisionUse resolve(String alias, DecisionUse declared, String source,
+            ExpressionFunctions functions) {
+        return resolve(alias, declared, source, false, functions);
     }
 
     private DecisionUse resolve(String alias, DecisionUse declared, String source,
-            boolean documentBound) {
+            boolean documentBound, ExpressionFunctions functions) {
         if (declared.use() == null || declared.use().isBlank()) {
             throw new TqlException(UNKNOWN, source + ": decide entry '" + alias
                     + "' declares no use: — a decide: entry is always a reference to a"
@@ -491,7 +519,7 @@ public final class DecisionSets {
         }
         Set<String> wiringRoots = documentBound ? withDocument(WIRING_ROOTS) : WIRING_ROOTS;
         declared.params().forEach((input, expression) -> checkRoots(alias, input, expression,
-                source, wiringRoots));
+                source, wiringRoots, functions));
         if (declared.effectiveAt() != null && !declared.effectiveAt().isBlank()) {
             if (shared.source() == null) {
                 throw new TqlException(CONTRACT, source + ": decide entry '" + alias
@@ -504,7 +532,7 @@ public final class DecisionSets {
                         + "' declares no effective: columns");
             }
             checkRoots(alias, "effectiveAt", declared.effectiveAt(), source,
-                    documentBound ? withDocument(EFFECTIVE_ROOTS) : EFFECTIVE_ROOTS);
+                    documentBound ? withDocument(EFFECTIVE_ROOTS) : EFFECTIVE_ROOTS, functions);
         }
         return declared.resolvedWith(shared);
     }
@@ -516,8 +544,8 @@ public final class DecisionSets {
     }
 
     private static void checkRoots(String alias, String input, String expression,
-            String source, Set<String> allowed) {
-        Expr parsed = ExpressionParser.parse(expression);
+            String source, Set<String> allowed, ExpressionFunctions functions) {
+        Expr parsed = ExpressionParser.parse(expression, functions);
         Set<String> roots = new LinkedHashSet<>();
         collectRoots(parsed, roots);
         roots.removeAll(allowed);

@@ -5,6 +5,7 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.sql.ScopeResolver;
 import io.tesseraql.core.sql.Sql2WayParser;
 import io.tesseraql.core.sql.SqlNode;
@@ -55,26 +56,36 @@ public final class CompiledScopeResolver implements ScopeResolver {
     private final Map<String, List<CompiledArm>> scopes;
 
     public CompiledScopeResolver(List<ScopeFile> scopeFiles, String dialect) {
+        this(scopeFiles, dialect, ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #CompiledScopeResolver(List, String)}, resolving custom calls against
+     * {@code functions}.
+     */
+    public CompiledScopeResolver(List<ScopeFile> scopeFiles, String dialect,
+            ExpressionFunctions functions) {
         Map<String, List<CompiledArm>> compiled = new LinkedHashMap<>();
         for (ScopeFile scopeFile : scopeFiles) {
             ScopeDefinition definition = scopeFile.definition();
             Path scopeDir = scopeFile.source().getParent();
             List<CompiledArm> arms = new ArrayList<>();
             for (MatchArm arm : definition.match()) {
-                arms.add(compileArm(arm, scopeDir, dialect));
+                arms.add(compileArm(arm, scopeDir, dialect, functions));
             }
             compiled.put(definition.id(), arms);
         }
         this.scopes = compiled;
     }
 
-    private static CompiledArm compileArm(MatchArm arm, Path scopeDir, String dialect) {
+    private static CompiledArm compileArm(MatchArm arm, Path scopeDir, String dialect,
+            ExpressionFunctions functions) {
         List<SqlNode> fragment = null;
         if (arm.file() != null && !arm.file().isBlank()) {
             Path file = DialectSqlResolver.resolve(scopeDir.resolve(arm.file()).normalize(),
                     dialect);
             try {
-                fragment = Sql2WayParser.parse(Files.readString(file));
+                fragment = Sql2WayParser.parse(Files.readString(file), functions);
             } catch (IOException ex) {
                 throw new UncheckedIOException("Failed to read scope fragment " + file, ex);
             }

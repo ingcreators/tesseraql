@@ -89,12 +89,13 @@ final class ChunkStepRunner {
         this.boundReader = spooled
                 ? null
                 : SqlRenderer.render(
-                        io.tesseraql.core.sql.Sql2WayParser.parse(StepContext.read(readerPath)),
+                        io.tesseraql.core.sql.Sql2WayParser.parse(StepContext.read(readerPath),
+                                context.functions()),
                         context.resolveParams(chunk.reader()),
                         io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED, jobContext,
                         io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
         this.writerTemplate = io.tesseraql.core.sql.Sql2WayParser
-                .parse(StepContext.read(writerPath));
+                .parse(StepContext.read(writerPath), context.functions());
         this.enrichments = context.enrichments(chunk.enrich(), dialect);
     }
 

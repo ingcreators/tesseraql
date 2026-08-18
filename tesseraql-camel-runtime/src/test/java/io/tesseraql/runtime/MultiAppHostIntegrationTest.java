@@ -53,10 +53,10 @@ class MultiAppHostIntegrationTest {
         try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
             declaredPort = probe.getLocalPort();
         }
-        installApp("shop-a", "a", null);
+        installApp("shop-a", "a", null, ModuleFixtureFunctions.GreetsA.class);
         // shop-b declares a base path of its own, which the derived address has to outrank —
         // an application's address is its name, and its own configuration cannot move it.
-        installApp("shop-b", "b", "/legacy");
+        installApp("shop-b", "b", "/legacy", ModuleFixtureFunctions.GreetsB.class);
         // Business data is isolated by schema, so the main coordinates differ; the stack
         // supplies the framework connection (docs/stack-architecture.md decision 22).
         Files.writeString(installRoot.resolve(
@@ -88,6 +88,24 @@ class MultiAppHostIntegrationTest {
 
         assertThat(itemName("shop-a", "/shop-a")).isEqualTo("from-a");
         assertThat(itemName("shop-b", "/shop-b")).isEqualTo("from-b");
+    }
+
+    /**
+     * Decision 28's headline (docs/module-scope.md): both applications declare a module
+     * providing {@code shopgreets()} — same name, different semantics — and each answers with
+     * its own. Under the retired process-global registry the last install replaced its
+     * neighbour's function; under one union loader the answer depended on classpath order.
+     */
+    @Test
+    void eachApplicationEvaluatesItsOwnModuleFunctions() throws Exception {
+        assertThat(greeting("shop-a", "/shop-a")).isEqualTo("from-module-a");
+        assertThat(greeting("shop-b", "/shop-b")).isEqualTo("from-module-b");
+    }
+
+    private static String greeting(String appId, String prefix) throws Exception {
+        HttpResponse<String> response = get(appId, prefix + "/api/greet");
+        assertThat(response.statusCode()).isEqualTo(200);
+        return MAPPER.readTree(response.body()).get("data").get(0).get("greeting").asText();
     }
 
     /**
@@ -206,8 +224,8 @@ class MultiAppHostIntegrationTest {
      * @param ownBasePath the prefix the application's own configuration names, or null — the
      *                    derived address outranks it either way
      */
-    private static void installApp(String appId, String schema, String ownBasePath)
-            throws IOException {
+    private static void installApp(String appId, String schema, String ownBasePath,
+            Class<?> functionProvider) throws IOException {
         Path appHome = installRoot.resolve(appId).resolve("1.0.0");
         Path source = Paths.get("..", "examples", "user-admin-app").toAbsolutePath().normalize();
         try (Stream<Path> files = Files.walk(source)) {
@@ -221,14 +239,17 @@ class MultiAppHostIntegrationTest {
                     url: %s&currentSchema=%s
                     username: %s
                     password: %s
+                tesseraql:
+                  modules:
+                    - io.example:greeter
                 """.formatted("shop-a".equals(appId) ? declaredPort : 0,
                 POSTGRES.getJdbcUrl(), schema,
                 POSTGRES.getUsername(), POSTGRES.getPassword())
                 + (ownBasePath == null ? "" : """
-                        tesseraql:
                           http:
                             basePath: %s
                         """.formatted(ownBasePath)));
+        writeModuleJar(appHome, functionProvider);
 
         Path itemsDir = appHome.resolve("web/api/items");
         Files.createDirectories(itemsDir);
@@ -252,8 +273,51 @@ class MultiAppHostIntegrationTest {
                 """);
         Files.writeString(itemsDir.resolve("list.sql"), "select id, name from items order by id\n");
 
+        // A route whose SQL calls the module-provided function: the decision-28 headline. Both
+        // applications use the same name, and each must answer with its own module's semantics.
+        Path greetDir = appHome.resolve("web/api/greet");
+        Files.createDirectories(greetDir);
+        Files.writeString(greetDir.resolve("get.yml"), """
+                version: tesseraql/v1
+                id: greet.function
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: greet.sql
+                      mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: main.rows
+                """);
+        Files.writeString(greetDir.resolve("greet.sql"),
+                "select /* shopgreets() */ 'placeholder' as greeting\n");
+
         new AppCatalog(installRoot).register(
                 new InstalledApp(appId, "1.0.0", appId + "/1.0.0", List.of()));
+    }
+
+    /**
+     * A module jar holding only the {@code META-INF/services} entry: the provider class sits on
+     * the test classpath (the parent loader), so which implementation an application's registry
+     * holds is decided entirely by the services file in its own {@code work/modules} jar.
+     */
+    private static void writeModuleJar(Path appHome, Class<?> providerClass) throws IOException {
+        Path modules = appHome.resolve("work/modules");
+        Files.createDirectories(modules);
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(
+                Files.newOutputStream(modules.resolve("greeter.jar")))) {
+            zip.putNextEntry(new java.util.zip.ZipEntry(
+                    "META-INF/services/io.tesseraql.core.expr.ExpressionFunction"));
+            zip.write((providerClass.getName() + "\n")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
     }
 
     private static void copy(Path source, Path target, Path path) {

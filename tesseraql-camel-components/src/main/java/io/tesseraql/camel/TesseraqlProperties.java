@@ -122,6 +122,12 @@ public final class TesseraqlProperties {
     public static final String IDENTITY_REALM_BEAN = "tesseraqlIdentityRealm";
     public static final String TRACER_BEAN = "tesseraqlTracer";
     public static final String METER_BEAN = "tesseraqlMeter";
+    /**
+     * Registry bean name for this runtime's {@code ExpressionFunctions} — the per-runtime
+     * function set SQL producers parse against (docs/module-scope.md). Absent (a hand-built
+     * context) means the process default, the tracer/lanes fallback shape.
+     */
+    public static final String FUNCTIONS_BEAN = "tesseraqlExpressionFunctions";
 
     /** Registry bean name for the business-route audit sink (roadmap Phase 45), if enabled. */
     public static final String ROUTE_AUDIT_SINK_BEAN = "tesseraqlRouteAuditSink";

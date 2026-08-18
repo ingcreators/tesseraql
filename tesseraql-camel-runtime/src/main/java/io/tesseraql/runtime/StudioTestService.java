@@ -64,10 +64,13 @@ final class StudioTestService {
     private final boolean enabled;
     private final int queryTimeoutSeconds;
     private final int maxRows;
+    private final io.tesseraql.core.expr.ExpressionFunctions functions;
 
     StudioTestService(Function<String, DataSource> datasources, Path appHome, RealmConfig realm,
-            String dialect, boolean enabled, int queryTimeoutSeconds, int maxRows) {
+            String dialect, boolean enabled, int queryTimeoutSeconds, int maxRows,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.datasources = datasources;
+        this.functions = functions;
         this.appHome = appHome.toAbsolutePath().normalize();
         this.realm = realm;
         this.dialect = dialect;
@@ -346,7 +349,8 @@ final class StudioTestService {
         Map<String, Object> bindParams = new LinkedHashMap<>();
         binding.params().forEach((name, expr) -> bindParams.put(name,
                 evaluation.resolve(Arrays.asList(expr.split("\\.")))));
-        BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(read(sqlFile)), bindParams);
+        BoundSql bound = SqlRenderer.render(Sql2WayParser.parse(read(sqlFile), functions),
+                bindParams);
         DataSource sandbox = sandbox("main");
         try (Connection connection = sandbox.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {

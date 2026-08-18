@@ -67,12 +67,17 @@ final class ModulesCommand implements Runnable {
         }
     }
 
-    /** {@code tesseraql modules resolve --app <dir>}. */
+    /** {@code tesseraql modules resolve --app <dir>}, or {@code --stack} for every member. */
     @Command(name = "resolve", description = "Resolve tesseraql.modules and (re)write modules.lock.")
     static final class ResolveCommand implements Callable<Integer> {
 
-        @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
+        @Option(names = {"--app"}, description = "Path to the external app home.")
         Path app;
+
+        @Option(names = {"--stack"}, paramLabel = "<dir>", description = "Resolve every member"
+                + " of the stack: an install root (catalog.json) or a folder of application"
+                + " homes — the operator step a host's declared-but-unresolved refusal names.")
+        Path stack;
 
         @Mixin
         ConfigOptions configOptions;
@@ -83,15 +88,31 @@ final class ModulesCommand implements Runnable {
         @Override
         public Integer call() {
             configOptions.apply();
-            AppConfig config = new ManifestLoader().load(app).config();
-            return new ModulesInstaller(offline).install(app, config, true).map(result -> {
-                System.out.println("Resolved " + result.artifacts().size() + " artifact(s) into "
-                        + result.cacheDir() + "; wrote modules.lock");
-                return 0;
-            }).orElseGet(() -> {
-                System.out.println("No tesseraql.modules declared.");
-                return 0;
-            });
+            if ((app == null) == (stack == null)) {
+                System.err.println("Pass exactly one of --app <dir> or --stack <dir>.");
+                return 2;
+            }
+            List<Path> homes;
+            if (stack != null) {
+                try {
+                    homes = io.tesseraql.operations.app.AppDirectory.stack(stack);
+                } catch (io.tesseraql.core.error.TqlException refused) {
+                    System.err.println(refused.getMessage());
+                    return 2;
+                }
+            } else {
+                homes = List.of(app);
+            }
+            for (Path home : homes) {
+                AppConfig config = new ManifestLoader().load(home).config();
+                new ModulesInstaller(offline).install(home, config, true).ifPresentOrElse(
+                        result -> System.out.println(home.getFileName() + ": resolved "
+                                + result.artifacts().size() + " artifact(s) into "
+                                + result.cacheDir() + "; wrote modules.lock"),
+                        () -> System.out.println(
+                                home.getFileName() + ": no tesseraql.modules declared."));
+            }
+            return 0;
         }
     }
 

@@ -80,6 +80,26 @@ deployment concern with better tools than a runtime fetcher. There is no `instal
 CLI today: a deployment either ships the directory or drives `AppInstaller` from its own
 tooling.
 
+### Modules are resolved before the host starts
+
+An application's `tesseraql.modules` (drivers and the pdf/excel/s3 codecs) are resolved into its
+`work/modules` **before** hosting, because resolution reaches Maven repositories and a production
+host boots offline. A package ships the declaration and `modules.lock`, not the jars, so the
+operator runs the resolve once per install:
+
+```sh
+tesseraql modules resolve --stack /opt/tesseraql/apps   # every member, or --app for one
+```
+
+The host refuses to start an application whose declared modules were never resolved
+(`TQL-APP-4216`), or whose `work/modules` disagrees with its `modules.lock` (`TQL-APP-4217`) —
+running it silently without the functions, codecs and drivers it declared is the failure mode
+those refusals replace. Each hosted runtime then loads its own `work/modules` on its own
+classloader: module visibility equals runtime scope, so two applications can carry the same
+driver at different versions, and a custom expression function is visible exactly to the
+application that declared it. Changing a member's module set is a redeploy of that member, not a
+live edit.
+
 ## One address per application
 
 Every application is addressed as `/<name>/` on one origin, and the stack shares one

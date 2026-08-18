@@ -7,6 +7,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
+import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import io.tesseraql.yaml.template.Templates;
@@ -96,6 +97,17 @@ public final class HtmlResponseRenderer implements Processor {
     public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
             String defaultLocaleTag, ViewBinding viewBinding,
             Map<String, ViewBinding> boundViews) {
+        this(response, appHome, routeDir, defaultLocaleTag, viewBinding, boundViews,
+                ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #HtmlResponseRenderer(HtmlResponse, Path, Path, String, ViewBinding, Map)},
+     * resolving custom calls against {@code functions}.
+     */
+    public HtmlResponseRenderer(HtmlResponse response, Path appHome, Path routeDir,
+            String defaultLocaleTag, ViewBinding viewBinding,
+            Map<String, ViewBinding> boundViews, ExpressionFunctions functions) {
         this.response = response;
         this.appHome = appHome.toAbsolutePath().normalize();
         this.viewBinding = viewBinding;
@@ -129,15 +141,16 @@ public final class HtmlResponseRenderer implements Processor {
             String source = String.valueOf(expr);
             Expr compiled;
             try {
-                compiled = ExpressionParser.parse(source);
+                compiled = ExpressionParser.parse(source, functions);
             } catch (RuntimeException ex) {
                 compiled = new Expr.Path(Arrays.asList(source.split("\\.")));
             }
             compiledModel.put(key, compiled);
         });
         this.statusWhen = JsonResponseRenderer.CompiledStatus
-                .compileAll(response.statusWhen());
-        this.headers = new ResponseHeaders(response.headers(), response.headersWhen());
+                .compileAll(response.statusWhen(), functions);
+        this.headers = new ResponseHeaders(response.headers(), response.headersWhen(),
+                functions);
     }
 
     @Override

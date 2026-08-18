@@ -94,7 +94,27 @@ All notable changes to TesseraQL are documented here. The format follows
   the refusal prints the fix — and the marker is read in the parent only, never from inside an
   application home.
 
+### Added
+
+- **`tesseraql host` runs modules, per application** (docs/stack-architecture.md Decision 28,
+  docs/module-scope.md). Each hosted runtime loads its own `work/modules` on its own
+  classloader: expression functions, file codecs, and blob-store providers are visible exactly
+  to the application that declared them, and two applications can carry the same module — or
+  the same function name — with different versions or semantics. Production hosts boot offline
+  from what resolution left on disk; the new refusals **TQL-APP-4216** (declared modules,
+  nothing resolved) and **TQL-APP-4217** (`work/modules` disagrees with `modules.lock`) replace
+  what used to be running an application silently without its declared modules.
+  `tesseraql modules resolve` gained `--stack <dir>` to resolve every member in one command.
+
 ### Changed
+
+- **`dev` no longer composes every member's modules onto one classloader.** The union loader
+  made every runtime see every neighbour's extension jars and let the last-loaded application's
+  functions answer for all of them; each member runtime now builds its own loader over its own
+  `work/modules`, and `--modules <dir>` remains what it always was — a development override
+  composed onto every member runtime, an override rather than a declaration. The PDF engine
+  lookup now resolves inside the `tesseraql-pdf` module itself, so PDF export works without the
+  removed thread-context classloader.
 
 - **An expression evaluates with the custom functions it was parsed under**
   (docs/stack-architecture.md Decision 28, docs/module-scope.md). The function set is a value:

@@ -70,6 +70,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private final TempStore tempStore;
     private final DataSource dataSource;
     private final FileCodecs codecs;
+    private final io.tesseraql.core.expr.ExpressionFunctions functions;
     private final ObjectMapper mapper = new ObjectMapper();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -78,10 +79,21 @@ public final class JdbcFileTransferService implements FileTransferService {
 
     public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
             FileCodecs codecs) {
+        this(jobs, tempStore, dataSource, codecs,
+                io.tesseraql.core.expr.ExpressionFunctions.processDefault());
+    }
+
+    /**
+     * As {@link #JdbcFileTransferService(JobRepository, TempStore, DataSource, FileCodecs)},
+     * resolving custom calls in transfer SQL against {@code functions}.
+     */
+    public JdbcFileTransferService(JobRepository jobs, TempStore tempStore, DataSource dataSource,
+            FileCodecs codecs, io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.jobs = jobs;
         this.tempStore = tempStore;
         this.dataSource = dataSource;
         this.codecs = codecs;
+        this.functions = functions;
     }
 
     /**
@@ -647,7 +659,8 @@ public final class JdbcFileTransferService implements FileTransferService {
         try {
             Path resolved = io.tesseraql.core.dialect.DialectSqlResolver.resolve(sqlFile,
                     dialect());
-            return Sql2WayParser.parse(Files.readString(resolved, StandardCharsets.UTF_8));
+            return Sql2WayParser.parse(Files.readString(resolved, StandardCharsets.UTF_8),
+                    functions);
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

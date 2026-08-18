@@ -71,6 +71,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private final AutoCloseable otelSdk;
     private final io.tesseraql.opsui.OpsDashboard opsDashboard;
     private final io.tesseraql.core.outbox.OutboxEventSink outboxSink;
+    private final AppModules appModules;
 
     private TesseraqlRuntime(CamelContext camelContext, Map<String, HikariDataSource> dataSources,
             int port,
@@ -81,7 +82,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             TenantDataSources tenantDataSources, io.tesseraql.yaml.config.AppConfig config,
             AutoCloseable pinningSource, AutoCloseable otelSdk,
             io.tesseraql.opsui.OpsDashboard opsDashboard,
-            io.tesseraql.core.outbox.OutboxEventSink outboxSink) {
+            io.tesseraql.core.outbox.OutboxEventSink outboxSink, AppModules appModules) {
         this.camelContext = camelContext;
         this.dataSources = dataSources;
         this.mainDataSource = dataSources.get("main");
@@ -100,6 +101,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         this.otelSdk = otelSdk;
         this.opsDashboard = opsDashboard;
         this.outboxSink = outboxSink;
+        this.appModules = appModules;
     }
 
     /** The operations dashboard for this runtime (health, metrics, traces, alerts). */
@@ -113,16 +115,33 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * One application's modules and manifest, in the order decision 28 requires: the module
+     * loader exists before the manifest loads, because manifest loading already parses
+     * expressions (the decision-wiring root checks) and must resolve them against this
+     * application's own functions (docs/module-scope.md).
+     */
+    private record LoadedApp(AppModules modules, AppManifest manifest) {
+
+        static LoadedApp of(Path appHome, java.io.File extraModules) {
+            AppModules modules = AppModules.load(appHome,
+                    ManifestLoader.configOnly(appHome), extraModules);
+            return new LoadedApp(modules,
+                    new ManifestLoader().load(appHome, modules.functions()));
+        }
+    }
+
+    /**
      * Starts the runtime against {@code appHome} on the configured port, pointing the {@code main}
      * datasource at {@code override} when non-null (the {@code serve --embedded-db} path).
      */
     public static TesseraqlRuntime start(Path appHome,
             DataSources.MainDatasourceOverride override) {
-        AppManifest manifest = new ManifestLoader().load(appHome);
-        int port = manifest.config().getString("server.port").map(Integer::parseInt).orElse(8080);
-        return start(appHome, manifest, port,
-                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(manifest)),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null);
+        LoadedApp app = LoadedApp.of(appHome, null);
+        int port = app.manifest().config().getString("server.port").map(Integer::parseInt)
+                .orElse(8080);
+        return start(appHome, app.manifest(), port,
+                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null, app.modules());
     }
 
     /** Starts the runtime against {@code appHome} on an explicit port (used by tests). */
@@ -133,23 +152,25 @@ public final class TesseraqlRuntime implements AutoCloseable {
     /** Starts the runtime on an explicit port, with the {@code main} datasource override applied. */
     public static TesseraqlRuntime start(Path appHome, int port,
             DataSources.MainDatasourceOverride override) {
-        AppManifest manifest = new ManifestLoader().load(appHome);
-        return start(appHome, manifest, port,
-                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(manifest)),
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null);
+        LoadedApp app = LoadedApp.of(appHome, null);
+        return start(appHome, app.manifest(), port,
+                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, override, null, app.modules());
     }
 
     /** Starts the runtime with an explicit tracer (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer) {
-        return start(appHome, new ManifestLoader().load(appHome), port, tracer,
-                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, null);
+        LoadedApp app = LoadedApp.of(appHome, null);
+        return start(appHome, app.manifest(), port, tracer,
+                io.tesseraql.core.telemetry.NoopMeter.INSTANCE, null, null, app.modules());
     }
 
     /** Starts the runtime with an explicit tracer and meter (used to wire observability). */
     public static TesseraqlRuntime start(Path appHome, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
-        return start(appHome, new ManifestLoader().load(appHome), port, tracer, meter, null, null);
+        LoadedApp app = LoadedApp.of(appHome, null);
+        return start(appHome, app.manifest(), port, tracer, meter, null, null, app.modules());
     }
 
     /**
@@ -161,14 +182,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * stack sharing a sign-in.
      */
     static TesseraqlRuntime start(Path appHome, int port, HostContext host) {
-        AppManifest loaded = new ManifestLoader().load(appHome);
+        LoadedApp app = LoadedApp.of(appHome, host.extraModules());
         // Hosted (stack) mode had no tracing at all, so the console's trace pages behind `tesseraql host`
         // were permanently empty (docs/audit-hardening.md Decision 7). An app hosted in a stack is
         // the same app: it gets the same in-process ring every other start path gets.
-        return start(appHome, withBasePath(loaded, host.basePath()), port,
-                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(loaded)),
+        return start(appHome, withBasePath(app.manifest(), host.basePath()), port,
+                new io.tesseraql.core.telemetry.RingTracer(ringCapacity(app.manifest())),
                 io.tesseraql.core.telemetry.NoopMeter.INSTANCE, host.mainDataSourceOverride(),
-                host.frameworkDataSource(), true, host.cookiePath(), host.stackMembers());
+                host.frameworkDataSource(), true, host.cookiePath(), host.stackMembers(),
+                app.modules());
     }
 
     /**
@@ -277,9 +299,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
      */
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
-            DataSources.MainDatasourceOverride override, String cookiePath) {
+            DataSources.MainDatasourceOverride override, String cookiePath, AppModules modules) {
         return start(appHome, manifest, port, tracer, meter, override, null, false, cookiePath,
-                null);
+                null, modules);
     }
 
     /**
@@ -298,13 +320,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
      *                                 runtime so the portal can list them (docs/root-portal.md);
      *                                 null everywhere else, and the portal provider is then
      *                                 simply not registered
+     * @param modules                  this application's modules, loaded before its manifest
+     *                                 (docs/module-scope.md): the function set its expressions
+     *                                 parse with, the loader its codecs discover from, and a
+     *                                 resource this runtime owns and closes after its pools
      */
     private static TesseraqlRuntime start(Path appHome, AppManifest manifest, int port,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter,
             DataSources.MainDatasourceOverride override,
             javax.sql.DataSource stackFrameworkDataSource, boolean hostedValidatesFramework,
             String cookiePath,
-            java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers) {
+            java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
+            AppModules modules) {
         DefaultCamelContext context = new DefaultCamelContext();
         // The component policy guards every registration from here on
         // (docs/component-guard.md): baseline-denied components fail boot, config or not.
@@ -392,6 +419,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         bridgeMdcAcrossAsyncBoundaries(context);
         context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
         context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
+        // This runtime's function set, bound where the tracer and lanes bind so the SQL
+        // producers parse against it (docs/module-scope.md).
+        context.getRegistry().bind(TesseraqlProperties.FUNCTIONS_BEAN, modules.functions());
 
         io.tesseraql.core.threading.ExecutionLanes lanes = LaneConfigs.load(manifest.config());
         context.getRegistry().bind(TesseraqlProperties.LANES_BEAN, lanes);
@@ -461,7 +491,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if (!manifest.scopes().isEmpty()) {
             context.getRegistry().bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
                     new io.tesseraql.identity.scope.CompiledScopeResolver(
-                            manifest.scopes(), datasourceDialect(manifest.config())));
+                            manifest.scopes(), datasourceDialect(manifest.config()),
+                            modules.functions()));
         }
         // Analytics file scopes (docs/duckdb.md): ${scope.*} placeholders resolve only when a
         // duckdb datasource is declared; everywhere else the SQL producer's reject-any-placeholder
@@ -748,7 +779,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Deadline escalation (roadmap Phase 28 slice 3): a sweeper reassigns overdue tasks per
             // each state's onBreach.reassign resolver, recording history through the managed store.
             List<WorkflowSweeper.Rule> rules = buildSweeperRules(manifest,
-                    datasourceDialect(manifest.config()));
+                    datasourceDialect(manifest.config()), modules.functions());
             if (!rules.isEmpty()) {
                 io.tesseraql.core.workflow.WorkflowStore historyStore = context.getRegistry()
                         .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN,
@@ -771,7 +802,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // adding the optional tesseraql-excel module to the classpath is the whole install.
         io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
                 jobRepository,
-                tempStore, dataSource, io.tesseraql.core.files.FileCodecs.discover());
+                tempStore, dataSource,
+                io.tesseraql.core.files.FileCodecs.discover(modules.loader()),
+                modules.functions());
         // The same bound routes and commands run under: an export query or an after-SQL
         // statement held a pooled connection for as long as the driver allowed.
         fileTransfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
@@ -867,7 +900,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // named credentials, the timeouts, and the per-host circuit breaker.
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
                 httpOutbound, manifest.config(), tracer, effectiveMeter);
-        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer)
+        JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer,
+                modules.functions())
                 // A running job says so on a clock, and overlap: skip believes a previous run
                 // only while its owner keeps saying it (docs/audit-hardening.md Decision 6).
                 .heartbeatInterval(io.tesseraql.core.util.Durations.parse(manifest.config()
@@ -1231,7 +1265,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.yaml.migration.SchemaHistoryName.of(manifest.config()),
                     appHome, manifest.config(), dataSource, tenantDataSources, dataSources::get);
             context.addService(new VertxPlatformHttpServer(httpConfig));
-            context.addRoutes(new RouteCompiler().appName(appName).compile(manifest));
+            context.addRoutes(new RouteCompiler().appName(appName)
+                    .functions(modules.functions()).compile(manifest));
             // Mounted apps (jar-bundled system apps and config-listed directories, design ch. 32)
             // are plain yaml/sql/template trees compiled exactly like the main app. They load before
             // the MCP endpoint is wired so their MCP surface joins the main app's on one endpoint and
@@ -1242,8 +1277,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // Mounted apps migrate their own schema (per-app history table) before serving.
                 AppMigrations.migrate(mounted.name(), mounted.manifest().appHome(),
                         manifest.config(), dataSource, tenantDataSources, dataSources::get);
-                context.addRoutes(new RouteCompiler()
-                        .appName(mounted.name()).compile(mounted.manifest()));
+                context.addRoutes(new RouteCompiler().appName(mounted.name())
+                        .functions(modules.functions()).compile(mounted.manifest()));
                 // Mounted apps' batch jobs join the same scheduler and manual-run surface,
                 // tagged with the owning app; duplicate ids across apps fail the mount.
                 for (JobFile job : mounted.manifest().jobs()) {
@@ -1900,13 +1935,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             };
             boolean readOnly = manifest.config().getBoolean("tesseraql.studio.readOnly", true);
             io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
-                    manifest, readOnly);
+                    manifest, readOnly, modules.functions());
             // Studio's memoized schema/decision lookups (the data browser's column contracts,
             // the SQL-builder table list); each hot reload — and the Studio schema refresh —
             // starts a fresh epoch, so the memo is never staler than the served routes.
             StudioDocCache studioDocCache = new StudioDocCache(manifest);
             RouteReloader reloader = new RouteReloader(context, appHome, manifest, studio,
-                    appName, mountedApps, studioDocCache);
+                    appName, mountedApps, studioDocCache, modules.functions());
             // The serve --watch file watcher drives the exact reloader Studio's apply uses;
             // bound unstarted (independent of Studio being enabled) so watchRoutes() can
             // start it on demand without threading it through the runtime constructor.
@@ -1929,7 +1964,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         name -> context.getRegistry().lookupByNameAndType(name,
                                 javax.sql.DataSource.class),
                         appHome, realm, datasourceDialect(manifest.config()),
-                        testRunnerEnabled, testTimeout, testMaxRows);
+                        testRunnerEnabled, testTimeout, testMaxRows, modules.functions());
                 // The Studio scaffold generator (backlog B3): introspect a table from the dev
                 // datasource and generate its CRUD slice, reusing the CLI's introspection + generator
                 // so the output is byte-identical. Gated on writable Studio + an explicit opt-in.
@@ -2002,7 +2037,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // the classpath, returning null (a graceful "module absent" message) otherwise — so
                 // Studio stays free of the heavy openhtmltopdf/pdfbox stack.
                 io.tesseraql.studio.StudioService.PdfRender studioPdf = (export, routeDir,
-                        rows) -> renderExportPdf(export, routeDir, appHome, rows);
+                        rows) -> renderExportPdf(export, routeDir, appHome, rows,
+                                modules.loader());
                 context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
                         studioScaffold, studioAccess, studioMask, studioPdf));
                 // The copilot's send + stream transports (docs/copilot.md): below the YAML
@@ -2020,7 +2056,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         tenantDataSources, calendarDecisions, notificationChannels,
                         studioDocCache));
                 DocsProviders.register(serviceProviders,
-                        new DocsProviders.Deps(manifest, appHome, studioAccess));
+                        new DocsProviders.Deps(manifest, appHome, studioAccess,
+                                modules.loader()));
             }
             // Retention (design ch. 44): enabled by configuring the sweep interval. When
             // tesseraql.retention.attachments is set and the managed attachment store is bound, the
@@ -2094,12 +2131,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             closeQuietly(tenantDataSources);
             closeQuietly(lanes);
             dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
+            closeQuietly(modules);
             throw new IllegalStateException("Failed to start TesseraQL runtime", ex);
         }
         LOG.info("TesseraQL runtime started on port {} for app {}", port, appHome);
         return new TesseraqlRuntime(context, dataSources, port, jobRepository, jobExecutor,
                 outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
-                manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink);
+                manifest.config(), pinningSource, otelSdk, opsDashboard, outboxSink, modules);
     }
 
     /** A 1-based page number from a request param (Integer or String), defaulting to 1 (I3). */
@@ -2197,7 +2235,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** The sweeper's escalation rules: each state deadline's onBreach.reassign resolver, parsed. */
     private static List<WorkflowSweeper.Rule> buildSweeperRules(
-            io.tesseraql.yaml.manifest.AppManifest manifest, String dialect) {
+            io.tesseraql.yaml.manifest.AppManifest manifest, String dialect,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         List<WorkflowSweeper.Rule> rules = new java.util.ArrayList<>();
         boolean defaultManaged = io.tesseraql.yaml.workflow.WorkflowSettings.from(manifest.config())
                 .managed();
@@ -2208,7 +2247,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             String docType = def.document().type();
             io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify escalateNotify = escalateReminder(
-                    def);
+                    def, functions);
             String mode = def.mode() == null || def.mode().isBlank() ? null : def.mode();
             boolean managed = mode == null ? defaultManaged : "managed".equalsIgnoreCase(mode);
             java.nio.file.Path dir = workflow.source().getParent();
@@ -2274,12 +2313,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** The compiled escalation reminder (Phase 20 channels), or {@code null} when undeclared. */
     private static io.tesseraql.yaml.notify.NotifyEvents.CompiledNotify escalateReminder(
-            io.tesseraql.yaml.model.WorkflowDefinition def) {
+            io.tesseraql.yaml.model.WorkflowDefinition def,
+            io.tesseraql.core.expr.ExpressionFunctions functions) {
         if (def.reminders() == null || def.reminders().escalated() == null) {
             return null;
         }
         return io.tesseraql.yaml.notify.NotifyEvents.compile(def.id(), "escalated",
-                def.reminders().escalated());
+                def.reminders().escalated(), functions);
     }
 
     /** The audit actor a Studio service provider was bound (the caller's {@code principal.loginId}). */
@@ -2698,10 +2738,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * the classpath (the optional {@code tesseraql-pdf} module is absent).
      */
     private static byte[] renderExportPdf(io.tesseraql.yaml.model.ExportSpec export,
-            Path routeDir, Path appHome, List<Map<String, Object>> rows) {
+            Path routeDir, Path appHome, List<Map<String, Object>> rows,
+            ClassLoader modulesLoader) {
         io.tesseraql.core.files.FileCodec codec;
         try {
-            codec = io.tesseraql.core.files.FileCodecs.discover().require("pdf");
+            codec = io.tesseraql.core.files.FileCodecs.discover(modulesLoader).require("pdf");
         } catch (io.tesseraql.core.error.TqlException ex) {
             return null;
         }
@@ -2725,10 +2766,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * discovery the export routes use. Returns {@code null} when the optional {@code tesseraql-pdf}
      * module is absent so the portal degrades to a clear note rather than failing (F8, slice 2).
      */
-    static byte[] renderRoutesPdf(List<Map<String, Object>> rows, Path appHome) {
+    static byte[] renderRoutesPdf(List<Map<String, Object>> rows, Path appHome,
+            ClassLoader modulesLoader) {
         io.tesseraql.core.files.FileCodec codec;
         try {
-            codec = io.tesseraql.core.files.FileCodecs.discover().require("pdf");
+            codec = io.tesseraql.core.files.FileCodecs.discover(modulesLoader).require("pdf");
         } catch (io.tesseraql.core.error.TqlException ex) {
             return null;
         }
@@ -2913,7 +2955,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 try {
                     tenantDataSources.close();
                 } finally {
-                    dataSources.values().forEach(HikariDataSource::close);
+                    try {
+                        dataSources.values().forEach(HikariDataSource::close);
+                    } finally {
+                        // After the pools: a pool's driver may live in this loader.
+                        closeQuietly(appModules);
+                    }
                 }
             }
         }
