@@ -129,6 +129,22 @@ validate-don't-migrate means a candidate expecting a newer framework schema is *
 (TQL-APP-4214) and the operator migrates the stack first — "deploy one application" never
 quietly re-migrates a schema every neighbour is standing on.
 
+**The overlap window opens at candidate start, not at the swap — said plainly, because it is
+where "is the old version safe until the new one takes over?" has its fine print.** The old
+runtime serves every request until the swap, and the candidate takes no HTTP traffic before it
+(none for a direct replace, its weight share for a canary). But a runtime that starts is a whole
+runtime: the candidate's job executor, pollers and outbox begin working at its start, claim-
+arbitrated against the old version's — **the canary weight gates HTTP only**. That is today's
+canary semantics and the multi-node semantics (a node that joins a cluster works before it takes
+front traffic), inherited rather than invented, and the claim machinery is the arbiter either
+way — but an operator staging a 10% canary should read that its *background* participation is
+not 10%, so `hosting.md`'s deploy section says it. And the no-op property carries the same fine
+print, stated rather than implied: **a failed replace is a topological no-op** — the old runtime
+never stopped, the catalogue never moved — while the candidate's business migrations that
+already ran stay ran (Flyway does not undo; expand/contract is precisely what makes a
+v2-migrated schema safe under a still-serving v1), and background work its brief life performed
+is real work, exactly as if a node had joined and left.
+
 **The drain is the one the application already declared.** The swap happens first, so new
 requests reach the new runtime; the old runtime then gets `close()`, whose Camel shutdown
 strategy drains in-flight exchanges under the application's own `tesseraql.shutdown.timeout` and
@@ -405,8 +421,9 @@ into 2.
 ## What moves in the docs, and when
 
 With the code PRs, not before: `hosting.md` gains the deploy section (the verb, the canary ramp,
-the drain contract and its declared timeout, the ephemeral-port wrinkle, the two-file protocol
-and where status lands) and updates the "drives `AppInstaller` from its own tooling" sentence;
+the drain contract and its declared timeout, the overlap window's contract — weight gates HTTP
+only, background work participates from candidate start — the ephemeral-port wrinkle, the
+two-file protocol and where status lands) and updates the "drives `AppInstaller` from its own tooling" sentence;
 `deployment.md`'s expand/contract paragraph is restated as the deploy window's contract, and it
 gains the stop-path sentences (SIGTERM drains; the platform's grace period must exceed the
 stack's derived drain bound);
