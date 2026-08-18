@@ -581,3 +581,7 @@ Each gated on the slice it blocks, with a recommendation:
    on an ops shell that is itself still moving — the two-answers-that-add-mechanism signal
    this campaign stops on. The alternative, a minimal deploy-only grant ahead of the general
    model, is named for review and not recommended.
+   **Closed in review (2026-08-18), on the recommendation: the requirement stands and is
+   wanted eventually; it is out of this design's scope, deferred to the grants work.** The
+   section above is the standing record the grants work inherits — deploy is one of its
+   customers, the target shape is sketched there, and the interim holds until it ships.
