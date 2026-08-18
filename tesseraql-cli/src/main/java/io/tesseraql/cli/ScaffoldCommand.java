@@ -64,6 +64,11 @@ final class ScaffoldCommand implements Runnable {
 
         @Override
         public Integer call() throws Exception {
+            Path home = SingleApplication.resolve(app, "tesseraql scaffold crud");
+            if (home == null) {
+                return 2;
+            }
+            app = home;
             AppConfig config = new ManifestLoader().load(app).config();
             TableSchema schema = introspect(config);
             List<ScaffoldedFile> files = new CrudScaffolder(SecurityDefaults.from(config),
@@ -151,6 +156,11 @@ final class ScaffoldCommand implements Runnable {
 
         @Override
         public Integer call() throws Exception {
+            Path home = SingleApplication.resolve(app, "tesseraql scaffold decision");
+            if (home == null) {
+                return 2;
+            }
+            app = home;
             java.util.Map<String, String> parsed = new java.util.LinkedHashMap<>();
             for (String input : inputs) {
                 String[] parts = input.split(":", 2);
@@ -219,6 +229,11 @@ final class ScaffoldCommand implements Runnable {
 
         @Override
         public Integer call() throws Exception {
+            Path home = SingleApplication.resolve(app, "tesseraql scaffold eject-view");
+            if (home == null) {
+                return 2;
+            }
+            app = home;
             // The orchestration is shared with Studio's eject ramp (docs/page-builder.md
             // D2): ViewEjects locates the route, renders the pattern, writes the
             // checksum-stamped template and flips view: to template:.

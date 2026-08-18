@@ -30,7 +30,10 @@ final class PackageCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
-        Path home = app.toAbsolutePath().normalize();
+        Path home = SingleApplication.resolve(app, "tesseraql package");
+        if (home == null) {
+            return 2;
+        }
         Path work = io.tesseraql.yaml.config.WorkHome.resolve(home,
                 io.tesseraql.yaml.manifest.ManifestLoader.configOnly(home));
         Path output = out != null

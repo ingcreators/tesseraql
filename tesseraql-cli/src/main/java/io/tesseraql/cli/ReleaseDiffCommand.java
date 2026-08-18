@@ -34,7 +34,14 @@ public final class ReleaseDiffCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
-        ReleaseDiff.Report report = ReleaseDiff.between(baseline, app);
+        Path candidate = SingleApplication.resolve(app, "tesseraql release-diff");
+        Path base = candidate == null
+                ? null
+                : SingleApplication.resolve(baseline, "tesseraql release-diff", "--baseline");
+        if (candidate == null || base == null) {
+            return 2;
+        }
+        ReleaseDiff.Report report = ReleaseDiff.between(base, candidate);
         String rendered = json ? ReleaseDiff.toJson(report) : ReleaseDiff.toMarkdown(report);
         System.out.println(rendered);
         if (out != null) {
