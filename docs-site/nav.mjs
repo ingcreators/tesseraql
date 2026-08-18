@@ -243,4 +243,6 @@ export const EXCLUDED = [
   'token-issuance.md',
   // What a CLI argument means, and the option sets a command belongs to, 2026-08-16.
   'cli-surface.md',
+  // How the root redirect and the stack portal are built, 2026-08-18.
+  'root-portal.md',
 ];
