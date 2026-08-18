@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -20,6 +21,9 @@ final class PackageCommand implements Callable<Integer> {
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
     Path app;
 
+    @Mixin
+    ConfigOptions configOptions;
+
     @Option(names = {
             "--out"}, description = "Output archive (default: <app>/work/<app-name>.tqlapp).")
     Path out;
@@ -30,6 +34,7 @@ final class PackageCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         Path home = SingleApplication.resolve(app, "tesseraql package");
         if (home == null) {
             return 2;

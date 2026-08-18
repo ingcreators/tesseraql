@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -23,11 +24,15 @@ final class GenerateCommand implements Callable<Integer> {
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
     Path app;
 
+    @Mixin
+    ConfigOptions configOptions;
+
     @Option(names = {"--out"}, description = "Output directory (default: <app>/work/generated).")
     Path out;
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         AppManifest manifest = new ManifestLoader().load(app);
         Path target = out != null
                 ? out

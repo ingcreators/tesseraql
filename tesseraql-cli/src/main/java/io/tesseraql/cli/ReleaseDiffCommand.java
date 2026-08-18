@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -21,6 +22,9 @@ public final class ReleaseDiffCommand implements Callable<Integer> {
             "--app"}, required = true, description = "Path to the candidate app home (what you are about to deploy).")
     Path app;
 
+    @Mixin
+    ConfigOptions configOptions;
+
     @Option(names = {
             "--baseline"}, required = true, description = "Path to the baseline app home (what runs today: a checkout of the "
                     + "deployed tag or an unpacked release).")
@@ -34,6 +38,7 @@ public final class ReleaseDiffCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         Path candidate = SingleApplication.resolve(app, "tesseraql release-diff");
         Path base = candidate == null
                 ? null

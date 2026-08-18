@@ -65,6 +65,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **CLI options come in sets, and a command takes the whole set or none of it**
+  (docs/cli-surface.md Decisions 5 and 7). `--env` now exists on every command that loads a
+  manifest — `lint`, the command whose missing profile flag was closest to a defect, included —
+  and `--modules` on every command that parses routes (`routes` and `mcp` gained it). The
+  connection set gained `--datasource <name>`, selecting which declared datasource backs the
+  connection; that fixed two latent bugs where the flag keyed work while the connection stayed
+  `main`: `schema --datasource reporting` introspected `main` labelled `reporting`, and
+  `migrate --datasource reporting` ran the `reporting` migration set against the `main`
+  database. A shape guard now keeps the set names (`--env`, `--modules`, `--jdbc-url`,
+  `--username`, `--password`, `--datasource`) out of individual commands, with one named
+  exemption: `token --password` is a sign-in password, not a database credential, and keeps its
+  name.
+
 - **The single-application commands refuse a directory of applications, naming each**
   (docs/cli-surface.md Decision 2). `package`, `scaffold crud`/`decision`/`eject-view`,
   `release-diff` — `--baseline` included, because a folder of applications diffed silently

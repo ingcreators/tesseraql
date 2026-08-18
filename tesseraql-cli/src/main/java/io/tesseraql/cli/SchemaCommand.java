@@ -28,28 +28,28 @@ final class SchemaCommand implements Callable<Integer> {
     Path app;
 
     @Mixin
-    CliDatasource datasource;
+    ConnectionOptions datasource;
 
-    @Option(names = {
-            "--datasource"}, description = "Datasource name the catalog is keyed by (default: main).")
-    String datasourceName = "main";
+    @Mixin
+    ConfigOptions configOptions;
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         AppConfig config = new ManifestLoader().load(app).config();
         DriverManagerDataSource dataSource = datasource.resolve(config, app);
         SchemaGenerator generator = new SchemaGenerator();
-        SchemaDoc schema = generator.generate(Map.of(datasourceName, dataSource),
+        SchemaDoc schema = generator.generate(Map.of(datasource.name, dataSource),
                 Instant.now().toString());
 
         Path docsDir = app.resolve(".tesseraql").resolve("docs");
         Files.createDirectories(docsDir);
         Files.writeString(docsDir.resolve("schema.json"), generator.toJson(schema));
 
-        CatalogSchema catalog = schema.datasources().get(datasourceName);
+        CatalogSchema catalog = schema.datasources().get(datasource.name);
         System.out.println(String.format(
                 "TesseraQL schema: introspected %d tables from datasource '%s'",
-                catalog.tables().size(), datasourceName));
+                catalog.tables().size(), datasource.name));
         System.out.println("Wrote " + docsDir.resolve("schema.json"));
         return 0;
     }

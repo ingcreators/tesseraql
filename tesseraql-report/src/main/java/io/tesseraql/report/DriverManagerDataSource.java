@@ -23,6 +23,16 @@ public final class DriverManagerDataSource implements DataSource {
         this.password = password;
     }
 
+    /** The JDBC URL this datasource connects with. */
+    public String url() {
+        return url;
+    }
+
+    /** The username it connects as, or {@code null} when the URL carries the identity. */
+    public String user() {
+        return user;
+    }
+
     @Override
     public Connection getConnection() throws SQLException {
         return DriverManager.getConnection(url, user, password);

@@ -49,7 +49,10 @@ final class ScaffoldCommand implements Runnable {
         String table;
 
         @Mixin
-        CliDatasource datasource;
+        ConnectionOptions datasource;
+
+        @Mixin
+        ConfigOptions configOptions;
 
         @Option(names = {"--force"}, description = "Overwrite edited and user-owned files.")
         boolean force;
@@ -64,6 +67,7 @@ final class ScaffoldCommand implements Runnable {
 
         @Override
         public Integer call() throws Exception {
+            configOptions.apply();
             Path home = SingleApplication.resolve(app, "tesseraql scaffold crud");
             if (home == null) {
                 return 2;
@@ -89,7 +93,7 @@ final class ScaffoldCommand implements Runnable {
         }
 
         /**
-         * Connects with the shared {@link CliDatasource} resolution: an explicit
+         * Connects with the shared {@link ConnectionOptions} resolution: an explicit
          * {@code --jdbc-url}, then the app's main datasource, then a running
          * {@code serve --embedded-db} (its {@code work/embedded-db.jdbc} marker) when the
          * config does not resolve or answer — so scaffolding works against the embedded
@@ -227,8 +231,12 @@ final class ScaffoldCommand implements Runnable {
         @Option(names = {"--force"}, description = "Overwrite an edited or user-owned template.")
         boolean force;
 
+        @Mixin
+        ConfigOptions configOptions;
+
         @Override
         public Integer call() throws Exception {
+            configOptions.apply();
             Path home = SingleApplication.resolve(app, "tesseraql scaffold eject-view");
             if (home == null) {
                 return 2;

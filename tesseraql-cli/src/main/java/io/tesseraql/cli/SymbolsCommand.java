@@ -24,6 +24,7 @@ import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -46,12 +47,16 @@ final class SymbolsCommand implements Callable<Integer> {
     @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
     Path app;
 
+    @Mixin
+    ConfigOptions configOptions;
+
     /** One document that could not be parsed, so its symbols are missing from this run. */
     private record Broken(String source, String error) {
     }
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         Path home = app.toAbsolutePath().normalize();
         List<Broken> broken = new ArrayList<>();
         // The tolerant load the hot reloader uses: an unparseable route document costs its own

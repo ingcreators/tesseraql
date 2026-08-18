@@ -7,18 +7,25 @@ import java.util.Optional;
 import picocli.CommandLine.Option;
 
 /**
- * Shared datasource options for the database-touching subcommands ({@code identity-schema},
- * {@code migrate}, {@code test}, {@code scaffold crud}, ...). Mixed into a command with
- * {@code @Mixin}, it exposes {@code --jdbc-url/--username/--password} and resolves a
- * {@link DriverManagerDataSource}, falling back to the app's {@code tesseraql.datasources.main.*}
- * config when no URL is given, kept in one place so the CLI surfaces never drift. (The
- * {@code mcp} dev-tools still carry their own copy of the config fallback — argument-driven,
- * not option-driven.)
+ * The connection option set (docs/cli-surface.md Decision 5): {@code --jdbc-url}, {@code
+ * --username}, {@code --password} and {@code --datasource}, mixed into every command that opens a
+ * database. It resolves a {@link DriverManagerDataSource}, falling back to the named datasource's
+ * {@code tesseraql.datasources.<name>.*} config (default {@code main}) when no URL is given, kept
+ * in one place so the CLI surfaces never drift. The {@code --datasource} name also keys
+ * datasource-scoped work — {@code migrate}'s migration set, {@code schema}'s catalog — so one
+ * flag never means two things. (The {@code mcp} dev-tools still carry their own copy of the
+ * config fallback — argument-driven, not option-driven.)
  */
-final class CliDatasource {
+final class ConnectionOptions {
 
-    @Option(names = {"--jdbc-url"}, description = "JDBC URL (default: the app's main datasource).")
+    @Option(names = {
+            "--jdbc-url"}, description = "JDBC URL (default: the app's --datasource config).")
     String jdbcUrl;
+
+    @Option(names = {"--datasource"}, paramLabel = "<name>", description = "Named datasource"
+            + " whose configuration backs the connection, and the key for datasource-scoped work"
+            + " (default: main).")
+    String name = "main";
 
     @Option(names = {"--username"}, description = "Database user for --jdbc-url.")
     String username;
@@ -39,14 +46,14 @@ final class CliDatasource {
             if (config == null) {
                 throw new IllegalArgumentException("--jdbc-url is required");
             }
-            url = config.getString("tesseraql.datasources.main.jdbcUrl").orElseThrow(
+            url = config.getString(key("jdbcUrl")).orElseThrow(
                     () -> new IllegalArgumentException("No --jdbc-url given and the app config"
-                            + " declares no tesseraql.datasources.main.jdbcUrl"));
+                            + " declares no " + key("jdbcUrl")));
             if (user == null) {
-                user = config.getString("tesseraql.datasources.main.username").orElse(null);
+                user = config.getString(key("username")).orElse(null);
             }
             if (pass == null) {
-                pass = config.getString("tesseraql.datasources.main.password").orElse(null);
+                pass = config.getString(key("password")).orElse(null);
             }
         }
         return new DriverManagerDataSource(url, user, pass);
@@ -69,14 +76,12 @@ final class CliDatasource {
             String configPass = password;
             if (config != null) {
                 try {
-                    configUrl = config.getString("tesseraql.datasources.main.jdbcUrl").orElse(null);
+                    configUrl = config.getString(key("jdbcUrl")).orElse(null);
                     if (configUser == null) {
-                        configUser = config.getString("tesseraql.datasources.main.username")
-                                .orElse(null);
+                        configUser = config.getString(key("username")).orElse(null);
                     }
                     if (configPass == null) {
-                        configPass = config.getString("tesseraql.datasources.main.password")
-                                .orElse(null);
+                        configPass = config.getString(key("password")).orElse(null);
                     }
                 } catch (RuntimeException ex) {
                     // Unresolvable placeholders (e.g. ${db.main.url} with no input declared) —
@@ -93,5 +98,10 @@ final class CliDatasource {
             }
         }
         return resolve(config);
+    }
+
+    /** The configuration key for {@code field} under the named datasource. */
+    private String key(String field) {
+        return "tesseraql.datasources." + name + "." + field;
     }
 }

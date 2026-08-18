@@ -57,7 +57,7 @@ final class JobCommand implements Callable<Integer> {
     Path app;
 
     @Mixin
-    CliDatasource datasource;
+    ConnectionOptions datasource;
 
     @Option(names = {"--param"}, description = "Job parameter as name=value; repeatable.")
     List<String> params = List.of();
@@ -74,15 +74,18 @@ final class JobCommand implements Callable<Integer> {
             + " execution's completed steps as SKIPPED and start at its first failure.")
     boolean fromFailedStep;
 
-    @Option(names = {"--modules"}, description = "Directory of extra module jars (composes with"
-            + " the app's declared tesseraql.modules).")
-    java.io.File modules;
+    @Mixin
+    CompileOptions compile;
+
+    @Mixin
+    ConfigOptions configOptions;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Override
     public Integer call() throws Exception {
-        CliModules.installAppExtensions(app, modules);
+        configOptions.apply();
+        CliModules.installAppExtensions(app, compile.modules);
         AppManifest manifest = new ManifestLoader().load(app);
         Map<String, JobFile> jobs = new LinkedHashMap<>();
         manifest.jobs().forEach(job -> jobs.put(job.definition().id(), job));

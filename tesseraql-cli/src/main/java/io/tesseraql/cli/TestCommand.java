@@ -44,7 +44,7 @@ final class TestCommand implements Callable<Integer> {
     Path app;
 
     @Mixin
-    CliDatasource datasource;
+    ConnectionOptions datasource;
 
     @Option(names = {"--realm"}, description = "Managed realm id (default: local).")
     String realm = "local";
@@ -91,15 +91,18 @@ final class TestCommand implements Callable<Integer> {
         text, json
     }
 
-    @Option(names = {"--modules"}, description = "Directory of extra module jars (composes with"
-            + " the app's declared tesseraql.modules).")
-    java.io.File modules;
+    @Mixin
+    CompileOptions compile;
+
+    @Mixin
+    ConfigOptions configOptions;
 
     @Override
     public Integer call() throws Exception {
+        configOptions.apply();
         // Validation rules evaluate expressions, so custom functions install first (the same
-        // modules wiring serve boots with).
-        CliModules.installAppExtensions(app, modules);
+        // modules wiring dev boots with).
+        CliModules.installAppExtensions(app, compile.modules);
         AppManifest manifest = new ManifestLoader().load(app);
         DriverManagerDataSource dataSource = datasource.resolve(manifest.config(), app);
         Path reports = reportDir != null

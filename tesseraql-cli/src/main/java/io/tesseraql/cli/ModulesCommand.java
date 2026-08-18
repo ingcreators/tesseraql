@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
@@ -43,11 +44,15 @@ final class ModulesCommand implements Runnable {
         @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
         Path app;
 
+        @Mixin
+        ConfigOptions configOptions;
+
         @Option(names = {"--offline"}, description = "Resolve only from the local repository.")
         boolean offline;
 
         @Override
         public Integer call() throws Exception {
+            configOptions.apply();
             ModuleCoordinate.parse(coordinate);
             Path tesseraqlYml = app.resolve("config/tesseraql.yml");
             String updated = ModulesYaml.addModule(Files.readString(tesseraqlYml), coordinate);
@@ -69,11 +74,15 @@ final class ModulesCommand implements Runnable {
         @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
         Path app;
 
+        @Mixin
+        ConfigOptions configOptions;
+
         @Option(names = {"--offline"}, description = "Resolve only from the local repository.")
         boolean offline;
 
         @Override
         public Integer call() {
+            configOptions.apply();
             AppConfig config = new ManifestLoader().load(app).config();
             return new ModulesInstaller(offline).install(app, config, true).map(result -> {
                 System.out.println("Resolved " + result.artifacts().size() + " artifact(s) into "
@@ -93,8 +102,12 @@ final class ModulesCommand implements Runnable {
         @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
         Path app;
 
+        @Mixin
+        ConfigOptions configOptions;
+
         @Override
         public Integer call() {
+            configOptions.apply();
             AppConfig config = new ManifestLoader().load(app).config();
             List<ModuleCoordinate> declared = ModulesYaml.declared(config);
             if (declared.isEmpty()) {

@@ -23,6 +23,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 
 /**
@@ -98,6 +99,9 @@ final class DuckDbCommand implements Callable<Integer> {
         @Option(names = {"--app"}, required = true, description = "Path to the app home.")
         Path app;
 
+        @Mixin
+        ConfigOptions configOptions;
+
         @Option(names = {
                 "--repository"}, description = "Extension repository URL (a corporate mirror); default is DuckDB's.")
         String repository;
@@ -112,6 +116,7 @@ final class DuckDbCommand implements Callable<Integer> {
 
         @Override
         public Integer call() throws Exception {
+            configOptions.apply();
             AppConfig config = new ManifestLoader().load(app).config();
             Path cache = extensionDirectory(config, app);
             Files.createDirectories(cache);
@@ -154,8 +159,12 @@ final class DuckDbCommand implements Callable<Integer> {
         @Option(names = {"--app"}, required = true, description = "Path to the app home.")
         Path app;
 
+        @Mixin
+        ConfigOptions configOptions;
+
         @Override
         public Integer call() throws Exception {
+            configOptions.apply();
             AppConfig config = new ManifestLoader().load(app).config();
             Path cache = extensionDirectory(config, app);
             Set<String> declared = declaredExtensions(config);
