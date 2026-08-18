@@ -80,8 +80,17 @@ buffer for all of them ([app-isolation-model.md](app-isolation-model.md) decisio
    and hidden outside the caller's grants (deny by default); `ops.app.*` grants everything.
 3. `kamal setup` / `kamal deploy`.
 
-Kamal swaps containers with old and new briefly overlapping, so migrations must stay
-expand/contract (backward compatible) - the same discipline the canary flow already requires.
+Old and new versions briefly overlap in every deploy shape — Kamal swaps containers with both
+serving, and a [`tesseraql deploy`](hosting.md#deploying-one-application) starts the new runtime
+beside the old one before traffic moves. So migrations must stay expand/contract (backward
+compatible): that is the deploy window's contract, and the old version serves over the migrated
+schema for the length of the window.
+
+The stack also stops gracefully: on SIGTERM, `host` flips the gateway's readiness to 503 while
+liveness stays 200, keeps serving until in-flight work drains, and then closes every runtime
+under its own `tesseraql.shutdown.timeout`. Give the platform a grace period —
+`terminationGracePeriodSeconds`, Kamal's `deploy_timeout`, and kin — longer than the slowest
+member's declared timeout, or the platform's SIGKILL cuts the drain short.
 
 ## Multi-server notes
 

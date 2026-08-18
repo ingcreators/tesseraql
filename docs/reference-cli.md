@@ -5,7 +5,7 @@ Every `tesseraql` subcommand, generated from the command model the binary itself
 
 Most commands take `--app <dir>`, the application home they act on. Every subcommand calls the same engine as the matching Maven goal, so a CLI loop and a CI pipeline do the same work.
 
-[`dev`](#dev) · [`host`](#host) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
+[`dev`](#dev) · [`host`](#host) · [`deploy`](#deploy) · [`routes`](#routes) · [`new`](#new) · [`scaffold`](#scaffold) · [`lint`](#lint) · [`token`](#token) · [`test`](#test) · [`coverage`](#coverage) · [`generate`](#generate) · [`schema`](#schema) · [`symbols`](#symbols) · [`release-diff`](#release-diff) · [`governance`](#governance) · [`admission`](#admission) · [`migrate`](#migrate) · [`job`](#job) · [`identity-schema`](#identity-schema) · [`package`](#package) · [`verify`](#verify) · [`modules`](#modules) · [`embedded-db`](#embedded-db) · [`duckdb`](#duckdb) · [`mcp`](#mcp)
 
 ## `dev`
 
@@ -37,6 +37,59 @@ Serve every installed app from one port, each in its own runtime.
 | `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
 | `--http2` | — | Serve and forward cleartext HTTP/2 (h2c). Off by default. One switch moves both hops: a client's connection to the gateway and the gateway's connection to each app. An app that does not offer h2c answers the upgrade over HTTP/1.1 and is reached exactly as before. |
 | `--trusted-proxies <cidr,...>` | — | Addresses whose forwarded headers come from your edge rather than from a caller, e.g. 10.0.0.0/8,192.168.1.5. When set, an application's mTLS forwardedHeader is stripped from requests arriving from anywhere else. Empty by default, which strips nothing: the edge overwriting the header on every inbound request is the contract either way. |
+
+## `deploy`
+
+Deploy one application into a stack's install root; a running host replaces its runtime without a restart.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `<package.tqlapp>` | — | The application package to deploy. Its declared name says which member it replaces; its version must be newer than the installed one. |
+| `--stack <dir>` | — | The install root to deploy into: catalog.json plus one unpacked tree per application version. Explicit, never discovered - production does not guess. |
+| `--canary` | — | Stage the new version beside the serving one instead of replacing it, at --weight percent of HTTP traffic (default 10). Promote or roll back when the ramp has said its piece. |
+| `--weight <percent>` | — | The staged canary's share of HTTP traffic, 0-100. Only with --canary; background work participates fully from candidate start regardless. |
+| `--sha256 <hex>` | — | Verify the package's SHA-256 before anything is written; a tampered or corrupted package is rejected. |
+| `--wait` | — | Wait for the running host to report the outcome in the member's .upgrade status file before exiting. |
+| `--wait-timeout <seconds>` | — | How long --wait waits before giving up loudly (default 300). |
+
+### `deploy weight`
+
+Adjust the staged canary's share of HTTP traffic.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `<name>` | yes | The application whose canary is staged. |
+| `<percent>` | yes | The new share, 0-100. |
+| `--stack <dir>` | yes | The install root. |
+
+### `deploy promote`
+
+Activate the staged canary; the previous version stays on disk for rollback.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `<name>` | yes | The application whose canary is staged. |
+| `--stack <dir>` | yes | The install root. |
+| `--wait` | — | Wait for the running host to report the outcome in the member's .upgrade status file before exiting. |
+| `--wait-timeout <seconds>` | — | How long --wait waits before giving up loudly (default 300). |
+
+### `deploy rollback`
+
+Discard a staged canary, or restore the previous version as active.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `<name>` | yes | The application to roll back. |
+| `--stack <dir>` | yes | The install root. |
+
+### `deploy status`
+
+Show each member's active version, staged canary, and the host's last reported outcome.
+
+| Argument | Required? | Description |
+| --- | --- | --- |
+| `<name>` | — | One application; every catalogued one when omitted. |
+| `--stack <dir>` | yes | The install root. |
 
 ## `routes`
 

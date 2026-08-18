@@ -22,6 +22,7 @@ import picocli.CommandLine.Option;
 @Command(name = "tesseraql", mixinStandardHelpOptions = true, versionProvider = TesseraqlCli.VersionProvider.class, description = "SQL-first hypermedia and integration framework.", subcommands = {
         TesseraqlCli.DevCommand.class,
         HostCommand.class,
+        DeployCommand.class,
         TesseraqlCli.RoutesCommand.class,
         NewCommand.class,
         ScaffoldCommand.class,

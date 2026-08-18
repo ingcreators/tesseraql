@@ -5,7 +5,8 @@ How an application team moves to a new TesseraQL release. Two things carry a ver
 version your app builds against (the `tesseraql.version` property in the scaffolded
 `pom.xml`, plus the resolved module closure in `modules.lock`). Keep them on the same
 release — the scaffold pins them together, and this page keeps them together through an
-upgrade.
+upgrade. Shipping a new version of your *application* into a running stack is a different
+move: see [hosting.md's deploy section](hosting.md#deploying-one-application).
 
 ## Compatibility before 1.0
 

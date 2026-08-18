@@ -11,13 +11,17 @@ out. Written 2026-08-18, before implementation.
 
 Everything below was measured against main at #860 unless marked otherwise.
 
-**Status 2026-08-18: design approved in review.** Open questions 1–4 each closed on their
-recommendation (the file-state trigger, the declared drain bound with the cooperative stop
-requested at drain start, the single `deploy` verb, the ready probe before the swap); question
-5 closed as deferred, its section standing as the record the grants work inherits. Review
-itself reshaped the design five times before approval — the swap race, the stack's own stop,
-the overlap window's fine print, the job drain correction, and the deploy-authorization
-boundary — each recorded in place. Implementation pending, in the three slices below.
+**Status 2026-08-18: all three slices shipped.** Slice 1 (the host operation, the live relay,
+the stack's own graceful stop); slice 2 (the reconciler, atomic state writes, the status
+write-back); slice 3 (the `deploy` verb, TQL-UPGRADE-4092, the docs sweep). Open questions 1–4
+each closed on their recommendation (the file-state trigger, the declared drain bound with the
+cooperative stop requested at drain start, the single `deploy` verb, the ready probe before the
+swap); question 5 closed as deferred, its section standing as the record the grants work
+inherits. Review itself reshaped the design five times before approval — the swap race, the
+stack's own stop, the overlap window's fine print, the job drain correction, and the
+deploy-authorization boundary — each recorded in place. One count corrected at implementation:
+structural decision 3 said the verb count moves from 25 to 26; the reference stood at 24, so it
+moves to 25.
 
 ## What exists today, measured
 
@@ -357,9 +361,10 @@ refusals (not newer, framework range) surface in the terminal before any state i
 deploy into — is refused with **TQL-UPGRADE-4092** naming what an install root is and that a
 workspace of source trees deploys by restart.
 
-The verb count moves from 25 to 26 (`cli-surface.md`'s mapping table gains one row);
-`deploy` takes `--stack` explicitly like `host` does — production does not guess (Decision 9's
-`host` rule applies: the flag is required, no discovery).
+The verb count moves from 24 to 25 (`cli-surface.md`'s mapping table gains one row; the
+draft said 25 to 26 — corrected at implementation against `reference-cli.md`); `deploy` takes
+`--stack` explicitly like `host` does — production does not guess (Decision 9's `host` rule
+applies: the flag is required, no discovery).
 
 ## Per-application deploy authorization, asked in review
 

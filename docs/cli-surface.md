@@ -639,6 +639,7 @@ and gains its options.
 | --- | --- |
 | `serve` | **becomes `dev`**; `--app` → **`--stack`**, which is now the only way to name what runs (Decision 1), discovered one level up when omitted (Decision 9); gains `--app-name` for narrowing (Decision 3); `+config` (already had `--env`) |
 | `host` | `--install-root` → **`--stack`**, always explicit — production does not guess (Decision 9); **`--mode` deleted** with independent hosting (`stack-architecture.md` Decision 12); keeps `--port`, `--http2`, `--trusted-proxies`; gains `--app-name` (Decision 3); `+config` |
+| `deploy` | **new** (`stack-architecture.md` Decision 29, [runtime-replace.md](runtime-replace.md)): the operator's pen for the install root's deploy protocol — a positional package plus `promote` / `rollback` / `weight` / `status` subcommands, `--canary`/`--weight`, `--sha256`, `--wait`; `--stack` always explicit like `host`'s (Decision 9); refuses a catalogue-less directory (TQL-UPGRADE-4092) |
 | `mcp` | gains **`--stack`** (discovered one level up when omitted, Decision 9) and `--app-name` — `stack-architecture.md` Decision 19 makes the development-tool MCP span the stack, and Decision 3 is how it narrows; `--read-only` becomes a property of the server, not of an application; `+config` |
 | `new` | `--dir` → **`--stack`**, not `--app` — see Decision 8; it names the *parent*, which is by definition a directory holding applications. The "Next steps" it prints are rewritten with it |
 | `migrate` | `--app-name` **deleted**, not renamed — see Decision 6; `+config` |

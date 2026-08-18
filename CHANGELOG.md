@@ -25,6 +25,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`tesseraql deploy` — an operator deploys one application with one command, and the stack
+  never restarts** (docs/stack-architecture.md Decision 29, docs/runtime-replace.md). The verb
+  is the deploy protocol's pen: a positional `.tqlapp` package replaces the member it names
+  (`--canary --weight <n>` stages a ramp instead), and `weight`, `promote`, `rollback` and
+  `status` subcommands drive the rest of the lifecycle `AppUpgrader` already carries.
+  `--sha256` verifies the package before anything is written; `--wait` tails
+  `.upgrade/<name>.status.json` until the running host reports the outcome, so a CI pipeline
+  gets a synchronous exit code out of an asynchronous host — and without it, or with no host
+  running at all, the state is written and the next host start converges to it. `--stack` is
+  explicit like `host`'s, and must be an install root: a workspace of source trees has no
+  version ledger and is refused (**TQL-UPGRADE-4092**) — it deploys by restarting the stack.
+
 - **A running host converges to the install root's state — deploying is writing the files**
   (docs/stack-architecture.md Decision 29, docs/runtime-replace.md). `catalog.json` and
   `.upgrade/<name>.json` were already the protocol boot reads (a restart mid-canary has always
