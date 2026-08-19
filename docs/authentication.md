@@ -410,9 +410,9 @@ It serves three endpoints under `/_tesseraql/oidc`:
 
 With `link.enabled: true`, the resolution key is an **immutable identity link**
 (`tql_user_identities`): the token's `iss` + `sub` pair links to the local user on first sign-in,
-and every later sign-in resolves through the link — so a `preferred_username` change at the OP
-re-syncs the **same** account (login id, display name and email are mutable, re-synced profile
-fields) instead of provisioning a duplicate. `claims.map` is the declared attribute capture:
+and every later sign-in resolves through the link. A `preferred_username` change at the OP
+therefore re-syncs the **same** account instead of provisioning a duplicate — login id, display
+name and email are mutable, re-synced profile fields. `claims.map` is the declared attribute capture:
 each entry re-syncs one ID-token claim into a
 [store attribute](iam-admin.md#attributes-and-assignment-rules) at every login — set when the
 token carries it, deleted when it stops — written before the principal resolves, so the same
