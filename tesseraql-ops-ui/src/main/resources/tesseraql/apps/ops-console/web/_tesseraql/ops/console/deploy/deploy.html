@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: ops-shell-page('Deploy an application', ${deploy.shell}, ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/ops/console}">&larr; console</a>
+  </div>
+</th:block>
+<!-- No auto-refresh, unlike the sibling pages: a poll would discard a file the operator has
+     already picked into the form. -->
+<div id="page-content" class="hc-stack">
+
+<!-- The endpoint's post/redirect/get lands back here with the result as query parameters, so
+     a refresh re-renders the banner instead of re-uploading the package. -->
+<p class="hc-alert" data-variant="success" role="status" th:if="${deployed}">
+  Deployed <strong th:text="${deployed}">app</strong>
+  <span th:if="${fromVersion}" th:text="|from ${fromVersion} to ${toVersion}|">versions</span>
+  <span th:unless="${fromVersion}" th:text="|at ${toVersion}|">version</span>
+  <th:block th:if="${canary}">&mdash; staged as a canary; watch its second switcher entry and
+    promote or roll back with the CLI.</th:block>
+  <th:block th:unless="${canary}">&mdash; the running host's reconciler converges the stack to
+    it while the stack serves.</th:block>
+</p>
+
+<section class="hc-card">
+  <div class="hc-card__header">Deploy a package</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">Upload a <code>.tqlapp</code>. The endpoint checks your
+      <code>tql.app.deploy</code> grant against the <strong>package's declared name</strong>
+      &mdash; never a form field &mdash; runs the upgrade preflight, and writes the intent the
+      reconciler converges to. A refused deploy writes nothing.</p>
+    <!-- The kit's mutating-form recipe against POST /_tesseraql/deploy itself: htmx posts the
+         multipart body and swaps the shared renderer's error fragment on a refusal; success
+         answers HX-Redirect back to this page. With no JavaScript the same form posts plain
+         multipart — the _csrf field is the header's no-JS twin — and follows the 303. -->
+    <form id="deploy-form" method="post" enctype="multipart/form-data"
+          th:action="@{/_tesseraql/deploy}"
+          th:hx-post="@{/_tesseraql/deploy}" hx-encoding="multipart/form-data"
+          hx-target="#deploy-errors" hx-swap="innerHTML"
+          hx-disabled-elt="find button[type=submit]" hx-indicator="find .hc-spinner"
+          class="hc-stack">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <div id="deploy-errors"></div>
+      <label class="hc-field">
+        <span class="hc-field__label">Package</span>
+        <input class="hc-input" type="file" name="file" accept=".tqlapp" required>
+      </label>
+      <label class="hc-switch-label">
+        <input class="hc-switch" type="checkbox" name="canary" value="true">
+        <span class="hc-field__label">Stage as a canary instead of replacing</span>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Canary weight (percent, only with the canary)</span>
+        <input class="hc-input" type="number" name="weight" min="0" max="100" placeholder="10">
+      </label>
+      <span class="hc-action">
+        <button type="submit" class="hc-button" data-variant="primary">Deploy</button>
+        <span class="hc-spinner htmx-indicator" aria-hidden="true"></span>
+      </span>
+    </form>
+  </div>
+</section>
+
+<section class="hc-card">
+  <div class="hc-card__header">Applications you may deploy</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">Your <code>tql.app.deploy</code> grants applied to the
+      stack's members. A package declaring any other name refuses at the endpoint.</p>
+    <table class="hc-table" th:if="${deploy.hasApps}">
+      <thead><tr><th>Application</th><th>Installed version</th><th></th></tr></thead>
+      <tbody>
+        <tr th:each="app : ${deploy.apps}">
+          <td th:text="${app.name}">app</td>
+          <td th:text="${app.version}">1.0.0</td>
+          <td><span class="hc-badge" data-variant="warning" th:if="${app.canary}">canary staged</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <!-- A wildcard-or-new-name grant with no matching member still deploys: the table is the
+         intersection with today's members, and the empty state says so instead of implying
+         the form is dead. -->
+    <p class="hc-field__message" th:unless="${deploy.hasApps}">None of the stack's current
+      members match your grants by name; a package whose declared name your grants cover
+      still deploys.</p>
+  </div>
+</section>
+
+<section class="hc-card">
+  <div class="hc-card__header">From a pipeline</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">The same endpoint without a browser &mdash; a scoped bearer
+      instead of install-root access.</p>
+    <div class="hc-cluster">
+      <span class="hc-spacer"></span>
+      <button type="button" class="hc-button" data-variant="ghost" data-size="sm"
+              data-hc-copy="#deploy-cli">Copy</button>
+    </div>
+    <pre class="hc-code"><code id="deploy-cli">tesseraql deploy ./app-1.2.0.tqlapp --url https://this-host</code></pre>
+  </div>
+</section>
+</div>
+</html>

@@ -1,0 +1,43 @@
+version: tesseraql/v1
+id: tql.opsConsole.deploy
+kind: route
+recipe: query-html
+
+# The deploy page (docs/stack-shells.md, the deploy page): the console face of
+# POST /_tesseraql/deploy. The form posts its multipart submit to that same endpoint — this
+# page adds reach, not a second door — and the endpoint answers post/redirect/get back here,
+# the result riding the query parameters below. Display-gated in the service on holding any
+# tql.app.deploy atom: a non-holder is refused 404-shaped like every out-of-scope ops
+# resource, and the endpoint re-checks the atom against the package's declared name on every
+# submit, so a shell bug can widen what is listed, never what is deployed.
+
+input:
+  deployed:
+    type: string
+    required: false
+  fromVersion:
+    type: string
+    required: false
+  toVersion:
+    type: string
+    required: false
+  canary:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: ops.shell.deploy
+      params:
+        permissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: deploy.html
+    model:
+      deploy: main
+      deployed: params.deployed
+      fromVersion: params.fromVersion
+      toVersion: params.toVersion
+      canary: params.canary

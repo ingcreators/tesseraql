@@ -185,6 +185,133 @@ class StackDeployIntegrationTest {
                 .isEqualTo("2.0.0");
     }
 
+    /**
+     * The ops deploy page's display gate (docs/stack-shells.md, the deploy page): a browser
+     * session holding a {@code tql.app.deploy} grant gets the page — its form posting to the
+     * endpoint itself — and the console home's nav carries the entry; a session without one
+     * meets the 404-shaped refusal and no nav entry, the deny-by-default the switcher already
+     * has.
+     */
+    @Test
+    @Order(6)
+    void theDeployPageRendersOnlyForADeployGrantHolder() throws Exception {
+        BrowserSession deployer = signIn("deployer");
+        HttpResponse<String> page = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port()
+                        + "/_tesseraql/ops/console/deploy"))
+                .header("Cookie", deployer.cookie())
+                .header("Accept", "text/html")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(page.statusCode()).as(page.body()).isEqualTo(200);
+        assertThat(page.body()).contains("action=\"/_tesseraql/deploy\"");
+        assertThat(page.body()).as("lists the member the grant covers, with its version")
+                .contains("shop").contains("2.0.0");
+
+        HttpResponse<String> home = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port() + "/_tesseraql/ops/console"))
+                .header("Cookie", deployer.cookie())
+                .header("Accept", "text/html")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(home.body()).as("the nav entry renders for a holder")
+                .contains("/_tesseraql/ops/console/deploy");
+
+        BrowserSession nodeploy = signIn("nodeploy");
+        HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port()
+                        + "/_tesseraql/ops/console/deploy"))
+                .header("Cookie", nodeploy.cookie())
+                .header("Accept", "text/html")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(refused.statusCode()).as("no atom, no page — 404-shaped like the switcher")
+                .isEqualTo(404);
+        HttpResponse<String> bareHome = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port() + "/_tesseraql/ops/console"))
+                .header("Cookie", nodeploy.cookie())
+                .header("Accept", "text/html")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(bareHome.body()).doesNotContain("/_tesseraql/ops/console/deploy");
+    }
+
+    /**
+     * A page that can make the browser POST must not be able to deploy: a session-cookie
+     * multipart submit without the CSRF token is refused, and nothing is written.
+     */
+    @Test
+    @Order(7)
+    void aBrowserSubmitWithoutTheCsrfTokenIsRefused() throws Exception {
+        BrowserSession session = signIn("deployer");
+        HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port() + "/_tesseraql/deploy"))
+                .header("Cookie", session.cookie())
+                .header("Accept", "text/html")
+                .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(
+                        multipart(packaged(appHome("9.0.0", "s1"), "9.0.0"), null)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(refused.statusCode()).isEqualTo(403);
+        assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
+                .isEqualTo("2.0.0");
+    }
+
+    /**
+     * The no-JS shape of the deploy page's form: a plain multipart post — the package as the
+     * {@code file} part, the CSRF token as the {@code _csrf} field — answers post/redirect/get
+     * back to the page with the result riding the query, and the reconciler converges the
+     * stack to the new version exactly as for the bearer path.
+     */
+    @Test
+    @Order(8)
+    void aBrowserMultipartFormDeploysWithPostRedirectGet() throws Exception {
+        BrowserSession session = signIn("deployer");
+        HttpResponse<String> accepted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port() + "/_tesseraql/deploy"))
+                .header("Cookie", session.cookie())
+                .header("Accept", "text/html")
+                .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(
+                        multipart(packaged(appHome("3.0.0", "s1"), "3.0.0"), session.csrf())))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(303);
+        assertThat(accepted.headers().firstValue("Location").orElseThrow())
+                .isEqualTo("/_tesseraql/ops/console/deploy?deployed=shop"
+                        + "&fromVersion=2.0.0&toVersion=3.0.0");
+
+        assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
+                .isEqualTo("3.0.0");
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (System.currentTimeMillis() < deadline && !"s1".equals(itemName())) {
+            Thread.sleep(200);
+        }
+        assertThat(itemName()).as("the reconciler replaced the serving runtime").isEqualTo("s1");
+    }
+
+    /**
+     * The htmx shape of the same form ({@code installCsrfHeader} carries the token as the
+     * {@code X-CSRF-Token} header): success answers 200 with {@code HX-Redirect} — htmx's
+     * full-navigation signal — and no JSON body for the swap target.
+     */
+    @Test
+    @Order(9)
+    void anHtmxMultipartSubmitIsAnsweredWithHxRedirect() throws Exception {
+        BrowserSession session = signIn("deployer");
+        HttpResponse<String> accepted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + gateway.port() + "/_tesseraql/deploy"))
+                .header("Cookie", session.cookie())
+                .header("HX-Request", "true")
+                .header("X-CSRF-Token", session.csrf())
+                .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(
+                        multipart(packaged(appHome("4.0.0", "s2"), "4.0.0"), null)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+        assertThat(accepted.headers().firstValue("HX-Redirect").orElseThrow())
+                .isEqualTo("/_tesseraql/ops/console/deploy?deployed=shop"
+                        + "&fromVersion=3.0.0&toVersion=4.0.0");
+        assertThat(accepted.body()).isEmpty();
+        assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
+                .isEqualTo("4.0.0");
+    }
+
     private static HttpResponse<String> deploy(Path tqlapp, String bearer, String query)
             throws Exception {
         return CLIENT.send(HttpRequest.newBuilder(
@@ -195,13 +322,11 @@ class StackDeployIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    /**
-     * The acquisition path the design names (docs/stack-shells.md): sign in at the origin, then
-     * exchange the session for a bearer at the origin's {@code /_tesseraql/token} — both served
-     * by the surface runtime and signed with the stack file's key, the caller's own grants
-     * riding the token's claims.
-     */
-    private static String acquireBearer(String loginId) throws Exception {
+    /** A signed-in browser at the origin: the session cookie and its CSRF token. */
+    record BrowserSession(String cookie, String csrf) {
+    }
+
+    private static BrowserSession signIn(String loginId) throws Exception {
         HttpResponse<String> login = CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + gateway.port()
                         + "/_tesseraql/login"))
@@ -212,19 +337,51 @@ class StackDeployIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
-        String cookie = setCookie.substring(0, setCookie.indexOf(';'));
-        String csrf = MAPPER.readTree(login.body()).path("csrfToken").asText();
+        return new BrowserSession(setCookie.substring(0, setCookie.indexOf(';')),
+                MAPPER.readTree(login.body()).path("csrfToken").asText());
+    }
 
+    /**
+     * The acquisition path the design names (docs/stack-shells.md): sign in at the origin, then
+     * exchange the session for a bearer at the origin's {@code /_tesseraql/token} — both served
+     * by the surface runtime and signed with the stack file's key, the caller's own grants
+     * riding the token's claims.
+     */
+    private static String acquireBearer(String loginId) throws Exception {
+        BrowserSession session = signIn(loginId);
         HttpResponse<String> exchanged = CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + gateway.port()
                         + "/_tesseraql/token"))
-                        .header("Cookie", cookie)
-                        .header("X-CSRF-Token", csrf)
+                        .header("Cookie", session.cookie())
+                        .header("X-CSRF-Token", session.csrf())
                         .POST(HttpRequest.BodyPublishers.noBody())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
         return MAPPER.readTree(exchanged.body()).path("token").asText();
+    }
+
+    private static final String BOUNDARY = "tql-deploy-test-boundary";
+
+    /**
+     * The deploy page's form as bytes: the package as the {@code file} part and, when given,
+     * the CSRF token as the {@code _csrf} field — the no-JS twin of the header.
+     */
+    private static byte[] multipart(Path tqlapp, String csrf) throws IOException {
+        var bytes = new java.io.ByteArrayOutputStream();
+        if (csrf != null) {
+            bytes.writeBytes(("--" + BOUNDARY + "\r\n"
+                    + "Content-Disposition: form-data; name=\"_csrf\"\r\n\r\n"
+                    + csrf + "\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        bytes.writeBytes(("--" + BOUNDARY + "\r\n"
+                + "Content-Disposition: form-data; name=\"file\"; filename=\"app.tqlapp\"\r\n"
+                + "Content-Type: application/octet-stream\r\n\r\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        bytes.writeBytes(Files.readAllBytes(tqlapp));
+        bytes.writeBytes(("\r\n--" + BOUNDARY + "--\r\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return bytes.toByteArray();
     }
 
     private static String itemName() throws Exception {

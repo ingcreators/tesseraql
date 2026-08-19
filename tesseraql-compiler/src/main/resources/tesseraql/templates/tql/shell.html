@@ -330,6 +330,9 @@
     <a class="hc-item" th:each="entry : ${shell.entries}" th:attr="href=@{${entry.href}}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#blocks}"/></svg></span><span class="hc-item__title hc-shell__label" th:text="${entry.label}">app</span></a>
   </div>
   <a class="hc-item" th:href="@{/_tesseraql/ops/console/token}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Token</span></a>
+  <!-- Display-gated on holding any tql.app.deploy atom (docs/stack-shells.md, the deploy
+       page); reach only — the endpoint re-checks the atom against the package it receives. -->
+  <a class="hc-item" th:if="${shell.deploy}" th:href="@{/_tesseraql/ops/console/deploy}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#rocket}"/></svg></span><span class="hc-item__title hc-shell__label">Deploy</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
     <p class="tql-nav__group" id="ops-nav-system">System</p>
     <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>
@@ -354,6 +357,7 @@
     <a class="hc-item" th:attr="href=@{|${shell.base}/audit${shell.slotQuery}|}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#scroll-text}"/></svg></span><span class="hc-item__title hc-shell__label">Audit</span></a>
   </div>
   <a class="hc-item" th:href="@{/_tesseraql/ops/console/token}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#lock}"/></svg></span><span class="hc-item__title hc-shell__label">Token</span></a>
+  <a class="hc-item" th:if="${shell.deploy}" th:href="@{/_tesseraql/ops/console/deploy}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#rocket}"/></svg></span><span class="hc-item__title hc-shell__label">Deploy</span></a>
   <div class="tql-nav__section" role="group" aria-labelledby="ops-nav-system">
     <p class="tql-nav__group" id="ops-nav-system">System</p>
     <a class="hc-item" th:if="${_system != null && _system.studioHref != null}" th:attr="href=${_system.studioHref}"><span class="hc-item__media" aria-hidden="true"><svg class="hc-icon"><use th:href="@{/assets/_tesseraql/icons.svg#layout-dashboard}"/></svg></span><span class="hc-item__title hc-shell__label">Studio</span></a>

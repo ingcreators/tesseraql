@@ -840,6 +840,12 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
             public boolean hasCanary(String member) {
                 return MultiAppHost.this.hasCanary(member);
             }
+
+            @Override
+            public String version(String member) {
+                Slot slot = slots.get(member);
+                return slot == null || slot.entry() == null ? null : slot.entry().version();
+            }
         };
     }
 

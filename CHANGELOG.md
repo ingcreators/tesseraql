@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The ops console grew the deploy endpoint's browser face** (docs/stack-shells.md, the
+  deploy page — the slice-3 follow-up). `/_tesseraql/ops/console/deploy` rides the shell's
+  chrome, appears only for a signed-in holder of any `tql.app.deploy` grant, lists the
+  members those grants cover with the version each serves right now (read live from the
+  host's slots, so a replace never shows stale numbers), and uploads a `.tqlapp` — optionally
+  canary-staged with a weight — to `POST /_tesseraql/deploy` itself. The endpoint learned the
+  browser's shapes without touching the JSON contract: a multipart body (the `file` part is
+  the package; form fields ride as they do on every compiled route), the `_csrf` field beside
+  the `X-CSRF-Token` header, and post/redirect/get answers (`HX-Redirect` for the htmx
+  submit, a 303 for the no-JS form). The gate is display only: the endpoint still checks the
+  atom against the package's declared name on every submit, so the page widens what is
+  listed, never what is deployed.
+
 - **The MCP surface is gated, discoverable, and audience-bound** (docs/token-issuance.md
   slice 10, delivering docs/audit-hardening.md slices 6 and 7). `tesseraql.mcp.auth` adds the
   transport gate the handler always had a seam for: `public` by default — nothing changes

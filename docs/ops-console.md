@@ -23,6 +23,7 @@ The console checks the framework's permission atoms, per application
 | --- | --- |
 | `tql.ops.view.<name>` | Seeing that application's operational data: its switcher entry and every read page. |
 | `tql.ops.run.<name>` | Acting on it: run a job, redeliver an outbox message or a dead-lettered event. |
+| `tql.app.deploy.<name>` | The [Deploy page](#deploy): uploading a new version of that application. |
 
 The wildcard is a terminal `*` (`tql.ops.view.*`). The verbs are granted separately —
 *view broadly, act narrowly* — and deny by default: a caller with no `tql.ops.view` atoms
@@ -104,6 +105,19 @@ status, the duration, the bound parameters, and a link to the trace.
 
 The audit store is off unless `tesseraql.audit.routes.enabled` is set. When it is off, the
 page says so and names the key rather than showing an empty table.
+
+## Deploy
+
+The browser face of the stack's deploy endpoint (`POST /_tesseraql/deploy` —
+[hosting.md](hosting.md#operating-a-host)): upload a `.tqlapp`, optionally staged as a canary
+with a traffic weight, and the running host's reconciler converges the stack to it without a
+restart. The page appears in the sidebar only for a signed-in holder of a `tql.app.deploy`
+grant, and it lists the members those grants cover with the version each serves right now.
+
+The gate is display only. The form posts to the endpoint itself, which checks the caller's
+`tql.app.deploy.<name>` grant against the **package's declared name** — never a form field —
+so the page can widen what is listed, never what is deployed. A refusal (wrong application,
+stale version, failed preflight) renders inline on the form and writes nothing.
 
 ## What the console does not do
 

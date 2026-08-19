@@ -39,8 +39,13 @@ final class OpsActions {
 
     /** The 404 refusal for an unknown — or out-of-scope, which reads the same — resource. */
     static TqlException notFound(String what) {
+        return notFound(what, "tql.ops");
+    }
+
+    /** The same 404 shape naming the atom family whose absence made the resource unreachable. */
+    static TqlException notFound(String what, String atomFamily) {
         return TqlException.builder(UNKNOWN)
-                .message(what + " is unknown or outside the caller's tql.ops scope")
+                .message(what + " is unknown or outside the caller's " + atomFamily + " scope")
                 .build();
     }
 
