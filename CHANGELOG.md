@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The stack tells clients where its authorization server lives** (docs/token-issuance.md
+  slice 7). `GET /.well-known/oauth-authorization-server` at the stack origin serves RFC 8414
+  metadata — the issuer is the origin with no path component, so the document sits at the bare
+  well-known and the endpoints are listed absolute. `code` responses only, `S256` only, `none`
+  and `client_secret_basic` auth methods, and deliberately **no `scopes_supported`** — the
+  measured clients proceed without it, and the scope parameter grants nothing here. The
+  gateway's origin fence now forwards `/.well-known/*` to the stack surface runtime.
+
 - **`/register`: a client announces itself, and consent is why that is safe**
   (docs/token-issuance.md slice 6). `POST /_tesseraql/oauth/register` serves RFC 7591 dynamic
   registration, open because the MCP clients this exists for cannot present an initial access
