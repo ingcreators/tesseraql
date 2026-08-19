@@ -114,6 +114,15 @@
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
+    <!-- The authorization server's store, exercised here against a real database because the
+         security migration component and Testcontainers both live on this side
+         (docs/token-issuance.md slice 2). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-oauth</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-studio</artifactId>
