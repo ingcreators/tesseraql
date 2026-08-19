@@ -47,15 +47,31 @@ public final class McpHttpHandler {
      */
     private final Map<String, Long> sessions = new ConcurrentHashMap<>();
     private final java.time.Duration ttl;
+    /**
+     * The 401 challenge. Bare {@code Bearer} unless the embedder supplies the RFC 9728
+     * {@code resource_metadata} form — the parameter Claude requires to discover which
+     * authorization server issues for this resource (docs/audit-hardening.md decision 2).
+     */
+    private final String challenge;
 
     public McpHttpHandler(McpServer server, McpAuthenticator authenticator) {
-        this(server, authenticator, DEFAULT_TTL);
+        this(server, authenticator, "Bearer", DEFAULT_TTL);
+    }
+
+    public McpHttpHandler(McpServer server, McpAuthenticator authenticator, String challenge) {
+        this(server, authenticator, challenge, DEFAULT_TTL);
     }
 
     /** Visible for tests, and for an embedder that wants a different idle window. */
     McpHttpHandler(McpServer server, McpAuthenticator authenticator, java.time.Duration ttl) {
+        this(server, authenticator, "Bearer", ttl);
+    }
+
+    private McpHttpHandler(McpServer server, McpAuthenticator authenticator, String challenge,
+            java.time.Duration ttl) {
         this.server = server;
         this.authenticator = authenticator;
+        this.challenge = challenge;
         this.ttl = ttl;
     }
 
@@ -96,7 +112,7 @@ public final class McpHttpHandler {
                 authenticator.authenticate(request.authorization());
             } catch (RuntimeException ex) {
                 return json(401, "{\"error\":\"unauthorized\"}", Map.of("WWW-Authenticate",
-                        "Bearer"));
+                        challenge));
             }
         }
         return switch (request.method().toUpperCase(java.util.Locale.ROOT)) {

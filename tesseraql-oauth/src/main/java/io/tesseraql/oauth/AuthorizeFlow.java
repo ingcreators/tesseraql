@@ -63,6 +63,11 @@ public final class AuthorizeFlow {
         return externalOrigin;
     }
 
+    /** The stack's members, name to address — what the resource metadata is served for. */
+    public Map<String, String> memberAddresses() {
+        return memberAddresses;
+    }
+
     /**
      * The full ladder for one request, consent screen owed unless a recorded consent already
      * answers it. {@code subject}/{@code loginId} identify the session's principal;

@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The MCP surface is gated, discoverable, and audience-bound** (docs/token-issuance.md
+  slice 10, delivering docs/audit-hardening.md slices 6 and 7). `tesseraql.mcp.auth` adds the
+  transport gate the handler always had a seam for: `public` by default — nothing changes
+  without opting in — and `bearer` demands a token whose audience is the surface's canonical
+  resource identifier (derived from the address: the member's address plus
+  `/_tesseraql/mcp`), so a token minted for the application beside it still refuses. The 401
+  carries `WWW-Authenticate: Bearer resource_metadata="…"` — the discovery the measured
+  clients try first — and the stack origin serves RFC 9728 protected-resource metadata at the
+  path-inserted well-known per member, naming the stack's authorization server. With this, an
+  MCP client can walk discovery → registration → consent → code → token → tools against a
+  stack whose only identity source is TesseraQL's own login.
+
 - **The account page shows what you authorised, and revoking it means it**
   (docs/token-issuance.md slice 8). `/_tesseraql/account/connections` lists the signed-in
   user's OAuth connections per client and per resource — the client's registered name rendered

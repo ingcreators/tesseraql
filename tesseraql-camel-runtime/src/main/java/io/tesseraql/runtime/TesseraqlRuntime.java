@@ -1369,8 +1369,53 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             .map(Boolean::parseBoolean).orElse(true)) {
                 io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(appName, mcpApps,
                         context.createProducerTemplate());
+                // The MCP transport gate (docs/audit-hardening.md decision 2, delivered with
+                // the authorization-server campaign's resource slice): tesseraql.mcp.auth is
+                // public by default — nothing changes without opting in — and `bearer` demands
+                // a token whose audience is THIS surface's canonical resource identifier,
+                // derived from the address unless declared. The 401 carries the RFC 9728
+                // resource_metadata challenge whenever the resource is absolute, because the
+                // measured clients discover through the challenge first.
+                String mcpAuth = manifest.config().getString("tesseraql.mcp.auth")
+                        .orElse("public");
+                io.tesseraql.mcp.McpAuthenticator mcpGate = null;
+                String mcpChallenge = "Bearer";
+                if ("bearer".equals(mcpAuth)) {
+                    if (security.jwt() == null) {
+                        throw new io.tesseraql.core.error.TqlException(
+                                new io.tesseraql.core.error.TqlErrorCode(
+                                        io.tesseraql.core.error.TqlDomain.MCP, 4262),
+                                "tesseraql.mcp.auth is bearer, but no JWT validation is"
+                                        + " configured — the gate has nothing to verify a"
+                                        + " token against");
+                    }
+                    String origin = hostContext == null ? null : hostContext.externalOrigin();
+                    String mcpResource = manifest.config()
+                            .getString("tesseraql.mcp.resource")
+                            .orElse((origin == null ? "" : origin)
+                                    + (basePath == null ? "" : basePath) + "/_tesseraql/mcp");
+                    io.tesseraql.security.SecurityConfig.JwtConfig gate = withAudience(
+                            security.jwt(), mcpResource);
+                    io.tesseraql.security.jwt.JwtAuthenticator mcpJwt = new io.tesseraql.security.jwt.JwtAuthenticator(
+                            gate);
+                    mcpGate = mcpJwt::authenticate;
+                    if (origin != null) {
+                        mcpChallenge = "Bearer resource_metadata=\"" + origin
+                                + "/.well-known/oauth-protected-resource"
+                                + (basePath == null ? "" : basePath) + "/_tesseraql/mcp\"";
+                    }
+                } else if (!"public".equals(mcpAuth)) {
+                    throw new io.tesseraql.core.error.TqlException(
+                            new io.tesseraql.core.error.TqlErrorCode(
+                                    io.tesseraql.core.error.TqlDomain.MCP, 4262),
+                            "tesseraql.mcp.auth '" + mcpAuth + "' is not served at the"
+                                    + " transport gate yet — public and bearer are; the"
+                                    + " per-primitive auth:/policy: continue underneath"
+                                    + " either");
+                }
                 context.addRoutes(new McpRouteBuilder(
-                        new io.tesseraql.mcp.McpHttpHandler(mcpServer, null)));
+                        new io.tesseraql.mcp.McpHttpHandler(mcpServer, mcpGate,
+                                mcpChallenge)));
                 LOG.info(
                         "Serving {} MCP tool(s), {} resource(s), {} UI resource(s), and {} prompt(s)"
                                 + " at /_tesseraql/mcp",
@@ -3279,6 +3324,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 dataSource);
         store.ensureSchema();
         return new io.tesseraql.core.account.CachingPreferenceStore(store);
+    }
+
+    /**
+     * The application's validation block with the audience swapped for the MCP surface's
+     * canonical resource identifier — audit-hardening decision 2's binding: a token at the MCP
+     * endpoint must be issued for THIS surface, not merely for the application beside it.
+     */
+    private static io.tesseraql.security.SecurityConfig.JwtConfig withAudience(
+            io.tesseraql.security.SecurityConfig.JwtConfig jwt, String audience) {
+        return new io.tesseraql.security.SecurityConfig.JwtConfig(jwt.algorithm(), jwt.secret(),
+                jwt.publicKey(), jwt.jwksUri(), jwt.jwks(), jwt.issuer(),
+                java.util.List.of(audience), jwt.clockSkew(), jwt.requireExpiration(),
+                jwt.rolesClaim(), jwt.permissionsClaim(), jwt.groupsClaim(), jwt.tenantClaim(),
+                jwt.loginClaim(), jwt.nameClaim());
     }
 
     /**
