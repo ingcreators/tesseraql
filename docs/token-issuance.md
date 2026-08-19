@@ -1,9 +1,14 @@
 # Token issuance
 
-Status: **designed 2026-08-16; campaign started 2026-08-19.** This is the implementation design
-for the authorization server [stack-architecture.md](stack-architecture.md) decided to build. That
-document decided *whether* and *what for*; this one decides *how*, and stops where a measurement it
-does not have would decide better.
+Status: **designed 2026-08-16; campaign started and every slice shipped 2026-08-19.** This is
+the implementation design for the authorization server
+[stack-architecture.md](stack-architecture.md) decided to build. That document decided *whether*
+and *what for*; this one decided *how* — and the how is now on main: the module and its store,
+the signing keys and the JWKS, issuer unification, `/authorize` with consent and the acting-role
+face, `/token`, `/register`, the RFC 8414 metadata, the account page, and the MCP resource side
+with its transport gate. What remains of the campaign is not a slice: the Decision 11 acceptance
+run against the real clients, and the RFC 8707 `resource` observation the fail-loud
+`invalid_target` placeholder waits on.
 
 The campaign-start revision reconciles the design with what shipped between those two dates — the
 stack surface runtime, the stack file's security graft, the per-application role model — and closes
