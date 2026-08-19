@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize access</title>
+  <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components/hc.min.css}">
+</head>
+<body class="hc-page" data-density="compact">
+<main class="hc-container" style="max-width: 30rem; margin-top: 10vh;">
+  <div class="hc-card">
+    <div class="hc-card__body hc-stack">
+      <h1 class="hc-heading">Authorize access</h1>
+
+      <th:block th:if="${requestError != null or review.error != null}">
+        <p class="hc-alert" data-variant="danger" role="alert">
+          This authorization request cannot proceed
+          (<span th:text="${requestError != null ? requestError : review.error}">error</span>).
+          Close this page and start again from the application that sent you here.
+        </p>
+      </th:block>
+
+      <th:block th:if="${requestError == null and review.error == null}">
+        <!-- The client's name is display text chosen by the party asking to be authorised
+             (docs/token-issuance.md decision 4): rendered escaped, and never presented as
+             though the framework vouched for it. -->
+        <p><strong th:text="${review.clientName}">a client</strong>
+          (<code th:text="${review.clientId}">client-id</code>) asks to access
+          <strong th:text="${review.member}">an application</strong> as you.</p>
+        <p class="hc-field__message">Resource: <code th:text="${review.resource}">resource</code>.
+          Consent is recorded for this application and this resource only; other applications in
+          this stack ask separately.</p>
+
+        <form method="post" action="/_tesseraql/oauth/consent" class="hc-stack">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <input type="hidden" name="client_id" th:value="${review.clientId}">
+          <input type="hidden" name="redirect_uri" th:value="${review.redirectUri}">
+          <input type="hidden" name="state" th:value="${review.state}">
+          <input type="hidden" name="code_challenge" th:value="${review.codeChallenge}">
+          <input type="hidden" name="resource" th:value="${review.resource}">
+
+          <!-- The acting-role selection (docs/application-roles.md, the OAuth face): a
+               concurrent-role user narrows the connection to one capacity; a single holder is
+               pre-selected — the browser's one-role auto-confirm in consent form. Changing a
+               connection's capacity later is a re-authorization. -->
+          <label class="hc-field" th:if="${!#lists.isEmpty(review.roles)}">
+            <span class="hc-field__label">Acting as</span>
+            <select class="hc-select" name="actingRole">
+              <option value="" th:if="${#lists.size(review.roles) > 1}">
+                No application role</option>
+              <option th:each="grant : ${review.roles}" th:value="${grant.role}"
+                      th:text="${grant.role}"
+                      th:selected="${grant.role == review.singleRole}"></option>
+            </select>
+          </label>
+
+          <div class="hc-cluster">
+            <button type="submit" name="decision" value="approve" class="hc-button"
+                    data-variant="primary">Allow</button>
+            <button type="submit" name="decision" value="deny" class="hc-button">Deny</button>
+          </div>
+        </form>
+      </th:block>
+    </div>
+  </div>
+</main>
+</body>
+</html>
