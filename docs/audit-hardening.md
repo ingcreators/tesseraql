@@ -486,8 +486,8 @@ neither depends on anything else in this campaign.
 | 3 | SQL Server constraint classification, including the xopenStates path | yes | Gated dialect round-trip required |
 | 4 | Per-file poll exclusion on every transport | yes | New key, new table, new migration |
 | 5 | Shutdown ordering and boot-failure teardown | no | Land early regardless |
-| 6 | MCP transport gate: `tesseraql.mcp.auth` and audience binding | yes | Depends on slices 1 and 12 |
-| 7 | MCP Protected Resource Metadata and a conformant challenge | yes | Depends on slice 6 |
+| 6 | ~~MCP transport gate: `tesseraql.mcp.auth` and audience binding~~ — **shipped 2026-08-19 with the authorization-server campaign's resource slice** (token-issuance.md slice 10): `public` by default, `bearer` binds the audience to the canonical resource identifier, derived from the address | yes | Depends on slices 1 and 12 |
+| 7 | ~~MCP Protected Resource Metadata and a conformant challenge~~ — **shipped 2026-08-19, same slice**: path-inserted per-member documents at the stack origin, `authorization_servers` = the stack issuer, and the 401 challenge carries `resource_metadata` | yes | Depends on slice 6 |
 | 8 | Node identity, heartbeat, and a bounded stop | yes | Timer-driven heartbeat, not boundary writes |
 | 9 | The reaper, and `overlap: skip` asking whether the owner is alive | yes | Depends on slice 8 |
 | 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and stack-mode tracing | yes | Reaches every log line and the console's trace pages |

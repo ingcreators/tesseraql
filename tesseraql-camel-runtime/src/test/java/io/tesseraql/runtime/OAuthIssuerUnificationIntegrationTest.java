@@ -451,6 +451,78 @@ class OAuthIssuerUnificationIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Order(6)
+    void theMcpSurfaceIsGatedDiscoverableAndAudienceBound() throws Exception {
+        String mcpResource = "http://localhost:" + port + "/shop/_tesseraql/mcp";
+
+        // The path-inserted well-known — the probe the measured clients try first.
+        HttpResponse<String> metadata = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port
+                        + "/.well-known/oauth-protected-resource/shop/_tesseraql/mcp"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
+        JsonNode document = MAPPER.readTree(metadata.body());
+        assertThat(document.get("resource").asText()).isEqualTo(mcpResource);
+        assertThat(document.get("authorization_servers").get(0).asText())
+                .isEqualTo("http://localhost:" + port);
+
+        // No token: 401, and the challenge names where the metadata lives.
+        HttpResponse<String> challenged = mcp(mcpResource, null);
+        assertThat(challenged.statusCode()).isEqualTo(401);
+        assertThat(challenged.headers().firstValue("WWW-Authenticate").orElse(""))
+                .contains("resource_metadata=")
+                .contains("/shop/_tesseraql/mcp");
+
+        // A member-API token is not the MCP audience: the gate refuses it.
+        HttpResponse<String> memberToken = exchange("alice", "{\"appName\":\"shop\"}");
+        String wrongAudience = MAPPER.readTree(memberToken.body()).path("token").asText();
+        assertThat(mcp(mcpResource, wrongAudience).statusCode()).isEqualTo(401);
+
+        // A token granted FOR the MCP resource opens it: the whole chain, once more, with the
+        // resource below the member's address (a new resource means a new consent).
+        String[] session = signIn("alice");
+        String form = "_csrf=" + enc(session[1]) + "&client_id=codex&redirect_uri="
+                + enc("http://127.0.0.1:49681/callback/x") + "&state=mcp"
+                + "&code_challenge=" + enc(challenge(VERIFIER))
+                + "&resource=" + enc(mcpResource) + "&decision=approve";
+        HttpResponse<String> approved = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/decision"))
+                .header("Cookie", session[0])
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form)).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(approved.statusCode()).as(approved.body()).isEqualTo(303);
+        String code = approved.headers().firstValue("Location").orElseThrow()
+                .replaceAll(".*[?&]code=([^&]+).*", "$1");
+        HttpResponse<String> minted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=authorization_code&client_id=codex&code=" + enc(code)
+                                + "&redirect_uri=" + enc("http://127.0.0.1:49681/callback/x")
+                                + "&code_verifier=" + enc(VERIFIER)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(minted.statusCode()).as(minted.body()).isEqualTo(200);
+        String access = MAPPER.readTree(minted.body()).get("access_token").asText();
+
+        HttpResponse<String> opened = mcp(mcpResource, access);
+        assertThat(opened.statusCode()).as(opened.body()).isEqualTo(200);
+    }
+
+    private static HttpResponse<String> mcp(String endpoint, String bearer) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(endpoint))
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json, text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
+                                + "\"params\":{}}"));
+        if (bearer != null) {
+            request.header("Authorization", "Bearer " + bearer);
+        }
+        return CLIENT.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
     void aForgedTokenIsStillRefusedAtTheMember() throws Exception {
         HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/shop/api/secure"))
@@ -540,12 +612,16 @@ class OAuthIssuerUnificationIntegrationTest {
                 // audience stays and the origin joins it.
                 .replace("secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}",
                         ""));
-        // No jwt block anywhere: the validation configuration is the stack's, derived.
+        // No jwt block anywhere: the validation configuration is the stack's, derived. The
+        // MCP transport gate is on (docs/audit-hardening.md decision 2), so the member's MCP
+        // surface demands a token minted for ITS resource identifier.
         Files.writeString(home.resolve("config/overlay.yml"), """
                 tesseraql:
                   app:
                     name: shop
                     version: 1.0.0
+                  mcp:
+                    auth: bearer
                 db:
                   main:
                     url: %s&currentSchema=s1
@@ -553,6 +629,28 @@ class OAuthIssuerUnificationIntegrationTest {
                     password: %s
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
+        Path mcpDir = home.resolve("mcp");
+        Files.createDirectories(mcpDir);
+        Files.writeString(mcpDir.resolve("items.yml"), """
+                version: tesseraql/v1
+                id: items.tool
+                kind: tool
+                recipe: query-json
+                description: Lists the items.
+                security:
+                  auth: public
+                sources:
+                  main:
+                    sql:
+                      file: items.sql
+                      mode: query
+                response:
+                  json:
+                    status: 200
+                    body:
+                      data: main.rows
+                """);
+        Files.writeString(mcpDir.resolve("items.sql"), "select id, name from items order by id\n");
         Path itemsDir = home.resolve("web/api/secure");
         Files.createDirectories(itemsDir);
         Files.writeString(itemsDir.resolve("get.yml"), """

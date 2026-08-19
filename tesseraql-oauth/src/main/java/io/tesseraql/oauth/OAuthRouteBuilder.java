@@ -69,7 +69,35 @@ final class OAuthRouteBuilder extends RouteBuilder {
                     .to("direct:tql.oauth.metadata");
             from("direct:tql.oauth.metadata").routeId("system.oauth.metadata")
                     .process(this::metadata);
+            // RFC 9728 protected-resource metadata, path-inserted per member — the probe the
+            // measured clients try first (docs/audit-hardening.md decision 2). One document
+            // per member's MCP surface; the surface serves them because it is what holds the
+            // member list and the origin, and the fence already owns /.well-known/*.
+            for (String basePath : flow.memberAddresses().values()) {
+                rest().get("/.well-known/oauth-protected-resource" + basePath
+                        + "/_tesseraql/mcp").to("direct:tql.oauth.resourceMetadata");
+            }
+            from("direct:tql.oauth.resourceMetadata").routeId("system.oauth.resourceMetadata")
+                    .process(this::resourceMetadata);
         }
+    }
+
+    /** The document behind one member's path-inserted well-known: its resource id, and the
+     * issuer as the one entry in {@code authorization_servers}. */
+    private void resourceMetadata(Exchange exchange) throws Exception {
+        String path = exchange.getMessage().getHeader(Exchange.HTTP_PATH, String.class);
+        if (path == null || path.isBlank()) {
+            path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        }
+        String resource = flow.issuer()
+                + path.substring("/.well-known/oauth-protected-resource".length());
+        java.util.Map<String, Object> document = new java.util.LinkedHashMap<>();
+        document.put("resource", resource);
+        document.put("authorization_servers", java.util.List.of(flow.issuer()));
+        document.put("bearer_methods_supported", java.util.List.of("header"));
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
     }
 
     /**
