@@ -1,9 +1,10 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;

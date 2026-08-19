@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * thread; every frame write hops to the connection's event-loop context, and a client
  * disconnect fails the next write, which ends the producer.
  */
-final class SseRoutes {
+public final class SseRoutes {
 
     private static final Logger LOG = LoggerFactory.getLogger(SseRoutes.class);
 
@@ -42,7 +42,7 @@ final class SseRoutes {
     }
 
     /** One connected SSE client; {@code data} must be single-line by construction. */
-    interface Writer {
+    public interface Writer {
         void event(String name, String data) throws IOException;
 
         /** Sets the browser's reconnect delay — long-lived streams send it at open. */
@@ -50,12 +50,12 @@ final class SseRoutes {
     }
 
     /** The producing side of one stream, run on its own virtual thread. */
-    interface Producer {
+    public interface Producer {
         void produce(Writer writer) throws Exception;
     }
 
     /** One SSE endpoint: {@code begin} gates the stream, the returned producer feeds it. */
-    interface Handler {
+    public interface Handler {
         Producer begin(Principal principal, Function<String, String> query);
     }
 
@@ -73,7 +73,7 @@ final class SseRoutes {
      * router routes, so Camel's REST configuration — where the prefix reaches every other
      * framework endpoint at once — does not apply to them.
      */
-    static void register(CamelContext camelContext, int port, String path, Handler handler) {
+    public static void register(CamelContext camelContext, int port, String path, Handler handler) {
         VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
                 VertxPlatformHttpRouter.getRouterNameFromPort(port));
         String mounted = io.tesseraql.camel.BasePath.of(camelContext) + path;

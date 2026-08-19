@@ -42,6 +42,13 @@
       <artifactId>tesseraql-studio</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- The workshop extension (docs/studio-shell.md): the developer CLI ships Studio's
+         runtime-side machinery; the runtime module itself no longer depends on it. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-studio-runtime</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-report</artifactId>

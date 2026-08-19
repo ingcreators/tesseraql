@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;

@@ -115,24 +115,18 @@
       <scope>test</scope>
     </dependency>
     <!-- The authorization server (docs/token-issuance.md): a framework surface of the stack,
-         shipped in the runtime like Studio and gated by the stack file's
-         security.oauth.enabled — inert everywhere the graft does not reach. -->
+         gated by the stack file's security.oauth.enabled — inert everywhere the graft does
+         not reach. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-oauth</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-studio</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <!-- The declarative test engine, run from Studio against the dev datasource (backlog A2). -->
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-test-core</artifactId>
-      <version>${project.version}</version>
-    </dependency>
+    <!-- Studio and the declarative test engine deliberately do NOT appear here: the workshop
+         lives in tesseraql-studio-runtime, discovered through the RuntimeExtension SPI, so a
+         deployment's runtime carries no test framework (docs/studio-shell.md structural
+         decision 3, docs/runtime-footprint.md problem 2). The enforcer rule below is the
+         boundary's guard. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-mcp</artifactId>
@@ -327,6 +321,42 @@
 
   <build>
     <plugins>
+      <plugin>
+        <!--
+          The workshop boundary (docs/studio-shell.md structural decision 3, the guard
+          docs/runtime-footprint.md open question 5 asked for): the runtime that every
+          deployment carries must never depend on Studio or on a test framework at compile
+          or runtime scope. Test scope stays free — a test framework in tests is correct.
+        -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>no-workshop-on-the-runtime</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>io.tesseraql:tesseraql-studio:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-studio:*:*:runtime</exclude>
+                    <exclude>io.tesseraql:tesseraql-studio-runtime</exclude>
+                    <exclude>io.tesseraql:tesseraql-test-core:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-test-core:*:*:runtime</exclude>
+                    <exclude>com.icegreen:greenmail:*:*:compile</exclude>
+                    <exclude>com.icegreen:greenmail:*:*:runtime</exclude>
+                    <exclude>junit:junit:*:*:compile</exclude>
+                    <exclude>junit:junit:*:*:runtime</exclude>
+                  </excludes>
+                  <searchTransitive>true</searchTransitive>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>

@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.yaml.config.AppConfig;

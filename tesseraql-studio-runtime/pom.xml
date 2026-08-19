@@ -1,0 +1,87 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.15.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-studio-runtime</artifactId>
+  <name>Tesseraql Studio Runtime</name>
+  <!--
+    The workshop's runtime-side machinery (docs/studio-shell.md structural decision 3): the
+    Studio providers, JSON API, sandboxed test runner, scaffold and data services, and the
+    Copilot transports, self-installed into a runtime through the RuntimeExtension SPI
+    (design ch. 47). This module exists so tesseraql-camel-runtime carries no compile-time
+    dependency on tesseraql-studio or on the declarative test framework — the jar on the
+    classpath is the whole install, and a deployment without it carries no test engine,
+    no GreenMail and no JUnit 4.
+  -->
+
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-camel-runtime</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-studio</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- The declarative test engine, run from Studio against the dev datasource (backlog A2). -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-test-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The example fixture declares a DuckDB analytics datasource; the data-browser test
+         seeds one. Test-only, exactly as in the runtime module (docs/duckdb.md). -->
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The optional PDF codec, on the test classpath so the render-preview PDF path is proven. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-pdf</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- The framework-surface guard needs every family mounted at once (ops, studio, scim,
+         mcp, tql, system), and this module's test tree is the one classpath that has them. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-scim</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+</project>

@@ -53,7 +53,7 @@ public final class ScaffoldedConfigKeys {
             Map.entry("tesseraql.studio.enabled",
                     "tesseraql-studio/src/main/java/io/tesseraql/studio/StudioAppProvider.java"),
             Map.entry("tesseraql.studio.readOnly",
-                    "tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java"),
+                    "tesseraql-studio-runtime/src/main/java/io/tesseraql/studio/runtime/StudioRuntimeExtension.java"),
             Map.entry("tesseraql.security.defaults.routes",
                     "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/SecurityDefaults.java"),
             Map.entry("tesseraql.security.responseHeaders",

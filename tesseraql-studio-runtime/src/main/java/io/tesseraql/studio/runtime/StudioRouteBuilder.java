@@ -1,9 +1,10 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.runtime.RouteReloader;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.StudioService;
 import java.util.LinkedHashMap;
@@ -173,7 +174,16 @@ final class StudioRouteBuilder extends RouteBuilder {
         from("direct:studio.reload").routeId("studio.reload")
                 .to(AUTH).process(json(exchange -> {
                     studioAccess.requireEdit(roles(exchange));
-                    return reloader.reload(true);
+                    RouteReloader.Result reload = reloader.reload(true);
+                    // The response keeps the pre-extraction shape: the reload delta plus the
+                    // refreshed explorer (the reload listeners have already re-read it).
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("reloaded", reload.reloaded());
+                    result.put("added", reload.added());
+                    result.put("removed", reload.removed());
+                    result.put("failed", reload.failed());
+                    result.put("explorer", studio.explorer());
+                    return result;
                 }));
     }
 

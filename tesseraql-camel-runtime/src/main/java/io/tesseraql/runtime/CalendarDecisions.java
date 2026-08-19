@@ -21,7 +21,7 @@ import javax.sql.DataSource;
  * (docs/silent-tolerance.md O5). {@link io.tesseraql.opsui.CalendarStatus} carries it to the
  * dashboard, which raises {@code TQL-OPS-9009} while any job is firing unfiltered.
  */
-final class CalendarDecisions {
+public final class CalendarDecisions {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(CalendarDecisions.class);
@@ -82,7 +82,7 @@ final class CalendarDecisions {
      * the schedule has no calendar, nothing counts within the horizon, or resolution failed.
      * The daily-consider model is invisible until its outcome is shown somewhere.
      */
-    String nextCounting(JobFile job, LocalDate from) {
+    public String nextCounting(JobFile job, LocalDate from) {
         Resolved resolved = resolve(job);
         if (resolved == null) {
             return null;

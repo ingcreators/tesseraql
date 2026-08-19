@@ -79,6 +79,7 @@
     <module>tesseraql-report</module>
     <module>tesseraql-apptasks</module>
     <module>tesseraql-studio</module>
+    <module>tesseraql-studio-runtime</module>
     <module>tesseraql-ops-ui</module>
     <module>tesseraql-docs-reference</module>
     <module>tesseraql-excel</module>

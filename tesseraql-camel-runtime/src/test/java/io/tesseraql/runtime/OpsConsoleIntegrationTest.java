@@ -132,8 +132,12 @@ class OpsConsoleIntegrationTest {
                     .contains(">Overview<").contains(">Jobs<").contains(">Traces<")
                     .contains(">Transfers<").contains(">Outbox<").contains(">Events<")
                     .contains(">Audit<")
-                    // the other system apps stay reachable
-                    .contains(">Studio<").contains(">IAM Admin<")
+                    // the shell links only what is mounted here (docs/stack-shells.md
+                    // structural decision 2's `_system` rule): this module's test classpath
+                    // carries no workshop since the extraction (docs/studio-shell.md slice 1),
+                    // so the Studio link is honestly absent — the mounted-Studio complement
+                    // lives in the workshop module's own tests.
+                    .doesNotContain(">Studio<").contains(">IAM Admin<")
                     // icons via the self-hosted sprite
                     .contains("/assets/_tesseraql/icons.svg#waypoints");
         }

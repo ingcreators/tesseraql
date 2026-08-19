@@ -208,10 +208,14 @@ authorisation and about one console per stack: it is what removes a test framewo
 double and JUnit from every deployment. That is worth recording, because a campaign with two
 independent justifications is scheduled differently from one with a single justification.
 
-Until then the chain is measured and documented rather than quietly carried. The extraction
-is designed in [studio-shell.md](studio-shell.md) (2026-08-19): a `tesseraql-studio-runtime`
-extension module the runtime discovers, so the runtime module's compile scope drops
-`tesseraql-studio` and `tesseraql-test-core` in its slice 1.
+The extraction is designed in [studio-shell.md](studio-shell.md) (2026-08-19): a
+`tesseraql-studio-runtime` extension module the runtime discovers, so the runtime module's
+compile scope drops `tesseraql-studio` and `tesseraql-test-core` in its slice 1. **That slice
+is shipped**: the chain above is gone from the runtime module, and an enforcer rule — the
+guard open question 5 asked for — fails the build if Studio, test-core, GreenMail or JUnit 4
+ever reach its compile or runtime scope again. The deployment *image* still carries the jars
+until Decision 1 splits the distributions; what changed is that the split is now a packaging
+decision, and the jars are inert under a host by topology.
 
 ## Open
 

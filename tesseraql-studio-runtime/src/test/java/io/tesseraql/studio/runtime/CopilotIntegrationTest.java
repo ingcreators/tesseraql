@@ -1,8 +1,9 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
+import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;

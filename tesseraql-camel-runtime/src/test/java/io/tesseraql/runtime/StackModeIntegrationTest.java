@@ -155,33 +155,9 @@ class StackModeIntegrationTest {
         }
     }
 
-    /**
-     * Studio under the gateway (docs/app-isolation-model.md slice 5): a per-runtime Studio is
-     * reached through its application's prefix, and everything it emits — asset URLs, the CSRF
-     * token the kit posts back, the command palette's navigation targets — is prefixed with it.
-     */
-    @Test
-    void studioIsUsableThroughItsApplicationsPrefix() throws Exception {
-        HttpResponse<String> studio = get("/shop-a/_tesseraql/studio/ui", sessionCookie);
-
-        assertThat(studio.statusCode()).isEqualTo(200);
-        assertThat(studio.body()).contains("<meta name=\"csrf-token\"");
-        // The origin-scope addresses a member page carries are exactly the stack's own
-        // surfaces (docs/stack-shells.md structural decisions 2 and 3): the operations
-        // console, IAM Admin, and the account family — everything else stays base-relative.
-        assertThat(originRootedUrlsIn(studio.body()))
-                .containsOnly("/_tesseraql/ops/console", "/_tesseraql/admin/users",
-                        "/_tesseraql/account", "/_tesseraql/account/pins/toggle");
-        assertThat(studio.body())
-                .as("the command palette navigates to addresses this runtime serves")
-                .contains("data-value=\"/shop-a/_tesseraql/studio/ui/docs\"");
-        // Every address it names is served by this runtime. Whether this caller may open it is
-        // a separate question — the ops shell needs tql.ops.view atoms — so the test asks only
-        // that the address exists, which is what a prefix can break.
-        for (String url : prefixedUrlsIn(studio.body())) {
-            assertThat(get(url, sessionCookie).statusCode()).as(url).isNotEqualTo(404);
-        }
-    }
+    // "Studio is usable through its application's prefix" moved to the workshop module's
+    // StackStudioIntegrationTest (docs/studio-shell.md slice 1): this module's test classpath
+    // no longer carries Studio, which is the extraction's whole point.
 
     /** An unauthenticated browser on a member page is bounced to the stack's origin sign-in —
      * the member serves no door of its own — with a {@code redirect} carrying the prefixed
@@ -190,7 +166,7 @@ class StackModeIntegrationTest {
     void theLoginBounceGoesToTheStacksOrigin() throws Exception {
         HttpResponse<String> denied = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER).build()
-                .send(HttpRequest.newBuilder(uri("/shop-a/_tesseraql/studio/ui"))
+                .send(HttpRequest.newBuilder(uri("/shop-a/users/board"))
                         .header("Accept", "text/html").build(),
                         HttpResponse.BodyHandlers.ofString());
 
@@ -198,7 +174,7 @@ class StackModeIntegrationTest {
         assertThat(denied.headers().firstValue("Location").orElse(""))
                 .startsWith("/_tesseraql/login?redirect=")
                 .as("the redirect target is the prefixed address the browser asked for, once")
-                .endsWith("%2Fshop-a%2F_tesseraql%2Fstudio%2Fui");
+                .endsWith("%2Fshop-a%2Fusers%2Fboard");
     }
 
     private static String cookieFrom(String rawResponse) {

@@ -1,6 +1,6 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
-import static io.tesseraql.runtime.TesseraqlRuntime.renderRoutesPdf;
+import static io.tesseraql.studio.runtime.StudioSupport.renderRoutesPdf;
 
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;

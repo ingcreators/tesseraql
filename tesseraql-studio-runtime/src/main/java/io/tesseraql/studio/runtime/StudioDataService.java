@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import java.io.IOException;
 import java.io.StringWriter;
