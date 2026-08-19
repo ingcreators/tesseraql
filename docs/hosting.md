@@ -141,7 +141,10 @@ name** — never a request parameter, so a token scoped to `orders` cannot deplo
 renaming anything — runs the same preflight, and writes the same intent on its own install
 root; a refused deploy answers as the response and writes nothing. This is how a pipeline
 deploys only the applications it manages, with a scoped short-lived token and no login to the
-host machine. It needs the stack file to carry the token issuer:
+host machine. The same endpoint has a browser face: the ops console's **Deploy** page
+(`/_tesseraql/ops/console/deploy`), shown to any signed-in holder of a `tql.app.deploy` grant,
+uploads a `.tqlapp` through the same checks ([ops console](ops-console.md#deploy)). It needs
+the stack file to carry the token issuer:
 
 ```yaml
 # tesseraql-stack.yml

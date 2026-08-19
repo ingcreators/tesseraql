@@ -103,6 +103,15 @@ public record HostContext(String basePath, String cookiePath, String externalOri
 
         /** Whether {@code member} has a staged canary slot right now. */
         boolean hasCanary(String member);
+
+        /**
+         * The version {@code member}'s stable slot serves right now, or {@code null} when
+         * unknown. Live like {@link #port}, because the boot-time member list goes stale the
+         * moment a deploy replaces a runtime — the deploy page's table reads this.
+         */
+        default String version(String member) {
+            return null;
+        }
     }
 
     /**

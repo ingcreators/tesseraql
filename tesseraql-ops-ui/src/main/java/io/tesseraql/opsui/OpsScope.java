@@ -33,6 +33,9 @@ public final class OpsScope {
     /** The atom prefix granting per-application operational actions. */
     public static final String RUN_PREFIX = "tql.ops.run.";
 
+    /** The atom prefix granting deployment of one application. */
+    public static final String DEPLOY_PREFIX = "tql.app.deploy.";
+
     private OpsScope() {
     }
 
@@ -52,6 +55,28 @@ public final class OpsScope {
     /** The app-name filter for a caller's <em>run</em> verb — acting, not seeing. */
     public static Predicate<String> run(Object permissions, Set<String> servedApps) {
         return compose(granted(RUN_PREFIX, permissions), servedApps);
+    }
+
+    /**
+     * The app-name filter for a caller's <em>deploy</em> authority — the deploy page's member
+     * table (docs/stack-shells.md, the deploy page). Reach only: the endpoint re-checks the
+     * atom against the package's declared name on every submit.
+     */
+    public static Predicate<String> deploy(Object permissions, Set<String> servedApps) {
+        return compose(granted(DEPLOY_PREFIX, permissions), servedApps);
+    }
+
+    /**
+     * Whether the caller holds any {@code tql.app.deploy} grant at all — the deploy page's
+     * display gate: the shell's nav entry renders and the page answers only for a holder,
+     * deny by default like the switcher.
+     */
+    public static boolean holdsAnyDeploy(Object permissions) {
+        if (!(permissions instanceof List<?> codes)) {
+            return false;
+        }
+        return codes.stream().map(String::valueOf)
+                .anyMatch(code -> code.startsWith(DEPLOY_PREFIX));
     }
 
     /**

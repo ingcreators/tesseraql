@@ -93,6 +93,20 @@ final class OpsShellProviders {
 
         List<String> memberNames();
 
+        /** The members' installed versions by name — the deploy page's table. */
+        default Map<String, String> memberVersions() {
+            return Map.of();
+        }
+
+        /**
+         * Whether this runtime carries the stack's deploy endpoint — the surface runtime's
+         * pen. The unhosted boot has no pen, so the deploy page neither lists nor answers
+         * there (docs/stack-shells.md, the deploy page).
+         */
+        default boolean deploySurface() {
+            return false;
+        }
+
         boolean hasCanary(String member);
 
         Map<String, Object> invoke(String member, boolean canary, Op op,
@@ -117,6 +131,20 @@ final class OpsShellProviders {
                 @Override
                 public List<String> memberNames() {
                     return names;
+                }
+
+                @Override
+                public Map<String, String> memberVersions() {
+                    // Read live per call, like ports: the boot-time member list goes stale
+                    // the moment a deploy replaces a runtime.
+                    Map<String, String> versions = new LinkedHashMap<>();
+                    names.forEach(name -> versions.put(name, origins.version(name)));
+                    return versions;
+                }
+
+                @Override
+                public boolean deploySurface() {
+                    return true;
                 }
 
                 @Override
@@ -240,9 +268,10 @@ final class OpsShellProviders {
     /** Registers the shell's providers; the console app's routes are their only callers. */
     static void register(ServiceProviders providers, Targets targets) {
         providers
-                .register("ops.shell.nav", params -> Map.of(
-                        "entries", entries(params.get("permissions"), targets)))
+                .register("ops.shell.nav",
+                        params -> navModel(params.get("permissions"), targets))
                 .register("ops.shell.home", params -> home(params, targets))
+                .register("ops.shell.deploy", params -> deployPage(params, targets))
                 .register("ops.shell.overview",
                         params -> page(Op.OVERVIEW, params, targets, Map.of()))
                 .register("ops.shell.jobs", params -> page(Op.JOBS, params, targets, Map.of()))
@@ -285,6 +314,56 @@ final class OpsShellProviders {
         return entries;
     }
 
+    /** The shell nav's model: the switcher entries plus the deploy entry's display gate. */
+    private static Map<String, Object> navModel(Object permissions, Targets targets) {
+        Map<String, Object> nav = new LinkedHashMap<>();
+        nav.put("entries", entries(permissions, targets));
+        nav.put("deploy", deployNav(permissions, targets));
+        return nav;
+    }
+
+    /**
+     * The deploy entry's display gate (docs/stack-shells.md, the deploy page): any
+     * {@code tql.app.deploy} atom, and the deploy surface existing at all. Reach, not
+     * authority — the endpoint re-checks the atom against the package's declared name.
+     */
+    private static boolean deployNav(Object permissions, Targets targets) {
+        return targets.deploySurface()
+                && io.tesseraql.opsui.OpsScope.holdsAnyDeploy(permissions);
+    }
+
+    /**
+     * The deploy page's model: refused 404-shaped for a non-holder — unlisted and unreachable
+     * in one move, like every out-of-scope ops resource — and the member table is the caller's
+     * deploy scope applied to the member list, each with its installed version and canary
+     * state. The success banner's fields ride the route's own query parameters, not this model.
+     */
+    private static Map<String, Object> deployPage(Map<String, Object> params, Targets targets) {
+        Object permissions = params.get("permissions");
+        if (!deployNav(permissions, targets)) {
+            throw OpsActions.notFound("The deploy page", "tql.app.deploy");
+        }
+        Predicate<String> scope = io.tesseraql.opsui.OpsScope.deploy(permissions,
+                Set.copyOf(targets.memberNames()));
+        Map<String, String> versions = targets.memberVersions();
+        List<Map<String, Object>> apps = new ArrayList<>();
+        for (String name : targets.memberNames()) {
+            if (!scope.test(name)) {
+                continue;
+            }
+            Map<String, Object> app = new LinkedHashMap<>();
+            app.put("name", name);
+            app.put("version", versions.get(name) == null ? "-" : versions.get(name));
+            app.put("canary", targets.hasCanary(name));
+            apps.add(app);
+        }
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("shell", navModel(permissions, targets));
+        model.put("apps", apps);
+        model.put("hasApps", !apps.isEmpty());
+        return model;
+    }
+
     private static Map<String, Object> entry(String name, boolean canary) {
         Map<String, Object> entry = new LinkedHashMap<>();
         entry.put("name", name);
@@ -325,7 +404,7 @@ final class OpsShellProviders {
         List<Map<String, Object>> cards = new ArrayList<>();
         futures.forEach(future -> cards.add(future.join()));
         Map<String, Object> model = new LinkedHashMap<>();
-        model.put("shell", homeShell(entries));
+        model.put("shell", homeShell(entries, params.get("permissions"), targets));
         model.put("cards", cards);
         return model;
     }
@@ -362,6 +441,7 @@ final class OpsShellProviders {
         Map<String, Object> shell(Map<String, Object> params, Targets targets) {
             Map<String, Object> shell = new LinkedHashMap<>(entry(member, canary));
             shell.put("entries", entries(params.get("permissions"), targets));
+            shell.put("deploy", deployNav(params.get("permissions"), targets));
             return shell;
         }
     }
@@ -389,9 +469,11 @@ final class OpsShellProviders {
         return new Selected(member, canary);
     }
 
-    private static Map<String, Object> homeShell(List<Map<String, Object>> entries) {
+    private static Map<String, Object> homeShell(List<Map<String, Object>> entries,
+            Object permissions, Targets targets) {
         Map<String, Object> shell = new LinkedHashMap<>();
         shell.put("entries", entries);
+        shell.put("deploy", deployNav(permissions, targets));
         return shell;
     }
 

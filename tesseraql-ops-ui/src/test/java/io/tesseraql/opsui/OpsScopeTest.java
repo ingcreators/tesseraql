@@ -101,4 +101,30 @@ class OpsScopeTest {
         assertThat(OpsScope.holdsAnyView(List.of())).isFalse();
         assertThat(OpsScope.holdsAnyView(null)).isFalse();
     }
+
+    /**
+     * The deploy page's display gate (docs/stack-shells.md, the deploy page): any
+     * {@code tql.app.deploy} grant opens the page and the nav entry; the ops verbs say
+     * nothing about deploying, and vice versa — the on-call reader is not the deploy pen.
+     */
+    @Test
+    void onlyADeployGrantOpensTheDeployPage() {
+        assertThat(OpsScope.holdsAnyDeploy(List.of("tql.app.deploy.shop"))).isTrue();
+        assertThat(OpsScope.holdsAnyDeploy(List.of("tql.app.deploy.*"))).isTrue();
+        assertThat(OpsScope.holdsAnyDeploy(List.of("tql.ops.view.*", "tql.ops.run.*")))
+                .as("seeing and acting on operations do not grant deploying")
+                .isFalse();
+        assertThat(OpsScope.holdsAnyDeploy(List.of())).isFalse();
+        assertThat(OpsScope.holdsAnyDeploy(null)).isFalse();
+    }
+
+    /** The deploy scope composes like the ops verbs: grants intersected with the members. */
+    @Test
+    void theDeployScopeIntersectsGrantsWithTheMemberList() {
+        assertThat(OpsScope.deploy(List.of("tql.app.deploy.shop"), SERVED).test("shop")).isTrue();
+        assertThat(OpsScope.deploy(List.of("tql.app.deploy.shop"), SERVED).test("billing"))
+                .isFalse();
+        assertThat(OpsScope.deploy(List.of("tql.app.deploy.*"), SERVED).test("billing")).isTrue();
+        assertThat(OpsScope.deploy(List.of("tql.ops.view.*"), SERVED).test("shop")).isFalse();
+    }
 }

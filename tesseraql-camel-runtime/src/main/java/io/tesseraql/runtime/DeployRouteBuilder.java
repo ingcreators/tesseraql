@@ -35,9 +35,12 @@ import org.apache.camel.builder.RouteBuilder;
  *
  * <p>Two callers, one endpoint: a pipeline presents a bearer from {@code tesseraql token}
  * (validated against the stack file's {@code security.jwt.*}, grafted onto this runtime's
- * configuration), and a browser session presents its cookie with the CSRF token — the ops deploy
- * page's shape when it lands. The authority is an operational guardrail, not isolation between
- * distrusting teams (docs/runtime-replace.md states the boundary): those get separate stacks.
+ * configuration) with the package as the raw request body, and the ops deploy page's browser
+ * session posts a multipart form — the file part carries the package, the CSRF token rides the
+ * {@code X-CSRF-Token} header or the {@code _csrf} field, and the answer goes post/redirect/get
+ * back to the page ({@code HX-Redirect} for the htmx submit) while API callers keep the JSON
+ * contract. The authority is an operational guardrail, not isolation between distrusting teams
+ * (docs/runtime-replace.md states the boundary): those get separate stacks.
  */
 final class DeployRouteBuilder extends RouteBuilder {
 
@@ -82,15 +85,7 @@ final class DeployRouteBuilder extends RouteBuilder {
             AppUpgrader.UpgradeResult result = pen.deploy(tqlapp, canary,
                     weight == null || weight.isBlank() ? null : Integer.parseInt(weight),
                     blankToNull(query(exchange, "sha256")));
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("name", result.appName());
-            body.put("fromVersion", result.fromVersion());
-            body.put("toVersion", result.toVersion());
-            body.put("canary", canary);
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
-                    "application/json; charset=utf-8");
-            exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
+            respond(exchange, result, canary);
         } finally {
             Files.deleteIfExists(tqlapp);
         }
@@ -116,14 +111,95 @@ final class DeployRouteBuilder extends RouteBuilder {
         }
         String cookie = exchange.getMessage().getHeader("Cookie", String.class);
         Principal principal = new BrowserAuthenticator(sessions).authenticate(cookie);
-        new CsrfValidator(sessions).validate(cookie,
-                exchange.getMessage().getHeader("X-CSRF-Token", String.class));
+        new CsrfValidator(sessions).validate(cookie, csrfToken(exchange));
         return principal;
+    }
+
+    /**
+     * The CSRF token of a browser submit, on the compiled routes' two paths: the
+     * {@code X-CSRF-Token} header (the {@code installCsrfHeader} htmx convention) or, for the
+     * deploy page's no-JS plain form post, the hidden {@code _csrf} field — a multipart form
+     * attribute platform-http mirrors into a header.
+     */
+    private static String csrfToken(Exchange exchange) {
+        String header = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        return header != null ? header : exchange.getMessage().getHeader("_csrf", String.class);
+    }
+
+    /**
+     * The answer, negotiated by caller (docs/stack-shells.md, the deploy page): the page's htmx
+     * submit ({@code HX-Request}) gets {@code HX-Redirect} and its no-JS degradation (a form
+     * post accepting HTML) a 303 — both post/redirect/get back to the deploy page with the
+     * result riding query parameters — while API callers (the CLI's {@code deploy --url},
+     * pipelines) keep the JSON contract unchanged.
+     */
+    private static void respond(Exchange exchange, AppUpgrader.UpgradeResult result,
+            boolean canary) throws Exception {
+        boolean htmx = "true".equals(exchange.getMessage().getHeader("HX-Request", String.class));
+        String accept = exchange.getMessage().getHeader("Accept", String.class);
+        // Inbound form fields surfaced as headers must not echo back onto the response.
+        exchange.getMessage().removeHeaders("*");
+        if (htmx || (accept != null && accept.contains("text/html"))) {
+            String target = io.tesseraql.camel.BasePath.url(exchange,
+                    "/_tesseraql/ops/console/deploy?deployed=" + encode(result.appName())
+                            + "&fromVersion=" + encode(result.fromVersion())
+                            + "&toVersion=" + encode(result.toVersion())
+                            + (canary ? "&canary=true" : ""));
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
+            exchange.getMessage().setBody("");
+            if (htmx) {
+                // htmx surfaces a redirect status to the XHR, not the tab; HX-Redirect on a 200
+                // is its full-navigation signal.
+                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+                exchange.getMessage().setHeader("HX-Redirect", target);
+            } else {
+                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 303);
+                exchange.getMessage().setHeader("Location", target);
+            }
+            return;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", result.appName());
+        body.put("fromVersion", result.fromVersion());
+        body.put("toVersion", result.toVersion());
+        body.put("canary", canary);
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                "application/json; charset=utf-8");
+        exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
+    }
+
+    /**
+     * The uploaded package bytes: for the deploy page's multipart form the file part — a part
+     * named {@code file} preferred, first file part as fallback, the {@code FileImportProcessor}
+     * precedent — otherwise the raw request body ({@code deploy --url}, pipelines). A multipart
+     * request without a file part is refused as an empty deploy rather than spooling the
+     * envelope bytes as if they were a package.
+     */
+    private static InputStream packageStream(Exchange exchange) throws Exception {
+        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        if (contentType != null
+                && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
+            org.apache.camel.attachment.AttachmentMessage attachments = exchange
+                    .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
+            jakarta.activation.DataHandler part = null;
+            if (attachments != null && attachments.hasAttachments()) {
+                part = attachments.getAttachment("file") != null
+                        ? attachments.getAttachment("file")
+                        : attachments.getAttachments().values().iterator().next();
+            }
+            if (part == null) {
+                throw new TqlException(EMPTY_BODY, "The multipart deploy request carried no"
+                        + " file part with the .tqlapp package bytes");
+            }
+            return part.getInputStream();
+        }
+        return exchange.getMessage().getBody(InputStream.class);
     }
 
     /** The uploaded package, spooled off-heap; the caller deletes it when done. */
     private static Path spool(Exchange exchange) throws Exception {
-        InputStream body = exchange.getMessage().getBody(InputStream.class);
+        InputStream body = packageStream(exchange);
         Path spooled = Files.createTempFile("tesseraql-deploy", ".tqlapp");
         try {
             long bytes = body == null
@@ -148,5 +224,10 @@ final class DeployRouteBuilder extends RouteBuilder {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value == null ? "" : value,
+                java.nio.charset.StandardCharsets.UTF_8);
     }
 }

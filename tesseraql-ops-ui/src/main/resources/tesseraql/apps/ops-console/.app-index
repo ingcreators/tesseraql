@@ -4,6 +4,8 @@
 config/tesseraql.yml
 web/_tesseraql/ops/console/get.yml
 web/_tesseraql/ops/console/home.html
+web/_tesseraql/ops/console/deploy/get.yml
+web/_tesseraql/ops/console/deploy/deploy.html
 web/_tesseraql/ops/console/token/get.yml
 web/_tesseraql/ops/console/token/post.yml
 web/_tesseraql/ops/console/token/token.html

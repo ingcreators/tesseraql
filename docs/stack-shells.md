@@ -62,7 +62,12 @@ baseline gained `tql.app.deploy.*`; and the ops-console deploy page is a follow-
 question 5 allowed — the endpoint is the contract. One measurement
 correction from implementation: the console's live pages ride htmx polling, not SSE, so the
 delegation carries ordinary requests — the relay's streaming discipline stays proven for the
-surfaces that do stream.
+surfaces that do stream. **The slice-3 follow-up is shipped** (the ops deploy page): designed
+in place in the deploy surface's page subsection below — the page rides the shell at
+`/_tesseraql/ops/console/deploy` behind an any-`tql.app.deploy` display gate, posts its
+multipart form to the same endpoint, and the endpoint learned the browser's shapes (the
+multipart file part, the `_csrf` field beside the `X-CSRF-Token` header, post/redirect/get and
+`HX-Redirect` answers) with the JSON contract untouched.
 
 The role side of this model — roles gaining a per-application axis, rule-based assignment,
 per-user direct grants and acting-role activation for concurrent roles — is designed separately in
@@ -400,6 +405,40 @@ The boundary runtime-replace.md stated carries over verbatim: this is an operati
 guardrail, not isolation between distrusting teams — those get separate stacks (Decision
 27). And install-root access on the host machine remains stack-root; the endpoint adds a
 narrower door, it does not narrow the wide one.
+
+### The deploy page (the slice-3 follow-up, designed at implementation)
+
+The page is one console route on the shell's chrome — the token page's shape: no delegation,
+the form is the content — and it adds **no second door**: the form posts to
+`POST /_tesseraql/deploy` itself. What that costs is the endpoint learning the browser's
+shapes, both already precedented elsewhere in the framework:
+
+- **The upload is multipart/form-data** — the file part named `file` preferred, first file
+  part as fallback, exactly the dual shape file-transfers documents ("the raw file content,
+  or multipart/form-data") and `FileImportProcessor` reads. The form's other fields
+  (`canary`, `weight`) ride as form attributes, which platform-http mirrors into headers —
+  the same read the endpoint's query parameters already use, so one accessor serves both
+  callers. A multipart request without a file part is refused as an empty deploy rather than
+  spooling the envelope bytes as if they were a package.
+- **CSRF accepts the compiled routes' two paths**: the `X-CSRF-Token` header (the
+  `installCsrfHeader` htmx convention) or the hidden `_csrf` field for a no-JS plain form
+  post.
+- **The answer is negotiated by caller.** An htmx submit (`HX-Request`) gets `HX-Redirect`;
+  a no-JS form post (Accept carrying `text/html`) gets a 303 — both post/redirect/get back
+  to the page with the result riding query parameters. API callers (the CLI's `deploy
+  --url`, pipelines) keep the JSON contract byte for byte. Refusals need nothing new: the
+  shared error renderer already answers htmx with the inline `hc-alert` fragment and
+  everything else with the JSON envelope.
+- **The display gate is holding any `tql.app.deploy` atom** (a name or the wildcard), and
+  the deploy surface existing at all — the surface runtime; the unhosted boot has no pen,
+  no endpoint, and therefore no page. The nav entry renders and the page answers only for a
+  holder; a non-holder is refused 404-shaped like every out-of-scope ops resource. The gate
+  is reach, not authority: the endpoint re-checks the atom against the package's declared
+  name on every submit, which is the guard this design pinned from the start.
+- The page lists the members the caller's deploy scope covers with their installed versions,
+  and offers the canary staging the endpoint already takes (`canary`, `weight`). `sha256`
+  stays a pipeline affordance, deliberately not a form field: integrity pinning defends an
+  artifact that travelled; the browser uploads the file the operator just picked.
 
 ## Slices
 
