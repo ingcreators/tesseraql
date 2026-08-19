@@ -147,5 +147,107 @@
     </div>
   </div>
 </section>
+<!-- The grant editor (docs/application-roles.md slice 2): direct role assignments and
+     direct permission grants, validity windows included; forms render only where the
+     realm's role capability allows writes. -->
+<p class="hc-alert" data-variant="success" role="status" th:if="${assigned != null}">Role assigned.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${unassigned != null}">Role unassigned.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}">Permission granted.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}">Permission revoked.</p>
+<section class="hc-card" th:if="${editorAvailable == 1}">
+  <div class="hc-card__header">Role assignments</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(assignments)}">
+      <p class="hc-empty__title">No direct role assignments.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(assignments)}">
+      <table class="hc-table">
+        <thead><tr><th>Code</th><th>Application</th><th>Source</th><th>From</th><th>Until</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="a : ${assignments}">
+            <td><code th:text="${a.role_code}"></code></td>
+            <td th:text="${a.application != null ? a.application : 'stack-wide'}"></td>
+            <td th:text="${a.source}"></td>
+            <td th:text="${a.starts_at}"></td>
+            <td th:text="${a.ends_at}"></td>
+            <td th:if="${editorWritable == 1}">
+              <form th:each="u : ${user}" method="post"
+                    th:action="@{/_tesseraql/admin/users/{id}/roles/unassign(id=${u.user_id})}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="roleCode" th:value="${a.role_code}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Unassign</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
+          th:action="@{/_tesseraql/admin/users/{id}/roles/assign(id=${u.user_id})}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${allRoles}" th:value="${r.role_code}"
+                  th:text="|${r.role_code} (${r.application != null ? r.application : 'stack-wide'})|"></option>
+        </select>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">From</span>
+        <input class="hc-input" name="startsAt" type="datetime-local">
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Until</span>
+        <input class="hc-input" name="endsAt" type="datetime-local">
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Assign</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card" th:if="${editorAvailable == 1}">
+  <div class="hc-card__header">Direct permissions</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(grants)}">
+      <p class="hc-empty__title">No direct permission grants.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(grants)}">
+      <table class="hc-table">
+        <thead><tr><th>Code</th><th>From</th><th>Until</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="g : ${grants}">
+            <td><code th:text="${g.permission_code}"></code></td>
+            <td th:text="${g.starts_at}"></td>
+            <td th:text="${g.ends_at}"></td>
+            <td th:if="${editorWritable == 1}">
+              <form th:each="u : ${user}" method="post"
+                    th:action="@{/_tesseraql/admin/users/{id}/permissions/revoke(id=${u.user_id})}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="code" th:value="${g.permission_code}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Revoke</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
+          th:action="@{/_tesseraql/admin/users/{id}/permissions/grant(id=${u.user_id})}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Permission code</span>
+        <input class="hc-input" name="code" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">From</span>
+        <input class="hc-input" name="startsAt" type="datetime-local">
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Until</span>
+        <input class="hc-input" name="endsAt" type="datetime-local">
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Grant</button>
+    </form>
+  </div>
+</section>
 </div>
 </html>

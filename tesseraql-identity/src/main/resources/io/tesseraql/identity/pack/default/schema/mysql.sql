@@ -23,7 +23,8 @@ create table if not exists tql_groups (
 create table if not exists tql_roles (
   role_id   varchar(64) primary key,
   role_code varchar(200) not null unique,
-  role_name varchar(200) not null
+  role_name varchar(200) not null,
+  application varchar(200)
 );
 
 create table if not exists tql_permissions (
@@ -41,6 +42,9 @@ create table if not exists tql_user_groups (
 create table if not exists tql_user_roles (
   user_id varchar(64) not null,
   role_id varchar(64) not null,
+  source  varchar(32) not null default 'admin',
+  starts_at datetime,
+  ends_at   datetime,
   primary key (user_id, role_id)
 );
 
@@ -54,4 +58,12 @@ create table if not exists tql_role_permissions (
   role_id       varchar(64) not null,
   permission_id varchar(64) not null,
   primary key (role_id, permission_id)
+);
+
+create table if not exists tql_user_permissions (
+  user_id       varchar(64) not null,
+  permission_id varchar(64) not null,
+  starts_at datetime,
+  ends_at   datetime,
+  primary key (user_id, permission_id)
 );

@@ -26,7 +26,22 @@ public record Principal(
         List<String> groups,
         List<String> roles,
         List<String> permissions,
-        Map<String, Object> claims) {
+        Map<String, Object> claims,
+        List<RoleGrant> roleGrants,
+        List<String> directPermissions) {
+
+    /**
+     * One held role with its application axis and the permission bundle it delivers — the
+     * attribution the active-view recompute needs (docs/application-roles.md structural
+     * decision 4). {@code application} is null for a stack-wide role. Populated only by
+     * store-resolved principals; claim-asserted principals (bearer, API key, mTLS) carry
+     * none and never activate.
+     */
+    public record RoleGrant(String role, String application, List<String> permissions) {
+        public RoleGrant {
+            permissions = permissions == null ? List.of() : List.copyOf(permissions);
+        }
+    }
 
     public Principal {
         groups = groups == null ? List.of() : List.copyOf(groups);
@@ -36,6 +51,20 @@ public record Principal(
         claims = claims == null
                 ? Map.of()
                 : java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(claims));
+        // A pre-upgrade principal_json deserializes with neither list: the union stays the
+        // active view for such sessions, exactly as before the application axis existed.
+        roleGrants = roleGrants == null ? List.of() : List.copyOf(roleGrants);
+        directPermissions = directPermissions == null
+                ? List.of()
+                : List.copyOf(directPermissions);
+    }
+
+    /** The pre-application-axis shape: every construction site without grant attribution. */
+    public Principal(String subject, String loginId, String displayName, String tenantId,
+            List<String> groups, List<String> roles, List<String> permissions,
+            Map<String, Object> claims) {
+        this(subject, loginId, displayName, tenantId, groups, roles, permissions, claims,
+                List.of(), List.of());
     }
 
     public boolean hasRole(String role) {

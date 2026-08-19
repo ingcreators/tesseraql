@@ -1816,6 +1816,52 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             : io.tesseraql.identity.GrantViews.applicationGrants(memberName,
                                     grantViewMembers, runner);
                 });
+                // The role and grant editors (docs/application-roles.md slice 2): reads
+                // degrade like the views; writes are gated by the realm's role capability
+                // inside IdentityService.executeUpdate.
+                java.util.function.Supplier<io.tesseraql.identity.IdentityService> iamIdentity = () -> context
+                        .getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                io.tesseraql.identity.IdentityService.class);
+                java.util.function.Supplier<io.tesseraql.identity.RealmConfig> iamRealm = () -> context
+                        .getRegistry().lookupByNameAndType(
+                                TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                io.tesseraql.identity.RealmConfig.class);
+                serviceProviders.register("iam.roles",
+                        params -> io.tesseraql.identity.RoleAdmin.rolesModel(iamIdentity.get(),
+                                iamRealm.get(), grantViewMembers));
+                serviceProviders.register("iam.grantEditor",
+                        params -> io.tesseraql.identity.RoleAdmin.grantEditorModel(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId"))));
+                serviceProviders.register("iam.createRole",
+                        params -> io.tesseraql.identity.RoleAdmin.createRole(iamIdentity.get(),
+                                iamRealm.get(), String.valueOf(params.get("code")),
+                                String.valueOf(params.get("name")),
+                                String.valueOf(params.get("application"))));
+                serviceProviders.register("iam.assignRole",
+                        params -> io.tesseraql.identity.RoleAdmin.assignRole(iamIdentity.get(),
+                                iamRealm.get(), String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("startsAt")),
+                                String.valueOf(params.get("endsAt"))));
+                serviceProviders.register("iam.unassignRole",
+                        params -> io.tesseraql.identity.RoleAdmin.unassignRole(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("roleCode"))));
+                serviceProviders.register("iam.grantPermission",
+                        params -> io.tesseraql.identity.RoleAdmin.grantPermission(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("code")),
+                                String.valueOf(params.get("startsAt")),
+                                String.valueOf(params.get("endsAt"))));
+                serviceProviders.register("iam.revokePermission",
+                        params -> io.tesseraql.identity.RoleAdmin.revokePermission(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("code"))));
             }
             // The ops shell's delegating providers (docs/stack-shells.md structural decision 2).
             // On the surface runtime the members and their live ports come from the host; on the

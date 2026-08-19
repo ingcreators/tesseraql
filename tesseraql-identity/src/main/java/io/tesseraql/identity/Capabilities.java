@@ -15,6 +15,10 @@ public record Capabilities(String userManagement, String groupManagement, String
         return READ_WRITE.equals(userManagement);
     }
 
+    public boolean roleWriteAllowed() {
+        return READ_WRITE.equals(roleManagement);
+    }
+
     public static Capabilities readWrite() {
         return new Capabilities(READ_WRITE, READ_WRITE, READ_WRITE);
     }

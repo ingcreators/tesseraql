@@ -32,6 +32,9 @@ public final class IdentityService {
     /** TQL-IAM-4030: a write was attempted on a realm whose capability is read-only. */
     public static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.IAM, 4030);
 
+    /** The realm's role capability is not readWrite, so role management is refused. */
+    public static final TqlErrorCode ROLE_READ_ONLY = new TqlErrorCode(TqlDomain.IAM, 4031);
+
     private final Function<String, DataSource> datasources;
     private final String dialect;
 
@@ -78,7 +81,14 @@ public final class IdentityService {
      * (design ch. 10.7.3).
      */
     public int executeUpdate(RealmConfig realm, String contract, Map<String, Object> params) {
-        if (!realm.capabilities().userWriteAllowed()) {
+        // Two capabilities, two gates (docs/application-roles.md structural decision 6): a
+        // role-management write answers to roleManagement, everything else to userManagement.
+        if (IdentityContracts.roleManagementContracts().contains(contract)) {
+            if (!realm.capabilities().roleWriteAllowed()) {
+                throw new TqlException(ROLE_READ_ONLY, "Realm '" + realm.id()
+                        + "' does not allow role management contract '" + contract + "'");
+            }
+        } else if (!realm.capabilities().userWriteAllowed()) {
             throw new TqlException(READ_ONLY,
                     "Realm '" + realm.id() + "' does not allow write contract '" + contract + "'");
         }
@@ -118,6 +128,23 @@ public final class IdentityService {
         Object userId = user.get("user_id");
         Map<String, Object> byUser = Map.of("userId", userId);
 
+        // Grant attribution (docs/application-roles.md structural decision 4): held roles
+        // with their application axis and bundles, plus direct grants — the two optional
+        // contracts; a sql realm without them resolves exactly as before, union only.
+        List<Map<String, Object>> grantRows;
+        List<String> direct;
+        try {
+            grantRows = execute(realm, IdentityContracts.FIND_ROLE_GRANTS_BY_USER_ID, byUser);
+            direct = column(execute(realm,
+                    IdentityContracts.FIND_DIRECT_PERMISSIONS_BY_USER_ID, byUser),
+                    "permission_code");
+        } catch (TqlException ex) {
+            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+                throw ex;
+            }
+            grantRows = List.of();
+            direct = List.of();
+        }
         return Optional.of(new Principal(
                 asString(userId),
                 asString(user.get("login_id")),
@@ -129,7 +156,35 @@ public final class IdentityService {
                         "role_code"),
                 column(execute(realm, IdentityContracts.FIND_PERMISSIONS_BY_USER_ID, byUser),
                         "permission_code"),
-                user));
+                user,
+                roleGrants(grantRows),
+                direct));
+    }
+
+    /** Groups the role-grant rows (role_code, application, permission_code) by role. */
+    private static List<Principal.RoleGrant> roleGrants(List<Map<String, Object>> rows) {
+        Map<String, Map.Entry<String, List<String>>> byRole = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            String role = asString(row.get("role_code"));
+            if (role == null) {
+                continue;
+            }
+            Map.Entry<String, List<String>> entry = byRole.computeIfAbsent(role,
+                    key -> Map.entry(asString(row.get("application")) == null
+                            ? ""
+                            : asString(row.get("application")), new ArrayList<>()));
+            String permission = asString(row.get("permission_code"));
+            if (permission != null) {
+                entry.getValue().add(permission);
+            }
+        }
+        List<Principal.RoleGrant> grants = new ArrayList<>();
+        for (Map.Entry<String, Map.Entry<String, List<String>>> entry : byRole.entrySet()) {
+            grants.add(new Principal.RoleGrant(entry.getKey(),
+                    entry.getValue().getKey().isEmpty() ? null : entry.getValue().getKey(),
+                    entry.getValue().getValue()));
+        }
+        return grants;
     }
 
     private static List<String> column(List<Map<String, Object>> rows, String alias) {

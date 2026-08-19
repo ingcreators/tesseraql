@@ -26,7 +26,8 @@ if object_id('tql_roles', 'U') is null
 create table tql_roles (
   role_id   varchar(64) primary key,
   role_code varchar(200) not null unique,
-  role_name varchar(200) not null
+  role_name varchar(200) not null,
+  application varchar(200)
 );
 
 if object_id('tql_permissions', 'U') is null
@@ -47,6 +48,9 @@ if object_id('tql_user_roles', 'U') is null
 create table tql_user_roles (
   user_id varchar(64) not null,
   role_id varchar(64) not null,
+  source  varchar(32) not null default 'admin',
+  starts_at datetime2,
+  ends_at   datetime2,
   primary key (user_id, role_id)
 );
 
@@ -62,4 +66,12 @@ create table tql_role_permissions (
   role_id       varchar(64) not null,
   permission_id varchar(64) not null,
   primary key (role_id, permission_id)
+);
+
+create table tql_user_permissions (
+  user_id       varchar(64) not null,
+  permission_id varchar(64) not null,
+  starts_at datetime2,
+  ends_at   datetime2,
+  primary key (user_id, permission_id)
 );

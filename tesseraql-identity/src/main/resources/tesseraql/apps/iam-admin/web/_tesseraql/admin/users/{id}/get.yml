@@ -18,6 +18,18 @@ input:
   signedout:
     type: string
     required: false
+  assigned:
+    type: string
+    required: false
+  unassigned:
+    type: string
+    required: false
+  granted:
+    type: string
+    required: false
+  revoked:
+    type: string
+    required: false
 
 sources:
   main:
@@ -45,6 +57,11 @@ sources:
       name: iam.userSessions
       params:
         userId: path.id
+  editor:
+    service:
+      name: iam.grantEditor
+      params:
+        userId: path.id
 response:
   html:
     status: 200
@@ -59,3 +76,12 @@ response:
       enabled: params.enabled
       disabled: params.disabled
       signedout: params.signedout
+      assigned: params.assigned
+      unassigned: params.unassigned
+      granted: params.granted
+      revoked: params.revoked
+      assignments: editor.assignments
+      grants: editor.grants
+      allRoles: editor.roles
+      editorAvailable: editor.available
+      editorWritable: editor.writable
