@@ -53,6 +53,22 @@ request; the framework does not resolve it to a location.
 Where `tesseraql.sessions.idleTimeout` is configured, a session also expires after that
 much inactivity, inside its absolute lifetime. The scaffolded configuration sets it.
 
+## Applications
+
+The applications page (`/_tesseraql/admin/applications`) answers "who may do what in this
+application", one page per application in the stack. Each application's page lists:
+
+- who may **use** it — the holders of its `tql.app.use` grant, with holders of the
+  `tql.app.use.*` wildcard shown under their own rows;
+- who may **see** and **act on** its operations, **deploy** it, and **edit it in Studio**;
+- the application's own **permission codes** — the codes carrying its name as their first
+  segment — and who holds each one, through which role.
+
+The views are read-only and derived entirely from the identity store; granting and revoking
+still happen through roles ([authentication.md](authentication.md)). A `sql` realm that does
+not provide the optional grant-view contracts sees the pages degrade with a notice rather
+than fail.
+
 ## Delegations
 
 The delegations page shows who is currently acting for whom, and over what period.

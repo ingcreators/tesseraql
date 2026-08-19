@@ -213,6 +213,43 @@ class StackIdentityIntegrationTest {
     }
 
     /**
+     * The per-application grant views (docs/application-roles.md slice 1): the applications
+     * page lists the stack's members, and one member's page answers "who may do what" from the
+     * store — exact grants under the member's own atom, wildcard holders under the wildcard
+     * row, and the application's own permission codes with their holders and paths.
+     */
+    @Test
+    void theGrantViewsAnswerPerApplication() throws Exception {
+        HttpResponse<String> list = get("/_tesseraql/admin/applications", admin);
+        assertThat(list.statusCode()).as(list.body()).isEqualTo(200);
+        assertThat(list.body()).contains("shop-a").contains("shop-b")
+                .contains("tql.app.use.*");
+
+        HttpResponse<String> shopA = get("/_tesseraql/admin/applications/shop-a", admin);
+        assertThat(shopA.statusCode()).as(shopA.body()).isEqualTo(200);
+        // usera's exact grant sits under the member's atom; admin's wildcard under the
+        // wildcard row; the app's own code lists every holder with its delivering role.
+        assertThat(shopA.body()).contains("tql.app.use.shop-a").contains("usera")
+                .contains("tql.app.use.*").contains("admin")
+                .contains("shop-a.users.read").contains("nouse").contains("r-nouse");
+
+        HttpResponse<String> shopB = get("/_tesseraql/admin/applications/shop-b", admin);
+        assertThat(shopB.statusCode()).isEqualTo(200);
+        // Nobody holds shop-b's exact use atom: the wildcard row alone carries reach.
+        assertThat(shopB.body()).doesNotContain("tql.app.use.shop-b</code>")
+                .contains("tql.app.use.*");
+    }
+
+    /** The views are IAM surfaces: no store-wide atom, no page; an unknown name is 404. */
+    @Test
+    void theGrantViewsRefuseAndRefuseToGuess() throws Exception {
+        assertThat(get("/_tesseraql/admin/applications", userA).statusCode()).isEqualTo(403);
+        assertThat(get("/_tesseraql/admin/applications/nope", admin).statusCode())
+                .as("an application outside the stack is unknown, not empty")
+                .isEqualTo(404);
+    }
+
+    /**
      * The account surface is the stack's: it answers at the origin, the member's copy is gone,
      * and a member page links it origin-absolute so the one door is the one that is linked.
      */

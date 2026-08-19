@@ -20,7 +20,8 @@ import java.nio.file.Path;
  */
 public final class ContractResolver {
 
-    private static final TqlErrorCode MISSING_CONTRACT = new TqlErrorCode(TqlDomain.IAM, 1001);
+    /** Raised when the realm provides no SQL for a requested contract. */
+    public static final TqlErrorCode MISSING_CONTRACT = new TqlErrorCode(TqlDomain.IAM, 1001);
     private static final String PACK_PATH = "/io/tesseraql/identity/pack/default/sql/";
 
     private final RealmConfig realm;

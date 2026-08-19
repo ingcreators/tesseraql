@@ -1,6 +1,10 @@
 # Each route folder is the complete unit: yml + colocated template.
 # IAM admin console app (design ch. 10): served by the runtime as a mounted system app.
 config/tesseraql.yml
+web/_tesseraql/admin/applications/applications.html
+web/_tesseraql/admin/applications/get.yml
+web/_tesseraql/admin/applications/{name}/application.html
+web/_tesseraql/admin/applications/{name}/get.yml
 web/_tesseraql/admin/delegations/delegations.html
 web/_tesseraql/admin/delegations/get.yml
 web/_tesseraql/admin/users/get.yml

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Application', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <div class="hc-cluster">
+    <span class="hc-badge" th:text="${name}">app</span>
+    <a class="hc-button" data-variant="ghost" data-size="sm"
+       th:href="@{/_tesseraql/admin/applications}">&larr; applications</a>
+  </div>
+</th:block>
+<div id="page-content" class="hc-stack">
+<section class="hc-card" th:if="${known == 0}">
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty">
+      <p class="hc-empty__title">This application is not part of the stack.</p>
+    </div>
+  </div>
+</section>
+<th:block th:if="${known == 1}">
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">Grant views are unavailable for this realm.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<!-- Deny-by-default reads as what it is: nobody holds anything, nobody gets in. -->
+<section class="hc-card" th:if="${available == 1 and hasAny == 0}">
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty">
+      <p class="hc-empty__title">Nobody holds any grant for this application.</p>
+      <p>No atoms are granted and no permission codes carry its prefix; every
+        authenticated principal is refused at its fence.</p>
+    </div>
+  </div>
+</section>
+<th:block th:if="${available == 1 and hasAny == 1}">
+<!-- One card per atom family (docs/application-roles.md structural decision 6): exact
+     grants first, then the family's terminal wildcard — an exact granted string, not a
+     glob — under its own rows. -->
+<section class="hc-card" th:each="f : ${families}">
+  <div class="hc-card__header" th:text="${f.label}">family</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${f.empty == 1}">
+      <p class="hc-empty__title">No grants.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${f.empty == 0}">
+      <table class="hc-table">
+        <thead><tr><th>Atom</th><th>Login</th><th>Name</th><th>Status</th><th>Via role</th><th>Path</th></tr></thead>
+        <tbody>
+          <tr th:each="h : ${f.rows}">
+            <td><code th:text="${f.atom}">atom</code></td>
+            <td th:text="${h.login_id}"></td>
+            <td th:text="${h.display_name}"></td>
+            <td th:text="${h.status}"></td>
+            <td th:text="${h.role_code}"></td>
+            <td th:text="${h.grant_type}"></td>
+          </tr>
+          <tr th:each="h : ${f.wildcardRows}">
+            <td><code th:text="${f.wildcard}">atom</code></td>
+            <td th:text="${h.login_id}"></td>
+            <td th:text="${h.display_name}"></td>
+            <td th:text="${h.status}"></td>
+            <td th:text="${h.role_code}"></td>
+            <td th:text="${h.grant_type}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<section class="hc-card">
+  <div class="hc-card__header">Application permission codes</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(appCodes)}">
+      <p class="hc-empty__title">No permission codes carry this application's prefix.</p>
+    </div>
+    <th:block th:each="c : ${appCodes}">
+      <p><code th:text="${c.code}">code</code> <span th:text="${c.codeName}">name</span></p>
+      <div class="hc-empty" th:if="${#lists.isEmpty(c.rows)}">
+        <p class="hc-empty__title">No holders.</p>
+      </div>
+      <div class="hc-table-scroll" th:if="${!#lists.isEmpty(c.rows)}">
+        <table class="hc-table" data-density="compact">
+          <thead><tr><th>Login</th><th>Name</th><th>Status</th><th>Via role</th><th>Path</th></tr></thead>
+          <tbody>
+            <tr th:each="h : ${c.rows}">
+              <td th:text="${h.login_id}"></td>
+              <td th:text="${h.display_name}"></td>
+              <td th:text="${h.status}"></td>
+              <td th:text="${h.role_code}"></td>
+              <td th:text="${h.grant_type}"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </th:block>
+  </div>
+</section>
+</th:block>
+</th:block>
+</div>
+</html>

@@ -1,0 +1,21 @@
+version: tesseraql/v1
+id: tql.iamAdmin.applications.list
+kind: route
+recipe: query-html
+
+security:
+  policy: tql.iam.admin.view
+
+sources:
+  main:
+    service:
+      name: iam.applications
+response:
+  html:
+    status: 200
+    template: applications.html
+    model:
+      rows: main.rows
+      wildcardHolders: main.wildcardHolders
+      available: main.available
+      reason: main.reason

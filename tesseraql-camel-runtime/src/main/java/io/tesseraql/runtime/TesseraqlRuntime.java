@@ -1773,6 +1773,50 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (stackMembers != null) {
                 PortalProviders.register(serviceProviders, stackMembers);
             }
+            // The per-application grant views (docs/application-roles.md slice 1), wherever
+            // iam-admin mounts: the surface runtime (the member list) or the unhosted boot (a
+            // stack of one). Identity and realm resolve lazily like identity.invite — they
+            // bind after this chain builds — and a boot with no realm answers the same
+            // degraded model a sql realm without the optional contracts gets.
+            if (stackMembers != null || hostContext == null) {
+                java.util.List<String> grantViewMembers = stackMembers != null
+                        ? stackMembers.stream()
+                                .map(io.tesseraql.operations.app.InstalledApp::name).toList()
+                        : java.util.List.of(appName);
+                java.util.function.Supplier<io.tesseraql.identity.GrantViews.ContractRunner> grantContracts = () -> {
+                    io.tesseraql.identity.IdentityService identity = context
+                            .getRegistry().lookupByNameAndType(
+                                    TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                    io.tesseraql.identity.IdentityService.class);
+                    io.tesseraql.identity.RealmConfig realm = context.getRegistry()
+                            .lookupByNameAndType(
+                                    TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                    io.tesseraql.identity.RealmConfig.class);
+                    if (identity == null || realm == null) {
+                        return null;
+                    }
+                    return (contract, contractParams) -> identity.execute(realm,
+                            contract, contractParams);
+                };
+                serviceProviders.register("iam.applications", params -> {
+                    io.tesseraql.identity.GrantViews.ContractRunner runner = grantContracts.get();
+                    return runner == null
+                            ? io.tesseraql.identity.GrantViews.applicationsUnavailable(
+                                    grantViewMembers, "No identity realm is configured")
+                            : io.tesseraql.identity.GrantViews.applications(grantViewMembers,
+                                    runner);
+                });
+                serviceProviders.register("iam.applicationGrants", params -> {
+                    String memberName = String.valueOf(params.get("name"));
+                    io.tesseraql.identity.GrantViews.ContractRunner runner = grantContracts.get();
+                    return runner == null
+                            ? io.tesseraql.identity.GrantViews.applicationGrantsUnavailable(
+                                    memberName, grantViewMembers,
+                                    "No identity realm is configured")
+                            : io.tesseraql.identity.GrantViews.applicationGrants(memberName,
+                                    grantViewMembers, runner);
+                });
+            }
             // The ops shell's delegating providers (docs/stack-shells.md structural decision 2).
             // On the surface runtime the members and their live ports come from the host; on the
             // unhosted boot (tests, embedding — no host, no origin) the console mounts locally
