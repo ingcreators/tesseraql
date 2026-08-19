@@ -591,7 +591,8 @@ them.
 developers, operators), the identity
 remainder of Decision 24's slice 4, and the authenticated deploy surface runtime-replace.md
 deferred to the grants work. The Studio shell (slice 8) is deliberately left to its own
-design on the delegation pattern established there. **Its slice 1 — the atom grammar and the
+design on the delegation pattern established there — now written:
+[studio-shell.md](studio-shell.md) (2026-08-19). **Its slice 1 — the atom grammar and the
 ops shell with its switcher, delegation and per-member canary entries — is shipped**; the
 identity remainder and the deploy surface follow as its slices 2 and 3.
 
@@ -1591,7 +1592,8 @@ commands that operate on one application, where it never denoted a deployment.
 **Slice 8 is a campaign, not a slice.** `StudioService` is roughly 1,878 lines after the refactoring
 campaign and couples preview, source editing, apply and reload, the scaffolder, the migration author
 and the test runner to a runtime. It is listed here for ordering and should be designed separately,
-on the delegation pattern slice 7 establishes.
+on the delegation pattern slice 7 establishes. Designed: [studio-shell.md](studio-shell.md)
+(2026-08-19).
 
 ## Out of scope
 

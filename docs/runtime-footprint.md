@@ -208,7 +208,10 @@ authorisation and about one console per stack: it is what removes a test framewo
 double and JUnit from every deployment. That is worth recording, because a campaign with two
 independent justifications is scheduled differently from one with a single justification.
 
-Until then the chain is measured and documented rather than quietly carried.
+Until then the chain is measured and documented rather than quietly carried. The extraction
+is designed in [studio-shell.md](studio-shell.md) (2026-08-19): a `tesseraql-studio-runtime`
+extension module the runtime discovers, so the runtime module's compile scope drops
+`tesseraql-studio` and `tesseraql-test-core` in its slice 1.
 
 ## Open
 

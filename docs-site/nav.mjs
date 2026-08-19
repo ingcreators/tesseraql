@@ -253,4 +253,6 @@ export const EXCLUDED = [
   'stack-shells.md',
   // Per-application roles: the app axis, assignment rules, direct grants, activation, 2026-08-18.
   'application-roles.md',
+  // The Studio shell and the workshop extraction (stack-shells slice 8), 2026-08-19.
+  'studio-shell.md',
 ];
