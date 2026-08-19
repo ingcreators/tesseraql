@@ -36,6 +36,7 @@ public final class AppLinter {
         return List.of(
                 new ApplicationNameRules(),
                 new PolicyCodeRules(),
+                new DeclaredRoleRules(),
                 new RouteRules(),
                 new CalendarRules(),
                 new JobRules(),

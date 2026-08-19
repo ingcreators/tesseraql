@@ -57,11 +57,22 @@ public final class IdentityContracts {
     public static final String GRANT_USER_PERMISSION = "grant-user-permission";
     public static final String REVOKE_USER_PERMISSION = "revoke-user-permission";
 
+    // Declared-role reconciliation (docs/application-roles.md slice 3); managed-pack only.
+    /** Insert-or-update one declared role by code, stamping source 'declared'. */
+    public static final String UPSERT_DECLARED_ROLE = "upsert-declared-role";
+    /** Empties one role's bundle before the declaration's codes are re-assigned. */
+    public static final String CLEAR_ROLE_PERMISSIONS = "clear-role-permissions";
+    /** One application's roles with their source, for orphan detection and the admin views. */
+    public static final String LIST_ROLES_BY_APPLICATION = "list-roles-by-application";
+    /** Stamps one role's source ('orphaned' when its declaration went away). */
+    public static final String SET_ROLE_SOURCE = "set-role-source";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
                 GRANT_USER_PERMISSION, REVOKE_USER_PERMISSION, ENSURE_ROLE, ENSURE_PERMISSION,
-                ASSIGN_USER_ROLE, ASSIGN_ROLE_PERMISSION);
+                ASSIGN_USER_ROLE, ASSIGN_ROLE_PERMISSION, UPSERT_DECLARED_ROLE,
+                CLEAR_ROLE_PERMISSIONS, SET_ROLE_SOURCE);
     }
 
     private IdentityContracts() {

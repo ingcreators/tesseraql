@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **An application declares its duty roles, and the store converges to them**
+  (docs/application-roles.md slice 3). `tesseraql.security.roles` lists the roles an
+  application ships — code (carrying the application's own name as its first segment),
+  display name, and a bundle of the application's own permission codes — validated at lint
+  and boot (`TQL-YAML-1407`) and reconciled into the identity store at every boot on a
+  managed realm: bundles converge to the declaration, every application role carries the
+  implicit `tql.app.use.<name>` atom as a visible row, and a role the declaration dropped
+  is stamped *orphaned* (assignments kept, badged on the roles page, revived by
+  re-declaring). `tql_roles` gains a `source` column (`admin`/`declared`/`orphaned`).
+
 - **Roles gain the application axis, direct grants, and validity windows**
   (docs/application-roles.md slice 2). The managed identity schema grows
   `tql_roles.application` (null = stack-wide), `tql_user_permissions` (per-user direct

@@ -46,12 +46,18 @@
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
       <table class="hc-table">
-        <thead><tr><th>Code</th><th>Name</th><th>Application</th></tr></thead>
+        <thead><tr><th>Code</th><th>Name</th><th>Application</th><th>Source</th></tr></thead>
         <tbody>
           <tr th:each="r : ${rows}">
             <td><code th:text="${r.role_code}"></code></td>
             <td th:text="${r.role_name}"></td>
             <td th:text="${r.application != null ? r.application : 'stack-wide'}"></td>
+            <td>
+              <span th:text="${r.source}">admin</span>
+              <!-- Report-only (docs/application-roles.md open question 5): the declaration
+                   went away; assignments are kept and re-declaring revives the role. -->
+              <span class="hc-badge" th:if="${r.source == 'orphaned'}">no longer declared</span>
+            </td>
           </tr>
         </tbody>
       </table>

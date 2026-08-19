@@ -45,6 +45,13 @@ capability enforced as TQL-IAM-4031 with input refusals as TQL-IAM-4033. Impleme
 decisions recorded: role-management writes are classified by contract name inside
 `executeUpdate` (so YAML contract steps stay gated correctly), and an admin re-assign
 replaces the existing assignment's window (revoke-then-grant, idempotent).
+**Slice 3 is shipped** (declared application roles): `tesseraql.security.roles` +
+TQL-YAML-1407 at lint and boot, boot reconciliation on the managed realm with the
+implicit `tql.app.use` atom as a visible bundle row, and the orphan report. One
+implementation decision the design left open: orphan reporting needed a store-visible
+marker, so `tql_roles` gained a `source` column (`admin`/`declared`/`orphaned`) — the
+reconciler stamps it, the roles page badges it, re-declaring revives it, and
+manually-created roles are never touched.
 
 **Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
 application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,

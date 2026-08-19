@@ -27,7 +27,8 @@ create table tql_roles (
   role_id   varchar(64) primary key,
   role_code varchar(200) not null unique,
   role_name varchar(200) not null,
-  application varchar(200)
+  application varchar(200),
+  source      varchar(32) not null default 'admin'
 );
 
 if object_id('tql_permissions', 'U') is null

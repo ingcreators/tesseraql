@@ -42,6 +42,7 @@ public final class SecurityConfigFactory {
             });
         }
         requireOwnPolicyCodes(config, policies);
+        requireValidDeclaredRoles(config);
         return new SecurityConfig(policies, parseJwt(config), parseApiKeys(config),
                 parseMtls(config));
     }
@@ -279,5 +280,16 @@ public final class SecurityConfigFactory {
 
     private static java.time.Duration duration(AppConfig config, String key) {
         return config.getString(key).map(io.tesseraql.core.util.Durations::parse).orElse(null);
+    }
+
+    /** The declared-role fence's boot backstop (docs/application-roles.md slice 3). */
+    private static void requireValidDeclaredRoles(AppConfig config) {
+        String appName = config.getString("tesseraql.app.name").map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .filter(name -> io.tesseraql.yaml.app.ApplicationName
+                        .segmentViolation(name) == null)
+                .orElse(null);
+        io.tesseraql.yaml.app.DeclaredRoles.require(appName,
+                config.navigate("tesseraql.security.roles"));
     }
 }
