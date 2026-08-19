@@ -6,9 +6,9 @@ the implementation design for the authorization server
 and *what for*; this one decided *how* — and the how is now on main: the module and its store,
 the signing keys and the JWKS, issuer unification, `/authorize` with consent and the acting-role
 face, `/token`, `/register`, the RFC 8414 metadata, the account page, and the MCP resource side
-with its transport gate. What remains of the campaign is not a slice: the Decision 11 acceptance
-run against the real clients, and the RFC 8707 `resource` observation the fail-loud
-`invalid_target` placeholder waits on.
+with its transport gate. What remains of the campaign is not a slice: the interactive half of
+the Decision 11 acceptance run — the `resource` observation was taken the same day, against
+Claude Code itself, and the placeholder held.
 
 The campaign-start revision reconciles the design with what shipped between those two dates — the
 stack surface runtime, the stack file's security graft, the per-application role model — and closes
@@ -501,8 +501,11 @@ Desktop, Codex CLI, Claude Code — connects to a member's MCP surface through d
 registration, consent and refresh, with no fixed credential and no developer in the loop.** The
 connect-and-observe pass is therefore not optional homework: it is both the measurement slices
 were gated on and the campaign's own finish line. Its Codex leg ran on 2026-08-19 and closed open
-questions 2 and 3; what remains for the finish line is the RFC 8707 `resource` observation and
-the other two clients, run against a stack with the server enabled once slices 2 through 7 stand.
+questions 2 and 3; its Claude Code leg ran the same day, against a logging stub of this design's
+own document shapes, and took the RFC 8707 `resource` observation (open question 2's note). What
+remains for the finish line is the interactive half — a person completing sign-in and consent in
+a browser against the live stack — which a non-interactive session cannot finish by design:
+`claude mcp login` stops exactly at the step that needs the human.
 
 ## Open questions
 
@@ -514,12 +517,18 @@ the other two clients, run against a stack with the server enabled once slices 2
    survives.** Codex registers `http://127.0.0.1:<ephemeral port>/callback/<callback_id>` (or
    `<configured base>/<callback_id>` under a custom `mcp_oauth_callback_url`) and sends the same
    complete URI at `/authorize`, re-registering on retry with its new port. Decision 5 records the
-   consequences; slice 6 is unblocked. **Still owed from the same setup: whether the measured
-   clients send RFC 8707 `resource`.** Decision 4's consent-per-resource and Decision 9's
-   per-member claims key on it; the MCP specification requires clients to send it, and the older
-   field evidence (claude.ai omitting it) predates that requirement and concerns a hosted
-   connector this does not target. The authorize placeholder stays fail-loud — `invalid_target`
-   when no resource resolves, never a guessed audience — until the observation is taken.
+   consequences; slice 6 is unblocked. **The `resource` observation was taken 2026-08-19,
+   against Claude Code itself** — driven at a logging stub serving this design's exact document
+   shapes: Claude Code fetched the authorization-server metadata and the **path-inserted**
+   protected-resource document, registered with a complete loopback callback
+   (`http://localhost:<ephemeral>/callback` — exact match generalizes beyond Codex), asked for
+   `token_endpoint_auth_method: none` explicitly (the default slice 6 chose), and built an
+   authorize URL carrying `S256` **and `resource=` — the protected-resource document's
+   identifier, verbatim**. The fail-loud `invalid_target` placeholder therefore stands as the
+   behavior, not a placeholder: the measured client sends `resource`, so requiring it refuses
+   nothing that matters. Codex's own `resource` behavior stays unobserved; the MCP specification
+   requires it and the observed client complies. The older field evidence (claude.ai omitting
+   it) predates that requirement and concerns a hosted connector this does not target.
 3. ~~**Whether any client refuses to proceed without `scopes_supported`**~~ — **measured
    2026-08-19 for Codex: it does not.** Against metadata omitting `scopes_supported` entirely,
    Codex registered and built the authorization URL, and — with no scopes configured on its side —
