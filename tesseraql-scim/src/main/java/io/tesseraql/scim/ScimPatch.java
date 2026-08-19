@@ -9,8 +9,11 @@ import java.util.Map;
  * Normalizes a SCIM PATCH request into a full user (design ch. 10.15): it applies each operation to
  * the current user's attributes so the result can be persisted via the replace contract. Supports
  * the attributes TesseraQL maps ({@code userName}, {@code active}, {@code externalId},
- * {@code name.givenName/familyName}, {@code emails}); unsupported paths are rejected with
- * {@code invalidPath} (400).
+ * {@code name.givenName/familyName}, {@code emails}) and the enterprise extension's org attributes
+ * (docs/application-roles.md structural decision 3). Unsupported <em>core</em> paths are rejected
+ * with {@code invalidPath} (400); an unmapped extension-schema path (one carrying a {@code :}) is
+ * tolerated as a no-op instead, so an IdP provisioning extension attributes TesseraQL does not
+ * capture cannot be broken by them.
  */
 public final class ScimPatch {
 
@@ -42,9 +45,25 @@ public final class ScimPatch {
                 entry -> setAttribute(flat, entry.getKey(), entry.getValue(), false));
     }
 
+    private static final String ENTERPRISE_PREFIX = ScimUser.ENTERPRISE_SCHEMA
+            .toLowerCase(Locale.ROOT) + ":";
+
     private static void setAttribute(Map<String, Object> flat, String path, JsonNode value,
             boolean remove) {
-        switch (path.toLowerCase(Locale.ROOT)) {
+        String normalized = path.toLowerCase(Locale.ROOT);
+        if (normalized.startsWith(ENTERPRISE_PREFIX)) {
+            setEnterpriseAttribute(flat, normalized.substring(ENTERPRISE_PREFIX.length()),
+                    value, remove);
+            return;
+        }
+        if (normalized.equals(ScimUser.ENTERPRISE_SCHEMA.toLowerCase(Locale.ROOT))) {
+            if (value != null && value.isObject()) {
+                value.properties().forEach(entry -> setEnterpriseAttribute(flat,
+                        entry.getKey().toLowerCase(Locale.ROOT), entry.getValue(), false));
+            }
+            return;
+        }
+        switch (normalized) {
             case "username" -> flat.put("userName", remove ? null : text(value));
             case "externalid" -> flat.put("externalId", remove ? null : text(value));
             case "active" -> flat.put("active", remove ? null : value != null && value.asBoolean());
@@ -61,8 +80,32 @@ public final class ScimPatch {
                 }
             }
             case "emails" -> flat.put("email", remove ? null : primaryEmail(value));
-            default ->
-                throw new ScimException(400, "invalidPath", "Unsupported PATCH path: " + path);
+            default -> {
+                if (!normalized.contains(":")) {
+                    throw new ScimException(400, "invalidPath",
+                            "Unsupported PATCH path: " + path);
+                }
+            }
+        }
+    }
+
+    /** One enterprise-extension member; {@code manager} accepts an object or its bare value. */
+    private static void setEnterpriseAttribute(Map<String, Object> flat, String member,
+            JsonNode value, boolean remove) {
+        switch (member) {
+            case "department" -> flat.put("department", remove ? null : text(value));
+            case "division" -> flat.put("division", remove ? null : text(value));
+            case "costcenter" -> flat.put("costCenter", remove ? null : text(value));
+            case "employeenumber" -> flat.put("employeeNumber", remove ? null : text(value));
+            case "manager", "manager.value" -> flat.put("manager",
+                    remove
+                            ? null
+                            : value != null && value.isObject()
+                                    ? text(value.get("value"))
+                                    : text(value));
+            default -> {
+                // An enterprise member TesseraQL does not map: tolerated, not an error.
+            }
         }
     }
 

@@ -149,6 +149,61 @@ class ScimInboundIntegrationTest {
     }
 
     @Test
+    void createAndUpdateLandEnterpriseAttributesInTheIdentityStore() throws Exception {
+        String body = """
+                {"schemas":["urn:ietf:params:scim:schemas:core:2.0:User",
+                            "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"],
+                 "userName":"fumiko","nickName":"fu-chan",
+                 "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":
+                   {"department":"経理部","employeeNumber":"E-7",
+                    "manager":{"value":"u-mgr"}}}
+                """;
+        String id = MAPPER.readTree(send("POST", "/scim/v2/Users", body).body())
+                .get("id").asText();
+        assertThat(attribute(id, "department")).isEqualTo("経理部");
+        assertThat(attribute(id, "employeeNumber")).isEqualTo("E-7");
+        assertThat(attribute(id, "manager")).isEqualTo("u-mgr");
+        assertThat(attribute(id, "nickname")).isEqualTo("fu-chan");
+
+        // A PUT converges the declared set: moved values move, withheld values are deleted.
+        HttpResponse<String> replaced = send("PUT", "/scim/v2/Users/" + id, """
+                {"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+                 "userName":"fumiko",
+                 "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":
+                   {"department":"総務部"}}
+                """);
+        assertThat(replaced.statusCode()).isEqualTo(200);
+        assertThat(attribute(id, "department")).isEqualTo("総務部");
+        assertThat(attribute(id, "employeeNumber")).isNull();
+        assertThat(attribute(id, "nickname")).isNull();
+
+        // A PATCH applies only what it addresses; the untouched department survives.
+        HttpResponse<String> patched = send("PATCH", "/scim/v2/Users/" + id,
+                """
+                        {"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+                         "Operations":[
+                           {"op":"replace",
+                            "path":"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:employeeNumber",
+                            "value":"E-8"}
+                         ]}
+                        """);
+        assertThat(patched.statusCode()).isEqualTo(200);
+        assertThat(attribute(id, "employeeNumber")).isEqualTo("E-8");
+        assertThat(attribute(id, "department")).isEqualTo("総務部");
+    }
+
+    private static String attribute(String userId, String name) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery(
+                        "select value from tql_user_attributes where user_id = '" + userId
+                                + "' and name = '" + name + "'")) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    @Test
     void filterByUserNameEqReturnsMatch() throws Exception {
         send("POST", "/scim/v2/Users", "{\"userName\":\"filterme\"}");
 
@@ -326,6 +381,13 @@ class ScimInboundIntegrationTest {
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
+            // The attribute capture writes tql_user_attributes on the managed realm.
+            for (String ddl : io.tesseraql.identity.DefaultIdentityPack.schema("postgres")
+                    .split(";")) {
+                if (!ddl.isBlank()) {
+                    statement.execute(ddl);
+                }
+            }
             statement.execute("create table scim_users (id serial primary key, "
                     + "user_name varchar(200) not null unique, given_name varchar(200), "
                     + "family_name varchar(200), email varchar(320), active boolean default true, "
@@ -358,6 +420,10 @@ class ScimInboundIntegrationTest {
                     name: scim-inbound
                   scim:
                     enabled: true
+                    attributes:
+                      enabled: true
+                      map:
+                        nickName: nickname
                     users:
                       create: scim/create-user.sql
                       findById: scim/find-user.sql

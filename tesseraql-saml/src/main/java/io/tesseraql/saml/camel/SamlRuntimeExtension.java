@@ -67,7 +67,9 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
                 config.getString("tesseraql.saml.attributes.email").orElse(null),
                 config.getString("tesseraql.saml.attributes.roles").orElse(null),
                 config.getString("tesseraql.saml.attributes.groups").orElse(null),
-                config.getString("tesseraql.saml.attributes.tenant").orElse(null));
+                config.getString("tesseraql.saml.attributes.tenant").orElse(null),
+                config.getString("tesseraql.saml.link.subjectAttribute").orElse(null),
+                attributeMap(config));
         // When link mode is on, resolve (and optionally provision) a local user so authorization
         // uses locally-managed roles instead of IdP-asserted ones (design ch. 10.14 userLink).
         boolean link = config.getString("tesseraql.saml.link.enabled")
@@ -104,6 +106,21 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
                 validator, mapping, sessions, linker, metadata, endpoints, security,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                         io.tesseraql.security.throttle.CredentialThrottle.class)));
+    }
+
+    /**
+     * The declared attribute capture ({@code tesseraql.saml.attributes.map}): assertion attribute
+     * name → store attribute name, re-synced at every linked login (docs/application-roles.md
+     * structural decision 3). Unmapped assertion attributes stay discarded.
+     */
+    private static java.util.Map<String, String> attributeMap(AppConfig config) {
+        java.util.Map<String, String> mapped = new java.util.LinkedHashMap<>();
+        if (config
+                .navigate("tesseraql.saml.attributes.map") instanceof java.util.Map<?, ?> entries) {
+            entries.forEach((name, target) -> mapped.put(String.valueOf(name),
+                    String.valueOf(target)));
+        }
+        return mapped;
     }
 
     private static byte[] readBytes(AppManifest manifest, String relative) {

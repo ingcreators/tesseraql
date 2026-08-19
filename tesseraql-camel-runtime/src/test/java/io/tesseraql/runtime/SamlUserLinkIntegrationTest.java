@@ -103,6 +103,54 @@ class SamlUserLinkIntegrationTest {
         }
     }
 
+    @Test
+    void renamedLoginResyncsTheSameAccountThroughTheIdentityLink() throws Exception {
+        // First login provisions dave; the persistent NameID is the immutable link subject.
+        HttpResponse<String> first = postAcs("subj-dave", Map.of(
+                "uid", List.of("dave"), "department", List.of("総務部")));
+        assertThat(first.statusCode()).isEqualTo(200);
+        String userId = MAPPER.readTree(first.body()).get("subject").asText();
+        assertThat(userId).isNotEqualTo("dave");
+        assertThat(scalar("select value from tql_user_attributes where user_id = '" + userId
+                + "' and name = 'department'")).isEqualTo("総務部");
+
+        // The deployment assigns a role between logins.
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute("insert into tql_roles (role_id, role_code, role_name)"
+                    + " values ('r-dave','orders.approver','承認者')");
+            statement.execute("insert into tql_user_roles (user_id, role_id)"
+                    + " values ('" + userId + "','r-dave')");
+        }
+
+        // The IdP renames the login and moves the department: the same account re-syncs
+        // through the link instead of a duplicate being provisioned, and keeps its role.
+        HttpResponse<String> second = postAcs("subj-dave", Map.of(
+                "uid", List.of("dave.renamed"), "department", List.of("経理部")));
+        assertThat(second.statusCode()).isEqualTo(200);
+        JsonNode body = MAPPER.readTree(second.body());
+        assertThat(body.get("subject").asText()).isEqualTo(userId);
+        assertThat(body.get("loginId").asText()).isEqualTo("dave.renamed");
+        assertThat(scalar("select login_id from tql_users where user_id = '" + userId + "'"))
+                .isEqualTo("dave.renamed");
+        assertThat(scalar("select value from tql_user_attributes where user_id = '" + userId
+                + "' and name = 'department'")).isEqualTo("経理部");
+        assertThat(scalar("select count(*) from tql_users where login_id like 'dave%'"))
+                .isEqualTo("1");
+        assertThat(scalar("select count(*) from tql_user_roles where user_id = '" + userId
+                + "'")).isEqualTo("1");
+    }
+
+    private static String scalar(String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement();
+                ResultSet rs = statement.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
     private static HttpResponse<String> postAcs(String nameId, Map<String, List<String>> attributes)
             throws Exception {
         String xml = SamlTestSupport.signedResponse(keyPair.getPrivate(), nameId, AUDIENCE,
@@ -172,7 +220,10 @@ class SamlUserLinkIntegrationTest {
                     idp:
                       publicKey: saml/idp.pem
                     attributes:
+                      loginId: uid
                       email: email
+                      map:
+                        department: department
                     link:
                       enabled: true
                       provision: true

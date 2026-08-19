@@ -25,14 +25,22 @@ public final class ScimRouteBuilder extends RouteBuilder {
     private final ObjectMapper mapper = new ObjectMapper();
     private final ScimUserService users;
     private final ScimGroupService groups;
+    private final io.tesseraql.scim.ScimAttributeCapture capture;
 
     public ScimRouteBuilder(ScimUserService users) {
-        this(users, null);
+        this(users, null, null);
     }
 
     public ScimRouteBuilder(ScimUserService users, ScimGroupService groups) {
+        this(users, groups, null);
+    }
+
+    /** With the identity-store attribute capture (docs/application-roles.md), or null without. */
+    public ScimRouteBuilder(ScimUserService users, ScimGroupService groups,
+            io.tesseraql.scim.ScimAttributeCapture capture) {
         this.users = users;
         this.groups = groups;
+        this.capture = capture;
     }
 
     @Override
@@ -88,9 +96,13 @@ public final class ScimRouteBuilder extends RouteBuilder {
     }
 
     private void createUser(Exchange exchange) throws Exception {
-        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class),
-                ScimUser.class);
+        com.fasterxml.jackson.databind.JsonNode payload = mapper.readTree(
+                exchange.getMessage().getBody(String.class));
+        ScimUser request = mapper.treeToValue(payload, ScimUser.class);
         ScimUser created = users.create(request);
+        if (capture != null) {
+            capture.syncResource(created.id(), request, payload);
+        }
         // RFC 7644 §3.3: a SCIM 201 carries the created resource's Location.
         exchange.getMessage().setHeader("Location",
                 exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class)
@@ -114,9 +126,14 @@ public final class ScimRouteBuilder extends RouteBuilder {
 
     private void replaceUser(Exchange exchange) throws Exception {
         String id = exchange.getMessage().getHeader("id", String.class);
-        ScimUser request = mapper.readValue(exchange.getMessage().getBody(String.class),
-                ScimUser.class);
-        respond(exchange, 200, users.replace(id, request));
+        com.fasterxml.jackson.databind.JsonNode payload = mapper.readTree(
+                exchange.getMessage().getBody(String.class));
+        ScimUser request = mapper.treeToValue(payload, ScimUser.class);
+        ScimUser replaced = users.replace(id, request);
+        if (capture != null) {
+            capture.syncResource(id, request, payload);
+        }
+        respond(exchange, 200, replaced);
     }
 
     private void patchUser(Exchange exchange) throws Exception {
@@ -124,7 +141,11 @@ public final class ScimRouteBuilder extends RouteBuilder {
         io.tesseraql.scim.ScimPatchRequest patch = mapper.readValue(
                 exchange.getMessage().getBody(String.class),
                 io.tesseraql.scim.ScimPatchRequest.class);
-        respond(exchange, 200, users.patch(id, patch));
+        ScimUser patched = users.patch(id, patch);
+        if (capture != null) {
+            capture.syncPatch(id, patch);
+        }
+        respond(exchange, 200, patched);
     }
 
     private void deleteUser(Exchange exchange) {

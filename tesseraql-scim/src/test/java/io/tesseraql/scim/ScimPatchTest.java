@@ -48,6 +48,47 @@ class ScimPatchTest {
     }
 
     @Test
+    void appliesEnterpriseExtensionPaths() throws Exception {
+        ScimUser result = ScimPatch.apply(sample(), patch("""
+                {"Operations":[
+                  {"op":"replace",
+                   "path":"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department",
+                   "value":"経理部"},
+                  {"op":"replace",
+                   "path":"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager",
+                   "value":{"value":"u-mgr"}}
+                ]}
+                """));
+        assertThat(result.enterprise().department()).isEqualTo("経理部");
+        assertThat(result.enterprise().managerValue()).isEqualTo("u-mgr");
+        assertThat(result.userName()).isEqualTo("asmith"); // untouched
+    }
+
+    @Test
+    void appliesTheEnterpriseObjectFromAPathlessReplace() throws Exception {
+        ScimUser result = ScimPatch.apply(sample(), patch("""
+                {"Operations":[{"op":"replace","value":{
+                  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User":
+                    {"division":"管理本部"}
+                }}]}
+                """));
+        assertThat(result.enterprise().division()).isEqualTo("管理本部");
+    }
+
+    @Test
+    void toleratesAnUnmappedExtensionPathInsteadOfRejectingTheRequest() throws Exception {
+        // An IdP provisioning an extension attribute TesseraQL does not capture must not be
+        // broken by it; only unknown core paths stay invalidPath.
+        ScimUser result = ScimPatch.apply(sample(), patch("""
+                {"Operations":[
+                  {"op":"replace","path":"urn:example:custom:2.0:User:badge","value":"B-1"},
+                  {"op":"replace","path":"name.givenName","value":"Annette"}
+                ]}
+                """));
+        assertThat(result.name().givenName()).isEqualTo("Annette");
+    }
+
+    @Test
     void rejectsUnsupportedPath() throws Exception {
         ScimPatchRequest request = patch("""
                 {"Operations":[{"op":"replace","path":"x509Certificates","value":"abc"}]}
