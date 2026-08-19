@@ -77,7 +77,8 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         MemberOrigins memberOrigins,
         java.io.File extraModules,
         java.util.Map<String, Object> surfaceSecurity,
-        DeployPen deployPen) {
+        DeployPen deployPen,
+        java.util.Map<String, Object> stackIssuerJwt) {
 
     /**
      * The host's live member-origin lookup: which internal port answers for a member's stable or
@@ -124,7 +125,8 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/", null, null, null, null, null, null, null, null);
+        return new HostContext(null, "/", null, null, null, null, null, null, null, null,
+                null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -136,7 +138,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null, null, extraModules, null, null);
+                mainDataSourceOverride, null, null, extraModules, null, null, stackIssuerJwt);
     }
 
     /**
@@ -153,7 +155,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             DeployPen deployPen) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null,
-                surfaceSecurity, deployPen);
+                surfaceSecurity, deployPen, stackIssuerJwt);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
@@ -161,13 +163,23 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen);
+                surfaceSecurity, deployPen, stackIssuerJwt);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen);
+                surfaceSecurity, deployPen, stackIssuerJwt);
+    }
+
+    /**
+     * These settings, carrying the derived stack-issuer validation block (decision 9 of
+     * docs/token-issuance.md) every runtime in the stack applies.
+     */
+    HostContext withStackIssuer(java.util.Map<String, Object> stackIssuerJwt) {
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                surfaceSecurity, deployPen, stackIssuerJwt);
     }
 }

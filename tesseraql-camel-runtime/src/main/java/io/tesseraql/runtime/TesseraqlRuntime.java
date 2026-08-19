@@ -349,10 +349,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // grafted over its configuration before anything reads it (docs/stack-shells.md, the
         // deploy surface): the origin's JWT validation, token issuing and deploy endpoint all
         // configure from the merged tree, through the same keys an application would declare.
-        final AppManifest manifest = hostContext != null && hostContext.surfaceSecurity() != null
-                ? loaded.withConfig(withStackSecurity(loaded.config(),
-                        hostContext.surfaceSecurity()))
-                : loaded;
+        final AppManifest manifest = withStackContext(loaded, hostContext);
         java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers = hostContext == null
                 ? null
                 : hostContext.stackMembers();
@@ -2055,10 +2052,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .getBoolean("tesseraql.security.token.enabled", false);
             String tokenTtl = manifest.config()
                     .getString("tesseraql.security.token.ttl").orElse("15m");
+            // One issuer per stack (docs/token-issuance.md decision 9): with the authorization
+            // server enabled on this runtime, the exchange signs RS256 through the extension's
+            // signer instead of an HS256 secret — two doors, one issuer.
+            boolean stackIssuer = manifest.config()
+                    .getBoolean("tesseraql.security.oauth.enabled", false);
             SessionTokens sessionTokens = new SessionTokens(security.jwt(),
-                    io.tesseraql.core.util.Durations.parse(tokenTtl), tokenTtl, tokenIssuing);
+                    io.tesseraql.core.util.Durations.parse(tokenTtl), tokenTtl, tokenIssuing,
+                    stackIssuer
+                            ? () -> context.getRegistry().lookupByNameAndType(
+                                    io.tesseraql.oauth.OAuthRuntimeExtension.TOKEN_SIGNER_BEAN,
+                                    io.tesseraql.oauth.AccessTokenSigner.class)
+                            : null);
             if (tokenIssuing) {
-                if (!TokenExchangeRouteBuilder.canIssue(security.jwt())) {
+                if (!stackIssuer && !TokenExchangeRouteBuilder.canIssue(security.jwt())) {
                     throw TokenExchangeRouteBuilder.noSigningKey();
                 }
                 context.addRoutes(new TokenExchangeRouteBuilder(sessionStore, sessionTokens));
@@ -3244,6 +3251,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 dataSource);
         store.ensureSchema();
         return new io.tesseraql.core.account.CachingPreferenceStore(store);
+    }
+
+    /**
+     * The stack's grafts, in order: the surface runtime receives the stack file's whole
+     * {@code security:} subtree, and — with the authorization server enabled — every hosted
+     * runtime receives the derived stack-issuer validation block on top
+     * (docs/token-issuance.md decision 9), its audience defaulting to its own address.
+     */
+    private static AppManifest withStackContext(AppManifest loaded, HostContext hostContext) {
+        if (hostContext == null) {
+            return loaded;
+        }
+        AppManifest manifest = hostContext.surfaceSecurity() != null
+                ? loaded.withConfig(withStackSecurity(loaded.config(),
+                        hostContext.surfaceSecurity()))
+                : loaded;
+        if (hostContext.stackIssuerJwt() == null) {
+            return manifest;
+        }
+        return manifest.withConfig(StackIssuer.apply(manifest.config(),
+                hostContext.stackIssuerJwt(), hostContext.externalOrigin(),
+                hostContext.basePath(),
+                hostContext.stackMembers() != null
+                        ? "the stack file"
+                        : "this application's configuration"));
     }
 
     /**

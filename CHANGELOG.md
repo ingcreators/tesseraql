@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **One issuer per stack** (docs/token-issuance.md decision 9, the unification core). With
+  `security.oauth.enabled` in the stack file, the host derives one RS256 validation block —
+  the origin as issuer, the surface's JWKS, the stack's claim names — and every hosted runtime
+  applies it: nothing is declared per member, a runtime's accepted audiences are its own
+  address plus the stack origin, and the session exchange (`/_tesseraql/token`, the console
+  token page) signs with the same database-held key, so a token from either door validates at
+  every member. A JWT key source declared beside the stack's issuer is refused as a second
+  issuer (`TQL-OAUTH-3001`), an issuer without a declared `externalOrigin` is refused
+  (`TQL-OAUTH-3002`), and `TQL-SEC-4146` narrows to "no HS256 secret **and** no stack issuer".
+
 - **The stack signs RS256, and every replica serves one JWKS** (docs/token-issuance.md
   slice 3). `security.oauth.enabled` in `tesseraql-stack.yml` installs the authorization
   server's surface on the stack surface runtime; first start generates an RSA-2048 pair into
