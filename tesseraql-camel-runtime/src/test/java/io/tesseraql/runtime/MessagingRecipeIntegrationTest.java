@@ -49,6 +49,7 @@ class MessagingRecipeIntegrationTest {
         appHome = prepareAppHome();
         port = freePort();
         runtime = TesseraqlRuntime.start(appHome, port);
+        TestHttp.awaitReady(port);
     }
 
     @AfterAll
