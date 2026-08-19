@@ -1,0 +1,15 @@
+version: tesseraql/v1
+id: tql.iamAdmin.rules.recompute
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+steps:
+  - id: main
+    service:
+      name: iam.recomputeAll
+response:
+  redirect:
+    location: /_tesseraql/admin/rules?recomputed=1

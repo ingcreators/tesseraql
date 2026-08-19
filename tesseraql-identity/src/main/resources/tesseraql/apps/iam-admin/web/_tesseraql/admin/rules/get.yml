@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.iamAdmin.rules.list
+kind: route
+recipe: query-html
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  created:
+    type: string
+    required: false
+  deleted:
+    type: string
+    required: false
+  added:
+    type: string
+    required: false
+  recomputed:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.rules
+response:
+  html:
+    status: 200
+    template: rules.html
+    model:
+      rows: main.rows
+      allRoles: main.roles
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      created: params.created
+      deleted: params.deleted
+      added: params.added
+      recomputed: params.recomputed

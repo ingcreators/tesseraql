@@ -10,6 +10,15 @@ web/_tesseraql/admin/delegations/get.yml
 web/_tesseraql/admin/roles/get.yml
 web/_tesseraql/admin/roles/roles.html
 web/_tesseraql/admin/roles/create/post.yml
+web/_tesseraql/admin/rules/get.yml
+web/_tesseraql/admin/rules/rules.html
+web/_tesseraql/admin/rules/create/post.yml
+web/_tesseraql/admin/rules/conditions/post.yml
+web/_tesseraql/admin/rules/delete/post.yml
+web/_tesseraql/admin/rules/recompute/post.yml
+web/_tesseraql/admin/users/{id}/attributes/set/post.yml
+web/_tesseraql/admin/users/{id}/attributes/delete/post.yml
+web/_tesseraql/admin/users/{id}/recompute/post.yml
 web/_tesseraql/admin/users/{id}/roles/assign/post.yml
 web/_tesseraql/admin/users/{id}/roles/unassign/post.yml
 web/_tesseraql/admin/users/{id}/permissions/grant/post.yml

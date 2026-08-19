@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Rules', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status" th:if="${created != null}">Rule created.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${deleted != null}">Rule deleted. Assignments converge at each user's next sign-in, or recompute now.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${added != null}">Condition added.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${recomputed != null}">Recomputed every user's rule assignments.</p>
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">Assignment rules are unavailable for this realm.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<section class="hc-card" th:if="${available == 1 and writable == 1}">
+  <div class="hc-card__header">Create rule</div>
+  <div class="hc-card__body hc-stack">
+    <!-- One rule grants one role when every condition matches; conditions on the same
+         attribute with a positive kind OR together (docs/application-roles.md). -->
+    <form method="post" th:action="@{/_tesseraql/admin/rules/create}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Attribute</span>
+        <input class="hc-input" name="attribute"></label>
+      <label class="hc-field"><span class="hc-field__label">Kind</span>
+        <select class="hc-input" name="kind">
+          <option>eq</option><option>in</option><option>neq</option>
+          <option>not-in</option><option>group</option><option>subtree</option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Value</span>
+        <input class="hc-input" name="value" required></label>
+      <button class="hc-button" data-variant="primary" type="submit">Create</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card">
+  <div class="hc-card__header">Rules</div>
+  <div class="hc-card__body hc-stack">
+    <form th:if="${available == 1 and writable == 1}" method="post"
+          th:action="@{/_tesseraql/admin/rules/recompute}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-size="sm" type="submit">Recompute all users now</button>
+    </form>
+    <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
+      <p class="hc-empty__title">No assignment rules.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
+      <table class="hc-table">
+        <thead><tr><th>Grants role</th><th>Conditions</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="r : ${rows}">
+            <td><code th:text="${r.role_code}"></code></td>
+            <td>
+              <div th:each="c : ${r.conditions}">
+                <code th:text="|${c.attribute_name != null ? c.attribute_name + ' ' : ''}${c.match_kind} ${c.value}|"></code>
+              </div>
+              <form th:if="${writable == 1}" method="post"
+                    th:action="@{/_tesseraql/admin/rules/conditions}" class="hc-cluster">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="ruleId" th:value="${r.rule_id}">
+                <input class="hc-input" data-size="sm" name="attribute" placeholder="attribute">
+                <select class="hc-input" data-size="sm" name="kind">
+                  <option>eq</option><option>in</option><option>neq</option>
+                  <option>not-in</option><option>group</option><option>subtree</option>
+                </select>
+                <input class="hc-input" data-size="sm" name="value" placeholder="value" required>
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Add</button>
+              </form>
+            </td>
+            <td th:if="${writable == 1}">
+              <form method="post" th:action="@{/_tesseraql/admin/rules/delete}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="ruleId" th:value="${r.rule_id}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</div>
+</html>

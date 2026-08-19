@@ -89,6 +89,18 @@ Every write is gated by the realm's `roleManagement` capability; a realm that do
 allow it renders these editors read-only and refuses the write. Grant changes take
 effect at the affected user's next sign-in, like every grant change.
 
+## Attributes and assignment rules
+
+The user detail page also edits a person's **attributes** — free-form named values like a
+department or a title, which reach the application as `principal.claim.<name>`. The rules
+page (`/_tesseraql/admin/rules`) turns attributes into roles: a rule grants one role when
+every condition matches, with condition kinds `eq`, `in`, `neq`, `not-in`, `group`
+(membership in a store group) and `subtree` (the attribute sits under an org unit, via the
+managed org foundation). Rules apply at each user's next sign-in and their assignments
+carry rule provenance — a manually assigned role always survives, and a rule's assignment
+goes away when the rule stops producing it. **Recompute now** (one user from their detail
+page, everyone from the rules page) applies rule edits without waiting for sign-ins.
+
 ## Delegations
 
 The delegations page shows who is currently acting for whom, and over what period.

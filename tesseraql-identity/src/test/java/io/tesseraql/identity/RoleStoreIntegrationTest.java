@@ -108,6 +108,34 @@ class RoleStoreIntegrationTest {
                 .hasMessageContaining("first segment");
     }
 
+    /** Slice 4: an attribute-matched rule assigns at sign-in; manual assignments survive. */
+    @Test
+    void rulesAssignAtSignInAndManualAssignmentsSurvive() {
+        RoleAdmin.createRole(identity, MANAGED, "keiri.member", "経理", "");
+        String ruleId = String.valueOf(RoleAdmin.createRule(identity, MANAGED,
+                "keiri.member", "department", "eq", "accounting", false).get("created"));
+        RoleAdmin.setAttribute(identity, MANAGED, "u1", "department", "accounting");
+
+        Principal matched = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(matched.roles()).contains("keiri.member");
+        assertThat(matched.claim().get("department")).isEqualTo("accounting");
+
+        // The attribute flips: the rule assignment converges away at the next sign-in.
+        RoleAdmin.setAttribute(identity, MANAGED, "u1", "department", "sales");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .doesNotContain("keiri.member");
+
+        // A manual assignment of the same role is admin provenance: recompute keeps it.
+        RoleAdmin.assignRole(identity, MANAGED, "u1", "keiri.member", "", "");
+        RoleRules.recompute(identity, MANAGED, "u1");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .contains("keiri.member");
+
+        RoleAdmin.unassignRole(identity, MANAGED, "u1", "keiri.member");
+        RoleAdmin.deleteAttribute(identity, MANAGED, "u1", "department");
+        RoleAdmin.deleteRule(identity, MANAGED, ruleId);
+    }
+
     /** Slice 3: declaration → store, converge on re-declaration, orphan on removal, revive. */
     @Test
     void declaredRolesReconcileConvergeOrphanAndRevive() {

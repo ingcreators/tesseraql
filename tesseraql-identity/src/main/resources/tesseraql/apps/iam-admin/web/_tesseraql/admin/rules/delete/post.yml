@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.iamAdmin.rules.delete
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  ruleId:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.deleteRoleRule
+      params:
+        ruleId: params.ruleId
+response:
+  redirect:
+    location: /_tesseraql/admin/rules?deleted=1

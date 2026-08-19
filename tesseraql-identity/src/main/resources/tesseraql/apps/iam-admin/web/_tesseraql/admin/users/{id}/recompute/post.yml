@@ -1,0 +1,17 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.recompute
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+steps:
+  - id: main
+    service:
+      name: iam.recomputeUser
+      params:
+        userId: path.id
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}?recomputed=1

@@ -154,6 +154,50 @@
 <p class="hc-alert" data-variant="success" role="status" th:if="${unassigned != null}">Role unassigned.</p>
 <p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}">Permission granted.</p>
 <p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}">Permission revoked.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${attrset != null}">Attribute set. Rules apply at the next sign-in, or recompute now.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${attrdeleted != null}">Attribute deleted.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${recomputed != null}">Rule assignments recomputed.</p>
+<section class="hc-card" th:if="${editorAvailable == 1}">
+  <div class="hc-card__header">Attributes</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(attributes)}">
+      <p class="hc-empty__title">No attributes.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(attributes)}">
+      <table class="hc-table" data-density="compact">
+        <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="at : ${attributes}">
+            <td><code th:text="${at.name}"></code></td>
+            <td th:text="${at.value}"></td>
+            <td th:if="${editorWritable == 1}">
+              <form th:each="u : ${user}" method="post"
+                    th:action="@{/_tesseraql/admin/users/{id}/attributes/delete(id=${u.user_id})}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="name" th:value="${at.name}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
+          th:action="@{/_tesseraql/admin/users/{id}/attributes/set(id=${u.user_id})}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Name</span>
+        <input class="hc-input" name="name" required></label>
+      <label class="hc-field"><span class="hc-field__label">Value</span>
+        <input class="hc-input" name="value"></label>
+      <button class="hc-button" data-variant="primary" type="submit">Set</button>
+    </form>
+    <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
+          th:action="@{/_tesseraql/admin/users/{id}/recompute(id=${u.user_id})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-size="sm" type="submit">Recompute rule assignments now</button>
+    </form>
+  </div>
+</section>
 <section class="hc-card" th:if="${editorAvailable == 1}">
   <div class="hc-card__header">Role assignments</div>
   <div class="hc-card__body hc-stack">

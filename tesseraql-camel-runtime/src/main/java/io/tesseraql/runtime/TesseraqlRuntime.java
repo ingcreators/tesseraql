@@ -1862,6 +1862,48 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 iamIdentity.get(), iamRealm.get(),
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("code"))));
+                // Attributes and assignment rules (docs/application-roles.md slice 4).
+                boolean orgManaged = "managed".equals(manifest.config()
+                        .getString("tesseraql.orgunit.mode").orElse("app"));
+                serviceProviders.register("iam.rules",
+                        params -> io.tesseraql.identity.RoleAdmin.rulesModel(
+                                iamIdentity.get(), iamRealm.get()));
+                serviceProviders.register("iam.createRoleRule",
+                        params -> io.tesseraql.identity.RoleAdmin.createRule(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("attribute")),
+                                String.valueOf(params.get("kind")),
+                                String.valueOf(params.get("value")), orgManaged));
+                serviceProviders.register("iam.addRuleCondition",
+                        params -> io.tesseraql.identity.RoleAdmin.addRuleCondition(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("ruleId")),
+                                String.valueOf(params.get("attribute")),
+                                String.valueOf(params.get("kind")),
+                                String.valueOf(params.get("value")), orgManaged));
+                serviceProviders.register("iam.deleteRoleRule",
+                        params -> io.tesseraql.identity.RoleAdmin.deleteRule(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("ruleId"))));
+                serviceProviders.register("iam.setAttribute",
+                        params -> io.tesseraql.identity.RoleAdmin.setAttribute(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("name")),
+                                String.valueOf(params.get("value"))));
+                serviceProviders.register("iam.deleteAttribute",
+                        params -> io.tesseraql.identity.RoleAdmin.deleteAttribute(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("name"))));
+                serviceProviders.register("iam.recomputeUser", params -> Map.of("recomputed",
+                        io.tesseraql.identity.RoleRules.recompute(iamIdentity.get(),
+                                iamRealm.get(), String.valueOf(params.get("userId")))
+                                .size()));
+                serviceProviders.register("iam.recomputeAll",
+                        params -> io.tesseraql.identity.RoleAdmin.recomputeAll(
+                                iamIdentity.get(), iamRealm.get()));
             }
             // The ops shell's delegating providers (docs/stack-shells.md structural decision 2).
             // On the surface runtime the members and their live ports come from the host; on the

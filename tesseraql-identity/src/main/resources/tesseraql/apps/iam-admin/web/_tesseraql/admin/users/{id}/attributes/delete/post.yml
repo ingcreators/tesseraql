@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.deleteAttribute
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  name:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.deleteAttribute
+      params:
+        userId: path.id
+        name: params.name
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}?attrdeleted=1
