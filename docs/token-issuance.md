@@ -318,6 +318,14 @@ forwards `/_tesseraql/*` and `/assets/*` to the surface runtime today, and `root
 reserved `/.well-known/*` for this document — the fence gains that prefix in the metadata slice,
 and nothing else about routing moves.
 
+*Slice 7 shipped 2026-08-19: the fence gained `/.well-known/*` (the segment starts with a dot,
+so the address grammar already kept member names clear of it), and the extension serves RFC
+8414 metadata at the bare well-known — issuer, the four absolute endpoints, `code` only,
+`S256` only, `none` and `client_secret_basic`, and deliberately no `scopes_supported`, as
+measured. RFC 9207's `iss` had already shipped with the authorize slice. The
+`authorization_servers` value the resource metadata will carry is the issuer; the resource
+side itself is slice 10's.*
+
 RFC 9207's `iss` is included in the authorization response. It is cheap now and awkward later, and
 it costs nothing to a client that ignores it.
 
@@ -540,7 +548,7 @@ dependency order given below, not the numeric one.
 | 4 | ~~`/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE~~ — **shipped 2026-08-19**; the three-surface split and the deferrals are in Decision 4's note |
 | 5 | ~~`/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain~~ — **shipped 2026-08-19**; the mint-time re-resolution is in Decision 2's note |
 | 6 | ~~`/register`, the client registry, exact-match redirect validation (measured — open question 2)~~ — **shipped 2026-08-19**, with Decision 8's lint half (`TQL-OAUTH-3004`); Decision 5's note has the auth-method default |
-| 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |
+| 7 | ~~RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry~~ — **shipped 2026-08-19** (Decision 6's note; `iss` had shipped with slice 4) |
 | 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
 | 9 | ~~Issuer unification (Decision 9): members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the exchange's member axis, the `session-token-exchange.md` premise edit~~ — **shipped 2026-08-19** (Decision 9's notes) |
 | 10 | The resource side, to `audit-hardening.md`'s decisions: RFC 9728 protected-resource metadata per member relayed at origin scope, the `WWW-Authenticate` challenge, the MCP transport gate and audience binding — then the connect-and-observe pass against the whole chain |

@@ -79,8 +79,9 @@ get the same screen), paid once per stack rather than once per application.
    through the same `vertx-http-proxy` path members use. A forward failure is the same 502
    `TQL-APP-5020` a member's would be.
 4. Longest-member-prefix routing, tenant check, forward — unchanged.
-5. No match — 404 `TQL-APP-4040`, unchanged. `/favicon.ico`, `/robots.txt` and `/.well-known/*`
-   keep 404ing until the slice that owns them (token-issuance, for well-known).
+5. No match — 404 `TQL-APP-4040`, unchanged. `/favicon.ico` and `/robots.txt` keep 404ing
+   until a slice owns them. `/.well-known/*` joined the fence with token-issuance slice 7
+   (2026-08-19): the surface runtime serves RFC 8414 metadata at the bare well-known.
 
 **Why `/assets/*` is in the fence.** The framework already claims `<scope>/assets` at every scope:
 the login page at `/shop-a/_tesseraql/login` loads `/shop-a/assets/vendor/…`, because asset URLs
@@ -317,7 +318,7 @@ stays true and untouched — the portal is not an `AppSourceProvider`.
 - **Per-principal application entitlement.** No model exists; open question 4 owns it.
 - **Tile metadata** — titles, icons, descriptions. Version 1 renders names, which are the address
   contract. See open question 3.
-- **`/.well-known/*` at the origin** — token-issuance territory.
+- **`/.well-known/*` at the origin** — token-issuance territory; claimed by its slice 7.
 
 ## Open questions
 

@@ -363,6 +363,31 @@ class OAuthIssuerUnificationIntegrationTest {
     }
 
     @Test
+    void theMetadataSitsAtTheBareWellKnownAndAdvertisesNoScopes() throws Exception {
+        HttpResponse<String> metadata = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port
+                        + "/.well-known/oauth-authorization-server"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
+        JsonNode document = MAPPER.readTree(metadata.body());
+        String issuer = "http://localhost:" + port;
+        assertThat(document.get("issuer").asText()).isEqualTo(issuer);
+        assertThat(document.get("authorization_endpoint").asText())
+                .isEqualTo(issuer + "/_tesseraql/oauth/authorize");
+        assertThat(document.get("token_endpoint").asText())
+                .isEqualTo(issuer + "/_tesseraql/oauth/token");
+        assertThat(document.get("registration_endpoint").asText())
+                .isEqualTo(issuer + "/_tesseraql/oauth/register");
+        assertThat(document.get("jwks_uri").asText())
+                .isEqualTo(issuer + "/_tesseraql/oauth/jwks");
+        assertThat(document.get("code_challenge_methods_supported").toString())
+                .contains("S256");
+        // Deliberately absent (stack-architecture.md decision 11, measured against Codex).
+        assertThat(document.has("scopes_supported")).isFalse();
+    }
+
+    @Test
     void aRegistrationWithoutACompleteCallbackIsRefused() throws Exception {
         HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/_tesseraql/oauth/register"))

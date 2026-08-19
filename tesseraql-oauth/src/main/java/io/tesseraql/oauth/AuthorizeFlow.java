@@ -58,6 +58,11 @@ public final class AuthorizeFlow {
         this.clock = clock;
     }
 
+    /** The issuer — the stack origin, no path component (stack-architecture.md decision 6). */
+    public String issuer() {
+        return externalOrigin;
+    }
+
     /**
      * The full ladder for one request, consent screen owed unless a recorded consent already
      * answers it. {@code subject}/{@code loginId} identify the session's principal;

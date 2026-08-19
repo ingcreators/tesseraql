@@ -65,7 +65,37 @@ final class OAuthRouteBuilder extends RouteBuilder {
             rest().post("/_tesseraql/oauth/register").to("direct:tql.oauth.register");
             from("direct:tql.oauth.register").routeId("system.oauth.register")
                     .process(this::register);
+            rest().get("/.well-known/oauth-authorization-server")
+                    .to("direct:tql.oauth.metadata");
+            from("direct:tql.oauth.metadata").routeId("system.oauth.metadata")
+                    .process(this::metadata);
         }
+    }
+
+    /**
+     * RFC 8414 authorization-server metadata at the bare well-known, because the issuer is the
+     * stack origin with no path component (docs/token-issuance.md decision 6) — the endpoints
+     * need not share the issuer's path and are listed absolute. {@code scopes_supported} is
+     * deliberately absent (stack-architecture.md decision 11, measured against Codex): the
+     * scope parameter is accepted and grants nothing.
+     */
+    private void metadata(Exchange exchange) throws Exception {
+        String issuer = flow.issuer();
+        java.util.Map<String, Object> document = new java.util.LinkedHashMap<>();
+        document.put("issuer", issuer);
+        document.put("authorization_endpoint", issuer + "/_tesseraql/oauth/authorize");
+        document.put("token_endpoint", issuer + "/_tesseraql/oauth/token");
+        document.put("registration_endpoint", issuer + "/_tesseraql/oauth/register");
+        document.put("jwks_uri", issuer + "/_tesseraql/oauth/jwks");
+        document.put("response_types_supported", java.util.List.of("code"));
+        document.put("grant_types_supported",
+                java.util.List.of("authorization_code", "refresh_token"));
+        document.put("code_challenge_methods_supported", java.util.List.of("S256"));
+        document.put("token_endpoint_auth_methods_supported",
+                java.util.List.of("none", "client_secret_basic"));
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
     }
 
     /**

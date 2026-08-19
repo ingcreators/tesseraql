@@ -250,9 +250,17 @@ final class StackRelay {
         return best;
     }
 
-    /** Whether {@code rawPath} is the origin scope's framework claim: the fence, or its assets. */
+    /**
+     * Whether {@code rawPath} is the origin scope's framework claim: the fence, its assets, or
+     * the well-known documents — RFC 8414 metadata sits at the bare
+     * {@code /.well-known/oauth-authorization-server} because the issuer is the origin with no
+     * path component (docs/token-issuance.md decision 6), and the surface runtime is what
+     * serves it. The segment starts with a dot, so the address grammar already keeps every
+     * member name clear of it.
+     */
     private static boolean insideTheOriginFence(String rawPath) {
-        return addresses("/_tesseraql", rawPath) || addresses("/assets", rawPath);
+        return addresses("/_tesseraql", rawPath) || addresses("/assets", rawPath)
+                || addresses("/.well-known", rawPath);
     }
 
     /** Whether {@code prefix} addresses {@code path}: equal, or followed by a segment boundary. */
