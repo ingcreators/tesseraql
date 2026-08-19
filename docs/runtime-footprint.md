@@ -1,30 +1,54 @@
 # Runtime footprint
 
-Status: **designed 2026-08-17** — nothing shipped. What a TesseraQL deployment actually carries,
-why, and what it should carry instead.
+Status: designed 2026-08-17; **decided 2026-08-19** — the mechanism for the distribution split,
+the zonky fix and its guard, the Windows test job and execution story, and the generalized
+boundary guards. What a TesseraQL deployment actually carries, why, and what it should carry
+instead.
 
 This began as a question about the command line — *is it a problem that one binary does this many
 things?* — and the measurement moved the answer somewhere else. **The command line's breadth is not
-the defect.** Twenty-four subcommands over one domain object is an ordinary shape: `git` carries
+the defect.** Twenty-five subcommands over one domain object is an ordinary shape: `git` carries
 well over a hundred, `kubectl` around forty, `cargo` around thirty, and
 [cli-surface.md](cli-surface.md) Decision 5 already tests their cohesion by capability — a command
 loads a manifest, compiles routes, or opens a database.
 
-**The defect is that the deployment artifact is the developer's toolchain, and that the runtime
-embeds development tooling of its own.** Those are two separable problems and this document keeps
-them separate.
+**The defect is that the deployment artifact is the developer's toolchain.** The 2026-08-17 draft
+named a second defect — the runtime embedding development tooling of its own — and that one is
+fixed: [studio-shell.md](studio-shell.md) structural decision 3 extracted the workshop into
+`tesseraql-studio-runtime`, `tesseraql-camel-runtime` dropped its compile dependencies on
+`tesseraql-studio` and `tesseraql-test-core`, and an enforcer rule
+(`no-workshop-on-the-runtime`) guards the boundary. What remains is the packaging problem, and
+this revision decides it.
 
-## What is actually in the image
+## What is actually in the artifact
 
-Measured 2026-08-17 against `deploy/Dockerfile`, which builds the published deployment image.
+Measured 2026-08-19 (`dependency:list`, runtime scope, 0.15.0-SNAPSHOT). The deployment image
+(`deploy/Dockerfile`) copies `tesseraql-cli`'s jar **and its whole resolved dependency set** into
+`lib/`; the dist fat jar, the dist archive, and the jpackage app image bundle the same set.
 
-The image copies `tesseraql-cli`'s jar **and its whole dependency set** into `lib/`, starts
-`java -cp 'lib/*' io.tesseraql.cli.TesseraqlCli`, and its `CMD` is `["serve", "--app", "/app"]`.
-
-| | Runtime jars |
+| | Runtime-classpath artifacts |
 | --- | --- |
-| `tesseraql-camel-runtime` | 192 |
-| `tesseraql-cli` | 249 |
+| `tesseraql-camel-runtime` | 195 |
+| `tesseraql-cli` | 261 |
+
+The 66 artifacts only the CLI carries are `tesseraql-camel-runtime`'s own jar plus 65 additions,
+and the additions decompose into four clusters — the clusters are the whole story:
+
+| Cluster | Jars | Size | What it is | Who needs it |
+| --- | --- | --- | --- | --- |
+| Embedded PostgreSQL | 7 | 62.6 MB | zonky supervisor + three platform binary bundles + txz codecs | `dev --embedded-db`, `embedded-db` — development only, and the binary bundles are dead weight even there (problem 1) |
+| Artifact resolver | 46 | 8.0 MB | ShrinkWrap + Maven resolver + Guice/Plexus/Sisu closure | `modules`, `dev` (resolving `tesseraql.modules`), embedded-db binary resolution — development only (see below) |
+| The workshop | 8 | 2.3 MB | `tesseraql-studio`, `tesseraql-studio-runtime`, `tesseraql-test-core`, GreenMail, JUnit 4, commonmark, the editor webjar | `dev` — a `host` stack mounts no Studio by topology ([studio-shell.md](studio-shell.md) structural decision 1) |
+| Operator glue | 4 | 0.5 MB | picocli, `tesseraql-apptasks`, `tesseraql-report`, `tesseraql-coverage-core` | picocli and apptasks stay in the deployment (argument parsing; the migrate/identity-schema engine). report and coverage-core render test results — development only |
+
+**The finding that decides the mechanism: `host` needs none of the resolver stack.** `HostCommand`
+starts the gateway directly; it never touches `ModulesInstaller`. An application's declared
+`tesseraql.modules` are resolved into its `work/modules` cache by `dev` or the `modules` command
+*before* deployment, each runtime builds its own loader over what that resolve left on disk
+([module-scope.md](module-scope.md)), and a `.tqlapp` ships the cache it was verified with. So the
+deployment classpath is `tesseraql-camel-runtime`'s 195 artifacts plus picocli, apptasks, and the
+CLI jar itself — roughly 63 jars and 73 MB smaller than what ships today, with the zonky binaries
+alone accounting for 62 MB of that.
 
 ### Problem 1 — the platform binaries are bundled against a written intention not to bundle them
 
@@ -32,29 +56,11 @@ The image copies `tesseraql-cli`'s jar **and its whole dependency set** into `li
 `dev --embedded-db` and the `embedded-db` command. Both poms say what is supposed to happen:
 
 > Embedded PostgreSQL process supervisor (**the binary is resolved on demand, not bundled**).
-> — `pom.xml:268`
+> — the root pom's dependency management, and the CLI pom repeats it
 
-> the binary is **NOT bundled**; it is resolved on demand via the ShrinkWrap resolver below.
-> — `tesseraql-cli/pom.xml:98`
-
-That is the right design. `embedded-postgres.properties` is filtered at build time from
-`zonky.postgres.binaries.version`, so the CLI asks for **one** platform's binary, the running
-platform's, at the moment it is needed. Only `embedded-postgres-binaries-linux-amd64` is declared,
-at **`test`** scope, so CI does not reach the network.
-
-**The dependency tree does something else.** Measured 2026-08-17:
-
-```
-tesseraql-cli
-+- io.zonky.test:embedded-postgres:jar:2.2.2:compile
-|  +- io.zonky.test.postgres:embedded-postgres-binaries-windows-amd64:jar:14.22.0:runtime
-|  +- io.zonky.test.postgres:embedded-postgres-binaries-darwin-amd64:jar:14.22.0:runtime
-|  \- io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64-alpine:jar:14.22.0:runtime
-\- io.zonky.test.postgres:embedded-postgres-binaries-linux-amd64:jar:17.10.0:test
-```
-
-`embedded-postgres` **carries three platform bundles transitively at runtime scope, and nothing
-excludes them.** They are copied into `lib/` by the deployment image and into every distribution.
+That is the right design, and the tree does something else. `embedded-postgres:2.2.2` carries
+three platform bundles transitively at runtime scope, unexcluded, so they are copied into every
+distribution:
 
 | Artifact | Size | How it arrives |
 | --- | --- | --- |
@@ -62,176 +68,262 @@ excludes them.** They are copied into `lib/` by the deployment image and into ev
 | `embedded-postgres-binaries-darwin-amd64` | 27 MB | transitive, unexcluded |
 | `embedded-postgres-binaries-linux-amd64-alpine` | 14 MB | transitive, unexcluded |
 
-**And they are the wrong version.** The project configures **17.10.0**; the bundles are **14.22.0** —
-a different PostgreSQL major. `embedded-db-version-lifecycle` already records that cross-major is
-the case this project chose not to automate, because zonky's binaries are server-only and a data
-directory initialised by one major is refused by another.
+**And they are the wrong version** — 14.22.0 where the project configures 17.10.0, a different
+PostgreSQL major.
 
-**Which of the two wins at runtime is not measured, and it decides what this is.** If the on-demand
-resolver always fetches 17.10.0, the bundles are sixty-two megabytes of dead weight. If zonky's
-resolver prefers a matching platform bundle already on the classpath, then a **Windows** developer
-gets PostgreSQL **14** where every other path in this project means 17 — and a data directory
-written by one and opened by the other fails outright. **Print the value before deciding which:**
-run `dev --embedded-db` on Windows and log the server version. It is a ten-minute measurement and it
-changes the severity by a category.
+**Which of the two wins at runtime is now answered — by code, not by the ten-minute Windows
+measurement the last draft asked for.** `EmbeddedPostgresSupport.start` installs a custom
+`PgBinaryResolver` **unconditionally**: it resolves
+`embedded-postgres-binaries-<platform>:17.10.0` (or the data directory's pinned version) through
+the embedded ShrinkWrap resolver and streams that jar's `.txz` payload to zonky. Zonky's own
+classpath-scanning `DefaultPostgresBinaryResolver` — the only code path that would ever read the
+bundled 14.22.0 jars — is never consulted, on any platform. A Windows developer gets 17.10.0
+exactly like everyone else.
 
-### Problem 2 — the runtime carries Studio, and Studio carries a test framework
+So the bundles are 62 MB of dead weight in every distribution, not a version defect. **The fix is
+`<exclusions>` on the `embedded-postgres` dependency** for the three platform bundles, which
+restores the "resolved on demand" the poms already intend — and it benefits the *developer* CLI
+too, independent of the distribution split. Because this arrived once by omission it can arrive
+again by upgrade, so the fix comes with its decay guard (see the guards decision): an enforcer
+rule in `tesseraql-cli` banning `io.zonky.test.postgres:*` from compile and runtime scope. Test
+scope stays free — the declared linux-amd64 test dependency is what keeps CI off the network. The
+belt-and-suspenders half of the guard is behavioral and lives where the platform does:
+`EmbeddedDbDevIntegrationTest` runs a real resolved `postgres` and, extended with a version
+assertion, fails if the server that starts is not the configured major (decision 2a runs it on
+Windows).
 
-This one is not the command line's doing. It is in the module that production cannot do without.
+### Problem 2 — the runtime carried Studio, and Studio carried a test framework — FIXED
 
-```
-tesseraql-camel-runtime          ← every deployment has this
-├── tesseraql-studio             compile — mounted by StudioProviders
-└── tesseraql-test-core          compile — used by StudioTestService, and nothing else
-    └── com.icegreen:greenmail   compile — MailCapture, test-core's own mail assertions
-        └── junit:junit:4.13.2   compile
-```
-
-**Studio's "run the tests" button is why an in-memory SMTP server and JUnit 4 are on the classpath
-of every TesseraQL deployment.** Each link is individually reasonable — `MailCapture` genuinely
-needs GreenMail, `StudioTestService` genuinely needs the runner, Studio is genuinely a framework
-surface — and the chain is not.
-
-**GreenMail's scope in `tesseraql-test-core` is correct and should not be changed.** A declarative
-test framework that asserts on mail needs a mail server at compile scope. What is wrong is one link
-up: a *runtime* depending on a *test framework*.
+The chain measured on 2026-08-17 (`tesseraql-camel-runtime → tesseraql-test-core → greenmail →
+junit:4.13.2`, all compile scope, because of `StudioTestService` alone) is gone.
+[studio-shell.md](studio-shell.md) structural decision 3 moved everything Studio-shaped out of the
+runtime module into `tesseraql-studio-runtime`, discovered through the `RuntimeExtension` SPI; the
+runtime module's pom now carries the `no-workshop-on-the-runtime` enforcer rule (studio,
+test-core, greenmail and junit banned at compile and runtime scope, transitively, with test scope
+free). What this document adds is the packaging half that extraction deliberately left open: the
+deployment *artifact* still carries the workshop jars, because the image copies the developer
+CLI's dependency set. Decision 1 below is that split.
 
 ### What this is and is not
 
-It is weight and breadth of surface. **It is not a vulnerability**, and overstating it would misplace
-the fix. The zonky binaries are inert files unless something executes them. Studio is gated by
-`tesseraql.apps.studio.enabled`, so it is configuration that mounts it, not the classpath. JUnit on a
-classpath is not exploitable by itself.
-
-What it costs is real anyway: image size, a longer dependency surface to audit and to patch, and an
+It is weight and breadth of surface. **It is not a vulnerability**, and overstating it would
+misplace the fix. The zonky binaries are inert files unless something executes them; a `host`
+stack mounts no Studio by topology; JUnit on a classpath is not exploitable by itself. What it
+costs is real anyway: image size, a longer dependency surface to audit and to patch, and an
 artifact that does not say what it is for.
 
 ### Problem 3 — Windows Server is a released target that nothing tests
 
-Asked directly: *what if production runs on Windows Server?* The measurement changed the shape of
-problems 1 and 2 and added one of its own.
-
 **It is shipped.** `jpackage.yml` builds on `windows-latest`, `release.yml` attaches
 `tesseraql-<version>-windows-x86_64.zip`, and `getting-started.md` documents
-`scoop install tesseraql` against `ingcreators/scoop-bucket` — which exists, last pushed
-2026-08-13.
+`scoop install tesseraql` against `ingcreators/scoop-bucket`. **Nothing verifies it**: the Windows
+job runs `-DskipTests`, and every test job in `ci.yml` is `ubuntu-latest`. Windows is wanted as a
+production target, which makes this a requirement, not a question — decision 2a below.
 
-**Nothing verifies it.** That Windows job runs `./mvnw … -DskipTests`, and every job in `ci.yml`
-that runs a test is `ubuntu-latest`. The Windows artifact is built and published; no test observes
-its behaviour on the platform it is published for.
+Two measurements sharpen what "test it" means:
 
-**Windows is wanted as a production target**, which turns this section from a question into a
-requirement and removes an option decision 2a would otherwise have had.
-
-It also sharpens problem 1 rather than repeating it. A deployment distribution should carry no
-embedded-database binaries on any platform, because `--embedded-db` is a development feature
-everywhere — **the split is development against production, not one operating system against
-another.** What the platform changes is which bundle is the live one in the *developer* CLI, and
-that is exactly the case where 14.22.0 against a configured 17.10.0 stops being dead weight and
-starts being a version a developer actually runs.
-
-**And the Linux image is not the Windows path at all.** Decision 2 below says the deployment image
-runs `host`; a Windows Server deployment never reaches that image. It runs the jpackage launcher or
-the distribution zip, for which no equivalent statement exists — no documented `host` invocation, no
-service wrapper.
-
-**What is most likely to break, and is untested.** Windows refuses to delete or replace a file
-another process holds open; Linux does not, because an unlinked inode stays valid for whoever has it
-open. `AppInstaller` upgrades an application by `deleteRecursively(target)` followed by
-`Files.move(staging, target, REPLACE_EXISTING)` — replacing a directory tree that a running host may
-be holding files under, which is the ordinary case rather than an edge one. The same semantics reach
-`--watch` and anything under `work/` that a pool or an embedded database keeps open.
-
-`AppInstaller` already carries `.replace('\\', '/')` on the stored path, which is somebody having
-met the platform once. Nothing generalised from it.
+- **The platform-semantics modules are cheap to run on Windows.** `tesseraql-operations` uses no
+  Testcontainers at all; `tesseraql-cli` has exactly two Testcontainers classes
+  (`AppLifecycleDbCommandsIntegrationTest`, `JobCommandIntegrationTest`) to exclude. Everything
+  else — `AppInstaller`, `AppUpgrader`, `AppDirectory`, the path and launcher handling, and
+  `EmbeddedDbDevIntegrationTest`, which resolves and boots a real `postgres` — runs on a plain
+  runner.
+- **The upgrade path is already install-beside-and-switch-a-pointer**, which the last draft only
+  hoped for. Versions install side by side under `<installRoot>/<name>/<version>`; activation is
+  `AppCatalog.replace`, an `ATOMIC_MOVE` of the catalog file; canary staging, promotion and
+  rollback never move files at all. The Windows held-file hazard is therefore one narrow case,
+  not the whole upgrade path: `AppInstaller.place` does `deleteRecursively(target)` +
+  `Files.move(staging, target)` **when the same version is placed again** — deleting a tree a
+  running host may hold files open under, which Windows refuses mid-walk, leaving a half-deleted
+  version directory. The shape of the fix is decision 4.
 
 ## Decisions
 
-### 1. The deployment artifact carries the host, not the workshop
+### 1. The deployment artifact carries the host, not the workshop — via a distribution module
 
-Two distributions from one codebase: the developer CLI as it is today, and a deployment
-distribution containing what `host` needs. The command line is **not** split — its cohesion is fine
-and [cli-surface.md](cli-surface.md) spent a campaign on it. What splits is what gets shipped.
+Two distributions from one codebase: the developer CLI exactly as it is today, and a
+**`tesseraql-host`** distribution module containing what a deployment needs. The command line is
+**not** split — its cohesion is fine and [cli-surface.md](cli-surface.md) spent a campaign on it.
+What splits is what gets shipped.
 
-The mechanism is deliberately left open between two candidates, because the choice depends on
-measurements this document has not taken:
+The 2026-08-17 draft left the mechanism open between `optional` scoping and a distribution
+module, pending the jar classification. The classification (above) closed it, and so did a fact
+about Maven that the draft missed: **`optional` cannot do this job at all.** Optional scope
+changes what *downstream consumers* inherit; it does not remove anything from the declaring
+module's own resolved runtime classpath, and every deployment channel — the image's
+`copy-dependencies`, the shade fat jar, the dist assembly, jpackage — packages exactly that
+classpath. The only way `optional` "works" is an exclude list maintained inside
+`deploy/Dockerfile` flags, which is a stringly-typed convention that decays silently and that the
+Windows zip channel cannot reuse. The draft's own criterion — the cheap option is only acceptable
+if it fails loudly when a development dependency creeps back in — rules it out.
 
-- **`optional` on the development-only dependencies**, with the deployment image excluding them.
-  Cheapest, one pom change plus an image change, and it keeps one artifact. **Problem 1's own fix is
-  smaller still and independent of this choice**: `<exclusions>` on `embedded-postgres` for the three
-  transitive platform bundles, which restores the "resolved on demand" the poms already intend and
-  removes sixty-two megabytes from *every* distribution, developer CLI included.
-- **A `tesseraql-runtime` distribution module** that depends on the runtime and a `host`-only entry
-  point. Heavier, and it makes the boundary a build failure rather than a convention.
+`tesseraql-host` is deliberately thin. It moves no classes and duplicates no verbs:
 
-The second is only worth its cost if the first cannot be made to fail loudly when a development
-dependency creeps back in.
+- **It depends on `tesseraql-cli` with exclusions** on the development-only clusters: the
+  workshop chain (`tesseraql-studio`, `tesseraql-studio-runtime`, `tesseraql-test-core` and their
+  mail/junit/editor transitives), the zonky supervisor, the ShrinkWrap/Maven resolver stack, and
+  `tesseraql-report`/`tesseraql-coverage-core`. What remains resolves to the runtime's 195
+  artifacts plus picocli and apptasks.
+- **It contributes one class: the deployment's picocli root command**, listing only the verbs an
+  operator runs against a production stack. The shared command implementations stay
+  package-private in `io.tesseraql.cli` and are reused as-is (the host module's root command
+  lives in the same package; the deployment runs on a plain `-cp lib/*` classpath, so the split
+  package is legal and invisible). This is also what makes the exclusions *safe*: the developer
+  CLI's root command reflects over all 25 subcommand classes at startup, so a distribution that
+  merely dropped jars from under `TesseraqlCli` would gamble on lazy class loading; a root
+  command that never names the dev-only verbs never loads them.
+- **The enforcer rule makes the boundary a build failure** (the guards decision below), which is
+  the loud failure the draft demanded — the same mechanism, verbatim, as the runtime module's
+  `no-workshop-on-the-runtime`.
 
-### 2. The production image runs `host`, not `dev`
+The verb roster of the host distribution, by the rule *a verb enters iff its dependency closure
+lives inside the host set* (the enforcer arbitrates disagreements at build time):
 
-`deploy/Dockerfile` ends with `CMD ["serve", "--app", "/app"]`. Under
-[stack-architecture.md](stack-architecture.md) Decision 12 and
-[cli-surface.md](cli-surface.md) Decision 4 that verb becomes `dev`, so the published production
-image would literally invoke the development command.
+| In `tesseraql-host` | Stays developer-CLI-only |
+| --- | --- |
+| `host`, `deploy`, `migrate`, `identity-schema`, `job`, `token`, `verify`, `admission`, `routes`, `duckdb` (the documented operator step: `install-extensions`) | `dev`, `new`, `scaffold`, `lint`, `test`, `coverage`, `generate`, `schema`, `symbols`, `release-diff`, `governance`, `package`, `modules`, `embedded-db`, `mcp` |
 
-It becomes `host --stack /app`. The line is one word, and it is worth having as a decision because
-it is the shortest possible statement of what this document is about: **the artifact should say what
-it is for.**
+Consequences the draft's open questions asked about:
 
-### 2a. Windows Server is a production target, so it is tested
+- **`dev --embedded-db` stays in the developer CLI unchanged**, and so does the `embedded-db`
+  subcommand of the same binary. The resolver stack the binary resolution rides on is in the
+  developer CLI anyway for `tesseraql.modules`; there is nothing to relocate.
+- **`deploy/Dockerfile` builds from `-pl tesseraql-host`** and copies its dependency set; the
+  entrypoint invokes the host root command; `CMD ["host", "--stack", "/stack", ...]` and the CDS
+  training run (`routes` is in the host roster) survive unchanged. The existing `deploy-image` CI
+  job keeps proving the image boots and routes.
+- **The Windows deployment artifact is the same module through the jpackage channel** — decision
+  2a's sibling statement below — which is the second reason the mechanism had to be a
+  Maven-addressable artifact rather than a Dockerfile exclude list: two shipping channels derive
+  from one declaration.
 
-An earlier draft offered a choice — test it or stop offering it — because a published release asset
-and a documented `scoop install` with no test on the platform is a claim nobody verified. **Windows
-is wanted as a supported production target, so the choice collapses to the first branch** and the
-open questions below become work items rather than alternatives.
+**Rejected: splitting `tesseraql-cli` into `cli-core` + `cli`.** It moves every operator command
+class for the same resulting classpath, and re-litigates the verb cohesion cli-surface already
+settled. **Rejected: `optional` scoping** — see above; it does not reach the channels that
+package the classpath, and its failure mode is silence.
 
-The answer is not the whole suite on a Windows runner: the Testcontainers integration tests dominate
-the build and are slow and flaky on Windows agents, and they exercise a database rather than a
-filesystem. It is **the modules where platform semantics actually live** — `tesseraql-operations`
-(install, upgrade, catalogue, `AppDirectory`) and `tesseraql-cli` (paths, launchers, `--watch`) — as
-a separate `windows-latest` job.
+### 2. The production image runs `host`, not `dev` — SHIPPED
 
-**And a deployment distribution for Windows is part of decision 1**, not an afterthought to it. A
-Windows deployment never reaches `deploy/Dockerfile`, so "the production image runs `host`" needs a
-sibling statement for the jpackage launcher: what a Windows Server installation runs, and how it is
-supervised. Neither exists today.
+`deploy/Dockerfile` ends with `CMD ["host", "--stack", "/stack", "--port", "8080"]` and registers
+the ordered drain on SIGTERM; the `deploy-image` CI job asserts the image builds, lists routes,
+and keeps its trained CDS archive. Kept as a decision because it is the shortest possible
+statement of what this document is about: **the artifact should say what it is for.**
 
-### 3. Studio leaves the runtime's compile scope, which is already the plan
+### 2a. Windows Server is a production target, so it is tested — and it has an execution story
 
-[stack-architecture.md](stack-architecture.md) Decision 14 makes framework surfaces stack-level, and
-its slice 8 extracts Studio — recorded there as "a campaign, not a slice" because `StudioService`
-couples preview, source editing, apply and reload, the scaffolder, the migration author and the test
-runner to a runtime.
+**The test job.** A `windows-latest` job in `ci.yml` runs the modules where platform semantics
+actually live, not the Testcontainers suite (slow and flaky on Windows agents, and it exercises a
+database, not a filesystem):
 
-**This document adds a reason that slice did not have.** The extraction is not only about
-authorisation and about one console per stack: it is what removes a test framework, an SMTP test
-double and JUnit from every deployment. That is worth recording, because a campaign with two
-independent justifications is scheduled differently from one with a single justification.
+```
+./mvnw -B -ntp -pl tesseraql-operations,tesseraql-cli -am test \
+  -Dtest='!AppLifecycleDbCommandsIntegrationTest,!JobCommandIntegrationTest'
+```
 
-The extraction is designed in [studio-shell.md](studio-shell.md) (2026-08-19): a
-`tesseraql-studio-runtime` extension module the runtime discovers, so the runtime module's
-compile scope drops `tesseraql-studio` and `tesseraql-test-core` in its slice 1. **That slice
-is shipped**: the chain above is gone from the runtime module, and an enforcer rule — the
-guard open question 5 asked for — fails the build if Studio, test-core, GreenMail or JUnit 4
-ever reach its compile or runtime scope again. The deployment *image* still carries the jars
-until Decision 1 splits the distributions; what changed is that the split is now a packaging
-decision, and the jars are inert under a host by topology.
+What that buys, concretely: `AppInstaller`/`AppUpgrader`/`AppDirectory`/`AppCatalog` run on a
+real Windows filesystem (the held-file and path semantics get coverage where they live, including
+decision 4's refusal once it ships); the CLI's path, launcher and `--watch` handling run under
+`\` separators; and `EmbeddedDbDevIntegrationTest` resolves the **windows-amd64** binary over the
+network and boots a real `postgres` — the "which binary wins on Windows" measurement the draft
+wanted, permanent and asserted instead of logged once. The test gains an explicit version
+assertion (the started server's major equals the configured major) so resolver drift fails the
+build. The linux-amd64 test dependency keeps the Ubuntu jobs offline; the Windows job reaching
+Maven Central for one ~20 MB binary jar per run is the price of testing the real resolution path,
+paid on the runner where it is the live one.
+
+**The execution story — the sibling statement decision 2 owed.** A Windows Server deployment
+never reaches `deploy/Dockerfile`. It runs the **`tesseraql-host` jpackage app image**, and it is
+supervised as a **Windows service through a service wrapper**:
+
+- `release.yml`/`jpackage.yml` gain a host-image leg: `tesseraql-host-<version>-windows-x86_64.zip`,
+  built from the host module's fat jar exactly as the CLI image is built today (`--win-console`
+  included — the service wrapper captures the console streams as the service log).
+- The zip ships a sample service definition for **WinSW** (MIT-licensed, single-exe, wraps any
+  console executable): `tesseraql-host.exe host --stack C:\ProgramData\tesseraql\stack --port 8080`,
+  with the wrapper's graceful-stop mode sending the console signal that triggers the JVM
+  shutdown hook — the same ordered drain SIGTERM reaches in the container. Verifying the drain
+  line on a service stop is part of the distribution slice, not assumed. WinSW is recommended
+  over Apache Commons Daemon/procrun because procrun wants the JVM wired as a DLL with dedicated
+  start/stop entry points — more invasive for no additional guarantee — and over NSSM on
+  maintenance grounds. The framework does not embed a service API; supervision stays outside the
+  process, exactly as systemd and the container runtime stay outside it on Linux.
+- `hosting.md` gets the Windows Server section: install layout, the service definition, where
+  `work/` lives, and the upgrade flow (`deploy` + promote — identical to Linux because the
+  catalog pointer switch is platform-neutral).
+- The developer CLI's Scoop channel is untouched; whether the host image also gets a package
+  manager channel is deferred until someone asks for it.
+
+### 3. Studio leaves the runtime's compile scope — SHIPPED
+
+[studio-shell.md](studio-shell.md) structural decision 3, recorded here because this document
+supplied the second justification (the deployment classpath) that changed how that campaign was
+scheduled. The remaining packaging half is decision 1.
+
+### 4. A placed version directory is immutable; same-version replacement is refused
+
+The measured upgrade path (problem 3) already installs beside and switches an atomic pointer, so
+the fix for the held-file hazard is not a redesign — it is removing the one operation that
+contradicts the model. `AppInstaller.place` currently deletes and re-creates the target when the
+incoming package carries a version that is already on disk. Under a running host that is exactly
+the delete-a-held-tree operation Windows refuses (and Linux silently tolerates, which is worse —
+the platforms diverge). The fix:
+
+- **`place` refuses an existing version directory** with an actionable message: bump the version.
+  A version directory, once placed, is immutable — the same contract the catalog's
+  rollback already relies on ("the previous version's files must still be present").
+- Pre-1.0 there is no compatibility carve-out (AGENTS.md rule 10); iterating on an unreleased
+  package is a `dev` workflow against a source tree, not repeated `deploy` of one version.
+- This removes `deleteRecursively` from the install path entirely rather than special-casing
+  Windows — the "install beside and switch a pointer" answer the draft predicted, minus the parts
+  that already existed. With the target guaranteed absent, the final `Files.move(staging, target)`
+  is a same-volume rename, so a crash mid-install leaves a stray staging directory, never a
+  partial version directory that would then block its own retry.
+
+The stored-path `.replace('\\', '/')` normalization stays: catalog entries are portable across
+platforms by construction.
+
+### 5. The boundary guards: one enforcer rule per module that owns a boundary
+
+`no-workshop-on-the-runtime` (the runtime module's rule from the Studio extraction) generalizes
+into a pattern: **each module that owns a classpath boundary carries a `bannedDependencies`
+enforcer rule naming what must never cross it, at compile and runtime scope, transitively, with
+test scope free.** A guard lives in the module whose invariant it protects, fails the module's
+own `verify`, and names the design document that explains it.
+
+| Module | Rule | Bans (compile/runtime, transitive) |
+| --- | --- | --- |
+| `tesseraql-camel-runtime` | `no-workshop-on-the-runtime` (exists) | studio, studio-runtime, test-core, greenmail, junit |
+| `tesseraql-cli` | `no-bundled-database-binaries` (new) | `io.zonky.test.postgres:*` — the supervisor stays, binaries resolve on demand; the declared test-scope linux-amd64 is untouched |
+| `tesseraql-host` | `no-workshop-in-the-deployment` (new) | studio, studio-runtime, test-core, greenmail, junit, `io.zonky.test:*`, `io.zonky.test.postgres:*`, `org.jboss.shrinkwrap.resolver:*`, report, coverage-core — plus tripwire artifacts from the resolver closure (`org.apache.maven.resolver:maven-resolver-api`, `com.google.inject:guice`) so the stack cannot return under a different root |
+
+Why enforcer rules and not a test: the rule runs inside the module's own build on every `verify`,
+needs no fixture to keep in sync with the pom, and its failure message names the banned
+coordinate and the scope — the same reasons the Studio extraction chose it. The `deploy-image`
+and dist smoke jobs stay as behavioral backstops, but the contract is enforced where the
+dependency would be declared, which is where it decayed last time.
+
+## Slices
+
+Each slice is a PR; each leaves the build green and the boundary it touches guarded.
+
+| # | Slice | Contents | Done means |
+| --- | --- | --- | --- |
+| 1 | The binaries stop shipping | `<exclusions>` on `embedded-postgres`; the `no-bundled-database-binaries` rule; the version assertion in `EmbeddedDbDevIntegrationTest` | Every distribution is 62 MB lighter; a zonky upgrade that re-bundles binaries fails `tesseraql-cli`'s own verify |
+| 2 | `tesseraql-host` | The module, its root command over the operator roster, exclusions, `no-workshop-in-the-deployment`; `deploy/Dockerfile` builds from it; the `deploy-image` job proves the result boots | The image carries ~199 jars, none of them the workshop; a convenient dev dependency added to the CLI does not reach deployments |
+| 3 | Windows runs the tests | The `windows-latest` job over `tesseraql-operations` + `tesseraql-cli` (Testcontainers classes excluded) | The platform-semantics modules are tested on the platform they are released for; the resolver measurement is a permanent assertion |
+| 4 | Version directories are immutable | Decision 4's refusal in `AppInstaller.place`, tested (and exercised on Windows by slice 3's job) | No code path deletes a tree a running host may hold open |
+| 5 | Windows Server has an artifact and a story | The host-image jpackage/release leg, the WinSW sample definition, the `hosting.md` Windows Server section, drain-on-service-stop verified | A Windows deployment runs a named artifact under named supervision, with the same drain contract as the container |
+
+Slices 1, 3 and 4 are independent of each other and of slice 2. Slice 5 depends on slice 2.
 
 ## Open
 
-1. **Which mechanism for decision 1** — `optional` scoping versus a distribution module. Needs the
-   remaining 57 jars classified: how many are dev-only beyond zonky, and how many the deployment
-   image would keep anyway.
-2. **Where `dev --embedded-db` lives** once the distributions split. The developer CLI keeps it; the
-   question is whether the `embedded-db` command stays a subcommand of the same binary.
-3. **Which binary the on-demand resolver actually returns on Windows** — the configured 17.10.0 or
-   the transitively bundled 14.22.0. Ten minutes with `dev --embedded-db` and a logged server
-   version, and it decides whether problem 1 is weight or a version defect. **Measure before
-   deciding.**
-4. **`AppInstaller`'s replace-the-directory upgrade on Windows.** Not an open question about whether
-   to care — Windows is a target — but about the shape of the fix. Installing beside and switching a
-   pointer avoids the held-file problem and gives atomic rollback on every platform, which is why it
-   is likely the answer rather than a Windows special case.
-5. **Whether a guard can assert the boundary.** A test that fails when a development-only artifact
-   reaches the deployment classpath is what makes decision 1 hold; without one the scoping decays
-   the first time a convenient dependency is added, which is how it arrived here.
+1. **The exact host verb roster** is settled at slice 2 by the enforcer: a verb whose closure
+   escapes the host set either loses the dependency or stays developer-CLI-only. The table in
+   decision 1 is the intent, not a contract.
+2. **Drain verification on Windows service stop** (slice 5): the mechanism for asserting the
+   "Stack stopping" line under WinSW's graceful stop on a CI runner is chosen when the slice is
+   built — a wrapper-driven stop in the `windows-latest` job if runner privileges allow, a
+   documented manual verification if they do not.
+3. **`--watch` and `work/` under Windows held-file semantics** beyond the installer: slice 3's
+   job will surface what the suites cover; anything it finds is filed against this document.
