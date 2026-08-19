@@ -13,7 +13,7 @@ steps:
       name: studio.draftsApplyAll
       params:
         actor: principal.loginId
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/drafts?applied=1

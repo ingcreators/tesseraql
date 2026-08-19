@@ -30,11 +30,11 @@ final class CopilotRouteBuilder extends RouteBuilder {
     private static final String PAGE = "/_tesseraql/studio/ui/copilot";
 
     private final CopilotService copilot;
-    private final StudioAccess studioAccess;
+    private final StudioEdit studioEdit;
 
-    CopilotRouteBuilder(CopilotService copilot, StudioAccess studioAccess) {
+    CopilotRouteBuilder(CopilotService copilot, StudioEdit studioEdit) {
         this.copilot = copilot;
-        this.studioAccess = studioAccess;
+        this.studioEdit = studioEdit;
     }
 
     @Override
@@ -53,7 +53,7 @@ final class CopilotRouteBuilder extends RouteBuilder {
                     requireCopilot();
                     String message = requireMessage(exchange);
                     String actor = actor(exchange);
-                    boolean canEdit = studioAccess.canEdit(roles(exchange));
+                    boolean canEdit = studioEdit.canEdit(permissions(exchange));
                     if ("true".equals(exchange.getMessage().getHeader("HX-Request",
                             String.class))) {
                         String turn = copilot.begin(actor, message, canEdit);
@@ -83,7 +83,7 @@ final class CopilotRouteBuilder extends RouteBuilder {
      * markers in between, and done carrying the final transcript markup.
      */
     static void registerStream(org.apache.camel.CamelContext context, int port,
-            CopilotService copilot, StudioAccess studioAccess) {
+            CopilotService copilot, StudioEdit studioEdit) {
         SseRoutes.register(context, port, PAGE + "/stream", (principal, query) -> {
             if (copilot == null) {
                 throw new TqlException(new TqlErrorCode(TqlDomain.STUDIO, 4235),
@@ -172,9 +172,9 @@ final class CopilotRouteBuilder extends RouteBuilder {
         return principal.loginId() != null ? principal.loginId() : principal.subject();
     }
 
-    private static List<String> roles(Exchange exchange) {
+    private static List<String> permissions(Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
                 Principal.class);
-        return principal == null ? List.of() : principal.roles();
+        return principal == null ? List.of() : principal.permissions();
     }
 }

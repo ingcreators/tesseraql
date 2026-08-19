@@ -472,7 +472,7 @@ final class StudioDataService {
      * Applies a PK-scoped single-row UPDATE (Track J4): changed columns are validated against
      * the live catalog, values bind coerced to the column's JDBC type (empty string sets NULL),
      * primary-key columns are never updatable, and exactly one row must be affected. The caller
-     * gates this behind editRoles + an explicit confirm and records the audit entry.
+     * gates this behind the edit atom + an explicit confirm and records the audit entry.
      */
     int updateRow(String table, Map<String, String> pk, Map<String, String> changes) {
         if (!isEditEnabled()) {

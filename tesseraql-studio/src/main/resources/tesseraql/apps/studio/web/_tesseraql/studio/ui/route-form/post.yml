@@ -230,7 +230,7 @@ steps:
         in9pattern: params.in9pattern
         in9enum: params.in9enum
         in9domain: params.in9domain
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   redirect:
     status: 303

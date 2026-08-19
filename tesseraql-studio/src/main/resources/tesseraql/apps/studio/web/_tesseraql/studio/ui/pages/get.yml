@@ -8,7 +8,7 @@ sources:
     service:
       name: studio.pages
       params:
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

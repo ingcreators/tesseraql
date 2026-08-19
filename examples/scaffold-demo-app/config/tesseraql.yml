@@ -21,11 +21,10 @@ tesseraql:
         datasource: main
 
   studio:
-    # Studio is a privileged developer surface at /_tesseraql/studio. Enabled for local
-    # development; in production set TESSERAQL_STUDIO_ENABLED=false (or, to keep it
-    # visible but inert, TESSERAQL_STUDIO_READONLY=true).
+    # Studio is a privileged developer surface at /_tesseraql/studio. Enabled for
+    # local development; editing requires the caller's tql.studio.edit atom
+    # (docs/studio-shell.md), and a hosted production stack mounts no Studio at all.
     enabled: ${TESSERAQL_STUDIO_ENABLED:true}
-    readOnly: ${TESSERAQL_STUDIO_READONLY:false}
 
   # Camel components: dangerous ones (exec, script, groovy, class, ...) are refused
   # by a built-in baseline whether or not anything is configured

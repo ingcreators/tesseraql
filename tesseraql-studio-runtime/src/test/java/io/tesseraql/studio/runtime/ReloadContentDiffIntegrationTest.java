@@ -163,7 +163,8 @@ class ReloadContentDiffIntegrationTest {
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
-                Map.of("sub", "reload-it", "roles", List.of("ADMIN")))));
+                Map.of("sub", "reload-it", "roles", List.of("ADMIN"),
+                        "permissions", List.of("tql.studio.edit.*")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -193,9 +194,9 @@ class ReloadContentDiffIntegrationTest {
                       secret: dev-only-secret-change-me-in-production
                       audience: https://app.example.com
                       rolesClaim: roles
+                      permissionsClaim: permissions
                   studio:
                     enabled: true
-                    readOnly: false
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
         route(target, "alpha");

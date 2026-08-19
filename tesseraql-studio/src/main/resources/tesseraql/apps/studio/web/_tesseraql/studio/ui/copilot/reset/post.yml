@@ -8,7 +8,7 @@ steps:
     service:
       name: studio.copilot.reset
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

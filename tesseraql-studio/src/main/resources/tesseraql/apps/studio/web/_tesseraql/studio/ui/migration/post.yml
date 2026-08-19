@@ -31,7 +31,7 @@ sources:
         description: params.description
         ddl: params.ddl
         actor: principal.loginId
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

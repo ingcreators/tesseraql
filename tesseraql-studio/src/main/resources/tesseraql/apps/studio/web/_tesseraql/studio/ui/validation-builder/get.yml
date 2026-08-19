@@ -8,7 +8,7 @@ sources:
     service:
       name: studio.validationBuilder
       params:
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

@@ -25,7 +25,7 @@ steps:
         kind: params.kind
         value: params.value
         actor: principal.loginId
-        principalRoles: principal.roles
+        principalPermissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/security?added=1

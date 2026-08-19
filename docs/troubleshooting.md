@@ -131,11 +131,11 @@ history table; `tesseraql migrate info` shows the current state first.
 
 ## Running in production
 
-### Studio is read-only and Apply does nothing
+### Studio refuses every write with a 403
 
-That is the intended production posture. `tesseraql.studio.readOnly: true` refuses every
-write, and `tesseraql.studio.editRoles` narrows editing to named roles when Studio *is*
-writable. The refusal is `TQL-STUDIO-4031`. See [studio.md](studio.md#read-only-by-default-in-production).
+The caller does not hold this application's `tql.studio.edit.<name>` atom (or the
+`tql.studio.edit.*` wildcard). Editing is deny-by-default: grant the atom through IAM Admin
+or a role that bundles it. See [studio.md](studio.md#editing-is-a-grant).
 
 ### A notification never arrived
 

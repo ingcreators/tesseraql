@@ -6,9 +6,10 @@ is new machinery — it composes the pieces the framework already ships.
 
 ## The loop
 
-1. **Edit in dev.** Studio is writable in dev (`tesseraql.studio.readOnly: false`): route
-   form, source editor, scaffolds, migrations, policy edits — everything lands as files in
-   the app tree, and applying serves immediately (the hot reload).
+1. **Edit in dev.** Studio is writable to holders of the `tql.studio.edit.<name>` atom —
+   the bootstrap administrator carries the wildcard: route form, source editor, scaffolds,
+   migrations, policy edits — everything lands as files in the app tree, and applying
+   serves immediately (the hot reload).
 2. **Branch and PR.** The app tree is a git repository; Studio edits are ordinary diffs.
    Open a PR from the dev branch. The Studio audit trail (`work/studio/audit/`) tells you
    who changed what if the diff needs context — `work/` itself is never committed.
@@ -31,9 +32,9 @@ is new machinery — it composes the pieces the framework already ships.
    (datasources, pool sizing, metrics/audit switches — see [environment
    profiles](deployment.md#environment-profiles)). Secrets stay in the environment or
    the secret provider — never in the tree.
-6. **Prod Studio is read-only.** `tesseraql.studio.readOnly: true` (optionally plus
-   `editRoles: []`) in the prod profile: the explorer, docs portal, ops console and release
-   diff page stay available for inspection; every write path is disabled. An edit gets to
+6. **Prod grants no edit atoms.** Production principals simply do not hold
+   `tql.studio.edit.<name>`, so the explorer, docs portal, ops console and release diff
+   page stay available for inspection while every write path refuses. An edit gets to
    prod exactly one way — back through steps 1-5.
 7. **Capture the next baseline.** After the deploy, capture the baselines the documentation
    portal's [Release diff page](documentation-portal.md#release-diff) reads from the app

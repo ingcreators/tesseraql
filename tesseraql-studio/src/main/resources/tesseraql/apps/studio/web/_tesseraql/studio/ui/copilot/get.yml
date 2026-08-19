@@ -8,7 +8,7 @@ sources:
     service:
       name: studio.copilot.view
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   html:

@@ -14,7 +14,7 @@ sources:
       name: studio.routeForm.view
       params:
         path: params.path
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

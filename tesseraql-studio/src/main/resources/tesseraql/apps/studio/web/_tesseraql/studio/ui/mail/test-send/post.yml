@@ -22,7 +22,7 @@ sources:
     service:
       name: studio.mailTestSend
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         path: params.path
         to: params.to
         content: params.content

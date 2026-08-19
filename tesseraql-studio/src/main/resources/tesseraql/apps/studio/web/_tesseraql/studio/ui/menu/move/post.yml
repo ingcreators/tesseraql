@@ -21,7 +21,7 @@ steps:
         index: params.index
         dir: params.dir
         actor: principal.loginId
-        principalRoles: principal.roles
+        principalPermissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/menu?moved=1

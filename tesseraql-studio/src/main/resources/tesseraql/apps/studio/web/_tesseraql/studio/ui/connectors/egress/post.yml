@@ -26,7 +26,7 @@ steps:
         host: params.host
         remove: params.remove
         confirm: params.confirm
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

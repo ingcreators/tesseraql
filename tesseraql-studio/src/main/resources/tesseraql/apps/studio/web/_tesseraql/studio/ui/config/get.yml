@@ -18,7 +18,7 @@ sources:
     service:
       name: studio.config
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         q: params.q
 response:
   html:

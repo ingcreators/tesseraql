@@ -71,7 +71,7 @@ buffer for all of them ([app-isolation-model.md](app-isolation-model.md) decisio
    (`TQL-YAML-1404`) rather than run under a name every unnamed app would share.
 2. `tesseraql identity-schema --jdbc-url ... --admin-login admin
    --admin-password-file ./admin.pw --admin-roles ADMIN
-   --admin-permissions tql.ops.view.*,tql.ops.run.*,tql.app.deploy.*,tql.app.use.*`
+   --admin-permissions tql.ops.view.*,tql.ops.run.*,tql.app.deploy.*,tql.studio.edit.*,tql.app.use.*`
    applies the managed IAM schema and seeds the first administrator; the
    `tesseraql:identity-schema` Maven goal is the CI alternative. There are no default
    credentials; the role names must match the app's `tesseraql.security.policies`.

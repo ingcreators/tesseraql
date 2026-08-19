@@ -12,7 +12,7 @@ sources:
     service:
       name: studio.command
       params:
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

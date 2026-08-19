@@ -19,7 +19,7 @@ sources:
         table: params.table
         force: params.force
         actor: principal.loginId
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

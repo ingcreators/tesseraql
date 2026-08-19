@@ -17,7 +17,8 @@ import org.apache.camel.builder.RouteBuilder;
 
 /**
  * Serves the TesseraQL Studio JSON API under {@code /_tesseraql/studio} (design ch. 16). Endpoints
- * require a bearer principal; draft writes additionally require Studio not to be in read-only mode.
+ * require a bearer principal; mutating endpoints additionally require the caller's
+ * {@code tql.studio.edit.<name>} atom (docs/studio-shell.md structural decision 4).
  * The browser UI (explorer, editor, setup wizards) is served by the bundled studio app (ch. 32).
  */
 final class StudioRouteBuilder extends RouteBuilder {
@@ -29,19 +30,19 @@ final class StudioRouteBuilder extends RouteBuilder {
     private final RouteReloader reloader;
     private final StudioTestService studioTests;
     private final StudioScaffoldService studioScaffold;
-    private final StudioAccess studioAccess;
+    private final StudioEdit studioEdit;
     private final StudioService.FieldMask studioMask;
     private final StudioService.PdfRender studioPdf;
 
     StudioRouteBuilder(StudioService studio, RouteReloader reloader,
             StudioTestService studioTests, StudioScaffoldService studioScaffold,
-            StudioAccess studioAccess, StudioService.FieldMask studioMask,
+            StudioEdit studioEdit, StudioService.FieldMask studioMask,
             StudioService.PdfRender studioPdf) {
         this.studio = studio;
         this.reloader = reloader;
         this.studioTests = studioTests;
         this.studioScaffold = studioScaffold;
-        this.studioAccess = studioAccess;
+        this.studioEdit = studioEdit;
         this.studioMask = studioMask;
         this.studioPdf = studioPdf;
     }
@@ -81,7 +82,7 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         from("direct:studio.draft").routeId("studio.draft")
                 .to(AUTH).process(json(exchange -> {
-                    studioAccess.requireEdit(roles(exchange));
+                    studioEdit.requireEdit(permissions(exchange));
                     String path = requirePath(exchange);
                     String content = exchange.getMessage().getBody(String.class);
                     studio.saveDraft(path, content == null ? "" : content);
@@ -128,7 +129,7 @@ final class StudioRouteBuilder extends RouteBuilder {
         // force=true; new route files need a restart, surfaced in the result.
         from("direct:studio.scaffold.apply").routeId("studio.scaffold.apply")
                 .to(AUTH).process(json(exchange -> {
-                    studioAccess.requireEdit(roles(exchange));
+                    studioEdit.requireEdit(permissions(exchange));
                     Map<String, Object> result = io.tesseraql.studio.StudioViews.scaffoldResult(
                             studioScaffold.apply(requireTable(exchange), flag(exchange, "force"),
                                     actor(exchange)));
@@ -143,13 +144,13 @@ final class StudioRouteBuilder extends RouteBuilder {
 
         from("direct:studio.apply").routeId("studio.apply")
                 .to(AUTH).process(json(exchange -> {
-                    studioAccess.requireEdit(roles(exchange));
+                    studioEdit.requireEdit(permissions(exchange));
                     String path = requirePath(exchange);
                     // The confirm-before-apply gate applies to every apply surface, not only the
                     // editor: an automation that promotes drafts under confirmApply passes
                     // confirm=true (force counts, as it does in the UI). The API used to be
                     // exempt, which made the policy a suggestion.
-                    studioAccess.requireConfirm(
+                    studioEdit.requireConfirm(
                             flag(exchange, "confirm") || flag(exchange, "force"));
                     // force=true overwrites a source that changed under the draft (backlog D5); the
                     // caller is recorded to the audit trail (backlog D6).
@@ -169,11 +170,11 @@ final class StudioRouteBuilder extends RouteBuilder {
         // The manual reload is the recovery hammer: force rebuilds every kept route even
         // when its sources look unchanged (the automatic apply-path reloads content-diff).
         // It mutates the served route table, so it takes the same edit gate its siblings do —
-        // without it, a read-only Studio (the default posture) still let any authenticated
-        // caller rebuild every route, repeatedly.
+        // without it, any authenticated caller without the edit atom could still rebuild
+        // every route, repeatedly.
         from("direct:studio.reload").routeId("studio.reload")
                 .to(AUTH).process(json(exchange -> {
-                    studioAccess.requireEdit(roles(exchange));
+                    studioEdit.requireEdit(permissions(exchange));
                     RouteReloader.Result reload = reloader.reload(true);
                     // The response keeps the pre-extraction shape: the reload delta plus the
                     // refreshed explorer (the reload listeners have already re-read it).
@@ -209,10 +210,10 @@ final class StudioRouteBuilder extends RouteBuilder {
         return principal.loginId() != null ? principal.loginId() : principal.subject();
     }
 
-    /** The authenticated caller's roles, for the edit-permission gate (backlog D6). */
-    private static List<String> roles(Exchange exchange) {
+    /** The authenticated caller's permission codes, for the edit-atom gate. */
+    private static List<String> permissions(Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
-        return principal == null ? List.of() : principal.roles();
+        return principal == null ? List.of() : principal.permissions();
     }
 
     private static String require(Exchange exchange, String name) {

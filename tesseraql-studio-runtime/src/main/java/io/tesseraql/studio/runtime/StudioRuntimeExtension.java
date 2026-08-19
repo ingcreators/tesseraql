@@ -51,9 +51,12 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 RealmConfig.class);
         RouteReloader reloader = seams.reloader();
 
-        boolean readOnly = manifest.config().getBoolean("tesseraql.studio.readOnly", true);
+        // Writable by construction (docs/studio-shell.md structural decision 4): the retired
+        // tesseraql.studio.readOnly master switch's two jobs moved to better owners —
+        // per-caller write authority is the tql.studio.edit.<name> atom (deny-by-default),
+        // per-deployment safety is topology (a host mounts no Studio at all, slice 3).
         io.tesseraql.studio.StudioService studio = new io.tesseraql.studio.StudioService(
-                manifest, readOnly, functions);
+                manifest, false, functions);
         // Studio's memoized schema/decision lookups (the data browser's column contracts,
         // the SQL-builder table list); each hot reload — and the Studio schema refresh —
         // starts a fresh epoch, so the memo is never staler than the served routes.
@@ -63,11 +66,12 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
             studio.reload();
         });
         // The Studio test runner (backlog A2): run a route's read-only sql cases against the
-        // dev datasource. Gated on writable Studio + an explicit opt-in, sandboxed per run
-        // (read-only connection, statement timeout, row cap, rollback on close).
-        boolean testRunnerEnabled = !readOnly
-                && manifest.config().getString("tesseraql.studio.testRunner.enabled")
-                        .map(Boolean::parseBoolean).orElse(false);
+        // dev datasource. An explicit opt-in, sandboxed per run (read-only connection,
+        // statement timeout, row cap, rollback on close) — a capability of this workshop,
+        // not an authority; who may act is the atom's question.
+        boolean testRunnerEnabled = manifest.config()
+                .getString("tesseraql.studio.testRunner.enabled")
+                .map(Boolean::parseBoolean).orElse(false);
         int testTimeout = manifest.config()
                 .getString("tesseraql.studio.testRunner.queryTimeoutSeconds")
                 .map(Integer::parseInt).orElse(5);
@@ -81,10 +85,10 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 testRunnerEnabled, testTimeout, testMaxRows, functions);
         // The Studio scaffold generator (backlog B3): introspect a table from the dev
         // datasource and generate its CRUD slice, reusing the CLI's introspection + generator
-        // so the output is byte-identical. Gated on writable Studio + an explicit opt-in.
-        boolean scaffoldEnabled = !readOnly
-                && manifest.config().getString("tesseraql.studio.scaffold.enabled")
-                        .map(Boolean::parseBoolean).orElse(false);
+        // so the output is byte-identical. An explicit opt-in, like the test runner.
+        boolean scaffoldEnabled = manifest.config()
+                .getString("tesseraql.studio.scaffold.enabled")
+                .map(Boolean::parseBoolean).orElse(false);
         StudioScaffoldService studioScaffold = new StudioScaffoldService(
                 name -> context.getRegistry().lookupByNameAndType(name,
                         javax.sql.DataSource.class),
@@ -124,20 +128,14 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                         javax.sql.DataSource.class),
                 java.util.List.copyOf(seams.dataSources().keySet()),
                 dataBrowserEnabled, dataEditEnabled, testTimeout, testMaxRows);
-        // Granular read-only (backlog D6): an optional editRoles allow-list refines the
-        // writable master switch — when set, only callers holding one of those roles may edit.
-        java.util.Set<String> editRoles = manifest.config()
-                .getString("tesseraql.studio.editRoles")
-                .map(roles -> java.util.Arrays.stream(roles.split(","))
-                        .map(String::trim).filter(role -> !role.isEmpty())
-                        .collect(java.util.stream.Collectors.toSet()))
-                .orElse(java.util.Set.of());
         // Confirm-diff-before-every-apply (Studio backlog D5 follow-up): an opt-in gate that
         // makes the editor acknowledge the diff before each apply, not only on a conflict.
         boolean confirmApply = manifest.config()
                 .getString("tesseraql.studio.confirmApply")
                 .map(Boolean::parseBoolean).orElse(false);
-        StudioAccess studioAccess = new StudioAccess(!readOnly, editRoles, confirmApply);
+        // Who may edit is the tql.studio.edit.<name> atom, per application — the retired
+        // editRoles allow-list was the model's last framework surface reading role names.
+        StudioEdit studioEdit = new StudioEdit(seams.appName(), confirmApply);
         // Output-field masking in the JSON render preview (Studio backlog A1 follow-up): the
         // runtime supplies the mask over the canonical FieldPolicyApplier (so Studio stays
         // free of the security/compiler stack), evaluated for the sample principal the
@@ -155,24 +153,24 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 rows) -> StudioSupport.renderExportPdf(export, routeDir, appHome, rows,
                         seams.modulesLoader());
         context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
-                studioScaffold, studioAccess, studioMask, studioPdf));
+                studioScaffold, studioEdit, studioMask, studioPdf));
         // The copilot's send + stream transports (docs/copilot.md): below the YAML
         // surface because of streaming and HX-Request negotiation. Send is a Camel
         // route; the stream is an SseRoutes endpoint registered after start.
         // Mounted with Studio; unconfigured stays a clean TQL-STUDIO-4235 refusal.
-        context.addRoutes(new CopilotRouteBuilder(copilotService, studioAccess));
+        context.addRoutes(new CopilotRouteBuilder(copilotService, studioEdit));
         seams.postStart().accept(() -> CopilotRouteBuilder.registerStream(context,
-                seams.port(), copilotService, studioAccess));
+                seams.port(), copilotService, studioEdit));
         // Providers backing the bundled studio app (design ch. 16, 47).
         StudioProviders.register(serviceProviders, new StudioProviders.Deps(studio,
-                studioAccess, studioTests, studioScaffold, studioData, copilotService,
+                studioEdit, studioTests, studioScaffold, studioData, copilotService,
                 studioMask, studioPdf, scaffoldEnabled, testRunnerEnabled, reloader,
                 manifest, appHome, seams.appName(), seams.port(), context,
                 seams.dataSources().get("main"), seams.dataSources(),
                 seams.tenantDataSources(), seams.calendarDecisions(),
                 seams.notificationChannels(), studioDocCache));
         DocsProviders.register(serviceProviders,
-                new DocsProviders.Deps(manifest, appHome, studioAccess,
+                new DocsProviders.Deps(manifest, appHome, studioEdit,
                         seams.modulesLoader()));
     }
 }

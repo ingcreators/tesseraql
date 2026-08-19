@@ -34,7 +34,7 @@ steps:
         weekend_saturday: params.weekend_saturday
         weekend_sunday: params.weekend_sunday
         dates: params.dates
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

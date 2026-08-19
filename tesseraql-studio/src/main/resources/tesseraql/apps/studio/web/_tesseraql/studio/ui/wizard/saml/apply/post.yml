@@ -50,7 +50,7 @@ sources:
         loginIdAttribute: params.loginIdAttribute
         emailAttribute: params.emailAttribute
         provision: params.provision
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   html:

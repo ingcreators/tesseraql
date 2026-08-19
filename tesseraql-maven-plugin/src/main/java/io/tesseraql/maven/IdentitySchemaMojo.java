@@ -70,8 +70,8 @@ public class IdentitySchemaMojo extends AbstractMojo {
      * deployment's own vocabulary, granted afterwards through IAM Admin.
      */
     @Parameter(property = "tesseraql.adminPermissions", defaultValue = "tql.app.use.*,"
-            + "tql.ops.view.*,tql.ops.run.*,tql.app.deploy.*,tql.iam.admin.view,"
-            + "tql.iam.admin.write")
+            + "tql.ops.view.*,tql.ops.run.*,tql.app.deploy.*,tql.studio.edit.*,"
+            + "tql.iam.admin.view,tql.iam.admin.write")
     private String adminPermissions;
 
     @Override

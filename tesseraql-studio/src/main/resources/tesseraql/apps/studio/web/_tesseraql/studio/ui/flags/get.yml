@@ -16,7 +16,7 @@ sources:
     service:
       name: studio.flags
       params:
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

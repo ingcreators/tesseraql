@@ -8,7 +8,7 @@ sources:
     service:
       name: studio.migration.new
       params:
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

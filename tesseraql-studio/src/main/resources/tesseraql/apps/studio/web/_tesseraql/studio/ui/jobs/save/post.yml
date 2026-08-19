@@ -37,7 +37,7 @@ steps:
         overlap: params.overlap
         slaCompleteBy: params.slaCompleteBy
         slaRunningLongerThan: params.slaRunningLongerThan
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

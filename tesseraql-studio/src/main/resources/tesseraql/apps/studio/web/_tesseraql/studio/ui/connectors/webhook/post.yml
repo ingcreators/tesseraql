@@ -34,7 +34,7 @@ steps:
         timestampHeader: params.timestampHeader
         idHeader: params.idHeader
         tolerance: params.tolerance
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

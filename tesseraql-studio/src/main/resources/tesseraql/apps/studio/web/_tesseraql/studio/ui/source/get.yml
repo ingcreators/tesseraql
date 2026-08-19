@@ -19,7 +19,7 @@ sources:
     service:
       name: studio.source
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         path: query.path
 response:
   html:

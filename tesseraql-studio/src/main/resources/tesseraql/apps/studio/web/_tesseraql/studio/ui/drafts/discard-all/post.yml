@@ -11,7 +11,7 @@ steps:
     service:
       name: studio.draftsDiscardAll
       params:
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/drafts?discarded=1

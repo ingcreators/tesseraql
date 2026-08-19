@@ -18,7 +18,7 @@ sources:
       params:
         name: params.name
         saved: params.saved
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

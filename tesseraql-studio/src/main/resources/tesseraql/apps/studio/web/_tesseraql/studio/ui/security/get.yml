@@ -24,7 +24,7 @@ sources:
     service:
       name: studio.security
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         status: params.status
         q: params.q
 response:

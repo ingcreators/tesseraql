@@ -34,7 +34,7 @@ sources:
     service:
       name: studio.data
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         updated: params.updated
         ds: params.ds
         table: params.table

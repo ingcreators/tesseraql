@@ -20,7 +20,7 @@ sources:
       name: studio.drafts
       params:
         q: params.q
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

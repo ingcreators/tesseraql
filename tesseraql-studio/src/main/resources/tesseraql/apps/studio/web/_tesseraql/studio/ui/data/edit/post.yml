@@ -162,7 +162,7 @@ steps:
         cn19: params.cn19
         cv19: params.cv19
         cs19: params.cs19
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:
