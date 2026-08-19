@@ -50,6 +50,9 @@ public interface OAuthStore {
 
     Optional<RecordedConsent> findConsent(String clientId, String subject, String resourceId);
 
+    /** Everything a subject has authorised — the account page's listing (decision 4). */
+    List<RecordedConsent> consentsFor(String subject);
+
     void deleteConsent(String clientId, String subject, String resourceId);
 
     /** Prunes expired codes and refresh tokens; called opportunistically, never on a hot path. */

@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.account.connections.revoke
+kind: route
+recipe: command-json
+
+# Revocation deletes the consent and its refresh chains together (docs/token-issuance.md
+# decision 4): the connection is gone, not dormant — coming back is a re-authorization. The
+# subject is the ambient principal's own; the route cannot revoke for anybody else.
+
+input:
+  clientId:
+    type: string
+    required: true
+    maxLength: 200
+  resource:
+    type: string
+    required: true
+    maxLength: 500
+
+steps:
+  - id: main
+    service:
+      name: oauth.account.revoke
+      params:
+        subject: principal.subject
+        clientId: params.clientId
+        resource: params.resource
+
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/account/connections

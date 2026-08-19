@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The account page shows what you authorised, and revoking it means it**
+  (docs/token-issuance.md slice 8). `/_tesseraql/account/connections` lists the signed-in
+  user's OAuth connections per client and per resource — the client's registered name rendered
+  escaped, the application it reaches, the acting capacity, and how many live refresh chains
+  stand behind it. Revoke deletes the consent and revokes every matching refresh chain in one
+  act: the next refresh answers `invalid_grant`, and coming back is a re-authorization through
+  the consent screen. On a stack with no authorization server the page says so instead of
+  breaking.
+
 - **The stack tells clients where its authorization server lives** (docs/token-issuance.md
   slice 7). `GET /.well-known/oauth-authorization-server` at the stack origin serves RFC 8414
   metadata — the issuer is the origin with no path component, so the document sits at the bare
