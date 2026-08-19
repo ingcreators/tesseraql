@@ -59,8 +59,10 @@ tesseraql:
 | `idp.ssoUrl` | for SP-initiated login | Where `GET /_tesseraql/saml/login` redirects the browser with its AuthnRequest. |
 | `idp.sloUrl` | for single logout | Where logout sends the LogoutRequest; also enables the inbound single-logout endpoint. |
 | `attributes.*` | no | Assertion-attribute names mapped onto the principal (see below). |
+| `attributes.map.<name>` | no | Declared attribute capture: assertion attribute `<name>` re-syncs into the store attribute the value names, at every linked login (see below). |
 | `link.enabled` | no | Resolve the principal from the local identity store instead of the assertion (default `false`). |
 | `link.provision` | no | With linking on, create a local user on first federated sign-in (default `false`). |
+| `link.subjectAttribute` | no | The assertion attribute holding the immutable identity-link subject; default is the persistent NameID. |
 | `allowIdpInitiated` | no | Accept responses that answer no pending request (default `false`). |
 | `requireSignedLogout` | no | Reject unsigned inbound logout requests (default `true`). |
 | `clockSkew` | no | Allowed clock skew for the assertion's time-bound conditions, as a duration string such as `5m` or `30s` (default `5m`). |
@@ -100,12 +102,31 @@ Where roles come from is the `link` switch:
 
 - **Linking off (default):** the principal is built from the assertion — IdP-asserted roles and
   groups drive authorization directly.
-- **Linking on:** the login id is resolved against the local identity store, so authorization uses
-  locally managed roles and permissions rather than whatever the IdP asserts. A federated user
-  with no local account is rejected — unless `link.provision: true`, which creates an ACTIVE local
-  user (login id, display name, email, tenant) on first sign-in. With linking on, the `saml`
+- **Linking on:** the principal is resolved against the local identity store, so authorization
+  uses locally managed roles and permissions rather than whatever the IdP asserts. The resolution
+  key is an **immutable identity link** (`tql_user_identities`): the persistent NameID — or the
+  attribute `link.subjectAttribute` names — links to the local user on first sign-in, and every
+  later sign-in resolves through the link. Login id, display name and email are mutable,
+  re-synced profile fields, so a login rename or mail-domain migration at the IdP moves the
+  **same** account — roles, grants and all — instead of provisioning a duplicate. A federated
+  user with no local account is rejected — unless `link.provision: true`, which creates an ACTIVE
+  local user (with an opaque internal id) on first sign-in. With linking on, the `saml`
   coverage kind tracks that the identity contracts the login path runs are exercised by contract
   test cases (see [testing.md](testing.md#coverage-kinds)).
+
+With linking on, `attributes.map` is the **declared attribute capture**: each entry re-syncs one
+assertion attribute into a [store attribute](iam-admin.md#attributes-and-assignment-rules) at
+every login — set when the assertion carries it, deleted when it stops — written *before* the
+principal resolves, so the same sign-in's assignment rules already see the fresh value. Unmapped
+attributes stay discarded; capture is declared, not promiscuous.
+
+```yaml
+    attributes:
+      email: email
+      map:
+        department: department   # assertion attribute → store attribute
+        title: 役職
+```
 
 ## Logout
 

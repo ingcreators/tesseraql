@@ -21,6 +21,10 @@ import java.util.List;
  * @param claims       ID-token claim names mapped onto the principal
  * @param linkEnabled  resolve/authorize via local identity contracts instead of IdP-asserted roles
  * @param provision    JIT-provision an unknown user when linking
+ * @param attributes   ID-token claim name → store attribute name, re-synced into
+ *                     {@code tql_user_attributes} at every linked login
+ *                     (docs/application-roles.md structural decision 3); capture is declared,
+ *                     not promiscuous — unmapped claims stay discarded
  */
 public record OidcConfig(
         String discoveryUri,
@@ -32,13 +36,15 @@ public record OidcConfig(
         Duration clockSkew,
         Claims claims,
         boolean linkEnabled,
-        boolean provision) {
+        boolean provision,
+        java.util.Map<String, String> attributes) {
 
     public OidcConfig {
         scopes = scopes == null || scopes.isEmpty() ? List.of("openid") : List.copyOf(scopes);
         postLoginUrl = postLoginUrl == null || postLoginUrl.isBlank() ? "/" : postLoginUrl;
         clockSkew = clockSkew == null ? Duration.ZERO : clockSkew;
         claims = claims == null ? new Claims(null, null, null, null, null) : claims;
+        attributes = attributes == null ? java.util.Map.of() : java.util.Map.copyOf(attributes);
     }
 
     /** Whether a confidential client secret is configured (else this is a public PKCE-only client). */
@@ -84,7 +90,18 @@ public record OidcConfig(
                 config.getString("tesseraql.oidc.link.enabled").map(Boolean::parseBoolean)
                         .orElse(false),
                 config.getString("tesseraql.oidc.link.provision").map(Boolean::parseBoolean)
-                        .orElse(false));
+                        .orElse(false),
+                attributeMap(config));
+    }
+
+    /** The declared attribute capture ({@code tesseraql.oidc.claims.map}), possibly empty. */
+    private static java.util.Map<String, String> attributeMap(AppConfig config) {
+        java.util.Map<String, String> mapped = new java.util.LinkedHashMap<>();
+        if (config.navigate("tesseraql.oidc.claims.map") instanceof java.util.Map<?, ?> entries) {
+            entries.forEach((claim, target) -> mapped.put(String.valueOf(claim),
+                    String.valueOf(target)));
+        }
+        return mapped;
     }
 
     private static List<String> scopes(AppConfig config) {

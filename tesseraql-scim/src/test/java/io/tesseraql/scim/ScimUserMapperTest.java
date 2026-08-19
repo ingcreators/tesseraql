@@ -38,6 +38,38 @@ class ScimUserMapperTest {
     }
 
     @Test
+    void deserializesTheEnterpriseExtensionInsteadOfDiscardingIt() throws Exception {
+        String json = """
+                {
+                  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User",
+                              "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"],
+                  "userName": "asmith",
+                  "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User": {
+                    "department": "経理部",
+                    "division": "管理本部",
+                    "costCenter": "CC-100",
+                    "employeeNumber": "E-42",
+                    "manager": {"value": "u-mgr", "displayName": "Boss"}
+                  }
+                }
+                """;
+        ScimUser user = MAPPER.readValue(json, ScimUser.class);
+
+        assertThat(user.enterprise().department()).isEqualTo("経理部");
+        assertThat(user.enterprise().division()).isEqualTo("管理本部");
+        assertThat(user.enterprise().costCenter()).isEqualTo("CC-100");
+        assertThat(user.enterprise().employeeNumber()).isEqualTo("E-42");
+        assertThat(user.enterprise().managerValue()).isEqualTo("u-mgr");
+
+        Map<String, Object> params = ScimUserMapper.toParams(user);
+        assertThat(params).containsEntry("department", "経理部")
+                .containsEntry("division", "管理本部")
+                .containsEntry("costCenter", "CC-100")
+                .containsEntry("employeeNumber", "E-42")
+                .containsEntry("manager", "u-mgr");
+    }
+
+    @Test
     void mapsScimUserToContractBindParameters() {
         ScimUser user = new ScimUser(null, null, "ext-9", "bjones",
                 new ScimUser.Name("Bob", "Jones", null),

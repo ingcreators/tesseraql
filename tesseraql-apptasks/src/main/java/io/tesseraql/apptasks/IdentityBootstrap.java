@@ -48,12 +48,16 @@ public final class IdentityBootstrap {
      */
     public void seedAdmin(String loginId, String password, List<String> roleCodes,
             List<String> permissionCodes) {
+        // The internal key is opaque, never derived from the login id (docs/application-roles.md
+        // structural decision 3): the seed upserts by login id, so a re-seed keeps the existing
+        // row's user_id and only a first seed mints the random one.
         identity.executeUpdate(realm, IdentityContracts.SEED_ADMIN_USER, Map.of(
-                "userId", loginId,
+                "userId", java.util.UUID.randomUUID().toString(),
                 "loginId", loginId,
                 "displayName", loginId,
                 "passwordHash", encoder.encode(password),
                 "passwordParams", encoder.defaultParams()));
+        String userId = userIdByLogin(loginId);
         for (String permissionCode : permissionCodes) {
             identity.executeUpdate(realm, IdentityContracts.ENSURE_PERMISSION, Map.of(
                     "permissionId", permissionCode,
@@ -64,11 +68,24 @@ public final class IdentityBootstrap {
             identity.executeUpdate(realm, IdentityContracts.ENSURE_ROLE, Map.of(
                     "roleId", roleCode, "roleCode", roleCode, "roleName", roleCode));
             identity.executeUpdate(realm, IdentityContracts.ASSIGN_USER_ROLE, Map.of(
-                    "userId", loginId, "roleCode", roleCode));
+                    "userId", userId, "roleCode", roleCode));
             for (String permissionCode : permissionCodes) {
                 identity.executeUpdate(realm, IdentityContracts.ASSIGN_ROLE_PERMISSION, Map.of(
                         "roleCode", roleCode, "permissionCode", permissionCode));
             }
         }
+    }
+
+    /** The seeded administrator's opaque user id, resolved through the standard contract. */
+    private String userIdByLogin(String loginId) {
+        java.util.Map<String, Object> params = new java.util.LinkedHashMap<>();
+        params.put("loginId", loginId);
+        params.put("tenantId", null);
+        List<Map<String, Object>> users = identity.execute(realm,
+                IdentityContracts.FIND_USER_BY_LOGIN, params);
+        if (users.isEmpty()) {
+            throw new IllegalStateException("Seeded administrator not found: " + loginId);
+        }
+        return String.valueOf(users.get(0).get("user_id"));
     }
 }

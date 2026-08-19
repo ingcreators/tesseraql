@@ -8,6 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Provisioning and SSO land the attributes, and a federated identity links once**
+  (docs/application-roles.md slice 4, second half). SCIM stops discarding the enterprise
+  extension: `department`/`division`/`costCenter`/`employeeNumber`/`manager` (plus a
+  configured `tesseraql.scim.attributes.map` of additional SCIM paths) are captured into
+  `tql_user_attributes` on create *and* update when `tesseraql.scim.attributes.enabled`
+  is on, keyed by the SCIM resource id. The SAML and OIDC linkers gain declared attribute
+  maps (`tesseraql.saml.attributes.map`, `tesseraql.oidc.claims.map`) and stop returning
+  early on existing users — the mapped set re-syncs at every login, before the principal
+  resolves, so that sign-in's assignment rules already see the fresh values. Federated
+  users get an immutable key: `tql_user_identities` links OIDC by `iss`+`sub` and SAML by
+  the persistent NameID (or `tesseraql.saml.link.subjectAttribute`), so a login-id change
+  at the IdP re-syncs the same account — roles, grants and all — instead of provisioning
+  a duplicate; login id, display name and email become mutable, re-synced profile fields.
+  BREAKING (pre-1.0, no migration steps): the `ScimUser` record gains the enterprise
+  extension and `SamlAttributeMapping`/`OidcConfig` grow their map slots; the linkers now
+  write the link table and re-sync profiles where they previously only read; the
+  identity-schema seeder mints an opaque admin `user_id` instead of reusing the login id
+  (existing stores keep their seeded ids — the seed upserts by login id).
+
 - **Attributes arrive with the user, and rules assign the roles**
   (docs/application-roles.md slice 4, first half). `tql_user_attributes` holds free-form
   named attributes (部署/役職 …), edited on the IAM user detail page and merged into

@@ -386,6 +386,8 @@ tesseraql:
       roles: roles
       groups: groups
       tenant: tenant_id
+      map:                                           # declared attribute capture (linking on)
+        department: department                       # ID-token claim → store attribute
     link:
       enabled: true       # resolve/authorize via local identity contracts (else IdP-asserted)
       provision: false    # JIT-provision an unknown user the first time they sign in
@@ -405,6 +407,16 @@ It serves three endpoints under `/_tesseraql/oidc`:
   `postLoginUrl`.
 - `GET /logout` — clears the local session and, when the provider advertises one, redirects to its
   end-session endpoint.
+
+With `link.enabled: true`, the resolution key is an **immutable identity link**
+(`tql_user_identities`): the token's `iss` + `sub` pair links to the local user on first sign-in,
+and every later sign-in resolves through the link — so a `preferred_username` change at the OP
+re-syncs the **same** account (login id, display name and email are mutable, re-synced profile
+fields) instead of provisioning a duplicate. `claims.map` is the declared attribute capture:
+each entry re-syncs one ID-token claim into a
+[store attribute](iam-admin.md#attributes-and-assignment-rules) at every login — set when the
+token carries it, deleted when it stops — written before the principal resolves, so the same
+sign-in's assignment rules already see the fresh value. Unmapped claims stay discarded.
 
 Discovery is **lazy**: the provider is contacted on the first login, not at app startup, so a brief
 provider outage does not stop the app from booting. The expected token issuer is always the

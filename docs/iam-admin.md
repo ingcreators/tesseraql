@@ -92,8 +92,20 @@ effect at the affected user's next sign-in, like every grant change.
 ## Attributes and assignment rules
 
 The user detail page also edits a person's **attributes** — free-form named values like a
-department or a title, which reach the application as `principal.claim.<name>`. The rules
-page (`/_tesseraql/admin/rules`) turns attributes into roles: a rule grants one role when
+department or a title, which reach the application as `principal.claim.<name>`.
+
+Attributes can also **arrive with the user** instead of being typed here. SCIM provisioning
+captures the enterprise extension's org attributes (`department`, `division`, `costCenter`,
+`employeeNumber`, `manager`) plus any additional paths `tesseraql.scim.attributes.map`
+declares, on create and update, when `tesseraql.scim.attributes.enabled` is on — the
+capture assumes the SCIM contracts manage this identity store's users, so the SCIM
+resource id is the user id. SAML and OIDC logins re-sync their configured attribute maps
+at every sign-in ([saml.md](saml.md#attribute-mapping-and-user-linking),
+[authentication.md](authentication.md#openid-connect-relying-party)). All three sources
+share one write discipline: a mapped value that stops arriving is deleted, and everything
+unmapped is discarded.
+
+The rules page (`/_tesseraql/admin/rules`) turns attributes into roles: a rule grants one role when
 every condition matches, with condition kinds `eq`, `in`, `neq`, `not-in`, `group`
 (membership in a store group) and `subtree` (the attribute sits under an org unit, via the
 managed org foundation). Rules apply at each user's next sign-in and their assignments

@@ -87,6 +87,16 @@ public final class IdentityContracts {
     public static final String IS_ORG_DESCENDANT = "is-org-descendant";
     public static final String LIST_USER_IDS = "list-user-ids";
 
+    // Federated identity keys (docs/application-roles.md slice 4, second half); managed-pack.
+    // The SSO linkers resolve by the immutable (provider, external subject) pair so a login-id
+    // change at the IdP re-syncs the same account instead of provisioning a duplicate.
+    /** The user linked to one federated identity ({@code provider} + {@code subject}). */
+    public static final String FIND_USER_BY_IDENTITY = "find-user-by-identity";
+    /** Records the immutable link from a federated identity to a local user. */
+    public static final String LINK_USER_IDENTITY = "link-user-identity";
+    /** Re-syncs a federated user's mutable profile (login id, display name, email). */
+    public static final String UPDATE_FEDERATED_USER = "update-federated-user";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,

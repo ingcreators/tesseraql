@@ -96,3 +96,10 @@ create table tql_role_rule_conditions (
   match_kind     varchar(32) not null,
   value          varchar(1000)
 );
+
+create table tql_user_identities (
+  user_id          varchar(64) not null,
+  provider         varchar(255) not null,
+  external_subject varchar(255) not null,
+  primary key (provider, external_subject)
+);

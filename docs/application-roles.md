@@ -60,6 +60,21 @@ materialization with `source = 'rule'` provenance plus the recompute actions, an
 rules page and attribute editors in IAM Admin. Shipped as two PRs by implementation
 choice: the SCIM enterprise capture, the SAML/OIDC attribute maps with re-sync, and the
 `tql_user_identities` federated keys are the second half.
+**Slice 4's second half is shipped** (SCIM/SSO capture and federated keys): the SCIM
+enterprise capture behind `tesseraql.scim.attributes.enabled` (+ `.map` for additional
+paths, keyed by the SCIM resource id — capture assumes the SCIM contracts manage the
+identity store's users), the SAML/OIDC attribute maps
+(`tesseraql.saml.attributes.map` / `tesseraql.oidc.claims.map`) re-syncing before the
+principal resolves, and `tql_user_identities` with the linkers resolving through it;
+the seeder's `userId = loginId` shortcut retired (upsert-by-login keeps existing seeded
+ids). Implementation decisions recorded: the SAML provider column value is the fixed
+alias `saml` (a runtime configures one IdP; the subject is already IdP-scoped) while
+OIDC stores the discovered issuer; both linkers share one resolver
+(`FederatedIdentities`) that degrades to the pre-link behavior on a realm without the
+contracts or user writes; a SCIM PATCH captures only the members it addresses (a full
+create/replace converges the whole declared set), and unmapped extension-schema PATCH
+paths are tolerated as no-ops instead of `invalidPath`, so an IdP provisioning
+uncaptured extension attributes cannot be broken by them.
 
 **Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
 application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,

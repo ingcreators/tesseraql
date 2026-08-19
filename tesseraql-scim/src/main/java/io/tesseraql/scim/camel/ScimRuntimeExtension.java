@@ -45,7 +45,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
         if (flag(manifest.config(), "tesseraql.scim.enabled")) {
             context.camel().addRoutes(new ScimRouteBuilder(
                     buildUserService(manifest, context.dataSource()),
-                    buildGroupService(manifest, context.dataSource())));
+                    buildGroupService(manifest, context.dataSource()),
+                    buildAttributeCapture(context)));
         }
         if (flag(manifest.config(), "tesseraql.scim.outbound.enabled")) {
             context.bind(TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
@@ -110,6 +111,38 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readSql(manifest, "tesseraql.scim.groups.removeMember"),
                 readSqlOptional(manifest, "tesseraql.scim.groups.count"));
         return new ScimGroupService(dataSource, contract);
+    }
+
+    /**
+     * The identity-store attribute capture (docs/application-roles.md structural decision 3),
+     * on when {@code tesseraql.scim.attributes.enabled} is true: the enterprise extension's org
+     * attributes plus {@code tesseraql.scim.attributes.map} (SCIM path → attribute name) land in
+     * {@code tql_user_attributes}, keyed by the SCIM resource id. A realm that cannot take the
+     * writes is a boot-time configuration error, not a silent drop.
+     */
+    private static io.tesseraql.scim.ScimAttributeCapture buildAttributeCapture(
+            ExtensionContext context) {
+        AppConfig config = context.manifest().config();
+        if (!flag(config, "tesseraql.scim.attributes.enabled")) {
+            return null;
+        }
+        io.tesseraql.identity.IdentityService identity = context.bean(
+                TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                io.tesseraql.identity.IdentityService.class);
+        io.tesseraql.identity.RealmConfig realm = context.bean(
+                TesseraqlProperties.IDENTITY_REALM_BEAN,
+                io.tesseraql.identity.RealmConfig.class);
+        if (identity == null || realm == null || !realm.capabilities().userWriteAllowed()) {
+            throw new IllegalStateException("tesseraql.scim.attributes.enabled requires an "
+                    + "identity realm with user-management writes (a managed realm)");
+        }
+        java.util.Map<String, String> extras = new java.util.LinkedHashMap<>();
+        if (config
+                .navigate("tesseraql.scim.attributes.map") instanceof java.util.Map<?, ?> entries) {
+            entries.forEach((path, name) -> extras.put(String.valueOf(path),
+                    String.valueOf(name)));
+        }
+        return new io.tesseraql.scim.ScimAttributeCapture(identity, realm, extras);
     }
 
     private static String readSql(AppManifest manifest, String configKey) {

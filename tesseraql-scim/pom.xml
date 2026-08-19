@@ -25,6 +25,13 @@
       <artifactId>tesseraql-compiler</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- The attribute capture writes tql_user_attributes through the identity contracts
+         (docs/application-roles.md structural decision 3), like the SAML/OIDC linkers. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>

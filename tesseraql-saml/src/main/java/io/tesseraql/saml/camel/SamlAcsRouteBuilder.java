@@ -267,9 +267,11 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         guardAgainstReplay(exchange, assertion);
         Principal resolved = linker == null
                 ? toPrincipal(assertion)
-                : linker.resolve(loginId(assertion), attribute(assertion, mapping.displayName()),
+                : linker.resolve(new io.tesseraql.identity.FederatedIdentities.FederatedLogin(
+                        SamlUserLinker.PROVIDER, linkSubject(assertion), loginId(assertion),
+                        attribute(assertion, mapping.displayName()),
                         attribute(assertion, mapping.email()),
-                        attribute(assertion, mapping.tenant()));
+                        attribute(assertion, mapping.tenant()), mappedAttributes(assertion)));
         Principal principal = withFederationClaims(resolved, assertion);
 
         String sessionId = sessions.create(principal, SessionStore.ClientInfo.of(
@@ -377,6 +379,25 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         return mapping.loginId() == null
                 ? assertion.nameId()
                 : assertion.attribute(mapping.loginId()).orElse(assertion.nameId());
+    }
+
+    /** The immutable link subject: the configured attribute, else the persistent NameID. */
+    private String linkSubject(SamlAssertion assertion) {
+        return mapping.subject() == null
+                ? assertion.nameId()
+                : assertion.attribute(mapping.subject()).orElse(assertion.nameId());
+    }
+
+    /**
+     * The declared attribute capture: each mapped assertion attribute under its store name, an
+     * absent one mapped to null so the store copy is deleted (re-sync converges, never accretes).
+     */
+    private Map<String, String> mappedAttributes(SamlAssertion assertion) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : mapping.attributes().entrySet()) {
+            values.put(entry.getValue(), assertion.attribute(entry.getKey()).orElse(null));
+        }
+        return values;
     }
 
     private static String attribute(SamlAssertion assertion, String name) {

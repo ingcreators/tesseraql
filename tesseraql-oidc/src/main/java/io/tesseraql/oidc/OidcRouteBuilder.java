@@ -158,7 +158,7 @@ final class OidcRouteBuilder extends RouteBuilder {
         OidcMetadata metadata = discovery.metadata();
         String idToken = exchangeCode(metadata, code, pending.codeVerifier());
         Principal validated = validator(metadata).validate(idToken, pending.nonce());
-        Principal principal = link(validated);
+        Principal principal = link(validated, metadata.issuer());
 
         String sessionId = sessions.create(principal, SessionStore.ClientInfo.of(
                 exchange.getMessage().getHeader("User-Agent", String.class),
@@ -226,13 +226,30 @@ final class OidcRouteBuilder extends RouteBuilder {
         }
     }
 
-    private Principal link(Principal validated) {
+    private Principal link(Principal validated, String issuer) {
         if (linker == null) {
             return validated;
         }
         Object email = validated.claims().get("email");
-        return linker.resolve(validated.loginId(), validated.displayName(),
-                email == null ? null : String.valueOf(email), validated.tenantId());
+        // The immutable link key is iss + sub (docs/application-roles.md structural decision
+        // 3); the login claim stays what the principal resolves and re-syncs by.
+        return linker.resolve(new io.tesseraql.identity.FederatedIdentities.FederatedLogin(
+                issuer, validated.subject(), validated.loginId(), validated.displayName(),
+                email == null ? null : String.valueOf(email), validated.tenantId(),
+                mappedAttributes(validated)));
+    }
+
+    /**
+     * The declared attribute capture: each mapped ID-token claim under its store name, an absent
+     * one mapped to null so the store copy is deleted (re-sync converges, never accretes).
+     */
+    private Map<String, String> mappedAttributes(Principal validated) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : config.attributes().entrySet()) {
+            Object value = validated.claims().get(entry.getKey());
+            values.put(entry.getValue(), value == null ? null : String.valueOf(value));
+        }
+        return values;
     }
 
     private OidcTokenValidator validator(OidcMetadata metadata) {
