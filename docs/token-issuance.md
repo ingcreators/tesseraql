@@ -224,6 +224,16 @@ means "mint a new one". The consent record is read by our authorize endpoint bef
 page reads. The account surface (Decision 14) is where that page belongs, and revoking there deletes
 the consent and the refresh tokens together.
 
+*Slice 8 shipped 2026-08-19: `/_tesseraql/account/connections` lists the subject's consents per
+client and per resource — client name escaped, resource and member named, the selected capacity
+and the live-token count beside them — and its revoke deletes the consent and revokes every
+matching refresh chain in one act, so the next refresh is `invalid_grant` and the next authorize
+owes the consent screen again. The providers are registered unconditionally and answer
+`enabled: false` wherever the oauth extension bound no store, because the account app also
+mounts on unhosted runtimes and the page renders that state honestly. The page reads the store
+directly rather than through `getRefreshTokens`' hash-keyed models, exactly as Decision 2's
+listing note anticipated.*
+
 **The consent screen is also where a concurrent-role user selects an acting role** — the OAuth face of the
 role activation designed in [application-roles.md](application-roles.md) (its "three faces"
 section). The authorize endpoint holds the store-resolved role grants and the `resource`
@@ -549,7 +559,7 @@ dependency order given below, not the numeric one.
 | 5 | ~~`/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain~~ — **shipped 2026-08-19**; the mint-time re-resolution is in Decision 2's note |
 | 6 | ~~`/register`, the client registry, exact-match redirect validation (measured — open question 2)~~ — **shipped 2026-08-19**, with Decision 8's lint half (`TQL-OAUTH-3004`); Decision 5's note has the auth-method default |
 | 7 | ~~RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry~~ — **shipped 2026-08-19** (Decision 6's note; `iss` had shipped with slice 4) |
-| 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
+| 8 | ~~Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together~~ — **shipped 2026-08-19** (Decision 4's note) |
 | 9 | ~~Issuer unification (Decision 9): members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the exchange's member axis, the `session-token-exchange.md` premise edit~~ — **shipped 2026-08-19** (Decision 9's notes) |
 | 10 | The resource side, to `audit-hardening.md`'s decisions: RFC 9728 protected-resource metadata per member relayed at origin scope, the `WWW-Authenticate` challenge, the MCP transport gate and audience binding — then the connect-and-observe pass against the whole chain |
 

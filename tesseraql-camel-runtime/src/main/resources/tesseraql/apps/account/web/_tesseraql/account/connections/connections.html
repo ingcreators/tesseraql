@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connected applications</title>
+  <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components/hc.min.css}">
+</head>
+<body>
+<main class="hc-stack" style="max-width: 46rem; margin: 4rem auto; padding: 0 1rem;">
+  <section class="hc-card hc-stack">
+    <div class="hc-stack">
+      <h1>Connected applications</h1>
+
+      <p th:unless="${review.enabled}" class="hc-field__message">
+        This stack has no authorization server, so there is nothing to authorise here.
+      </p>
+
+      <th:block th:if="${review.enabled}">
+        <p th:if="${#lists.isEmpty(review.connections)}" class="hc-field__message">
+          Nothing is authorised. When you allow an application through the consent screen, the
+          connection appears here.
+        </p>
+
+        <table class="hc-table" th:if="${!#lists.isEmpty(review.connections)}">
+          <thead>
+          <tr>
+            <th>Application</th>
+            <th>For</th>
+            <th>Acting as</th>
+            <th>Since</th>
+            <th></th>
+          </tr>
+          </thead>
+          <tbody>
+          <!-- The client's name is display text chosen by the party that registered it:
+               rendered escaped, never vouched for (docs/token-issuance.md decision 5). -->
+          <tr th:each="row : ${review.connections}">
+            <td>
+              <strong th:text="${row.clientName}">client</strong><br>
+              <code th:text="${row.clientId}">id</code>
+            </td>
+            <td>
+              <span th:text="${row.member}">member</span><br>
+              <code th:text="${row.resource}">resource</code>
+            </td>
+            <td th:text="${row.actingRole}">role</td>
+            <td th:text="${row.grantedAt}">when</td>
+            <td>
+              <!-- Revoking deletes the consent and its refresh chains together: the
+                   connection is gone, and coming back is a re-authorization. -->
+              <form method="post" th:action="@{/_tesseraql/account/connections/revoke}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="clientId" th:value="${row.clientId}">
+                <input type="hidden" name="resource" th:value="${row.resource}">
+                <button type="submit" class="hc-button" data-variant="ghost">Revoke</button>
+              </form>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+      </th:block>
+
+      <p><a th:href="@{/_tesseraql/account}">Back to account</a></p>
+    </div>
+  </section>
+</main>
+</body>
+</html>

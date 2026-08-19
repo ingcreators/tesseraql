@@ -307,6 +307,30 @@ public final class JdbcOAuthStore implements OAuthStore {
     }
 
     @Override
+    public List<RecordedConsent> consentsFor(String subject) {
+        String sql = "select client_id, subject, resource_id, acting_role, granted_at"
+                + " from tql_oauth_consent where subject = ? order by granted_at";
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement select = connection.prepareStatement(sql)) {
+            select.setString(1, subject);
+            try (ResultSet rs = select.executeQuery()) {
+                List<RecordedConsent> consents = new ArrayList<>();
+                while (rs.next()) {
+                    consents.add(new RecordedConsent(
+                            rs.getString("client_id"),
+                            rs.getString("subject"),
+                            rs.getString("resource_id"),
+                            rs.getString("acting_role"),
+                            instant(rs.getTimestamp("granted_at"))));
+                }
+                return consents;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("OAuth consent listing failed", e);
+        }
+    }
+
+    @Override
     public void deleteConsent(String clientId, String subject, String resourceId) {
         String sql = "delete from tql_oauth_consent"
                 + " where client_id = ? and subject = ? and resource_id = ?";

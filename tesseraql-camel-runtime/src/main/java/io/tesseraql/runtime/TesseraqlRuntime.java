@@ -2102,6 +2102,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // acquiring a token stops meaning "read a cookie and a meta tag out of developer
             // tools". Registered whether or not issuing is on, because the page has to be able to
             // name the key that turns it on rather than answer a 500.
+            // The account surface's authorised-applications providers (docs/token-issuance.md
+            // decision 4): registered unconditionally, answering enabled:false wherever the
+            // oauth extension bound no store, so the unhosted account app renders the honest
+            // state instead of meeting a missing provider.
+            OAuthAccountProviders.register(serviceProviders,
+                    name -> context.getRegistry().lookupByName(name));
             serviceProviders
                     .register("ops.token.status", params -> sessionTokens.status())
                     .register("ops.token.issue", sessionTokens::issue)

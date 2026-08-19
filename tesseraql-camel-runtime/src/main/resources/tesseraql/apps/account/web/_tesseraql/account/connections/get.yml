@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.account.connections
+kind: route
+recipe: query-html
+
+# The subject-facing half of the authorization server (docs/token-issuance.md decision 4):
+# what this account has authorised, per client and per resource, and where revoking it lives.
+# The provider answers enabled:false wherever the stack has no authorization server, and the
+# page renders that state honestly.
+
+security:
+  auth: browser
+
+sources:
+  main:
+    service:
+      name: oauth.account.connections
+      params:
+        subject: principal.subject
+
+response:
+  html:
+    status: 200
+    template: connections.html
+    model:
+      review: main
+    headers:
+      Cache-Control: "no-store"

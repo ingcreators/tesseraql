@@ -259,6 +259,57 @@ class OAuthIssuerUnificationIntegrationTest {
                                 + enc(refresh)))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(reused.statusCode()).isEqualTo(400);
+
+        // The live end of the chain, for the revocation test downstream.
+        liveRefresh = MAPPER.readTree(refreshed.body()).get("refresh_token").asText();
+    }
+
+    /** The rotated chain's live end after the token test — what revocation must kill. */
+    static String liveRefresh;
+
+    @Test
+    @org.junit.jupiter.api.Order(5)
+    void theAccountPageListsTheConnectionAndRevocationEndsIt() throws Exception {
+        String[] session = signIn("alice");
+        String cookie = session[0];
+        String csrf = session[1];
+
+        // The page lists the consent the flow recorded — client name escaped, resource named.
+        HttpResponse<String> page = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/account/connections"))
+                .header("Cookie", cookie).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(page.statusCode()).as(page.body()).isEqualTo(200);
+        assertThat(page.body()).contains("Codex &lt;CLI&gt;").contains("/shop");
+
+        // Revocation deletes the consent and its refresh chains together.
+        HttpResponse<String> revoked = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port
+                        + "/_tesseraql/account/connections/revoke"))
+                .header("Cookie", cookie)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("_csrf=" + enc(csrf)
+                        + "&clientId=codex&resource="
+                        + enc("http://localhost:" + port + "/shop")))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(revoked.statusCode()).as(revoked.body()).isEqualTo(303);
+
+        // The chain's live end died with the consent...
+        HttpResponse<String> refreshRefused = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=refresh_token&client_id=codex&refresh_token="
+                                + enc(liveRefresh)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(refreshRefused.statusCode()).isEqualTo(400);
+
+        // ...and coming back is a re-authorization: the consent screen is owed again.
+        HttpResponse<String> again = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + authorizeQuery()))
+                .header("Cookie", cookie).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(again.statusCode()).isEqualTo(302);
+        assertThat(again.headers().firstValue("Location").orElse(""))
+                .startsWith("/_tesseraql/oauth/consent?");
     }
 
     @Test

@@ -4,6 +4,9 @@ config/tesseraql.yml
 web/_tesseraql/account/account.html
 web/_tesseraql/account/app/post.yml
 web/_tesseraql/account/appearance/post.yml
+web/_tesseraql/account/connections/connections.html
+web/_tesseraql/account/connections/get.yml
+web/_tesseraql/account/connections/revoke/post.yml
 web/_tesseraql/account/delegation/clear/post.yml
 web/_tesseraql/account/delegation/post.yml
 web/_tesseraql/account/get.yml
