@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Attributes arrive with the user, and rules assign the roles**
+  (docs/application-roles.md slice 4, first half). `tql_user_attributes` holds free-form
+  named attributes (部署/役職 …), edited on the IAM user detail page and merged into
+  `principal.claims` at sign-in. Assignment rules (`/_tesseraql/admin/rules`) grant a role
+  when their conditions match — kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` over the
+  managed org closure, comparisons never expressions, refused with `TQL-IAM-4032` —
+  evaluated at sign-in and materialized into `tql_user_roles` with `source = 'rule'`
+  provenance: manual assignments always survive recompute, and "recompute now" (one user
+  or all) covers the edit-to-login window. The SCIM/SSO attribute capture and the
+  federated identity keys follow as the slice's second half.
+
 - **An application declares its duty roles, and the store converges to them**
   (docs/application-roles.md slice 3). `tesseraql.security.roles` lists the roles an
   application ships — code (carrying the application's own name as its first segment),

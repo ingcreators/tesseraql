@@ -1,0 +1,27 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.setAttribute
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  name:
+    type: string
+    required: true
+  value:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.setAttribute
+      params:
+        userId: path.id
+        name: params.name
+        value: params.value
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}?attrset=1

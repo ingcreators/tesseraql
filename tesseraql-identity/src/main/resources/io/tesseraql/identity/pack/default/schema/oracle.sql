@@ -68,3 +68,23 @@ create table tql_user_permissions (
   ends_at   timestamp,
   primary key (user_id, permission_id)
 );
+
+create table tql_user_attributes (
+  user_id varchar2(64) not null,
+  name    varchar2(200) not null,
+  value   varchar2(1000),
+  primary key (user_id, name)
+);
+
+create table tql_role_rules (
+  rule_id varchar2(64) primary key,
+  role_id varchar2(64) not null,
+  enabled number(1) default 1 not null
+);
+
+create table tql_role_rule_conditions (
+  rule_id        varchar2(64) not null,
+  attribute_name varchar2(200),
+  match_kind     varchar2(32) not null,
+  value          varchar2(1000)
+);

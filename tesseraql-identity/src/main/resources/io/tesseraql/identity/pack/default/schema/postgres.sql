@@ -68,3 +68,23 @@ create table if not exists tql_user_permissions (
   ends_at   timestamp,
   primary key (user_id, permission_id)
 );
+
+create table if not exists tql_user_attributes (
+  user_id varchar(64) not null,
+  name    varchar(200) not null,
+  value   varchar(1000),
+  primary key (user_id, name)
+);
+
+create table if not exists tql_role_rules (
+  rule_id varchar(64) primary key,
+  role_id varchar(64) not null,
+  enabled smallint default 1 not null
+);
+
+create table if not exists tql_role_rule_conditions (
+  rule_id        varchar(64) not null,
+  attribute_name varchar(200),
+  match_kind     varchar(32) not null,
+  value          varchar(1000)
+);

@@ -127,6 +127,42 @@ public final class IdentityService {
         Map<String, Object> user = users.get(0);
         Object userId = user.get("user_id");
         Map<String, Object> byUser = Map.of("userId", userId);
+        List<String> groups = column(execute(realm, IdentityContracts.FIND_GROUPS_BY_USER_ID,
+                byUser), "group_code");
+
+        // Attributes ride the claims, and the enabled assignment rules materialize this
+        // user's rule-produced roles before the role and permission reads, so this sign-in
+        // already reflects them (docs/application-roles.md structural decision 3). The
+        // user row's own columns win a name collision; a sql realm without the optional
+        // contracts skips both, exactly as it skips grant attribution.
+        Map<String, Object> claims = new LinkedHashMap<>(user);
+        try {
+            Map<String, String> attributes = new LinkedHashMap<>();
+            for (Map<String, Object> row : execute(realm,
+                    IdentityContracts.LIST_USER_ATTRIBUTES, byUser)) {
+                attributes.put(asString(row.get("name")), asString(row.get("value")));
+            }
+            attributes.forEach(claims::putIfAbsent);
+            if (realm.type() == RealmConfig.RealmType.MANAGED
+                    && realm.capabilities().roleWriteAllowed()) {
+                java.util.Set<String> produced = RoleRules.evaluate(
+                        execute(realm, IdentityContracts.FIND_ENABLED_RULE_CONDITIONS,
+                                Map.of()),
+                        attributes, groups, (ancestor, descendant) -> {
+                            List<Map<String, Object>> matched = execute(realm,
+                                    IdentityContracts.IS_ORG_DESCENDANT,
+                                    Map.of("ancestorId", ancestor,
+                                            "descendantId", descendant));
+                            return !matched.isEmpty() && ((Number) matched.get(0)
+                                    .get("matched")).longValue() > 0;
+                        });
+                RoleRules.materialize(this, realm, asString(userId), produced);
+            }
+        } catch (TqlException ex) {
+            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+                throw ex;
+            }
+        }
 
         // Grant attribution (docs/application-roles.md structural decision 4): held roles
         // with their application axis and bundles, plus direct grants — the two optional
@@ -150,13 +186,12 @@ public final class IdentityService {
                 asString(user.get("login_id")),
                 asString(user.get("display_name")),
                 asString(user.get("tenant_id")),
-                column(execute(realm, IdentityContracts.FIND_GROUPS_BY_USER_ID, byUser),
-                        "group_code"),
+                groups,
                 column(execute(realm, IdentityContracts.FIND_ROLES_BY_USER_ID, byUser),
                         "role_code"),
                 column(execute(realm, IdentityContracts.FIND_PERMISSIONS_BY_USER_ID, byUser),
                         "permission_code"),
-                user,
+                claims,
                 roleGrants(grantRows),
                 direct));
     }

@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,6 +55,8 @@ public final class RoleAdmin {
         }
         Map<String, Object> byUser = Map.of("userId", userId);
         try {
+            model.put("attributes", identity.execute(realm,
+                    IdentityContracts.LIST_USER_ATTRIBUTES, byUser));
             model.put("assignments", identity.execute(realm,
                     IdentityContracts.LIST_ROLE_ASSIGNMENTS_BY_USER_ID, byUser));
             model.put("grants", identity.execute(realm,
@@ -72,6 +75,7 @@ public final class RoleAdmin {
 
     private static Map<String, Object> unavailable(Map<String, Object> model, String reason) {
         model.put("rows", java.util.List.of());
+        model.put("attributes", java.util.List.of());
         model.put("assignments", java.util.List.of());
         model.put("grants", java.util.List.of());
         model.put("roles", java.util.List.of());
@@ -166,6 +170,125 @@ public final class RoleAdmin {
         params.put("code", require(code, "permission code"));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_PERMISSION, params);
         return Map.of("revoked", code);
+    }
+
+    /** Sets one user attribute (delete-then-insert; the user-management gate applies). */
+    public static Map<String, Object> setAttribute(IdentityService identity, RealmConfig realm,
+            String userId, String name, String value) {
+        requireRealm(identity, realm);
+        Map<String, Object> key = new LinkedHashMap<>();
+        key.put("userId", require(userId, "user"));
+        key.put("name", require(name, "attribute name"));
+        identity.executeUpdate(realm, IdentityContracts.DELETE_USER_ATTRIBUTE, key);
+        Map<String, Object> params = new LinkedHashMap<>(key);
+        params.put("value", value == null ? "" : value.trim());
+        identity.executeUpdate(realm, IdentityContracts.INSERT_USER_ATTRIBUTE, params);
+        return Map.of("set", name);
+    }
+
+    public static Map<String, Object> deleteAttribute(IdentityService identity,
+            RealmConfig realm, String userId, String name) {
+        requireRealm(identity, realm);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("userId", require(userId, "user"));
+        params.put("name", require(name, "attribute name"));
+        identity.executeUpdate(realm, IdentityContracts.DELETE_USER_ATTRIBUTE, params);
+        return Map.of("deleted", name);
+    }
+
+    /** Creates a rule granting one role, with its first condition in the same submit. */
+    public static Map<String, Object> createRule(IdentityService identity, RealmConfig realm,
+            String roleCode, String attribute, String kind, String value, boolean orgManaged) {
+        requireRealm(identity, realm);
+        RoleRules.validateCondition(attribute, require(kind, "condition kind"),
+                require(value, "condition value"), orgManaged);
+        String ruleId = "rule-" + java.util.UUID.randomUUID();
+        Map<String, Object> create = new LinkedHashMap<>();
+        create.put("ruleId", ruleId);
+        create.put("roleCode", require(roleCode, "role code"));
+        identity.executeUpdate(realm, IdentityContracts.CREATE_ROLE_RULE, create);
+        Map<String, Object> condition = new LinkedHashMap<>();
+        condition.put("ruleId", ruleId);
+        condition.put("attributeName", attribute == null || attribute.isBlank()
+                || "null".equals(attribute) ? null : attribute.trim());
+        condition.put("matchKind", kind.trim());
+        condition.put("value", value.trim());
+        identity.executeUpdate(realm, IdentityContracts.INSERT_RULE_CONDITION, condition);
+        return Map.of("created", ruleId);
+    }
+
+    /** Adds one condition to an existing rule (conditions AND across attributes). */
+    public static Map<String, Object> addRuleCondition(IdentityService identity,
+            RealmConfig realm, String ruleId, String attribute, String kind, String value,
+            boolean orgManaged) {
+        requireRealm(identity, realm);
+        RoleRules.validateCondition(attribute, require(kind, "condition kind"),
+                require(value, "condition value"), orgManaged);
+        Map<String, Object> condition = new LinkedHashMap<>();
+        condition.put("ruleId", require(ruleId, "rule"));
+        condition.put("attributeName", attribute == null || attribute.isBlank()
+                || "null".equals(attribute) ? null : attribute.trim());
+        condition.put("matchKind", kind.trim());
+        condition.put("value", value.trim());
+        identity.executeUpdate(realm, IdentityContracts.INSERT_RULE_CONDITION, condition);
+        return Map.of("added", ruleId);
+    }
+
+    public static Map<String, Object> deleteRule(IdentityService identity, RealmConfig realm,
+            String ruleId) {
+        requireRealm(identity, realm);
+        Map<String, Object> params = Map.of("ruleId", require(ruleId, "rule"));
+        identity.executeUpdate(realm, IdentityContracts.DELETE_RULE_CONDITIONS, params);
+        identity.executeUpdate(realm, IdentityContracts.DELETE_ROLE_RULE, params);
+        return Map.of("deleted", ruleId);
+    }
+
+    /** The rules page's model: every rule with its conditions, and the role dropdown. */
+    public static Map<String, Object> rulesModel(IdentityService identity, RealmConfig realm) {
+        Map<String, Object> model = new LinkedHashMap<>();
+        if (identity == null || realm == null) {
+            return unavailable(model, "No identity realm is configured");
+        }
+        try {
+            Map<String, List<Map<String, Object>>> conditions = new LinkedHashMap<>();
+            for (Map<String, Object> row : identity.execute(realm,
+                    IdentityContracts.LIST_RULE_CONDITIONS, Map.of())) {
+                conditions.computeIfAbsent(String.valueOf(row.get("rule_id")),
+                        key -> new java.util.ArrayList<>()).add(row);
+            }
+            List<Map<String, Object>> rules = new java.util.ArrayList<>();
+            for (Map<String, Object> row : identity.execute(realm,
+                    IdentityContracts.LIST_ROLE_RULES, Map.of())) {
+                Map<String, Object> rule = new LinkedHashMap<>(row);
+                rule.put("conditions", conditions.getOrDefault(
+                        String.valueOf(row.get("rule_id")), List.of()));
+                rules.add(rule);
+            }
+            model.put("rows", rules);
+            model.put("roles", identity.execute(realm, IdentityContracts.LIST_ROLES,
+                    Map.of()));
+            model.put("available", 1);
+        } catch (TqlException ex) {
+            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+                throw ex;
+            }
+            return unavailable(model, ex.getMessage());
+        }
+        model.put("writable", realm.capabilities().roleWriteAllowed() ? 1 : 0);
+        return model;
+    }
+
+    /** Recomputes every user's rule-produced assignments (the admin's bulk action). */
+    public static Map<String, Object> recomputeAll(IdentityService identity,
+            RealmConfig realm) {
+        requireRealm(identity, realm);
+        int users = 0;
+        for (Map<String, Object> row : identity.execute(realm,
+                IdentityContracts.LIST_USER_IDS, Map.of())) {
+            RoleRules.recompute(identity, realm, String.valueOf(row.get("user_id")));
+            users++;
+        }
+        return Map.of("recomputed", users);
     }
 
     /** A window field: blank means unbounded; a date or date-time means that instant. */

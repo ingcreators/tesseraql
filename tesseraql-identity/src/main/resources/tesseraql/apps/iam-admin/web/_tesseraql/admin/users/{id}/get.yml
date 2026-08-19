@@ -30,6 +30,15 @@ input:
   revoked:
     type: string
     required: false
+  attrset:
+    type: string
+    required: false
+  attrdeleted:
+    type: string
+    required: false
+  recomputed:
+    type: string
+    required: false
 
 sources:
   main:
@@ -81,6 +90,10 @@ response:
       granted: params.granted
       revoked: params.revoked
       assignments: editor.assignments
+      attributes: editor.attributes
+      attrset: params.attrset
+      attrdeleted: params.attrdeleted
+      recomputed: params.recomputed
       grants: editor.grants
       allRoles: editor.roles
       editorAvailable: editor.available

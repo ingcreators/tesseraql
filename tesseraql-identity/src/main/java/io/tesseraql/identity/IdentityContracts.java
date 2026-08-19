@@ -67,12 +67,34 @@ public final class IdentityContracts {
     /** Stamps one role's source ('orphaned' when its declaration went away). */
     public static final String SET_ROLE_SOURCE = "set-role-source";
 
+    // Attributes and assignment rules (docs/application-roles.md slice 4); managed-pack.
+    public static final String LIST_USER_ATTRIBUTES = "list-user-attributes";
+    public static final String INSERT_USER_ATTRIBUTE = "insert-user-attribute";
+    public static final String DELETE_USER_ATTRIBUTE = "delete-user-attribute";
+    public static final String LIST_ROLE_RULES = "list-role-rules";
+    public static final String LIST_RULE_CONDITIONS = "list-rule-conditions";
+    /** The enabled rules with their conditions, one joined read for sign-in evaluation. */
+    public static final String FIND_ENABLED_RULE_CONDITIONS = "find-enabled-rule-conditions";
+    public static final String CREATE_ROLE_RULE = "create-role-rule";
+    public static final String DELETE_ROLE_RULE = "delete-role-rule";
+    public static final String INSERT_RULE_CONDITION = "insert-rule-condition";
+    public static final String DELETE_RULE_CONDITIONS = "delete-rule-conditions";
+    /** A user's rule-produced assignments ({@code source = 'rule'}), for the converge. */
+    public static final String LIST_RULE_ASSIGNMENTS_BY_USER_ID = "list-rule-assignments-by-user-id";
+    public static final String GRANT_USER_ROLE_RULE = "grant-user-role-rule";
+    public static final String REVOKE_USER_ROLE_RULE = "revoke-user-role-rule";
+    /** Whether one org unit sits under another, via the managed closure. */
+    public static final String IS_ORG_DESCENDANT = "is-org-descendant";
+    public static final String LIST_USER_IDS = "list-user-ids";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
                 GRANT_USER_PERMISSION, REVOKE_USER_PERMISSION, ENSURE_ROLE, ENSURE_PERMISSION,
                 ASSIGN_USER_ROLE, ASSIGN_ROLE_PERMISSION, UPSERT_DECLARED_ROLE,
-                CLEAR_ROLE_PERMISSIONS, SET_ROLE_SOURCE);
+                CLEAR_ROLE_PERMISSIONS, SET_ROLE_SOURCE, CREATE_ROLE_RULE, DELETE_ROLE_RULE,
+                INSERT_RULE_CONDITION, DELETE_RULE_CONDITIONS, GRANT_USER_ROLE_RULE,
+                REVOKE_USER_ROLE_RULE);
     }
 
     private IdentityContracts() {

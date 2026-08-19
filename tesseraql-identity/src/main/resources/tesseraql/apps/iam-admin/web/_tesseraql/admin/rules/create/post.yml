@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.iamAdmin.rules.create
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  roleCode:
+    type: string
+    required: true
+  attribute:
+    type: string
+    required: false
+  kind:
+    type: string
+    required: true
+  value:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.createRoleRule
+      params:
+        roleCode: params.roleCode
+        attribute: params.attribute
+        kind: params.kind
+        value: params.value
+response:
+  redirect:
+    location: /_tesseraql/admin/rules?created=1

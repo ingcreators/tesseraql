@@ -52,6 +52,14 @@ implementation decision the design left open: orphan reporting needed a store-vi
 marker, so `tql_roles` gained a `source` column (`admin`/`declared`/`orphaned`) — the
 reconciler stamps it, the roles page badges it, re-declaring revives it, and
 manually-created roles are never touched.
+**Slice 4's first half is shipped** (attributes and assignment rules):
+`tql_user_attributes` merged into claims at sign-in (user-row columns win),
+`tql_role_rules`/`_conditions` with the six kinds (TQL-IAM-4032 at rule save; `subtree`
+requires the managed org foundation and evaluates over `tql_org_closure`), sign-in
+materialization with `source = 'rule'` provenance plus the recompute actions, and the
+rules page and attribute editors in IAM Admin. Shipped as two PRs by implementation
+choice: the SCIM enterprise capture, the SAML/OIDC attribute maps with re-sync, and the
+`tql_user_identities` federated keys are the second half.
 
 **Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
 application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,
