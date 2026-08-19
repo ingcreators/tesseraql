@@ -71,6 +71,7 @@
     <module>tesseraql-scim</module>
     <module>tesseraql-saml</module>
     <module>tesseraql-oidc</module>
+    <module>tesseraql-oauth</module>
     <module>tesseraql-test-core</module>
     <module>tesseraql-coverage-core</module>
     <module>tesseraql-operations</module>
@@ -96,6 +97,13 @@
 
     <!-- Third-party library versions -->
     <camel.version>4.22.0</camel.version>
+    <!--
+      The authorization server's grant layer (docs/token-issuance.md decision 1). camel-cxf-rest
+      at this Camel LTS manages the same CXF line, so the two stay aligned from one property.
+      The campaign's standing rule: track this version against the CXF advisory list at every
+      slice rather than pinning and forgetting it — the 2026 OAuth2 advisory batch is why.
+    -->
+    <cxf.version>4.2.3</cxf.version>
     <!--
       Vert.x arrives transitively through camel-platform-http-vertx; the gateway's relay
       (docs/stack-architecture.md decision 13) adds vertx-http-proxy on top of it. The two must be

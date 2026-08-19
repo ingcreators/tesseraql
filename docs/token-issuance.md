@@ -86,6 +86,17 @@ merely a preference: those are the classes carrying several of the 2026 advisori
 them is the structural half of the mitigation Decision 5 promised. The other half is tracking the
 CXF version rather than pinning and forgetting it, which is the campaign's standing work.
 
+*Shipped with slice 2 (2026-08-19), with the dependency floor measured rather than estimated.
+CXF 4.2.3 was re-verified as the latest release with no advisories beyond the August batch it
+fixes. The published POM makes the JAX-RS runtime a **compile** dependency, so the exclusion is
+explicit: `cxf-rt-frontend-jaxrs`, `cxf-rt-rs-client`, `cxf-rt-rs-security-jose-jaxrs` and
+`openjpa` are excluded, and the real floor is `jakarta.ws.rs-api`, `cxf-core` and
+`cxf-rt-rs-security-jose` — the JOSE **library** is demanded by the class verifier because
+`OAuthUtils` carries JOSE types in method signatures, and the JPA **API** jar rides
+compile-only because CXF's model classes are annotated with it. The unit suite drives the real
+handlers on exactly that classpath, so a regression of the floor fails the build rather than a
+deployment.*
+
 ### 2. The store holds codes, refresh tokens, clients and consents — and not access tokens
 
 The interface to implement is **twelve methods**, verified against 4.2.3 rather than taken from the
@@ -130,6 +141,16 @@ The tables ride the **`security` migration component**, beside sessions — whic
 host migrate once for the whole stack, before any runtime starts. The store implementation reads
 the framework datasource through the extension seam (`ExtensionContext.frameworkDataSource()`),
 which is the same road `OidcStateStore` already travels.
+
+*Shipped with slice 2 (2026-08-19): `tesseraql-oauth` with the twelve-method
+`TesseraqlOAuthDataProvider` over an `OAuthStore` seam (`JdbcOAuthStore` on the V5 tables,
+proven by a Testcontainers suite; the in-memory twin drives CXF's real handlers in unit tests).
+Codes and refresh tokens land only as SHA-256 hashes; consume and rotation are guarded
+single-winner writes, which is what closes in our own storage the TOCTOU race CXF shipped as
+CVE-2026-50631. One mechanical finding worth keeping: the handlers validate a grant's audience
+against the client's **registered** audiences, and a DCR client registers none — so the
+RFC 8707 resource rides the grant's extra properties end to end, and which resources a subject
+may reach stays the authorize endpoint's question, exactly where Decision 4 put it.*
 
 ### 3. Signing keys live in the framework datasource, so every replica serves one JWKS
 
@@ -435,7 +456,7 @@ dependency order given below, not the numeric one.
 | # | Slice |
 | --- | --- |
 | 1 | ~~Spike: `getAccessToken` reconstruction against CXF's `code` and `refresh` flows~~ — **done 2026-08-16**, and it retired its own question |
-| 2 | The `tesseraql-oauth` module, storage schema on the `security` migration component, the twelve-method provider proven against CXF's `code` and `refresh` grant flows in unit tests |
+| 2 | ~~The `tesseraql-oauth` module, storage schema on the `security` migration component, the twelve-method provider proven against CXF's `code` and `refresh` grant flows in unit tests~~ — **shipped 2026-08-19**; the measured corrections live in Decisions 1 and 2 |
 | 3 | Signing keys in the framework datasource, generation at the host's migration moment, JWKS publication at the origin (the fence gains `/.well-known/*`), `kid` rotation |
 | 4 | `/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE |
 | 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain |

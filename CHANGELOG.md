@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The authorization server's grant core: CXF's grant layer beneath TesseraQL's own storage**
+  (docs/token-issuance.md slice 2). A new `tesseraql-oauth` module drives CXF's real
+  authorization-code and refresh grant handlers over a twelve-method data provider backed by
+  TesseraQL's own tables — `tql_oauth_client`/`_code`/`_refresh`/`_consent` on the `security`
+  migration component (V5), migrated once per stack by the host. Codes and refresh tokens are
+  stored only as SHA-256 hashes; codes are single-use as a database property; refresh rotation
+  is a guarded single-winner update and a reused token retires its whole chain; PKCE is
+  required and `S256`-only; the `scope` parameter is accepted and grants nothing; access
+  tokens stay stateless behind an `AccessTokenSigner` seam the signing-key slice fills. The
+  JAX-RS runtime CXF's endpoints would drag is excluded — the grant layer runs on the
+  `jakarta.ws.rs` API jar, `cxf-core` and the JOSE library alone, proven by the unit suite.
+  No endpoint is served yet; `/authorize`, `/token` and `/register` arrive with their slices.
+
 - **A multi-role user acts as one role per tab — or per token — and the trail says which**
   (docs/application-roles.md slice 5, activation). The acting role rides the address:
   `/<member>/_as/<role>/…` is normalized by the stack relay into an internal header the

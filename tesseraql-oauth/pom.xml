@@ -1,0 +1,120 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.15.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-oauth</artifactId>
+  <name>Tesseraql OAuth</name>
+  <!--
+    The stack's authorization server (docs/token-issuance.md): CXF's OAuth2 grant layer beneath
+    TesseraQL's own endpoints, storage and signing. Same RuntimeExtension shape as tesseraql-oidc,
+    and the same boundary rule: never a dependency on tesseraql-camel-runtime
+    (docs/stack-architecture.md decision 15).
+  -->
+
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- RuntimeExtension SPI, so the authorization-server surface self-installs. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-compiler</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <!-- /authorize authenticates against the framework's own users, never a second directory. -->
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-identity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-security</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!--
+      The grant layer only (docs/token-issuance.md decision 1): the shipped endpoint classes and
+      the JAX-RS runtime they drag are excluded, along with the storage/caching providers'
+      optional backends — the classes carrying several of the 2026 advisories are exactly the
+      ones this build replaces. What the grant classes compile against is the jakarta.ws.rs API
+      jar and cxf-core, declared below as the direct dependencies they are.
+    -->
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-rs-security-oauth2</artifactId>
+      <version>${cxf.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.cxf</groupId>
+          <artifactId>cxf-rt-frontend-jaxrs</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.cxf</groupId>
+          <artifactId>cxf-rt-rs-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.cxf</groupId>
+          <artifactId>cxf-rt-rs-security-jose-jaxrs</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.openjpa</groupId>
+          <artifactId>openjpa</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-core</artifactId>
+      <version>${cxf.version}</version>
+    </dependency>
+    <!--
+      Measured at slice 2: the grant layer's OAuthUtils carries JOSE types in its method
+      signatures, so the class verifier demands them at load — the JOSE library (not the
+      excluded -jaxrs binding) is part of the grant layer's real floor.
+    -->
+    <dependency>
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-rs-security-jose</artifactId>
+      <version>${cxf.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.ws.rs</groupId>
+      <artifactId>jakarta.ws.rs-api</artifactId>
+      <version>3.1.0</version>
+    </dependency>
+    <!--
+      Compile-time only: CXF's model classes carry JPA annotations, and javac under -Werror
+      refuses class files whose annotation constants it cannot resolve. The API jar makes them
+      resolvable; nothing here persists through JPA and the jar does not ship.
+    -->
+    <dependency>
+      <groupId>jakarta.persistence</groupId>
+      <artifactId>jakarta.persistence-api</artifactId>
+      <version>3.1.0</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+</project>
