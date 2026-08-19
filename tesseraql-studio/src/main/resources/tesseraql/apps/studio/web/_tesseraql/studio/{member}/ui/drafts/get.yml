@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.studio.drafts
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
+  applied:
+    type: string
+    required: false
+  discarded:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.drafts
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        q: params.q
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: drafts.html
+    model:
+      page: main
+      applied: params.applied
+      discarded: params.discarded

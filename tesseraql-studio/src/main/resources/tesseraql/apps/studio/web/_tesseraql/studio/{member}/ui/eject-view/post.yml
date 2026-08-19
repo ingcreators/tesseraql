@@ -1,0 +1,44 @@
+version: tesseraql/v1
+id: tql.studio.ejectView
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+  confirm:
+    type: string
+    required: false
+  force:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.ejectView
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        shellPermissions: principal.permissions
+        path: params.path
+        confirm: params.confirm
+        force: params.force
+response:
+  html:
+    status: 200
+    template: eject-view.html
+    model:
+      eject: main

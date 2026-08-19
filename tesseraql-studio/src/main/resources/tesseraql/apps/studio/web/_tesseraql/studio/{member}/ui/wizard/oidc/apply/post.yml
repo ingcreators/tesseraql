@@ -1,0 +1,62 @@
+version: tesseraql/v1
+id: tql.studio.wizard.oidc.apply
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  discoveryUri:
+    type: string
+    required: true
+  clientId:
+    type: string
+    required: true
+  redirectUri:
+    type: string
+    required: true
+  scopes:
+    type: string
+    required: false
+  postLoginUrl:
+    type: string
+    required: false
+  provision:
+    type: string
+    required: false
+  clientSecret:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.wizard.oidc.apply
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        discoveryUri: params.discoveryUri
+        clientId: params.clientId
+        redirectUri: params.redirectUri
+        scopes: params.scopes
+        postLoginUrl: params.postLoginUrl
+        provision: params.provision
+        clientSecret: params.clientSecret
+        permissions: principal.permissions
+        actor: principal.loginId
+response:
+  html:
+    status: 200
+    template: applied.html
+    model:
+      result: main

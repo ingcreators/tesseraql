@@ -27,15 +27,21 @@ import javax.crypto.spec.SecretKeySpec;
  */
 final class ShareLinks {
 
-    private static final String SHARE_BASE = "/_tesseraql/docs/share/";
+    /**
+     * The member-shaped share address (docs/studio-shell.md structural decision 2): a share
+     * link names the member whose docs it opens, because the pages serve from the shell's
+     * one origin, per member.
+     */
+    private final String shareBase;
     private static final long DEFAULT_TTL_SECONDS = 7 * 24 * 3600L;
 
     private final byte[] secret;
     private final long ttlSeconds;
 
-    private ShareLinks(byte[] secret, long ttlSeconds) {
+    private ShareLinks(byte[] secret, long ttlSeconds, String member) {
         this.secret = secret;
         this.ttlSeconds = ttlSeconds;
+        this.shareBase = "/_tesseraql/docs/share/" + member + "/";
     }
 
     /**
@@ -43,17 +49,17 @@ final class ShareLinks {
      * its presence enables sharing) and the optional {@code tesseraql.docs.share.ttl} link lifetime
      * (a duration like {@code 7d}, default 7 days). With no secret, sharing is disabled.
      */
-    static ShareLinks from(AppConfig config) {
+    static ShareLinks from(AppConfig config, String member) {
         String secret = config.getString("tesseraql.docs.share.secret").orElse(null);
         if (secret == null || secret.isBlank()) {
-            return new ShareLinks(null, 0);
+            return new ShareLinks(null, 0, member);
         }
         long ttl = config.getString("tesseraql.docs.share.ttl")
                 .map(Durations::parse)
                 .map(java.time.Duration::toSeconds)
                 .filter(seconds -> seconds > 0)
                 .orElse(DEFAULT_TTL_SECONDS);
-        return new ShareLinks(secret.getBytes(StandardCharsets.UTF_8), ttl);
+        return new ShareLinks(secret.getBytes(StandardCharsets.UTF_8), ttl, member);
     }
 
     /**
@@ -61,9 +67,9 @@ final class ShareLinks {
      * a disabled signer; the ttl is used as given (so a non-positive value mints already-expired
      * links for verifying the expiry path).
      */
-    static ShareLinks of(String secret, long ttlSeconds) {
+    static ShareLinks of(String secret, long ttlSeconds, String member) {
         return new ShareLinks(secret == null ? null : secret.getBytes(StandardCharsets.UTF_8),
-                ttlSeconds);
+                ttlSeconds, member);
     }
 
     /** Whether docs sharing is configured (a signing secret is present). */
@@ -122,7 +128,7 @@ final class ShareLinks {
         }
         long exp = Instant.now().getEpochSecond() + ttlSeconds;
         String separator = query.indexOf('?') < 0 ? "?" : "&";
-        return SHARE_BASE + query + separator + "exp=" + exp + "&sig=" + sign(label, parts, exp);
+        return shareBase + query + separator + "exp=" + exp + "&sig=" + sign(label, parts, exp);
     }
 
     private boolean verify(String label, List<String> parts, String exp, String sig) {

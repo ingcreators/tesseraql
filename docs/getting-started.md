@@ -42,7 +42,7 @@ Verify: `tesseraql --version`.
 tesseraql new myapp                  # scaffold into your own repo (config, a migration, routes, tests)
 cd myapp
 docker compose up -d                 # a local PostgreSQL (or point config at your own)
-tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /<name>/_tesseraql/studio
+tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /_tesseraql/studio
 tesseraql scaffold crud --app . --table items
 ```
 
@@ -57,7 +57,7 @@ printf 'change-me' > admin.pw
 tesseraql identity-schema --app . --admin-login admin --admin-password-file admin.pw
 ```
 
-Then open `http://localhost:8080/myapp/_tesseraql/studio` and sign in with that login. The same
+Then open `http://localhost:8080/_tesseraql/studio` and sign in with that login. The same
 command works under `--embedded-db`: `dev` leaves the running embedded database's JDBC URL in
 `work/embedded-db.jdbc`, and the database-touching commands (`identity-schema`, `migrate`,
 `scaffold crud`, `test`, ...) fall back to it under `--app .` whenever the configured

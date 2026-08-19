@@ -1,0 +1,25 @@
+version: tesseraql/v1
+id: tql.studio.decisionBuilder
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.decisionBuilder
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+
+response:
+  html:
+    status: 200
+    template: decision-builder.html
+    model:
+      db: main

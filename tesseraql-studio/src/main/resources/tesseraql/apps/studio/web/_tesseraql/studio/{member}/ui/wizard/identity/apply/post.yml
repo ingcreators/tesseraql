@@ -1,0 +1,54 @@
+version: tesseraql/v1
+id: tql.studio.wizard.identity.apply
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  realmId:
+    type: string
+    required: true
+  type:
+    type: string
+    required: true
+  datasource:
+    type: string
+    required: true
+  sqlRoot:
+    type: string
+    required: false
+  userManagement:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.wizard.identity.apply
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        realmId: params.realmId
+        type: params.type
+        datasource: params.datasource
+        sqlRoot: params.sqlRoot
+        userManagement: params.userManagement
+        permissions: principal.permissions
+        actor: principal.loginId
+response:
+  html:
+    status: 200
+    template: applied.html
+    model:
+      result: main

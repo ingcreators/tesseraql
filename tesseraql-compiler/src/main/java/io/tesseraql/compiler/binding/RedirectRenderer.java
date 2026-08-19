@@ -55,6 +55,25 @@ public final class RedirectRenderer implements Processor {
         negotiate(exchange, redirect.effectiveStatus(), location.toString());
     }
 
+    /**
+     * The studio shell's member segment (docs/studio-shell.md structural decision 2): a studio
+     * page serving under {@code /_tesseraql/studio/<member>/} redirects within the same
+     * member's workshop, so a studio-addressed location gains the segment here — the same rule
+     * the link builder applies to emitted links, keeping the app tree member-agnostic.
+     */
+    private static String withStudioMember(Exchange exchange, String location) {
+        if (location == null || !location.startsWith("/_tesseraql/studio/ui")) {
+            return location;
+        }
+        String member = exchange.getMessage().getHeader("member", String.class);
+        String route = exchange.getFromRouteId();
+        if (member == null || route == null || !route.startsWith("tql.studio.")) {
+            return location;
+        }
+        return "/_tesseraql/studio/" + member
+                + location.substring("/_tesseraql/studio".length());
+    }
+
     private static boolean isHtmxRequest(Exchange exchange) {
         return "true".equalsIgnoreCase(exchange.getMessage().getHeader("HX-Request", String.class));
     }
@@ -71,7 +90,8 @@ public final class RedirectRenderer implements Processor {
      * place the prefix has to go.
      */
     public static void negotiate(Exchange exchange, int status, String location) {
-        String target = io.tesseraql.camel.BasePath.url(exchange, location);
+        String target = io.tesseraql.camel.BasePath.url(exchange,
+                withStudioMember(exchange, location));
         if (isHtmxRequest(exchange)) {
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
             exchange.getMessage().setHeader("HX-Redirect", target);

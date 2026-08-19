@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.studio.mail.composer
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+  saved:
+    type: string
+    required: false
+  applied:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.mailComposer
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellPermissions: principal.permissions
+        path: query.path
+response:
+  html:
+    status: 200
+    template: composer.html
+    model:
+      cmp: main
+      saved: params.saved
+      applied: params.applied
+    headers:
+      # frame-src 'self' admits the sandboxed srcdoc iframe previewing the rendered mail
+      # (same policy as the source editor's rendered preview).
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

@@ -1,0 +1,45 @@
+version: tesseraql/v1
+id: tql.studio.policy.removeRule
+kind: route
+recipe: command-json
+
+# Revokes a role/permission rule from a policy (writes the reduced set to config/overlay.yml), then
+# rebinds the live PolicyEngine. Edit-gated in the provider.
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  policy:
+    type: string
+    required: true
+  kind:
+    type: string
+    required: true
+  value:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.policyRemoveRule
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        policy: params.policy
+        kind: params.kind
+        value: params.value
+        actor: principal.loginId
+        principalPermissions: principal.permissions
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/security?removed=1

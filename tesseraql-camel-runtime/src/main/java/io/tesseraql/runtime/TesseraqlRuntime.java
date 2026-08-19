@@ -1292,7 +1292,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // the conflict check spans every hosted app.
             List<SystemApps.MountedApp> mountedApps = SystemApps.load(manifest.config(), appHome,
                     hostedMember
-                            ? java.util.Set.of("ops-console", "auth-ui", "account", "iam-admin")
+                            ? java.util.Set.of("ops-console", "auth-ui", "account", "iam-admin",
+                                    "studio")
                             : java.util.Set.of());
             SystemApps.requireNoRouteConflicts(manifest, mountedApps);
             for (SystemApps.MountedApp mounted : mountedApps) {
@@ -1325,8 +1326,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             } else if (hostedApps.contains("ops-console")) {
                 systemNav.put("consoleHref", basePath + "/_tesseraql/ops/console");
             }
-            if (hostedApps.contains("studio")) {
-                systemNav.put("studioHref", basePath + "/_tesseraql/studio/ui");
+            if (hostedMember) {
+                // The workshop is the stack's, at the origin scope — and only where the host
+                // says a workshop exists at all (docs/studio-shell.md structural decision 1),
+                // so a production member's shell carries no Studio link.
+                if (hostContext.workshop()) {
+                    systemNav.put("studioHref", "/_tesseraql/studio");
+                }
+            } else if (hostedApps.contains("studio")) {
+                systemNav.put("studioHref", basePath + "/_tesseraql/studio");
             }
             if (hostedMember) {
                 // IAM Admin is the stack's, mounted once at the origin scope (docs/stack-shells.md
@@ -2221,7 +2229,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.RUNTIME_SEAMS_BEAN, new RuntimeSeams(
                     port, appName, java.util.Map.copyOf(dataSources), tenantDataSources,
                     calendarDecisions, notificationChannels, reloader, sseEndpoints::add,
-                    httpOutbound, modules.loader(), datasourceDialect(manifest.config())));
+                    httpOutbound, modules.loader(), datasourceDialect(manifest.config()),
+                    hostContext != null,
+                    hostContext != null && hostContext.workshop(),
+                    hostContext == null || hostContext.stackMembers() == null
+                            ? null
+                            : hostContext.stackMembers().stream()
+                                    .map(io.tesseraql.operations.app.InstalledApp::name)
+                                    .toList(),
+                    hostContext == null ? null : hostContext.memberOrigins()));
             // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
             // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).
             for (io.tesseraql.compiler.ext.RuntimeExtension extension : RuntimeExtensions
@@ -2781,6 +2797,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 ? loaded.withConfig(withStackSecurity(loaded.config(),
                         hostContext.surfaceSecurity()))
                 : loaded;
+        if (hostContext.workshop() && hostContext.stackMembers() != null) {
+            // The workshop's shell mounts on the surface runtime when the host said a workshop
+            // exists (docs/studio-shell.md structural decision 2) — a topology graft over the
+            // portal's static disable, through the same merge the stack file's security rides.
+            // No configuration reaches here under host, so nothing can turn it on there.
+            manifest = manifest.withConfig(withStackSecurityPath(manifest.config(),
+                    java.util.List.of("apps", "studio"),
+                    java.util.Map.of("enabled", "true")));
+        }
         if (hostContext.stackIssuerJwt() == null) {
             return manifest;
         }
@@ -2801,9 +2826,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static io.tesseraql.yaml.config.AppConfig withStackSecurity(
             io.tesseraql.yaml.config.AppConfig config,
             java.util.Map<String, Object> security) {
+        return withStackSecurityPath(config, java.util.List.of("security"), security);
+    }
+
+    /** As {@link #withStackSecurity}, merging {@code values} under any {@code tesseraql.*} path. */
+    private static io.tesseraql.yaml.config.AppConfig withStackSecurityPath(
+            io.tesseraql.yaml.config.AppConfig config, java.util.List<String> path,
+            java.util.Map<String, Object> values) {
         java.util.Map<String, Object> root = SystemApps.deepCopy(config.root());
-        java.util.Map<String, Object> tesseraql = SystemApps.childMap(root, "tesseraql");
-        mergeOver(SystemApps.childMap(tesseraql, "security"), security);
+        java.util.Map<String, Object> target = SystemApps.childMap(root, "tesseraql");
+        for (String segment : path) {
+            target = SystemApps.childMap(target, segment);
+        }
+        mergeOver(target, values);
         return new io.tesseraql.yaml.config.AppConfig(root);
     }
 

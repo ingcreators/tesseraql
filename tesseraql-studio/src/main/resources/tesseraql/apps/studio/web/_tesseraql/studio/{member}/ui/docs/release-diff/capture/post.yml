@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.docs.releaseDiff.capture
+kind: route
+recipe: command-json
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+
+# Captures both diff baselines in one action (docs/studio-schema-lifecycle.md):
+# schema.baseline.json copies the schema sidecar, openapi.baseline.json persists the
+# live OpenAPI document. Replaces the hand-copy instructions this page used to print.
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.baselineCapture
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        actor: principal.loginId
+        permissions: principal.permissions
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/docs/release-diff?captured=1

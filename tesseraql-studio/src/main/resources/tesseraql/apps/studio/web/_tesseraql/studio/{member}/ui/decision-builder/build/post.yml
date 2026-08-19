@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.studio.decisionBuilder.build
+kind: route
+recipe: query-html
+
+# Generates the decide: YAML referencing one declared decision (pure text; copy into the route).
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  decision:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.decisionBuilder.build
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        decision: params.decision
+response:
+  html:
+    status: 200
+    template: build.html
+    model:
+      db: main

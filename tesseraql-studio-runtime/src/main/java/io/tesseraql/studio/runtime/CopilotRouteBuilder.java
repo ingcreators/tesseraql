@@ -27,14 +27,20 @@ import org.apache.camel.builder.RouteBuilder;
 final class CopilotRouteBuilder extends RouteBuilder {
 
     private static final String AUTH = "tesseraql-auth:authenticate?auth=browser";
-    private static final String PAGE = "/_tesseraql/studio/ui/copilot";
 
     private final CopilotService copilot;
     private final StudioEdit studioEdit;
+    /** The member-shaped page address: {@code /_tesseraql/studio/<member>/ui/copilot}. */
+    private final String page;
 
-    CopilotRouteBuilder(CopilotService copilot, StudioEdit studioEdit) {
+    CopilotRouteBuilder(CopilotService copilot, StudioEdit studioEdit, String member) {
         this.copilot = copilot;
         this.studioEdit = studioEdit;
+        this.page = pageOf(member);
+    }
+
+    private static String pageOf(String member) {
+        return "/_tesseraql/studio/" + member + "/ui/copilot";
     }
 
     @Override
@@ -42,7 +48,7 @@ final class CopilotRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().post(PAGE + "/send").to("direct:tql.copilot.send");
+        rest().post(page + "/send").to("direct:tql.copilot.send");
 
         // The chat-messages recipe's dual-path send: an htmx caller gets the user item, the
         // streaming placeholder, and an out-of-band composer clear; a no-JS post runs the
@@ -65,12 +71,12 @@ final class CopilotRouteBuilder extends RouteBuilder {
                         exchange.getMessage().setBody(CopilotFragments.entryHtml(
                                 new CopilotService.Entry("user", message, null))
                                 + CopilotFragments.placeholder(io.tesseraql.camel.BasePath.url(
-                                        exchange, PAGE + "/stream?turn=" + turn))
+                                        exchange, page + "/stream?turn=" + turn))
                                 + CopilotFragments.messageInput(true));
                         return;
                     }
                     copilot.send(actor, message, canEdit);
-                    io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, 303, PAGE);
+                    io.tesseraql.compiler.binding.RedirectRenderer.negotiate(exchange, 303, page);
                 });
 
     }
@@ -83,8 +89,8 @@ final class CopilotRouteBuilder extends RouteBuilder {
      * markers in between, and done carrying the final transcript markup.
      */
     static void registerStream(org.apache.camel.CamelContext context, int port,
-            CopilotService copilot, StudioEdit studioEdit) {
-        SseRoutes.register(context, port, PAGE + "/stream", (principal, query) -> {
+            CopilotService copilot, StudioEdit studioEdit, String member) {
+        SseRoutes.register(context, port, pageOf(member) + "/stream", (principal, query) -> {
             if (copilot == null) {
                 throw new TqlException(new TqlErrorCode(TqlDomain.STUDIO, 4235),
                         "The copilot is not configured"

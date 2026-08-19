@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.config
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  saved:
+    type: string
+    required: false
+  # Key/value search (docs/studio-ux-refresh.md slice 6): narrows the effective-config
+  # table server-side; the header count always shows the full total.
+  q:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.config
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellPermissions: principal.permissions
+        q: params.q
+response:
+  html:
+    status: 200
+    template: config.html
+    model:
+      cfg: main
+      saved: params.saved

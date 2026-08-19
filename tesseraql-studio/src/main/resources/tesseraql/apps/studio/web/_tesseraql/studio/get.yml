@@ -1,16 +1,22 @@
 version: tesseraql/v1
 id: tql.studio.home
 kind: route
-recipe: query-json
+recipe: query-html
 
-# Convenience alias. The Studio UI lives under /_tesseraql/studio/ui, but /_tesseraql/studio is the
-# natural entry point users (and the getting-started docs) reach for. This public route 302-redirects
-# there so the bare path resolves instead of 404ing; the /ui landing page enforces its own
-# auth: browser, so opening the alias is no less guarded than opening the UI directly.
-security:
-  auth: public
+# The workshop switcher (docs/studio-shell.md structural decision 2): one Studio per stack,
+# listing the members whose tql.studio.edit atom the caller holds — deny-by-default, so no
+# grants means an empty switcher, not an open door. Each member's workshop re-checks the same
+# atom on every delegated call; this page only decides what is listed.
+
+sources:
+  main:
+    service:
+      name: studio.shell.nav
+      params:
+        shellPermissions: principal.permissions
 
 response:
-  redirect:
-    status: 302
-    location: /_tesseraql/studio/ui
+  html:
+    template: home.html
+    model:
+      studio: main

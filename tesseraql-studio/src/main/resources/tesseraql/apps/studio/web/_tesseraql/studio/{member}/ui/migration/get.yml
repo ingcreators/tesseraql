@@ -1,0 +1,24 @@
+version: tesseraql/v1
+id: tql.studio.migration
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.migration.new
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: migration.html
+    model:
+      mig: main

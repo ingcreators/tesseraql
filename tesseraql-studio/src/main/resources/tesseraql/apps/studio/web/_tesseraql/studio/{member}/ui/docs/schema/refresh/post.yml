@@ -1,0 +1,35 @@
+version: tesseraql/v1
+id: tql.studio.docs.schema.refresh
+kind: route
+recipe: command-json
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+
+# Introspects the runtime's own datasources and rewrites the schema sidecar
+# (docs/studio-schema-lifecycle.md) - the in-Studio replacement for the schema goal.
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.schemaRefresh
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        actor: principal.loginId
+        permissions: principal.permissions
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/docs/schema?refreshed=1

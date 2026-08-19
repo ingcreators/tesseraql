@@ -636,7 +636,7 @@ public final class AppScaffolder {
             ## CLI path (interactive dev loop)
 
             ```sh
-            tesseraql dev                    # runs the stack; this app at /__APP_NAME__/, Studio at /__APP_NAME__/_tesseraql/studio
+            tesseraql dev                    # runs the stack; this app at /__APP_NAME__/, Studio at /_tesseraql/studio
             tesseraql scaffold crud --app . --table items
             tesseraql lint --app .
             tesseraql test --app .

@@ -1,17 +1,20 @@
 # Hosting several applications
 
-One TesseraQL runtime serves one application, plus the framework's own surfaces — Studio, the
-[operations console](ops-console.md), IAM Admin, the account pages and the sign-in pages. To
-run several applications on one machine, start them together with `tesseraql host`. Each gets
-its own runtime, and one port fronts them all.
+One TesseraQL runtime serves one application; the framework's own surfaces — the sign-in and
+account pages, the portal, the [operations console](ops-console.md) and IAM Admin — are the
+stack's, served once at the origin scope. To run several applications on one machine, start
+them together with `tesseraql host`. Each gets its own runtime, and one port fronts them all.
+Studio exists only in development: a hosted production stack mounts no Studio at all, and no
+configuration changes that ([studio-shell.md](studio-shell.md)) — changes reach a host through
+`deploy`, never an editor.
 
 ```sh
 tesseraql host --stack /srv/tesseraql/apps --port 8080
 ```
 
 Every application the directory holds starts in its own runtime: its own Camel context, its own
-datasource set, its own Studio, its own traces. A gateway on the given port routes each request
-to the right one.
+datasource set, its own traces. A gateway on the given port routes each request to the right
+one.
 
 ## What `--stack` accepts
 
@@ -309,9 +312,9 @@ transport depend on.
 
 ## What isolation gives you, and what it does not
 
-Each runtime is separate: a separate Camel context, URL space, Studio, trace buffer and
-configuration. A route in one application cannot collide with a route in another, and Studio
-shows the application whose runtime serves it.
+Each runtime is separate: a separate Camel context, URL space, trace buffer and
+configuration. A route in one application cannot collide with a route in another, and in
+development each application's workshop edits exactly its own runtime's source.
 
 **Data isolation is enabled, not guaranteed.** The framework does not verify that co-hosted
 applications reach different data, and does not claim to. An application declares the shape of

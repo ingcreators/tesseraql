@@ -69,6 +69,12 @@ package io.tesseraql.runtime;
  *                            context so the authenticated deploy endpoint can write the install
  *                            root's intent through the host that owns it; {@code null} everywhere
  *                            else — no pen, no endpoint
+ * @param workshop            whether the workshop may exist in this stack (docs/studio-shell.md
+ *                            structural decision 1): the development loop is running AND the
+ *                            stack is source trees, not an install root. Only the host can know
+ *                            either fact; the runtime binds it as a topology bean, and the
+ *                            workshop extension keys its faces on it. Always {@code false}
+ *                            under {@code host} — no configuration turns Studio on there
  */
 public record HostContext(String basePath, String cookiePath, String externalOrigin,
         javax.sql.DataSource frameworkDataSource,
@@ -78,7 +84,8 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         java.io.File extraModules,
         java.util.Map<String, Object> surfaceSecurity,
         DeployPen deployPen,
-        java.util.Map<String, Object> stackIssuerJwt) {
+        java.util.Map<String, Object> stackIssuerJwt,
+        boolean workshop) {
 
     /**
      * The host's live member-origin lookup: which internal port answers for a member's stable or
@@ -126,7 +133,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     public static HostContext stack() {
         return new HostContext(null, "/", null, null, null, null, null, null, null, null,
-                null);
+                null, false);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -138,7 +145,8 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null, null, extraModules, null, null, stackIssuerJwt);
+                mainDataSourceOverride, null, null, extraModules, null, null, stackIssuerJwt,
+                workshop);
     }
 
     /**
@@ -155,7 +163,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             DeployPen deployPen) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null,
-                surfaceSecurity, deployPen, stackIssuerJwt);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
@@ -163,14 +171,24 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
+    }
+
+    /**
+     * These settings, carrying the host's workshop verdict (docs/studio-shell.md structural
+     * decision 1): {@code dev} over source trees and nothing else.
+     */
+    HostContext withWorkshop(boolean workshop) {
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
     }
 
     /**
@@ -180,6 +198,6 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext withStackIssuer(java.util.Map<String, Object> stackIssuerJwt) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
     }
 }

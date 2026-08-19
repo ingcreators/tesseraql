@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.studio.sqlBuilder.columns
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  table:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.sqlBuilder.columns
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        table: params.table
+response:
+  html:
+    status: 200
+    template: columns.html
+    model:
+      cols: main

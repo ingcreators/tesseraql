@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.studio.migration.dryRun
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+  content:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.migration.dryRun
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        path: params.path
+        content: params.content
+response:
+  html:
+    status: 200
+    template: dry-run.html
+    model:
+      dryRun: main

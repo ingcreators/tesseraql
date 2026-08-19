@@ -1,0 +1,50 @@
+version: tesseraql/v1
+id: tql.studio.wizard.scim.apply
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  groups:
+    type: string
+    required: false
+  outbound:
+    type: string
+    required: false
+  outboundUrl:
+    type: string
+    required: false
+  tokenRef:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.wizard.scim.apply
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        groups: params.groups
+        outbound: params.outbound
+        outboundUrl: params.outboundUrl
+        tokenRef: params.tokenRef
+        permissions: principal.permissions
+        actor: principal.loginId
+response:
+  html:
+    status: 200
+    template: applied.html
+    model:
+      result: main

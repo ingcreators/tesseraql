@@ -1,0 +1,38 @@
+version: tesseraql/v1
+id: tql.studio.migration.migrate
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  confirm:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.migration.migrate
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        confirm: params.confirm
+        actor: principal.loginId
+        permissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: migrate.html
+    model:
+      mig: main

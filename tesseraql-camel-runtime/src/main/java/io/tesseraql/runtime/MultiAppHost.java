@@ -210,6 +210,12 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         HostContext context = dev != null && dev.extraModules() != null
                 ? settled.withExtraModules(dev.extraModules())
                 : settled;
+        // The workshop exists only where the source is (docs/studio-shell.md structural
+        // decision 1): the development loop is running AND the stack is source trees. A dev
+        // over an install root runs packages — a run-and-observe shape whose uses are all
+        // betrayed by edits landing in the extracted tree — and host never qualifies.
+        context = context.withWorkshop(dev != null
+                && !java.nio.file.Files.isRegularFile(installRoot.resolve("catalog.json")));
         // One issuer per stack (docs/token-issuance.md decision 9): with the authorization
         // server enabled, every runtime — members and the surface alike — validates the same
         // derived RS256 block instead of holding per-app secrets.

@@ -114,9 +114,11 @@ class EmbeddedDbDevIntegrationTest {
                     .followRedirects(HttpClient.Redirect.NEVER).build();
 
             // A browser opening a protected Studio page with no session is bounced to the login page
-            // (post/redirect/get), carrying the original target as ?redirect=.
+            // (post/redirect/get), carrying the original target as ?redirect=. The workshop is
+            // member-shaped (docs/studio-shell.md): the unhosted boot's one member is the app.
             HttpResponse<Void> unauth = client.send(HttpRequest.newBuilder()
-                    .uri(URI.create(base + "/_tesseraql/studio/ui")).header("Accept", "text/html")
+                    .uri(URI.create(base + "/_tesseraql/studio/demo/ui"))
+                    .header("Accept", "text/html")
                     .GET().build(), HttpResponse.BodyHandlers.discarding());
             assertThat(unauth.statusCode()).isEqualTo(302);
             assertThat(unauth.headers().firstValue("location").orElseThrow())
@@ -128,11 +130,12 @@ class EmbeddedDbDevIntegrationTest {
                     .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                             io.tesseraql.security.session.SessionStore.class);
             String sid = sessions.create(new io.tesseraql.security.Principal("dev", "dev", "Dev",
-                    null, java.util.List.of(), java.util.List.of("ADMIN"), java.util.List.of(),
+                    null, java.util.List.of(), java.util.List.of("ADMIN"),
+                    java.util.List.of("tql.studio.edit.*"),
                     java.util.Map.of()),
                     io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
             HttpResponse<Void> authed = client.send(HttpRequest.newBuilder()
-                    .uri(URI.create(base + "/_tesseraql/studio/ui"))
+                    .uri(URI.create(base + "/_tesseraql/studio/demo/ui"))
                     .header("Cookie", sessions.cookieName() + "=" + sid)
                     .GET().build(), HttpResponse.BodyHandlers.discarding());
             assertThat(authed.statusCode()).isEqualTo(200);
@@ -145,7 +148,7 @@ class EmbeddedDbDevIntegrationTest {
     }
 
     @Test
-    void mountsStudioAndRedirectsTheBarePathToTheUiLanding(@TempDir Path dir) throws Exception {
+    void mountsStudioAndTheBarePathIsTheSwitcher(@TempDir Path dir) throws Exception {
         Path app = dir.resolve("demo");
         AppScaffolder scaffolder = new AppScaffolder();
         scaffolder.writeNew(app, scaffolder.scaffold("demo"));
@@ -155,19 +158,21 @@ class EmbeddedDbDevIntegrationTest {
         try {
             runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
 
-            // The bundled Studio app mounts via the ServiceLoader; the bare /_tesseraql/studio is a
-            // public alias that 302-redirects to the real UI landing under /ui (which requires a
-            // browser session). Without following the redirect we see the alias's own response.
+            // The bundled Studio app mounts via the ServiceLoader; the bare /_tesseraql/studio
+            // is the workshop switcher now (docs/studio-shell.md structural decision 2) — a
+            // browser-session page, so an anonymous browser is bounced to the sign-in with the
+            // switcher as the redirect target.
             HttpResponse<Void> response = HttpClient.newBuilder()
                     .followRedirects(HttpClient.Redirect.NEVER).build()
                     .send(HttpRequest.newBuilder()
                             .uri(URI.create(
                                     "http://localhost:" + runtime.port() + "/_tesseraql/studio"))
+                            .header("Accept", "text/html")
                             .GET().build(), HttpResponse.BodyHandlers.discarding());
 
             assertThat(response.statusCode()).isEqualTo(302);
-            assertThat(response.headers().firstValue("Location"))
-                    .hasValue("/_tesseraql/studio/ui");
+            assertThat(response.headers().firstValue("Location").orElseThrow())
+                    .startsWith("/_tesseraql/login?redirect=");
         } finally {
             if (runtime != null) {
                 runtime.close();

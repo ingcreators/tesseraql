@@ -56,13 +56,18 @@ public final class FrameworkSurfaces {
                     "the reset confirmation form; authorized by the emailed token, not a session"),
             Map.entry("tql.auth.invite",
                     "the invitation acceptance form; authorized by the emailed token"),
-            Map.entry("tql.studio.home", "declared auth: public in the bundled Studio app"),
             Map.entry("tql.studio.docs.share.route",
                     "a shareable documentation page; declared auth: public in the Studio app"),
             Map.entry("tql.studio.docs.share.table",
                     "a shareable documentation page; declared auth: public in the Studio app"),
             Map.entry("tql.studio.docs.share.coverage",
                     "a shareable documentation page; declared auth: public in the Studio app"),
+            Map.entry("studio.workshop.public",
+                    "the token-authorized share providers' delegation endpoint"
+                            + " (docs/studio-shell.md structural decision 2): public by design,"
+                            + " like the share pages it answers for — the op must be one of the"
+                            + " enumerated PUBLIC rows, and the provider verifies the signed,"
+                            + " expiring link itself"),
             // Moved from PROCESSOR_ENFORCED, where they attested a gate that does not run
             // (docs/audit-hardening.md Decision 8). The wording is McpRouteBuilder's own, which
             // has always described the surface accurately; only this registry disagreed.

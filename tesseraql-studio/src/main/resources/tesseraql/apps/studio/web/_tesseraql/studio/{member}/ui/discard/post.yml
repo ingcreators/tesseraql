@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.discard
+kind: route
+recipe: command-json
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.discard
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        path: params.path
+        permissions: principal.permissions
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/source?path={params.path}

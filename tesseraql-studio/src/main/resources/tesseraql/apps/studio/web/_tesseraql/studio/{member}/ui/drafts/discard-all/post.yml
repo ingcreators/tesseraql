@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.studio.draftsDiscardAll
+kind: route
+recipe: command-json
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+
+# Discards every pending draft at once (Studio Drafts bulk actions). Edit-gated in the provider;
+# the UI guards it behind an hc-confirm modal. Redirects back to the (now empty) Drafts list.
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.draftsDiscardAll
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        shellPermissions: principal.permissions
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/drafts?discarded=1

@@ -50,7 +50,7 @@ the running embedded database.)
 
 ## The Studio tour
 
-Open `http://localhost:8080/inventory/_tesseraql/studio` and walk the loop the framework is built
+Open `http://localhost:8080/_tesseraql/studio`, pick `inventory`, and walk the loop the framework is built
 around — every stop is live against the seeded data:
 
 1. **Explorer** — every route, view, job and workflow the app serves, straight from the

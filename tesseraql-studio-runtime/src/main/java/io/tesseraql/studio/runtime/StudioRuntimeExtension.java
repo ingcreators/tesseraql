@@ -50,6 +50,30 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
         RealmConfig realm = extension.bean(TesseraqlProperties.IDENTITY_REALM_BEAN,
                 RealmConfig.class);
         RouteReloader reloader = seams.reloader();
+        // Confirm-diff-before-every-apply (Studio backlog D5 follow-up): an opt-in gate that
+        // makes the editor acknowledge the diff before each apply, not only on a conflict.
+        boolean confirmApply = manifest.config()
+                .getString("tesseraql.studio.confirmApply")
+                .map(Boolean::parseBoolean).orElse(false);
+        // Who may edit is the tql.studio.edit.<name> atom, per application — the retired
+        // editRoles allow-list was the model's last framework surface reading role names.
+        StudioEdit studioEdit = new StudioEdit(seams.appName(), confirmApply);
+
+        // One extension, three faces by topology (docs/studio-shell.md structural decision 3).
+        if (seams.hosted() && !seams.workshop()) {
+            // A production host: nothing Studio-shaped exists, and no configuration reaches
+            // here to change that (structural decision 1).
+            return;
+        }
+        if (seams.stackMembers() != null) {
+            // The surface runtime: the shell — the switcher and the delegating providers; the
+            // studio app itself mounted through the host's topology graft. The workshop
+            // machinery stays at the members, where its inputs live.
+            StudioShellProviders.register(serviceProviders,
+                    WorkshopTargets.of(seams.stackMembers(), seams.memberOrigins()));
+            context.addRoutes(new CopilotProxyRouteBuilder(seams.memberOrigins()));
+            return;
+        }
 
         // Writable by construction (docs/studio-shell.md structural decision 4): the retired
         // tesseraql.studio.readOnly master switch's two jobs moved to better owners —
@@ -128,14 +152,6 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                         javax.sql.DataSource.class),
                 java.util.List.copyOf(seams.dataSources().keySet()),
                 dataBrowserEnabled, dataEditEnabled, testTimeout, testMaxRows);
-        // Confirm-diff-before-every-apply (Studio backlog D5 follow-up): an opt-in gate that
-        // makes the editor acknowledge the diff before each apply, not only on a conflict.
-        boolean confirmApply = manifest.config()
-                .getString("tesseraql.studio.confirmApply")
-                .map(Boolean::parseBoolean).orElse(false);
-        // Who may edit is the tql.studio.edit.<name> atom, per application — the retired
-        // editRoles allow-list was the model's last framework surface reading role names.
-        StudioEdit studioEdit = new StudioEdit(seams.appName(), confirmApply);
         // Output-field masking in the JSON render preview (Studio backlog A1 follow-up): the
         // runtime supplies the mask over the canonical FieldPolicyApplier (so Studio stays
         // free of the security/compiler stack), evaluated for the sample principal the
@@ -154,13 +170,25 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                         seams.modulesLoader());
         context.addRoutes(new StudioRouteBuilder(studio, reloader, studioTests,
                 studioScaffold, studioEdit, studioMask, studioPdf));
+        // The member's workshop API: what the studio shell delegates to
+        // (docs/studio-shell.md structural decision 2).
+        context.addRoutes(new WorkshopRouteBuilder(studioEdit));
+        // The wizards render their .yml.tpl artifacts from the studio app's extracted tree;
+        // the member mounts no studio app anymore, so the tree is materialized here — files
+        // the wizard providers read, never routes.
+        new io.tesseraql.yaml.apps.ClasspathAppSource("studio", "tesseraql/apps/studio",
+                StudioRuntimeExtension.class.getClassLoader())
+                .materialize(io.tesseraql.yaml.config.WorkHome
+                        .resolve(appHome, manifest.config()).resolve("apps"));
         // The copilot's send + stream transports (docs/copilot.md): below the YAML
         // surface because of streaming and HX-Request negotiation. Send is a Camel
-        // route; the stream is an SseRoutes endpoint registered after start.
-        // Mounted with Studio; unconfigured stays a clean TQL-STUDIO-4235 refusal.
-        context.addRoutes(new CopilotRouteBuilder(copilotService, studioEdit));
+        // route; the stream is an SseRoutes endpoint registered after start. Both live
+        // at the member-shaped address the shell's page emits, so the unhosted boot and
+        // the proxied hosted call land on one path.
+        context.addRoutes(new CopilotRouteBuilder(copilotService, studioEdit,
+                seams.appName()));
         seams.postStart().accept(() -> CopilotRouteBuilder.registerStream(context,
-                seams.port(), copilotService, studioEdit));
+                seams.port(), copilotService, studioEdit, seams.appName()));
         // Providers backing the bundled studio app (design ch. 16, 47).
         StudioProviders.register(serviceProviders, new StudioProviders.Deps(studio,
                 studioEdit, studioTests, studioScaffold, studioData, copilotService,
@@ -171,6 +199,13 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 seams.notificationChannels(), studioDocCache));
         DocsProviders.register(serviceProviders,
                 new DocsProviders.Deps(manifest, appHome, studioEdit,
-                        seams.modulesLoader()));
+                        seams.modulesLoader(), seams.appName()));
+        if (!seams.hosted()) {
+            // The unhosted boot (integration tests, library embedding) is a stack of one:
+            // the same shell chrome over an in-process target, so the one studio app tree
+            // serves both faces (the ops shell's Targets.self precedent).
+            StudioShellProviders.register(serviceProviders,
+                    WorkshopTargets.self(seams.appName(), () -> serviceProviders));
+        }
     }
 }

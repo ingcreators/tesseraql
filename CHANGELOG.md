@@ -222,6 +222,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **One Studio per stack, in development only** (docs/studio-shell.md slice 3). The workshop
+  moves to the shells model: `/_tesseraql/studio` at the stack's origin is the switcher —
+  members filtered by the caller's `tql.studio.edit` atoms, deny-by-default — and each
+  application's workshop lives under `/_tesseraql/studio/<name>/ui`, every page delegated
+  over loopback to that member's workshop API with the caller's own credentials, which the
+  member re-checks. The workshop exists only where the source is: `dev` over source trees
+  mounts it; a hosted production stack — and a `dev` pointed at an install root — mounts
+  nothing Studio-shaped, with no configuration to change that. Changes reach a host through
+  `deploy`, never an editor. Pre-1.0 breaking changes ride along: hosted members no longer
+  serve `/<name>/_tesseraql/studio/**` (the per-member mount is gone, and with it the
+  read-only Studio production members used to carry — docs/studio-shell.md records the cost),
+  the unhosted boot's Studio moves to the same member-shaped addresses
+  (`/_tesseraql/studio/<name>/ui`), and docs share links gain the member segment. New codes:
+  `TQL-STUDIO-4043` (unknown or out-of-scope workshop member, 404-shaped) and
+  `TQL-STUDIO-5030` (a member's runtime did not answer the delegated call, 503).
+
 - **Who may edit in Studio is the `tql.studio.edit.<name>` atom** (docs/studio-shell.md
   slice 2). The per-application grant — checked against the caller's permissions, family
   wildcard honoured, deny-by-default — replaces the retired `tesseraql.studio.readOnly`

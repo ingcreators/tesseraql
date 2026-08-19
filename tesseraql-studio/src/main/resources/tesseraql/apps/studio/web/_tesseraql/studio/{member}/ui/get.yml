@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.explorer
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
+  # The command palette's "new route here" entry (docs/studio-ux-refresh.md slice 7):
+  # landing with ?create=<prefix>/ opens the New-route drawer seeded to that folder.
+  create:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.explorer
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        q: params.q
+        create: params.create
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: explorer.html
+    model:
+      studio: main

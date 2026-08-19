@@ -5,7 +5,10 @@ files on disk that the framework serves, edits them as drafts, and applies a cha
 live process without a restart. It is the fastest loop the framework has, and it is where
 a semi-technical author can do real work without a checkout.
 
-Open it under your application's address: `/<name>/_tesseraql/studio/ui`. `tesseraql dev` prints each application's URL at startup.
+Open it at the stack's origin: `/_tesseraql/studio` lists the applications your
+`tql.studio.edit` grants reach, and each application's workshop lives under
+`/_tesseraql/studio/<name>/ui`. One Studio per stack, in development only — a hosted
+production stack mounts no Studio at all ([studio-shell.md](studio-shell.md)).
 
 ## The editing model
 

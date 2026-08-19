@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.studio.flags
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  saved:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.flags
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: flags.html
+    model:
+      f: main
+      saved: params.saved
+      removed: params.removed

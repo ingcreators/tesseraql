@@ -33,6 +33,27 @@ public final class BasePathLinkBuilder extends StandardLinkBuilder {
     public static final String BASE_PATH_VARIABLE = "base";
 
     /**
+     * The studio shell's member segment (docs/studio-shell.md structural decision 2): published
+     * only when a studio page renders under {@code /_tesseraql/studio/<member>/}, and applied
+     * to studio-addressed link targets below — the same one-place philosophy as the base path,
+     * so the studio app tree's two-hundred-odd link expressions stay member-agnostic.
+     */
+    public static final String STUDIO_MEMBER_VARIABLE = "_studioMember";
+
+    @Override
+    protected String processLink(org.thymeleaf.context.IExpressionContext context, String link) {
+        Object member = context.getVariable(STUDIO_MEMBER_VARIABLE);
+        if (member != null && link != null) {
+            int at = link.indexOf("/_tesseraql/studio/ui");
+            if (at >= 0) {
+                link = link.substring(0, at) + "/_tesseraql/studio/" + member
+                        + link.substring(at + "/_tesseraql/studio".length());
+            }
+        }
+        return super.processLink(context, link);
+    }
+
+    /**
      * The prefix comes from the rendering context rather than from this instance, so one engine
      * — which Thymeleaf caches per application home — serves every render regardless of how the
      * runtime was started.

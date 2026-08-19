@@ -757,7 +757,8 @@ public final class StudioService {
         params.forEach((key, value) -> model.put(key,
                 value == null ? "" : String.valueOf(value)));
         return io.tesseraql.yaml.template.Templates.render(studioAppRoot,
-                "web/_tesseraql/studio/ui/wizard/" + kind + "/wizard-" + kind + ".yml.tpl",
+                "web/_tesseraql/studio/{member}/ui/wizard/" + kind + "/wizard-" + kind
+                        + ".yml.tpl",
                 model);
     }
 

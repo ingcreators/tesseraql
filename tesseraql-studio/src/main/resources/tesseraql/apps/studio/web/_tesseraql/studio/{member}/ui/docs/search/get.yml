@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.studio.docs.search
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.docs.search
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        q: query.q
+response:
+  html:
+    status: 200
+    template: results.html
+    model:
+      results: main

@@ -1,0 +1,59 @@
+version: tesseraql/v1
+id: tql.studio.jobs.save
+kind: route
+recipe: command-json
+
+# Saves a job's trigger and operational policies as a draft (docs/jobs.md, Studio). The
+# service enforces the linter's rules before anything lands (TQL-STUDIO-4239): one trigger
+# kind, one cadence, one calendar qualifier, known enum values, parseable SLA fields.
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  name:
+    type: string
+    required: true
+  cron: { type: string, required: false }
+  fixedDelay: { type: string, required: false }
+  calendar: { type: string, required: false }
+  runOn: { type: string, required: false }
+  dayOfMonth: { type: string, required: false }
+  shift: { type: string, required: false }
+  after: { type: string, required: false }
+  overlap: { type: string, required: false }
+  slaCompleteBy: { type: string, required: false }
+  slaRunningLongerThan: { type: string, required: false }
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.jobs.save
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        name: params.name
+        cron: params.cron
+        fixedDelay: params.fixedDelay
+        calendar: params.calendar
+        runOn: params.runOn
+        dayOfMonth: params.dayOfMonth
+        shift: params.shift
+        after: params.after
+        overlap: params.overlap
+        slaCompleteBy: params.slaCompleteBy
+        slaRunningLongerThan: params.slaRunningLongerThan
+        permissions: principal.permissions
+        actor: principal.loginId
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/jobs?name={params.name}&saved=1
