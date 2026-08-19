@@ -8,6 +8,15 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **IAM Admin answers "who may do what in this application"** (docs/application-roles.md
+  slice 1). The new applications pages (`/_tesseraql/admin/applications`, one page per stack
+  member) list, per application: the holders of its `tql.app.use` grant with wildcard holders
+  under their own rows, the ops view/run, deploy and Studio atom holders, and the
+  application's own permission codes with each holder and the role that delivered it —
+  read-only, derived entirely from the atom grammar and the existing identity store. The two
+  backing contracts (`find-permission-holders`, `list-permissions-by-prefix`) are optional:
+  a `sql` realm that does not provide them sees the pages degrade with a notice, never fail.
+
 - **The stack's authenticated deploy surface: `POST /_tesseraql/deploy` and `deploy --url`**
   (docs/stack-shells.md slice 3; docs/runtime-replace.md open question 5's arrival). The
   surface runtime serves an endpoint that receives a `.tqlapp` as its request body — bearer

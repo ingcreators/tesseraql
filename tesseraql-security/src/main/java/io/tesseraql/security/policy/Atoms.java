@@ -20,6 +20,15 @@ public final class Atoms {
     /** The atom prefix granting deployment of one application ({@code tql.app.deploy.<name>}). */
     public static final String APP_DEPLOY_PREFIX = "tql.app.deploy.";
 
+    /** The atom prefix granting sight of one application's operational data ({@code tql.ops.view.<name>}). */
+    public static final String OPS_VIEW_PREFIX = "tql.ops.view.";
+
+    /** The atom prefix granting action on one application's operations ({@code tql.ops.run.<name>}). */
+    public static final String OPS_RUN_PREFIX = "tql.ops.run.";
+
+    /** The atom prefix reserved for Studio editing of one application ({@code tql.studio.edit.<name>}). */
+    public static final String STUDIO_EDIT_PREFIX = "tql.studio.edit.";
+
     private Atoms() {
     }
 

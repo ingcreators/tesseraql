@@ -31,6 +31,14 @@ public final class IdentityContracts {
     public static final String ENSURE_PERMISSION = "ensure-permission";
     public static final String ASSIGN_ROLE_PERMISSION = "assign-role-permission";
 
+    // Grant views (docs/application-roles.md slice 1); read-only and OPTIONAL — a sql realm
+    // that does not provide them renders the per-application pages degraded, never fails, so
+    // they are deliberately not in the standard contract set below.
+    /** Users holding one exact permission code, with the role and path that delivered it. */
+    public static final String FIND_PERMISSION_HOLDERS = "find-permission-holders";
+    /** Permission codes under one prefix (the caller pre-escapes the LIKE pattern). */
+    public static final String LIST_PERMISSIONS_BY_PREFIX = "list-permissions-by-prefix";
+
     private IdentityContracts() {
     }
 

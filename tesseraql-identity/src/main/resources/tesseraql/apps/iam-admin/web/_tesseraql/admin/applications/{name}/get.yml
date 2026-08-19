@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: tql.iamAdmin.applications.detail
+kind: route
+recipe: query-html
+
+security:
+  policy: tql.iam.admin.view
+
+sources:
+  main:
+    service:
+      name: iam.applicationGrants
+      params:
+        name: path.name
+response:
+  html:
+    status: 200
+    statusWhen:
+      - when: main.known == 0
+        status: 404
+    template: application.html
+    model:
+      name: main.name
+      known: main.known
+      families: main.families
+      appCodes: main.codes
+      hasAny: main.hasAny
+      available: main.available
+      reason: main.reason

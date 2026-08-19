@@ -29,6 +29,13 @@ conditions moving to deferred-with-direction; scoped token minting (activation's
 faces — the section after structural decision 5), which grew out of the review question
 "what capacity does an MCP or web-API caller act in"; and immutable federated identity
 keys (structural decision 3), answering the review question about OIDC/SAML user keying.
+**Slice 1 is shipped** (the per-application grant views): `/_tesseraql/admin/applications`
+lists the stack's members, and each member's page answers who may use it (exact and
+wildcard rows apart), the ops/deploy/Studio atom holders, and its own permission codes
+with each holder's delivering role — backed by two new optional contracts
+(`find-permission-holders`, `list-permissions-by-prefix`) that degrade, never fail, on a
+`sql` realm without them. The member list comes from the stack (the surface runtime's
+member list, or the single unhosted application), never from the store.
 
 **Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
 application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,
