@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.portal.roles
+kind: route
+recipe: query-html
+
+# The role picker (docs/application-roles.md structural decision 4): a user holding
+# several roles for one member chooses the capacity to act in, and the choice rides the
+# address — each option 302s into /<member>/_as/<role>/… , carrying the sanitized return
+# target. The origin holds the session, so the picker is an origin surface like sign-in;
+# the grants come from the caller's own session principal, so the page can only ever offer
+# what is held. Auth and CSRF come from the application's security.defaults.routes.
+
+input:
+  app:
+    in: query
+    type: string
+    required: false
+  redirect:
+    in: query
+    type: string
+    required: false
+sources:
+  main:
+    service:
+      name: portal.roles.list
+      params:
+        app: query.app
+        redirect: query.redirect
+        roleGrants: principal.roleGrants
+response:
+  html:
+    status: 200
+    template: roles.html
+    model:
+      picker: main
+    headers:
+      Cache-Control: "no-store"

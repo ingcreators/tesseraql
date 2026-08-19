@@ -410,7 +410,11 @@ public final class ErrorResponseRenderer implements Processor {
                 // credential is the problem and not this server (docs/audit-hardening.md
                 // Decision 1).
                 case 4011, 4012, 4013, 4143, 4144 -> 401;
-                case 4031, 4032 -> 403;
+                // 4148: authenticated and allowed in, but acting in a capacity the caller
+                // does not hold (docs/application-roles.md) — the browser leg redirects to
+                // the role picker before this renderer ever sees it, so what reaches here
+                // is the API caller's 403.
+                case 4031, 4032, 4148 -> 403;
                 case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
                 // The SEC domain is the whole security namespace, not an auth-failure one:
                 // everything else is a server-side fault — config errors (4000, 4001, 4085-4089,

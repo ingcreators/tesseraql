@@ -17,6 +17,13 @@ sources:
   main:
     service:
       name: ops.token.status
+  # The caller's application-scoped roles, for the acting-role selector
+  # (docs/application-roles.md): a token minted --as carries the active view, not the union.
+  roles:
+    service:
+      name: ops.token.roles
+      params:
+        roleGrants: principal.roleGrants
   # The shell's switcher entries, so this page carries the same sidebar as the rest of the
   # console (docs/stack-shells.md structural decision 2).
   nav:
@@ -30,4 +37,5 @@ response:
     template: token.html
     model:
       issue: main
+      roles: roles
       shellnav: nav

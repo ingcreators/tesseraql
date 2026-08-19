@@ -73,7 +73,7 @@ Named explicitly because every one of these is a natural "while we're at it":
 - **No re-quote rounds or price negotiation.** One quoting round per RFQ. The delivery-date
   negotiation loop is the one negotiation the app models.
 - **No EDI standard formats.** CSV with honest column names; the optional EDI slice moves
-  files over SFTP but does not implement 全銀/CII/EDIFACT.
+  files over SFTP but does not implement Zengin/CII/EDIFACT.
 - **No proxy approval / delegation and no configurable rework targets.** Rejection returns
   a document to its author; that is the only rework path.
 - **PostgreSQL only**, like every gallery app (`--embedded-db` is the demo path).

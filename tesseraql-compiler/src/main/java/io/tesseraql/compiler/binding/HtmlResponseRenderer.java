@@ -226,8 +226,12 @@ public final class HtmlResponseRenderer implements Processor {
         // model variable `_csrf`, so the shell can emit <meta name="csrf-token"> for the
         // Hypermedia Components installCsrfHeader convention and forms can carry a hidden field.
         // Every template resolves its own URLs against this, so an application under a prefix
-        // emits the URLs it also serves (docs/base-path.md).
-        model.put("base", basePath);
+        // emits the URLs it also serves (docs/base-path.md). Under an active role the
+        // effective prefix carries the /_as/<role> segment (docs/application-roles.md
+        // structural decision 5), which is what keeps every emitted link in the tab's
+        // capacity; framework assets resolve origin-absolute and never carry it.
+        model.put("base",
+                basePath + io.tesseraql.camel.BasePath.activationSegment(exchange));
 
         String csrfToken = exchange.getProperty(TesseraqlProperties.CSRF_TOKEN, String.class);
         if (csrfToken != null) {
@@ -242,6 +246,7 @@ public final class HtmlResponseRenderer implements Processor {
         chrome.menu(appHome);
         chrome.system();
         chrome.account();
+        chrome.acting();
         chrome.readThemePreference();
         chrome.inbox();
         chrome.shortcuts(viewBinding);

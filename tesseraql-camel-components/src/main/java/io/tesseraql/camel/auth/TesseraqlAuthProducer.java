@@ -4,6 +4,7 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.security.Activation;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.apikey.ApiKeyAuthenticator;
 import io.tesseraql.security.jwt.JwtAuthenticator;
@@ -54,6 +55,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                 case "csrf" -> csrf(exchange);
                 case "rotate" -> rotate(exchange);
                 case "fence" -> fence(exchange);
+                case "activate" -> activate(exchange);
                 default -> throw new TqlException(UNSUPPORTED,
                         "Unsupported tesseraql-auth operation: " + operation);
             }
@@ -187,6 +189,122 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         PolicyEngine engine = bean(PolicyEngine.class, TesseraqlProperties.POLICY_ENGINE_BEAN);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
         engine.authorize(endpoint.getPolicy(), principal);
+    }
+
+    /**
+     * Role activation on a hosted stack member (docs/application-roles.md structural decisions
+     * 4 and 5): reads the acting-role signal the relay minted from the address's {@code _as}
+     * segment, validates it against the principal's own grants — a forged signal can only
+     * select among roles the caller genuinely holds, so it narrows, never widens — and swaps
+     * the exchange's principal for the active view. Everything downstream (authorize, binder,
+     * scopes, menus, templates, audit) reads the swapped principal unchanged. With no signal:
+     * a caller holding no roles scoped to this member passes untouched (the compatibility
+     * default); a browser HTML GET holding exactly one is redirected into that role's address
+     * (choice of one is no choice), several to the role picker; a non-HTML request runs with
+     * no application role active — deterministic, and safe because absence denies. An unheld
+     * role answers TQL-SEC-4148: the picker for a browser, 403 otherwise. Emitted after the
+     * fence; anywhere but a hosted member the topology bean is absent and this is a no-op.
+     */
+    private void activate(Exchange exchange) {
+        String member = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.STACK_MEMBER_BEAN, String.class);
+        if (member == null) {
+            return;
+        }
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+        if (principal == null) {
+            return;
+        }
+        java.util.List<Principal.RoleGrant> held = Activation.grantsFor(principal, member);
+        String encoded = exchange.getMessage().getHeader(TesseraqlProperties.ACTING_ROLE_HEADER,
+                String.class);
+        if (encoded != null && !encoded.isBlank()) {
+            String requested = java.net.URLDecoder.decode(encoded,
+                    java.nio.charset.StandardCharsets.UTF_8);
+            if (held.stream().noneMatch(grant -> grant.role().equals(requested))) {
+                if (wantsHtmlNavigation(exchange)) {
+                    redirect(exchange, pickerLocation(exchange, member));
+                    return;
+                }
+                throw new TqlException(Activation.WRONG_CAPACITY, "The caller does not hold"
+                        + " role '" + requested + "' for application '" + member
+                        + "', so it cannot act as it (activation narrows, never widens)");
+            }
+            exchange.setProperty(TesseraqlProperties.ACTING_ROLE, requested);
+            exchange.setProperty(TesseraqlProperties.PRINCIPAL,
+                    Activation.activate(principal, member, requested));
+            return;
+        }
+        if (held.isEmpty()) {
+            return;
+        }
+        if (wantsHtmlNavigation(exchange)) {
+            if (held.size() == 1) {
+                redirect(exchange, activatedLocation(exchange, held.get(0).role()));
+            } else {
+                redirect(exchange, pickerLocation(exchange, member));
+            }
+            return;
+        }
+        exchange.setProperty(TesseraqlProperties.PRINCIPAL,
+                Activation.activate(principal, member, null));
+    }
+
+    /**
+     * Whether this is a top-level browser HTML {@code GET} navigation — the only shape the
+     * activation redirects answer; an htmx swap or an API caller gets a deterministic in-place
+     * answer instead (the {@code ErrorResponseRenderer} login-bounce test, restated here).
+     */
+    private static boolean wantsHtmlNavigation(Exchange exchange) {
+        if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
+            return false;
+        }
+        Object method = exchange.getMessage().getHeader(Exchange.HTTP_METHOD);
+        if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
+            return false;
+        }
+        String accept = exchange.getMessage().getHeader("Accept", String.class);
+        return accept != null && accept.contains("text/html");
+    }
+
+    /** The same page under the given role's activation segment, query preserved. */
+    private String activatedLocation(Exchange exchange, String role) {
+        String base = io.tesseraql.camel.BasePath.of(endpoint.getCamelContext());
+        String path = wirePath(exchange);
+        String within = path.startsWith(base) ? path.substring(base.length()) : path;
+        return base + "/_as/" + io.tesseraql.camel.BasePath.encodeSegment(role) + within
+                + querySuffix(exchange);
+    }
+
+    /**
+     * The origin role picker, carrying this member and the original wire path — origin-absolute
+     * like the hosted login bounce, because the origin holds the session and the picker.
+     */
+    private static String pickerLocation(Exchange exchange, String member) {
+        String wire = wirePath(exchange) + querySuffix(exchange);
+        return "/_tesseraql/roles?app=" + java.net.URLEncoder.encode(member,
+                java.nio.charset.StandardCharsets.UTF_8) + "&redirect="
+                + java.net.URLEncoder.encode(wire, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** The request's wire path (the member never sees the {@code _as} segment — relay-stripped). */
+    private static String wirePath(Exchange exchange) {
+        String path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        return path == null || !path.startsWith("/") || path.startsWith("//") ? "/" : path;
+    }
+
+    private static String querySuffix(Exchange exchange) {
+        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        return query == null || query.isBlank() ? "" : "?" + query;
+    }
+
+    /** A 302 that ends the route here — the activation redirects, never a rendered page. */
+    private static void redirect(Exchange exchange, String location) {
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader("Location", location);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
+        exchange.getMessage().setBody("");
+        exchange.setRouteStop(true);
     }
 
     /**

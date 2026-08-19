@@ -38,6 +38,19 @@
           <strong th:text="${issue.ttl}">15m</strong>. They cannot be revoked before they expire
           &mdash; a password change ends every session and does not reach a token already minted
           from one.</p>
+        <!-- The acting-role selector (docs/application-roles.md): the token face of activation.
+             Nothing selected mints the union, exactly as before; a selection mints the active
+             view — that role, the stack-wide roles, their permissions plus direct grants — and
+             an acting_role claim, so the audit writes the same capacity sentence for a machine
+             caller as for a tab. Rendered only when the caller holds application roles. -->
+        <label class="hc-field" th:if="${!#lists.isEmpty(roles)}">
+          <span class="hc-field__label">Acting as</span>
+          <select class="hc-select" name="actingRole">
+            <option value="">All held roles (the union)</option>
+            <option th:each="grant : ${roles}" th:value="${grant.role}"
+                    th:text="|${grant.role} (${grant.application})|"></option>
+          </select>
+        </label>
         <!-- A native submit, not htmx: the browser's own navigation indicator is the feedback,
              and an hx-post would have to swap a fragment carrying a credential. -->
         <button type="submit" class="hc-button" data-variant="primary">Issue a token</button>

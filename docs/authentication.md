@@ -484,6 +484,39 @@ header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
 > The hand-built Studio **JSON API** under `/_tesseraql/studio/*` (distinct from the `/ui` pages)
 > stays `auth: bearer` for programmatic callers; only the browser UI uses sessions.
 
+## Acting roles (activation)
+
+A user holding several [application roles](iam-admin.md) for the same hosted application —
+a concurrent assignment — acts as **one of them at a time**, and the choice rides the address:
+`/<member>/_as/<role>/…`. A tab *is* its URL, so two tabs run two capacities side by side and
+can never mix; the segment survives reload, works without JS, and shows in the access log. The
+stack gateway strips the segment before forwarding, so application routes never see it, and
+hands the role to the member as an internal header it validates against the caller's **own**
+grants — a forged segment or header can only select among held roles, never add one.
+
+The line, drawn once: **reachability reads the union; conduct reads the active view.** The
+`tql.app.use` fence, every framework atom check, and bearer minting see everything the
+principal holds. Inside the application — route policies, [scope arms](data-scoping.md),
+menus, field policies, ambient `principal.*` binds — the principal is the active view: all
+stack-wide roles, the one activated role, and the permissions those deliver plus direct
+grants. Absence denies: with no role activated, no application role is in effect.
+
+Entry is automatic. A signed-in browser navigation to a member where the caller holds exactly
+one application role is redirected into that role's address; holding several redirects to the
+**role picker** at the origin (`/_tesseraql/roles`); holding none changes nothing — an
+application without application roles never sees this machinery. The member page's chrome
+carries a **role switcher** listing the caller's other roles for that member as links
+that swap the segment in place. A role the caller does not hold answers `TQL-SEC-4148`: the
+picker for a browser, 403 for everyone else. Non-HTML callers are never redirected — an API
+caller states its capacity in the address, or runs with no application role active.
+
+Tokens state a capacity too: `tesseraql token --as <role>` (and the role selector on the ops
+console's token page) mints the **active view** — the narrowed roles and permissions — plus an
+`acting_role` claim, so the [audit trail](iam-admin.md) writes the same sentence for a machine
+caller as for a tab. Nothing selected mints the union, exactly as before. Claim-asserted
+principals (bearer JWT, API keys, mTLS) carry no store attribution and are always their full
+claimed selves; asking them to activate is refused.
+
 ## Runtime error codes
 
 Returned at request time (distinct from the lint codes below, which are static checks):
@@ -494,6 +527,7 @@ Returned at request time (distinct from the lint codes below, which are static c
 | `TQL-SEC-4031` | 403 | **Forbidden** — authenticated, but the principal does not satisfy the route's `policy` (missing role/permission), or the policy is undefined (deny by default). Grant the role/permission, or define the policy. |
 | `TQL-SEC-4001` | 500 | **The authenticator is not configured** — the route's `auth:` mode needs a bean the application never bound, usually because its `tesseraql.security.<mode>` block is missing. No credential can succeed, which is why this is a server fault and not a 401: a 401 would send clients into token-refresh retries against a server where nothing could work. The build-time counterpart is `TQL-SEC-4047`. |
 | `TQL-SEC-4032` | 403 | **CSRF check failed** — a state-changing `auth: browser` request arrived without a valid CSRF token. Send the page's `X-CSRF-Token` header (htmx does this automatically) or the `_csrf` form field from a live session. |
+| `TQL-SEC-4148` | 403 | **Wrong capacity** — the caller asked to act as an application role they do not hold (a revoked bookmark, someone else's link, an unheld `--as`). A browser navigation is redirected to the role picker instead; choose a held role there. |
 
 ## Lint rules
 

@@ -65,7 +65,7 @@ delegation carries ordinary requests — the relay's streaming discipline stays 
 surfaces that do stream.
 
 The role side of this model — roles gaining a per-application axis, rule-based assignment,
-per-user direct grants and acting-role activation (兼務) — is designed separately in
+per-user direct grants and acting-role activation for concurrent roles — is designed separately in
 [application-roles.md](application-roles.md), on this document's atom grammar.
 
 ## What exists today, measured

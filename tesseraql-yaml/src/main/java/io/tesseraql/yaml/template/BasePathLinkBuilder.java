@@ -45,6 +45,20 @@ public final class BasePathLinkBuilder extends StandardLinkBuilder {
             return "";
         }
         String prefix = String.valueOf(configured).trim();
-        return "/".equals(prefix) ? "" : prefix;
+        if ("/".equals(prefix)) {
+            return "";
+        }
+        // An asset is role-independent (docs/application-roles.md structural decision 5):
+        // keying the browser cache by acting role would duplicate it, so a target under
+        // /assets sheds the /_as/<role> activation segment the prefix may carry. `_as` cannot
+        // occur in a real base path — the leading-underscore name rule reserves it — so the
+        // marker is unambiguous.
+        if (base != null && (base.equals("/assets") || base.startsWith("/assets/"))) {
+            int segment = prefix.indexOf("/_as/");
+            if (segment >= 0) {
+                return prefix.substring(0, segment);
+            }
+        }
+        return prefix;
     }
 }

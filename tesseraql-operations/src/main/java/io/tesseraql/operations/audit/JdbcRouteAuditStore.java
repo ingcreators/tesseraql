@@ -30,12 +30,15 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
         this.dataSource = dataSource;
     }
 
-    /** Creates the audit table if absent, from the bundled vendor-aware migration script. */
+    /** Creates the audit table if absent, from the bundled vendor-aware migration scripts. */
     public void ensureSchema() {
         try {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
                     JdbcRouteAuditStore.class,
                     "/tesseraql/db/migration/audit/V1__route_audit.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcRouteAuditStore.class,
+                    "/tesseraql/db/migration/audit/V2__route_audit_acting_role.sql");
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to create route audit schema", ex);
         }
@@ -47,8 +50,9 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
                 PreparedStatement ps = connection.prepareStatement("""
                         insert into tql_route_audit
                           (audit_id, app_name, route_id, http_method, url_path, actor,
-                           tenant_id, status, duration_ms, params_json, trace_id, occurred_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           acting_role, tenant_id, status, duration_ms, params_json, trace_id,
+                           occurred_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """)) {
             ps.setString(1, UUID.randomUUID().toString());
             ps.setString(2, event.appName());
@@ -56,16 +60,17 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
             ps.setString(4, event.httpMethod());
             ps.setString(5, event.urlPath());
             ps.setString(6, event.actor());
-            ps.setString(7, event.tenantId());
+            ps.setString(7, event.actingRole());
+            ps.setString(8, event.tenantId());
             if (event.status() == null) {
-                ps.setObject(8, null);
+                ps.setObject(9, null);
             } else {
-                ps.setInt(8, event.status());
+                ps.setInt(9, event.status());
             }
-            ps.setLong(9, event.durationMillis());
-            ps.setString(10, event.paramsJson());
-            ps.setString(11, event.traceId());
-            ps.setTimestamp(12, Timestamp.from(event.occurredAt()));
+            ps.setLong(10, event.durationMillis());
+            ps.setString(11, event.paramsJson());
+            ps.setString(12, event.traceId());
+            ps.setTimestamp(13, Timestamp.from(event.occurredAt()));
             ps.executeUpdate();
         } catch (SQLException ex) {
             LOG.log(System.Logger.Level.WARNING,
@@ -80,8 +85,8 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement ps = connection.prepareStatement("""
                         select audit_id, app_name, route_id, http_method, url_path, actor,
-                               tenant_id, status, duration_ms, params_json, trace_id,
-                               occurred_at
+                               acting_role, tenant_id, status, duration_ms, params_json,
+                               trace_id, occurred_at
                         from tql_route_audit
                         order by occurred_at desc
                         """)) {
@@ -99,6 +104,7 @@ public final class JdbcRouteAuditStore implements RouteAuditSink {
                     row.put("method", rs.getString("http_method"));
                     row.put("path", rs.getString("url_path"));
                     row.put("actor", rs.getString("actor"));
+                    row.put("actingRole", rs.getString("acting_role"));
                     row.put("tenantId", rs.getString("tenant_id"));
                     row.put("status", rs.getObject("status"));
                     row.put("durationMs", rs.getLong("duration_ms"));
