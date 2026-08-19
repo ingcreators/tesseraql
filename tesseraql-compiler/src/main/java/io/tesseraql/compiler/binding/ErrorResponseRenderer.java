@@ -446,6 +446,10 @@ public final class ErrorResponseRenderer implements Processor {
                 default -> 500;
             };
             case IDEM -> code.number() == 4090 ? 409 : 500;
+            // 3003: a token request naming a member the exchange does not address — the
+            // caller's request, not a server fault. The other OAUTH codes are boot refusals
+            // and never surface over HTTP.
+            case OAUTH -> code.number() == 3003 ? 400 : 500;
             // 3320: the live stream was asked for a topic no route declares — the caller's
             // query, not a server fault. Build-time view codes never surface over HTTP.
             case VIEW -> code.number() == 3320 ? 400 : 500;

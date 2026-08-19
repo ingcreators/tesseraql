@@ -39,27 +39,52 @@ final class SessionTokens {
      * during the same start that wires this; {@code null} keeps the HS256 path.
      */
     private final java.util.function.Supplier<io.tesseraql.oauth.AccessTokenSigner> stackSigner;
+    /**
+     * The stack members a token may be minted for under the stack issuer — name to address —
+     * and the origin their audiences derive from; both {@code null} away from the surface,
+     * where the exchange keeps its single-application meaning.
+     */
+    private final Map<String, String> memberAddresses;
+    private final String externalOrigin;
+
+    /**
+     * TQL-OAUTH-3003: a token request named a stack member this runtime does not address.
+     * Either the name is not in the stack, or the exchange serving the request is not the
+     * stack's surface — the member axis exists only where the member list does.
+     */
+    private static final io.tesseraql.core.error.TqlErrorCode UNKNOWN_MEMBER = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.OAUTH,
+            3003);
 
     /**
      * @param ttl the lifetime as the operator wrote it ({@code 15m}), for display; the parsed
      *            {@code lifetime} is what expiry is computed from
      */
     SessionTokens(JwtConfig jwt, Duration lifetime, String ttl, boolean enabled) {
-        this(jwt, lifetime, ttl, enabled, null);
+        this(jwt, lifetime, ttl, enabled, null, null, null);
     }
 
     SessionTokens(JwtConfig jwt, Duration lifetime, String ttl, boolean enabled,
-            java.util.function.Supplier<io.tesseraql.oauth.AccessTokenSigner> stackSigner) {
+            java.util.function.Supplier<io.tesseraql.oauth.AccessTokenSigner> stackSigner,
+            Map<String, String> memberAddresses, String externalOrigin) {
         this.jwt = jwt;
         this.lifetime = lifetime;
         this.ttl = ttl;
         this.enabled = enabled;
         this.stackSigner = stackSigner;
+        this.memberAddresses = memberAddresses;
+        this.externalOrigin = externalOrigin;
     }
 
-    /** Whether this application issues, and for how long — what the console page asks first. */
+    /** Whether this application issues, for how long, and which members it can mint for. */
     Map<String, Object> status() {
-        return Map.of("enabled", enabled, "ttl", ttl);
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("enabled", enabled);
+        status.put("ttl", ttl);
+        status.put("applications", memberAddresses == null
+                ? java.util.List.of()
+                : java.util.List.copyOf(memberAddresses.keySet()));
+        return status;
     }
 
     /**
@@ -95,12 +120,48 @@ final class SessionTokens {
                 strings(caller.get("permissions")), Map.of(),
                 grants(params.get("roleGrants")), strings(params.get("directPermissions")));
         String acting = string(params.get("actingRole"));
-        if (acting != null && !acting.isBlank()) {
-            principal = activated(principal, acting);
-        }
+        String appName = string(params.get("appName"));
+        principal = narrowed(principal, appName, acting);
         Map<String, Object> minted = new LinkedHashMap<>(status());
-        minted.putAll(mint(principal));
+        minted.putAll(mint(principal, appName));
         return minted;
+    }
+
+    /**
+     * The member axis of the unified issuer (docs/token-issuance.md decision 9): naming a
+     * member narrows the mint to that member's active view — the browser's own entry rules,
+     * per token: one held role auto-activates, several stay inactive unless {@code
+     * actingRole} selects one, and a role stated for a member that does not grant it refuses
+     * with TQL-SEC-4148. No member named keeps today's behavior verbatim, {@code actingRole}
+     * included.
+     */
+    Principal narrowed(Principal principal, String appName, String acting) {
+        boolean hasActing = acting != null && !acting.isBlank();
+        if (appName == null || appName.isBlank()) {
+            return hasActing ? activated(principal, acting) : principal;
+        }
+        if (memberAddresses == null || !memberAddresses.containsKey(appName)) {
+            throw new io.tesseraql.core.error.TqlException(UNKNOWN_MEMBER,
+                    memberAddresses == null
+                            ? "The token request names stack member '" + appName + "', but this"
+                                    + " runtime addresses no stack members — the member axis is"
+                                    + " the stack surface's"
+                            : "The token request names stack member '" + appName + "', but the"
+                                    + " stack's members are " + memberAddresses.keySet());
+        }
+        java.util.List<io.tesseraql.security.Principal.RoleGrant> scoped = io.tesseraql.security.Activation
+                .grantsFor(principal, appName);
+        String selected = hasActing
+                ? acting
+                : scoped.size() == 1 ? scoped.get(0).role() : null;
+        if (selected != null
+                && scoped.stream().noneMatch(grant -> selected.equals(grant.role()))) {
+            throw new io.tesseraql.core.error.TqlException(
+                    io.tesseraql.security.Activation.WRONG_CAPACITY,
+                    "The caller does not hold application role '" + selected + "' for member '"
+                            + appName + "', so a token cannot be minted acting as it");
+        }
+        return io.tesseraql.security.Activation.activate(principal, appName, selected);
     }
 
     /**
@@ -123,10 +184,18 @@ final class SessionTokens {
 
     /** The endpoint's answer body: the token, its type, and when it stops working. */
     Map<String, Object> mint(Principal principal) {
+        return mint(principal, null);
+    }
+
+    /** As {@link #mint(Principal)}, with a named member's address as the audience. */
+    Map<String, Object> mint(Principal principal, String appName) {
         Instant expiry = Instant.now().plus(lifetime);
+        String audience = appName == null || appName.isBlank() || memberAddresses == null
+                ? null
+                : externalOrigin + memberAddresses.get(appName);
         String minted;
         try {
-            minted = sign(principal, expiry);
+            minted = sign(principal, expiry, audience);
         } catch (java.security.GeneralSecurityException
                 | com.fasterxml.jackson.core.JacksonException ex) {
             throw new IllegalStateException("Could not sign a bearer token", ex);
@@ -139,7 +208,7 @@ final class SessionTokens {
     }
 
     /** The claims the bearer path reads, signed with the secret it verifies against. */
-    private String sign(Principal principal, Instant expiry)
+    private String sign(Principal principal, Instant expiry, String audienceOverride)
             throws java.security.GeneralSecurityException,
             com.fasterxml.jackson.core.JsonProcessingException {
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -169,7 +238,11 @@ final class SessionTokens {
         }
         // The audience is required now (docs/audit-hardening.md Decision 1), so a token minted
         // without it would be signed correctly and refused on arrival by this same application.
-        payload.put("aud", jwt.audience().size() == 1 ? jwt.audience().get(0) : jwt.audience());
+        // A named member's address outranks it (docs/token-issuance.md decision 9): the token
+        // is minted for that member and refuses everywhere else.
+        payload.put("aud", audienceOverride != null
+                ? audienceOverride
+                : jwt.audience().size() == 1 ? jwt.audience().get(0) : jwt.audience());
         payload.put("exp", expiry.getEpochSecond());
 
         // One issuer per stack: with the authorization server enabled, the session exchange and

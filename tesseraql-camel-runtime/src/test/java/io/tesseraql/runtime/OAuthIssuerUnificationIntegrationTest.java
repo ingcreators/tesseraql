@@ -122,6 +122,32 @@ class OAuthIssuerUnificationIntegrationTest {
     }
 
     @Test
+    void aMemberScopedTokenCarriesTheMembersAddressAndWorksThere() throws Exception {
+        HttpResponse<String> exchanged = exchange("alice", "{\"appName\":\"shop\"}");
+        assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
+        String token = MAPPER.readTree(exchanged.body()).path("token").asText();
+
+        JsonNode payload = MAPPER.readTree(
+                Base64.getUrlDecoder().decode(token.split("\\.")[1]));
+        assertThat(payload.get("aud").asText())
+                .isEqualTo("http://localhost:" + port + "/shop");
+
+        HttpResponse<String> accepted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/shop/api/secure"))
+                .header("Authorization", "Bearer " + token)
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+    }
+
+    @Test
+    void anUnknownMemberInATokenRequestIsTheCallersError() throws Exception {
+        HttpResponse<String> refused = exchange("alice", "{\"appName\":\"nope\"}");
+
+        assertThat(refused.statusCode()).isEqualTo(400);
+        assertThat(refused.body()).contains("TQL-OAUTH-3003");
+    }
+
+    @Test
     void aForgedTokenIsStillRefusedAtTheMember() throws Exception {
         HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/shop/api/secure"))
@@ -132,6 +158,12 @@ class OAuthIssuerUnificationIntegrationTest {
     }
 
     private static String acquireBearer(String loginId) throws Exception {
+        HttpResponse<String> exchanged = exchange(loginId, null);
+        assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
+        return MAPPER.readTree(exchanged.body()).path("token").asText();
+    }
+
+    private static HttpResponse<String> exchange(String loginId, String body) throws Exception {
         HttpResponse<String> login = CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port
                         + "/_tesseraql/login"))
@@ -145,16 +177,17 @@ class OAuthIssuerUnificationIntegrationTest {
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
         String csrf = MAPPER.readTree(login.body()).path("csrfToken").asText();
 
-        HttpResponse<String> exchanged = CLIENT.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port
-                        + "/_tesseraql/token"))
-                        .header("Cookie", cookie)
-                        .header("X-CSRF-Token", csrf)
-                        .POST(HttpRequest.BodyPublishers.noBody())
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
-        assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
-        return MAPPER.readTree(exchanged.body()).path("token").asText();
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/token"))
+                .header("Cookie", cookie)
+                .header("X-CSRF-Token", csrf);
+        if (body != null) {
+            request.header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body));
+        } else {
+            request.POST(HttpRequest.BodyPublishers.noBody());
+        }
+        return CLIENT.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private static void seedDatabase() throws Exception {

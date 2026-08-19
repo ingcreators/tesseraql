@@ -78,4 +78,79 @@ class SessionTokensTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("authenticated principal");
     }
+
+    // The member axis (docs/token-issuance.md decision 9): naming a member narrows to that
+    // member's active view under the browser's own entry rules, per token.
+
+    private static SessionTokens memberAware() {
+        return new SessionTokens(JWT, Duration.ofMinutes(15), "15m", true, null,
+                new java.util.LinkedHashMap<>(Map.of("shop", "/shop")),
+                "https://stack.example.com");
+    }
+
+    private static io.tesseraql.security.Principal holder(
+            io.tesseraql.security.Principal.RoleGrant... grants) {
+        return new io.tesseraql.security.Principal("u-1", "eve", null, null, List.of(),
+                List.of("staff"), List.of("read"), Map.of(), List.of(grants), List.of());
+    }
+
+    @Test
+    void oneHeldRoleAutoActivatesForTheNamedMember() {
+        var principal = holder(
+                new io.tesseraql.security.Principal.RoleGrant("staff", null, List.of("read")),
+                new io.tesseraql.security.Principal.RoleGrant("approver", "shop",
+                        List.of("shop.approve")));
+
+        var narrowed = memberAware().narrowed(principal, "shop", null);
+
+        assertThat(narrowed.roles()).contains("approver");
+        assertThat(narrowed.permissions()).contains("shop.approve");
+    }
+
+    @Test
+    void severalHeldRolesStayInactiveUnlessSelected() {
+        var principal = holder(
+                new io.tesseraql.security.Principal.RoleGrant("staff", null, List.of("read")),
+                new io.tesseraql.security.Principal.RoleGrant("approver", "shop", List.of()),
+                new io.tesseraql.security.Principal.RoleGrant("auditor", "shop", List.of()));
+
+        var narrowed = memberAware().narrowed(principal, "shop", null);
+        assertThat(narrowed.roles()).containsExactly("staff");
+
+        var selected = memberAware().narrowed(principal, "shop", "auditor");
+        assertThat(selected.roles()).contains("auditor").doesNotContain("approver");
+    }
+
+    @Test
+    void aRoleNotHeldForTheNamedMemberRefuses() {
+        var principal = holder(
+                new io.tesseraql.security.Principal.RoleGrant("approver", "billing",
+                        List.of()));
+
+        assertThatThrownBy(() -> memberAware().narrowed(principal, "shop", "approver"))
+                .hasMessageContaining("for member 'shop'");
+    }
+
+    @Test
+    void anUnknownMemberRefusesNamingTheStack() {
+        assertThatThrownBy(() -> memberAware().narrowed(holder(), "nope", null))
+                .hasMessageContaining("members are");
+        assertThatThrownBy(() -> new SessionTokens(JWT, Duration.ofMinutes(15), "15m", true)
+                .narrowed(holder(), "shop", null))
+                .hasMessageContaining("addresses no stack members");
+    }
+
+    @Test
+    void aMemberScopedMintCarriesTheMembersAddressAsAudience() throws Exception {
+        var minted = memberAware().mint(holder(
+                new io.tesseraql.security.Principal.RoleGrant("approver", "shop",
+                        List.of())),
+                "shop");
+
+        String token = String.valueOf(minted.get("token"));
+        String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]),
+                StandardCharsets.UTF_8);
+        assertThat(new ObjectMapper().readTree(payload).get("aud").asText())
+                .isEqualTo("https://stack.example.com/shop");
+    }
 }
