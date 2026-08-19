@@ -12,6 +12,15 @@ GreenMail and JUnit 4 from the path to every deployment's classpath.
 Written 2026-08-19, before implementation. Everything below was measured against main at #892
 unless marked otherwise.
 
+**Status 2026-08-19: design approved in review.** All five open questions closed on their
+recommendations — `readOnly` retires outright, the loss of production members' read-only
+Studio is accepted and recorded as the named cost, the workshop keys on DevMode *and* the
+stack being source trees, Copilot is proxied from the member, and the module is
+`tesseraql-studio-runtime`. One clarification from review is recorded in structural
+decision 1's rejection list: a future "start editing an installed package" need is an
+explicit take-it-out-of-the-package operation (the eject lineage), never a loosening of the
+workshop condition. Implementation proceeds slice by slice, slice 1 first.
+
 ## What exists today, measured
 
 **Half of the extraction is already done, and it is the half everyone assumes is missing.**
@@ -127,7 +136,12 @@ smuggled in here as a read-only mode of the workshop (open question 2).
 production docs surface, and it keeps the write machinery one key away from an installed
 package. **Rejected: keying the workshop on classpath presence** (the extension jar being
 there) — the dev CLI and a hand-run host share a classpath today; presence says what *could*
-run, topology says what *should*.
+run, topology says what *should*. **Rejected: loosening the workshop condition for a future
+"start editing an installed package" need** (raised in review) — a `dev` over an install root
+is a run-and-observe shape (package verification, production repro, pipeline smoke, demos),
+and every one of those uses is betrayed by edits landing in the extracted tree; if editing
+from a package is ever wanted, it is an explicit take-it-out-of-the-package operation — the
+eject lineage — into a workspace, never a workshop over the package.
 
 ## Structural decision 2: the shell at the origin, the workshop API at the member
 
