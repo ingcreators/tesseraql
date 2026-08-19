@@ -15,7 +15,7 @@ section says why: "slice 8 is a campaign, not a slice" — `StudioService` coupl
 editing, apply/reload, the scaffolder, the migration author and the test runner to a runtime,
 and it is designed separately **on the delegation pattern this document establishes**. What
 this document does decide for Studio is its atom (structural decision 1), so the vocabulary
-is settled once.
+is settled once. That design now exists: [studio-shell.md](studio-shell.md) (2026-08-19).
 
 Written 2026-08-18, before implementation. Everything below was measured against main at #865
 unless marked otherwise. Structural decision 1 was rewritten in review at the user's
@@ -416,7 +416,8 @@ only; slice 3 needs 1's grammar and the surface runtime, nothing from 2. **Slice
 Studio shell — gets its own design after slice 1 ships**, on the delegation pattern and the
 `tql.studio.edit.<name>` atom this document fixes; `runtime-footprint.md`'s payoff (the test
 framework, GreenMail and JUnit leaving every deployment) arrives with that extraction, and
-is deliberately not promised here.
+is deliberately not promised here. That design is [studio-shell.md](studio-shell.md)
+(2026-08-19).
 
 ## Guards
 
