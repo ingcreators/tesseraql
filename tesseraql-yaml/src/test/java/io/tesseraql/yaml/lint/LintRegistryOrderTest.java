@@ -28,6 +28,7 @@ class LintRegistryOrderTest {
                         // Immediately after the name, which is the namespace the codes are
                         // judged against (docs/stack-shells.md structural decision 1).
                         "PolicyCodeRules",
+                        "DeclaredRoleRules",
                         // The document families, one loop each, in load order.
                         "RouteRules",
                         "CalendarRules",

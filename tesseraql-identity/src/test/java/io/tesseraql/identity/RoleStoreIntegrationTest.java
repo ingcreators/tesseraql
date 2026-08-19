@@ -108,6 +108,51 @@ class RoleStoreIntegrationTest {
                 .hasMessageContaining("first segment");
     }
 
+    /** Slice 3: declaration → store, converge on re-declaration, orphan on removal, revive. */
+    @Test
+    void declaredRolesReconcileConvergeOrphanAndRevive() {
+        var approver = new io.tesseraql.yaml.app.DeclaredRoles.DeclaredRole(
+                "shop.approver", "承認者", java.util.List.of("shop.approve"));
+        var viewer = new io.tesseraql.yaml.app.DeclaredRoles.DeclaredRole(
+                "shop.viewer", null, java.util.List.of());
+        assertThat(DeclaredRoleReconciler.reconcile(identity, MANAGED, "shop",
+                java.util.List.of(approver, viewer))).isEmpty();
+
+        RoleAdmin.assignRole(identity, MANAGED, "u1", "shop.approver", "", "");
+        Principal p = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        // The declared bundle plus the implicit use atom — the fence implication as a row.
+        assertThat(p.permissions()).contains("shop.approve", "tql.app.use.shop");
+        assertThat(p.roleGrants()).anySatisfy(grant -> {
+            assertThat(grant.role()).isEqualTo("shop.approver");
+            assertThat(grant.application()).isEqualTo("shop");
+        });
+
+        // Re-declare with a different bundle and without the viewer: the bundle converges,
+        // the viewer is orphaned (kept, stamped), and nothing is deleted.
+        var changed = new io.tesseraql.yaml.app.DeclaredRoles.DeclaredRole(
+                "shop.approver", "承認者", java.util.List.of("shop.read"));
+        assertThat(DeclaredRoleReconciler.reconcile(identity, MANAGED, "shop",
+                java.util.List.of(changed))).containsExactly("shop.viewer");
+        Principal after = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(after.permissions()).contains("shop.read", "tql.app.use.shop")
+                .doesNotContain("shop.approve");
+        assertThat(identity.execute(MANAGED, IdentityContracts.LIST_ROLES_BY_APPLICATION,
+                Map.of("application", "shop")))
+                .anySatisfy(row -> {
+                    assertThat(row.get("role_code")).isEqualTo("shop.viewer");
+                    assertThat(row.get("source")).isEqualTo("orphaned");
+                });
+
+        // Re-declaring the orphan revives it.
+        DeclaredRoleReconciler.reconcile(identity, MANAGED, "shop",
+                java.util.List.of(changed, viewer));
+        assertThat(identity.execute(MANAGED, IdentityContracts.LIST_ROLES_BY_APPLICATION,
+                Map.of("application", "shop")))
+                .allSatisfy(row -> assertThat(row.get("source")).isEqualTo("declared"));
+
+        RoleAdmin.unassignRole(identity, MANAGED, "u1", "shop.approver");
+    }
+
     @Test
     void adminAssignmentWithAWindowRoundTrips() {
         RoleAdmin.assignRole(identity, MANAGED, "u1", "orders.approver",

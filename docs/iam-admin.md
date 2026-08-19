@@ -73,7 +73,10 @@ rather than fail.
 The roles page (`/_tesseraql/admin/roles`) lists the store's roles and creates new ones.
 A role either belongs to one application — its code then carries that application's name
 as its first segment, like `orders.approver` — or is stack-wide, the deployment's own
-vocabulary like a department. The user detail page edits one person's grants:
+vocabulary like a department. An application can also *declare* its roles in its own
+configuration (`tesseraql.security.roles`); declared roles converge into the store at
+boot, and one whose declaration went away is badged **no longer declared** here —
+assignments are kept, and re-declaring it revives it. The user detail page edits one person's grants:
 
 - **Role assignments**: assign or unassign a role, optionally with a **validity window**
   (a from and until date-time). An expired or not-yet-started assignment does not reach

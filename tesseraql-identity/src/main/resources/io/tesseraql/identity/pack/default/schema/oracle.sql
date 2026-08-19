@@ -24,7 +24,8 @@ create table tql_roles (
   role_id   varchar2(64) primary key,
   role_code varchar2(200) not null unique,
   role_name varchar2(200) not null,
-  application varchar2(200)
+  application varchar2(200),
+  source      varchar2(32) default 'admin' not null
 );
 
 create table tql_permissions (

@@ -1991,6 +1991,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
             context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
+            // Declared application roles converge into the store at boot
+            // (docs/application-roles.md slice 3): managed realm only, no-op without a
+            // declaration and without previously declared rows.
+            io.tesseraql.identity.DeclaredRoleReconciler.reconcile(identity, realm, appName,
+                    io.tesseraql.yaml.app.DeclaredRoles.require(appName,
+                            manifest.config().navigate("tesseraql.security.roles")));
             // TOTP enrollments (roadmap Phase 50 slice 3): available wherever password
             // login is - the account page enrolls, the login route enforces.
             io.tesseraql.operations.credential.JdbcTotpStore totpStore = new io.tesseraql.operations.credential.JdbcTotpStore(
