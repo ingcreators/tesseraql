@@ -119,7 +119,7 @@ means "mint a new one". The consent record is read by our authorize endpoint bef
 page reads. The account surface (Decision 14) is where that page belongs, and revoking there deletes
 the consent and the refresh tokens together.
 
-**The consent screen is also where a 兼務 user selects an acting role** — the OAuth face of the
+**The consent screen is also where a multi-role user selects an acting role** — the OAuth face of the
 role activation designed in [application-roles.md](application-roles.md) (its "three faces"
 section). The authorize endpoint holds the store-resolved role grants and the `resource`
 parameter's member, so it renders the acting-role selection beside consent for a user holding

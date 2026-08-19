@@ -87,7 +87,7 @@ trigger:
 - **The daily-consider model**: the cron fires, the calendar filters. "Last business
   day of month" is a daily cron plus a filter — no deferred one-shot firings, no
   scheduler state. A filtered-out firing is skipped silently (it is not a run).
-- **The shifted nominal day** (`5日, 休日なら翌営業日`) was first deferred on the
+- **The shifted nominal day** ("the 5th — or the next business day when that is a holiday") was first deferred on the
   belief that it needs missed-date memory across firings — the detailed review found it
   does not: the shifted target is a **pure function of the calendar** ("does the fire
   date equal the first business day on or after this month's 5th?"), so

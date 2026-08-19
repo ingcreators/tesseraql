@@ -46,7 +46,7 @@ All notable changes to TesseraQL are documented here. The format follows
 
 - **Attributes arrive with the user, and rules assign the roles**
   (docs/application-roles.md slice 4, first half). `tql_user_attributes` holds free-form
-  named attributes (部署/役職 …), edited on the IAM user detail page and merged into
+  named attributes (department, title, …), edited on the IAM user detail page and merged into
   `principal.claims` at sign-in. Assignment rules (`/_tesseraql/admin/rules`) grant a role
   when their conditions match — kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` over the
   managed org closure, comparisons never expressions, refused with `TQL-IAM-4032` —
@@ -69,8 +69,8 @@ All notable changes to TesseraQL are documented here. The format follows
   (docs/application-roles.md slice 2). The managed identity schema grows
   `tql_roles.application` (null = stack-wide), `tql_user_permissions` (per-user direct
   grants), and `starts_at`/`ends_at` windows plus a `source` provenance column on
-  assignments — resolution filters to the open window at sign-in, so 期間限定権限 is an
-  end date and a 発令日 is a future-dated start. IAM Admin gains the roles page
+  assignments — resolution filters to the open window at sign-in, so time-limited
+  authority is an end date and a future-dated appointment is a future start. IAM Admin gains the roles page
   (`/_tesseraql/admin/roles`) and per-user grant editors; the `Principal` carries
   `roleGrants` (role → application → bundle) and `directPermissions` for the activation
   slices. Role-management writes answer to the realm's until-now-unchecked
@@ -2003,7 +2003,7 @@ pre-1.0 rendering-contract change** — see Changed.
   the next boundary, statements bounded by their SQL timeout, no preemptive kill.
   Cancelling a finished execution answers 409 with `TQL-BATCH-4042`.
 
-- **The shifted nominal day — 「5日、休日なら翌営業日」 without scheduler state**
+- **The shifted nominal day — "the 5th, or the next business day when that is a holiday" — without scheduler state**
   (docs/batch-platform.md, a lifted deferral): a schedule may declare `dayOfMonth: 5`
   with `shift: nextBusinessDay` (default) or `previousBusinessDay`. The shifted target
   is a pure function of the business-day calendar — the firing counts only on it, across

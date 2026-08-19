@@ -3,7 +3,7 @@
 Implementation design for the application role model the stack-shells review set as the next
 identity step: roles gain a per-application axis, attribute rules assign them automatically,
 individuals can hold permission grants directly, and a person holding roles in several
-capacities (兼務) selects the one they act as at use time. One requirement is hard and named
+capacities concurrently selects the one they act as at use time. One requirement is hard and named
 up front because it shapes the whole activation design: **two browser tabs must never mix
 acting roles** — the active role is tab-scoped state, not a session attribute.
 
@@ -11,8 +11,8 @@ The model matches mainstream practice deliberately, so each piece can be judged 
 known shape: per-application roles are Entra ID app roles and Keycloak client roles; role
 bundles plus per-user direct grants are the Salesforce profile-and-permission-set pair;
 selection at use time is NIST RBAC session activation; and rule-based assignment from
-department and title attributes is what domestic business packages (部署・役職 →
-機能権限の自動付与) have done for decades.
+department and title attributes — the department/title-to-function-permission mapping —
+is what Japanese business packages have done for decades.
 
 Written 2026-08-18, before implementation, measured against main at #871 — the stack-shells
 campaign is complete, so the `tql.<family>.<verb>.<name|*>` atom grammar, the `tql.app.use`
@@ -194,8 +194,8 @@ below exists because that threading does not scale to a whole application's URL 
 
 **The audit trail records who, not as-what.** `tql_route_audit` (opt-in per app) records
 `actor` = loginId-else-subject and `tenant_id`; no role reaches any audit row
-(`RouteAudit.java:75-77`). The 兼務 requirement's second half — "the trail shows which
-capacity acted" — needs a column.
+(`RouteAudit.java:75-77`). The concurrent-role requirement's second half — "the trail
+shows which capacity acted" — needs a column.
 
 **Found defects, recorded here and fixed in the docs sweep:** `docs/approval-workflow.md:403`
 documents a guard `principal.role == 'approver'` — `Principal` has no `role()` accessor, so
@@ -271,7 +271,7 @@ classification, and every existing query stays valid. **Rejected: composite uniq
 `approver`, and `Principal.roles` is a flat string list; the moment two same-named roles can
 be held at once, every consumer needs qualification anyway, so qualify the code itself.
 **Rejected: application roles replacing stack-wide roles** (rejected in the original review
-too) — cross-application bundling is real (経理部 spans apps) and is exactly what
+too) — cross-application bundling is real (an accounting-department role spans apps) and is exactly what
 stack-wide roles are for; the two kinds coexist with different owners.
 
 ## Structural decision 2: direct grants, and validity windows on every explicit assignment
@@ -299,8 +299,8 @@ working untouched.
 queries filter to the open window at sign-in. This is the assignment-level shape the
 enterprise mainstream uses — SAP's valid-from/valid-to on every user-role row, Salesforce's
 expiration date on exactly the permission-set layer — and it serves both Japanese needs at
-once: a bounded exception (期間限定権限) is an `ends_at`, and a future-dated appointment
-(発令日) is a `starts_at` on a manual assignment. The attribute-driven form of 発令 —
+once: a bounded exception — time-limited authority — is an `ends_at`, and a future-dated
+appointment's effective date is a `starts_at` on a manual assignment. The attribute-driven form of an appointment —
 HR updates the department on the effective date and the rules follow — is the Workday
 shape and needs no column at all; both routes work and the docs teach both.
 Rule-materialized rows (`source = rule`) carry **no** window: a rule's output is
@@ -316,7 +316,7 @@ existing row means.
 ## Structural decision 3: attributes arrive with the user; rules assign the roles
 
 **New table `tql_user_attributes` (`user_id`, `name`, `value`, PK user+name).** Free-form
-named string attributes — 部署, 役職, 雇用区分, whatever the deployment's rules need —
+named string attributes — department, title, employment type, whatever the deployment's rules need —
 merged into `Principal.claims` at resolution (user-row columns win on collision, so nothing
 shipped changes meaning). Three writers, one shape:
 
@@ -352,7 +352,8 @@ grants one role when its conditions all match the user's attributes:
 - `tql_role_rules` (`rule_id`, `role_id`, `enabled`)
 - `tql_role_rule_conditions` (`rule_id`, `attribute_name`, `match_kind`, `value`) — kinds
   `eq`, `in` (rows sharing a rule and attribute OR together; distinct attributes AND),
-  `neq` and `not-in` (negative conditions — 経理部 except 派遣, the Entra dynamic-group
+  `neq` and `not-in` (negative conditions — the accounting department except temporary
+  staff, the Entra dynamic-group
   `-ne`/`-notIn` shape; a negative *condition* is an ordinary predicate and keeps the
   rule enumerable, which is exactly what a negative *grant* would not be — the
   additive-only stance is untouched), `group` (membership in a store group, `value` =
@@ -434,7 +435,7 @@ at all. Order: authenticate → fence (union) → activate (narrow) → csrf →
 member, nothing happens — an application with no application roles never sees any of this
 machinery, which is the compatibility default. If the caller holds exactly one, a browser
 HTML GET is 302-redirected to the same path with that role activated (choice of one is no
-choice). If the caller holds several — the 兼務 case — a browser HTML GET is redirected to
+choice). If the caller holds several — the concurrent-role case — a browser HTML GET is redirected to
 the **role picker**; a non-HTML request (API callers, fetch) is *not* redirected and runs
 with no application role active: deterministic, and safe because absence denies. A bearer
 caller that wants an active role states it in the address like everyone else; with empty
@@ -444,7 +445,7 @@ caller that wants an active role states it in the address like everyone else; wi
 (`/_tesseraql/roles?app=<member>&redirect=<wire path>`, `LoginRedirects` sanitization) —
 the origin holds the session and the direction of travel is surfaces-at-origin; it lists
 the caller's roles for that member by `role_name` and 302s into the chosen role's address.
-The switcher (所属切替) is shell chrome on the member page — the ops-shell member-switcher
+The switcher is shell chrome on the member page — the ops-shell member-switcher
 shape — rendering the caller's *other* roles for this member as direct links that swap the
 activation segment in place; opening one in a new tab is precisely how two capacities run
 side by side.
@@ -454,7 +455,7 @@ makes that incoherent (policies checking permissions would answer for roles the 
 removed). **Rejected: activation as session state** — violates the hard requirement by
 construction; every tab shares the session. **Rejected: activating subsets or multiple
 concurrent roles per application** — the requirement is selection, the motivation is
-separation of duties and an unambiguous audit sentence ("acted as 承認者"); one at a time,
+separation of duties and an unambiguous audit sentence ("acted as approver"); one at a time,
 per application, per tab. **Rejected: applying the active view to framework atom checks** —
 an operator's reach must not depend on which tab they used to open the console; the
 backlog's own line (fence stays union-based) generalized.
@@ -532,7 +533,7 @@ question 4 applies only to callers arriving at the bare address.
 And an OAuth client states it per connection: the authorization server's consent screen
 (token-issuance.md Decision 4) is the picker's OAuth face — it holds the store-resolved
 `roleGrants` and the `resource` parameter's member, renders the acting-role selection
-beside consent for a 兼務 user (a single holder auto-confirms, the browser's one-role
+beside consent for a multi-role user (a single holder auto-confirms, the browser's one-role
 302 in consent form), records the narrowing on the grant so refreshed access tokens
 keep the capacity, and re-resolves the store at refresh, which propagates grant
 changes, validity windows and rule recomputation at refresh cadence — faster than a
@@ -590,8 +591,8 @@ on 2, and 5 does not need 3 or 4:
 | 1 | The per-application grant views | Read-only IAM Admin pages derived from the atom grammar + existing store; zero schema | An admin answers "who may do what in this application" from one page |
 | 2 | The store axis and direct grants | `tql_roles.application`, `tql_user_permissions`, `tql_user_roles.source`, validity windows (`starts_at`/`ends_at` on both assignment tables, filtered at resolution), `Principal.roleGrants`/`directPermissions`, widened contracts (optional for `sql` realms), IAM role/grant editors incl. windows, `roleManagement` capability enforced (TQL-IAM-4031) | Roles belong to applications; exceptions are grants with expiry dates, not synthetic roles |
 | 3 | Declared application roles | `tesseraql.security.roles` + TQL-YAML-1407 (lint + boot), boot reconciliation with the implicit `tql.app.use` atom, orphan report | An application ships its duty shapes; the deployment assigns people |
-| 4 | Attributes and assignment rules | `tql_user_attributes` + IAM editing, SCIM enterprise capture + update-path upsert, SAML/OIDC attribute maps + re-sync on login, `tql_user_identities` immutable federated keys (linkers resolve by `iss`+`sub` / persistent NameID; login id becomes mutable; seeder's `userId = loginId` retires), `tql_role_rules`/`_conditions` with the six kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` (TQL-IAM-4032), sign-in materialization with provenance, rules UI + recompute | 部署/役職 arrive with the user; the store assigns roles by rule |
-| 5 | Activation | The `_as` address + relay normalization + internal header + ingress strip, `tesseraql-auth:activate` + active-view principal, picker + switcher chrome, TQL-SEC-4148, `acting_role` audit column, `token --as` + token-page role selector (active-view mint + `acting_role` claim) | A 兼務 user acts as one role per tab — or per token — and the trail says which |
+| 4 | Attributes and assignment rules | `tql_user_attributes` + IAM editing, SCIM enterprise capture + update-path upsert, SAML/OIDC attribute maps + re-sync on login, `tql_user_identities` immutable federated keys (linkers resolve by `iss`+`sub` / persistent NameID; login id becomes mutable; seeder's `userId = loginId` retires), `tql_role_rules`/`_conditions` with the six kinds `eq`/`in`/`neq`/`not-in`/`group`/`subtree` (TQL-IAM-4032), sign-in materialization with provenance, rules UI + recompute | Department and title arrive with the user; the store assigns roles by rule |
+| 5 | Activation | The `_as` address + relay normalization + internal header + ingress strip, `tesseraql-auth:activate` + active-view principal, picker + switcher chrome, TQL-SEC-4148, `acting_role` audit column, `token --as` + token-page role selector (active-view mint + `acting_role` claim) | A multi-role user acts as one role per tab — or per token — and the trail says which |
 
 ## Guards
 
@@ -636,14 +637,14 @@ refuses reconciliation.
 **Slice 4** — SCIM create *and update* land enterprise attributes; SAML/OIDC re-sync
 changes an attribute on second login; a rule assigns at sign-in; attribute change flips it
 at next sign-in; manual assignment survives recompute; `in` and `subtree` kinds; a
-negative condition (`neq` 派遣) excludes a user an affirmative condition would match; a
+negative condition (`neq` on the employment type) excludes a user an affirmative condition would match; a
 `group` condition follows store group membership; rule-save refusal without managed org
 units; recompute-all converges a cold store; a changed login id at the IdP re-syncs the
 same account through the identity link instead of provisioning a duplicate, and the
 account keeps its roles and grants across the change.
 
-**Slice 5, the headline IT** (the `StackIdentityIntegrationTest` arrangement): one 兼務
-user, two roles in one member — two "tabs" (two paths under different `_as` segments, one
+**Slice 5, the headline IT** (the `StackIdentityIntegrationTest` arrangement): one
+multi-role user, two roles in one member — two "tabs" (two paths under different `_as` segments, one
 session cookie), interleaved requests: each answers with its own role's policies, scopes
 and menu; audit rows carry each `acting_role`; the fence passes on the union both sides.
 Plus: single-role auto-302; multi-role picker redirect for HTML, no-redirect stack-only
@@ -701,7 +702,7 @@ block) and name the shape they will take; the rest are stances, not omissions.
   endpoint, no admin UI, no write contracts. The deferred design adds all three (and
   decides group membership windows there, not here); the rules' `group` condition kind
   lands now so provisioned groups drive assignment the day that design ships.
-- **Grant-change history and access review (棚卸し)** — *deferred with direction.* IAM
+- **Grant-change history and periodic access review** — *deferred with direction.* IAM
   Admin's writes ride routes, so the existing opt-in route audit already records who
   changed what; the deferred design adds the dedicated append-only grant history and the
   attestation surface (the IGA certification-campaign shape) on top of it.
@@ -733,7 +734,7 @@ block) and name the shape they will take; the rest are stances, not omissions.
 - **Role hierarchy / composite roles** — permanent stance, with the two meanings named
   so the exclusion is legible: the visibility hierarchy people usually mean (a manager
   sees subordinates' records — Salesforce's "role hierarchy") **already exists** as
-  org-unit subtree scoping; permission inheritance (部長 ⊇ 課長) stays out — groups and
+  org-unit subtree scoping; permission inheritance (a department head subsuming a section head) stays out — groups and
   rules compose bundles flat, and flat is what every attestation tool reduces a
   hierarchy to anyway.
 - **Per-tenant roles.** `tql_roles` stays tenant-less; tenant entitlement stays the
