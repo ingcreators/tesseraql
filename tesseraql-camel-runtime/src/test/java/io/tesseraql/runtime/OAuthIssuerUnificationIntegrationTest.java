@@ -41,6 +41,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * issuer, zero per-member jwt configuration.
  */
 @Testcontainers
+@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.OrderAnnotation.class)
 class OAuthIssuerUnificationIntegrationTest {
 
     @Container
@@ -145,6 +146,113 @@ class OAuthIssuerUnificationIntegrationTest {
 
         assertThat(refused.statusCode()).isEqualTo(400);
         assertThat(refused.body()).contains("TQL-OAUTH-3003");
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(1)
+    void withoutASessionAuthorizeBouncesThroughLogin() throws Exception {
+        HttpResponse<String> bounced = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + authorizeQuery())).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(bounced.statusCode()).isEqualTo(302);
+        assertThat(bounced.headers().firstValue("Location").orElse(""))
+                .startsWith("/_tesseraql/login?redirect=");
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(2)
+    void theAuthorizeFlowIssuesACodeThroughConsent() throws Exception {
+        seedClient();
+        String[] session = signIn("alice");
+        String cookie = session[0];
+        String csrf = session[1];
+
+        // The protocol GET owes the consent screen on first contact.
+        HttpResponse<String> toConsent = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + authorizeQuery()))
+                .header("Cookie", cookie).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(toConsent.statusCode()).isEqualTo(302);
+        String consentPage = toConsent.headers().firstValue("Location").orElseThrow();
+        assertThat(consentPage).startsWith("/_tesseraql/oauth/consent?");
+
+        // The page renders the client's (escaped) name and the consent form.
+        HttpResponse<String> page = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + consentPage))
+                .header("Cookie", cookie).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(page.statusCode()).as(page.body()).isEqualTo(200);
+        assertThat(page.body()).contains("Codex &lt;CLI&gt;").contains("decision");
+
+        // Approval answers with the authorization response: code, state, RFC 9207 iss.
+        String form = "_csrf=" + enc(csrf) + "&client_id=codex&redirect_uri="
+                + enc("http://127.0.0.1:49681/callback/x") + "&state=xyz"
+                + "&code_challenge=" + enc("a-challenge-of-plausible-length-0123456789abcdef")
+                + "&resource=" + enc("http://localhost:" + port + "/shop")
+                + "&decision=approve";
+        HttpResponse<String> approved = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/decision"))
+                .header("Cookie", cookie)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form)).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(approved.statusCode()).as(approved.body()).isEqualTo(303);
+        String callback = approved.headers().firstValue("Location").orElseThrow();
+        assertThat(callback).startsWith("http://127.0.0.1:49681/callback/x?")
+                .contains("code=").contains("state=xyz").contains("iss=");
+    }
+
+    @Test
+    @org.junit.jupiter.api.Order(3)
+    void aRecordedConsentSkipsTheScreen() throws Exception {
+        String cookie = signIn("alice")[0];
+
+        HttpResponse<String> immediate = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + authorizeQuery()))
+                .header("Cookie", cookie).build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(immediate.statusCode()).isEqualTo(303);
+        assertThat(immediate.headers().firstValue("Location").orElse(""))
+                .startsWith("http://127.0.0.1:49681/callback/x?").contains("code=");
+    }
+
+    private static String authorizeQuery() {
+        return "/_tesseraql/oauth/authorize?client_id=codex&response_type=code"
+                + "&redirect_uri=" + enc("http://127.0.0.1:49681/callback/x")
+                + "&state=xyz&code_challenge_method=S256"
+                + "&code_challenge=" + enc("a-challenge-of-plausible-length-0123456789abcdef")
+                + "&resource=" + enc("http://localhost:" + port + "/shop");
+    }
+
+    /** Registered the way slice 6's endpoint will register: straight into the store. The name
+     * carries markup on purpose — the consent page must escape it, never trust it. */
+    private static void seedClient() {
+        org.postgresql.ds.PGSimpleDataSource dataSource = new org.postgresql.ds.PGSimpleDataSource();
+        dataSource.setUrl(POSTGRES.getJdbcUrl());
+        dataSource.setUser(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        new io.tesseraql.oauth.JdbcOAuthStore(dataSource).saveClient(
+                new io.tesseraql.oauth.RegisteredClient("codex", null,
+                        java.util.List.of("http://127.0.0.1:49681/callback/x"),
+                        "Codex <CLI>", null, java.time.Instant.now(), null));
+    }
+
+    private static String enc(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String[] signIn(String loginId) throws Exception {
+        HttpResponse<String> login = CLIENT.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port
+                        + "/_tesseraql/login"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                "{\"loginId\":\"" + loginId + "\",\"password\":\"s3cret\"}"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
+        String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
+        return new String[]{setCookie.substring(0, setCookie.indexOf(';')),
+                MAPPER.readTree(login.body()).path("csrfToken").asText()};
     }
 
     @Test

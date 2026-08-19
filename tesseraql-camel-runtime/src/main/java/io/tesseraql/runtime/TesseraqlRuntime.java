@@ -2065,6 +2065,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 for (io.tesseraql.operations.app.InstalledApp member : hostContext.stackMembers()) {
                     memberAddresses.put(member.name(), member.basePath());
                 }
+                if (hostContext.externalOrigin() != null) {
+                    // The authorize surface resolves resources against these; bound before the
+                    // extensions install, so the oauth extension finds them
+                    // (docs/token-issuance.md decision 4).
+                    context.getRegistry().bind(
+                            io.tesseraql.oauth.OAuthRuntimeExtension.MEMBER_ADDRESSES_BEAN,
+                            memberAddresses);
+                    context.getRegistry().bind(
+                            io.tesseraql.oauth.OAuthRuntimeExtension.EXTERNAL_ORIGIN_BEAN,
+                            hostContext.externalOrigin());
+                }
             }
             SessionTokens sessionTokens = new SessionTokens(security.jwt(),
                     io.tesseraql.core.util.Durations.parse(tokenTtl), tokenTtl, tokenIssuing,

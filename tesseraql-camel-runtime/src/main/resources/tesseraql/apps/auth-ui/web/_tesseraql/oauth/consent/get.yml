@@ -1,0 +1,60 @@
+version: tesseraql/v1
+id: tql.auth.oauthConsent
+kind: route
+recipe: query-html
+
+# The consent screen (docs/token-issuance.md decision 4): the page between the protocol GET
+# /_tesseraql/oauth/authorize and the protocol POST /_tesseraql/oauth/consent, both served by
+# the oauth extension. The query echoes the authorization request; the provider re-validates
+# every parameter — the echo is the caller's to tamper with, and the POST validates again
+# regardless. Client-supplied metadata renders escaped: it is display text chosen by the party
+# asking to be authorised, never something the framework vouches for.
+
+input:
+  client_id:
+    type: string
+    required: false
+  redirect_uri:
+    type: string
+    required: false
+  state:
+    type: string
+    required: false
+  code_challenge:
+    type: string
+    required: false
+  code_challenge_method:
+    type: string
+    required: false
+  resource:
+    type: string
+    required: false
+  error:
+    type: string
+    required: false
+
+security:
+  auth: browser
+
+sources:
+  main:
+    service:
+      name: oauth.consent.review
+      params:
+        client_id: params.client_id
+        redirect_uri: params.redirect_uri
+        state: params.state
+        code_challenge: params.code_challenge
+        code_challenge_method: params.code_challenge_method
+        resource: params.resource
+        roleGrants: principal.roleGrants
+
+response:
+  html:
+    status: 200
+    template: consent.html
+    model:
+      review: main
+      requestError: params.error
+    headers:
+      Cache-Control: "no-store"
