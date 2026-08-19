@@ -235,6 +235,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Distributions no longer bundle embedded PostgreSQL platform binaries**
+  (docs/runtime-footprint.md problem 1, slice 1). zonky's `embedded-postgres` pulled three
+  platform binary bundles — 62 MB, and PostgreSQL 14 where the project configures 17 —
+  transitively at runtime scope into every distribution: the deployment image, the fat jar,
+  the dist archives, and the jpackage app images. The CLI's own resolver never read them (it
+  resolves the configured version on demand, per platform), so they were dead weight; they
+  are now excluded, an enforcer rule (`no-bundled-database-binaries`) keeps any platform
+  bundle out of the CLI's compile and runtime scope for good, and the embedded-db
+  integration test asserts the server that starts is the configured major.
+
 - **One Studio per stack, in development only** (docs/studio-shell.md slice 3). The workshop
   moves to the shells model: `/_tesseraql/studio` at the stack's origin is the switcher —
   members filtered by the caller's `tql.studio.edit` atoms, deny-by-default — and each

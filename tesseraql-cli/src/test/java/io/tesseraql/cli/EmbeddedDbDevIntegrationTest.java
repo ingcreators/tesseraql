@@ -52,6 +52,14 @@ class EmbeddedDbDevIntegrationTest {
             String jdbcUrl = embedded.override().jdbcUrl();
             assertThat(jdbcUrl).startsWith("jdbc:postgresql://");
 
+            // The server that actually started is the configured major, on every platform: the
+            // on-demand resolution is the only source of binaries — the classpath deliberately
+            // carries no platform bundles to fall back to (docs/runtime-footprint.md problem 1).
+            // On a Windows runner this is the measurement that answers which binary is live.
+            String configuredMajor = EmbeddedPostgresDataDir
+                    .majorOf(EmbeddedPostgresSupport.defaultVersion());
+            assertThat(serverVersion(jdbcUrl)).startsWith(configuredMajor + ".");
+
             runtime = TesseraqlRuntime.start(app, freePort(), embedded.override());
             assertThat(runtime.port()).isPositive();
 
@@ -385,6 +393,16 @@ class EmbeddedDbDevIntegrationTest {
     }
 
     private record Captured(int exitCode, String stdout) {
+    }
+
+    /** The running server's {@code server_version} (e.g. {@code 17.10}). */
+    private static String serverVersion(String jdbcUrl) throws Exception {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl);
+                Statement statement = connection.createStatement();
+                ResultSet version = statement.executeQuery("show server_version")) {
+            assertThat(version.next()).isTrue();
+            return version.getString(1);
+        }
     }
 
     private static boolean tableExists(String jdbcUrl, String table) throws Exception {
