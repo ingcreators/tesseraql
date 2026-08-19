@@ -31,7 +31,7 @@
           Consent is recorded for this application and this resource only; other applications in
           this stack ask separately.</p>
 
-        <form method="post" action="/_tesseraql/oauth/consent" class="hc-stack">
+        <form method="post" action="/_tesseraql/oauth/decision" class="hc-stack">
           <input type="hidden" name="_csrf" th:value="${_csrf}">
           <input type="hidden" name="client_id" th:value="${review.clientId}">
           <input type="hidden" name="redirect_uri" th:value="${review.redirectUri}">

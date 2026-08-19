@@ -20,8 +20,10 @@ import java.util.Map;
  * config that legitimately carries the key. Off by default — a component that issues
  * credentials should exist because somebody decided it should.
  *
- * <p>This slice serves the JWKS and owns the key lifecycle; {@code /authorize}, {@code /token}
- * and {@code /register} arrive with their own slices.
+ * <p>Serves the JWKS and owns the key lifecycle everywhere it is enabled; on the stack surface
+ * — where the member list and origin are bound — it also mounts {@code /authorize} and the
+ * consent decision, and registers the consent page's model provider. {@code /token} and
+ * {@code /register} arrive with their own slices.
  */
 public final class OAuthRuntimeExtension implements RuntimeExtension {
 
@@ -94,8 +96,7 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
         // The authorize surface exists exactly where the member list does — the stack surface
         // runtime, whose start binds the addresses and origin before extensions install.
         @SuppressWarnings("unchecked")
-        Map<String, String> memberAddresses =
-                context.bean(MEMBER_ADDRESSES_BEAN, Map.class);
+        Map<String, String> memberAddresses = context.bean(MEMBER_ADDRESSES_BEAN, Map.class);
         String externalOrigin = context.bean(EXTERNAL_ORIGIN_BEAN, String.class);
         AuthorizeFlow flow = null;
         SessionStore sessions = null;
@@ -131,7 +132,8 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
             }
             // A page cannot redirect and must not leak: any refusal — including one that
             // would be redirectable on the protocol path — renders as the page's error state.
-            return Map.of("error", outcome.pageError() != null ? outcome.pageError()
+            return Map.of("error", outcome.pageError() != null
+                    ? outcome.pageError()
                     : "invalid_request");
         });
     }
@@ -139,8 +141,7 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
     /** The ambient {@code principal.roleGrants} maps, as typed grants. */
     private static java.util.List<io.tesseraql.security.Principal.RoleGrant> grants(
             Object value) {
-        java.util.List<io.tesseraql.security.Principal.RoleGrant> grants =
-                new java.util.ArrayList<>();
+        java.util.List<io.tesseraql.security.Principal.RoleGrant> grants = new java.util.ArrayList<>();
         if (value instanceof java.util.List<?> list) {
             for (Object entry : list) {
                 if (entry instanceof Map<?, ?> map) {
@@ -151,7 +152,8 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
                     }
                     grants.add(new io.tesseraql.security.Principal.RoleGrant(
                             String.valueOf(map.get("role")),
-                            map.get("application") == null ? null
+                            map.get("application") == null
+                                    ? null
                                     : String.valueOf(map.get("application")),
                             held));
                 }

@@ -237,6 +237,24 @@ public ones, and the transformer list decides which challenge methods are accept
 first refuses `plain` rather than downgrading to it. Single-use codes come free — the handler calls
 `removeCodeGrant` as it reads.
 
+*Shipped with slice 4 (2026-08-19), as one validation ladder (`AuthorizeFlow`) behind three
+surfaces so they cannot drift: the protocol `GET /_tesseraql/oauth/authorize` and the consent
+decision `POST /_tesseraql/oauth/decision` in the extension, the consent screen as an auth-ui
+page between them (`/_tesseraql/oauth/consent` — the split open question 6 chose, made literal
+because a compiled page cannot 302 to a dynamic external callback, and because the same path
+cannot carry a Java POST and a YAML GET without answering 405). The ladder: an unknown client
+or a mismatched redirect URI answers on the page and is never redirected to; a missing or
+non-`S256` challenge, a missing or foreign `resource` (`invalid_target` — the fail-loud
+placeholder), and a denial answer on the wire; a recorded consent for the client and resource
+skips the screen and answers with the code; approval records consent — the selected capacity
+riding it — and redirects with the code, the echoed `state`, and RFC 9207's `iss`. The
+acting-role face works as contracted: held roles for the resource's member render as the
+selector, a single holder is pre-selected, an unheld selection is `access_denied`, and the
+capacity lands in the code grant's subject so slice 5's minted tokens carry it. Deferred
+knowingly: the lint half of Decision 8's app-declared-key refusal (the member boot refusal
+stands) now travels with the register slice, and refresh re-resolution of grants stays with
+slice 5 where refresh lives.*
+
 ### 5. Registration is open, and the registry is small
 
 Open, because `stack-architecture.md` Decision 3 established that MCP clients cannot present an
@@ -495,7 +513,7 @@ dependency order given below, not the numeric one.
 | 1 | ~~Spike: `getAccessToken` reconstruction against CXF's `code` and `refresh` flows~~ — **done 2026-08-16**, and it retired its own question |
 | 2 | ~~The `tesseraql-oauth` module, storage schema on the `security` migration component, the twelve-method provider proven against CXF's `code` and `refresh` grant flows in unit tests~~ — **shipped 2026-08-19**; the measured corrections live in Decisions 1 and 2 |
 | 3 | ~~Signing keys in the framework datasource, generation on first start, JWKS publication at the origin, `kid` rotation~~ — **shipped 2026-08-19**; the strengthened generation guard and the fence deferral are in Decision 3's note |
-| 4 | `/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE |
+| 4 | ~~`/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE~~ — **shipped 2026-08-19**; the three-surface split and the deferrals are in Decision 4's note |
 | 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain |
 | 6 | `/register`, the client registry, exact-match redirect validation (measured — open question 2) |
 | 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |

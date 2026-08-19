@@ -39,7 +39,7 @@ final class OAuthRouteBuilder extends RouteBuilder {
             rest().get("/_tesseraql/oauth/authorize").to("direct:tql.oauth.authorize");
             from("direct:tql.oauth.authorize").routeId("system.oauth.authorize")
                     .process(this::authorize);
-            rest().post("/_tesseraql/oauth/consent").to("direct:tql.oauth.consent");
+            rest().post("/_tesseraql/oauth/decision").to("direct:tql.oauth.consent");
             from("direct:tql.oauth.consent").routeId("system.oauth.consent")
                     .process(this::consent);
         }
@@ -82,7 +82,15 @@ final class OAuthRouteBuilder extends RouteBuilder {
             redirect(exchange, 302, "/_tesseraql/login");
             return;
         }
-        var form = Params.parse(exchange.getMessage().getBody(String.class));
+        // platform-http may pre-parse a browser form post into a Map body; use it directly.
+        java.util.Map<String, String> form;
+        if (exchange.getMessage().getBody() instanceof java.util.Map<?, ?> parsed) {
+            form = new java.util.LinkedHashMap<>();
+            parsed.forEach((key, value) -> form.put(String.valueOf(key),
+                    value == null ? null : String.valueOf(value)));
+        } else {
+            form = Params.parse(exchange.getMessage().getBody(String.class));
+        }
         String expected = session.csrfToken();
         if (expected == null || !expected.equals(form.get("_csrf"))) {
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 403);

@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`/authorize`, and consent that names what it grants** (docs/token-issuance.md slice 4).
+  The authorization server's front door: `GET /_tesseraql/oauth/authorize` asks one question —
+  whether the caller holds a session, however it was obtained — and bounces through the
+  existing sign-in when not. First contact lands on the consent screen (an auth-ui page):
+  the client's registered name rendered escaped and never vouched for, the resource named,
+  and — for a concurrent-role user — the acting-role selector, single holder pre-selected.
+  Approval records consent **per client and per resource** with the capacity riding it, and
+  answers with the authorization code, the echoed `state`, and RFC 9207's `iss`; a recorded
+  consent skips the screen. PKCE is required and `S256`-only; an unknown client or mismatched
+  redirect URI is never redirected to; a request without a resolvable RFC 8707 `resource`
+  refuses with `invalid_target` rather than guessing an audience. `/token` arrives with the
+  next slice.
+
 - **A token for one application, from the same two doors** (docs/token-issuance.md decision 9,
   the member axis). `tesseraql token --url <origin> --app-name <member>` and the console token
   page's application selector mint for one stack member: the token's audience is that member's

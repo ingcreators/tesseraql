@@ -106,8 +106,8 @@ public final class AuthorizeFlow {
         if (!"approve".equals(form.get("decision"))) {
             return Outcome.redirect(errorRedirect(validated, "access_denied"));
         }
-        List<io.tesseraql.security.Principal.RoleGrant> held =
-                io.tesseraql.security.Activation.grantsFor(
+        List<io.tesseraql.security.Principal.RoleGrant> held = io.tesseraql.security.Activation
+                .grantsFor(
                         principalWithGrants(roleGrants), validated.member);
         String actingRole = form.get("actingRole");
         if (actingRole != null && actingRole.isBlank()) {
@@ -154,8 +154,8 @@ public final class AuthorizeFlow {
     private Map<String, Object> consentModel(Validated validated,
             List<io.tesseraql.security.Principal.RoleGrant> roleGrants) {
         List<Map<String, String>> roles = new ArrayList<>();
-        for (io.tesseraql.security.Principal.RoleGrant grant
-                : io.tesseraql.security.Activation.grantsFor(
+        for (io.tesseraql.security.Principal.RoleGrant grant : io.tesseraql.security.Activation
+                .grantsFor(
                         principalWithGrants(roleGrants), validated.member)) {
             roles.add(Map.of("role", grant.role()));
         }
