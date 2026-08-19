@@ -102,10 +102,22 @@
     </dependency>
 
     <!-- Embedded PostgreSQL process supervisor for the serve embedded-db option. The platform
-         binary is NOT bundled; it is resolved on demand via the ShrinkWrap resolver below. -->
+         binary is NOT bundled; it is resolved on demand via the ShrinkWrap resolver below. The
+         wildcard exclusion is what makes that sentence true: zonky ships four platform bundles
+         transitively at runtime scope (62 MB shipped in every distribution, and a different
+         PostgreSQL major than ${zonky.postgres.binaries.version}), and the CLI's unconditional
+         custom PgBinaryResolver never reads them (docs/runtime-footprint.md problem 1). The
+         test-scoped linux-amd64 declaration below is unaffected: it keeps CI resolution offline.
+         The enforcer rule below keeps the bundles out when zonky's tree changes on an upgrade. -->
     <dependency>
       <groupId>io.zonky.test</groupId>
       <artifactId>embedded-postgres</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>io.zonky.test.postgres</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- PostgreSQL JDBC driver on the CLI runtime classpath. Required directly here, not just
@@ -213,6 +225,37 @@
       </plugins>
     </pluginManagement>
     <plugins>
+      <plugin>
+        <!--
+          The boundary's guard (docs/runtime-footprint.md decision 5, the pattern from
+          tesseraql-camel-runtime's no-workshop-on-the-runtime): embedded PostgreSQL binaries are
+          resolved on demand, never bundled, so no platform bundle may reach the CLI's compile or
+          runtime scope — that is how 62 MB of dead-weight binaries shipped in every distribution
+          once. Test scope stays free: the declared linux-amd64 test dependency is what keeps CI
+          resolution off the network.
+        -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>no-bundled-database-binaries</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>io.zonky.test.postgres:*:*:*:compile</exclude>
+                    <exclude>io.zonky.test.postgres:*:*:*:runtime</exclude>
+                  </excludes>
+                  <searchTransitive>true</searchTransitive>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <!-- Assemble the opt-in format codec modules (and their dependency closure) into
            target/modules. Bound to package; the 'provided' scope filter keeps the base CLI runtime
            classpath (target/dependency, includeScope=runtime) free of them - they are loaded only
