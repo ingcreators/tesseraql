@@ -296,6 +296,16 @@ either rule.
 Bounding registration spam belongs to the ingress, per `stack-architecture.md` Decision 13's
 division of the gateway from the thing in front of it.
 
+*Slice 6 shipped 2026-08-19: `POST /_tesseraql/oauth/register` (RFC 7591), open and
+unauthenticated, storing exactly what Decision 5 lists — the metadata as display text, the
+complete redirect URIs matched exactly thereafter (the measured shape), the registration
+stamp, the last-seen stamp `getClient` keeps fresh. The default `token_endpoint_auth_method`
+is `none`: the measured population is native loopback clients with no secret storage; a client
+that asks for `client_secret_basic` is issued a secret it sees once, stored hashed. The lint
+half of Decision 8's refusal landed here too — `TQL-OAUTH-3004` tells an application declaring
+`tesseraql.security.oauth.enabled` in its own tree that the key is the stack file's, before
+the member boot refusal would.*
+
 ### 6. Metadata is served at the origin, and the resource metadata is the application's
 
 `stack-architecture.md` Decision 6 makes the issuer the stack origin, with no path component, so
@@ -529,7 +539,7 @@ dependency order given below, not the numeric one.
 | 3 | ~~Signing keys in the framework datasource, generation on first start, JWKS publication at the origin, `kid` rotation~~ — **shipped 2026-08-19**; the strengthened generation guard and the fence deferral are in Decision 3's note |
 | 4 | ~~`/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE~~ — **shipped 2026-08-19**; the three-surface split and the deferrals are in Decision 4's note |
 | 5 | ~~`/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain~~ — **shipped 2026-08-19**; the mint-time re-resolution is in Decision 2's note |
-| 6 | `/register`, the client registry, exact-match redirect validation (measured — open question 2) |
+| 6 | ~~`/register`, the client registry, exact-match redirect validation (measured — open question 2)~~ — **shipped 2026-08-19**, with Decision 8's lint half (`TQL-OAUTH-3004`); Decision 5's note has the auth-method default |
 | 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |
 | 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
 | 9 | ~~Issuer unification (Decision 9): members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the exchange's member axis, the `session-token-exchange.md` premise edit~~ — **shipped 2026-08-19** (Decision 9's notes) |

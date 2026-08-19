@@ -62,7 +62,82 @@ final class OAuthRouteBuilder extends RouteBuilder {
                     .process(this::consent);
             rest().post("/_tesseraql/oauth/token").to("direct:tql.oauth.token");
             from("direct:tql.oauth.token").routeId("system.oauth.token").process(this::token);
+            rest().post("/_tesseraql/oauth/register").to("direct:tql.oauth.register");
+            from("direct:tql.oauth.register").routeId("system.oauth.register")
+                    .process(this::register);
         }
+    }
+
+    /**
+     * RFC 7591 dynamic registration, open because gating it means not being reachable at all
+     * (stack-architecture.md decision 3) — which is also why consent is mandatory and the
+     * metadata stored here is display text, never something the framework vouches for. The
+     * redirect URIs are stored complete and later matched exactly, as measured against Codex
+     * (open question 2); registration churn — a new ephemeral port is a new registration — is
+     * by design, and the last-seen stamp is how an operator finds the leftovers. The default
+     * auth method is {@code none}: the measured population is native loopback clients with no
+     * secret storage; a client that asks for {@code client_secret_basic} is issued a secret.
+     */
+    private void register(Exchange exchange) throws Exception {
+        com.fasterxml.jackson.databind.JsonNode metadata;
+        try {
+            String body = exchange.getMessage().getBody(String.class);
+            metadata = MAPPER.readTree(body == null ? "" : body);
+        } catch (com.fasterxml.jackson.core.JacksonException unparsable) {
+            error(exchange, 400, "invalid_client_metadata");
+            return;
+        }
+        if (metadata == null || !metadata.isObject()) {
+            error(exchange, 400, "invalid_client_metadata");
+            return;
+        }
+        com.fasterxml.jackson.databind.JsonNode uris = metadata.path("redirect_uris");
+        java.util.List<String> redirectUris = new java.util.ArrayList<>();
+        if (uris.isArray()) {
+            try {
+                for (com.fasterxml.jackson.databind.JsonNode uri : uris) {
+                    if (java.net.URI.create(uri.asText()).getScheme() == null) {
+                        redirectUris.clear();
+                        break;
+                    }
+                    redirectUris.add(uri.asText());
+                }
+            } catch (IllegalArgumentException malformed) {
+                redirectUris.clear();
+            }
+        }
+        if (redirectUris.isEmpty()) {
+            error(exchange, 400, "invalid_redirect_uri");
+            return;
+        }
+        String authMethod = metadata.path("token_endpoint_auth_method").asText("none");
+        String clientId = "c-" + java.util.UUID.randomUUID();
+        String clientSecret = "none".equals(authMethod) ? null : Tokens.newToken();
+        store.saveClient(new RegisteredClient(clientId,
+                clientSecret == null ? null : Tokens.sha256Hex(clientSecret),
+                redirectUris,
+                metadata.path("client_name").asText(null),
+                metadata.toString(),
+                java.time.Instant.now(),
+                null));
+
+        java.util.Map<String, Object> answer = new java.util.LinkedHashMap<>();
+        answer.put("client_id", clientId);
+        if (clientSecret != null) {
+            answer.put("client_secret", clientSecret);
+        }
+        answer.put("client_id_issued_at", java.time.Instant.now().getEpochSecond());
+        answer.put("token_endpoint_auth_method", "none".equals(authMethod)
+                ? "none"
+                : "client_secret_basic");
+        answer.put("redirect_uris", redirectUris);
+        if (metadata.hasNonNull("client_name")) {
+            answer.put("client_name", metadata.get("client_name").asText());
+        }
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 201);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader("Cache-Control", "no-store");
+        exchange.getMessage().setBody(MAPPER.writeValueAsString(answer));
     }
 
     /**

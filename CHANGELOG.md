@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`/register`: a client announces itself, and consent is why that is safe**
+  (docs/token-issuance.md slice 6). `POST /_tesseraql/oauth/register` serves RFC 7591 dynamic
+  registration, open because the MCP clients this exists for cannot present an initial access
+  token — and mandatory consent is the boundary that makes open registration tolerable. The
+  registry stores what a client sent (display text, never vouched for), the complete redirect
+  URIs it will be matched exactly against — the measured Codex shape — and a last-seen stamp
+  for finding registrations nothing ever used, since a new ephemeral port is a new
+  registration by design. Native loopback clients register public (`none`); a client asking
+  for `client_secret_basic` is issued a secret it sees once. The lint `TQL-OAUTH-3004` now
+  tells an application declaring `tesseraql.security.oauth.enabled` in its own tree that the
+  key belongs in `tesseraql-stack.yml`.
+
 - **`/token`: the code redeems, the refresh rotates, and every mint asks the store again**
   (docs/token-issuance.md slice 5). `POST /_tesseraql/oauth/token` serves the
   authorization-code and refresh grants over the stack's provider: client credentials are

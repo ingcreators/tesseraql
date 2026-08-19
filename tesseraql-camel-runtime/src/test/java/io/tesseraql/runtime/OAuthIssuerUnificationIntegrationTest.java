@@ -328,6 +328,53 @@ class OAuthIssuerUnificationIntegrationTest {
     }
 
     @Test
+    @org.junit.jupiter.api.Order(4)
+    void dynamicRegistrationIssuesAClientThatAuthorizes() throws Exception {
+        // The Codex shape (open question 2): the complete callback with an ephemeral port and
+        // callback id, no auth method — a public client.
+        HttpResponse<String> registered = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/register"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "{\"redirect_uris\":[\"http://127.0.0.1:50231/callback/gSuWNlcO\"],"
+                                + "\"client_name\":\"Codex CLI\"}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(registered.statusCode()).as(registered.body()).isEqualTo(201);
+        JsonNode issued = MAPPER.readTree(registered.body());
+        String clientId = issued.get("client_id").asText();
+        assertThat(issued.get("token_endpoint_auth_method").asText()).isEqualTo("none");
+        assertThat(issued.has("client_secret")).isFalse();
+
+        // The registration is live: the registered client walks into the authorize flow and
+        // is owed the consent screen (a new client has no recorded consent).
+        String cookie = signIn("alice")[0];
+        HttpResponse<String> toConsent = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port
+                        + "/_tesseraql/oauth/authorize?client_id=" + enc(clientId)
+                        + "&response_type=code&state=reg"
+                        + "&redirect_uri=" + enc("http://127.0.0.1:50231/callback/gSuWNlcO")
+                        + "&code_challenge_method=S256&code_challenge="
+                        + enc(challenge(VERIFIER))
+                        + "&resource=" + enc("http://localhost:" + port + "/shop")))
+                .header("Cookie", cookie).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(toConsent.statusCode()).isEqualTo(302);
+        assertThat(toConsent.headers().firstValue("Location").orElse(""))
+                .startsWith("/_tesseraql/oauth/consent?");
+    }
+
+    @Test
+    void aRegistrationWithoutACompleteCallbackIsRefused() throws Exception {
+        HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/register"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"client_name\":\"no-uris\"}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(refused.statusCode()).isEqualTo(400);
+        assertThat(refused.body()).contains("invalid_redirect_uri");
+    }
+
+    @Test
     void aForgedTokenIsStillRefusedAtTheMember() throws Exception {
         HttpResponse<String> refused = CLIENT.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/shop/api/secure"))
