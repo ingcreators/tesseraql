@@ -14,15 +14,18 @@ COPY . .
 # container-local repository, and package alone leaves them unresolvable, so
 # copy-dependencies fails on the io.tesseraql:* coordinates. Dockerfile.demo learned this
 # already; this image did not, and nothing in CI builds it, so it went unnoticed.
-RUN ./mvnw -ntp -DskipTests -pl tesseraql-cli -am install \
-    && ./mvnw -ntp -DskipTests -pl tesseraql-cli dependency:copy-dependencies \
+RUN ./mvnw -ntp -DskipTests -pl tesseraql-host -am install \
+    && ./mvnw -ntp -DskipTests -pl tesseraql-host dependency:copy-dependencies \
          -DincludeScope=runtime -DoutputDirectory=target/dependency
 
+# The deployment distribution, not the developer CLI (docs/runtime-footprint.md decision 1):
+# tesseraql-host's dependency set carries the runtime and the operator verbs, and none of the
+# workshop, the embedded-database supervisor, or the artifact-resolver stack.
 FROM eclipse-temurin:25-jre
 RUN useradd --system --home /opt/tesseraql tesseraql
 WORKDIR /opt/tesseraql
-COPY --from=build /build/tesseraql-cli/target/tesseraql-cli-*.jar lib/
-COPY --from=build /build/tesseraql-cli/target/dependency/*.jar lib/
+COPY --from=build /build/tesseraql-host/target/tesseraql-host-*.jar lib/
+COPY --from=build /build/tesseraql-host/target/dependency/*.jar lib/
 
 ARG APP_HOME
 COPY ${APP_HOME} /stack/app
@@ -46,7 +49,7 @@ VOLUME /stack/app/work
 # is silent at run time, so the container simply starts without one.
 RUN java -XX:+UseCompactObjectHeaders \
       -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa \
-      -cp 'lib/*' io.tesseraql.cli.TesseraqlCli routes --app /stack/app > /dev/null 2>&1 \
+      -cp 'lib/*' io.tesseraql.cli.TesseraqlHostCli routes --app /stack/app > /dev/null 2>&1 \
       && chown tesseraql /opt/tesseraql/lib/cds.jsa \
     || echo 'CDS training run failed; this image starts without a shared archive'
 
@@ -59,5 +62,5 @@ ENTRYPOINT ["java", \
   "-XX:+UseCompactObjectHeaders", \
   "--sun-misc-unsafe-memory-access=allow", \
   "-XX:SharedArchiveFile=/opt/tesseraql/lib/cds.jsa", \
-  "-cp", "lib/*", "io.tesseraql.cli.TesseraqlCli"]
+  "-cp", "lib/*", "io.tesseraql.cli.TesseraqlHostCli"]
 CMD ["host", "--stack", "/stack", "--port", "8080"]

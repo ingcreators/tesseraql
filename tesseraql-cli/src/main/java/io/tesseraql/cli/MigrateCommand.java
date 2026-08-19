@@ -1,7 +1,7 @@
 package io.tesseraql.cli;
 
 import io.tesseraql.apptasks.AppMigrator;
-import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.migration.SchemaHistoryName;

@@ -5,9 +5,7 @@ import io.tesseraql.cli.modules.ModulesInstaller;
 import io.tesseraql.core.TesseraqlVersion;
 import io.tesseraql.runtime.DataSources;
 import io.tesseraql.yaml.config.AppConfig;
-import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
-import io.tesseraql.yaml.manifest.RouteFile;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -23,7 +21,7 @@ import picocli.CommandLine.Option;
         TesseraqlCli.DevCommand.class,
         HostCommand.class,
         DeployCommand.class,
-        TesseraqlCli.RoutesCommand.class,
+        RoutesCommand.class,
         NewCommand.class,
         ScaffoldCommand.class,
         LintCommand.class,
@@ -278,30 +276,4 @@ public final class TesseraqlCli implements Runnable {
         }
     }
 
-    /** {@code tesseraql routes --app <dir>}: lists the routes discovered in the app. */
-    @Command(name = "routes", description = "List the routes discovered in the app.")
-    static final class RoutesCommand implements Callable<Integer> {
-
-        @Option(names = {"--app"}, required = true, description = "Path to the external app home.")
-        Path app;
-
-        @Mixin
-        ConfigOptions configOptions;
-
-        @Mixin
-        CompileOptions compile;
-
-        @Override
-        public Integer call() {
-            configOptions.apply();
-            // Route documents parse expressions, so module-provided functions install first.
-            CliModules.installAppExtensions(app, compile.modules);
-            AppManifest manifest = new ManifestLoader().load(app);
-            for (RouteFile route : manifest.routes()) {
-                System.out.printf("%-6s %-30s %s%n",
-                        route.httpMethod(), route.urlPath(), route.definition().id());
-            }
-            return 0;
-        }
-    }
 }

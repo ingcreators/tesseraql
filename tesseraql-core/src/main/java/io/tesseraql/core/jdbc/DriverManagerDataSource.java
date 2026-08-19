@@ -1,4 +1,4 @@
-package io.tesseraql.report;
+package io.tesseraql.core.jdbc;
 
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -8,8 +8,11 @@ import java.util.logging.Logger;
 import javax.sql.DataSource;
 
 /**
- * A minimal {@link DataSource} backed by {@link DriverManager}, used by the test goal so any JDBC
- * driver the build provides works without an extra pool dependency.
+ * A minimal {@link DataSource} backed by {@link DriverManager}, so any JDBC driver on the classpath
+ * works without an extra pool dependency. Shared by the CLI's operator commands, the Maven plugin's
+ * mojos, and the test/report tooling — which is why it lives here rather than in any of them
+ * (docs/runtime-footprint.md decision 1: the deployment distribution carries the operator commands
+ * but not the test tooling).
  */
 public final class DriverManagerDataSource implements DataSource {
 

@@ -1,7 +1,7 @@
 package io.tesseraql.maven;
 
 import io.tesseraql.apptasks.IdentityBootstrap;
-import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.yaml.secret.SecretFiles;
 import java.io.File;
 import java.io.IOException;
