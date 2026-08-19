@@ -25,6 +25,10 @@ class LintRegistryOrderTest {
                         // First, and needing nothing loaded: an application that does not name
                         // itself has no identity for any later finding to be about.
                         "ApplicationNameRules",
+                        // Config-scope refusals beside the name check: the authorization
+                        // server's key belongs to the stack file, not an application
+                        // (docs/token-issuance.md decision 8).
+                        "OAuthScopeRules",
                         // Immediately after the name, which is the namespace the codes are
                         // judged against (docs/stack-shells.md structural decision 1).
                         "PolicyCodeRules",

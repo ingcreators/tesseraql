@@ -35,6 +35,7 @@ public final class AppLinter {
     static List<LintRule> rules() {
         return List.of(
                 new ApplicationNameRules(),
+                new OAuthScopeRules(),
                 new PolicyCodeRules(),
                 new DeclaredRoleRules(),
                 new RouteRules(),
