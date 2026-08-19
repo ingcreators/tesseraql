@@ -23,7 +23,8 @@ create table tql_groups (
 create table tql_roles (
   role_id   varchar2(64) primary key,
   role_code varchar2(200) not null unique,
-  role_name varchar2(200) not null
+  role_name varchar2(200) not null,
+  application varchar2(200)
 );
 
 create table tql_permissions (
@@ -41,6 +42,9 @@ create table tql_user_groups (
 create table tql_user_roles (
   user_id varchar2(64) not null,
   role_id varchar2(64) not null,
+  source  varchar2(32) default 'admin' not null,
+  starts_at timestamp,
+  ends_at   timestamp,
   primary key (user_id, role_id)
 );
 
@@ -54,4 +58,12 @@ create table tql_role_permissions (
   role_id       varchar2(64) not null,
   permission_id varchar2(64) not null,
   primary key (role_id, permission_id)
+);
+
+create table tql_user_permissions (
+  user_id       varchar2(64) not null,
+  permission_id varchar2(64) not null,
+  starts_at timestamp,
+  ends_at   timestamp,
+  primary key (user_id, permission_id)
 );

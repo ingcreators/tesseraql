@@ -39,6 +39,31 @@ public final class IdentityContracts {
     /** Permission codes under one prefix (the caller pre-escapes the LIKE pattern). */
     public static final String LIST_PERMISSIONS_BY_PREFIX = "list-permissions-by-prefix";
 
+    // The application-role store surface (docs/application-roles.md slice 2); optional like
+    // the grant views — a sql realm without them has no grant attribution and a read-only
+    // admin surface, never a failure.
+    /** A user's held roles with their application axis and delivered permission bundles. */
+    public static final String FIND_ROLE_GRANTS_BY_USER_ID = "find-role-grants-by-user-id";
+    /** A user's direct permission grants inside their validity window. */
+    public static final String FIND_DIRECT_PERMISSIONS_BY_USER_ID = "find-direct-permissions-by-user-id";
+    /** A user's direct role assignments, windows included, for the admin editor. */
+    public static final String LIST_ROLE_ASSIGNMENTS_BY_USER_ID = "list-role-assignments-by-user-id";
+    /** A user's direct permission grants, windows included, for the admin editor. */
+    public static final String LIST_PERMISSION_GRANTS_BY_USER_ID = "list-permission-grants-by-user-id";
+    public static final String LIST_ROLES = "list-roles";
+    public static final String CREATE_ROLE = "create-role";
+    public static final String GRANT_USER_ROLE = "grant-user-role";
+    public static final String REVOKE_USER_ROLE = "revoke-user-role";
+    public static final String GRANT_USER_PERMISSION = "grant-user-permission";
+    public static final String REVOKE_USER_PERMISSION = "revoke-user-permission";
+
+    /** The write contracts gated by the realm's role capability, not its user capability. */
+    public static java.util.Set<String> roleManagementContracts() {
+        return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
+                GRANT_USER_PERMISSION, REVOKE_USER_PERMISSION, ENSURE_ROLE, ENSURE_PERMISSION,
+                ASSIGN_USER_ROLE, ASSIGN_ROLE_PERMISSION);
+    }
+
     private IdentityContracts() {
     }
 

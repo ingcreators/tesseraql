@@ -64,10 +64,27 @@ application", one page per application in the stack. Each application's page lis
 - the application's own **permission codes** — the codes carrying its name as their first
   segment — and who holds each one, through which role.
 
-The views are read-only and derived entirely from the identity store; granting and revoking
-still happen through roles ([authentication.md](authentication.md)). A `sql` realm that does
-not provide the optional grant-view contracts sees the pages degrade with a notice rather
-than fail.
+The views are read-only and derived entirely from the identity store. A `sql` realm that
+does not provide the optional grant-view contracts sees the pages degrade with a notice
+rather than fail.
+
+## Roles and grants
+
+The roles page (`/_tesseraql/admin/roles`) lists the store's roles and creates new ones.
+A role either belongs to one application — its code then carries that application's name
+as its first segment, like `orders.approver` — or is stack-wide, the deployment's own
+vocabulary like a department. The user detail page edits one person's grants:
+
+- **Role assignments**: assign or unassign a role, optionally with a **validity window**
+  (a from and until date-time). An expired or not-yet-started assignment does not reach
+  the user's next sign-in; a future-dated one arrives at the first sign-in after its
+  start.
+- **Direct permissions**: grant a permission code to one person directly — the bounded
+  exception that needs no synthetic role — with the same optional window.
+
+Every write is gated by the realm's `roleManagement` capability; a realm that does not
+allow it renders these editors read-only and refuses the write. Grant changes take
+effect at the affected user's next sign-in, like every grant change.
 
 ## Delegations
 

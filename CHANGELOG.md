@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Roles gain the application axis, direct grants, and validity windows**
+  (docs/application-roles.md slice 2). The managed identity schema grows
+  `tql_roles.application` (null = stack-wide), `tql_user_permissions` (per-user direct
+  grants), and `starts_at`/`ends_at` windows plus a `source` provenance column on
+  assignments — resolution filters to the open window at sign-in, so 期間限定権限 is an
+  end date and a 発令日 is a future-dated start. IAM Admin gains the roles page
+  (`/_tesseraql/admin/roles`) and per-user grant editors; the `Principal` carries
+  `roleGrants` (role → application → bundle) and `directPermissions` for the activation
+  slices. Role-management writes answer to the realm's until-now-unchecked
+  `roleManagement` capability (`TQL-IAM-4031`); refused inputs answer `TQL-IAM-4033`.
+  BREAKING (pre-1.0, no migration steps): existing managed stores must add the new
+  columns/table by hand or recreate; the schema script only creates absent tables.
+
 - **IAM Admin answers "who may do what in this application"** (docs/application-roles.md
   slice 1). The new applications pages (`/_tesseraql/admin/applications`, one page per stack
   member) list, per application: the holders of its `tql.app.use` grant with wildcard holders

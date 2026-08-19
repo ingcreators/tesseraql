@@ -36,6 +36,15 @@ with each holder's delivering role — backed by two new optional contracts
 (`find-permission-holders`, `list-permissions-by-prefix`) that degrade, never fail, on a
 `sql` realm without them. The member list comes from the stack (the surface runtime's
 member list, or the single unhosted application), never from the store.
+**Slice 2 is shipped** (the store axis, direct grants and windows): `tql_roles.application`,
+`tql_user_permissions`, `source` provenance and `starts_at`/`ends_at` on both assignment
+tables across all four dialects, window-filtered at resolution; `Principal.roleGrants`/
+`directPermissions` populated by two optional contracts (absent = union only, exactly as
+before); the roles page and per-user grant editors in IAM Admin; the `roleManagement`
+capability enforced as TQL-IAM-4031 with input refusals as TQL-IAM-4033. Implementation
+decisions recorded: role-management writes are classified by contract name inside
+`executeUpdate` (so YAML contract steps stay gated correctly), and an admin re-assign
+replaces the existing assignment's window (revoke-then-grant, idempotent).
 
 **Coverage direction (2026-08-18, user-set):** the model was reviewed against what business
 application platforms and business SaaS generally ship (Entra ID, Okta, Salesforce, SAP,

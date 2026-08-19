@@ -45,9 +45,9 @@ class AppTestRunnerIntegrationTest {
                     + "login_id varchar(200), display_name varchar(200), email varchar(320), "
                     + "status varchar(32), tenant_id varchar(64), version bigint default 0)");
             statement.execute("create table tql_roles (role_id varchar(64) primary key, "
-                    + "role_code varchar(200), role_name varchar(200))");
+                    + "role_code varchar(200), role_name varchar(200), application varchar(200))");
             statement.execute(
-                    "create table tql_user_roles (user_id varchar(64), role_id varchar(64))");
+                    "create table tql_user_roles (user_id varchar(64), role_id varchar(64), source varchar(32) default 'admin', starts_at timestamp, ends_at timestamp)");
             statement.execute(
                     "create table tql_user_groups (user_id varchar(64), group_id varchar(64))");
             statement.execute(
