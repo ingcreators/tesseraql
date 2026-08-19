@@ -67,7 +67,7 @@
             aria-label="Collapse navigation" type="button"><span class="hc-shell__collapse-icon" aria-hidden="true">&#171;</span></button>
     <strong th:text="${title}">TesseraQL</strong>
     <th:block th:replace="${header}"/>
-    <!-- The role switcher (所属切替, docs/application-roles.md structural decision 4): rendered
+    <!-- The role switcher (docs/application-roles.md structural decision 4): rendered
          from the reserved `_acting` variable on a hosted member whose caller holds application
          roles here. Each option is a direct link that swaps the /_as/<role> activation segment
          in place — opening one in a new tab is precisely how two capacities run side by side,

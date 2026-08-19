@@ -3,7 +3,7 @@ id: tql.portal.roles
 kind: route
 recipe: query-html
 
-# The role picker (docs/application-roles.md structural decision 4): a 兼務 user holding
+# The role picker (docs/application-roles.md structural decision 4): a user holding
 # several roles for one member chooses the capacity to act in, and the choice rides the
 # address — each option 302s into /<member>/_as/<role>/… , carrying the sanitized return
 # target. The origin holds the session, so the picker is an origin surface like sign-in;

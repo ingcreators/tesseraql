@@ -125,7 +125,7 @@ attributes stay discarded; capture is declared, not promiscuous.
       email: email
       map:
         department: department   # assertion attribute → store attribute
-        title: 役職
+        title: jobTitle
 ```
 
 ## Logout

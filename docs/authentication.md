@@ -486,8 +486,8 @@ header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
 
 ## Acting roles (activation)
 
-A 兼務 user — one holding several [application roles](iam-admin.md) for the same hosted
-application — acts as **one of them at a time**, and the choice rides the address:
+A user holding several [application roles](iam-admin.md) for the same hosted application —
+a concurrent assignment — acts as **one of them at a time**, and the choice rides the address:
 `/<member>/_as/<role>/…`. A tab *is* its URL, so two tabs run two capacities side by side and
 can never mix; the segment survives reload, works without JS, and shows in the access log. The
 stack gateway strips the segment before forwarding, so application routes never see it, and
@@ -505,7 +505,7 @@ Entry is automatic. A signed-in browser navigation to a member where the caller 
 one application role is redirected into that role's address; holding several redirects to the
 **role picker** at the origin (`/_tesseraql/roles`); holding none changes nothing — an
 application without application roles never sees this machinery. The member page's chrome
-carries a **switcher** (所属切替) listing the caller's other roles for that member as links
+carries a **role switcher** listing the caller's other roles for that member as links
 that swap the segment in place. A role the caller does not hold answers `TQL-SEC-4148`: the
 picker for a browser, 403 for everyone else. Non-HTML callers are never redirected — an API
 caller states its capacity in the address, or runs with no application role active.

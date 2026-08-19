@@ -36,7 +36,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The headline activation arrangement (docs/application-roles.md structural decisions 4 and 5):
- * one 兼務 user, two roles in one member, two "tabs" — two paths under different {@code _as}
+ * one user with two concurrent roles in one member, two "tabs" — two paths under {@code _as}
  * segments sharing one session cookie — interleaved without mixing, because the address is the
  * only carrier. Policies read the active view while the fence reads the union; a forged segment
  * can narrow, never widen (TQL-SEC-4148); emitted links carry the segment and asset URLs do
@@ -53,7 +53,7 @@ class StackActivationIntegrationTest {
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
-    /** 兼務: two roles scoped to shop-a (sales carries users.read, audit does not). */
+    /** Two concurrent roles scoped to shop-a (sales carries users.read, audit does not). */
     static Session kenji;
     /** Exactly one role scoped to shop-a — choice of one is no choice. */
     static Session solo;

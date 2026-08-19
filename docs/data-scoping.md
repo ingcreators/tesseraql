@@ -13,7 +13,7 @@ It builds on three existing subsystems:
   (JWT, OIDC, SAML, API keys, mTLS). Under an [acting
   role](authentication.md#acting-roles-activation) the principal a scope arm evaluates is the
   **active view** — the tab's one activated application role plus the stack-wide roles — so a
-  兼務 user's rows follow the capacity they are acting in, not the union of everything they hold.
+  multi-role user's rows follow the capacity they act in, not the union of all they hold.
 - **[2-way SQL](two-way-sql.md)** — a scope predicate is injected at a site the author chooses,
   parameterized, and stays runnable in a plain SQL tool. No query is rewritten behind the
   author's back.

@@ -27,8 +27,8 @@ else installs it. See [admission.md](admission.md).
 that the framework serves. Yours, in your repository.
 
 **application role** — a role scoped to one application (`tql_roles.application`), such as
-承認者 in `orders`. A 兼務 user holding several activates one at a time per tab. Stack-wide
-roles (no application) are always active. See [iam-admin.md](iam-admin.md).
+an approver role in `orders`. A user holding several activates one at a time per tab.
+Stack-wide roles (no application) are always active. See [iam-admin.md](iam-admin.md).
 
 **bindable path** — a reference to a value in the execution context, such as `params.id`,
 `rows`, or `steps.insert.keys.id`. Used wherever a declaration needs a value rather than a

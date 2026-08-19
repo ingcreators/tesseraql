@@ -147,7 +147,7 @@ final class ShellChrome {
     }
 
     /**
-     * Publishes the role switcher (所属切替, docs/application-roles.md structural decision 4)
+     * Publishes the role switcher (docs/application-roles.md structural decision 4)
      * as the reserved {@code _acting} variable: on a hosted member whose caller holds
      * application roles here, the active role plus each other held role as a direct link that
      * swaps the {@code /_as/<role>} activation segment in place — the ops-shell

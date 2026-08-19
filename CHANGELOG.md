@@ -8,7 +8,7 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
-- **A 兼務 user acts as one role per tab — or per token — and the trail says which**
+- **A multi-role user acts as one role per tab — or per token — and the trail says which**
   (docs/application-roles.md slice 5, activation). The acting role rides the address:
   `/<member>/_as/<role>/…` is normalized by the stack relay into an internal header the
   member validates against the caller's **own** grants — a forged segment or header narrows,
