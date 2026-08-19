@@ -84,6 +84,7 @@ class OidcUserLinkIntegrationTest {
         int runtimePort = freePort();
         appHome = prepareAppHome(opPort, runtimePort);
         runtime = TesseraqlRuntime.start(appHome, runtimePort);
+        TestHttp.awaitReady(runtimePort);
     }
 
     @AfterAll
