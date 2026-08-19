@@ -1,10 +1,15 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<html xmlns:th="http://www.thymeleaf.org" lang="en" th:lang="${#locale.toLanguageTag()}"
+      data-theme="dark"
+      th:attr="data-theme=${_theme != null ? _theme : 'dark'}, data-density=${_density}, data-neutral=${_neutral}">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Connected applications</title>
-  <link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components/hc.min.css}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connected applications &middot; TesseraQL</title>
+<link rel="stylesheet" th:href="@{/assets/vendor/hypermedia-components__core/dist/hc.min.css}">
+<link rel="stylesheet" th:if="${_neutral}"
+      th:href="@{|/assets/vendor/hypermedia-components__core/dist/hc.tokens.neutral-${_neutral}.css|}">
+<link rel="stylesheet" th:href="@{/assets/_tesseraql/tesseraql.css}">
 </head>
 <body>
 <main class="hc-stack" style="max-width: 46rem; margin: 4rem auto; padding: 0 1rem;">
