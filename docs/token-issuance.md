@@ -11,6 +11,12 @@ the two open questions that needed no measurement (the error domain, Decision 10
 `TQL-SEC-4146`, Decision 9). The protocol design of 2026-08-16 is unchanged; what changed is where
 the endpoints live and how the rest of the stack comes to trust what they sign.
 
+Same-day review closed the rest. The Codex leg of the connect-and-observe pass was run and
+answered open questions 2 and 3 — exact-match redirect validation survives contact, and
+`scopes_supported` may stay absent — and open questions 6 through 8 were closed on their
+recommendations. The one observation still owed from that setup is whether the measured clients
+send RFC 8707 `resource`; the fail-loud authorize placeholder stands until it is taken.
+
 **What it implements.** Decisions 4 through 11 of `stack-architecture.md`: an authorization server
 for TesseraQL's own users, colocated with the resource server, signing RS256, issuing refresh
 tokens, registering clients dynamically, and requiring consent. It is a stack-level surface at
@@ -206,11 +212,19 @@ secret hash, redirect URIs, the metadata treated as display text, the registrati
 last-seen stamp so that an operator can find registrations nothing ever used. Nothing about a client
 is trusted beyond its redirect URIs, which are matched, and its credentials, which are verified.
 
-**Redirect-URI validation is deliberately unfinished.** `stack-architecture.md` Decision 3 records
-that Codex appends `/callback/<callback_id>` to the configured callback, so exact-match validation
-will reject it, and the measurement that would show the exact shape has not been taken. The
-placeholder is exact match; the alternative is prefix match confined to a registered origin and
-path, which is weaker and must not be adopted on a guess. Open question 2.
+**Redirect-URI validation is exact match, measured rather than guessed.** The 2026-08-19 Codex
+observation (open question 2) settled what `stack-architecture.md` Decision 3 left open: Codex
+registers the complete callback — `http://127.0.0.1:<ephemeral port>/callback/<callback_id>` by
+default, `<configured base>/<callback_id>` under a custom `mcp_oauth_callback_url` (the
+`/callback/` segment is not always appended) — and sends the **same complete URI** in
+`redirect_uris` at registration and in `redirect_uri` at `/authorize`; a retry re-registers with
+its new ephemeral port. So exact match against the registered URIs rejects nothing that matters —
+the "exact match will fail" expectation conflated the appended path with a mismatch, when the
+appended path is registered too — and the weaker prefix alternative is not adopted. Two
+consequences belong to this slice: registration churn is by design (a new ephemeral port is a new
+registration), which is what the last-seen stamp exists for; and consent stays per client under
+that churn — the cost of open registration Decision 10 already accepted, not a reason to weaken
+either rule.
 
 Bounding registration spam belongs to the ingress, per `stack-architecture.md` Decision 13's
 division of the gateway from the thing in front of it.
@@ -286,9 +300,9 @@ a second issuer inside a member, and the shipped precedent is `TQL-APP-4212`'s: 
 declaration in the wrong scope is a refusal naming the right one, not a silent override.
 
 The consent and authorize pages are served the way the surface's other pages are — on hc, behind
-the origin fence, with the session already at hand. Where exactly the page routes live (the
-`auth-ui` app beside sign-in, or the extension's own route builders) is open question 6, and it
-gates only the authorize/consent slice.
+the origin fence, with the session already at hand. They live in the bundled `auth-ui`
+application, beside sign-in (open question 6, closed on its recommendation); the protocol
+endpoints, which have no page to declare, stay in the extension.
 
 ### 9. One issuer per stack: members validate the published key, and the exchange signs with the private one
 
@@ -335,7 +349,8 @@ model: `aud` is the resource identifier the grant was made for; roles and permis
 active view for **that member** — the acting-role narrowing when one was selected, the member's
 union otherwise — never the subject's stack-wide authority. The exchange gains the member axis for
 the same reason (a token that only the surface accepts serves deploys, not applications); its
-parameter shape is open question 7.
+parameter shape is open question 7, closed on its recommendation: `--app-name` and a page
+selector, defaulting to the surface's own audience.
 
 ### 10. Protocol failures speak OAuth on the wire and `TQL-OAUTH` in the logs
 
@@ -361,9 +376,10 @@ The campaign's acceptance is not a green unit suite over grant handlers; it is t
 `stack-architecture.md` built toward: **a business user on a measured MCP client — ChatGPT
 Desktop, Codex CLI, Claude Code — connects to a member's MCP surface through discovery,
 registration, consent and refresh, with no fixed credential and no developer in the loop.** The
-connect-and-observe pass (open questions 2 and 3) is therefore not optional homework: it is both
-the measurement two slices are gated on and the campaign's own finish line, run against a stack
-with the server enabled once slices 2 through 7 stand.
+connect-and-observe pass is therefore not optional homework: it is both the measurement slices
+were gated on and the campaign's own finish line. Its Codex leg ran on 2026-08-19 and closed open
+questions 2 and 3; what remains for the finish line is the RFC 8707 `resource` observation and
+the other two clients, run against a stack with the server enabled once slices 2 through 7 stand.
 
 ## Open questions
 
@@ -371,41 +387,45 @@ with the server enabled once slices 2 through 7 stand.
    slice 1 spike: the question does not arise.** `grants` never calls it. Decision 2 records the
    measurement, and the risk that this would send the design back to Spring Authorization Server is
    retired.
-2. **The redirect-URI shape Codex actually registers** — *blocks slice 6's final validation; the
-   slice ships exact-match as the placeholder.* Pending the connect-and-observe pass
-   `stack-architecture.md` open question 6 describes; not runnable where this was written, since it
-   needs the client and a browser. The same pass now also records **whether the measured clients
-   send RFC 8707 `resource`**: Decision 4's consent-per-resource and Decision 9's per-member claims
-   key on it, the MCP specification requires clients to send it, and the recorded field evidence
-   (claude.ai omitting it) predates that requirement and concerns a hosted connector this does not
-   target. The placeholder is fail-loud: an authorize request without a resolvable `resource` is
-   refused with `invalid_target` rather than answered with a guessed audience.
-3. **Whether any client refuses to proceed without `scopes_supported`** — same pass. Decision 11 of
-   `stack-architecture.md` advertises none; this confirms the choice survives contact.
+2. ~~**The redirect-URI shape Codex actually registers**~~ — **measured 2026-08-19: exact match
+   survives.** Codex registers `http://127.0.0.1:<ephemeral port>/callback/<callback_id>` (or
+   `<configured base>/<callback_id>` under a custom `mcp_oauth_callback_url`) and sends the same
+   complete URI at `/authorize`, re-registering on retry with its new port. Decision 5 records the
+   consequences; slice 6 is unblocked. **Still owed from the same setup: whether the measured
+   clients send RFC 8707 `resource`.** Decision 4's consent-per-resource and Decision 9's
+   per-member claims key on it; the MCP specification requires clients to send it, and the older
+   field evidence (claude.ai omitting it) predates that requirement and concerns a hosted
+   connector this does not target. The authorize placeholder stays fail-loud — `invalid_target`
+   when no resource resolves, never a guessed audience — until the observation is taken.
+3. ~~**Whether any client refuses to proceed without `scopes_supported`**~~ — **measured
+   2026-08-19 for Codex: it does not.** Against metadata omitting `scopes_supported` entirely,
+   Codex registered and built the authorization URL, and — with no scopes configured on its side —
+   sent no `scope` parameter at all; its documented behavior prefers `scopes_supported` when
+   present and falls back to its own configuration otherwise. Decision 11 of
+   `stack-architecture.md` stands. The answer is per-client rather than universal: Claude Code and
+   ChatGPT Desktop are observed when the acceptance chain runs against them.
 4. ~~**The error-code range.**~~ **Closed 2026-08-19 — Decision 10: a new `TQL-OAUTH` domain.**
 5. ~~**What `TQL-SEC-4146` becomes.**~~ **Closed 2026-08-19 — Decision 9: it narrows.** The
    exchange signs with the authorization server's key when the server is enabled; the refusal keeps
    firing only when issuing is enabled and no key material of either kind exists.
-6. **Where the consent and authorize pages live** — *gates slice 4.* Two candidates: routes in the
-   bundled `auth-ui` application (declared YAML + hc templates beside the login page, provider
-   beans through the extension, the account surface's shape), or route builders owned entirely by
-   `tesseraql-oauth` (the OIDC module's shape). Recommended: **`auth-ui`** — consent is a page a
-   person reads next to sign-in, the app already carries the hc login markup and its lint/coverage
-   ride the declarative surface, and the protocol endpoints (`/token`, `/register`) stay in the
-   extension where no page exists to declare.
-7. **The exchange's member axis after unification** — *gates slice 9.* A unified token needs an
-   audience, and "the surface's own" serves only the deploy endpoint. Recommended: `tesseraql token
-   --url <origin>` and the console token page gain an **application selector** (`--app-name
-   <member>` / a page dropdown over the caller's entitled members), minting that member's audience
-   and that member's active view — the same computation Decision 9 fixes for the authorization
-   server — with the surface's own audience as the default when nothing is named, which is today's
-   behavior verbatim.
-8. **Refresh-token lifetimes and rotation windows** — *gates slice 5's configuration surface, not
-   its mechanics.* Rotation-on-use and reuse detection are decided (Decision 9 of
-   `stack-architecture.md`); the numbers (idle expiry, absolute expiry, the access-token lifetime
-   the JWKS rotation overlap is bounded by) should be chosen against the measured clients' refresh
-   behavior in the same observe pass rather than invented. Placeholder defaults ship with the slice
-   and are named in the operator documentation.
+6. ~~**Where the consent and authorize pages live**~~ — **closed 2026-08-19 on the
+   recommendation: `auth-ui`.** Consent is a page a person reads beside sign-in; the app already
+   carries the hc login markup, and its lint and coverage ride the declarative surface. The
+   protocol endpoints (`/token`, `/register`) stay in the extension, where no page exists to
+   declare. The rejected alternative — route builders owned entirely by `tesseraql-oauth`, the
+   OIDC module's shape — is kept here because it is the one a reader would propose again.
+7. ~~**The exchange's member axis after unification**~~ — **closed 2026-08-19 on the
+   recommendation.** `tesseraql token --url <origin>` gains `--app-name <member>` and the console
+   token page gains an application selector over the caller's entitled members, minting that
+   member's audience and that member's active view — the same computation Decision 9 fixes for the
+   authorization server. Nothing named keeps today's behavior verbatim: the surface's own
+   audience.
+8. ~~**Refresh-token lifetimes and rotation windows**~~ — **closed 2026-08-19 on the
+   recommendation: placeholder defaults ship with slice 5**, named in the operator documentation,
+   and the numbers (idle expiry, absolute expiry, the access-token lifetime the JWKS rotation
+   overlap is bounded by) are tuned against the measured clients' refresh behavior once the
+   observe pass runs against a live stack. Rotation-on-use and reuse detection were never open —
+   Decision 9 of `stack-architecture.md` fixed them.
 
 ## Slices
 
@@ -419,7 +439,7 @@ dependency order given below, not the numeric one.
 | 3 | Signing keys in the framework datasource, generation at the host's migration moment, JWKS publication at the origin (the fence gains `/.well-known/*`), `kid` rotation |
 | 4 | `/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE |
 | 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain |
-| 6 | `/register`, the client registry, exact-match redirect validation as the placeholder — final shape once open question 2 answers |
+| 6 | `/register`, the client registry, exact-match redirect validation (measured — open question 2) |
 | 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |
 | 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
 | 9 | Issuer unification (Decision 9): members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the exchange's member axis (open question 7), and the `session-token-exchange.md` premise edit |

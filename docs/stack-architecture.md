@@ -88,6 +88,13 @@ together with a redirect-URI defect, since Codex appends `/callback/<callback_id
 configured callback. **Do not design against it. Do verify the redirect-URI shape empirically**
 before finalising the authorization server's redirect validation; strict exact-match will fail.
 
+*Measured 2026-08-19, and the last sentence was wrong in the right direction: Codex registers the
+complete callback URI — default `http://127.0.0.1:<ephemeral port>/callback/<callback_id>`, or
+`<mcp_oauth_callback_url>/<callback_id>` when configured — and sends the same URI at
+`/authorize`, re-registering on retry with a new port. Strict exact match therefore works: the
+appended path is registered too. Recorded in `token-issuance.md` open question 2 and its
+Decision 5.*
+
 ### 4. TesseraQL builds an authorization server for its own users, and only for those
 
 `authorization-server.md` Decision 1 surveyed candidates against one criterion: is there an
@@ -124,7 +131,11 @@ all, because there is no authorization server to name in `authorization_servers`
 
 *Campaign started 2026-08-19 — [token-issuance.md](token-issuance.md) is the implementation
 design, revised that day to the stack as shipped (the surface runtime, the stack file's security
-graft, the acting-role contract) and closing its own open questions 4 and 5.*
+graft, the acting-role contract). Same-day review closed its open questions: two on decisions
+(the `TQL-OAUTH` domain, the fate of `TQL-SEC-4146`), two on the Codex leg of the
+connect-and-observe pass (exact-match redirect validation, absent `scopes_supported`), three on
+reviewed recommendations (consent page in `auth-ui`, the exchange's member axis, placeholder
+refresh lifetimes). Still owed: the RFC 8707 `resource` observation.*
 
 ### 5. Two candidates remain, and the choice is whether a second process is acceptable
 
@@ -1627,9 +1638,15 @@ could invalidate a design assumption.
    `tql.app.deploy` for the deploy surface, `tql.studio.edit` reserved for slice 8,
    `tql.iam.admin.*` store-wide; roles remain the deployment's bundles, and a framework
    surface checks atoms, never roles.
-5. **What `TQL-SEC-4146` becomes** once TesseraQL holds a private key — *gates slice 5.* The refusal
-   was correct under a premise Decision 8 removes.
-6. **How Codex actually behaves on connection** — *measurement; gates slice 5.* It appends
-   `/callback/<callback_id>` to the configured callback, so strict exact-match redirect validation
-   will reject it. The same connect-and-observe pass answers Decision 11's `scope` question and
-   confirms Decision 3's finding against a live server rather than against issue threads.
+5. ~~**What `TQL-SEC-4146` becomes**~~ once TesseraQL holds a private key. **Closed 2026-08-19 by
+   `token-issuance.md` Decision 9: it narrows.** The session-token exchange signs with the
+   authorization server's key when the server is enabled, so the refusal keeps firing only when
+   issuing is enabled and no key material of either kind exists.
+6. ~~**How Codex actually behaves on connection**~~ — **measured 2026-08-19.** Codex registers the
+   complete callback (`http://127.0.0.1:<ephemeral port>/callback/<callback_id>` by default,
+   `<mcp_oauth_callback_url>/<callback_id>` when configured) and sends the same URI at
+   `/authorize`, re-registering on retry with its new port — so strict exact match works, and this
+   entry's original expectation is corrected in Decision 3. Without `scopes_supported` Codex
+   proceeds and, unconfigured, sends no `scope` at all, confirming Decision 11. Recorded in
+   `token-issuance.md` open questions 2 and 3; still unobserved there: the RFC 8707 `resource`
+   parameter.
