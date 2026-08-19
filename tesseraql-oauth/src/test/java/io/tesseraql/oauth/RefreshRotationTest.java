@@ -121,6 +121,40 @@ class RefreshRotationTest {
         assertThat(listed.get(0).getAudiences()).containsExactly(RESOURCE);
     }
 
+    @Test
+    void mintsReResolveTheSubjectAndADeadViewIsInvalidGrant() {
+        java.util.concurrent.atomic.AtomicReference<java.util.Optional<TesseraqlOAuthDataProvider.SubjectView.View>> answer = new java.util.concurrent.atomic.AtomicReference<>(
+                java.util.Optional.of(
+                        new TesseraqlOAuthDataProvider.SubjectView.View(
+                                java.util.List.of("staff", "approver"),
+                                java.util.List.of("shop.approve"))));
+        TesseraqlOAuthDataProvider resolving = new TesseraqlOAuthDataProvider(store, signer,
+                clock, TesseraqlOAuthDataProvider.DEFAULT_ACCESS_TOKEN_LIFETIME,
+                TesseraqlOAuthDataProvider.DEFAULT_REFRESH_TOKEN_LIFETIME,
+                (login, resource, acting) -> answer.get(), "roles", "permissions",
+                "https://stack.example.com");
+
+        AccessTokenRegistration reg = new AccessTokenRegistration();
+        reg.setClient(client);
+        reg.setSubject(new UserSubject("eve", "u-1"));
+        reg.setAudiences(List.of(RESOURCE));
+        reg.setGrantType(OAuthConstants.AUTHORIZATION_CODE_GRANT);
+        ServerAccessToken token = resolving.createAccessToken(reg);
+
+        // The claims are the store's current answer, not something frozen into the grant.
+        assertThat(signer.lastClaims())
+                .containsEntry("roles", java.util.List.of("staff", "approver"))
+                .containsEntry("permissions", java.util.List.of("shop.approve"));
+
+        // A subject the store can no longer resolve — disabled, or a revoked capacity —
+        // ends at the next mint as invalid_grant rather than riding out the chain.
+        answer.set(java.util.Optional.empty());
+        assertThatThrownBy(() -> resolving.refreshAccessToken(client,
+                token.getRefreshToken(), List.of()))
+                .isInstanceOf(OAuthServiceException.class)
+                .hasMessageContaining(OAuthConstants.INVALID_GRANT);
+    }
+
     private ServerAccessToken mintInitial(String actingRole) {
         AccessTokenRegistration reg = new AccessTokenRegistration();
         reg.setClient(client);

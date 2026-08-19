@@ -137,6 +137,20 @@ look a token up by its value. Neither is built — sign-out revokes refresh toke
 an endpoint — but if either arrives, this is the method that has to grow an answer, and
 reconstructing a `ServerAccessToken` from validated JWT claims is how it should be answered.
 
+*Slice 5 shipped 2026-08-19: `POST /_tesseraql/oauth/token` with the `code` and `refresh`
+handlers over this provider — client authentication first (Basic or form credentials against
+the stored hash in constant time; a public client presents its id alone), OAuth's wire
+vocabulary on every refusal, `Cache-Control: no-store` on every answer. The mint gained the
+re-resolution decision 4 contracted: a `SubjectView` seam asks the identity store for the
+subject's **current** view at every mint — code redemption and refresh alike — so grant
+changes, validity windows and rule recomputation propagate at refresh cadence, a disabled
+account stops refreshing, and a revoked acting role ends the connection's capacity as
+`invalid_grant`. Claims carry the stack's own claim names (the same config the derived member
+blocks read) and the origin as `iss` — the mint-side half of the derived validation, caught by
+the end-to-end test when it was missing. The lifetime placeholders stay
+`tesseraql.security.oauth.accessTokenTtl`/`refreshTokenTtl` in the configuration reference;
+the operator cookbook page rides the metadata slice, where the surface becomes discoverable.*
+
 The tables ride the **`security` migration component**, beside sessions — which the hoist has the
 host migrate once for the whole stack, before any runtime starts. The store implementation reads
 the framework datasource through the extension seam (`ExtensionContext.frameworkDataSource()`),
@@ -514,7 +528,7 @@ dependency order given below, not the numeric one.
 | 2 | ~~The `tesseraql-oauth` module, storage schema on the `security` migration component, the twelve-method provider proven against CXF's `code` and `refresh` grant flows in unit tests~~ — **shipped 2026-08-19**; the measured corrections live in Decisions 1 and 2 |
 | 3 | ~~Signing keys in the framework datasource, generation on first start, JWKS publication at the origin, `kid` rotation~~ — **shipped 2026-08-19**; the strengthened generation guard and the fence deferral are in Decision 3's note |
 | 4 | ~~`/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE~~ — **shipped 2026-08-19**; the three-surface split and the deferrals are in Decision 4's note |
-| 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain |
+| 5 | ~~`/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain~~ — **shipped 2026-08-19**; the mint-time re-resolution is in Decision 2's note |
 | 6 | `/register`, the client registry, exact-match redirect validation (measured — open question 2) |
 | 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |
 | 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
