@@ -268,9 +268,15 @@ incoming package carries a version that is already on disk. Under a running host
 the delete-a-held-tree operation Windows refuses (and Linux silently tolerates, which is worse —
 the platforms diverge). The fix:
 
-- **`place` refuses an existing version directory** with an actionable message: bump the version.
-  A version directory, once placed, is immutable — the same contract the catalog's
-  rollback already relies on ("the previous version's files must still be present").
+- **`place` never touches an existing version directory.** Byte-identical content is the
+  idempotent re-install [stack-architecture.md](stack-architecture.md) Decision 23 already
+  promised — now a true no-op instead of a delete-and-replace that happened to produce the same
+  bytes. Different content under an existing version is refused with an actionable message: bump
+  the version. (The refinement over this document's first draft — which said refuse outright —
+  exists because the idempotent re-install was a tested contract this document had not met yet;
+  the content comparison is what honours both.) A version directory, once placed, is immutable —
+  the same contract the catalog's rollback already relies on ("the previous version's files must
+  still be present").
 - Pre-1.0 there is no compatibility carve-out (AGENTS.md rule 10); iterating on an unreleased
   package is a `dev` workflow against a source tree, not repeated `deploy` of one version.
 - This removes `deleteRecursively` from the install path entirely rather than special-casing

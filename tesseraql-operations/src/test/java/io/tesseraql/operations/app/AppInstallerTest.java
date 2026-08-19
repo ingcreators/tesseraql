@@ -118,6 +118,35 @@ class AppInstallerTest {
         assertThat(catalog.find("app")).get().extracting(InstalledApp::version).isEqualTo("1.0.0");
     }
 
+    /**
+     * A placed version directory is immutable (docs/runtime-footprint.md decision 4). The
+     * idempotent re-install above is a true no-op — nothing is deleted or replaced, so a running
+     * host never loses a file it holds open (Windows refuses such a delete mid-walk; Linux
+     * silently tolerates it) — and a same-version package with <em>different</em> bytes is
+     * refused: moving a name forward means a new version.
+     */
+    @Test
+    void sameVersionWithDifferentContentIsRefused(@TempDir Path dir) throws Exception {
+        Path installRoot = dir.resolve("apps");
+        Path v1 = pack(dir.resolve("v1.tqlapp"), Map.of(
+                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: app\n    version: 1.0.0\n",
+                "web/api/get.yml", "version: tesseraql/v1\nid: items.search\n"));
+        InstalledApp installed = new AppInstaller().install(v1, installRoot);
+
+        Path rebuilt = pack(dir.resolve("v1-rebuilt.tqlapp"), Map.of(
+                "config/tesseraql.yml", "tesseraql:\n  app:\n    name: app\n    version: 1.0.0\n",
+                "web/api/get.yml", "version: tesseraql/v1\nid: items.search.changed\n"));
+        assertThatThrownBy(() -> new AppInstaller().install(rebuilt, installRoot))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-APP-4090")
+                .hasMessageContaining("immutable")
+                .hasMessageContaining("bump the package version");
+
+        // The installed tree kept its original bytes: the refusal never touched it.
+        assertThat(installRoot.resolve(installed.path()).resolve("web/api/get.yml"))
+                .content().contains("items.search").doesNotContain("changed");
+    }
+
     private static Path pack(Path output, Map<String, String> entries) throws Exception {
         Map<String, String> ordered = new LinkedHashMap<>(entries);
         try (OutputStream out = Files.newOutputStream(output);

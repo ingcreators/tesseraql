@@ -261,6 +261,14 @@ All notable changes to TesseraQL are documented here. The format follows
   bundle out of the CLI's compile and runtime scope for good, and the embedded-db
   integration test asserts the server that starts is the configured major.
 
+- **A placed version directory is immutable** (docs/runtime-footprint.md decision 4,
+  slice 4). Installing a version that is already on disk is a true no-op when the package is
+  byte-identical (the idempotent re-install, as before) and is refused with `TQL-APP-4090`
+  when the content differs — previously the directory was silently deleted and replaced,
+  which loses files a running host holds open (Windows refuses the delete mid-walk and
+  leaves a half-deleted version; Linux tolerates it silently). Moving a name forward means a
+  new version; nothing in the install path deletes a placed tree anymore.
+
 - **One Studio per stack, in development only** (docs/studio-shell.md slice 3). The workshop
   moves to the shells model: `/_tesseraql/studio` at the stack's origin is the switcher —
   members filtered by the caller's `tql.studio.edit` atoms, deny-by-default — and each
