@@ -173,6 +173,20 @@ lifetime rather than by the refresh-token lifetime, because refresh tokens are o
 resource server and validated by the store. That bound is the reason rotation is affordable at all,
 and it should be stated in the operator documentation rather than left to be discovered.
 
+*Shipped with slice 3 (2026-08-19), with one strengthening: generation does not lean on the
+host's migration moment after all — the first key's `kid` is the reserved primary key
+`initial`, so concurrent first starts race on the row and exactly one generates, which holds for
+any number of replicas rather than for one blessed actor. Rotation inserts the new signer before
+retiring strictly older keys, so the stack is never keyless and two concurrent rotations leave
+two live keys rather than zero. The JWKS is served at `/_tesseraql/oauth/jwks` — inside the
+shipped origin fence, so no relay change was needed; the `/.well-known/*` fence gain travels
+with the metadata slice that serves documents there. `Rs256TokenSigner` fills the signer seam
+(`kid` in the header), and the round trip is proven against `Jwks`, the exact parser member
+bearer validation uses — the interop slice 9 stands on. The extension ships in the runtime like
+Studio (a framework surface, not an opt-in module), inert wherever the stack file's graft does
+not reach; a member carrying the key is refused at boot with `TQL-OAUTH-3000` — Decision 10's
+domain, minted — and the lint half of Decision 8's refusal lands with the authorize slice.*
+
 ### 4. Authentication and consent reuse what exists; consent is per client and per resource
 
 `/authorize` asks whether the caller holds a session and does nothing else about identity. There is
@@ -457,7 +471,7 @@ dependency order given below, not the numeric one.
 | --- | --- |
 | 1 | ~~Spike: `getAccessToken` reconstruction against CXF's `code` and `refresh` flows~~ — **done 2026-08-16**, and it retired its own question |
 | 2 | ~~The `tesseraql-oauth` module, storage schema on the `security` migration component, the twelve-method provider proven against CXF's `code` and `refresh` grant flows in unit tests~~ — **shipped 2026-08-19**; the measured corrections live in Decisions 1 and 2 |
-| 3 | Signing keys in the framework datasource, generation at the host's migration moment, JWKS publication at the origin (the fence gains `/.well-known/*`), `kid` rotation |
+| 3 | ~~Signing keys in the framework datasource, generation on first start, JWKS publication at the origin, `kid` rotation~~ — **shipped 2026-08-19**; the strengthened generation guard and the fence deferral are in Decision 3's note |
 | 4 | `/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE |
 | 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain |
 | 6 | `/register`, the client registry, exact-match redirect validation (measured — open question 2) |

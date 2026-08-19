@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The stack signs RS256, and every replica serves one JWKS** (docs/token-issuance.md
+  slice 3). `security.oauth.enabled` in `tesseraql-stack.yml` installs the authorization
+  server's surface on the stack surface runtime; first start generates an RSA-2048 pair into
+  `tql_oauth_signing_key` on the `security` component (V6) — exactly-once without a
+  coordinator, because the first key's `kid` is a reserved primary key and concurrent starts
+  race on it. `GET /_tesseraql/oauth/jwks` publishes the key set; rotation
+  (`SigningKeys.rotate()`) inserts the new signer before retiring predecessors, and a retired
+  key stays published until every access token it signed has expired — the bound is the
+  access-token lifetime (`tesseraql.security.oauth.accessTokenTtl`, default 15m). Access
+  tokens now mint RS256 with a `kid` header through `Rs256TokenSigner`, and a minted token
+  validates through the same `Jwks` parser member bearer validation uses. Enabling the key on
+  a stack member is refused at boot (`TQL-OAUTH-3000`) — the issuer is the stack's, declared
+  in the stack file.
+
 - **The authorization server's grant core: CXF's grant layer beneath TesseraQL's own storage**
   (docs/token-issuance.md slice 2). A new `tesseraql-oauth` module drives CXF's real
   authorization-code and refresh grant handlers over a twelve-method data provider backed by
