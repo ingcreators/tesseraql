@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.studio.audit
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
+  page:
+    type: integer
+    required: false
+  sort:
+    type: string
+    required: false
+  dir:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.audit
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        q: params.q
+        page: params.page
+        sort: params.sort
+        dir: params.dir
+response:
+  html:
+    status: 200
+    template: audit.html
+    model:
+      page: main

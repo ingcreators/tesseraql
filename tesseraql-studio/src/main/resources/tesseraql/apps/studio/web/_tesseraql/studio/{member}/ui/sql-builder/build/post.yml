@@ -1,0 +1,44 @@
+version: tesseraql/v1
+id: tql.studio.sqlBuilder.build
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  table:
+    type: string
+    required: true
+  operation:
+    type: string
+    required: true
+  column:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.sqlBuilder.build
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        table: params.table
+        operation: params.operation
+        column: params.column
+response:
+  html:
+    status: 200
+    template: build.html
+    model:
+      b: main

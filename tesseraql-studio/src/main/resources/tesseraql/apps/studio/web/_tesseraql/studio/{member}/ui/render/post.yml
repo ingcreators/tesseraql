@@ -1,0 +1,54 @@
+version: tesseraql/v1
+id: tql.studio.render
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+  content:
+    type: string
+    required: false
+  sampleModel:
+    type: string
+    required: false
+  live:
+    type: string
+    required: false
+  scripts:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.render
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        path: params.path
+        content: params.content
+        sampleModel: params.sampleModel
+        live: params.live
+response:
+  html:
+    status: 200
+    template: render.html
+    model:
+      render: main
+      scripts: params.scripts
+    headers:
+      Content-Security-Policy: "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data:; frame-ancestors 'none'"

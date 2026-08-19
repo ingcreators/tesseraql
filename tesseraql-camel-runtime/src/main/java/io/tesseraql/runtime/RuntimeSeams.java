@@ -24,11 +24,24 @@ import java.util.function.Consumer;
  * @param httpOutbound          the deny-by-default egress allow-list every outbound call obeys
  * @param modulesLoader         the app's module class loader (docs/module-scope.md)
  * @param mainDatasourceDialect the main datasource's configured or inferred dialect id
+ * @param hosted                whether a host is speaking at all ({@code false} on the unhosted
+ *                              boot — integration tests, library embedding)
+ * @param workshop              the host's workshop verdict (docs/studio-shell.md structural
+ *                              decision 1): the development loop over source trees; always
+ *                              {@code false} under {@code host} and on the unhosted boot it is
+ *                              not consulted
+ * @param stackMembers          the stack's member names, set only on the surface runtime's
+ *                              seams (the shell's switcher lists them); {@code null} everywhere
+ *                              else
+ * @param memberOrigins         the host's live member-origin lookup, set only on the surface
+ *                              runtime's seams — how a shell reaches a member's internal port
+ *                              across replaces; {@code null} everywhere else
  */
 public record RuntimeSeams(int port, String appName, Map<String, HikariDataSource> dataSources,
         TenantDataSources tenantDataSources, CalendarDecisions calendarDecisions,
         io.tesseraql.yaml.notify.NotificationChannels notificationChannels,
         RouteReloader reloader, Consumer<Runnable> postStart,
         io.tesseraql.yaml.http.HttpOutbound httpOutbound, ClassLoader modulesLoader,
-        String mainDatasourceDialect) {
+        String mainDatasourceDialect, boolean hosted, boolean workshop,
+        java.util.List<String> stackMembers, HostContext.MemberOrigins memberOrigins) {
 }

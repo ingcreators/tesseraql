@@ -1,0 +1,56 @@
+version: tesseraql/v1
+id: tql.studio.calendars.save
+kind: route
+recipe: command-json
+
+# Saves a calendar's weekend and fixed holiday dates as a draft (docs/jobs.md
+# "Business-day calendars"). Table-backed calendars refuse the form - their rows are
+# data, owned by the data browser. The service validates day names and ISO dates before
+# anything lands (TQL-STUDIO-4238).
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  name:
+    type: string
+    required: true
+  weekend_monday: { type: string, required: false }
+  weekend_tuesday: { type: string, required: false }
+  weekend_wednesday: { type: string, required: false }
+  weekend_thursday: { type: string, required: false }
+  weekend_friday: { type: string, required: false }
+  weekend_saturday: { type: string, required: false }
+  weekend_sunday: { type: string, required: false }
+  dates: { type: string, required: false }
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.calendars.save
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        name: params.name
+        weekend_monday: params.weekend_monday
+        weekend_tuesday: params.weekend_tuesday
+        weekend_wednesday: params.weekend_wednesday
+        weekend_thursday: params.weekend_thursday
+        weekend_friday: params.weekend_friday
+        weekend_saturday: params.weekend_saturday
+        weekend_sunday: params.weekend_sunday
+        dates: params.dates
+        permissions: principal.permissions
+        actor: principal.loginId
+response:
+  redirect:
+    status: 303
+    location: /_tesseraql/studio/ui/calendars?name={params.name}&saved=1

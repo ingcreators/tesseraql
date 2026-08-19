@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('TesseraQL Studio', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+</th:block>
+<div id="page-content" class="hc-stack">
+<!-- The switcher (docs/studio-shell.md structural decision 2): the members whose
+     tql.studio.edit atom the caller holds. Reach is decided here; authority is re-checked
+     by each member's own workshop on every delegated call. -->
+<div class="hc-empty" th:if="${#lists.isEmpty(studio.members)}">
+  <p class="hc-empty__title">No applications in your workshop scope.</p>
+  <p class="hc-field__message">Editing is per application: ask for the
+    <code>tql.studio.edit.&lt;name&gt;</code> grants you need.</p>
+</div>
+<section class="hc-card" th:each="member : ${studio.members}">
+  <div class="hc-card__header">
+    <a th:attr="href=@{${member.href}}" th:text="${member.name}">app</a>
+    <span class="hc-spacer"></span>
+    <span class="hc-badge">workshop</span>
+  </div>
+</section>
+</div>
+</html>

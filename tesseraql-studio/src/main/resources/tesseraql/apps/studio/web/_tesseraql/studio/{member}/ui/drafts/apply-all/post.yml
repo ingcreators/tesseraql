@@ -1,0 +1,35 @@
+version: tesseraql/v1
+id: tql.studio.draftsApplyAll
+kind: route
+recipe: command-json
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+
+# Applies every clean pending draft at once (Studio Drafts bulk actions); conflicting drafts are
+# left for a manual diff review in the editor. Edit-gated in the provider. Redirects back to the
+# Drafts list so the outcome (remaining conflicts, if any) is visible.
+
+steps:
+  - id: main
+    service:
+      name: studio.shell.studio.draftsApplyAll
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        actor: principal.loginId
+        permissions: principal.permissions
+response:
+  redirect:
+    location: /_tesseraql/studio/ui/drafts?applied=1

@@ -152,11 +152,11 @@ class CopilotIntegrationTest {
                 "{\"role\":\"assistant\",\"content\":\"Saved a draft; review and apply it in"
                         + " the editor.\"}"));
 
-        HttpResponse<String> sent = postForm("/_tesseraql/studio/ui/copilot/send",
+        HttpResponse<String> sent = postForm("/_tesseraql/studio/copilot-it/ui/copilot/send",
                 "message=" + URLEncoder.encode("bump ping to v2", StandardCharsets.UTF_8));
         assertThat(sent.statusCode()).isEqualTo(303);
 
-        HttpResponse<String> panel = get("/_tesseraql/studio/ui/copilot");
+        HttpResponse<String> panel = get("/_tesseraql/studio/copilot-it/ui/copilot");
         assertThat(panel.statusCode()).isEqualTo(200);
         assertThat(panel.body()).contains("bump ping to v2")
                 .contains("used: save_draft")
@@ -181,7 +181,7 @@ class CopilotIntegrationTest {
         REPLIES.add("{\"role\":\"assistant\",\"content\":\"Streaming hello from the"
                 + " copilot\"}");
 
-        HttpResponse<String> sent = postHtmx("/_tesseraql/studio/ui/copilot/send",
+        HttpResponse<String> sent = postHtmx("/_tesseraql/studio/copilot-it/ui/copilot/send",
                 "message=" + URLEncoder.encode("stream me", StandardCharsets.UTF_8));
         assertThat(sent.statusCode()).isEqualTo(200);
         // The chat-messages fragments: the user item, the streaming placeholder, and the
@@ -199,7 +199,7 @@ class CopilotIntegrationTest {
 
         // The SSE stream: chunk frames while the model streams, one done frame at the end.
         HttpResponse<String> stream = get(
-                "/_tesseraql/studio/ui/copilot/stream?turn=" + turn.group(1));
+                "/_tesseraql/studio/copilot-it/ui/copilot/stream?turn=" + turn.group(1));
         assertThat(stream.statusCode()).isEqualTo(200);
         assertThat(stream.headers().firstValue("Content-Type").orElse(""))
                 .startsWith("text/event-stream");
@@ -212,10 +212,10 @@ class CopilotIntegrationTest {
                 .contains("data-role=\"assistant\"");
 
         // Single markup source: a page reload renders the exact bytes done carried.
-        assertThat(get("/_tesseraql/studio/ui/copilot").body())
+        assertThat(get("/_tesseraql/studio/copilot-it/ui/copilot").body())
                 .contains(done.substring("data: ".length()));
         // The turn id is single-use: replaying the stream URL is refused.
-        assertThat(get("/_tesseraql/studio/ui/copilot/stream?turn=" + turn.group(1))
+        assertThat(get("/_tesseraql/studio/copilot-it/ui/copilot/stream?turn=" + turn.group(1))
                 .statusCode()).isEqualTo(404);
         assertThat(REPLIES).isEmpty();
     }
@@ -230,14 +230,14 @@ class CopilotIntegrationTest {
                         "{\\"path\\":\\"web/api/ping/ping.sql\\",\\"content\\":\\"select 'v3' as answer\\\\n\\"}"}}]}""",
                 "{\"role\":\"assistant\",\"content\":\"Draft v3 saved; review and apply.\"}"));
 
-        HttpResponse<String> sent = postHtmx("/_tesseraql/studio/ui/copilot/send",
+        HttpResponse<String> sent = postHtmx("/_tesseraql/studio/copilot-it/ui/copilot/send",
                 "message=" + URLEncoder.encode("bump ping to v3", StandardCharsets.UTF_8));
         java.util.regex.Matcher turn = java.util.regex.Pattern
                 .compile("stream\\?turn=([0-9a-f-]+)").matcher(sent.body());
         assertThat(turn.find()).isTrue();
 
         HttpResponse<String> stream = get(
-                "/_tesseraql/studio/ui/copilot/stream?turn=" + turn.group(1));
+                "/_tesseraql/studio/copilot-it/ui/copilot/stream?turn=" + turn.group(1));
         // The tool marker chunk rode the stream, and done shows the tool affordance.
         assertThat(stream.body()).contains("save_draft")
                 .contains("event: done")
@@ -255,16 +255,16 @@ class CopilotIntegrationTest {
     @Test
     void anUnknownTurnIdIsRefusedBeforeTheStreamOpens() throws Exception {
         HttpResponse<String> stream = get(
-                "/_tesseraql/studio/ui/copilot/stream?turn=not-a-turn");
+                "/_tesseraql/studio/copilot-it/ui/copilot/stream?turn=not-a-turn");
         assertThat(stream.statusCode()).isEqualTo(404);
     }
 
     /** The htmx path validates like the YAML route did: a blank message is a 400. */
     @Test
     void aBlankMessageIsRefused() throws Exception {
-        assertThat(postHtmx("/_tesseraql/studio/ui/copilot/send", "message=")
+        assertThat(postHtmx("/_tesseraql/studio/copilot-it/ui/copilot/send", "message=")
                 .statusCode()).isEqualTo(400);
-        assertThat(postForm("/_tesseraql/studio/ui/copilot/send", "message=")
+        assertThat(postForm("/_tesseraql/studio/copilot-it/ui/copilot/send", "message=")
                 .statusCode()).isEqualTo(400);
     }
 

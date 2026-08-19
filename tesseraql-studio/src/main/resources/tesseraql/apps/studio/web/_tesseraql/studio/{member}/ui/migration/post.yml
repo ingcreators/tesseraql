@@ -1,0 +1,54 @@
+version: tesseraql/v1
+id: tql.studio.migration.create
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  datasource:
+    type: string
+    required: false
+  vendor:
+    type: string
+    required: false
+  kind:
+    type: string
+    required: false
+  description:
+    type: string
+    required: true
+  ddl:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.migration.create
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        datasource: params.datasource
+        vendor: params.vendor
+        kind: params.kind
+        description: params.description
+        ddl: params.ddl
+        actor: principal.loginId
+        permissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: created.html
+    model:
+      mig: main

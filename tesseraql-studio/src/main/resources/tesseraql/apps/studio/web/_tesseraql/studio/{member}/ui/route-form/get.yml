@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.studio.routeForm
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.routeForm.view
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        path: params.path
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: route-form.html
+    model:
+      rf: main

@@ -45,6 +45,27 @@ per structural decision 4's invariant. The studio app's route bindings moved fro
 `principal.roles` to `principal.permissions`, the capability switches lost their
 `!readOnly` conjunct, and the bootstrap baseline gained `tql.studio.edit.*`.
 
+**Slice 3 is shipped** (the shell): `studio` joined the topology skips; the host computes the
+workshop verdict (`dev` ∧ no `catalog.json`) and hands it down through `HostContext`; the
+surface mounts the studio app through a topology graft over the portal's static disable; the
+studio app tree went member-shaped everywhere — the ops-console `{member}` precedent, the
+unhosted boot serving the same tree over an in-process target as a switcher of one; the
+member's workshop API (`/_tesseraql/studio/data/{op}`) answers the export table on enumerated
+verbs, stamps `permissions` and `actor` from its own authenticated principal, and refuses
+without the atom 404-shaped (`TQL-STUDIO-4043`; unreachable is `TQL-STUDIO-5030`); and
+Copilot's send is the one proxied hop, its stream reached at the member's own prefixed
+address through the gateway. Four implementation decisions the design left open, recorded
+here: the member segment rides the same one-place emission channel as the base path — the
+Thymeleaf link builder and the redirect renderer rewrite studio-addressed targets when a
+member page renders, the `/_as/<role>` precedent, so the app tree's two-hundred-odd link
+expressions stay member-agnostic; scalar provider results (the CSV export, generated files)
+ride the delegation in a value envelope with byte arrays base64-marked, and the file-response
+ops take no shell chrome; the token-authorized docs-share pages bypass the atom on both sides
+(the signed link is the authorization, verified by the provider itself, exactly as they
+bypass the browser session); and the shell's transport keys are its own
+(`shellCookie`/`shellCsrf`), so a page whose own feature params are named `cookie`/`csrf` —
+the try-it console — forwards them as data.
+
 ## What exists today, measured
 
 **Half of the extraction is already done, and it is the half everyone assumes is missing.**

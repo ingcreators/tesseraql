@@ -619,9 +619,12 @@ final class StudioProviders {
                 })
                 .register("studio.menu.add", params -> {
                     studioEdit.requireEdit(params.get("principalPermissions"));
+                    // The item's own visibility field rides "itemPermissions": the workshop
+                    // stamps "permissions" with the caller's identity, so a data field of
+                    // that name could never survive the hop.
                     studio.addMenuItem(str(params, "label"), str(params, "href"),
                             str(params, "icon"), str(params, "roles"),
-                            str(params, "permissions"), actorOf(params));
+                            str(params, "itemPermissions"), actorOf(params));
                     return Map.of("added", true);
                 })
                 .register("studio.menu.remove", params -> {

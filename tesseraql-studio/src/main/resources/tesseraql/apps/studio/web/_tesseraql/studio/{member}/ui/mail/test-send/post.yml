@@ -1,0 +1,48 @@
+version: tesseraql/v1
+id: tql.studio.mail.testSend
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  path:
+    type: string
+    required: true
+  to:
+    type: string
+    required: true
+  content:
+    type: string
+    required: false
+  sampleModel:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.mailTestSend
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        shellPermissions: principal.permissions
+        path: params.path
+        to: params.to
+        content: params.content
+        sampleModel: params.sampleModel
+response:
+  html:
+    status: 200
+    template: test-send.html
+    model:
+      send: main

@@ -30,7 +30,7 @@ layer.
 install the tesseraql CLI            # one of the distribution channels below
 tesseraql new myapp                  # scaffold into the developer's own repo
 cd myapp                             # point config at a PostgreSQL (Docker optional)
-tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /<name>/_tesseraql/studio/ui
+tesseraql dev                        # runs the stack; your app at /<name>/, Studio at /_tesseraql/studio
 tesseraql scaffold crud --table ...  # iterate
 tesseraql lint | test | coverage     # verify, all CLI-native
 tesseraql package                    # build a .tqlapp

@@ -150,12 +150,12 @@ Two edges are deliberate:
   get to be loud is still the build: lint checks every reference
   (`TQL-BATCH-4201`–`4203` below).
 
-**Studio** has a job-policies form (`/_tesseraql/studio/ui/jobs`): a job's trigger —
+**Studio** has a job-policies form (`/_tesseraql/studio/<name>/ui/jobs`): a job's trigger —
 schedule with its calendar qualifiers, or an `after:` chain picked from the declared
 jobs — plus `overlap:` and `sla:` as structured fields, saved through the draft flow
 with the linter's rules enforced before anything lands (`TQL-STUDIO-4239`).
 Poll-triggered jobs keep the text editor: the poll block carries connector security the
-form must not blur. And a calendars surface (`/_tesseraql/studio/ui/calendars`): every declared
+form must not blur. And a calendars surface (`/_tesseraql/studio/<name>/ui/calendars`): every declared
 calendar with a **month grid** that draws the daily-consider outcome — business days,
 weekends, holidays, and, when previewing a `dayOfMonth:` rule, the nominal date and the
 one day the firing actually counts. Weekend and fixed `dates:` edit as a form and land

@@ -23,7 +23,7 @@ final class DocsProviders {
      * exactly as the inline lambdas did.
      */
     record Deps(AppManifest manifest, Path appHome, StudioEdit studioEdit,
-            ClassLoader modulesLoader) {
+            ClassLoader modulesLoader, String member) {
     }
 
     /** Registers every {@code docs.*} provider on {@code serviceProviders}, in boot order. */
@@ -37,7 +37,7 @@ final class DocsProviders {
         // (introspected table definitions) when present.
         io.tesseraql.studio.DocService doc = new io.tesseraql.studio.DocService(manifest);
         // Opt-in signed share links (F8, slice 3): off unless a signing secret is set.
-        ShareLinks shareLinks = ShareLinks.from(manifest.config());
+        ShareLinks shareLinks = ShareLinks.from(manifest.config(), deps.member());
         serviceProviders
                 .register("docs.index", params -> io.tesseraql.studio.DocViews.index(
                         doc.appName(), doc.spec(), doc.report(),

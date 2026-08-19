@@ -1,0 +1,45 @@
+version: tesseraql/v1
+id: tql.studio.calendars
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  name:
+    type: string
+    required: false
+  month:
+    type: string
+    required: false
+  dayOfMonth:
+    type: string
+    required: false
+  shift:
+    type: string
+    required: false
+  saved:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.calendars.view
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        name: params.name
+        month: params.month
+        dayOfMonth: params.dayOfMonth
+        shift: params.shift
+        saved: params.saved
+        permissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: calendars.html
+    model:
+      cal: main

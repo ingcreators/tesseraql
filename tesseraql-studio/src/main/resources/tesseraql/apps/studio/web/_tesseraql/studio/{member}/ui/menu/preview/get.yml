@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.menu.preview
+kind: route
+recipe: query-html
+
+# Preview-as-role: renders the menu filtered exactly as a caller holding the given role/permission
+# would see it (server-side visibleFor), so the author can verify visibility before shipping.
+input:
+  Cookie:
+    type: string
+    required: false
+  role:
+    type: string
+    required: false
+  permission:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.menu.preview
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        role: params.role
+        permission: params.permission
+response:
+  html:
+    status: 200
+    template: preview.html
+    model:
+      preview: main

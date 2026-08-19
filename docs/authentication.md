@@ -426,7 +426,7 @@ admin wizard in Studio (**OIDC provider**) generates this config block.
 
 ## Browser sessions and the admin console
 
-The bundled admin console — **Studio** (`/_tesseraql/studio/ui`), the **Operations console**
+The bundled admin console — **Studio** (`/_tesseraql/studio`), the **Operations console**
 ([the ops console](ops-console.md)), and **[IAM Admin](iam-admin.md)** (`/_tesseraql/admin/users`) — authenticates with a
 **browser session** (`auth: browser`): it is opened in a browser, not with a hand-minted token.
 Opening a protected page without a session redirects (302) to the login page,

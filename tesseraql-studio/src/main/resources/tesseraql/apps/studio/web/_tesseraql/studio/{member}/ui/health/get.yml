@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.studio.health
+kind: route
+recipe: query-html
+
+# Severity chips + search (docs/studio-ux-refresh.md slice 6): both narrow the findings
+# table server-side; the stat tiles always show the full counts.
+input:
+  Cookie:
+    type: string
+    required: false
+  severity:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.health
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        severity: params.severity
+        q: params.q
+response:
+  html:
+    status: 200
+    template: health.html
+    model:
+      health: main

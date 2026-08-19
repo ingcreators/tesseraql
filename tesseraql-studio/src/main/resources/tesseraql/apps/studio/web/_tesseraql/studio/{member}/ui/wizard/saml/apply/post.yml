@@ -1,0 +1,74 @@
+version: tesseraql/v1
+id: tql.studio.wizard.saml.apply
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  spAudience:
+    type: string
+    required: true
+  acsUrl:
+    type: string
+    required: true
+  nameIdFormat:
+    type: string
+    required: false
+  ssoUrl:
+    type: string
+    required: true
+  sloUrl:
+    type: string
+    required: false
+  idpMetadataPath:
+    type: string
+    required: false
+  publicKeyPath:
+    type: string
+    required: false
+  loginIdAttribute:
+    type: string
+    required: true
+  emailAttribute:
+    type: string
+    required: false
+  provision:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.wizard.saml.apply
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        spAudience: params.spAudience
+        acsUrl: params.acsUrl
+        nameIdFormat: params.nameIdFormat
+        ssoUrl: params.ssoUrl
+        sloUrl: params.sloUrl
+        idpMetadataPath: params.idpMetadataPath
+        publicKeyPath: params.publicKeyPath
+        loginIdAttribute: params.loginIdAttribute
+        emailAttribute: params.emailAttribute
+        provision: params.provision
+        permissions: principal.permissions
+        actor: principal.loginId
+response:
+  html:
+    status: 200
+    template: applied.html
+    model:
+      result: main

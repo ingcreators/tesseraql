@@ -46,7 +46,7 @@ class StudioIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
-    // The bundled Studio UI (/_tesseraql/studio/ui/**) authenticates by browser session; the
+    // The bundled Studio UI (/_tesseraql/studio/user-admin/ui/**) authenticates by browser session; the
     // hand-built JSON API (/_tesseraql/studio/*) still authenticates by bearer JWT. Tests of the UI
     // carry these session cookies; tests of the JSON API keep using token()/*WithToken bearers.
     static String adminCookie;
@@ -180,7 +180,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiExplorerRendersDirectoryTreeAndFilter() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // A filter box and the kit's hc-tree (slice 4): semantic nested lists installTree
@@ -196,7 +196,8 @@ class StudioIntegrationTest {
     @Test
     void uiExplorerFilterNarrowsTheRenderedTree() throws Exception {
         // The htmx filter re-renders the page server-side for q; the input echoes the query.
-        HttpResponse<String> response = get("/_tesseraql/studio/ui?q=" + enc("search"), true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui?q=" + enc("search"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("users.search").contains("value=\"search\"");
@@ -206,7 +207,7 @@ class StudioIntegrationTest {
     void mailTestSendReportsAMissingChannelInsteadOfFailing() throws Exception {
         // No mail channel declares this template — the composer's test send answers with
         // a message, never a 500 (the fixture's channel template is a .txt body).
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/mail/test-send",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/mail/test-send",
                 "path=" + enc("templates/mail/welcome.html") + "&to=" + enc("dev@example.com"));
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -215,7 +216,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiPagesListsHtmlRoutesWithTheirLadderState() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/pages", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/pages", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The stats route is a declarative dashboard view (never ejected by other tests);
@@ -231,13 +232,13 @@ class StudioIntegrationTest {
         String form = "path=" + enc("web/users/index.html");
 
         // Default: the fully sandboxed frame — no scripts, ever.
-        HttpResponse<String> inert = postForm("/_tesseraql/studio/ui/render", form);
+        HttpResponse<String> inert = postForm("/_tesseraql/studio/user-admin/ui/render", form);
         assertThat(inert.statusCode()).isEqualTo(200);
         assertThat(inert.body()).contains("sandbox=\"\"").doesNotContain("allow-scripts");
 
         // Opt-in: allow-scripts WITHOUT allow-same-origin (opaque origin) — hc behaviors
         // initialize, the Studio session and app routes stay unreachable.
-        HttpResponse<String> live = postForm("/_tesseraql/studio/ui/render",
+        HttpResponse<String> live = postForm("/_tesseraql/studio/user-admin/ui/render",
                 form + "&scripts=true");
         assertThat(live.statusCode()).isEqualTo(200);
         assertThat(live.body()).contains("sandbox=\"allow-scripts\"")
@@ -252,7 +253,8 @@ class StudioIntegrationTest {
     @Test
     void uiBuilderOpensAShellWrappedPage() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/builder?path=" + enc("web/users/index.html"), true);
+                "/_tesseraql/studio/user-admin/ui/builder?path=" + enc("web/users/index.html"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The canvas iframe mounts, the verbatim prefix carries the shell wrapper, and the
@@ -267,14 +269,16 @@ class StudioIntegrationTest {
     void uiBuilderFallsBackForIneligibleFilesAndSourceOffersTheEntry() throws Exception {
         // A .txt mail body is not builder material — read-only with the escape hatch.
         HttpResponse<String> fallback = get(
-                "/_tesseraql/studio/ui/builder?path=" + enc("templates/mail/provisioned.txt"),
+                "/_tesseraql/studio/user-admin/ui/builder?path="
+                        + enc("templates/mail/provisioned.txt"),
                 true);
         assertThat(fallback.statusCode()).isEqualTo(200);
         assertThat(fallback.body()).contains("not builder-eligible");
 
         // The source page offers "Edit visually" for the eligible page template.
         HttpResponse<String> source = get(
-                "/_tesseraql/studio/ui/source?path=" + enc("web/users/index.html"), true);
+                "/_tesseraql/studio/user-admin/ui/source?path=" + enc("web/users/index.html"),
+                true);
         assertThat(source.statusCode()).isEqualTo(200);
         assertThat(source.body()).contains("Edit visually");
     }
@@ -283,11 +287,12 @@ class StudioIntegrationTest {
     void uiEjectViewFlipsTheRouteAndOffersTheBuilder() throws Exception {
         // The route page offers the ramp for a view: route.
         HttpResponse<String> source = get(
-                "/_tesseraql/studio/ui/source?path=" + enc("web/users/board/get.yml"), true);
+                "/_tesseraql/studio/user-admin/ui/source?path=" + enc("web/users/board/get.yml"),
+                true);
         assertThat(source.body()).contains("Eject view to template");
 
         // Ejecting renders the pattern once, flips view: to template: and reloads.
-        HttpResponse<String> ejected = postForm("/_tesseraql/studio/ui/eject-view",
+        HttpResponse<String> ejected = postForm("/_tesseraql/studio/user-admin/ui/eject-view",
                 "path=" + enc("web/users/board/get.yml") + "&confirm=true");
         assertThat(ejected.statusCode()).isEqualTo(200);
         assertThat(ejected.body()).contains("View ejected")
@@ -298,7 +303,8 @@ class StudioIntegrationTest {
 
         // The fresh template opens in the builder, and the flipped route still serves.
         HttpResponse<String> builder = get(
-                "/_tesseraql/studio/ui/builder?path=" + enc("web/users/board/board.html"),
+                "/_tesseraql/studio/user-admin/ui/builder?path="
+                        + enc("web/users/board/board.html"),
                 true);
         assertThat(builder.statusCode()).isEqualTo(200);
         assertThat(builder.body()).contains("shell-wrapped page");
@@ -306,7 +312,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMailListsTheManifestMailChannels() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/mail", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/mail", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The example app's user-mail channel, raw (the ${MAIL_HOST:…} placeholders are
@@ -321,7 +327,8 @@ class StudioIntegrationTest {
     @Test
     void uiMailComposerOpensAStarterForAMissingHtmlTemplate() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/mail/composer?path=" + enc("templates/mail/welcome.html"),
+                "/_tesseraql/studio/user-admin/ui/mail/composer?path="
+                        + enc("templates/mail/welcome.html"),
                 true);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -422,12 +429,12 @@ class StudioIntegrationTest {
                 .isEqualTo(200);
 
         // Based on the current source: the editor shows the draft without a conflict warning.
-        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/source?path=" + enc(path), true).body())
                 .doesNotContain("changed since this draft");
 
         // A concurrent change to the source surfaces the conflict warning and the force checkbox.
         Files.writeString(appHome.resolve(path), "select 3 as changed\n");
-        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/source?path=" + enc(path), true).body())
                 .contains("changed since this draft").contains("name=\"force\"");
     }
 
@@ -467,7 +474,8 @@ class StudioIntegrationTest {
                 true).statusCode()).isEqualTo(200);
 
         // The editor's compare panel shows no spurious changes: every line stays context.
-        String editor = get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body();
+        String editor = get("/_tesseraql/studio/user-admin/ui/source?path=" + enc(path), true)
+                .body();
         assertThat(editor).doesNotContain("data-state=\"added\"")
                 .doesNotContain("data-state=\"removed\"");
 
@@ -503,15 +511,15 @@ class StudioIntegrationTest {
 
         // The overview page lists the draft (linked to its editor) in an hc-datagrid (table
         // consistency pass — same component as Audit / docs Routes); the explorer links to the page.
-        assertThat(get("/_tesseraql/studio/ui/drafts", true).body()).contains(path)
-                .contains("conflict").contains("/_tesseraql/studio/ui/source?path=")
+        assertThat(get("/_tesseraql/studio/user-admin/ui/drafts", true).body()).contains(path)
+                .contains("conflict").contains("/_tesseraql/studio/user-admin/ui/source?path=")
                 .contains("hc-datagrid");
-        assertThat(get("/_tesseraql/studio/ui", true).body())
-                .contains("/_tesseraql/studio/ui/drafts");
+        assertThat(get("/_tesseraql/studio/user-admin/ui", true).body())
+                .contains("/_tesseraql/studio/user-admin/ui/drafts");
         // The page offers bulk apply/discard actions (Drafts differentiation vs the Explorer tree).
-        assertThat(get("/_tesseraql/studio/ui/drafts", true).body())
-                .contains("hx-post=\"/_tesseraql/studio/ui/drafts/apply-all\"")
-                .contains("hx-post=\"/_tesseraql/studio/ui/drafts/discard-all\"")
+        assertThat(get("/_tesseraql/studio/user-admin/ui/drafts", true).body())
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/drafts/apply-all\"")
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/drafts/discard-all\"")
                 .contains("data-hc-confirm");
     }
 
@@ -534,7 +542,7 @@ class StudioIntegrationTest {
         Files.writeString(appHome.resolve(conflict), "select 9 as changed\n");
 
         // Bulk apply-all lands the clean draft and skips the conflicting one (source untouched).
-        assertThat(postForm("/_tesseraql/studio/ui/drafts/apply-all", "").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/drafts/apply-all", "").statusCode())
                 .isEqualTo(303);
         assertThat(Files.readString(appHome.resolve(clean))).contains("done");
         assertThat(Files.readString(appHome.resolve(conflict))).contains("changed");
@@ -552,7 +560,7 @@ class StudioIntegrationTest {
                 .statusCode()).isEqualTo(200);
 
         // Discard-all clears the whole pending set (the source file is left as-is).
-        assertThat(postForm("/_tesseraql/studio/ui/drafts/discard-all", "").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/drafts/discard-all", "").statusCode())
                 .isEqualTo(303);
         assertThat(MAPPER.readTree(get("/_tesseraql/studio/drafts", true).body())).isEmpty();
         assertThat(Files.readString(appHome.resolve(path))).isEqualTo("select 1\n");
@@ -584,22 +592,24 @@ class StudioIntegrationTest {
 
         // The audit page renders the entry, with the filter chrome (H5), the total caption (I3), and
         // the sortable hc-datagrid headers (I2); the explorer links to it.
-        assertThat(get("/_tesseraql/studio/ui/audit", true).body()).contains("Audit trail")
+        assertThat(get("/_tesseraql/studio/user-admin/ui/audit", true).body())
+                .contains("Audit trail")
                 .contains(path).contains("id=\"audit-filter\"").contains("id=\"audit-table\"")
                 .contains("1 action").contains("class=\"hc-datagrid\"").contains("data-sortable")
                 // default newest-first; the filter input keeps the sort across an htmx re-filter
                 .contains("aria-sort=\"descending\"").contains("hx-vals=");
-        assertThat(get("/_tesseraql/studio/ui", true).body())
-                .contains("/_tesseraql/studio/ui/audit");
+        assertThat(get("/_tesseraql/studio/user-admin/ui", true).body())
+                .contains("/_tesseraql/studio/user-admin/ui/audit");
 
         // The filter searches the whole log (H5): a matching query keeps the entry, a miss drops it.
-        assertThat(get("/_tesseraql/studio/ui/audit?q=" + enc("aud/q"), true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/audit?q=" + enc("aud/q"), true).body())
                 .contains(path);
-        assertThat(get("/_tesseraql/studio/ui/audit?q=zzznomatch", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/audit?q=zzznomatch", true).body())
                 .contains("No actions match").doesNotContain(path);
         // The page param is accepted and out-of-range pages are graceful (I3): page 2 of a 1-page
         // trail still renders 200 (an empty slice), it does not error.
-        assertThat(get("/_tesseraql/studio/ui/audit?page=2", true).statusCode()).isEqualTo(200);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/audit?page=2", true).statusCode())
+                .isEqualTo(200);
     }
 
     @Test
@@ -621,28 +631,26 @@ class StudioIntegrationTest {
         assertThat(postWithToken("/_tesseraql/studio/scaffold/apply?table=gadgets", "", viewer)
                 .statusCode()).isEqualTo(403);
 
-        // Reads still work, and the explorer renders the read-only view — no edit chrome in the page
-        // content (no New-route form). The Studio sidebar nav (track H1) lists every section
-        // unconditionally for wayfinding; the editor-only pages render their own disabled state, so a
-        // read-only viewer still cannot mutate (the POST endpoints 403 above).
+        // The bearer JSON API's reads still answer (the atom gates writes there).
         assertThat(getWithToken("/_tesseraql/studio/explorer", viewer).statusCode()).isEqualTo(200);
-        // The UI landing is browser-auth: a read-only viewer reaches it via a VIEWER session.
-        String ui = getWithCookie("/_tesseraql/studio/ui", viewerCookie).body();
-        assertThat(ui).contains("read-only")
-                // no create affordance for a viewer — the New-route drawer trigger is edit-gated
-                .doesNotContain("hx-get=\"/_tesseraql/studio/ui/new")
-                // the sidebar nav renders the Studio sections (Audit among them)
-                .contains("/_tesseraql/studio/ui/audit");
+        // The workshop UI is deny-by-default whole (docs/studio-shell.md structural
+        // decision 4): a caller without the atom does not reach a member's pages at all —
+        // the 404-shaped refusal, so out-of-scope and unknown read identically — and the
+        // switcher lists nothing.
+        assertThat(getWithCookie("/_tesseraql/studio/user-admin/ui", viewerCookie)
+                .statusCode()).isEqualTo(404);
+        assertThat(getWithCookie("/_tesseraql/studio", viewerCookie).body())
+                .contains("No applications in your workshop scope");
     }
 
     @Test
     void editorRoleSeesTheEditChrome() throws Exception {
         // The configured edit role (ADMIN) keeps the full edit surface. The New-route drawer trigger
         // is the create chrome now (the form itself is the hc-drawer fragment it hx-gets).
-        String ui = get("/_tesseraql/studio/ui", true).body();
+        String ui = get("/_tesseraql/studio/user-admin/ui", true).body();
         assertThat(ui).contains("editable")
-                .contains("hx-get=\"/_tesseraql/studio/ui/new\"")
-                .contains("/_tesseraql/studio/ui/audit");
+                .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/new\"")
+                .contains("/_tesseraql/studio/user-admin/ui/audit");
     }
 
     @Test
@@ -652,7 +660,8 @@ class StudioIntegrationTest {
         // from anywhere, not only via the explorer header. The nav is grouped by job, each item
         // carries a sprite icon + an `.hc-shell__label` for the collapsible rail. Renders on a deep
         // page too.
-        for (String path : new String[]{"/_tesseraql/studio/ui", "/_tesseraql/studio/ui/docs"}) {
+        for (String path : new String[]{"/_tesseraql/studio/user-admin/ui",
+                "/_tesseraql/studio/user-admin/ui/docs"}) {
             String body = get(path, true).body();
             assertThat(body).contains("hc-shell__sidebar")
                     // the kit's installNavCurrent marks the active link (data-hc-nav-current opt-in)
@@ -706,7 +715,7 @@ class StudioIntegrationTest {
     void docsRulesPageRenders() throws Exception {
         // Order-independent for the same reason the domains page test is: a sibling scaffold
         // test may have written rules/ into the shared app home.
-        String body = get("/_tesseraql/studio/ui/docs/rules", true).body();
+        String body = get("/_tesseraql/studio/user-admin/ui/docs/rules", true).body();
 
         assertThat(body).contains("Shared validation rules");
         assertThat(body).containsAnyOf("No shared rules declared yet", "unreferenced", "Used by");
@@ -723,7 +732,7 @@ class StudioIntegrationTest {
     void docsDecisionsPageRenders() throws Exception {
         // Order-independent for the same reason the rules page test is: a sibling test may have
         // written decisions/ into the shared app home.
-        String body = get("/_tesseraql/studio/ui/docs/decisions", true).body();
+        String body = get("/_tesseraql/studio/user-admin/ui/docs/decisions", true).body();
 
         assertThat(body).contains("Decision tables");
         assertThat(body).containsAnyOf("No decision tables declared yet", "unreferenced",
@@ -735,12 +744,12 @@ class StudioIntegrationTest {
         // Order-independent: a sibling scaffold test may have written domains/items.yml into
         // the shared app home, so the page legitimately shows either its empty-state guidance
         // or the scaffolded domain rows (docs/field-domains.md Studio surfacing).
-        String body = get("/_tesseraql/studio/ui/docs/domains", true).body();
+        String body = get("/_tesseraql/studio/user-admin/ui/docs/domains", true).body();
         assertThat(body).contains("Field domains");
         assertThat(body).containsAnyOf("No field domains declared yet", "items.name");
 
         // The route form carries the per-slot domain select.
-        String form = get("/_tesseraql/studio/ui/route-form?path="
+        String form = get("/_tesseraql/studio/user-admin/ui/route-form?path="
                 + enc("web/api/users/get.yml"), true).body();
         assertThat(form).contains("in0domain");
     }
@@ -772,7 +781,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiExplorerRendersHtmlPage() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui", true);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
@@ -785,7 +794,8 @@ class StudioIntegrationTest {
     @Test
     void uiSourceRendersHtmlPage() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/source?path=" + enc("web/api/users/search.sql"), true);
+                "/_tesseraql/studio/user-admin/ui/source?path=" + enc("web/api/users/search.sql"),
+                true);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type"))
                 .hasValueSatisfying(value -> assertThat(value).contains("text/html"));
@@ -798,10 +808,15 @@ class StudioIntegrationTest {
     void uiSourceEditorCarriesTheLiveHighlightLanguage() throws Exception {
         // The editable hc-code field opts into hc's live syntax highlighting via data-lang (E);
         // .sql uses the consumer-registered 2-way SQL grammar (tql-sql), .yml a built-in grammar.
-        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc("web/api/users/search.sql"), true)
+        assertThat(get(
+                "/_tesseraql/studio/user-admin/ui/source?path=" + enc("web/api/users/search.sql"),
+                true)
                 .body()).contains("data-editable").contains("data-lang=\"tql-sql\"");
-        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc("web/api/users/get.yml"), true)
-                .body()).contains("data-lang=\"yaml\"");
+        assertThat(
+                get("/_tesseraql/studio/user-admin/ui/source?path=" + enc("web/api/users/get.yml"),
+                        true)
+                        .body())
+                .contains("data-lang=\"yaml\"");
         // The bootstrap asset registers the tql-sql grammar (Studio backlog E slice 2).
         assertThat(get("/assets/_tesseraql/tesseraql.js", true).body())
                 .contains("registerCodeLanguage(\"tql-sql\"");
@@ -820,12 +835,12 @@ class StudioIntegrationTest {
 
     @Test
     void uiExplorerRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui", false).statusCode()).isEqualTo(401);
     }
 
     @Test
     void uiDocsIndexRendersRoutesAndMigrationListing() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-security-policy"))
@@ -833,31 +848,31 @@ class StudioIntegrationTest {
         assertThat(response.body()).startsWith("<!DOCTYPE html>")
                 .contains("TesseraQL Docs")
                 .contains("users.search")
-                .contains("/_tesseraql/studio/ui/docs/route?id=users.search")
+                .contains("/_tesseraql/studio/user-admin/ui/docs/route?id=users.search")
                 .contains("Migrations")
                 // The live-search input wires htmx to the search fragment, with a visible syntax hint
                 // (H8) rather than burying the operators in the placeholder.
-                .contains("hx-get=\"/_tesseraql/studio/ui/docs/search\"")
+                .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/docs/search\"")
                 .contains("<code>status:failing</code>").contains("<code>coverage:untested</code>");
     }
 
     @Test
     void uiDocsSearchReturnsRankedResultFragment() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/search?q=" + enc("users provision"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/search?q=" + enc("users provision"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The provisioning route ranks first for both terms; the fragment links to its detail page,
         // and (H8) leads with a result count.
         assertThat(response.body()).contains("users.apiProvision")
-                .contains("/_tesseraql/studio/ui/docs/route?id=users.apiProvision")
+                .contains("/_tesseraql/studio/user-admin/ui/docs/route?id=users.apiProvision")
                 .contains("matches</li>");
     }
 
     @Test
     void uiDocsRouteRendersTheRouteReference() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("users.search"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The live-fallback model renders the request surface, security, and bound SQL.
@@ -872,7 +887,7 @@ class StudioIntegrationTest {
         // Track H4: the 8-section route reference gets a breadcrumb (Docs > id) and an in-page jump
         // nav anchoring each present section, so a long page is navigable.
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("users.search"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
@@ -889,7 +904,9 @@ class StudioIntegrationTest {
     @Test
     void uiDocsTableCarriesBreadcrumbAndOnThisPageNav() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("customers"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name="
+                        + enc("customers"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
@@ -901,19 +918,20 @@ class StudioIntegrationTest {
     @Test
     void uiDocsRouteCrossLinksDataDependenciesToSchemaTables() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("deps.customers"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("deps.customers"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // `deps.customers` reads `customers`, which the schema.json overlay introspects, so the
         // data-dependency badge links to that table's page (the cross-link is resolved live).
         assertThat(response.body()).contains("Data dependencies")
-                .contains("/_tesseraql/studio/ui/docs/schema/table?ds=main&amp;name=customers");
+                .contains(
+                        "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&amp;name=customers");
     }
 
     @Test
     void uiDocsRouteRendersNotFoundForUnknownId() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("no.such.route"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("no.such.route"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("No route").contains("no.such.route");
@@ -921,7 +939,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiDocsIndexRendersTheRunOverlay() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The report.json overlay renders the run summary strip and per-route status columns.
@@ -935,14 +953,14 @@ class StudioIntegrationTest {
         // Platform-UX I2: the route catalog is an hc-datagrid with server-driven column sort — each
         // header is a link that re-requests sorted, and the server sets aria-sort the kit renders the
         // arrow from. No JS / no hx-vals='js:' — works under the strict CSP.
-        String asc = get("/_tesseraql/studio/ui/docs?sort=id&dir=asc", true).body();
+        String asc = get("/_tesseraql/studio/user-admin/ui/docs?sort=id&dir=asc", true).body();
         assertThat(asc).contains("class=\"hc-datagrid\"").contains("data-sortable")
                 // the active column reports ascending and its header link flips to descending
                 .contains("aria-sort=\"ascending\"").contains("sort=id&amp;dir=desc");
         // ascending by id: deps.* sorts before users.*
         assertThat(asc.indexOf("deps.customers")).isLessThan(asc.indexOf("users.search"));
 
-        String desc = get("/_tesseraql/studio/ui/docs?sort=id&dir=desc", true).body();
+        String desc = get("/_tesseraql/studio/user-admin/ui/docs?sort=id&dir=desc", true).body();
         assertThat(desc).contains("aria-sort=\"descending\"").contains("sort=id&amp;dir=asc");
         assertThat(desc.indexOf("users.search")).isLessThan(desc.indexOf("deps.customers"));
     }
@@ -950,7 +968,7 @@ class StudioIntegrationTest {
     @Test
     void uiDocsRouteRendersTheRunOverlay() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("users.search"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The route page shows the run status card and the bound SQL's line/branch coverage.
@@ -972,7 +990,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiDocsCoverageRendersTheDashboard() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/coverage", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/coverage", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).startsWith("<!DOCTYPE html>")
@@ -990,31 +1008,32 @@ class StudioIntegrationTest {
     void uiDocsSearchFiltersByCoverageAndStatus() throws Exception {
         // coverage:covered keeps only the covered route from the overlay.
         HttpResponse<String> covered = get(
-                "/_tesseraql/studio/ui/docs/search?q=" + enc("coverage:covered"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/search?q=" + enc("coverage:covered"), true);
         assertThat(covered.statusCode()).isEqualTo(200);
         assertThat(covered.body()).contains("id=users.search");
 
         // coverage:untested excludes the covered route and surfaces the rest.
         HttpResponse<String> untested = get(
-                "/_tesseraql/studio/ui/docs/search?q=" + enc("coverage:untested"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/search?q=" + enc("coverage:untested"), true);
         assertThat(untested.body()).doesNotContain("id=users.search")
                 .contains("id=users.apiProvision");
 
         // status:passing keeps only the route whose cases all passed.
         HttpResponse<String> passing = get(
-                "/_tesseraql/studio/ui/docs/search?q=" + enc("status:passing"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/search?q=" + enc("status:passing"), true);
         assertThat(passing.body()).contains("id=users.search")
                 .doesNotContain("id=users.apiProvision");
     }
 
     @Test
     void uiDocsCoverageRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/docs/coverage", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs/coverage", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
     void uiDocsSchemaIndexRendersTheIntrospectedCatalog() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/schema", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/schema", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The schema.json overlay (v3) renders each datasource's tables with detail links.
@@ -1027,13 +1046,15 @@ class StudioIntegrationTest {
     void uiDocsSchemaTablesAreSortable() throws Exception {
         // Platform-UX I2: the schema table list is an hc-datagrid with server-driven column sort
         // (same CSP-clean pattern as the route catalog).
-        String asc = get("/_tesseraql/studio/ui/docs/schema?sort=name&dir=asc", true).body();
+        String asc = get("/_tesseraql/studio/user-admin/ui/docs/schema?sort=name&dir=asc", true)
+                .body();
         assertThat(asc).contains("class=\"hc-datagrid\"").contains("data-sortable")
                 .contains("aria-sort=\"ascending\"").contains("sort=name&amp;dir=desc");
         // ascending by name: the customers row's link text precedes the orders row's
         assertThat(asc.indexOf(">customers<")).isLessThan(asc.indexOf(">orders<"));
 
-        String desc = get("/_tesseraql/studio/ui/docs/schema?sort=name&dir=desc", true).body();
+        String desc = get("/_tesseraql/studio/user-admin/ui/docs/schema?sort=name&dir=desc", true)
+                .body();
         assertThat(desc).contains("aria-sort=\"descending\"").contains("sort=name&amp;dir=asc");
         assertThat(desc.indexOf(">orders<")).isLessThan(desc.indexOf(">customers<"));
     }
@@ -1041,7 +1062,8 @@ class StudioIntegrationTest {
     @Test
     void uiDocsSchemaTableRendersColumnsKeysAndForeignKeys() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("orders"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name=" + enc("orders"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The table page lists columns, the primary key, and the foreign key linked to its target.
@@ -1052,18 +1074,21 @@ class StudioIntegrationTest {
     @Test
     void uiDocsSchemaTableCrossLinksTheRoutesThatUseIt() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("customers"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name="
+                        + enc("customers"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The reverse SQL->table graph: the table page lists the routes that touch it, linking back
         // to each route page. `deps.customers` reads `customers` (see prepareAppHome).
         assertThat(response.body()).contains("Used by routes").contains("read by")
-                .contains("/_tesseraql/studio/ui/docs/route?id=deps.customers");
+                .contains("/_tesseraql/studio/user-admin/ui/docs/route?id=deps.customers");
     }
 
     @Test
     void uiDocsSchemaRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/docs/schema", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs/schema", false).statusCode())
+                .isEqualTo(401);
     }
 
     /**
@@ -1081,30 +1106,33 @@ class StudioIntegrationTest {
         byte[] apiBaseline = Files.readAllBytes(docs.resolve("openapi.baseline.json"));
         try {
             Files.writeString(docs.resolve("schema.json"), "{not json");
-            assertThat(get("/_tesseraql/studio/ui/docs/schema", true).body())
+            assertThat(get("/_tesseraql/studio/user-admin/ui/docs/schema", true).body())
                     .contains("cannot be parsed");
 
             HttpResponse<String> refresh = postForm(
-                    "/_tesseraql/studio/ui/docs/schema/refresh", "");
+                    "/_tesseraql/studio/user-admin/ui/docs/schema/refresh", "");
             assertThat(refresh.statusCode()).isEqualTo(303);
-            String page = get("/_tesseraql/studio/ui/docs/schema?refreshed=1", true).body();
+            String page = get("/_tesseraql/studio/user-admin/ui/docs/schema?refreshed=1", true)
+                    .body();
             assertThat(page).contains("Schema refreshed").contains("Datasource: main")
                     .contains("users");
 
             HttpResponse<String> capture = postForm(
-                    "/_tesseraql/studio/ui/docs/release-diff/capture", "");
+                    "/_tesseraql/studio/user-admin/ui/docs/release-diff/capture", "");
             assertThat(capture.statusCode()).isEqualTo(303);
-            String diff = get("/_tesseraql/studio/ui/docs/release-diff?captured=1", true).body();
+            String diff = get("/_tesseraql/studio/user-admin/ui/docs/release-diff?captured=1", true)
+                    .body();
             assertThat(diff).contains("Baselines captured")
                     .doesNotContain("No API baseline captured yet")
                     .doesNotContain("No schema baseline");
 
             // Honest wayfinding: a read-only viewer gets no refresh button.
-            assertThat(getWithCookie("/_tesseraql/studio/ui/docs/schema", viewerCookie).body())
+            assertThat(getWithCookie("/_tesseraql/studio/user-admin/ui/docs/schema", viewerCookie)
+                    .body())
                     .doesNotContain("Refresh schema");
 
             // Both actions land in the audit trail.
-            String audit = get("/_tesseraql/studio/ui/audit", true).body();
+            String audit = get("/_tesseraql/studio/user-admin/ui/audit", true).body();
             assertThat(audit).contains("schema-refresh").contains("baseline-capture");
         } finally {
             Files.write(docs.resolve("schema.json"), schema);
@@ -1115,37 +1143,38 @@ class StudioIntegrationTest {
 
     @Test
     void uiDocsRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/docs", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs", false).statusCode()).isEqualTo(401);
     }
 
     @Test
     void uiDocsExportPageListsTheDownloadableSpecs() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/export", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).startsWith("<!DOCTYPE html>")
                 .contains("Export API specs")
                 .contains("openapi.json")
-                .contains("/_tesseraql/studio/ui/docs/export/openapi")
+                .contains("/_tesseraql/studio/user-admin/ui/docs/export/openapi")
                 .contains("htmx-contract.json")
-                .contains("/_tesseraql/studio/ui/docs/export/htmx");
+                .contains("/_tesseraql/studio/user-admin/ui/docs/export/htmx");
     }
 
     @Test
     void uiDocsExportPageShowsTheApiChangelogAgainstTheBaseline() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/export", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The baseline sidecar drives the API spec diff: the legacy op is removed, current routes
         // (which the baseline lacks) are added — each added op links to its route page.
         assertThat(response.body()).contains("API changes").contains("removed")
                 .contains("/api/legacy/widgets").contains("added")
-                .contains("/_tesseraql/studio/ui/docs/route?id=users.search");
+                .contains("/_tesseraql/studio/user-admin/ui/docs/route?id=users.search");
     }
 
     @Test
     void uiDocsExportOpenApiStreamsTheSpecAsADownload() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/openapi", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/export/openapi",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type").orElse(""))
@@ -1160,7 +1189,8 @@ class StudioIntegrationTest {
 
     @Test
     void uiDocsExportHtmxStreamsTheContractAsADownload() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/htmx", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/export/htmx",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("content-type").orElse(""))
@@ -1172,23 +1202,25 @@ class StudioIntegrationTest {
 
     @Test
     void uiDocsExportRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/docs/export", false).statusCode()).isEqualTo(401);
-        assertThat(get("/_tesseraql/studio/ui/docs/export/openapi", false).statusCode())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs/export", false).statusCode())
+                .isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs/export/openapi", false).statusCode())
                 .isEqualTo(401);
     }
 
     @Test
     void uiDocsExportPageLinksToThePrintableCatalog() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/export", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Printable route catalog")
-                .contains("/_tesseraql/studio/ui/docs/export/pdf");
+                .contains("/_tesseraql/studio/user-admin/ui/docs/export/pdf");
     }
 
     @Test
     void uiDocsExportPdfRendersTheRouteCatalogAsADownloadablePdf() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/docs/export/pdf", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/docs/export/pdf",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // tesseraql-pdf is on the test classpath, so the catalog renders to a real PDF data URL
@@ -1202,33 +1234,34 @@ class StudioIntegrationTest {
 
     @Test
     void uiDocsExportPdfRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/docs/export/pdf", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs/export/pdf", false).statusCode())
+                .isEqualTo(401);
     }
 
     // ---- F8 slice 3: opt-in signed share links (the IT config sets tesseraql.docs.share.secret) ---
 
     private static final java.util.regex.Pattern SHARE_URL = java.util.regex.Pattern.compile(
-            "/_tesseraql/docs/share/route\\?id=users\\.search&amp;exp=(\\d+)&amp;sig=([A-Za-z0-9_-]+)");
+            "/_tesseraql/docs/share/user-admin/route\\?id=users\\.search&amp;exp=(\\d+)&amp;sig=([A-Za-z0-9_-]+)");
 
     /** Pulls the minted (HTML-escaped) share link out of a route doc page and unescapes it. */
     private static String shareUrlFrom(String routePageHtml) {
         java.util.regex.Matcher matcher = SHARE_URL.matcher(routePageHtml);
         assertThat(matcher.find()).as("route page offers a share link").isTrue();
-        return "/_tesseraql/docs/share/route?id=users.search&exp=" + matcher.group(1)
+        return "/_tesseraql/docs/share/user-admin/route?id=users.search&exp=" + matcher.group(1)
                 + "&sig=" + matcher.group(2);
     }
 
     @Test
     void uiDocsRouteOffersASignedShareLinkWhenSharingIsEnabled() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("users.search"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // UX-refresh slice 4: Share is a header popover action, not a card.
         assertThat(response.body()).contains("Share")
                 .contains("popovertarget=\"share-popover\"")
                 .contains("class=\"hc-popover\" id=\"share-popover\"")
-                .contains("/_tesseraql/docs/share/route?id=users.search")
+                .contains("/_tesseraql/docs/share/user-admin/route?id=users.search")
                 // The share URL field carries a copy button via the kit's installCopy behavior.
                 .contains("id=\"share-route\"").contains("data-hc-copy=\"#share-route\"");
         assertThat(shareUrlFrom(response.body())).isNotBlank();
@@ -1237,7 +1270,8 @@ class StudioIntegrationTest {
     @Test
     void docsShareRendersThePublicContractWithoutAuthentication() throws Exception {
         String shareUrl = shareUrlFrom(get(
-                "/_tesseraql/studio/ui/docs/route?id=" + enc("users.search"), true).body());
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=" + enc("users.search"), true)
+                .body());
 
         // Opened with NO bearer token: the signed link is the authorization.
         HttpResponse<String> shared = get(shareUrl, false);
@@ -1252,26 +1286,29 @@ class StudioIntegrationTest {
     void docsShareRejectsATamperedOrMissingToken() throws Exception {
         // A forged signature renders the invalid-link notice, never the route (still no auth).
         HttpResponse<String> forged = get(
-                "/_tesseraql/docs/share/route?id=users.search&exp=9999999999&sig=forged", false);
+                "/_tesseraql/docs/share/user-admin/route?id=users.search&exp=9999999999&sig=forged",
+                false);
         assertThat(forged.statusCode()).isEqualTo(200);
         assertThat(forged.body()).contains("invalid or has expired").doesNotContain("/api/users");
         // No token at all is the same notice.
-        assertThat(get("/_tesseraql/docs/share/route", false).body())
+        assertThat(get("/_tesseraql/docs/share/user-admin/route", false).body())
                 .contains("invalid or has expired");
     }
 
     @Test
     void uiDocsTableOffersAShareLinkAndRendersItPublicly() throws Exception {
         HttpResponse<String> page = get(
-                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=" + enc("orders"), true);
+                "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name=" + enc("orders"),
+                true);
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(page.body()).contains("/_tesseraql/docs/share/table?ds=main");
+        assertThat(page.body()).contains("/_tesseraql/docs/share/user-admin/table?ds=main");
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-                "/_tesseraql/docs/share/table\\?ds=main&amp;name=orders&amp;exp=(\\d+)&amp;sig="
+                "/_tesseraql/docs/share/user-admin/table\\?ds=main&amp;name=orders&amp;exp=(\\d+)&amp;sig="
                         + "([A-Za-z0-9_-]+)")
                 .matcher(page.body());
         assertThat(matcher.find()).isTrue();
-        String shareUrl = "/_tesseraql/docs/share/table?ds=main&name=orders&exp=" + matcher.group(1)
+        String shareUrl = "/_tesseraql/docs/share/user-admin/table?ds=main&name=orders&exp="
+                + matcher.group(1)
                 + "&sig=" + matcher.group(2);
 
         // Opened with NO bearer token: the signed link is the authorization.
@@ -1279,19 +1316,20 @@ class StudioIntegrationTest {
         assertThat(shared.statusCode()).isEqualTo(200);
         assertThat(shared.body()).contains("shared").contains("orders").contains("customer_id");
         // A forged token renders the notice, never the table.
-        assertThat(get("/_tesseraql/docs/share/table?ds=main&name=orders&exp=9999999999&sig=forged",
+        assertThat(get(
+                "/_tesseraql/docs/share/user-admin/table?ds=main&name=orders&exp=9999999999&sig=forged",
                 false).body()).contains("invalid or has expired").doesNotContain("customer_id");
     }
 
     @Test
     void uiDocsCoverageOffersAShareLinkAndRendersItPublicly() throws Exception {
-        HttpResponse<String> page = get("/_tesseraql/studio/ui/docs/coverage", true);
-        assertThat(page.body()).contains("/_tesseraql/docs/share/coverage?exp=");
+        HttpResponse<String> page = get("/_tesseraql/studio/user-admin/ui/docs/coverage", true);
+        assertThat(page.body()).contains("/_tesseraql/docs/share/user-admin/coverage?exp=");
         java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(
-                "/_tesseraql/docs/share/coverage\\?exp=(\\d+)&amp;sig=([A-Za-z0-9_-]+)")
+                "/_tesseraql/docs/share/user-admin/coverage\\?exp=(\\d+)&amp;sig=([A-Za-z0-9_-]+)")
                 .matcher(page.body());
         assertThat(matcher.find()).isTrue();
-        String shareUrl = "/_tesseraql/docs/share/coverage?exp=" + matcher.group(1)
+        String shareUrl = "/_tesseraql/docs/share/user-admin/coverage?exp=" + matcher.group(1)
                 + "&sig=" + matcher.group(2);
 
         HttpResponse<String> shared = get(shareUrl, false);
@@ -1300,7 +1338,9 @@ class StudioIntegrationTest {
                 .contains("2/2 passed");
         // The public coverage view withholds the per-test failure list.
         assertThat(shared.body()).doesNotContain("Failing tests");
-        assertThat(get("/_tesseraql/docs/share/coverage?exp=9999999999&sig=forged", false).body())
+        assertThat(
+                get("/_tesseraql/docs/share/user-admin/coverage?exp=9999999999&sig=forged", false)
+                        .body())
                 .contains("invalid or has expired");
     }
 
@@ -1324,12 +1364,13 @@ class StudioIntegrationTest {
                 """;
 
         // post/redirect/get: saving redirects back to the source page with a status flag.
-        HttpResponse<String> save = postForm("/_tesseraql/studio/ui/save",
+        HttpResponse<String> save = postForm("/_tesseraql/studio/user-admin/ui/save",
                 "path=" + enc(path) + "&content=" + enc(content));
         assertThat(save.statusCode()).isEqualTo(303);
         assertThat(save.headers().firstValue("location"))
                 .hasValueSatisfying(value -> assertThat(value)
-                        .startsWith("/_tesseraql/studio/ui/source?path=").contains("saved=1"));
+                        .startsWith("/_tesseraql/studio/user-admin/ui/source?path=")
+                        .contains("saved=1"));
 
         HttpResponse<String> afterSave = get(save.headers().firstValue("location").orElseThrow(),
                 true);
@@ -1343,11 +1384,12 @@ class StudioIntegrationTest {
         Files.writeString(appHome.resolve("web/api/formtest/formtest.sql"), "select 1");
 
         // Confirm-before-apply is on (IT config): applying without acknowledgment is rejected...
-        HttpResponse<String> blocked = postForm("/_tesseraql/studio/ui/apply", "path=" + enc(path));
+        HttpResponse<String> blocked = postForm("/_tesseraql/studio/user-admin/ui/apply",
+                "path=" + enc(path));
         assertThat(blocked.statusCode()).isEqualTo(422);
         assertThat(blocked.body()).contains("TQL-STUDIO-4223");
         // ...and applying with the diff acknowledgment succeeds.
-        HttpResponse<String> apply = postForm("/_tesseraql/studio/ui/apply",
+        HttpResponse<String> apply = postForm("/_tesseraql/studio/user-admin/ui/apply",
                 "path=" + enc(path) + "&confirm=true");
         assertThat(apply.statusCode()).isEqualTo(303);
         HttpResponse<String> afterApply = get(apply.headers().firstValue("location").orElseThrow(),
@@ -1358,14 +1400,14 @@ class StudioIntegrationTest {
     @Test
     void uiPreviewReturnsValidationFragment() throws Exception {
         // A live edit validates without saving and comes back as an hc-alert fragment (not a page).
-        HttpResponse<String> valid = postForm("/_tesseraql/studio/ui/preview",
+        HttpResponse<String> valid = postForm("/_tesseraql/studio/user-admin/ui/preview",
                 "path=" + enc("web/api/users/search.sql") + "&content=" + enc("select 1"));
         assertThat(valid.statusCode()).isEqualTo(200);
         assertThat(valid.body()).doesNotContain("<!DOCTYPE")
                 .contains("hc-alert").contains("data-variant=\"success\"");
 
         // A broken route surfaces inline as an error alert, again without touching the source.
-        HttpResponse<String> invalid = postForm("/_tesseraql/studio/ui/preview",
+        HttpResponse<String> invalid = postForm("/_tesseraql/studio/user-admin/ui/preview",
                 "path=" + enc("web/api/users/get.yml")
                         + "&content=" + enc("version: tesseraql/v1\nid: y\n"));
         assertThat(invalid.statusCode()).isEqualTo(200);
@@ -1391,7 +1433,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiRenderReturnsRenderedFragmentWithIframePreview() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/render",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/render",
                 "path=" + enc("web/users/fragments/table/table.html")
                         + "&sampleModel="
                         + enc("users:\n  - id: 1\n    name: Alice\n    status: active\n"));
@@ -1473,17 +1515,17 @@ class StudioIntegrationTest {
 
     @Test
     void uiSourceRouteOffersRenderedPreviewPanel() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("web/users/fragments/table/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Rendered preview").contains("execution context")
-                .contains("hx-post=\"/_tesseraql/studio/ui/render\"");
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/render\"");
     }
 
     @Test
     void uiSourceAsyncActionsShowALoadingIndicator() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("web/users/fragments/table/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -1503,7 +1545,7 @@ class StudioIntegrationTest {
         // layout, and Save / Apply / Discard live in a sticky action bar — Save also answering
         // Ctrl/Cmd+S via the form's data-tql-hotkey-save marker, and Discard (the page's one
         // destructive action) finally confirmed.
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("web/users/fragments/table/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -1519,13 +1561,13 @@ class StudioIntegrationTest {
 
     @Test
     void uiSourceTemplateOffersRenderedPreviewPanel() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("web/users/fragments/table/table.html"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Rendered preview").contains("Sample data")
                 // the panel wires htmx to the render endpoint
-                .contains("hx-post=\"/_tesseraql/studio/ui/render\"");
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/render\"");
         // The source page CSP admits the sandboxed preview iframe.
         assertThat(response.headers().firstValue("content-security-policy"))
                 .hasValueSatisfying(value -> assertThat(value).contains("frame-src 'self'"));
@@ -1633,24 +1675,24 @@ class StudioIntegrationTest {
 
     @Test
     void uiSourceJobOffersRunTestsWhenEnabled() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("batch/directory-sync/job.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Run tests")
-                .contains("hx-post=\"/_tesseraql/studio/ui/run-tests\"")
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/run-tests\"")
                 // a job offers tests but not the (route/template-only) rendered-preview panel
                 .doesNotContain("Use live data");
     }
 
     @Test
     void uiSourceRouteOffersRunTestsAndLiveDataWhenEnabled() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("web/api/users/get.yml"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Run tests")
-                .contains("hx-post=\"/_tesseraql/studio/ui/run-tests\"")
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/run-tests\"")
                 // the render panel offers the live-data toggle on a route page when enabled
                 .contains("Use live data").contains("name=\"live\"");
     }
@@ -1697,11 +1739,11 @@ class StudioIntegrationTest {
 
     @Test
     void uiScaffoldPageListsTables() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/scaffold", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/scaffold", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Scaffold CRUD from a table").contains("widgets")
-                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/preview\"")
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/scaffold/preview\"")
                 // table list uses hc-datagrid (table consistency pass)
                 .contains("hc-datagrid")
                 // Preview CRUD opens in a drawer (remote-dialog host), not a panel below
@@ -1710,10 +1752,10 @@ class StudioIntegrationTest {
 
     @Test
     void uiExplorerOffersScaffoldLinkWhenEnabled() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).contains("/_tesseraql/studio/ui/scaffold");
+        assertThat(response.body()).contains("/_tesseraql/studio/user-admin/ui/scaffold");
     }
 
     @Test
@@ -1757,12 +1799,13 @@ class StudioIntegrationTest {
 
     @Test
     void uiScaffoldPreviewOffersApplyForm() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/scaffold/preview",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/studio/user-admin/ui/scaffold/preview",
                 "table=widgets");
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Create these files")
-                .contains("hx-post=\"/_tesseraql/studio/ui/scaffold/apply\"")
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/scaffold/apply\"")
                 // the preview is a focused hc-drawer overlay, not an inline panel
                 .contains("class=\"hc-drawer\"");
     }
@@ -1770,12 +1813,12 @@ class StudioIntegrationTest {
     @Test
     void uiNewRouteCreatesStarterDraftAndRedirectsToEditor() throws Exception {
         String path = "web/api/newthing/get.yml";
-        HttpResponse<String> created = postForm("/_tesseraql/studio/ui/new",
+        HttpResponse<String> created = postForm("/_tesseraql/studio/user-admin/ui/new",
                 "path=" + enc(path) + "&recipe=query-json");
 
         assertThat(created.statusCode()).isEqualTo(303);
         String location = created.headers().firstValue("location").orElseThrow();
-        assertThat(location).startsWith("/_tesseraql/studio/ui/source?path=");
+        assertThat(location).startsWith("/_tesseraql/studio/user-admin/ui/source?path=");
 
         // Following the redirect opens the source editor on the freshly saved starter draft, which the
         // editor labels a new (not-yet-served) route so the restart-to-serve consequence is clear.
@@ -1787,7 +1830,7 @@ class StudioIntegrationTest {
         // Studio sidebar IA: the new (not-yet-served) draft now shows in the Explorer tree as its own
         // pending node, so it is visible before a restart serves it (no more "created it, where did
         // it go?"). The folder appears only because of the draft; "unserved draft" marks the leaf.
-        assertThat(get("/_tesseraql/studio/ui", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui", true).body())
                 .contains("newthing").contains("unserved draft");
     }
 
@@ -1795,16 +1838,17 @@ class StudioIntegrationTest {
     void uiExplorerOffersNewRouteFormWhenWritable() throws Exception {
         // The Explorer offers a "New route" drawer trigger + the remote-dialog host; the form itself
         // is the hc-drawer fragment served by the trigger's hx-get (Studio sidebar IA).
-        HttpResponse<String> response = get("/_tesseraql/studio/ui", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui", true);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("New route")
-                .contains("hx-get=\"/_tesseraql/studio/ui/new\"")
+                .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/new\"")
                 .contains("data-hc-remote-dialog-root");
 
-        HttpResponse<String> drawer = get("/_tesseraql/studio/ui/new", true);
+        HttpResponse<String> drawer = get("/_tesseraql/studio/user-admin/ui/new", true);
         assertThat(drawer.statusCode()).isEqualTo(200);
         assertThat(drawer.body()).contains("class=\"hc-drawer\"")
-                .contains("action=\"/_tesseraql/studio/ui/new\"").contains("Create route");
+                .contains("action=\"/_tesseraql/studio/user-admin/ui/new\"")
+                .contains("Create route");
     }
 
     @Test
@@ -1813,7 +1857,7 @@ class StudioIntegrationTest {
         // behavior's data-hotkey, a visible sidebar trigger via the bootstrap opener) with the
         // sidebar destinations server-rendered and the route/job groups loading lazily on
         // first open (intersect once — nothing fetched until the palette is visible).
-        String page = get("/_tesseraql/studio/ui/health", true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui/health", true).body();
         // The UI defaults (docs/hypermedia-ui.md): consoles render the slate ramp (attribute +
         // token sheet) and stay pinned to compact density regardless of tesseraql.ui.density.
         assertThat(page).contains("data-neutral=\"slate\"")
@@ -1823,31 +1867,33 @@ class StudioIntegrationTest {
                 .contains("class=\"hc-command-dialog\" id=\"studio-command\" data-hotkey=\"k\"")
                 .contains("class=\"hc-command__input\"").contains("role=\"combobox\"")
                 .contains(
-                        "class=\"hc-command__item\" role=\"option\" data-value=\"/_tesseraql/studio/ui/docs/schema\"")
+                        "class=\"hc-command__item\" role=\"option\" data-value=\"/_tesseraql/studio/user-admin/ui/docs/schema\"")
                 .contains("data-tql-open-dialog=\"#studio-command\"")
-                .contains("hx-get=\"/_tesseraql/studio/ui/command\"")
+                .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/command\"")
                 .contains("hx-trigger=\"intersect once\"")
                 .contains("class=\"hc-command__empty\"");
 
         // The dynamic fragment: routes and jobs as open-in-editor entries, route folders as
         // "new route here" entries (edit-gated).
-        String fragment = get("/_tesseraql/studio/ui/command", true).body();
+        String fragment = get("/_tesseraql/studio/user-admin/ui/command", true).body();
         assertThat(fragment).contains("Open in editor")
                 .contains("GET /api/users · users.search")
-                .contains("/_tesseraql/studio/ui/source?path=web%2Fapi%2Fusers%2Fget.yml")
+                .contains(
+                        "/_tesseraql/studio/user-admin/ui/source?path=web%2Fapi%2Fusers%2Fget.yml")
                 .contains("job directory.sync")
                 .contains("New route here")
                 .contains("New route in web/api/users/")
-                .contains("/_tesseraql/studio/ui?create=web%2Fapi%2Fusers%2F");
+                .contains("/_tesseraql/studio/user-admin/ui?create=web%2Fapi%2Fusers%2F");
     }
 
     @Test
     void uiExplorerCreateParamAutoOpensTheSeededDrawer() throws Exception {
         // The palette's "new route here" landing: ?create=<prefix>/ renders the auto-loading
         // drawer trigger, seeded to the folder; the explorer also hints the palette (⌘K).
-        String page = get("/_tesseraql/studio/ui?create=" + enc("web/api/users/"), true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui?create=" + enc("web/api/users/"), true)
+                .body();
         assertThat(page)
-                .contains("hx-get=\"/_tesseraql/studio/ui/new?prefix=web/api/users/\"")
+                .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/new?prefix=web/api/users/\"")
                 .contains("hx-trigger=\"load\"")
                 .contains("class=\"hc-kbd\"");
     }
@@ -1859,11 +1905,11 @@ class StudioIntegrationTest {
         // (the tree behavior's click handler only exempts links from branch toggling,
         // hc-briefs.md brief 5) whose hx-get seeds the New-route Path (?prefix=) so creation
         // inherits the browsed location.
-        assertThat(get("/_tesseraql/studio/ui", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui", true).body())
                 .contains("tql-tree-action").contains("+ New route")
-                .contains("hx-get=\"/_tesseraql/studio/ui/new?prefix=");
+                .contains("hx-get=\"/_tesseraql/studio/user-admin/ui/new?prefix=");
         HttpResponse<String> drawer = get(
-                "/_tesseraql/studio/ui/new?prefix=" + enc("web/api/users/"), true);
+                "/_tesseraql/studio/user-admin/ui/new?prefix=" + enc("web/api/users/"), true);
         assertThat(drawer.statusCode()).isEqualTo(200);
         assertThat(drawer.body()).contains("class=\"hc-drawer\"")
                 .contains("value=\"web/api/users/\"");
@@ -1982,10 +2028,10 @@ class StudioIntegrationTest {
         String path = "web/api/users/search.sql";
 
         // Saving a draft makes the source page flag it and offer a comparison and a discard.
-        assertThat(postForm("/_tesseraql/studio/ui/save",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/save",
                 "path=" + enc(path) + "&content=" + enc("select 1 -- draft")).statusCode())
                 .isEqualTo(303);
-        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/source?path=" + enc(path), true).body())
                 .contains("unsaved draft")
                 // the comparison is the Compare tab (slice 5), selected because a draft exists
                 .contains("id=\"tab-compare\"").contains("id=\"panel-compare\"")
@@ -1997,25 +2043,25 @@ class StudioIntegrationTest {
                 .contains("Discard draft").contains("data-hc-confirm-title=\"Discard draft\"");
 
         // Discarding redirects back and the badge is gone (the source is restored in the editor).
-        HttpResponse<String> discard = postForm("/_tesseraql/studio/ui/discard",
+        HttpResponse<String> discard = postForm("/_tesseraql/studio/user-admin/ui/discard",
                 "path=" + enc(path));
         assertThat(discard.statusCode()).isEqualTo(303);
         assertThat(discard.headers().firstValue("location"))
                 .hasValueSatisfying(value -> assertThat(value)
-                        .startsWith("/_tesseraql/studio/ui/source?path="));
-        assertThat(get("/_tesseraql/studio/ui/source?path=" + enc(path), true).body())
+                        .startsWith("/_tesseraql/studio/user-admin/ui/source?path="));
+        assertThat(get("/_tesseraql/studio/user-admin/ui/source?path=" + enc(path), true).body())
                 .doesNotContain("unsaved draft");
     }
 
     @Test
     void wizardIndexAndFormRender() throws Exception {
-        HttpResponse<String> index = get("/_tesseraql/studio/ui/wizard", true);
+        HttpResponse<String> index = get("/_tesseraql/studio/user-admin/ui/wizard", true);
         assertThat(index.statusCode()).isEqualTo(200);
         assertThat(index.body()).contains("Setup wizards").contains("SAML SP")
                 // H7: the index orients the user — what each wizard does and to start with the realm.
                 .contains("Set up an").contains("Federate logins with a SAML");
 
-        HttpResponse<String> form = get("/_tesseraql/studio/ui/wizard/saml", true);
+        HttpResponse<String> form = get("/_tesseraql/studio/user-admin/ui/wizard/saml", true);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body()).contains("SAML SP wizard").contains("name=\"acsUrl\"")
                 // H7: jargony fields carry inline help instead of a bare label + cryptic placeholder.
@@ -2031,7 +2077,8 @@ class StudioIntegrationTest {
                 + "&loginIdAttribute=uid&provision=true"
                 + "&publicKeyPath=" + enc("security/saml/idp-signing.pem");
 
-        HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml", form);
+        HttpResponse<String> result = postForm("/_tesseraql/studio/user-admin/ui/wizard/saml",
+                form);
 
         assertThat(result.statusCode()).isEqualTo(200);
         assertThat(result.headers().firstValue("content-type"))
@@ -2048,10 +2095,10 @@ class StudioIntegrationTest {
 
     @Test
     void oidcWizardRendersAndGeneratesConfig() throws Exception {
-        HttpResponse<String> index = get("/_tesseraql/studio/ui/wizard", true);
+        HttpResponse<String> index = get("/_tesseraql/studio/user-admin/ui/wizard", true);
         assertThat(index.body()).contains("OIDC provider");
 
-        HttpResponse<String> form = get("/_tesseraql/studio/ui/wizard/oidc", true);
+        HttpResponse<String> form = get("/_tesseraql/studio/user-admin/ui/wizard/oidc", true);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body()).contains("OIDC provider wizard").contains("name=\"discoveryUri\"");
 
@@ -2061,7 +2108,8 @@ class StudioIntegrationTest {
                 + "&redirectUri=" + enc("https://app.example.com/_tesseraql/oidc/callback")
                 + "&scopes=" + enc("openid profile email")
                 + "&postLoginUrl=" + enc("/") + "&provision=true";
-        HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/oidc", body);
+        HttpResponse<String> result = postForm("/_tesseraql/studio/user-admin/ui/wizard/oidc",
+                body);
 
         assertThat(result.statusCode()).isEqualTo(200);
         assertThat(result.headers().firstValue("content-disposition"))
@@ -2079,9 +2127,9 @@ class StudioIntegrationTest {
         // UX-refresh slice 5: the wizard mounts the hc-stepper (Configure → Review YAML →
         // Apply), previews the SAME .yml.tpl the download serves before either path, and the
         // persistent overlay write is the emphasized (primary) action.
-        String page = get("/_tesseraql/studio/ui/wizard/oidc", true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui/wizard/oidc", true).body();
         assertThat(page).contains("class=\"hc-stepper\"").contains("id=\"wizard-stepper\"")
-                .contains("hx-post=\"/_tesseraql/studio/ui/wizard/preview\"")
+                .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/wizard/preview\"")
                 .contains("id=\"wizard-preview\"");
         // The primary action is the overlay write, not the download.
         int write = page.indexOf("data-variant=\"primary\" type=\"submit\"");
@@ -2089,7 +2137,7 @@ class StudioIntegrationTest {
         assertThat(write).isNotNegative();
         assertThat(download).isGreaterThan(write);
 
-        HttpResponse<String> preview = postForm("/_tesseraql/studio/ui/wizard/preview",
+        HttpResponse<String> preview = postForm("/_tesseraql/studio/user-admin/ui/wizard/preview",
                 "kind=oidc&discoveryUri="
                         + enc("https://idp.example.com/.well-known/openid-configuration")
                         + "&clientId=my-app&redirectUri=" + enc("https://app.example.com/cb")
@@ -2107,13 +2155,14 @@ class StudioIntegrationTest {
 
         // The template name comes from a fixed whitelist (TQL-STUDIO-4240) — an unknown kind
         // is refused, never resolved as a path.
-        assertThat(postForm("/_tesseraql/studio/ui/wizard/preview", "kind=nope").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/wizard/preview", "kind=nope")
+                .statusCode())
                 .isGreaterThanOrEqualTo(400);
     }
 
     @Test
     void wizardSubmitRejectsMissingRequiredField() throws Exception {
-        HttpResponse<String> result = postForm("/_tesseraql/studio/ui/wizard/saml",
+        HttpResponse<String> result = postForm("/_tesseraql/studio/user-admin/ui/wizard/saml",
                 "acsUrl=" + enc("https://app.example.com/acs"));
 
         assertThat(result.statusCode()).isEqualTo(400);
@@ -2121,12 +2170,13 @@ class StudioIntegrationTest {
 
     @Test
     void wizardRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/wizard", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/wizard", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
     void uiMigrationPageRendersTheCreateForm() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/migration", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The editable caller sees the V/R create form (Studio backlog: migration authoring).
@@ -2144,7 +2194,8 @@ class StudioIntegrationTest {
     void uiMigrationCreatesAVersionedFileAndLinksToTheEditor() throws Exception {
         String form = "kind=versioned&datasource=main&description=" + enc("studio it migration")
                 + "&ddl=" + enc("create table it_widgets (id bigint primary key);");
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration", form);
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/migration",
+                form);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Migration created").contains("db/migration/")
@@ -2169,11 +2220,12 @@ class StudioIntegrationTest {
                 + "&ddl=" + enc("create table studio_loop_items ("
                         + "id bigint generated always as identity primary key, "
                         + "name varchar(120) not null);");
-        HttpResponse<String> created = postForm("/_tesseraql/studio/ui/migration", form);
+        HttpResponse<String> created = postForm("/_tesseraql/studio/user-admin/ui/migration", form);
         assertThat(created.statusCode()).isEqualTo(200);
         assertThat(created.body()).contains("Migration created").contains("Migrate now");
 
-        HttpResponse<String> migrated = postForm("/_tesseraql/studio/ui/migration/migrate",
+        HttpResponse<String> migrated = postForm(
+                "/_tesseraql/studio/user-admin/ui/migration/migrate",
                 "confirm=true");
         if (migrated.statusCode() != 200) {
             System.out.println("DBG migrate403=" + migrated.body());
@@ -2216,7 +2268,7 @@ class StudioIntegrationTest {
         assertThat(post("/_tesseraql/studio/reload", "", true).statusCode()).isEqualTo(200);
         assertThat(get("/api/formed", true).statusCode()).isEqualTo(200);
 
-        HttpResponse<String> page = get("/_tesseraql/studio/ui/route-form?path="
+        HttpResponse<String> page = get("/_tesseraql/studio/user-admin/ui/route-form?path="
                 + enc("web/api/formed/get.yml"), true);
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("Route form").contains("query-json")
@@ -2230,16 +2282,16 @@ class StudioIntegrationTest {
         String form = "path=" + enc("web/api/formed/get.yml")
                 + "&recipe=query-json&auth=bearer&policy=app.read"
                 + "&in0name=q&in0type=string&in0maxlen=40&in0domain=" + enc("formed.q");
-        HttpResponse<String> saved = postForm("/_tesseraql/studio/ui/route-form", form);
+        HttpResponse<String> saved = postForm("/_tesseraql/studio/user-admin/ui/route-form", form);
         assertThat(saved.statusCode()).isEqualTo(303);
         assertThat(saved.headers().firstValue("Location").orElse(""))
-                .contains("/_tesseraql/studio/ui/source").contains("saved=1");
+                .contains("/_tesseraql/studio/user-admin/ui/source").contains("saved=1");
 
         // The draft carries the structured change; the form now reads the draft. The field
         // domain must survive the HTTP form -> service hop (the post.yml params mapping the
         // Java-level unit tests cannot see): without it, the select silently drops and a save
         // strips an existing domain: from the document.
-        HttpResponse<String> reread = get("/_tesseraql/studio/ui/route-form?path="
+        HttpResponse<String> reread = get("/_tesseraql/studio/user-admin/ui/route-form?path="
                 + enc("web/api/formed/get.yml"), true);
         assertThat(reread.body()).contains("Editing the pending draft");
         String draft = Files.readString(
@@ -2263,29 +2315,32 @@ class StudioIntegrationTest {
     void connectorsPageEditsEgressCredentialsAndWebhooksThroughTheOverlay() throws Exception {
         // Track J2 (roadmap Phase 43): the connectors page shows the managed connector config
         // and writes overlay changes — egress confirm-gated, secrets as references only.
-        HttpResponse<String> page = get("/_tesseraql/studio/ui/connectors", true);
+        HttpResponse<String> page = get("/_tesseraql/studio/user-admin/ui/connectors", true);
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("Egress allow-lists").contains("api.directory.example")
                 .contains("Inbound webhook verifiers");
 
         // An egress change without the explicit confirm acknowledgment is rejected.
-        HttpResponse<String> unconfirmed = postForm("/_tesseraql/studio/ui/connectors/egress",
+        HttpResponse<String> unconfirmed = postForm(
+                "/_tesseraql/studio/user-admin/ui/connectors/egress",
                 "scope=outbound&host=api.next.example");
         assertThat(unconfirmed.statusCode()).isEqualTo(422);
 
-        HttpResponse<String> confirmed = postForm("/_tesseraql/studio/ui/connectors/egress",
+        HttpResponse<String> confirmed = postForm(
+                "/_tesseraql/studio/user-admin/ui/connectors/egress",
                 "scope=outbound&host=api.next.example&confirm=true");
         assertThat(confirmed.statusCode()).isEqualTo(303);
         String overlay = Files.readString(appHome.resolve("config/overlay.yml"));
         assertThat(overlay).contains("api.next.example").contains("api.directory.example");
-        assertThat(get("/_tesseraql/studio/ui/connectors", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/connectors", true).body())
                 .contains("api.next.example");
 
         // A webhook verifier never stores a literal secret — references only.
-        HttpResponse<String> raw = postForm("/_tesseraql/studio/ui/connectors/webhook",
+        HttpResponse<String> raw = postForm("/_tesseraql/studio/user-admin/ui/connectors/webhook",
                 "name=partner&secret=raw-literal-secret");
         assertThat(raw.statusCode()).isEqualTo(400);
-        HttpResponse<String> reference = postForm("/_tesseraql/studio/ui/connectors/webhook",
+        HttpResponse<String> reference = postForm(
+                "/_tesseraql/studio/user-admin/ui/connectors/webhook",
                 "name=partner&secret=" + enc("${secret.env.PARTNER_WEBHOOK}")
                         + "&signatureHeader=X-Sig&tolerance=PT5M");
         assertThat(reference.statusCode()).isEqualTo(303);
@@ -2293,9 +2348,9 @@ class StudioIntegrationTest {
                 .contains("${secret.env.PARTNER_WEBHOOK}");
 
         // Credentials follow the same rule (bearer token must be a reference).
-        assertThat(postForm("/_tesseraql/studio/ui/connectors/credential",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/connectors/credential",
                 "scope=outbound&name=svc&type=bearer&token=plain").statusCode()).isEqualTo(400);
-        assertThat(postForm("/_tesseraql/studio/ui/connectors/credential",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/connectors/credential",
                 "scope=outbound&name=svc&type=bearer&token="
                         + enc("${secret.env.SVC_TOKEN}"))
                 .statusCode()).isEqualTo(303);
@@ -2310,7 +2365,8 @@ class StudioIntegrationTest {
                 + enc("https://app.example/_tesseraql/oidc/callback")
                 + "&scopes=" + enc("openid profile email") + "&provision=true"
                 + "&clientSecret=" + enc("${secret.env.OIDC_CLIENT_SECRET}");
-        HttpResponse<String> applied = postForm("/_tesseraql/studio/ui/wizard/oidc/apply", form);
+        HttpResponse<String> applied = postForm(
+                "/_tesseraql/studio/user-admin/ui/wizard/oidc/apply", form);
         assertThat(applied.statusCode()).isEqualTo(200);
         assertThat(applied.body()).contains("OIDC settings written").contains("next start");
 
@@ -2319,13 +2375,13 @@ class StudioIntegrationTest {
                 .contains("${secret.env.OIDC_CLIENT_SECRET}");
 
         // A literal client secret is rejected before anything is written.
-        assertThat(postForm("/_tesseraql/studio/ui/wizard/oidc/apply",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/wizard/oidc/apply",
                 "discoveryUri=https%3A%2F%2Fidp.example&clientId=x&redirectUri=y"
                         + "&clientSecret=raw-secret")
                 .statusCode()).isEqualTo(400);
 
         // The wizard page itself now offers the write-through beside the download.
-        assertThat(get("/_tesseraql/studio/ui/wizard/oidc", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/wizard/oidc", true).body())
                 .contains("Write to config overlay");
     }
 
@@ -2336,11 +2392,11 @@ class StudioIntegrationTest {
         // sandbox row count as the expectation, and appends a declarative sql: case.
         String runForm = "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
                 + "&bearer=" + enc(token(List.of("USER_READ")));
-        HttpResponse<String> run = postForm("/_tesseraql/studio/ui/try/run", runForm);
+        HttpResponse<String> run = postForm("/_tesseraql/studio/user-admin/ui/try/run", runForm);
         assertThat(run.statusCode()).isEqualTo(200);
         assertThat(run.body()).contains("Save as test case");
 
-        HttpResponse<String> recorded = postForm("/_tesseraql/studio/ui/try/record",
+        HttpResponse<String> recorded = postForm("/_tesseraql/studio/user-admin/ui/try/record",
                 "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
                         + "&name=" + enc("search finds sato"));
         assertThat(recorded.statusCode()).isEqualTo(303);
@@ -2349,13 +2405,13 @@ class StudioIntegrationTest {
                 .contains("sato").contains("rowCount");
 
         // The recorded case runs through the route's test runner like a hand-written one.
-        HttpResponse<String> tests = postForm("/_tesseraql/studio/ui/run-tests",
+        HttpResponse<String> tests = postForm("/_tesseraql/studio/user-admin/ui/run-tests",
                 "path=" + enc("web/api/users/get.yml"));
         assertThat(tests.statusCode()).isEqualTo(200);
         assertThat(tests.body()).contains("search finds sato");
 
         // Re-recording the same name gets a suffix instead of clobbering the first case.
-        assertThat(postForm("/_tesseraql/studio/ui/try/record",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/try/record",
                 "method=GET&path=" + enc("/api/users") + "&query=" + enc("q=sato")
                         + "&name=" + enc("search finds sato"))
                 .statusCode()).isEqualTo(303);
@@ -2363,7 +2419,7 @@ class StudioIntegrationTest {
                 .contains("search finds sato (2)");
 
         // A command route is not recordable (v1) and says why.
-        assertThat(postForm("/_tesseraql/studio/ui/try/record",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/try/record",
                 "method=POST&path=" + enc("/api/users/provision")).statusCode()).isEqualTo(400);
     }
 
@@ -2372,7 +2428,7 @@ class StudioIntegrationTest {
         // Roadmap Phase 46: the release-diff page consolidates the captured-baseline diffs
         // (API changelog, schema DDL) and the migration list, with honest empty-states when
         // no baseline is captured yet.
-        HttpResponse<String> page = get("/_tesseraql/studio/ui/docs/release-diff", true);
+        HttpResponse<String> page = get("/_tesseraql/studio/user-admin/ui/docs/release-diff", true);
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("Release diff")
                 .contains("Migrations the app carries");
@@ -2388,11 +2444,11 @@ class StudioIntegrationTest {
     void copilotPageShowsTheHonestDisabledStateWhenUnconfigured() throws Exception {
         // Roadmap Phase 44: no model is shipped — an unconfigured app renders the setup
         // hint, and the send endpoint refuses cleanly instead of dialing anything.
-        HttpResponse<String> page = get("/_tesseraql/studio/ui/copilot", true);
+        HttpResponse<String> page = get("/_tesseraql/studio/user-admin/ui/copilot", true);
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.body()).contains("not configured")
                 .contains("tesseraql.copilot.endpoint");
-        assertThat(postForm("/_tesseraql/studio/ui/copilot/send", "message=hello")
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/copilot/send", "message=hello")
                 .statusCode()).isEqualTo(500);
     }
 
@@ -2400,27 +2456,30 @@ class StudioIntegrationTest {
     void dataBrowserRowEditUpdatesOneRowUnderConfirmAndAudit() throws Exception {
         // Track J4 (roadmap Phase 43): PK-scoped single-row edit — the browser links Edit when
         // the row editor is on, the caller may edit, and the table has a primary key.
-        HttpResponse<String> browse = get("/_tesseraql/studio/ui/data?table=tql_users", true);
+        HttpResponse<String> browse = get("/_tesseraql/studio/user-admin/ui/data?table=tql_users",
+                true);
         assertThat(browse.statusCode()).isEqualTo(200);
-        assertThat(browse.body()).contains("/_tesseraql/studio/ui/data/edit?table=tql_users")
+        assertThat(browse.body())
+                .contains("/_tesseraql/studio/user-admin/ui/data/edit?table=tql_users")
                 .contains("k0=user_id").contains("v0=u1");
 
         HttpResponse<String> form = get(
-                "/_tesseraql/studio/ui/data/edit?table=tql_users&k0=user_id&v0=u1", true);
+                "/_tesseraql/studio/user-admin/ui/data/edit?table=tql_users&k0=user_id&v0=u1",
+                true);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body()).contains("display_name").contains("Administrator")
                 .contains("PK");
 
         // No explicit confirm -> rejected before any SQL runs.
-        assertThat(postForm("/_tesseraql/studio/ui/data/edit",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/data/edit",
                 "table=tql_users&k0=user_id&v0=u1&cn0=display_name&cv0=X&cs0=true")
                 .statusCode()).isEqualTo(422);
 
-        HttpResponse<String> updated = postForm("/_tesseraql/studio/ui/data/edit",
+        HttpResponse<String> updated = postForm("/_tesseraql/studio/user-admin/ui/data/edit",
                 "table=tql_users&k0=user_id&v0=u1&confirm=true"
                         + "&cn0=display_name&cv0=" + enc("Renamed Admin") + "&cs0=true");
         assertThat(updated.statusCode()).isEqualTo(303);
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users", true).body())
                 .contains("Renamed Admin");
         // The audit trail carries the row identity and column names, never values.
         assertThat(get("/_tesseraql/studio/audit", true).body())
@@ -2428,7 +2487,7 @@ class StudioIntegrationTest {
                 .doesNotContain("Renamed Admin");
 
         // Editing the PK itself is refused (PK columns are excluded from the SET clause).
-        assertThat(postForm("/_tesseraql/studio/ui/data/edit",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/data/edit",
                 "table=tql_users&k0=user_id&v0=u1&confirm=true&cn0=user_id&cv0=u9&cs0=true")
                 .statusCode()).isEqualTo(400);
 
@@ -2439,13 +2498,15 @@ class StudioIntegrationTest {
             statement.execute("create table if not exists pkless_notes (note varchar(40))");
             statement.execute("insert into pkless_notes values ('only')");
         }
-        assertThat(get("/_tesseraql/studio/ui/data?table=pkless_notes", true).body())
-                .doesNotContain("/_tesseraql/studio/ui/data/edit?table=pkless_notes");
-        assertThat(get("/_tesseraql/studio/ui/data/edit?table=pkless_notes&k0=note&v0=only",
-                true).body()).contains("no primary key");
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=pkless_notes", true).body())
+                .doesNotContain("/_tesseraql/studio/user-admin/ui/data/edit?table=pkless_notes");
+        assertThat(
+                get("/_tesseraql/studio/user-admin/ui/data/edit?table=pkless_notes&k0=note&v0=only",
+                        true).body())
+                .contains("no primary key");
 
         // Restore the shared seed row (other tests assert the original display name).
-        assertThat(postForm("/_tesseraql/studio/ui/data/edit",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/data/edit",
                 "table=tql_users&k0=user_id&v0=u1&confirm=true"
                         + "&cn0=display_name&cv0=Administrator&cs0=true")
                 .statusCode()).isEqualTo(303);
@@ -2455,7 +2516,7 @@ class StudioIntegrationTest {
     void uiMenuPageRendersTheEditorAndFallbackNote() throws Exception {
         // With no config/menu.yml the editor shows the add form and the templates/nav.html fallback.
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/menu", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/menu", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Sidebar menu").contains("Add menu item")
@@ -2467,13 +2528,14 @@ class StudioIntegrationTest {
         Files.deleteIfExists(appHome.resolve("config/menu.yml"));
         String form = "label=" + enc("Reports") + "&href=" + enc("/reports")
                 + "&icon=activity&roles=" + enc("ADMIN, STAFF");
-        assertThat(postForm("/_tesseraql/studio/ui/menu/add", form).statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/menu/add", form).statusCode())
+                .isEqualTo(303);
 
         String menu = Files.readString(appHome.resolve("config/menu.yml"));
         assertThat(menu).contains("Reports").contains("/reports").contains("ADMIN")
                 .contains("STAFF");
         // The editor now renders the row with its label, href, and role-based visibility.
-        String page = get("/_tesseraql/studio/ui/menu", true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui/menu", true).body();
         assertThat(page).contains("Reports").contains("/reports").contains("Roles: ADMIN, STAFF");
         // The write is recorded to the audit trail (backlog D6).
         assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
@@ -2490,13 +2552,14 @@ class StudioIntegrationTest {
                 """);
 
         // Move the second item up → it precedes the first on disk.
-        assertThat(postForm("/_tesseraql/studio/ui/menu/move", "index=1&dir=up").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/menu/move", "index=1&dir=up")
+                .statusCode())
                 .isEqualTo(303);
         String moved = Files.readString(appHome.resolve("config/menu.yml"));
         assertThat(moved.indexOf("Second")).isLessThan(moved.indexOf("First"));
 
         // Remove index 0 (now "Second") → only "First" remains.
-        assertThat(postForm("/_tesseraql/studio/ui/menu/remove", "index=0").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/menu/remove", "index=0").statusCode())
                 .isEqualTo(303);
         String removed = Files.readString(appHome.resolve("config/menu.yml"));
         assertThat(removed).contains("First").doesNotContain("Second");
@@ -2517,11 +2580,13 @@ class StudioIntegrationTest {
         String before = Files.readString(appHome.resolve("config/menu.yml"));
 
         // Not a number at all, and a number past the end: both are refused.
-        assertThat(postForm("/_tesseraql/studio/ui/menu/remove", "index=abc").statusCode())
+        assertThat(
+                postForm("/_tesseraql/studio/user-admin/ui/menu/remove", "index=abc").statusCode())
                 .isEqualTo(400);
-        assertThat(postForm("/_tesseraql/studio/ui/menu/remove", "index=7").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/menu/remove", "index=7").statusCode())
                 .isEqualTo(400);
-        assertThat(postForm("/_tesseraql/studio/ui/menu/move", "index=9&dir=up").statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/menu/move", "index=9&dir=up")
+                .statusCode())
                 .isEqualTo(400);
 
         assertThat(Files.readString(appHome.resolve("config/menu.yml"))).isEqualTo(before);
@@ -2537,10 +2602,11 @@ class StudioIntegrationTest {
                 """);
 
         // A non-matching role sees only the public item; the gated href is not emitted.
-        String anon = get("/_tesseraql/studio/ui/menu/preview?role=" + enc("NOBODY"), true).body();
+        String anon = get("/_tesseraql/studio/user-admin/ui/menu/preview?role=" + enc("NOBODY"),
+                true).body();
         assertThat(anon).contains("/home").doesNotContain("/admin");
         // The ADMIN role sees both.
-        String admin = get("/_tesseraql/studio/ui/menu/preview?role=ADMIN", true).body();
+        String admin = get("/_tesseraql/studio/user-admin/ui/menu/preview?role=ADMIN", true).body();
         assertThat(admin).contains("/home").contains("/admin");
     }
 
@@ -2552,7 +2618,7 @@ class StudioIntegrationTest {
                   - {label: Users, href: /users}
                   - {label: Ghost, href: /definitely-not-a-route}
                 """);
-        String page = get("/_tesseraql/studio/ui/menu", true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui/menu", true).body();
 
         // Href autocomplete lists served route paths; role autocomplete comes from the app's policies.
         assertThat(page).contains("id=\"menu-href-options\"").contains("value=\"/users\"");
@@ -2565,13 +2631,15 @@ class StudioIntegrationTest {
 
     @Test
     void uiMenuEditorIsReadOnlyForAViewer() throws Exception {
-        assertThat(getWithCookie("/_tesseraql/studio/ui/menu", viewerCookie).body())
-                .contains("do not have permission");
+        // Deny-by-default (docs/studio-shell.md structural decision 4): a caller without the
+        // atom does not reach the workshop's pages at all — the 404-shaped refusal.
+        assertThat(getWithCookie("/_tesseraql/studio/user-admin/ui/menu", viewerCookie)
+                .statusCode()).isEqualTo(404);
     }
 
     @Test
     void uiMenuRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/menu", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/menu", false).statusCode()).isEqualTo(401);
     }
 
     @Test
@@ -2591,7 +2659,7 @@ class StudioIntegrationTest {
                       ok: true
                 """);
         try {
-            HttpResponse<String> response = get("/_tesseraql/studio/ui/health", true);
+            HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/health", true);
 
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.body()).contains("Health").contains("TQL-YAML-1002")
@@ -2624,18 +2692,18 @@ class StudioIntegrationTest {
                       ok: true
                 """);
         try {
-            String page = get("/_tesseraql/studio/ui/health", true).body();
+            String page = get("/_tesseraql/studio/user-admin/ui/health", true).body();
             assertThat(page).contains("class=\"tql-stat\"").contains("findings")
                     .contains(
-                            "class=\"hc-tabs__tab\" href=\"/_tesseraql/studio/ui/health?severity=error\"")
+                            "class=\"hc-tabs__tab\" href=\"/_tesseraql/studio/user-admin/ui/health?severity=error\"")
                     .contains("id=\"health-filter\"").contains("id=\"health-table\"")
                     .contains("tql-stripe-error");
 
             // The unknown-recipe probe is an error, so the warning chip hides it…
-            assertThat(get("/_tesseraql/studio/ui/health?severity=warning", true).body())
+            assertThat(get("/_tesseraql/studio/user-admin/ui/health?severity=warning", true).body())
                     .doesNotContain("lintprobe2");
             // …and the search finds it by source.
-            assertThat(get("/_tesseraql/studio/ui/health?q=lintprobe2", true).body())
+            assertThat(get("/_tesseraql/studio/user-admin/ui/health?q=lintprobe2", true).body())
                     .contains("web/api/lintprobe2/get.yml");
         } finally {
             Files.deleteIfExists(appHome.resolve(bad));
@@ -2645,12 +2713,13 @@ class StudioIntegrationTest {
 
     @Test
     void uiHealthDashboardRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/health", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/health", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
     void uiSecurityOverviewMapsRoutesToPoliciesAndFlagsUnprotected() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/security", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/security", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The route→policy map lists a secured route with its policy, and the policy catalogue shows
@@ -2666,7 +2735,7 @@ class StudioIntegrationTest {
         assertThat(response.body()).contains("class=\"tql-stat\"")
                 .contains("unused policies").contains("data-tone=\"warning\"")
                 .contains(
-                        "class=\"hc-tabs__tab\" href=\"/_tesseraql/studio/ui/security?status=unprotected\"")
+                        "class=\"hc-tabs__tab\" href=\"/_tesseraql/studio/user-admin/ui/security?status=unprotected\"")
                 .contains("id=\"security-filter\"").contains("id=\"security-routes\"");
     }
 
@@ -2677,11 +2746,12 @@ class StudioIntegrationTest {
         // every fixture route is protected, so the unprotected chip shows the honest empty
         // state while the stat tiles keep the full counts.
         String unprotected = routesRegion(
-                get("/_tesseraql/studio/ui/security?status=unprotected", true).body());
+                get("/_tesseraql/studio/user-admin/ui/security?status=unprotected", true).body());
         assertThat(unprotected).contains("No routes match").doesNotContain("/admin/users");
 
         String searched = routesRegion(
-                get("/_tesseraql/studio/ui/security?q=" + enc("/admin/users"), true).body());
+                get("/_tesseraql/studio/user-admin/ui/security?q=" + enc("/admin/users"), true)
+                        .body());
         assertThat(searched).contains("/admin/users").doesNotContain("/api/probe");
     }
 
@@ -2696,12 +2766,13 @@ class StudioIntegrationTest {
 
     @Test
     void uiSecurityOverviewRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/security", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/security", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
     void uiMessagesEditorRendersTheCatalogAcrossLocales() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/messages", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/messages", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The user-admin app ships en + ja catalogs sharing keys like users.list.title.
@@ -2713,7 +2784,7 @@ class StudioIntegrationTest {
     void uiMessagesSetUpsertsATranslationAndRecordsAudit() throws Exception {
         String key = "studio.it.greeting";
         String form = "locale=en&key=" + enc(key) + "&value=" + enc("Hello from IT");
-        assertThat(postForm("/_tesseraql/studio/ui/messages/set", form).statusCode())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/messages/set", form).statusCode())
                 .isEqualTo(303);
 
         // The nested key was written into messages/en.yml, and the write was audited.
@@ -2722,17 +2793,18 @@ class StudioIntegrationTest {
         assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
                 .contains("\"action\":\"message\"");
         // The editor now lists the new key.
-        assertThat(get("/_tesseraql/studio/ui/messages", true).body()).contains(key);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/messages", true).body()).contains(key);
     }
 
     @Test
     void uiMessagesEditorRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/messages", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/messages", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
     void uiConfigViewerRendersEffectiveConfigAndRedactsSecrets() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/config", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/config", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // A known flattened key is shown; a secret's literal value (docs.share.secret) is redacted.
@@ -2743,14 +2815,15 @@ class StudioIntegrationTest {
 
     @Test
     void uiConfigViewerRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/config", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/config", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
     void uiConfigEditorOverridesAWhitelistedSettingInOverlay() throws Exception {
         Path overlay = appHome.resolve("config/overlay.yml");
         try {
-            assertThat(postForm("/_tesseraql/studio/ui/config/set",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/config/set",
                     "key=" + enc("tesseraql.app.name") + "&value=StudioITApp").statusCode())
                     .isEqualTo(303);
             // Written to overlay.yml (base untouched) and audited.
@@ -2758,7 +2831,8 @@ class StudioIntegrationTest {
             assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
                     .contains("\"action\":\"config\"");
             // The effective config (base + overlay) reflects the override.
-            assertThat(get("/_tesseraql/studio/ui/config", true).body()).contains("StudioITApp");
+            assertThat(get("/_tesseraql/studio/user-admin/ui/config", true).body())
+                    .contains("StudioITApp");
         } finally {
             Files.deleteIfExists(overlay);
         }
@@ -2767,7 +2841,8 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserListsRowsOfATable() throws Exception {
         // The identity schema seeds one tql_users row (login_id 'admin').
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=tql_users", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/data?table=tql_users",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Data browser").contains("login_id").contains("admin");
@@ -2777,7 +2852,8 @@ class StudioIntegrationTest {
     void uiDataBrowserMarksNumericColumnsFromTheResultMetadata() throws Exception {
         // hc-briefs.md brief 7 (hc 0.1.13): numeric columns — decided from the result set's
         // JDBC metadata — carry data-numeric, so the kit end-aligns them; text columns don't.
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=users", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/data?table=users",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The users table's id is bigserial → its header is marked; name is text → unmarked.
@@ -2789,13 +2865,13 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserFiltersAndSortsByColumn() throws Exception {
         // Filter tql_users to the seeded 'admin' login and sort by it — validated columns, bound value.
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table=tql_users"
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/data?table=tql_users"
                 + "&fc0=login_id&fo0=contains&fv0=admin&sort=login_id&dir=desc", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("admin");
         // A non-matching filter yields no rows.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users"
                 + "&fc0=login_id&fo0=contains&fv0=" + enc("nobody-xyz"), true).body())
                 .contains("No rows");
     }
@@ -2803,11 +2879,11 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserAppliesMultipleAndConditions() throws Exception {
         // login_id contains 'admin' AND status equals 'ACTIVE' → matches the seeded row.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users"
                 + "&fc0=login_id&fo0=contains&fv0=admin"
                 + "&fc1=status&fo1=equals&fv1=ACTIVE", true).body()).contains("Administrator");
         // Same first condition but status equals 'INACTIVE' → no rows.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users"
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users"
                 + "&fc0=login_id&fo0=contains&fv0=admin"
                 + "&fc1=status&fo1=equals&fv1=INACTIVE", true).body()).contains("No rows");
     }
@@ -2815,30 +2891,32 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserShowsClearFiltersOnlyWhenFiltered() throws Exception {
         // With a filter active, the Clear-filters reset link (back to the bare table) is offered.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&fc0=login_id&fo0=contains&fv0=a",
+        assertThat(get(
+                "/_tesseraql/studio/user-admin/ui/data?table=tql_users&fc0=login_id&fo0=contains&fv0=a",
                 true).body()).contains("Clear filters")
-                .contains("/_tesseraql/studio/ui/data?ds=main&amp;table=tql_users\"");
+                .contains("/_tesseraql/studio/user-admin/ui/data?ds=main&amp;table=tql_users\"");
         // With no filter/sort, it is not shown.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users", true).body())
                 .doesNotContain("Clear filters");
     }
 
     @Test
     void uiDataBrowserOffersTheDatasourceDimension() throws Exception {
         // Two declared datasources → the selector renders with main selected by default.
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/data", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/data", true);
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("name=\"ds\"").contains(">analytics<");
 
         // The duckdb engine's own catalogs are scratch (no attaches declared here), so
         // browsing it succeeds against an intentionally empty listing — and never offers
         // the row editor, which stays a main-only affordance.
-        HttpResponse<String> analytics = get("/_tesseraql/studio/ui/data?ds=analytics", true);
+        HttpResponse<String> analytics = get("/_tesseraql/studio/user-admin/ui/data?ds=analytics",
+                true);
         assertThat(analytics.statusCode()).isEqualTo(200);
-        assertThat(analytics.body()).doesNotContain("/_tesseraql/studio/ui/data/edit?");
+        assertThat(analytics.body()).doesNotContain("/_tesseraql/studio/user-admin/ui/data/edit?");
 
         // An undeclared datasource is a refusal, never a silent fallback to main.
-        assertThat(get("/_tesseraql/studio/ui/data?ds=nope", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?ds=nope", true).body())
                 .contains("No such datasource");
     }
 
@@ -2846,10 +2924,10 @@ class StudioIntegrationTest {
     void uiDataBrowserFoldsFiltersUntilActive() throws Exception {
         // The filter slots live in a disclosure: collapsed with no active condition, and
         // opened + badged with the active count once a filter is applied.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users", true).body())
                 .contains("<summary class=\"hc-collapsible__trigger\">")
                 .doesNotContain("active</span>");
-        String filtered = get("/_tesseraql/studio/ui/data?table=tql_users"
+        String filtered = get("/_tesseraql/studio/user-admin/ui/data?table=tql_users"
                 + "&fc0=login_id&fo0=contains&fv0=a"
                 + "&fc1=status&fo1=equals&fv1=ACTIVE", true).body();
         assertThat(filtered).contains("2 active")
@@ -2859,11 +2937,11 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserCombinesConditionsWithOr() throws Exception {
         // status ACTIVE OR status INACTIVE → matches (the seeded admin is ACTIVE).
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&combinator=or"
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users&combinator=or"
                 + "&fc0=status&fo0=equals&fv0=ACTIVE"
                 + "&fc1=status&fo1=equals&fv1=INACTIVE", true).body()).contains("Administrator");
         // The same two as AND can't both hold → no rows.
-        assertThat(get("/_tesseraql/studio/ui/data?table=tql_users&combinator=and"
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=tql_users&combinator=and"
                 + "&fc0=status&fo0=equals&fv0=ACTIVE"
                 + "&fc1=status&fo1=equals&fv1=INACTIVE", true).body()).contains("No rows");
     }
@@ -2880,7 +2958,9 @@ class StudioIntegrationTest {
         try {
             // qty > 50 → numeric compare returns only the qty=100 row; a text compare would keep
             // '9' too (2 rows), so a single row proves the value was bound as a number.
-            assertThat(get("/_tesseraql/studio/ui/data?table=num_probe&fc0=qty&fo0=gt&fv0=50", true)
+            assertThat(get(
+                    "/_tesseraql/studio/user-admin/ui/data?table=num_probe&fc0=qty&fo0=gt&fv0=50",
+                    true)
                     .body()).contains("1 row(s)").contains("100");
         } finally {
             try (java.sql.Connection c = java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(),
@@ -2894,11 +2974,11 @@ class StudioIntegrationTest {
     @Test
     void uiDocsTableLinksToTheDataBrowser() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers", true);
+                "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name=customers", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Browse data")
-                .contains("/_tesseraql/studio/ui/data?table=");
+                .contains("/_tesseraql/studio/user-admin/ui/data?table=");
     }
 
     @Test
@@ -2907,7 +2987,7 @@ class StudioIntegrationTest {
         // backing the `shippingFee` decision badges each mapped column with its role. Asserted
         // here because only this path evaluates data.html against the columnContracts model.
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/data?table=shipping_fee_rules", true);
+                "/_tesseraql/studio/user-admin/ui/data?table=shipping_fee_rules", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body())
@@ -2918,7 +2998,7 @@ class StudioIntegrationTest {
                 .contains("shippingFee: priority")
                 .contains("shippingFee: fee output");
         // A table no decision maps stays badge-free.
-        assertThat(get("/_tesseraql/studio/ui/data?table=widgets", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data?table=widgets", true).body())
                 .doesNotContain("shippingFee:");
     }
 
@@ -2927,20 +3007,22 @@ class StudioIntegrationTest {
         // The schema table page says whose routing rows these are: the rule table is chipped
         // with the decision it backs, linking to the decisions reference page.
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/schema/table?ds=main&name=shipping_fee_rules", true);
+                "/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name=shipping_fee_rules",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("backs shippingFee")
-                .contains("/_tesseraql/studio/ui/docs/decisions");
+                .contains("/_tesseraql/studio/user-admin/ui/docs/decisions");
         // A table backing no decision carries no chip.
-        assertThat(get("/_tesseraql/studio/ui/docs/schema/table?ds=main&name=customers", true)
+        assertThat(get("/_tesseraql/studio/user-admin/ui/docs/schema/table?ds=main&name=customers",
+                true)
                 .body()).doesNotContain("backs shippingFee");
     }
 
     @Test
     void uiDataBrowserExportsTheViewAsCsv() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/data/export?table=tql_users", true);
+                "/_tesseraql/studio/user-admin/ui/data/export?table=tql_users", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.headers().firstValue("Content-Type").orElse("")).contains("text/csv");
@@ -2951,8 +3033,10 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserExportRespectsAFilter() throws Exception {
         // Filtering to a non-matching value exports only the header (no data rows).
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/data/export?table=tql_users"
-                + "&fc0=login_id&fo0=contains&fv0=" + enc("nobody-xyz"), true);
+        HttpResponse<String> response = get(
+                "/_tesseraql/studio/user-admin/ui/data/export?table=tql_users"
+                        + "&fc0=login_id&fo0=contains&fv0=" + enc("nobody-xyz"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("login_id").doesNotContain("admin");
@@ -2961,7 +3045,7 @@ class StudioIntegrationTest {
     @Test
     void uiDataBrowserRejectsAnUnknownTable() throws Exception {
         // A table not in the live catalog is rejected (guards against SQL injection via the name).
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/data?table="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/data?table="
                 + enc("nope; drop table tql_users"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -2970,12 +3054,13 @@ class StudioIntegrationTest {
 
     @Test
     void uiDataBrowserRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/data", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/data", false).statusCode()).isEqualTo(401);
     }
 
     @Test
     void uiValidationBuilderRendersTheForm() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/validation-builder", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/validation-builder",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Validation builder").contains("name=\"operation\"");
@@ -2991,7 +3076,8 @@ class StudioIntegrationTest {
 
     @Test
     void uiValidationBuilderGeneratesARuleSnippet() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/validation-builder/build",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/studio/user-admin/ui/validation-builder/build",
                 "operation=min&source=body&field=age&value=18&id=ageAtLeast18");
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3004,7 +3090,8 @@ class StudioIntegrationTest {
 
     @Test
     void uiDecisionBuilderRendersTheForm() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/decision-builder", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/decision-builder",
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The declared decisions populate the select. Asserted here rather than in a unit test
@@ -3015,7 +3102,8 @@ class StudioIntegrationTest {
 
     @Test
     void uiDecisionBuilderGeneratesADecideSnippet() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/decision-builder/build",
+        HttpResponse<String> response = postForm(
+                "/_tesseraql/studio/user-admin/ui/decision-builder/build",
                 "decision=shippingFee");
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3034,7 +3122,7 @@ class StudioIntegrationTest {
         // decisions document — the routeFormSave persistence contract.
         try {
             HttpResponse<String> page = get(
-                    "/_tesseraql/studio/ui/decisions?name=approvalTier", true);
+                    "/_tesseraql/studio/user-admin/ui/decisions?name=approvalTier", true);
             assertThat(page.statusCode()).isEqualTo(200);
             assertThat(page.body()).contains("Decision rows").contains("approvalTier")
                     // fixed slots + posted column meaning
@@ -3045,7 +3133,7 @@ class StudioIntegrationTest {
                     // the canonical-formatting note (the route-form contract)
                     .contains("canonical formatting");
 
-            HttpResponse<String> saved = postForm("/_tesseraql/studio/ui/decisions/save",
+            HttpResponse<String> saved = postForm("/_tesseraql/studio/user-admin/ui/decisions/save",
                     "name=approvalTier"
                             + "&c0key=amount&c0kind=in&c1key=dept&c1kind=in&c2key=tier&c2kind=out"
                             + "&r0c0=" + enc(">= 100000") + "&r0c2=cfo"
@@ -3053,7 +3141,7 @@ class StudioIntegrationTest {
                             + "&r2c2=manager");
             assertThat(saved.statusCode()).isEqualTo(303);
             assertThat(saved.headers().firstValue("Location").orElse(""))
-                    .contains("/_tesseraql/studio/ui/decisions").contains("saved=1");
+                    .contains("/_tesseraql/studio/user-admin/ui/decisions").contains("saved=1");
 
             // The draft carries the edited cell; the source of truth is untouched.
             String draft = Files.readString(
@@ -3064,7 +3152,8 @@ class StudioIntegrationTest {
             // Audited, and the grid now reads the draft.
             assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
                     .contains("\"action\":\"decision-rows\"");
-            assertThat(get("/_tesseraql/studio/ui/decisions?name=approvalTier", true).body())
+            assertThat(get("/_tesseraql/studio/user-admin/ui/decisions?name=approvalTier", true)
+                    .body())
                     .contains("Editing the pending draft").contains("marketing");
         } finally {
             // Discard the draft so the shared app home stays canonical for sibling tests
@@ -3080,7 +3169,7 @@ class StudioIntegrationTest {
         // The save validates the rebuilt document (parseDecisions + DecisionSets.compile)
         // before persisting, so an out cell outside the declared enum answers with its
         // TQL-DECISION code and no draft is written.
-        HttpResponse<String> rejected = postForm("/_tesseraql/studio/ui/decisions/save",
+        HttpResponse<String> rejected = postForm("/_tesseraql/studio/user-admin/ui/decisions/save",
                 "name=approvalTier"
                         + "&c0key=amount&c0kind=in&c1key=dept&c1kind=in&c2key=tier&c2kind=out"
                         + "&r0c0=" + enc(">= 100000") + "&r0c2=vp"
@@ -3096,17 +3185,19 @@ class StudioIntegrationTest {
     void uiFlagsEditorSetsAndRemovesAFlag() throws Exception {
         Path flags = appHome.resolve("config/flags.yml");
         try {
-            assertThat(postForm("/_tesseraql/studio/ui/flags/set",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/flags/set",
                     "name=betaBanner&type=boolean&value=true").statusCode()).isEqualTo(303);
             // Written to config/flags.yml and audited; the editor lists it.
             assertThat(Files.readString(flags)).contains("betaBanner").contains("true");
             assertThat(Files.readString(appHome.resolve("work/studio/audit/audit.jsonl")))
                     .contains("\"action\":\"flag\"");
-            assertThat(get("/_tesseraql/studio/ui/flags", true).body()).contains("betaBanner");
+            assertThat(get("/_tesseraql/studio/user-admin/ui/flags", true).body())
+                    .contains("betaBanner");
 
             // Remove it.
             assertThat(
-                    postForm("/_tesseraql/studio/ui/flags/remove", "name=betaBanner").statusCode())
+                    postForm("/_tesseraql/studio/user-admin/ui/flags/remove", "name=betaBanner")
+                            .statusCode())
                     .isEqualTo(303);
             assertThat(Files.readString(flags)).doesNotContain("betaBanner");
         } finally {
@@ -3120,14 +3211,14 @@ class StudioIntegrationTest {
         try {
             Files.writeString(flags, "flags:\n  beta: false\n");
             // The flag renders an "off" toggle whose form posts the opposite value (true).
-            String page = get("/_tesseraql/studio/ui/flags", true).body();
+            String page = get("/_tesseraql/studio/user-admin/ui/flags", true).body();
             assertThat(page).contains(">off<").contains("value=\"true\"");
 
             // Clicking the toggle (post the opposite) flips it on; the page now shows "on".
-            assertThat(postForm("/_tesseraql/studio/ui/flags/set",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/flags/set",
                     "name=beta&type=boolean&value=true").statusCode()).isEqualTo(303);
             assertThat(Files.readString(flags)).contains("beta: true");
-            assertThat(get("/_tesseraql/studio/ui/flags", true).body()).contains(">on<")
+            assertThat(get("/_tesseraql/studio/user-admin/ui/flags", true).body()).contains(">on<")
                     .contains("value=\"false\"");
         } finally {
             Files.deleteIfExists(flags);
@@ -3141,7 +3232,7 @@ class StudioIntegrationTest {
         Path flags = appHome.resolve("config/flags.yml");
         try {
             Files.writeString(flags, "flags:\n  beta: true\n");
-            String page = get("/_tesseraql/studio/ui/flags", true).body();
+            String page = get("/_tesseraql/studio/user-admin/ui/flags", true).body();
             assertThat(page)
                     .contains("class=\"hc-switch\" type=\"checkbox\" role=\"switch\"")
                     .contains("data-tql-submit-on-change")
@@ -3155,12 +3246,13 @@ class StudioIntegrationTest {
     @Test
     void uiConfigSearchNarrowsTheEffectiveKeys() throws Exception {
         // UX-refresh slice 6: the drafts/audit header-search idiom on the config table.
-        String page = get("/_tesseraql/studio/ui/config", true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui/config", true).body();
         assertThat(page).contains("id=\"config-filter\"").contains("id=\"config-table\"");
 
-        assertThat(get("/_tesseraql/studio/ui/config?q=zzz-no-such-key", true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/config?q=zzz-no-such-key", true).body())
                 .contains("No keys match");
-        assertThat(get("/_tesseraql/studio/ui/config?q=" + enc("tesseraql.studio"), true).body())
+        assertThat(get("/_tesseraql/studio/user-admin/ui/config?q=" + enc("tesseraql.studio"), true)
+                .body())
                 .contains("key(s) match").contains("tesseraql.studio");
     }
 
@@ -3181,21 +3273,23 @@ class StudioIntegrationTest {
                       dates: [2026-01-01]
                 """);
         try {
-            String page = get("/_tesseraql/studio/ui/calendars?name=it-toggle", true).body();
+            String page = get("/_tesseraql/studio/user-admin/ui/calendars?name=it-toggle", true)
+                    .body();
             assertThat(page).contains("class=\"hc-calendar\"").contains("data-name=\"date\"")
-                    .contains("hx-post=\"/_tesseraql/studio/ui/calendars/toggle\"")
+                    .contains("hx-post=\"/_tesseraql/studio/user-admin/ui/calendars/toggle\"")
                     .contains("hx-trigger=\"hc:calendarchange\"")
                     .contains("2026-01-01");
 
             // Toggling a new date adds it to the draft…
-            assertThat(postForm("/_tesseraql/studio/ui/calendars/toggle",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/calendars/toggle",
                     "name=it-toggle&date=2026-12-31").statusCode()).isEqualTo(303);
             assertThat(Files.readString(draft)).contains("2026-12-31").contains("2026-01-01");
-            String toggled = get("/_tesseraql/studio/ui/calendars?name=it-toggle", true).body();
+            String toggled = get("/_tesseraql/studio/user-admin/ui/calendars?name=it-toggle", true)
+                    .body();
             assertThat(toggled).contains("2026-12-31").contains("unapplied draft");
 
             // …and toggling it again removes it from the same draft.
-            assertThat(postForm("/_tesseraql/studio/ui/calendars/toggle",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/calendars/toggle",
                     "name=it-toggle&date=2026-12-31").statusCode()).isEqualTo(303);
             assertThat(Files.readString(draft)).doesNotContain("2026-12-31")
                     .contains("2026-01-01");
@@ -3209,19 +3303,21 @@ class StudioIntegrationTest {
     void uiJobsPageListsDeclaredJobsAboveThePolicyForm() throws Exception {
         // UX-refresh slice 6: the declared jobs render as a real list — id, trigger story,
         // calendar, calendar-next — with the id opening the policy form (fieldset-grouped).
-        String page = get("/_tesseraql/studio/ui/jobs", true).body();
+        String page = get("/_tesseraql/studio/user-admin/ui/jobs", true).body();
         assertThat(page).contains("Job policies")
                 .contains("Calendar next").contains("directory.sync")
-                .contains("/_tesseraql/studio/ui/jobs?name=directory.sync");
+                .contains("/_tesseraql/studio/user-admin/ui/jobs?name=directory.sync");
 
-        String form = get("/_tesseraql/studio/ui/jobs?name=" + enc("directory.sync"), true)
+        String form = get("/_tesseraql/studio/user-admin/ui/jobs?name=" + enc("directory.sync"),
+                true)
                 .body();
         assertThat(form).contains("Policies");
     }
 
     @Test
     void uiFlagsEditorRequiresAuthentication() throws Exception {
-        assertThat(get("/_tesseraql/studio/ui/flags", false).statusCode()).isEqualTo(401);
+        assertThat(get("/_tesseraql/studio/user-admin/ui/flags", false).statusCode())
+                .isEqualTo(401);
     }
 
     @Test
@@ -3229,7 +3325,7 @@ class StudioIntegrationTest {
         Path overlay = appHome.resolve("config/overlay.yml");
         try {
             // A key outside the curated whitelist is rejected — nothing is written.
-            assertThat(postForm("/_tesseraql/studio/ui/config/set",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/config/set",
                     "key=" + enc("tesseraql.datasources.main.password") + "&value=pwned")
                     .statusCode()).isNotEqualTo(303);
             assertThat(!Files.exists(overlay) || !Files.readString(overlay).contains("pwned"))
@@ -3247,11 +3343,11 @@ class StudioIntegrationTest {
                 List.of());
         try {
             // The edit form is offered to an editor.
-            assertThat(get("/_tesseraql/studio/ui/security", true).body())
+            assertThat(get("/_tesseraql/studio/user-admin/ui/security", true).body())
                     .contains("Grant a role or permission");
 
             // Grant STUDIO_EDITOR a brand-new policy — creates it in the overlay.
-            assertThat(postForm("/_tesseraql/studio/ui/security/policy/add-rule",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/security/policy/add-rule",
                     "policy=" + enc(policyId) + "&kind=role&value=STUDIO_EDITOR").statusCode())
                     .isEqualTo(303);
             // Written to config/overlay.yml (the base config is untouched) and audited.
@@ -3262,7 +3358,7 @@ class StudioIntegrationTest {
             assertThat(currentPolicyEngine().permits(policyId, editor)).isTrue();
 
             // Revoke it → the policy now grants no one, live.
-            assertThat(postForm("/_tesseraql/studio/ui/security/policy/remove-rule",
+            assertThat(postForm("/_tesseraql/studio/user-admin/ui/security/policy/remove-rule",
                     "policy=" + enc(policyId) + "&kind=role&value=STUDIO_EDITOR").statusCode())
                     .isEqualTo(303);
             assertThat(currentPolicyEngine().permits(policyId, editor)).isFalse();
@@ -3279,7 +3375,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiTryConsoleRendersTheFormWithRoutePathSuggestions() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/try", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/try", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("API console").contains("id=\"try-path-options\"")
@@ -3289,7 +3385,7 @@ class StudioIntegrationTest {
     @Test
     void uiTryRunLoopbackInvokesAPublicRouteAndShowsTheResponse() throws Exception {
         // /users is a public page; the console proxies a loopback GET and renders status + body.
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/try/run",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/try/run",
                 "method=GET&path=" + enc("/users"));
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3298,7 +3394,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiTryRunRejectsANonAppPath() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/try/run",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/try/run",
                 "method=GET&path=" + enc("http://example.com/"));
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3308,7 +3404,7 @@ class StudioIntegrationTest {
     @Test
     void uiTryConsolePrefillsMethodPathAndBodyFromADeepLink() throws Exception {
         // Deep-linked to a POST route with a declared input → path + a JSON body skeleton are filled.
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/try?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/try?path="
                 + enc("/api/users/provision") + "&method=POST", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3318,32 +3414,34 @@ class StudioIntegrationTest {
     @Test
     void uiDocsRouteLinksToTheApiConsole() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/docs/route?id=users.apiProvision", true);
+                "/_tesseraql/studio/user-admin/ui/docs/route?id=users.apiProvision", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Try in API console")
-                .contains("/_tesseraql/studio/ui/try?path=");
+                .contains("/_tesseraql/studio/user-admin/ui/try?path=");
     }
 
     @Test
     void uiTryRunForwardsTheSessionForBrowserAuthedRoutes() throws Exception {
         // The Health page is browser-authenticated: a loopback with no session is rejected (401),
         // but forwarding the caller's session (useSession) authenticates it (200).
-        String target = enc("/_tesseraql/studio/ui/health");
-        assertThat(postForm("/_tesseraql/studio/ui/try/run", "method=GET&path=" + target).body())
+        String target = enc("/_tesseraql/studio/user-admin/ui/health");
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/try/run", "method=GET&path=" + target)
+                .body())
                 .contains("401");
-        assertThat(postForm("/_tesseraql/studio/ui/try/run",
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/try/run",
                 "method=GET&path=" + target + "&useSession=true").body()).contains("200");
     }
 
     @Test
     void uiSourceMigrationOffersDryRunWhenEnabled() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("db/migration/V1__create_users.sql"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // A migration file's editor offers the sandbox dry-run action (migration authoring slice 2).
-        assertThat(response.body()).contains("Dry-run").contains("/_tesseraql/studio/ui/dry-run");
+        assertThat(response.body()).contains("Dry-run")
+                .contains("/_tesseraql/studio/user-admin/ui/dry-run");
     }
 
     @Test
@@ -3351,12 +3449,12 @@ class StudioIntegrationTest {
         // The DDL is the posted (live editor) content, not the file; it runs and rolls back.
         String form = "path=" + enc("db/migration/V1__create_users.sql") + "&content="
                 + enc("create table dryrun_probe (id int primary key);");
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/dry-run", form);
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/dry-run", form);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("Applies cleanly");
         // It rolled back — re-running the same create succeeds again (the table never persisted).
-        assertThat(postForm("/_tesseraql/studio/ui/dry-run", form).body())
+        assertThat(postForm("/_tesseraql/studio/user-admin/ui/dry-run", form).body())
                 .contains("Applies cleanly");
     }
 
@@ -3364,7 +3462,7 @@ class StudioIntegrationTest {
     void uiDryRunReportsBrokenDdlAsAnError() throws Exception {
         String form = "path=" + enc("db/migration/V1__create_users.sql") + "&content="
                 + enc("create tabl dryrun_bad (id int);");
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/dry-run", form);
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/dry-run", form);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).doesNotContain("Applies cleanly")
@@ -3373,7 +3471,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationPageOffersTheDdlBuilder() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/migration", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The form-driven DDL builder (migration authoring slice 3).
@@ -3383,7 +3481,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationBuildGeneratesAddColumnDdl() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/build",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/migration/build",
                 "operation=add-column&table=users&column=nickname&type=text&notNull=true");
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3393,7 +3491,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationBuildGeneratesCreateIndexDdl() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/build",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/migration/build",
                 "operation=create-index&table=users&columns=" + enc("name, status")
                         + "&unique=true");
 
@@ -3404,7 +3502,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationBuildGeneratesCreateTableDdl() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/build",
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/migration/build",
                 "operation=create-table&table=widgets&primaryKey=id&columnLines="
                         + enc("id bigint\nname text not null"));
 
@@ -3415,7 +3513,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiSqlBuilderPageRendersTheTableDropdownAndOperations() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/sql-builder", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/sql-builder", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The 2-way SQL builder offers the introspected tables and the DML operations.
@@ -3429,7 +3527,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiSqlBuilderGeneratesTwoWaySqlForATable() throws Exception {
-        HttpResponse<String> select = postForm("/_tesseraql/studio/ui/sql-builder/build",
+        HttpResponse<String> select = postForm("/_tesseraql/studio/user-admin/ui/sql-builder/build",
                 "table=customers&operation=select-by-pk");
         assertThat(select.statusCode()).isEqualTo(200);
         // The bind references the param NAME (id), with the sql.params mapping documented, and a
@@ -3438,7 +3536,7 @@ class StudioIntegrationTest {
                 .contains("where id = /* id */ 0;").contains("--   id: params.id");
 
         // Insert skips the identity column (customers.id) and binds values from the body.
-        HttpResponse<String> insert = postForm("/_tesseraql/studio/ui/sql-builder/build",
+        HttpResponse<String> insert = postForm("/_tesseraql/studio/user-admin/ui/sql-builder/build",
                 "table=customers&operation=insert");
         assertThat(insert.body()).contains("insert into customers (email)").contains("/* email */")
                 .contains("--   email: params.email");
@@ -3448,19 +3546,20 @@ class StudioIntegrationTest {
     void uiSqlBuilderFiltersByAChosenColumnViaTheCascade() throws Exception {
         // The column cascade returns the table's columns as select options.
         HttpResponse<String> columns = get(
-                "/_tesseraql/studio/ui/sql-builder/columns?table=" + enc("customers"), true);
+                "/_tesseraql/studio/user-admin/ui/sql-builder/columns?table=" + enc("customers"),
+                true);
         assertThat(columns.statusCode()).isEqualTo(200);
         assertThat(columns.body()).contains(">id<").contains(">email<");
 
         // select-by-column filters on the chosen column with a params bind.
-        HttpResponse<String> select = postForm("/_tesseraql/studio/ui/sql-builder/build",
+        HttpResponse<String> select = postForm("/_tesseraql/studio/user-admin/ui/sql-builder/build",
                 "table=customers&operation=select-by-column&column=email");
         assertThat(select.body()).contains("from customers").contains("where email = /* email */");
     }
 
     @Test
     void uiSourceRouteSqlOffersTheInEditorSqlBuilder() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/source?path="
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/source?path="
                 + enc("web/api/users/search.sql"), true);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -3474,12 +3573,13 @@ class StudioIntegrationTest {
     @Test
     void uiSqlBuilderGeneratesInListAndOptionalIfFilters() throws Exception {
         // IN-list: the directive is followed by a parenthesized typed dummy.
-        HttpResponse<String> inList = postForm("/_tesseraql/studio/ui/sql-builder/build",
+        HttpResponse<String> inList = postForm("/_tesseraql/studio/user-admin/ui/sql-builder/build",
                 "table=customers&operation=select-by-column-in&column=email");
         assertThat(inList.body()).contains("where email in /* email */ (");
 
         // Optional: the predicate is wrapped in a /*%if … */ … /*%end*/ directive.
-        HttpResponse<String> optional = postForm("/_tesseraql/studio/ui/sql-builder/build",
+        HttpResponse<String> optional = postForm(
+                "/_tesseraql/studio/user-admin/ui/sql-builder/build",
                 "table=customers&operation=select-by-column-optional&column=email");
         assertThat(optional.body()).contains("/*%if email != null */")
                 .contains("and email = /* email */").contains("/*%end*/");
@@ -3487,7 +3587,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationPageOffersSchemaDiffWhenABaselineIsPresent() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/migration", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // Slice 5: the diff generator appends to the DDL editor instead of replacing it.
@@ -3496,7 +3596,8 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationDiffGeneratesAMigrationFromTheSchemaBaseline() throws Exception {
-        HttpResponse<String> response = postForm("/_tesseraql/studio/ui/migration/diff", "");
+        HttpResponse<String> response = postForm("/_tesseraql/studio/user-admin/ui/migration/diff",
+                "");
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The baseline lacks customers.email and the orders table, so the diff adds both.
@@ -3506,7 +3607,7 @@ class StudioIntegrationTest {
 
     @Test
     void uiMigrationBuilderTablesComeFromTheSchemaOverlay() throws Exception {
-        HttpResponse<String> response = get("/_tesseraql/studio/ui/migration", true);
+        HttpResponse<String> response = get("/_tesseraql/studio/user-admin/ui/migration", true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The DDL builder's table input is a dropdown populated from the introspected schema overlay
@@ -3518,14 +3619,15 @@ class StudioIntegrationTest {
     @Test
     void uiMigrationColumnsCascadeReturnsTheTablesColumns() throws Exception {
         HttpResponse<String> response = get(
-                "/_tesseraql/studio/ui/migration/columns?table=" + enc("customers"), true);
+                "/_tesseraql/studio/user-admin/ui/migration/columns?table=" + enc("customers"),
+                true);
 
         assertThat(response.statusCode()).isEqualTo(200);
         // The cascade returns the chosen table's columns as datalist options (customers: id, email).
         assertThat(response.body()).contains("value=\"id\"").contains("value=\"email\"");
     }
 
-    // The UI form posts go to /_tesseraql/studio/ui/** (browser auth): carry the admin session
+    // The UI form posts go to /_tesseraql/studio/user-admin/ui/** (browser auth): carry the admin session
     // cookie and its CSRF token. The bearer is harmless on these routes (browser auth ignores it).
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(

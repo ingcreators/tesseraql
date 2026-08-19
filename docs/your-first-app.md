@@ -52,7 +52,8 @@ the default admin role; `APP_READ`/`APP_WRITE` satisfy the `app.read`/`app.write
 Roles are captured into the session when you sign in, so granting them up front saves a
 sign-out later.
 
-Now open `http://localhost:8080/tasktracker/_tesseraql/studio` and sign in as `admin` / `change-me`.
+Now open `http://localhost:8080/_tesseraql/studio`, sign in as `admin` / `change-me`, and pick
+`tasktracker` in the workshop switcher.
 Studio shows the app: the Explorer lists the scaffolded routes. The starter home page is at
 `http://localhost:8080/tasktracker/`.
 

@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.studio.docs.schema
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  sort:
+    type: string
+    required: false
+  dir:
+    type: string
+    required: false
+  refreshed:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.docs.schema
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        sort: params.sort
+        dir: params.dir
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: schema.html
+    model:
+      sch: main
+      refreshed: params.refreshed

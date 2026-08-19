@@ -232,6 +232,16 @@ public final class HtmlResponseRenderer implements Processor {
         // capacity; framework assets resolve origin-absolute and never carry it.
         model.put("base",
                 basePath + io.tesseraql.camel.BasePath.activationSegment(exchange));
+        // The studio shell's member segment (docs/studio-shell.md structural decision 2):
+        // a page under /_tesseraql/studio/<member>/ publishes it, and the link builder
+        // rewrites the studio-addressed links the shared templates emit — so the studio
+        // app tree stays member-agnostic while every emitted link carries the segment.
+        String studioMember = exchange.getMessage().getHeader("member", String.class);
+        String fromRoute = exchange.getFromRouteId();
+        if (studioMember != null && fromRoute != null && fromRoute.startsWith("tql.studio.")) {
+            model.put(io.tesseraql.yaml.template.BasePathLinkBuilder.STUDIO_MEMBER_VARIABLE,
+                    studioMember);
+        }
 
         String csrfToken = exchange.getProperty(TesseraqlProperties.CSRF_TOKEN, String.class);
         if (csrfToken != null) {

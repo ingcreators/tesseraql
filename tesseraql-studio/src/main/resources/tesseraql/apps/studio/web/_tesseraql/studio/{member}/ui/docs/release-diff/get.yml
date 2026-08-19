@@ -1,0 +1,28 @@
+version: tesseraql/v1
+id: tql.docs.releaseDiff
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  captured:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.docs.releaseDiff
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellPermissions: principal.permissions
+response:
+  html:
+    status: 200
+    template: release-diff.html
+    model:
+      docs: main
+      captured: params.captured

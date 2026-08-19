@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: tql.studio.docs.export.htmx
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.docs.htmx
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+
+response:
+  file:
+    template: htmx-contract.json.tpl
+    contentType: "application/json; charset=utf-8"
+    filename: htmx-contract.json
+    model:
+      htmx: main

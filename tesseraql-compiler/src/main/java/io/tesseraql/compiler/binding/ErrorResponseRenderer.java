@@ -437,8 +437,12 @@ public final class ErrorResponseRenderer implements Processor {
                 // reach the decision compile (wrong target / malformed grid)
                 // 4241: a menu edit naming an index the menu does not have
                 case 4002, 4224, 4230, 4231, 4233, 4234, 4237, 4241 -> 400;
-                case 4030, 4031 -> 403; // read-only / caller lacks a Studio edit role (backlog D6)
-                case 4040 -> 404;
+                case 4030, 4031 -> 403; // the library's read-only refusals (McpDevTools instances)
+                // 4043: unknown workshop member — or out of the caller's tql.studio.edit
+                // scope, which reads identically (docs/studio-shell.md structural decision 2)
+                case 4040, 4043 -> 404;
+                // 5030: a member's runtime did not answer the studio shell's delegated call
+                case 5030 -> 503;
                 case 4090 -> 409; // a draft applied over a concurrently changed source (backlog D5)
                 case 4236 -> 409; // baseline capture without a schema sidecar to copy
                 // 4221: invalid draft; 4223: apply not confirmed; 4232: egress change not confirmed

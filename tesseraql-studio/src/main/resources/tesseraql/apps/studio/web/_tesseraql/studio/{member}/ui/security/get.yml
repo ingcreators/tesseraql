@@ -1,0 +1,42 @@
+version: tesseraql/v1
+id: tql.studio.security
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  added:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+  # Status chips + search (docs/studio-ux-refresh.md slice 6): narrow the routes table
+  # server-side; the stat tiles always show the full counts.
+  status:
+    type: string
+    required: false
+  q:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.security
+      params:
+        member: path.member
+        shellCookie: params.Cookie
+        shellPermissions: principal.permissions
+        status: params.status
+        q: params.q
+response:
+  html:
+    status: 200
+    template: security.html
+    model:
+      sec: main
+      added: params.added
+      removed: params.removed

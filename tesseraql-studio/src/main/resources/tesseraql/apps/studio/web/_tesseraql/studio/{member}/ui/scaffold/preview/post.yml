@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.studio.scaffold.preview
+kind: route
+recipe: query-html
+
+input:
+  Cookie:
+    type: string
+    required: false
+  _csrf:
+    type: string
+    required: false
+  X-CSRF-Token:
+    type: string
+    required: false
+  table:
+    type: string
+    required: true
+
+sources:
+  main:
+    service:
+      name: studio.shell.studio.scaffold.preview
+      params:
+        member: path.member
+        shellPermissions: principal.permissions
+        shellCookie: params.Cookie
+        shellCsrf: params._csrf
+        shellCsrfHeader: params.X-CSRF-Token
+        table: params.table
+response:
+  html:
+    status: 200
+    template: preview.html
+    model:
+      scaffold: main
