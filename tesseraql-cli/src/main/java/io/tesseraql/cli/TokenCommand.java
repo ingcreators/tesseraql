@@ -95,6 +95,13 @@ public final class TokenCommand implements Callable<Integer> {
             "--ttl"}, paramLabel = "<duration>", description = "Lifetime, e.g. 30m, 12h, 7d (default 24h).")
     String ttl = "24h";
 
+    @Option(names = {"--app-name"}, paramLabel = "<name>", description = "Mint for one stack "
+            + "member: the token's audience is that member's address and its claims are the "
+            + "member's active view — one held role auto-activates, several stay inactive "
+            + "unless --as selects one (docs/token-issuance.md decision 9). Only with --url, "
+            + "against a stack surface.")
+    String appName;
+
     @Option(names = {"--as"}, paramLabel = "<role>", description = "Act as one held application "
             + "role: with --url the server mints the active view (that role, the stack-wide "
             + "roles, their permissions) plus an acting_role claim, refusing a role the account "
@@ -106,6 +113,12 @@ public final class TokenCommand implements Callable<Integer> {
         if ((app == null) == (url == null)) {
             System.err.println("Choose one: --app <path> mints locally from a config on disk, "
                     + "--url <base-url> signs in to a running application and exchanges.");
+            return 2;
+        }
+        if (url == null && appName != null) {
+            System.err.println("--app-name selects a stack member on a running stack's surface,"
+                    + " so it applies with --url only; a local mint has no member list to"
+                    + " select from.");
             return 2;
         }
         return url != null ? exchange() : mintLocally();
@@ -188,11 +201,18 @@ public final class TokenCommand implements Callable<Integer> {
             return 1;
         }
 
-        // The capacity statement (docs/application-roles.md): the server selects from the
-        // session's own grants, so --as can only narrow — an unheld role answers 403.
-        String exchangeBody = actingRole == null || actingRole.isBlank()
-                ? "{}"
-                : MAPPER.writeValueAsString(Map.of("actingRole", actingRole));
+        // The capacity statement (docs/application-roles.md) and the member statement
+        // (docs/token-issuance.md decision 9): the server selects from the session's own
+        // grants and its own member list, so both can only narrow — an unheld role answers
+        // 403, an unaddressed member 400.
+        Map<String, String> request = new java.util.LinkedHashMap<>();
+        if (actingRole != null && !actingRole.isBlank()) {
+            request.put("actingRole", actingRole);
+        }
+        if (appName != null && !appName.isBlank()) {
+            request.put("appName", appName);
+        }
+        String exchangeBody = MAPPER.writeValueAsString(request);
         HttpResponse<String> minted = send(client, base + "/_tesseraql/token", exchangeBody,
                 cookie, csrf);
         if (minted.statusCode() == 403 && actingRole != null) {

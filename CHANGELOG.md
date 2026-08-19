@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A token for one application, from the same two doors** (docs/token-issuance.md decision 9,
+  the member axis). `tesseraql token --url <origin> --app-name <member>` and the console token
+  page's application selector mint for one stack member: the token's audience is that member's
+  address — it refuses at every other member — and its claims are the member's active view
+  under the browser's own entry rules, per token (one held role auto-activates, several stay
+  inactive unless `--as` selects one). Nothing named keeps the stack-wide mint verbatim. An
+  unaddressed member answers `TQL-OAUTH-3003` (HTTP 400); a role not held for the named member
+  stays `TQL-SEC-4148`. A runtime's own address is now always among its accepted audiences,
+  beside anything it declared.
+
 - **One issuer per stack** (docs/token-issuance.md decision 9, the unification core). With
   `security.oauth.enabled` in the stack file, the host derives one RS256 validation block —
   the origin as issuer, the surface's JWKS, the stack's claim names — and every hosted runtime

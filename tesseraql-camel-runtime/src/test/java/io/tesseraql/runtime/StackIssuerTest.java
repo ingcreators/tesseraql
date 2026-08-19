@@ -67,13 +67,15 @@ class StackIssuerTest {
     }
 
     @Test
-    void aDeclaredAudienceSurvivesTheGraftAndTheOriginJoinsIt() {
+    void aDeclaredAudienceSurvivesAndTheIssuersVocabularyJoinsIt() {
         Map<String, Object> root = config(
                 Map.of("security", Map.of("jwt", Map.of("audience", "urn:shop")))).root();
         AppConfig applied = StackIssuer.apply(new AppConfig(root),
                 StackIssuer.jwt(ORIGIN, Map.of()), ORIGIN, "/shop", "this test");
 
-        assertThat(audience(applied)).containsExactly("urn:shop", ORIGIN);
+        // The address and the origin always join: they are how the stack's mints name this
+        // member and the whole stack, whatever the application declared for itself.
+        assertThat(audience(applied)).containsExactly("urn:shop", ORIGIN + "/shop", ORIGIN);
     }
 
     @SuppressWarnings("unchecked")

@@ -2057,13 +2057,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // signer instead of an HS256 secret — two doors, one issuer.
             boolean stackIssuer = manifest.config()
                     .getBoolean("tesseraql.security.oauth.enabled", false);
+            // The member axis (docs/token-issuance.md decision 9): only the stack surface
+            // holds the member list, so only its exchange can mint a member-scoped audience.
+            java.util.Map<String, String> memberAddresses = null;
+            if (stackIssuer && hostContext != null && hostContext.stackMembers() != null) {
+                memberAddresses = new java.util.LinkedHashMap<>();
+                for (io.tesseraql.operations.app.InstalledApp member : hostContext.stackMembers()) {
+                    memberAddresses.put(member.name(), member.basePath());
+                }
+            }
             SessionTokens sessionTokens = new SessionTokens(security.jwt(),
                     io.tesseraql.core.util.Durations.parse(tokenTtl), tokenTtl, tokenIssuing,
                     stackIssuer
                             ? () -> context.getRegistry().lookupByNameAndType(
                                     io.tesseraql.oauth.OAuthRuntimeExtension.TOKEN_SIGNER_BEAN,
                                     io.tesseraql.oauth.AccessTokenSigner.class)
-                            : null);
+                            : null,
+                    memberAddresses,
+                    hostContext == null ? null : hostContext.externalOrigin());
             if (tokenIssuing) {
                 if (!stackIssuer && !TokenExchangeRouteBuilder.canIssue(security.jwt())) {
                     throw TokenExchangeRouteBuilder.noSigningKey();

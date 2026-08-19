@@ -398,9 +398,17 @@ what `stack-architecture.md` Decision 27 says a stack is — while an address-sc
 the OAuth grants' per-member boundary, so a token granted for one member still refuses at the
 next. `SessionTokens` signs through the extension's RS256 signer wherever
 `security.oauth.enabled` reaches, `TQL-SEC-4146` narrowed as decided, and
-`session-token-exchange.md` Decision 1 carries the premise correction. Still owed from this
-slice: the exchange's member axis (`--app-name`, the console selector) minting a member's
-address audience and active view.*
+`session-token-exchange.md` Decision 1 carries the premise correction.*
+
+*The member axis followed the same day, completing the slice: `tesseraql token --url --app-name
+<member>` and the console page's application selector mint that member's address as the
+audience and the member's active view under the browser's own entry rules per token — one held
+role auto-activates, several stay inactive unless `--as` selects one, an unheld role is
+`TQL-SEC-4148` and an unaddressed member `TQL-OAUTH-3003`. Nothing named keeps today's
+stack-wide mint verbatim. One refinement the integration test forced: a runtime's **address is
+always accepted** beside anything it declared — the address and the origin are the issuer's
+vocabulary, not the application's, so a declared audience joins them rather than replacing
+them.*
 
 ### 10. Protocol failures speak OAuth on the wire and `TQL-OAUTH` in the logs
 
@@ -492,7 +500,7 @@ dependency order given below, not the numeric one.
 | 6 | `/register`, the client registry, exact-match redirect validation (measured — open question 2) |
 | 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |
 | 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
-| 9 | Issuer unification (Decision 9): ~~members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the `session-token-exchange.md` premise edit~~ — **core shipped 2026-08-19** (Decision 9's note); still open: the exchange's member axis (open question 7's shape) |
+| 9 | ~~Issuer unification (Decision 9): members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the exchange's member axis, the `session-token-exchange.md` premise edit~~ — **shipped 2026-08-19** (Decision 9's notes) |
 | 10 | The resource side, to `audit-hardening.md`'s decisions: RFC 9728 protected-resource metadata per member relayed at origin scope, the `WWW-Authenticate` challenge, the MCP transport gate and audience binding — then the connect-and-observe pass against the whole chain |
 
 **Sequence: 2 → 3 → 9 → 4 → 5 → 6 → 7 → 10 → 8.** Slice 9 lands third because it is where the

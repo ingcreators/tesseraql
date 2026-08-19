@@ -38,6 +38,19 @@
           <strong th:text="${issue.ttl}">15m</strong>. They cannot be revoked before they expire
           &mdash; a password change ends every session and does not reach a token already minted
           from one.</p>
+        <!-- The member selector (docs/token-issuance.md decision 9): naming a member mints
+             the token for that member's address — its audience — and the member's active
+             view, so a token for one application refuses at the next. Nothing selected keeps
+             the stack-wide token, exactly as before. Rendered only on a stack surface, where
+             a member list exists. -->
+        <label class="hc-field" th:if="${!#lists.isEmpty(issue.applications)}">
+          <span class="hc-field__label">For application</span>
+          <select class="hc-select" name="appName">
+            <option value="">The whole stack</option>
+            <option th:each="member : ${issue.applications}" th:value="${member}"
+                    th:text="${member}"></option>
+          </select>
+        </label>
         <!-- The acting-role selector (docs/application-roles.md): the token face of activation.
              Nothing selected mints the union, exactly as before; a selection mints the active
              view — that role, the stack-wide roles, their permissions plus direct grants — and

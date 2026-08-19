@@ -117,11 +117,12 @@ final class StackIssuer {
     }
 
     /**
-     * A runtime's accepted audiences under the stack issuer: its own — declared, or derived
-     * from its address — plus the stack origin. The origin is the exchange's stack-wide mint
-     * (a bearer with the reach the session already has, docs/stack-architecture.md decision
-     * 27); an address-scoped audience is the OAuth grants' per-member boundary, which is why a
-     * token granted for one member still refuses at the next.
+     * A runtime's accepted audiences under the stack issuer: anything it declared, plus its
+     * own address, plus the stack origin — the last two always, because they are the issuer's
+     * vocabulary rather than the application's. The address is how the stack's mints name one
+     * member (the OAuth grants' per-member boundary — a token granted for one member refuses
+     * at the next); the origin is the exchange's stack-wide mint, a bearer with the reach the
+     * session already has (docs/stack-architecture.md decision 27).
      */
     private static List<String> audiences(Object declared, String externalOrigin,
             String basePath) {
@@ -130,9 +131,8 @@ final class StackIssuer {
             list.forEach(value -> audience.add(String.valueOf(value)));
         } else if (declared != null) {
             audience.add(String.valueOf(declared));
-        } else {
-            audience.add(externalOrigin + (basePath == null ? "" : basePath));
         }
+        audience.add(externalOrigin + (basePath == null ? "" : basePath));
         audience.add(externalOrigin);
         return List.copyOf(audience);
     }

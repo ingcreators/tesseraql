@@ -17,6 +17,9 @@ input:
   actingRole:
     type: string
     required: false
+  appName:
+    type: string
+    required: false
 
 sources:
   nav:
@@ -42,6 +45,7 @@ sources:
         # only narrow.
         displayName: principal.displayName
         actingRole: params.actingRole
+        appName: params.appName
         roleGrants: principal.roleGrants
         directPermissions: principal.directPermissions
 response:

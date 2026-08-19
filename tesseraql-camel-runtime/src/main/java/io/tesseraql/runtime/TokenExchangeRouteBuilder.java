@@ -108,19 +108,21 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
 
         SessionStore.Session session = sessions.session(sessions.sessionIdFromCookie(cookie));
 
-        // The token face of activation (docs/application-roles.md): `tesseraql token --as`
-        // states a capacity per token; the mint reads the session principal's own grants, so
-        // the statement can only narrow — an unheld role, or a session with no attribution at
-        // all, is refused (TQL-SEC-4148).
+        // The token face of activation (docs/application-roles.md) and the member axis of the
+        // unified issuer (docs/token-issuance.md decision 9): `tesseraql token --as` states a
+        // capacity, `--app-name` states a member; the mint reads the session principal's own
+        // grants, so both statements can only narrow — an unheld role is TQL-SEC-4148, an
+        // unaddressed member TQL-OAUTH-3003.
         io.tesseraql.security.Principal principal = session.principal();
         Object acting = body.get("actingRole");
-        if (acting != null && !String.valueOf(acting).isBlank()) {
-            principal = SessionTokens.activated(principal, String.valueOf(acting));
-        }
+        Object app = body.get("appName");
+        String appName = app == null ? null : String.valueOf(app);
+        principal = tokens.narrowed(principal, appName,
+                acting == null ? null : String.valueOf(acting));
 
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(
-                MAPPER.writeValueAsString(tokens.mint(principal)));
+                MAPPER.writeValueAsString(tokens.mint(principal, appName)));
     }
 }
