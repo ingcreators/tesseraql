@@ -347,6 +347,34 @@ console of its own. Cross-application aggregate views beyond the switcher and th
 per-member cards belong to the [metrics exposition](deployment.md#metrics-prometheus), which
 already labels job runs by application.
 
+## Windows Server
+
+A Windows deployment does not use the container image. It runs the **`tesseraql-host`
+distribution** — `tesseraql-host-<version>-windows-x86_64.zip` on each release — which carries
+the host and the operator commands (`host`, `deploy`, `migrate`, `identity-schema`, `job`,
+`token`, `verify`, `admission`, `routes`, `duckdb`) with a bundled Java runtime, and none of the
+development tooling: no `dev`, no Studio, no embedded database. Development on Windows uses the
+developer CLI (`scoop install tesseraql`); a server runs this artifact.
+
+Install and supervise it as a Windows service:
+
+1. Unzip under a program directory, e.g. `C:\Program Files\tesseraql`.
+2. The zip includes `tesseraql-host-service.xml`, a service definition for
+   [WinSW](https://github.com/winsw/winsw). Download `WinSW-x64.exe`, place it beside the XML
+   as `tesseraql-host-service.exe`, and adjust the stack directory, port, and the environment
+   values your applications' `config/application.yml` placeholders expect.
+3. `tesseraql-host-service.exe install`, then `net start tesseraql-host`.
+
+Stopping the service is the ordered drain, not a kill: the wrapper's stop reaches the same
+shutdown path `SIGTERM` reaches in a container, so in-flight work finishes before the process
+exits. The service log (under `logs\` beside the definition) records `Stack stopping` when the
+drain begins — the stop path is asserted by CI on every release build.
+
+Everything else on this page is platform-neutral. The install root, the catalog, `deploy` with
+canary, promote and rollback work identically, because activating a version is an atomic
+catalog-pointer switch and a placed version directory is never modified — no upgrade ever
+replaces a file the running service holds open.
+
 ## Next
 
 - [deployment.md](deployment.md) — shipping an application, bootstrap, migrations, TLS.
