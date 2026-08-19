@@ -1,6 +1,6 @@
 package io.tesseraql.cli;
 
-import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.report.docs.SchemaDoc;
 import io.tesseraql.report.docs.SchemaGenerator;
 import io.tesseraql.yaml.config.AppConfig;

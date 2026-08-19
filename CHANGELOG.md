@@ -8,6 +8,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The deployment distribution: `tesseraql-host`** (docs/runtime-footprint.md decision 1,
+  slice 2). A deployment now ships the host, not the workshop: the new module carries the
+  runtime and the operator verbs (`host`, `deploy`, `routes`, `token`, `migrate`, `job`,
+  `identity-schema`, `verify`, `admission`, `duckdb`) on a classpath of 199 artifacts —
+  none of them Studio, the declarative test engine, the embedded-database supervisor, or
+  the ~46-jar artifact-resolver stack the developer CLI needs and a deployment never does
+  (module caches are resolved before deployment; the CLI-side authoring commands now read
+  the on-disk cache when the resolver is absent). The command implementations are the
+  developer CLI's own, unchanged; an enforcer rule (`no-workshop-in-the-deployment`) makes
+  the boundary a build failure. `deploy/Dockerfile` builds from `tesseraql-host` and its
+  entry point is `io.tesseraql.cli.TesseraqlHostCli`; the demo image stays on the full
+  developer CLI, because a demo is a development experience. `DriverManagerDataSource`
+  moved from `tesseraql-report` to `io.tesseraql.core.jdbc` (pre-1.0 breaking move, no
+  alias): it is shared by the operator commands, the Maven plugin and the test tooling,
+  and its old home compile-depends on the test engine.
+
 - **The ops console grew the deploy endpoint's browser face** (docs/stack-shells.md, the
   deploy page — the slice-3 follow-up). `/_tesseraql/ops/console/deploy` rides the shell's
   chrome, appears only for a signed-in holder of any `tql.app.deploy` grant, lists the

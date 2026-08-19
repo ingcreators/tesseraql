@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.apptasks.IdentityBootstrap;
-import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.runtime.DataSources;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import io.tesseraql.yaml.config.AppConfig;

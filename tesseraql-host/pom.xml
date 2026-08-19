@@ -1,0 +1,138 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.tesseraql</groupId>
+    <artifactId>tesseraql-parent</artifactId>
+    <version>0.15.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>tesseraql-host</artifactId>
+  <name>Tesseraql Host</name>
+
+  <!--
+    The deployment distribution (docs/runtime-footprint.md decision 1): what `host` and the
+    operator verbs need, and nothing the developer's workshop needs. The module is deliberately
+    thin — it moves no classes and duplicates no verbs. It depends on the developer CLI with the
+    development-only clusters excluded, and contributes one class: the root command that lists
+    only the operator verbs, so none of the dev-only command classes (whose dependencies the
+    exclusions removed) is ever loaded. The enforcer rule below makes the boundary a build
+    failure, the same mechanism as tesseraql-camel-runtime's no-workshop-on-the-runtime.
+  -->
+  <dependencies>
+    <dependency>
+      <groupId>io.tesseraql</groupId>
+      <artifactId>tesseraql-cli</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <!-- The workshop: Studio's surface and runtime machinery, and through the latter the
+             declarative test engine with its mail double and JUnit 4. A host stack mounts no
+             Studio by topology (docs/studio-shell.md structural decision 1). -->
+        <exclusion>
+          <groupId>io.tesseraql</groupId>
+          <artifactId>tesseraql-studio</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.tesseraql</groupId>
+          <artifactId>tesseraql-studio-runtime</artifactId>
+        </exclusion>
+        <!-- Test-result rendering, used by the dev-only test/coverage verbs. tesseraql-report
+             also compile-depends on tesseraql-test-core, which is the workshop again. -->
+        <exclusion>
+          <groupId>io.tesseraql</groupId>
+          <artifactId>tesseraql-report</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.tesseraql</groupId>
+          <artifactId>tesseraql-coverage-core</artifactId>
+        </exclusion>
+        <!-- The embedded PostgreSQL supervisor behind the dev embedded-db option: a development
+             feature on every platform (docs/runtime-footprint.md problem 1). -->
+        <exclusion>
+          <groupId>io.zonky.test</groupId>
+          <artifactId>embedded-postgres</artifactId>
+        </exclusion>
+        <!-- The embedded Maven resolver behind `modules` and the embedded-db binary resolution.
+             A deployment never resolves artifacts: tesseraql.modules caches are resolved before
+             deployment and each runtime loads them from disk (docs/module-scope.md). Dropping
+             these two roots drops their whole ~46-jar closure. -->
+        <exclusion>
+          <groupId>org.jboss.shrinkwrap.resolver</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!--
+          The boundary's guard (docs/runtime-footprint.md decision 5): the deployment classpath
+          must never carry the workshop, the embedded-database supervisor or its binaries, or the
+          artifact-resolver stack — that is the whole reason this module exists, and without the
+          rule the exclusions above decay the first time a convenient dependency is added, which
+          is how the deployment image came to carry all of it. The two tripwire artifacts guard
+          the resolver closure returning under a different root. Test scope stays free.
+        -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>no-workshop-in-the-deployment</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>io.tesseraql:tesseraql-studio:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-studio:*:*:runtime</exclude>
+                    <exclude>io.tesseraql:tesseraql-studio-runtime:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-studio-runtime:*:*:runtime</exclude>
+                    <exclude>io.tesseraql:tesseraql-test-core:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-test-core:*:*:runtime</exclude>
+                    <exclude>io.tesseraql:tesseraql-report:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-report:*:*:runtime</exclude>
+                    <exclude>io.tesseraql:tesseraql-coverage-core:*:*:compile</exclude>
+                    <exclude>io.tesseraql:tesseraql-coverage-core:*:*:runtime</exclude>
+                    <exclude>com.icegreen:greenmail:*:*:compile</exclude>
+                    <exclude>com.icegreen:greenmail:*:*:runtime</exclude>
+                    <exclude>junit:junit:*:*:compile</exclude>
+                    <exclude>junit:junit:*:*:runtime</exclude>
+                    <exclude>io.zonky.test:*:*:*:compile</exclude>
+                    <exclude>io.zonky.test:*:*:*:runtime</exclude>
+                    <exclude>io.zonky.test.postgres:*:*:*:compile</exclude>
+                    <exclude>io.zonky.test.postgres:*:*:*:runtime</exclude>
+                    <exclude>org.jboss.shrinkwrap.resolver:*:*:*:compile</exclude>
+                    <exclude>org.jboss.shrinkwrap.resolver:*:*:*:runtime</exclude>
+                    <exclude>org.apache.maven.resolver:maven-resolver-api:*:*:compile</exclude>
+                    <exclude>org.apache.maven.resolver:maven-resolver-api:*:*:runtime</exclude>
+                    <exclude>com.google.inject:guice:*:*:compile</exclude>
+                    <exclude>com.google.inject:guice:*:*:runtime</exclude>
+                  </excludes>
+                  <searchTransitive>true</searchTransitive>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

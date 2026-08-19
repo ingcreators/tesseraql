@@ -1,11 +1,11 @@
 package io.tesseraql.maven;
 
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.coverage.CoverageRegression;
 import io.tesseraql.coverage.CoverageThresholds;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.report.AppTestRunner;
 import io.tesseraql.report.CoverageThresholdResolver;
-import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.report.docs.ReportDoc;
 import io.tesseraql.report.docs.ReportGenerator;
 import io.tesseraql.report.docs.ReportHistory;

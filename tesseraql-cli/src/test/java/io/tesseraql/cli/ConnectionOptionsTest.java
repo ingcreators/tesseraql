@@ -2,7 +2,7 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tesseraql.report.DriverManagerDataSource;
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;

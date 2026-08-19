@@ -1,11 +1,11 @@
 package io.tesseraql.cli;
 
+import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.coverage.CoverageGate;
 import io.tesseraql.coverage.CoverageThresholds;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.report.AppTestRunner;
 import io.tesseraql.report.CoverageThresholdResolver;
-import io.tesseraql.report.DriverManagerDataSource;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;

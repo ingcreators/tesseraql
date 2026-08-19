@@ -3,15 +3,19 @@ package io.tesseraql.cli;
 import io.tesseraql.cli.modules.ModuleDrivers;
 import io.tesseraql.cli.modules.ModulesInstaller;
 import io.tesseraql.core.expr.ExpressionFunctions;
+import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.config.WorkHome;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Loads optional plugin modules from a directory of jars onto a child classloader, so the CLI can
@@ -23,7 +27,26 @@ import java.util.List;
  */
 public final class CliModules {
 
+    /**
+     * Whether the embedded artifact resolver is on the classpath. The developer CLI carries it
+     * (for {@code tesseraql.modules} and the embedded-db binary); the deployment distribution
+     * deliberately does not (docs/runtime-footprint.md decision 1) — a deployment never resolves
+     * artifacts, because its module caches were resolved and lock-verified before it was
+     * deployed. Probed once so every module-touching path below can choose resolve-or-read.
+     */
+    private static final boolean RESOLVER_PRESENT = resolverPresent();
+
     private CliModules() {
+    }
+
+    private static boolean resolverPresent() {
+        try {
+            Class.forName("org.jboss.shrinkwrap.resolver.api.maven.Maven", false,
+                    CliModules.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException absent) {
+            return false;
+        }
     }
 
     /**
@@ -68,13 +91,7 @@ public final class CliModules {
     public static void installAppExtensions(List<Path> apps, File explicitModules) {
         List<File> moduleDirs = new ArrayList<>();
         for (Path app : apps) {
-            try {
-                new ModulesInstaller()
-                        .install(app, new ManifestLoader().load(app).config(), false)
-                        .ifPresent(result -> moduleDirs.add(result.cacheDir().toFile()));
-            } catch (RuntimeException ex) {
-                // lint of a broken app must still run; modules just stay uninstalled
-            }
+            moduleCache(app).ifPresent(moduleDirs::add);
         }
         if (explicitModules != null) {
             moduleDirs.add(explicitModules);
@@ -87,19 +104,34 @@ public final class CliModules {
     }
 
     /**
+     * One application's module cache directory: resolved (lock-verified) through the embedded
+     * resolver on the developer CLI, or read as-is from disk on the deployment distribution,
+     * which carries no resolver. A broken app (unreadable manifest) yields nothing and does not
+     * fail here: the linter reports the manifest problem itself.
+     */
+    private static Optional<File> moduleCache(Path app) {
+        try {
+            AppConfig config = new ManifestLoader().load(app).config();
+            if (RESOLVER_PRESENT) {
+                return new ModulesInstaller().install(app, config, false)
+                        .map(result -> result.cacheDir().toFile());
+            }
+            Path cache = WorkHome.resolve(app, config).resolve("modules");
+            return Files.isDirectory(cache) ? Optional.of(cache.toFile()) : Optional.empty();
+        } catch (RuntimeException ex) {
+            // lint of a broken app must still run; modules just stay uninstalled
+            return Optional.empty();
+        }
+    }
+
+    /**
      * The per-application module classloader the MCP dev tools resolve one application's
      * extensions with (docs/module-scope.md): its resolved {@code tesseraql.modules} cache and
      * an optional explicit {@code --modules} directory over the CLI's own classpath.
      */
     public static ClassLoader appLoader(Path app, File explicitModules) {
         List<File> moduleDirs = new ArrayList<>();
-        try {
-            new ModulesInstaller()
-                    .install(app, new ManifestLoader().load(app).config(), false)
-                    .ifPresent(result -> moduleDirs.add(result.cacheDir().toFile()));
-        } catch (RuntimeException ex) {
-            // a broken app must still serve its tools; modules just stay uninstalled
-        }
+        moduleCache(app).ifPresent(moduleDirs::add);
         if (explicitModules != null) {
             moduleDirs.add(explicitModules);
         }
