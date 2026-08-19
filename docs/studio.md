@@ -29,24 +29,28 @@ acknowledges a conflict).
 Jobs, queue consumers, and `config/` changes still need a restart. Everything else is
 instant.
 
-## Read-only by default in production
+## Editing is a grant
 
-Studio is mounted in every application, but its writes are gated:
+Who may edit is the `tql.studio.edit.<name>` permission atom, per application and
+deny-by-default: a caller without the grant (or the `tql.studio.edit.*` wildcard) can browse
+but every write refuses, whatever roles they hold. `identity-schema`'s bootstrap
+administrator carries the wildcard, so the development loop is frictionless out of the box;
+grant narrower atoms where several people share a stack.
+
+What the workshop *can* do — as opposed to who may act — stays configuration:
 
 | Key | Effect |
 | --- | --- |
 | `tesseraql.studio.enabled` | Mounts Studio at all. Default `true`. |
-| `tesseraql.studio.readOnly` | The master switch. Read-only Studio refuses every write. |
-| `tesseraql.studio.editRoles` | An allow-list. When set, only callers holding one of these roles may edit. |
 | `tesseraql.studio.dataBrowser.enabled` | Opt-in. Off by default. |
 | `tesseraql.studio.dataBrowser.edit.enabled` | Row editing inside the data browser. |
 | `tesseraql.studio.scaffold.enabled` | The scaffolding screens. |
 | `tesseraql.studio.testRunner.enabled` | Running suites from the browser. |
 | `tesseraql.studio.confirmApply` | Require a reviewed diff before every apply. |
 
-The read-only switch is enforced twice: once in the runtime against the caller's roles, and
-again in the service layer. A production deployment can leave Studio mounted for its
-documentation and health screens with editing off.
+The retired `tesseraql.studio.readOnly` master switch and `tesseraql.studio.editRoles`
+role allow-list are gone: per-caller write authority is the atom, and a framework surface
+checks permission atoms, never role names.
 
 ## Explorer
 

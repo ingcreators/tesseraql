@@ -15,7 +15,7 @@ sources:
       params:
         confirm: params.confirm
         actor: principal.loginId
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

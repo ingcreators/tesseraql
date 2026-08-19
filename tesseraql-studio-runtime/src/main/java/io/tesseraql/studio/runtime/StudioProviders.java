@@ -56,7 +56,7 @@ final class StudioProviders {
      * providers that need post-reload freshness re-read from disk themselves (for example via
      * {@code new ManifestLoader().load(appHome)}).
      */
-    record Deps(io.tesseraql.studio.StudioService studio, StudioAccess studioAccess,
+    record Deps(io.tesseraql.studio.StudioService studio, StudioEdit studioEdit,
             StudioTestService studioTests, StudioScaffoldService studioScaffold,
             StudioDataService studioData, io.tesseraql.studio.CopilotService copilotService,
             io.tesseraql.studio.StudioService.FieldMask studioMask,
@@ -72,7 +72,7 @@ final class StudioProviders {
     /** Registers every {@code studio.*} provider on {@code serviceProviders}, in boot order. */
     static void register(io.tesseraql.core.service.ServiceProviders serviceProviders, Deps deps) {
         io.tesseraql.studio.StudioService studio = deps.studio();
-        StudioAccess studioAccess = deps.studioAccess();
+        StudioEdit studioEdit = deps.studioEdit();
         StudioTestService studioTests = deps.studioTests();
         StudioScaffoldService studioScaffold = deps.studioScaffold();
         StudioDataService studioData = deps.studioData();
@@ -101,7 +101,7 @@ final class StudioProviders {
                     Map<String, Object> model = io.tesseraql.studio.StudioViews
                             .explorer(studio.explorer(q));
                     // Edit affordances follow the caller's edit permission (backlog D6).
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                    boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     model.put("editable", canEdit);
                     model.put("readOnly", !canEdit);
                     // Offer the scaffold action only when B3 is on and the caller may edit.
@@ -160,7 +160,7 @@ final class StudioProviders {
                     model.put("entries", entries);
                     model.put("folders", folders);
                     model.put("editable",
-                            studioAccess.canEdit(params.get("roles")));
+                            studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 // The New-route drawer fragment (Studio sidebar IA): echoes the folder prefix a
@@ -172,8 +172,8 @@ final class StudioProviders {
                 })
                 .register("studio.source", params -> {
                     String path = String.valueOf(params.get("path"));
-                    EditorChrome chrome = EditorChrome.of(studio, studioAccess, path,
-                            params.get("roles"));
+                    EditorChrome chrome = EditorChrome.of(studio, studioEdit, path,
+                            params.get("permissions"));
                     if (!chrome.hasDraft() && chrome.saved() == null) {
                         // Neither a draft nor a file: the source read raises the 404 the
                         // editor page answers with.
@@ -182,7 +182,7 @@ final class StudioProviders {
                     // The editor shows the draft when one exists (sourceContent is null for a
                     // new-file draft), otherwise the source it just read.
                     Map<String, Object> model = io.tesseraql.studio.StudioViews.source(path,
-                            chrome.text(), studio.isReadOnly(), chrome.hasDraft(),
+                            chrome.text(), !chrome.canEdit(), chrome.hasDraft(),
                             chrome.saved(), chrome.sampleModel());
                     // The Studio-to-editor half of the boundary's round trip (Phase 57).
                     model.put("editorHref", studio.editorHref(path));
@@ -251,13 +251,13 @@ final class StudioProviders {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("channels", channels);
                     model.put("hasChannels", !channels.isEmpty());
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 .register("studio.mailComposer", params -> {
                     String path = String.valueOf(params.get("path"));
-                    EditorChrome chrome = EditorChrome.of(studio, studioAccess, path,
-                            params.get("roles"));
+                    EditorChrome chrome = EditorChrome.of(studio, studioEdit, path,
+                            params.get("permissions"));
                     String text = chrome.text();
                     Map<String, Object> model = chrome.model();
                     model.put("isNew", text == null);
@@ -291,8 +291,8 @@ final class StudioProviders {
                 // scaffold-checksum header) survives byte-for-byte.
                 .register("studio.pageBuilder", params -> {
                     String path = String.valueOf(params.get("path"));
-                    EditorChrome chrome = EditorChrome.of(studio, studioAccess, path,
-                            params.get("roles"));
+                    EditorChrome chrome = EditorChrome.of(studio, studioEdit, path,
+                            params.get("permissions"));
                     Map<String, Object> model = chrome.model();
                     Eligibility eligible = Eligibility.of(path, chrome.text());
                     boolean composable = eligible.builder();
@@ -314,7 +314,7 @@ final class StudioProviders {
                 // the other outward-reaching dev tools (edit roles + the test
                 // runner opt-in); failures return as a message, never a 500.
                 .register("studio.mailTestSend", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     if (!studioTests.isEnabled()) {
                         model.put("ok", false);
@@ -454,11 +454,11 @@ final class StudioProviders {
                 // route state is the on-disk truth, not the boot snapshot; a
                 // successful flip reloads routes (the scaffold-apply precedent).
                 .register("studio.ejectView", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     boolean confirm = "true"
                             .equals(String.valueOf(params.get("confirm")));
                     boolean force = "true".equals(String.valueOf(params.get("force")));
-                    studioAccess.requireConfirm(confirm || force);
+                    studioEdit.requireConfirm(confirm || force);
                     String path = String.valueOf(params.get("path"));
                     io.tesseraql.yaml.view.ViewEjects.Result result = io.tesseraql.yaml.view.ViewEjects
                             .eject(appHome,
@@ -473,7 +473,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.save", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String path = String.valueOf(params.get("path"));
                     Object content = params.get("content");
                     studio.saveDraft(path, content == null ? "" : String.valueOf(content));
@@ -491,7 +491,7 @@ final class StudioProviders {
                 .register("studio.copilot.view", params -> {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("enabled", copilotService != null);
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                    boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     model.put("editable", canEdit);
                     // Entries arrive pre-rendered (CopilotFragments, the single
                     // markup source shared with the SSE done event); the message
@@ -513,7 +513,7 @@ final class StudioProviders {
                 })
                 .register("studio.routeForm.view", params -> {
                     String path = String.valueOf(params.get("path"));
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                    boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("form", studio.routeForm(path));
                     model.put("editable", canEdit);
@@ -537,7 +537,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.routeForm.save", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String path = String.valueOf(params.get("path"));
                     java.util.List<io.tesseraql.studio.StudioService.FormInput> inputs = new java.util.ArrayList<>();
                     for (int i = 0; i < ROUTE_FORM_INPUT_SLOTS; i++) {
@@ -559,7 +559,7 @@ final class StudioProviders {
                     return Map.of("saved", path);
                 })
                 .register("studio.newRoute", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String path = String.valueOf(params.get("path"));
                     Object recipe = params.get("recipe");
                     studio.newRouteDraft(path,
@@ -576,10 +576,10 @@ final class StudioProviders {
                 // page immediately, yet editing the sidebar can never be broken by an unrelated
                 // route that fails to recompile.
                 .register("studio.menu.view", params -> {
-                    boolean canEdit = studioAccess
-                            .canEdit(params.get("principalRoles") == null
-                                    ? params.get("roles")
-                                    : params.get("principalRoles"));
+                    boolean canEdit = studioEdit
+                            .canEdit(params.get("principalPermissions") == null
+                                    ? params.get("permissions")
+                                    : params.get("principalPermissions"));
                     java.util.List<io.tesseraql.yaml.menu.MenuSpec.MenuItem> items = studio
                             .menuItems();
                     // Known route paths back both href autocomplete and the per-item
@@ -618,19 +618,19 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.menu.add", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     studio.addMenuItem(str(params, "label"), str(params, "href"),
                             str(params, "icon"), str(params, "roles"),
                             str(params, "permissions"), actorOf(params));
                     return Map.of("added", true);
                 })
                 .register("studio.menu.remove", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     studio.removeMenuItem(menuIndex(params.get("index")), actorOf(params));
                     return Map.of("removed", true);
                 })
                 .register("studio.menu.move", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     int delta = "up".equals(String.valueOf(params.get("dir"))) ? -1 : 1;
                     studio.moveMenuItem(menuIndex(params.get("index")), delta,
                             actorOf(params));
@@ -815,7 +815,7 @@ final class StudioProviders {
                     model.put("unknownPolicies", unknownPolicies);
                     model.put("unusedPolicies", unusedPolicies);
                     model.put("policyCount", policies.size());
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 // Policy editing (security overview, edit slice): grant/revoke a role or
@@ -824,14 +824,14 @@ final class StudioProviders {
                 // gated + audited; then the PolicyEngine is rebuilt from the fresh config and
                 // rebound, so the change is authorized live on the next request — no restart.
                 .register("studio.policyAddRule", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     studio.addPolicyRule(str(params, "policy"), str(params, "kind"),
                             str(params, "value"), actorOf(params));
                     rebindPolicyEngine(context, manifest.appHome());
                     return Map.of("added", true);
                 })
                 .register("studio.policyRemoveRule", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     studio.removePolicyRule(str(params, "policy"), str(params, "kind"),
                             str(params, "value"), actorOf(params));
                     rebindPolicyEngine(context, manifest.appHome());
@@ -864,7 +864,7 @@ final class StudioProviders {
                     return result;
                 })
                 .register("studio.tryRecord", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String method = String.valueOf(params.get("method"));
                     String path = String.valueOf(params.get("path"));
                     Map<String, Object> recordable = studio.recordability(method, path);
@@ -915,7 +915,7 @@ final class StudioProviders {
                 // egress changes are always confirm-gated; all of it restart-bound
                 // (these sections load at boot), which the pages state.
                 .register("studio.connectors.view", params -> {
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                    boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>(
                             studio.connectorsView());
                     model.put("saved", params.get("saved"));
@@ -924,7 +924,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.connectors.egress", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     requireExplicitConfirm(params, "Egress allow-list changes");
                     studio.updateEgressHosts(str(params, "scope"), str(params, "host"),
                             "true".equals(String.valueOf(params.get("remove"))),
@@ -932,7 +932,7 @@ final class StudioProviders {
                     return Map.of("saved", true);
                 })
                 .register("studio.connectors.webhook", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     studio.writeWebhookVerifier(str(params, "name"),
                             str(params, "secret"), str(params, "signatureHeader"),
                             str(params, "timestampHeader"), str(params, "idHeader"),
@@ -940,7 +940,7 @@ final class StudioProviders {
                     return Map.of("saved", true);
                 })
                 .register("studio.connectors.credential", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     studio.writeConnectorCredential(str(params, "scope"),
                             str(params, "name"), str(params, "type"),
                             str(params, "token"), str(params, "username"),
@@ -963,7 +963,7 @@ final class StudioProviders {
                             .renderWizardYaml(studioAppRoot, kind, tplParams));
                 })
                 .register("studio.wizard.oidc.apply", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     Map<String, Object> values = new java.util.LinkedHashMap<>();
                     values.put("tesseraql.oidc.enabled", true);
                     values.put("tesseraql.oidc.discoveryUri",
@@ -988,7 +988,7 @@ final class StudioProviders {
                     return Map.of("applied", "oidc");
                 })
                 .register("studio.wizard.saml.apply", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     Map<String, Object> values = new java.util.LinkedHashMap<>();
                     values.put("tesseraql.saml.enabled", true);
                     values.put("tesseraql.saml.sp.audience",
@@ -1015,7 +1015,7 @@ final class StudioProviders {
                     return Map.of("applied", "saml");
                 })
                 .register("studio.wizard.scim.apply", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     Map<String, Object> values = new java.util.LinkedHashMap<>();
                     values.put("tesseraql.scim.enabled", true);
                     values.put("tesseraql.scim.groups.enabled",
@@ -1043,7 +1043,7 @@ final class StudioProviders {
                     return Map.of("applied", "scim");
                 })
                 .register("studio.wizard.identity.apply", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String realmId = requiredParam(params, "realmId");
                     String prefix = "tesseraql.identity.realms." + realmId + ".";
                     Map<String, Object> values = new java.util.LinkedHashMap<>();
@@ -1082,14 +1082,14 @@ final class StudioProviders {
                     model.put("count", rows.size());
                     model.put("secretCount", secrets);
                     model.put("settings", studio.editableSettings());
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 // Config editor (curated): override one whitelisted, restart-to-apply setting
                 // in config/overlay.yml (base untouched), or remove it when blank. Edit-gated +
                 // audited; only StudioService's whitelist of safe scalar keys is accepted.
                 .register("studio.configSet", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     Object value = params.get("value");
                     studio.setConfigValue(str(params, "key"),
                             value == null ? "" : String.valueOf(value), actorOf(params));
@@ -1115,11 +1115,11 @@ final class StudioProviders {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("flags", rows);
                     model.put("hasFlags", !rows.isEmpty());
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 .register("studio.flagsSet", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     Object value = params.get("value");
                     studio.setFlag(str(params, "name"),
                             value == null ? "" : String.valueOf(value),
@@ -1127,7 +1127,7 @@ final class StudioProviders {
                     return Map.of("saved", true);
                 })
                 .register("studio.flagsRemove", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     studio.removeFlag(str(params, "name"), actorOf(params));
                     return Map.of("removed", true);
                 })
@@ -1256,7 +1256,7 @@ final class StudioProviders {
                     // Non-main data is derived data, so the editor never leaves main.
                     boolean rowEditable = "main".equals(datasource)
                             && studioData.isEditEnabled()
-                            && studioAccess.canEdit(params.get("roles"));
+                            && studioEdit.canEdit(params.get("permissions"));
                     model.put("editEnabled", rowEditable);
                     model.put("updated", params.get("updated"));
                     Object columns = model.get("columns");
@@ -1313,9 +1313,9 @@ final class StudioProviders {
                 // Data browser CSV export: the current view (table + filter + sort) as CSV,
                 // capped at the scan limit. Served as a file download by the export route.
                 // Row edit (Track J4): PK-scoped single-row form + UPDATE, under the
-                // row-editor opt-in + editRoles + an explicit confirm + the audit trail.
+                // row-editor opt-in + the edit atom + an explicit confirm + the audit trail.
                 .register("studio.data.editForm", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String table = String.valueOf(params.get("table"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("table", table);
@@ -1334,7 +1334,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.data.update", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     requireExplicitConfirm(params, "Row edits");
                     String table = String.valueOf(params.get("table"));
                     Map<String, String> changes = new java.util.LinkedHashMap<>();
@@ -1417,11 +1417,11 @@ final class StudioProviders {
                     model.put("keyCount", keys.size());
                     model.put("localeCount", locales.size());
                     model.put("missingCount", missing);
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 .register("studio.messageSet", params -> {
-                    studioAccess.requireEdit(params.get("principalRoles"));
+                    studioEdit.requireEdit(params.get("principalPermissions"));
                     Object value = params.get("value");
                     studio.setMessage(str(params, "locale"), str(params, "key"),
                             value == null ? "" : String.valueOf(value), actorOf(params));
@@ -1431,7 +1431,7 @@ final class StudioProviders {
                 // next versioned number for the main datasource; the create writes a Flyway
                 // migration under db/…/migration and the result links to the source editor.
                 .register("studio.migration.new", params -> {
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                    boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("editable", canEdit);
                     model.put("readOnly", !canEdit);
@@ -1480,7 +1480,7 @@ final class StudioProviders {
                 // select/insert/update/delete 2-way SQL for a chosen table + operation, from
                 // the schema overlay. Pure generation — no side effect.
                 .register("studio.sqlBuilder.new", params -> {
-                    boolean canEdit = studioAccess.canEdit(params.get("roles"));
+                    boolean canEdit = studioEdit.canEdit(params.get("permissions"));
                     java.util.List<String> tables = new io.tesseraql.studio.DocService(
                             manifest).tableNames();
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
@@ -1521,7 +1521,7 @@ final class StudioProviders {
                 // Pure text generation to copy into the route — no side effect.
                 .register("studio.validationBuilder",
                         params -> Map.of("editable",
-                                studioAccess.canEdit(params.get("roles")),
+                                studioEdit.canEdit(params.get("permissions")),
                                 // Input-level constraints may already belong to a field
                                 // domain (docs/field-domains.md); the builder page
                                 // points at them before a cross-field rule is written.
@@ -1568,7 +1568,7 @@ final class StudioProviders {
                 // (routeFormSave's persistence contract) after a parse + compile check.
                 .register("studio.decisions.view", params -> {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     model.put("decisions", studio.sharedDecisions());
                     String name = str(params, "name");
                     model.put("grid", name == null ? null : studio.decisionGrid(name));
@@ -1576,7 +1576,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.decisions.save", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String name = String.valueOf(params.get("name"));
                     java.util.List<io.tesseraql.studio.StudioService.DecisionColumn> columns = new java.util.ArrayList<>();
                     for (int j = 0; j < io.tesseraql.studio.StudioService.DECISION_GRID_COLUMNS; j++) {
@@ -1606,7 +1606,7 @@ final class StudioProviders {
                 // preview; the rows themselves belong to the data browser.
                 .register("studio.calendars.view", params -> {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     List<io.tesseraql.studio.StudioService.CalendarSummary> declared = studio
                             .calendars();
                     model.put("calendars", declared);
@@ -1654,7 +1654,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.calendars.save", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String name = String.valueOf(params.get("name"));
                     java.util.List<String> weekend = new java.util.ArrayList<>();
                     for (String day : java.util.List.of("monday", "tuesday",
@@ -1677,7 +1677,7 @@ final class StudioProviders {
                 // card's hc-calendar posts the picked date here; the toggle rides
                 // the same validated draft flow as the form save.
                 .register("studio.calendars.toggle", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String calName = String.valueOf(params.get("name"));
                     studio.toggleCalendarHoliday(calName, str(params, "date"),
                             actorOf(params));
@@ -1687,7 +1687,7 @@ final class StudioProviders {
                 // qualifiers + overlap/sla as a structured form through the draft flow.
                 .register("studio.jobs.view", params -> {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     List<Map<String, Object>> declared = new java.util.ArrayList<>();
                     for (JobFile jobFile : manifest.jobs()) {
                         Map<String, Object> row = new java.util.LinkedHashMap<>();
@@ -1722,7 +1722,7 @@ final class StudioProviders {
                     return model;
                 })
                 .register("studio.jobs.save", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String jobId = String.valueOf(params.get("name"));
                     studio.saveJobPolicies(jobId, str(params, "cron"),
                             str(params, "fixedDelay"), str(params, "calendar"),
@@ -1733,7 +1733,7 @@ final class StudioProviders {
                     return Map.of("saved", jobId);
                 })
                 .register("studio.migration.create", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String datasource = params.get("datasource") == null
                             ? "main"
                             : String.valueOf(params.get("datasource"));
@@ -1768,7 +1768,7 @@ final class StudioProviders {
                 // goal emits, so the SQL/DDL builders and docs pages stop depending on
                 // an out-of-band goal run. Edit-gated, audited.
                 .register("studio.schemaRefresh", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     java.util.Map<String, io.tesseraql.yaml.scaffold.CatalogSchema> introspected = new java.util.LinkedHashMap<>();
                     io.tesseraql.yaml.scaffold.CatalogIntrospector introspector = new io.tesseraql.yaml.scaffold.CatalogIntrospector();
                     for (Map.Entry<String, com.zaxxer.hikari.HikariDataSource> entry : dataSources
@@ -1797,7 +1797,7 @@ final class StudioProviders {
                 // OpenAPI baseline persists the live document (no openapi.json file
                 // exists at runtime). Edit-gated, audited.
                 .register("studio.baselineCapture", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     // A fresh DocService reads the manifest live, like the migration
                     // providers above - the OpenAPI document is generated, not cached.
                     studio.captureBaselines(
@@ -1811,8 +1811,8 @@ final class StudioProviders {
                 // tenant pools + named per-datasource sets); edit-gated, confirm-gated
                 // like apply, and recorded to the audit trail.
                 .register("studio.migration.migrate", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
-                    studioAccess.requireConfirm(
+                    studioEdit.requireEdit(params.get("permissions"));
+                    studioEdit.requireConfirm(
                             "true".equals(String.valueOf(params.get("confirm"))));
                     int applied = AppMigrations.migrate(appName, appHome,
                             manifest.config(), dataSource, tenantDataSources,
@@ -1870,14 +1870,14 @@ final class StudioProviders {
                     return Map.of("ddl", ddl);
                 })
                 .register("studio.apply", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String path = String.valueOf(params.get("path"));
                     // force=true overwrites a concurrently changed source (backlog D5).
                     boolean force = "true".equals(String.valueOf(params.get("force")));
                     boolean confirm = "true".equals(String.valueOf(params.get("confirm")));
                     // When confirm-before-apply is on, require an explicit acknowledgment
                     // (the conflict force checkbox counts as one).
-                    studioAccess.requireConfirm(confirm || force);
+                    studioEdit.requireConfirm(confirm || force);
                     // The caller is recorded to the audit trail (backlog D6).
                     studio.applyDraft(path, force, actorOf(params));
                     reloader.reload();
@@ -1915,7 +1915,7 @@ final class StudioProviders {
                                 studioScaffold.preview(
                                         String.valueOf(params.get("table")))))
                 .register("studio.scaffold.apply", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     Object result = io.tesseraql.studio.StudioViews.scaffoldResult(
                             studioScaffold.apply(String.valueOf(params.get("table")),
                                     "true".equals(String.valueOf(params.get("force"))),
@@ -1926,7 +1926,7 @@ final class StudioProviders {
                     return result;
                 })
                 .register("studio.discard", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     String path = String.valueOf(params.get("path"));
                     studio.deleteDraft(path);
                     return Map.of("discarded", path);
@@ -1935,7 +1935,7 @@ final class StudioProviders {
                 // discard them all — the batch management the Explorer drafts-in-tree can't do.
                 // Edit-gated like studio.apply/scaffold.apply; apply reloads routes after.
                 .register("studio.draftsApplyAll", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     io.tesseraql.studio.StudioService.BulkApplyResult result = studio
                             .applyAllDrafts(actorOf(params));
                     reloader.reload();
@@ -1943,7 +1943,7 @@ final class StudioProviders {
                             "needsRestart", result.needsRestart());
                 })
                 .register("studio.draftsDiscardAll", params -> {
-                    studioAccess.requireEdit(params.get("roles"));
+                    studioEdit.requireEdit(params.get("permissions"));
                     return Map.of("discarded", studio.discardAllDrafts());
                 })
                 .register("studio.drafts", params -> {
@@ -1953,7 +1953,7 @@ final class StudioProviders {
                     Map<String, Object> model = io.tesseraql.studio.StudioViews
                             .drafts(studio.drafts(), q);
                     // The bulk apply/discard actions follow the caller's edit permission.
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     return model;
                 })
                 .register("studio.audit", params -> {
@@ -2002,7 +2002,7 @@ final class StudioProviders {
             boolean conflict, boolean confirmApply, boolean canEdit) {
 
         /** Reads the chrome of {@code path} for the caller's {@code roles}, one read per file. */
-        static EditorChrome of(io.tesseraql.studio.StudioService studio, StudioAccess access,
+        static EditorChrome of(io.tesseraql.studio.StudioService studio, StudioEdit access,
                 String path, Object roles) {
             String draft = studio.readDraft(path);
             return new EditorChrome(path, draft, studio.sourceIfExists(path),

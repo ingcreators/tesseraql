@@ -21,7 +21,7 @@ steps:
       params:
         name: params.name
         date: params.date
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

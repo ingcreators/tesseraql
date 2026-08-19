@@ -20,7 +20,7 @@ sources:
       params:
         q: params.q
         create: params.create
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

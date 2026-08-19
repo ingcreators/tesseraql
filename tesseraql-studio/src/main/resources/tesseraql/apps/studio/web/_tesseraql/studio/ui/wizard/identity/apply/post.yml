@@ -30,7 +30,7 @@ sources:
         datasource: params.datasource
         sqlRoot: params.sqlRoot
         userManagement: params.userManagement
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   html:

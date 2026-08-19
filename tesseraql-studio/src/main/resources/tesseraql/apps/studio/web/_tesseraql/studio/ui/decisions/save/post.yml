@@ -586,7 +586,7 @@ steps:
         d17: params.d17
         d18: params.d18
         d19: params.d19
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

@@ -33,7 +33,7 @@ steps:
         roles: params.roles
         permissions: params.permissions
         actor: principal.loginId
-        principalRoles: principal.roles
+        principalPermissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/menu?added=1

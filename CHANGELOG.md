@@ -222,6 +222,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Who may edit in Studio is the `tql.studio.edit.<name>` atom** (docs/studio-shell.md
+  slice 2). The per-application grant — checked against the caller's permissions, family
+  wildcard honoured, deny-by-default — replaces the retired `tesseraql.studio.readOnly`
+  master switch and `tesseraql.studio.editRoles` role allow-list, the model's last framework
+  surface reading role names; `TQL-STUDIO-4031` retires with them (the refusal is the
+  standard 403). The capability switches (`testRunner.enabled`, `scaffold.enabled`,
+  `dataBrowser.*`, `confirmApply`) stay configuration and no longer require a writable
+  master switch. `identity-schema`'s bootstrap baseline gains `tql.studio.edit.*`, so the
+  development loop is unchanged out of the box. Pre-1.0 breaking change: deployments that
+  set the retired keys delete them and grant atoms instead.
+
 - **Studio's runtime machinery moved to `tesseraql-studio-runtime`** (docs/studio-shell.md
   slice 1). The Studio providers, JSON API, sandboxed test runner, scaffold and data services,
   and the Copilot transports now live in a `RuntimeExtension` module the runtime discovers

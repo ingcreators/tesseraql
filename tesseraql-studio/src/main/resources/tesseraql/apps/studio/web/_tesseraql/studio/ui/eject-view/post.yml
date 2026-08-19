@@ -19,7 +19,7 @@ sources:
     service:
       name: studio.ejectView
       params:
-        roles: principal.roles
+        permissions: principal.permissions
         path: params.path
         confirm: params.confirm
         force: params.force

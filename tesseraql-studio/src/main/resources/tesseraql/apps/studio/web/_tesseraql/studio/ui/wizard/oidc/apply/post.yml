@@ -38,7 +38,7 @@ sources:
         postLoginUrl: params.postLoginUrl
         provision: params.provision
         clientSecret: params.clientSecret
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   html:

@@ -14,7 +14,7 @@ steps:
       name: studio.discard
       params:
         path: params.path
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/source?path={params.path}

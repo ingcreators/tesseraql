@@ -36,6 +36,15 @@ member-mounted-Studio-under-a-prefix property re-pinned from the workshop module
 `StackStudioIntegrationTest`; and the framework-surface guard moved too, because the workshop
 module's test classpath is the one place every surface family can mount at once.
 
+**Slice 2 is shipped** (the atom): `StudioEdit` checks `tql.studio.edit.<name>` — shell-side
+reach comes with slice 3; here it is the workshop's own gate — and `StudioAccess`,
+`editRoles`, `readOnly` and `TQL-STUDIO-4031` are gone (the refusal is the standard 403,
+naming the atom). `StudioService` keeps its writability parameter as library API (the MCP
+dev tools construct read-only instances deliberately); the extension constructs it writable,
+per structural decision 4's invariant. The studio app's route bindings moved from
+`principal.roles` to `principal.permissions`, the capability switches lost their
+`!readOnly` conjunct, and the bootstrap baseline gained `tql.studio.edit.*`.
+
 ## What exists today, measured
 
 **Half of the extraction is already done, and it is the half everyone assumes is missing.**

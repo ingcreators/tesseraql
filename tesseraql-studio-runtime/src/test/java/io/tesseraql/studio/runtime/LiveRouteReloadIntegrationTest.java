@@ -187,7 +187,8 @@ class LiveRouteReloadIntegrationTest {
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder.encodeToString(
                 MAPPER.writeValueAsBytes(
-                        TestClaims.addressed(Map.of("sub", "studio", "roles", List.of("ADMIN")))));
+                        TestClaims.addressed(Map.of("sub", "studio", "roles", List.of("ADMIN"),
+                                "permissions", List.of("tql.studio.edit.*")))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -216,8 +217,6 @@ class LiveRouteReloadIntegrationTest {
                 tesseraql:
                   app:
                     name: live-route-reload
-                  studio:
-                    readOnly: false
                 """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                 POSTGRES.getPassword()));
 

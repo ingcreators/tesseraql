@@ -30,7 +30,7 @@ steps:
         query: params.query
         body: params.body
         name: params.name
-        roles: principal.roles
+        permissions: principal.permissions
         actor: principal.loginId
 response:
   redirect:

@@ -18,7 +18,7 @@ steps:
       params:
         path: params.path
         content: params.content
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/source?path={params.path}&saved=1

@@ -345,7 +345,7 @@ Apply the managed IAM schema and optionally seed an administrator.
 | `--admin-login <adminLogin>` | — | Administrator to create or update after the schema is applied. |
 | `--admin-password-file <adminPasswordFile>` | — | File holding the admin password (else TESSERAQL_ADMIN_PASSWORD). |
 | `--admin-roles <adminRoles>` | — | Role codes assigned to the administrator (default: iam.admin). |
-| `--admin-permissions <adminPermissions>` | — | Permission codes created and granted to the admin roles (default: the framework's bootstrap baseline — tql.app.use.*, tql.ops.view.*, tql.ops.run.*, tql.app.deploy.*, tql.iam.admin.view, tql.iam.admin.write). |
+| `--admin-permissions <adminPermissions>` | — | Permission codes created and granted to the admin roles (default: the framework's bootstrap baseline — tql.app.use.*, tql.ops.view.*, tql.ops.run.*, tql.app.deploy.*, tql.studio.edit.*, tql.iam.admin.view, tql.iam.admin.write). |
 
 ## `package`
 

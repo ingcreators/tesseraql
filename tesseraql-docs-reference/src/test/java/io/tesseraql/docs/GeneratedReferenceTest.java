@@ -76,7 +76,7 @@ class GeneratedReferenceTest {
         String config = ReferenceGenerator.config(REPO);
 
         assertThat(config).contains("## tesseraql.studio");
-        assertThat(config).contains("`tesseraql.studio.readOnly`");
+        assertThat(config).contains("`tesseraql.studio.confirmApply`");
         assertThat(config).contains("https://github.com/ingcreators/tesseraql/blob/main/");
         // The generator's own example keys are not framework configuration.
         assertThat(config).doesNotContain("`tesseraql.x.y`");

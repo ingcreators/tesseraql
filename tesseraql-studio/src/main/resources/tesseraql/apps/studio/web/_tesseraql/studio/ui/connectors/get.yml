@@ -14,7 +14,7 @@ sources:
       name: studio.connectors.view
       params:
         saved: params.saved
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

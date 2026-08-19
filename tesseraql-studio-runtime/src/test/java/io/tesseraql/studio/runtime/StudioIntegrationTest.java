@@ -67,17 +67,20 @@ class StudioIntegrationTest {
         io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
                 .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
-        String adminSid = sessions.create(principal(List.of("ADMIN")),
+        String adminSid = sessions.create(
+                principal(List.of("ADMIN"), List.of("tql.studio.edit.*")),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
         adminCookie = sessions.cookieName() + "=" + adminSid;
         adminCsrf = sessions.session(adminSid).csrfToken();
-        viewerCookie = sessions.cookieName() + "=" + sessions.create(principal(List.of("VIEWER")),
+        viewerCookie = sessions.cookieName() + "=" + sessions.create(
+                principal(List.of("VIEWER"), List.of()),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
     }
 
-    private static io.tesseraql.security.Principal principal(List<String> roles) {
+    private static io.tesseraql.security.Principal principal(List<String> roles,
+            List<String> permissions) {
         return new io.tesseraql.security.Principal("studio-user", "studio-user", "Studio User",
-                null, List.of(), roles, List.of(), Map.of());
+                null, List.of(), roles, permissions, Map.of());
     }
 
     /**
@@ -605,8 +608,9 @@ class StudioIntegrationTest {
     }
 
     @Test
-    void editsRequireAnEditRoleWhenEditRolesAreConfigured() throws Exception {
-        // The app sets editRoles: ADMIN; a caller without that role is read-only (backlog D6).
+    void editsRequireTheEditAtom() throws Exception {
+        // Deny-by-default (docs/studio-shell.md structural decision 4): a caller without
+        // tql.studio.edit.<name> is read-only, whatever roles they hold.
         String viewer = token(List.of("VIEWER"));
 
         // Every mutating endpoint is forbidden for the non-editor (403, not 401).
@@ -2733,7 +2737,7 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         // A known flattened key is shown; a secret's literal value (docs.share.secret) is redacted.
         assertThat(response.body()).contains("Configuration")
-                .contains("tesseraql.studio.editRoles").contains("redacted")
+                .contains("tesseraql.studio.confirmApply").contains("redacted")
                 .doesNotContain("it-docs-share-secret");
     }
 
@@ -3239,7 +3243,8 @@ class StudioIntegrationTest {
     void uiSecurityPolicyEditWritesOverlayAndRebindsTheEngineLive() throws Exception {
         String policyId = "studio.it.editpolicy";
         Path overlay = appHome.resolve("config/overlay.yml");
-        io.tesseraql.security.Principal editor = principal(List.of("STUDIO_EDITOR"));
+        io.tesseraql.security.Principal editor = principal(List.of("STUDIO_EDITOR"),
+                List.of());
         try {
             // The edit form is offered to an editor.
             assertThat(get("/_tesseraql/studio/ui/security", true).body())
@@ -3584,17 +3589,22 @@ class StudioIntegrationTest {
     }
 
     private static String token() throws Exception {
-        return token(List.of("ADMIN"));
+        // The editor: holds the studio edit atom (docs/studio-shell.md structural decision 4).
+        return token(List.of("ADMIN"), List.of("tql.studio.edit.*"));
     }
 
     private static String token(List<String> roles) throws Exception {
+        return token(roles, List.of());
+    }
+
+    private static String token(List<String> roles, List<String> permissions) throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder
                 .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
         String payload = encoder
                 .encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(Map.of(
                         "sub", "studio-user", "preferred_username", "studio-user", "roles",
-                        roles))));
+                        roles, "permissions", permissions))));
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(
                 "dev-only-secret-change-me-in-production".getBytes(StandardCharsets.UTF_8),
@@ -3632,8 +3642,6 @@ class StudioIntegrationTest {
                       jdbcUrl: "jdbc:duckdb:"
                   studio:
                     enabled: true
-                    readOnly: false
-                    editRoles: ADMIN
                     confirmApply: true
                     testRunner:
                       enabled: true

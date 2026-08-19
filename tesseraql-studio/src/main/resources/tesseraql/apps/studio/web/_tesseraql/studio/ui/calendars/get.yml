@@ -30,7 +30,7 @@ sources:
         dayOfMonth: params.dayOfMonth
         shift: params.shift
         saved: params.saved
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   html:
     status: 200

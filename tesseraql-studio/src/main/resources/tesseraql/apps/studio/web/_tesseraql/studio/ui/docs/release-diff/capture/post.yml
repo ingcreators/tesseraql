@@ -13,7 +13,7 @@ steps:
       name: studio.baselineCapture
       params:
         actor: principal.loginId
-        roles: principal.roles
+        permissions: principal.permissions
 response:
   redirect:
     status: 303

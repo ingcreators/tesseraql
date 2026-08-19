@@ -99,10 +99,11 @@ nothing.
 
 ### Should Studio be enabled in production?
 
-Mounted, usually yes; writable, usually no. `tesseraql.studio.readOnly: true` keeps the
-documentation, health, and security screens available while refusing every write, and
-`tesseraql.studio.editRoles` narrows editing to named roles where you do want it
-([studio.md](studio.md#read-only-by-default-in-production)).
+Editing an installed application is never the intent: changes reach production through a
+package and a deploy, not an editor. Who may edit at all is the `tql.studio.edit.<name>`
+permission atom — deny-by-default, so a caller without the grant can browse the
+documentation, health, and security screens but every write refuses
+([studio.md](studio.md#editing-is-a-grant)).
 
 ### How does an edit made in Studio reach production?
 

@@ -16,7 +16,7 @@ steps:
       params:
         name: params.name
         actor: principal.loginId
-        principalRoles: principal.roles
+        principalPermissions: principal.permissions
 response:
   redirect:
     location: /_tesseraql/studio/ui/flags?removed=1

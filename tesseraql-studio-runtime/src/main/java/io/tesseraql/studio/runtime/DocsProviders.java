@@ -22,7 +22,7 @@ final class DocsProviders {
      * effectively-final local {@code TesseraqlRuntime.start(...)} built, captured by value
      * exactly as the inline lambdas did.
      */
-    record Deps(AppManifest manifest, Path appHome, StudioAccess studioAccess,
+    record Deps(AppManifest manifest, Path appHome, StudioEdit studioEdit,
             ClassLoader modulesLoader) {
     }
 
@@ -30,7 +30,7 @@ final class DocsProviders {
     static void register(io.tesseraql.core.service.ServiceProviders serviceProviders, Deps deps) {
         AppManifest manifest = deps.manifest();
         Path appHome = deps.appHome();
-        StudioAccess studioAccess = deps.studioAccess();
+        StudioEdit studioEdit = deps.studioEdit();
         // Providers backing the bundled documentation portal (documentation portal v1/v2/v3):
         // they read the packaged spec.json, falling back to a live model from the manifest,
         // and overlay the optional run report.json (test results + coverage) and schema.json
@@ -94,7 +94,7 @@ final class DocsProviders {
                                     : String.valueOf(params.get("dir")));
                     // The refresh action's gate and the honest empty state
                     // (docs/studio-schema-lifecycle.md).
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     model.put("schemaCorrupt", doc.schemaCorrupt());
                     return model;
                 })
@@ -146,7 +146,7 @@ final class DocsProviders {
                     Map<String, Object> model = new java.util.LinkedHashMap<>();
                     model.put("appName", doc.appName());
                     // The capture action's gate (docs/studio-schema-lifecycle.md).
-                    model.put("editable", studioAccess.canEdit(params.get("roles")));
+                    model.put("editable", studioEdit.canEdit(params.get("permissions")));
                     model.put("hasApiBaseline", doc.hasApiBaseline());
                     io.tesseraql.studio.DocViews.applyApiChangelog(model,
                             doc.apiChangelog());
