@@ -135,7 +135,9 @@ graft, the acting-role contract). Same-day review closed its open questions: two
 (the `TQL-OAUTH` domain, the fate of `TQL-SEC-4146`), two on the Codex leg of the
 connect-and-observe pass (exact-match redirect validation, absent `scopes_supported`), three on
 reviewed recommendations (consent page in `auth-ui`, the exchange's member axis, placeholder
-refresh lifetimes). Still owed: the RFC 8707 `resource` observation.*
+refresh lifetimes). **Every slice shipped the same day** — the whole of Decisions 4 through 11
+is on main, including audit-hardening's slices 6 and 7. Still owed: the acceptance run against
+the real clients, and the RFC 8707 `resource` observation.*
 
 ### 5. Two candidates remain, and the choice is whether a second process is acceptable
 
