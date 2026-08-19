@@ -186,7 +186,7 @@ class OAuthIssuerUnificationIntegrationTest {
         // Approval answers with the authorization response: code, state, RFC 9207 iss.
         String form = "_csrf=" + enc(csrf) + "&client_id=codex&redirect_uri="
                 + enc("http://127.0.0.1:49681/callback/x") + "&state=xyz"
-                + "&code_challenge=" + enc("a-challenge-of-plausible-length-0123456789abcdef")
+                + "&code_challenge=" + enc(challenge(VERIFIER))
                 + "&resource=" + enc("http://localhost:" + port + "/shop")
                 + "&decision=approve";
         HttpResponse<String> approved = CLIENT.send(HttpRequest.newBuilder(
@@ -199,6 +199,66 @@ class OAuthIssuerUnificationIntegrationTest {
         String callback = approved.headers().firstValue("Location").orElseThrow();
         assertThat(callback).startsWith("http://127.0.0.1:49681/callback/x?")
                 .contains("code=").contains("state=xyz").contains("iss=");
+
+        // The code redeems at /token with the PKCE verifier — the whole OAuth chain, and the
+        // access token works at the member like any stack token.
+        String code = callback.replaceAll(".*[?&]code=([^&]+).*", "$1");
+        HttpResponse<String> minted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=authorization_code&client_id=codex&code=" + enc(code)
+                                + "&redirect_uri=" + enc("http://127.0.0.1:49681/callback/x")
+                                + "&code_verifier=" + enc(VERIFIER)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(minted.statusCode()).as(minted.body()).isEqualTo(200);
+        JsonNode tokens = MAPPER.readTree(minted.body());
+        String access = tokens.get("access_token").asText();
+        String refresh = tokens.get("refresh_token").asText();
+
+        JsonNode payload = MAPPER.readTree(
+                Base64.getUrlDecoder().decode(access.split("\\.")[1]));
+        assertThat(payload.get("aud").asText())
+                .isEqualTo("http://localhost:" + port + "/shop");
+        assertThat(payload.get("roles").toString()).contains("staff");
+
+        HttpResponse<String> accepted = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/shop/api/secure"))
+                .header("Authorization", "Bearer " + access)
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
+
+        // A code is single-use: redeeming it again is invalid_grant.
+        HttpResponse<String> replayed = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=authorization_code&client_id=codex&code=" + enc(code)
+                                + "&redirect_uri=" + enc("http://127.0.0.1:49681/callback/x")
+                                + "&code_verifier=" + enc(VERIFIER)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(replayed.statusCode()).isEqualTo(400);
+
+        // Refresh rotates; the spent token presented again retires the chain.
+        HttpResponse<String> refreshed = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=refresh_token&client_id=codex&refresh_token="
+                                + enc(refresh)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(refreshed.statusCode()).as(refreshed.body()).isEqualTo(200);
+        assertThat(MAPPER.readTree(refreshed.body()).get("refresh_token").asText())
+                .isNotEqualTo(refresh);
+
+        HttpResponse<String> reused = CLIENT.send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + port + "/_tesseraql/oauth/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        "grant_type=refresh_token&client_id=codex&refresh_token="
+                                + enc(refresh)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(reused.statusCode()).isEqualTo(400);
     }
 
     @Test
@@ -215,12 +275,24 @@ class OAuthIssuerUnificationIntegrationTest {
                 .startsWith("http://127.0.0.1:49681/callback/x?").contains("code=");
     }
 
+    private static final String VERIFIER = "correct-horse-battery-staple-correct-horse-battery";
+
     private static String authorizeQuery() {
         return "/_tesseraql/oauth/authorize?client_id=codex&response_type=code"
                 + "&redirect_uri=" + enc("http://127.0.0.1:49681/callback/x")
                 + "&state=xyz&code_challenge_method=S256"
-                + "&code_challenge=" + enc("a-challenge-of-plausible-length-0123456789abcdef")
+                + "&code_challenge=" + enc(challenge(VERIFIER))
                 + "&resource=" + enc("http://localhost:" + port + "/shop");
+    }
+
+    private static String challenge(String verifier) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(verifier.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Registered the way slice 6's endpoint will register: straight into the store. The name

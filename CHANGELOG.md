@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`/token`: the code redeems, the refresh rotates, and every mint asks the store again**
+  (docs/token-issuance.md slice 5). `POST /_tesseraql/oauth/token` serves the
+  authorization-code and refresh grants over the stack's provider: client credentials are
+  verified against the stored hash in constant time (a public client presents its id alone),
+  PKCE closes the code flow, a reused refresh token retires its whole chain, and every refusal
+  speaks OAuth's wire vocabulary. Tokens are minted from the subject's **current** view — the
+  identity store is re-resolved at every mint, so grant changes, validity windows and rule
+  recomputation propagate at refresh cadence, a disabled account stops refreshing, and a
+  revoked acting role ends the connection's capacity as `invalid_grant` instead of riding out
+  the chain. Access tokens carry the stack's claim names and the origin as `iss`, so a token
+  from the OAuth door validates at members exactly like one from the session exchange.
+
 - **`/authorize`, and consent that names what it grants** (docs/token-issuance.md slice 4).
   The authorization server's front door: `GET /_tesseraql/oauth/authorize` asks one question —
   whether the caller holds a session, however it was obtained — and bounces through the

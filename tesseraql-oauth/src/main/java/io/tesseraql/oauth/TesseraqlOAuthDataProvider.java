@@ -58,11 +58,33 @@ public final class TesseraqlOAuthDataProvider implements AuthorizationCodeDataPr
      */
     public static final String RESOURCE = "resource";
 
+    /**
+     * The mint-time view of a subject (docs/token-issuance.md decision 4): the store is
+     * re-resolved at every mint — code redemption and refresh alike — so grant changes,
+     * validity windows and rule recomputation propagate at refresh cadence, a disabled
+     * account stops refreshing, and a revoked acting role ends the connection's capacity
+     * rather than freezing it. Absent (the slice-2 shape), tokens carry identity claims only.
+     */
+    public interface SubjectView {
+
+        /** The fresh roles and permissions of {@code loginId}'s view for the resource, with
+         * {@code actingRole} activated — or empty when the subject can no longer be resolved
+         * or no longer holds the stated capacity. */
+        Optional<View> resolve(String loginId, String resource, String actingRole);
+
+        record View(List<String> roles, List<String> permissions) {
+        }
+    }
+
     private final OAuthStore store;
     private final AccessTokenSigner signer;
     private final Clock clock;
     private final Duration accessTokenLifetime;
     private final Duration refreshTokenLifetime;
+    private final SubjectView subjectView;
+    private final String rolesClaim;
+    private final String permissionsClaim;
+    private final String issuer;
 
     public TesseraqlOAuthDataProvider(OAuthStore store, AccessTokenSigner signer, Clock clock) {
         this(store, signer, clock, DEFAULT_ACCESS_TOKEN_LIFETIME, DEFAULT_REFRESH_TOKEN_LIFETIME);
@@ -70,11 +92,29 @@ public final class TesseraqlOAuthDataProvider implements AuthorizationCodeDataPr
 
     public TesseraqlOAuthDataProvider(OAuthStore store, AccessTokenSigner signer, Clock clock,
             Duration accessTokenLifetime, Duration refreshTokenLifetime) {
+        this(store, signer, clock, accessTokenLifetime, refreshTokenLifetime, null, "roles",
+                "permissions", null);
+    }
+
+    /**
+     * @param rolesClaim       the roles claim name the stack's validation block reads — the
+     *                         same source the derived member configuration uses, so mint and
+     *                         validation cannot disagree on vocabulary
+     * @param permissionsClaim the permissions claim name, same rule
+     */
+    public TesseraqlOAuthDataProvider(OAuthStore store, AccessTokenSigner signer, Clock clock,
+            Duration accessTokenLifetime, Duration refreshTokenLifetime,
+            SubjectView subjectView, String rolesClaim, String permissionsClaim,
+            String issuer) {
         this.store = store;
         this.signer = signer;
         this.clock = clock;
         this.accessTokenLifetime = accessTokenLifetime;
         this.refreshTokenLifetime = refreshTokenLifetime;
+        this.subjectView = subjectView;
+        this.rolesClaim = rolesClaim;
+        this.permissionsClaim = permissionsClaim;
+        this.issuer = issuer;
     }
 
     @Override
@@ -252,6 +292,11 @@ public final class TesseraqlOAuthDataProvider implements AuthorizationCodeDataPr
         Instant now = clock.instant();
         Map<String, Object> claims = new LinkedHashMap<>();
         claims.put("sub", subjectId(subject));
+        if (issuer != null) {
+            // The stack origin (stack-architecture.md decision 6) — the derived member
+            // validation blocks check it, so a mint without it refuses at every member.
+            claims.put("iss", issuer);
+        }
         if (login(subject) != null) {
             claims.put("login", login(subject));
         }
@@ -260,6 +305,20 @@ public final class TesseraqlOAuthDataProvider implements AuthorizationCodeDataPr
         }
         if (actingRole != null) {
             claims.put(ACTING_ROLE, actingRole);
+        }
+        // Re-resolved at every mint (decision 4): the view is the store's current answer, so a
+        // disabled account or a revoked capacity ends here as invalid_grant rather than being
+        // frozen into the chain until it expires.
+        if (subjectView != null) {
+            SubjectView.View view = subjectView
+                    .resolve(login(subject), audience, actingRole)
+                    .orElseThrow(() -> new OAuthServiceException(OAuthConstants.INVALID_GRANT));
+            if (!view.roles().isEmpty()) {
+                claims.put(rolesClaim, view.roles());
+            }
+            if (!view.permissions().isEmpty()) {
+                claims.put(permissionsClaim, view.permissions());
+            }
         }
         claims.put("iat", now.getEpochSecond());
         claims.put("exp", now.plus(accessTokenLifetime).getEpochSecond());

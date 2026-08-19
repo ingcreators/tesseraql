@@ -98,18 +98,60 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
         @SuppressWarnings("unchecked")
         Map<String, String> memberAddresses = context.bean(MEMBER_ADDRESSES_BEAN, Map.class);
         String externalOrigin = context.bean(EXTERNAL_ORIGIN_BEAN, String.class);
+        TesseraqlOAuthDataProvider provider = new TesseraqlOAuthDataProvider(store, signer,
+                Clock.systemUTC(), accessTokenLifetime, refreshTokenLifetime,
+                subjectView(context, memberAddresses, externalOrigin),
+                config.getString("tesseraql.security.jwt.rolesClaim").orElse("roles"),
+                config.getString("tesseraql.security.jwt.permissionsClaim")
+                        .orElse("permissions"),
+                externalOrigin);
         AuthorizeFlow flow = null;
         SessionStore sessions = null;
         if (memberAddresses != null && externalOrigin != null) {
-            TesseraqlOAuthDataProvider provider = new TesseraqlOAuthDataProvider(store, signer,
-                    Clock.systemUTC(), accessTokenLifetime, refreshTokenLifetime);
             flow = new AuthorizeFlow(store, provider, memberAddresses, externalOrigin,
                     Clock.systemUTC());
             sessions = context.bean(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
             registerConsentReview(context, flow);
         }
         context.camel().addRoutes(new OAuthRouteBuilder(keys, accessTokenLifetime, flow,
-                sessions));
+                sessions, provider, store));
+    }
+
+    /**
+     * The mint-time re-resolution seam (docs/token-issuance.md decision 4): every mint asks
+     * the identity store for the subject's current view, so grant changes, validity windows,
+     * rule recomputation and account disablement propagate at refresh cadence — and a revoked
+     * acting role ends the connection's capacity as {@code invalid_grant}. Null when the
+     * runtime has no identity service to ask.
+     */
+    private static TesseraqlOAuthDataProvider.SubjectView subjectView(ExtensionContext context,
+            Map<String, String> memberAddresses, String externalOrigin) {
+        io.tesseraql.identity.IdentityService identity = context.bean(
+                TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                io.tesseraql.identity.IdentityService.class);
+        io.tesseraql.identity.RealmConfig realm = context.bean(
+                TesseraqlProperties.IDENTITY_REALM_BEAN,
+                io.tesseraql.identity.RealmConfig.class);
+        if (identity == null || realm == null) {
+            return null;
+        }
+        return (loginId, resource, actingRole) -> {
+            java.util.Optional<io.tesseraql.security.Principal> fresh = identity
+                    .resolvePrincipal(realm, loginId, null);
+            if (fresh.isEmpty()) {
+                return java.util.Optional.empty();
+            }
+            String member = AuthorizeFlow.memberOf(resource, memberAddresses, externalOrigin);
+            if (actingRole != null && io.tesseraql.security.Activation
+                    .grantsFor(fresh.get(), member == null ? "" : member).stream()
+                    .noneMatch(grant -> actingRole.equals(grant.role()))) {
+                return java.util.Optional.empty();
+            }
+            io.tesseraql.security.Principal view = io.tesseraql.security.Activation
+                    .activate(fresh.get(), member, actingRole);
+            return java.util.Optional.of(new TesseraqlOAuthDataProvider.SubjectView.View(
+                    view.roles(), view.permissions()));
+        };
     }
 
     /** The consent page's model provider — the page re-validates what its query echoed. */

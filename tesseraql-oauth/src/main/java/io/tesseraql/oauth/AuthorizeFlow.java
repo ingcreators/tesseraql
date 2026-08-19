@@ -215,12 +215,18 @@ public final class AuthorizeFlow {
         return validated;
     }
 
+    private String memberFor(String resource) {
+        return memberOf(resource, memberAddresses, externalOrigin);
+    }
+
     /**
      * The member a resource identifier belongs to: its address, or anything under it — an MCP
      * surface's identifier lives below the member's address (stack-architecture.md decision 6).
+     * Static because the refresh-time re-resolution asks the same question.
      */
-    private String memberFor(String resource) {
-        if (resource == null || externalOrigin == null) {
+    static String memberOf(String resource, Map<String, String> memberAddresses,
+            String externalOrigin) {
+        if (resource == null || externalOrigin == null || memberAddresses == null) {
             return null;
         }
         for (Map.Entry<String, String> member : memberAddresses.entrySet()) {

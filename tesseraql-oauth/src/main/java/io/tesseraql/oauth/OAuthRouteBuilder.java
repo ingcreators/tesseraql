@@ -18,17 +18,35 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class OAuthRouteBuilder extends RouteBuilder {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
     private final SigningKeys keys;
     private final Duration accessTokenLifetime;
     private final AuthorizeFlow flow;
     private final SessionStore sessions;
+    private final TesseraqlOAuthDataProvider provider;
+    private final OAuthStore store;
+    private final org.apache.cxf.rs.security.oauth2.grants.code.AuthorizationCodeGrantHandler codeGrant;
+    private final org.apache.cxf.rs.security.oauth2.grants.refresh.RefreshTokenGrantHandler refreshGrant;
 
     OAuthRouteBuilder(SigningKeys keys, Duration accessTokenLifetime, AuthorizeFlow flow,
-            SessionStore sessions) {
+            SessionStore sessions, TesseraqlOAuthDataProvider provider, OAuthStore store) {
         this.keys = keys;
         this.accessTokenLifetime = accessTokenLifetime;
         this.flow = flow;
         this.sessions = sessions;
+        this.provider = provider;
+        this.store = store;
+        // The grant layer as decision 4 configures it: a verifier from every client, S256 the
+        // only accepted transformation — plain is refused, never downgraded to.
+        this.codeGrant = new org.apache.cxf.rs.security.oauth2.grants.code.AuthorizationCodeGrantHandler();
+        codeGrant.setDataProvider(provider);
+        codeGrant.setCanSupportPublicClients(true);
+        codeGrant.setRequireCodeVerifier(true);
+        codeGrant.setCodeVerifierTransformers(java.util.List.of(
+                new org.apache.cxf.rs.security.oauth2.grants.code.DigestCodeVerifier()));
+        this.refreshGrant = new org.apache.cxf.rs.security.oauth2.grants.refresh.RefreshTokenGrantHandler();
+        refreshGrant.setDataProvider(provider);
     }
 
     @Override
@@ -42,7 +60,99 @@ final class OAuthRouteBuilder extends RouteBuilder {
             rest().post("/_tesseraql/oauth/decision").to("direct:tql.oauth.consent");
             from("direct:tql.oauth.consent").routeId("system.oauth.consent")
                     .process(this::consent);
+            rest().post("/_tesseraql/oauth/token").to("direct:tql.oauth.token");
+            from("direct:tql.oauth.token").routeId("system.oauth.token").process(this::token);
         }
+    }
+
+    /**
+     * The token endpoint (docs/token-issuance.md decision 1's own compiled route): client
+     * authentication first — Basic or form credentials, verified against the stored hash in
+     * constant time; a public client presents its id alone — then the grant handlers CXF
+     * ships, over the twelve-method provider. Every refusal is OAuth's wire vocabulary.
+     */
+    private void token(Exchange exchange) throws Exception {
+        java.util.Map<String, String> form = formBody(exchange);
+        String clientId = form.get("client_id");
+        String clientSecret = form.get("client_secret");
+        String authorization = exchange.getMessage().getHeader("Authorization", String.class);
+        if (authorization != null && authorization.startsWith("Basic ")) {
+            String[] credentials = new String(java.util.Base64.getDecoder().decode(
+                    authorization.substring(6)), StandardCharsets.UTF_8).split(":", 2);
+            clientId = credentials[0];
+            clientSecret = credentials.length > 1 ? credentials[1] : null;
+        }
+        java.util.Optional<RegisteredClient> registered = clientId == null
+                ? java.util.Optional.empty()
+                : store.findClient(clientId);
+        if (registered.isEmpty() || !secretMatches(registered.get(), clientSecret)) {
+            error(exchange, 401, "invalid_client");
+            return;
+        }
+        org.apache.cxf.rs.security.oauth2.common.Client client = provider.getClient(clientId);
+        jakarta.ws.rs.core.MultivaluedMap<String, String> params = new jakarta.ws.rs.core.MultivaluedHashMap<>();
+        form.forEach(params::putSingle);
+        try {
+            org.apache.cxf.rs.security.oauth2.common.ServerAccessToken token = switch (String
+                    .valueOf(form.get("grant_type"))) {
+                case "authorization_code" -> codeGrant.createAccessToken(client, params);
+                case "refresh_token" -> refreshGrant.createAccessToken(client, params);
+                default -> null;
+            };
+            if (token == null) {
+                error(exchange, 400, form.get("grant_type") == null
+                        || "authorization_code".equals(form.get("grant_type"))
+                        || "refresh_token".equals(form.get("grant_type"))
+                                ? "invalid_grant"
+                                : "unsupported_grant_type");
+                return;
+            }
+            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("access_token", token.getTokenKey());
+            body.put("token_type", "Bearer");
+            body.put("expires_in", token.getExpiresIn());
+            body.put("refresh_token", token.getRefreshToken());
+            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+            exchange.getMessage().setHeader("Cache-Control", "no-store");
+            exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
+        } catch (org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException refused) {
+            error(exchange, 400, refused.getMessage() == null
+                    ? "invalid_grant"
+                    : refused.getMessage());
+        }
+    }
+
+    private static boolean secretMatches(RegisteredClient registered, String presented) {
+        if (registered.secretHash() == null) {
+            // A public client authenticates by id alone; a secret it never had is not checked.
+            return true;
+        }
+        if (presented == null) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                registered.secretHash().getBytes(StandardCharsets.UTF_8),
+                Tokens.sha256Hex(presented).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static void error(Exchange exchange, int status, String code) throws Exception {
+        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader("Cache-Control", "no-store");
+        exchange.getMessage().setBody(MAPPER.writeValueAsString(
+                java.util.Map.of("error", code)));
+    }
+
+    /** platform-http may pre-parse a form post into a Map body; both shapes are accepted. */
+    private java.util.Map<String, String> formBody(Exchange exchange) {
+        if (exchange.getMessage().getBody() instanceof java.util.Map<?, ?> parsed) {
+            java.util.Map<String, String> form = new java.util.LinkedHashMap<>();
+            parsed.forEach((key, value) -> form.put(String.valueOf(key),
+                    value == null ? null : String.valueOf(value)));
+            return form;
+        }
+        return Params.parse(exchange.getMessage().getBody(String.class));
     }
 
     private void jwks(Exchange exchange) {
