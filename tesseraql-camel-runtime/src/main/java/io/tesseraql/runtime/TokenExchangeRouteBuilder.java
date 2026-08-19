@@ -30,14 +30,17 @@ import org.apache.camel.builder.RouteBuilder;
 final class TokenExchangeRouteBuilder extends RouteBuilder {
 
     /**
-     * TQL-SEC-4146: issuing was enabled and there is nothing to sign with.
+     * TQL-SEC-4146: issuing was enabled and there is nothing to sign with — neither an HS256
+     * secret nor the stack's authorization server.
      *
-     * <p>A boot refusal rather than a runtime one. {@code JwtAuthenticator} binds its algorithm
-     * from configuration and there is no private key anywhere in the tree, so an application
-     * verifying RS256 against a {@code jwksUri} cannot be issued for — it already has an issuer,
-     * and minting asymmetrically would mean JWKS publication, overlapping rotation and {@code kid}.
-     * Failing at startup says so once, to the operator, instead of once per request to a caller who
-     * cannot act on it.
+     * <p>A boot refusal rather than a runtime one, and narrower than it once was: the original
+     * premise ("there is no private key anywhere in the tree") died with the authorization
+     * server (docs/token-issuance.md decision 9), whose database-held key signs the exchange's
+     * tokens wherever {@code security.oauth.enabled} reaches. An application that verifies
+     * asymmetrically against an <em>external</em> issuer's {@code jwksUri} still cannot be
+     * issued for here — its tokens come from that issuer, not from this endpoint. Failing at
+     * startup says so once, to the operator, instead of once per request to a caller who cannot
+     * act on it.
      */
     private static final TqlErrorCode NO_SIGNING_KEY = new TqlErrorCode(TqlDomain.SEC, 4146);
 
@@ -65,10 +68,12 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
     /** The refusal an operator sees at startup when issuing is on and unsignable. */
     static TqlException noSigningKey() {
         return new TqlException(NO_SIGNING_KEY,
-                "tesseraql.security.token.enabled is true, but this application has no HS256 secret"
-                        + " to sign with — it verifies asymmetrically (publicKey/jwksUri) or"
-                        + " configures no JWT at all, so its tokens come from the identity provider"
-                        + " that holds the signing key, not from here");
+                "tesseraql.security.token.enabled is true, but this application has no HS256"
+                        + " secret to sign with and the stack's authorization server is not"
+                        + " enabled — it verifies against an external issuer (publicKey/jwksUri)"
+                        + " or configures no JWT at all, so its tokens come from the issuer that"
+                        + " holds a signing key: that provider, or the stack file's"
+                        + " security.oauth.enabled");
     }
 
     @Override

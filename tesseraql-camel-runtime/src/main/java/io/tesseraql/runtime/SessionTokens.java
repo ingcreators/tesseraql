@@ -33,16 +33,28 @@ final class SessionTokens {
     private final Duration lifetime;
     private final String ttl;
     private final boolean enabled;
+    /**
+     * The stack's RS256 signer when the authorization server is enabled
+     * (docs/token-issuance.md decision 9), looked up lazily because the extension installs
+     * during the same start that wires this; {@code null} keeps the HS256 path.
+     */
+    private final java.util.function.Supplier<io.tesseraql.oauth.AccessTokenSigner> stackSigner;
 
     /**
      * @param ttl the lifetime as the operator wrote it ({@code 15m}), for display; the parsed
      *            {@code lifetime} is what expiry is computed from
      */
     SessionTokens(JwtConfig jwt, Duration lifetime, String ttl, boolean enabled) {
+        this(jwt, lifetime, ttl, enabled, null);
+    }
+
+    SessionTokens(JwtConfig jwt, Duration lifetime, String ttl, boolean enabled,
+            java.util.function.Supplier<io.tesseraql.oauth.AccessTokenSigner> stackSigner) {
         this.jwt = jwt;
         this.lifetime = lifetime;
         this.ttl = ttl;
         this.enabled = enabled;
+        this.stackSigner = stackSigner;
     }
 
     /** Whether this application issues, and for how long — what the console page asks first. */
@@ -159,6 +171,18 @@ final class SessionTokens {
         // without it would be signed correctly and refused on arrival by this same application.
         payload.put("aud", jwt.audience().size() == 1 ? jwt.audience().get(0) : jwt.audience());
         payload.put("exp", expiry.getEpochSecond());
+
+        // One issuer per stack: with the authorization server enabled, the session exchange and
+        // the OAuth grants sign with the same database-held RS256 key, so a token from either
+        // door validates against the same JWKS at every member (decision 9).
+        if (stackSigner != null) {
+            io.tesseraql.oauth.AccessTokenSigner signer = stackSigner.get();
+            if (signer == null) {
+                throw new IllegalStateException("The stack issuer is enabled but no signer is"
+                        + " bound — the oauth extension did not install");
+            }
+            return signer.sign(payload);
+        }
 
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String header = encoder.encodeToString(

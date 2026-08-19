@@ -48,6 +48,15 @@ the point — `JwtAuthenticator` validates it exactly as it validates an IdP's.
 `tesseraql.security.jwt.secret`, `RS256` with a `publicKey` or a `jwksUri`. There is no private key
 anywhere in the tree, and there will not be one.
 
+> **The premise above died on 2026-08-19** — the authorization-server campaign's issuer
+> unification ([token-issuance.md](token-issuance.md) decision 9). There is a private key now:
+> the stack's, in the framework datasource, and where `security.oauth.enabled` reaches, this
+> exchange signs RS256 with it, so a token from either door validates against one published
+> JWKS at every member. The division this decision drew survives in its narrowed form: an
+> application verifying against an **external** issuer's JWKS still cannot be issued for here —
+> `TQL-SEC-4146` now names both remedies. Everything below stands for the HS256 shape, which
+> remains the whole story wherever the authorization server is not enabled.
+
 So the exchange is available to an application configured for **HS256**, and refused for one
 configured for RS256 against an identity provider's JWKS. That is not a limitation to work around,
 it is the correct division: an application verifying against an external IdP already has somewhere

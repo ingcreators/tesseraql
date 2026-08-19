@@ -210,6 +210,13 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         HostContext context = dev != null && dev.extraModules() != null
                 ? settled.withExtraModules(dev.extraModules())
                 : settled;
+        // One issuer per stack (docs/token-issuance.md decision 9): with the authorization
+        // server enabled, every runtime — members and the surface alike — validates the same
+        // derived RS256 block instead of holding per-app secrets.
+        if (StackIssuer.enabled(settings.surfaceSecurity())) {
+            context = context.withStackIssuer(
+                    StackIssuer.jwt(context.externalOrigin(), settings.surfaceSecurity()));
+        }
         // The stack-wide security schema is migrated ONCE, here, before any runtime starts;
         // the runtimes validate instead of migrating and refuse to start on a mismatch
         // (docs/stack-architecture.md decision 16). On the stack's own pool when the file
