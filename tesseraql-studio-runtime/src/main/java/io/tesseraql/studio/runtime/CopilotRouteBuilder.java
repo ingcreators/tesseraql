@@ -1,10 +1,11 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.runtime.SseRoutes;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.CopilotFragments;
 import io.tesseraql.studio.CopilotService;

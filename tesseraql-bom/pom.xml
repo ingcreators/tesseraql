@@ -88,6 +88,11 @@
       </dependency>
       <dependency>
         <groupId>io.tesseraql</groupId>
+        <artifactId>tesseraql-studio-runtime</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.tesseraql</groupId>
         <artifactId>tesseraql-excel</artifactId>
         <version>${project.version}</version>
       </dependency>

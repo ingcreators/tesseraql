@@ -1,10 +1,11 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.identity.DefaultIdentityPack;
+import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;

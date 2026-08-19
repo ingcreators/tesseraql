@@ -165,6 +165,13 @@ public final class TesseraqlProperties {
      * member name the {@code tql.app.use.<name>} fence refuses on.
      */
     public static final String STACK_MEMBER_BEAN = "tesseraqlStackMember";
+    /**
+     * Registry bean name for the runtime's boot-fact seam ({@code RuntimeSeams} in the runtime
+     * module): what a runtime extension may need beyond its {@code ExtensionContext} — the port,
+     * the pools by name, the hot reloader, the post-start hook window (docs/studio-shell.md
+     * structural decision 3). Bound before the extensions install.
+     */
+    public static final String RUNTIME_SEAMS_BEAN = "tesseraqlRuntimeSeams";
     /** Registry bean name for the operator's default page theme (roadmap Phase 48), if set. */
     public static final String UI_THEME_BEAN = "tesseraqlUiTheme";
     /** Registry bean name for the app's neutral color ramp (docs/hypermedia-ui.md), if non-default. */

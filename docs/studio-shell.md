@@ -21,6 +21,21 @@ decision 1's rejection list: a future "start editing an installed package" need 
 explicit take-it-out-of-the-package operation (the eject lineage), never a loosening of the
 workshop condition. Implementation proceeds slice by slice, slice 1 first.
 
+**Slice 1 is shipped** (the extraction): `tesseraql-studio-runtime` exists as designed —
+`StudioProviders`, `DocsProviders`, the JSON API, `StudioTestService`, the scaffold and data
+services, `StudioAccess`, the Copilot transports and the doc cache moved wholesale;
+`RouteReloader` stays with `--watch`, publicized, its Studio fields traded for `onReload`
+listeners; the boot facts the inlined wiring reached as locals ride one `RuntimeSeams` bean
+bound before extensions install; and the runtime pom's Studio and test-core dependencies are
+gone, guarded by an enforcer rule (compile/runtime scope banned, test scope free). Three
+implementation decisions the design left open, recorded here: the studio-only helpers in the
+runtime boot's tail (the try-it console, the policy-engine rebind, the render-PDF paths,
+~20 statics) moved into the module as `StudioSupport`; the Studio-shaped tests moved with the
+machinery (Maven's cycle rule forbids the runtime module test-depending on the extension), the
+member-mounted-Studio-under-a-prefix property re-pinned from the workshop module's own
+`StackStudioIntegrationTest`; and the framework-surface guard moved too, because the workshop
+module's test classpath is the one place every surface family can mount at once.
+
 ## What exists today, measured
 
 **Half of the extraction is already done, and it is the half everyone assumes is missing.**

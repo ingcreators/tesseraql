@@ -25,7 +25,7 @@ import javax.sql.DataSource;
  * <p>A resolved tenant with no configured pool is rejected with {@code TQL-TENANT-4031} (403) rather
  * than silently falling back to a shared pool, preventing cross-tenant data exposure.
  */
-final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable {
+public final class TenantDataSources implements TenantDataSourceResolver, AutoCloseable {
 
     private static final TqlErrorCode NO_TENANT_DATASOURCE = new TqlErrorCode(TqlDomain.TENANT,
             4031);

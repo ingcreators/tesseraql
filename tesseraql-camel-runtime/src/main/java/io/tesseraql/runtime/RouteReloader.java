@@ -1,7 +1,6 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.RouteCompiler;
-import io.tesseraql.studio.StudioService;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -34,8 +33,13 @@ import org.slf4j.LoggerFactory;
  * ({@code decisions/}, {@code rules/}, {@code scope/}, {@code domains/} — a change rebuilds
  * every route), and the {@code workflow/} surface (a change rebuilds the synthesized
  * transition routes). Jobs, consumers, config, and MCP documents still need a restart.
+ *
+ * <p>Public because the workshop extension (docs/studio-shell.md structural decision 3) drives
+ * it from outside this package; the Studio coupling it used to carry — refreshing the Studio
+ * explorer and dropping the doc cache after a reload — arrives through {@link #onReload}
+ * listeners the extension registers, so this class names no Studio type.
  */
-final class RouteReloader {
+public final class RouteReloader {
 
     private static final Logger LOG = LoggerFactory.getLogger(RouteReloader.class);
 
@@ -47,11 +51,10 @@ final class RouteReloader {
 
     private final CamelContext context;
     private final Path appHome;
-    private final StudioService studio;
     private final String appName;
     private final List<SystemApps.MountedApp> mountedApps;
-    /** Studio's memoized schema/decision lookups; every reload drops what they hold. */
-    private final StudioDocCache docCache;
+    /** Ran after every successful reload — the workshop extension hooks its cache epochs here. */
+    private final List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     /**
      * The app's base path, resolved once. Restated on every REST configuration this class
      * builds: a reloaded or stubbed route re-enters the context-wide configuration, and a hot
@@ -68,17 +71,15 @@ final class RouteReloader {
     /** The workflow/ tree; a change rebuilds the synthesized transition routes. */
     private String workflowFingerprint;
 
-    RouteReloader(CamelContext context, Path appHome, AppManifest current, StudioService studio,
-            String appName, List<SystemApps.MountedApp> mountedApps, StudioDocCache docCache,
+    RouteReloader(CamelContext context, Path appHome, AppManifest current,
+            String appName, List<SystemApps.MountedApp> mountedApps,
             io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.context = context;
         this.functions = functions;
         this.appHome = appHome;
         this.current = current;
-        this.studio = studio;
         this.appName = appName;
         this.mountedApps = List.copyOf(mountedApps);
-        this.docCache = docCache;
         this.basePath = io.tesseraql.core.http.BasePaths.normalize(
                 current.config().getString("tesseraql.http.basePath").orElse(null));
         this.fingerprints = fingerprintsOf(current);
@@ -90,9 +91,18 @@ final class RouteReloader {
     public record RouteFailure(String id, String method, String path, String error) {
     }
 
-    /** The reload outcome: what changed, what broke, and the refreshed Studio explorer. */
+    /** The reload outcome: what changed and what broke. */
     public record Result(List<String> reloaded, List<String> added, List<String> removed,
-            List<RouteFailure> failed, StudioService.Explorer explorer) {
+            List<RouteFailure> failed) {
+    }
+
+    /**
+     * Registers a listener run after every successful reload — the epoch signal the workshop
+     * extension uses to refresh the Studio explorer and drop its memoized doc lookups, and the
+     * seam that keeps this class free of Studio types.
+     */
+    public void onReload(Runnable listener) {
+        reloadListeners.add(listener);
     }
 
     /**
@@ -101,7 +111,7 @@ final class RouteReloader {
      * risky, expensive part of a reload (a stop/re-add races in-flight requests on its
      * endpoint), so an apply that edits one file bounces one route, not the whole app.
      */
-    synchronized Result reload() {
+    public synchronized Result reload() {
         return reload(false);
     }
 
@@ -110,7 +120,7 @@ final class RouteReloader {
      * per-route failure isolation. {@code force} rebuilds every kept route regardless of
      * content — the manual {@code POST /_tesseraql/studio/reload} recovery hammer.
      */
-    synchronized Result reload(boolean force) {
+    public synchronized Result reload(boolean force) {
         // Tolerant load: an unparseable route document is a per-route failure like a compile
         // error, not a reason to abort — only app.yml/config problems still fail the load.
         List<ManifestLoader.BrokenRoute> broken = new ArrayList<>();
@@ -253,11 +263,12 @@ final class RouteReloader {
         this.appFingerprint = appNow;
         this.workflowFingerprint = workflowNow;
         // The reload's scope includes the shared definitions Studio's memoized lookups read
-        // (decisions/ for the data browser's column contracts), so a reload is their epoch.
-        docCache.invalidate();
+        // (decisions/ for the data browser's column contracts), so a reload is their epoch —
+        // the workshop extension's listeners drop those caches and refresh the explorer here.
+        reloadListeners.forEach(Runnable::run);
         LOG.info("Hot reload: {} reloaded, {} added, {} removed, {} failed, {} unchanged",
                 reloadedIds.size(), addedIds.size(), removed.size(), failed.size(), unchanged);
-        return new Result(reloadedIds, addedIds, removed, failed, studio.reload());
+        return new Result(reloadedIds, addedIds, removed, failed);
     }
 
     /** Per-route content fingerprints: the digest of each route's source directory. */
@@ -460,7 +471,7 @@ final class RouteReloader {
     }
 
     /** The web-route ids the running context currently serves (tests and diagnostics). */
-    synchronized Set<String> currentIds() {
+    public synchronized Set<String> currentIds() {
         return new LinkedHashSet<>(byId(current).keySet());
     }
 }

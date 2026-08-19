@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

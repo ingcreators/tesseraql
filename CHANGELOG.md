@@ -222,6 +222,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Studio's runtime machinery moved to `tesseraql-studio-runtime`** (docs/studio-shell.md
+  slice 1). The Studio providers, JSON API, sandboxed test runner, scaffold and data services,
+  and the Copilot transports now live in a `RuntimeExtension` module the runtime discovers
+  from the classpath, exactly like SCIM/SAML/OIDC — and `tesseraql-camel-runtime` no longer
+  depends on `tesseraql-studio` or on the declarative test framework, so a deployment
+  assembling its classpath from the runtime carries no test engine, no GreenMail and no
+  JUnit 4 (docs/runtime-footprint.md problem 2; an enforcer rule now guards the boundary).
+  Pre-1.0 breaking change for hand-assembled classpaths: Studio now needs the
+  `tesseraql-studio-runtime` jar beside `tesseraql-studio` — the developer CLI ships both,
+  and behavior there is unchanged.
+
 - **The bootstrap baseline gains `tql.app.deploy.*`** — `identity-schema`'s default
   `--admin-permissions` now also carries the deploy wildcard, so a fresh stack's first
   administrator holds every door the atoms guard, the new deploy pen included.

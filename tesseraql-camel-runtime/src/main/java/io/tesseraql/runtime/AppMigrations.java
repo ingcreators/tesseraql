@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
  * previous version (expand/contract). Disable per app with
  * {@code tesseraql.migrations.enabled: false}.
  */
-final class AppMigrations {
+public final class AppMigrations {
 
     private static final Logger LOG = LoggerFactory.getLogger(AppMigrations.class);
     private static final TqlErrorCode UNKNOWN_DATASOURCE = new TqlErrorCode(TqlDomain.APP, 4201);
@@ -53,7 +53,7 @@ final class AppMigrations {
      * pool, and each {@code db/<datasource>/migration} set to its named datasource. Returns the
      * total number of migrations executed (Studio's "Migrate now" reports it).
      */
-    static int migrate(String appName, Path appHome, AppConfig config,
+    public static int migrate(String appName, Path appHome, AppConfig config,
             DataSource mainDataSource, TenantDataSources tenantDataSources,
             Function<String, DataSource> namedDataSources) {
         if (!config.getString("tesseraql.migrations.enabled")

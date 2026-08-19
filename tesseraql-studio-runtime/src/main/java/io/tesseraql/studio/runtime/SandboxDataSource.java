@@ -1,4 +1,4 @@
-package io.tesseraql.runtime;
+package io.tesseraql.studio.runtime;
 
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
