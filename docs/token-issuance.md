@@ -6,9 +6,11 @@ the implementation design for the authorization server
 and *what for*; this one decided *how* — and the how is now on main: the module and its store,
 the signing keys and the JWKS, issuer unification, `/authorize` with consent and the acting-role
 face, `/token`, `/register`, the RFC 8414 metadata, the account page, and the MCP resource side
-with its transport gate. What remains of the campaign is not a slice: the interactive half of
-the Decision 11 acceptance run — the `resource` observation was taken the same day, against
-Claude Code itself, and the placeholder held.
+with its transport gate. **The Decision 11 acceptance ran the same
+day and passed**: Claude Code, against a live stack whose only identity source was TesseraQL's
+own login, walked discovery, dynamic registration, sign-in, the consent screen, code, `/token`
+and the gated MCP surface — a person completing the consent in a browser, the one step no
+automation could — and the account page listed the live connection. The campaign is done.
 
 The campaign-start revision reconciles the design with what shipped between those two dates — the
 stack surface runtime, the stack file's security graft, the per-application role model — and closes
@@ -503,9 +505,13 @@ connect-and-observe pass is therefore not optional homework: it is both the meas
 were gated on and the campaign's own finish line. Its Codex leg ran on 2026-08-19 and closed open
 questions 2 and 3; its Claude Code leg ran the same day, against a logging stub of this design's
 own document shapes, and took the RFC 8707 `resource` observation (open question 2's note). What
-remains for the finish line is the interactive half — a person completing sign-in and consent in
-a browser against the live stack — which a non-interactive session cannot finish by design:
-`claude mcp login` stops exactly at the step that needs the human.
+remained for the finish line — the interactive half — ran the same day: a live stack (`dev`,
+the authorization server enabled, an `identity-schema`-seeded administrator), `claude mcp add`
++ `claude mcp login`, a person signing in and approving on the shipped consent screen, and the
+client landing `✔ Connected` on the gated MCP surface with the minted token. The account
+connections page listed the live connection, name escaped, revocation an act away. **The
+acceptance this decision defines is met for Claude Code**; Codex and ChatGPT Desktop remain
+unexercised end to end, with every measured behavior of Codex already accounted for.
 
 ## Open questions
 
