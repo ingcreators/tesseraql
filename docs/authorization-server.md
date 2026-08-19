@@ -1,8 +1,17 @@
 # TesseraQL as an authorization server
 
-Status: **designed 2026-08-15, and deferred.** The design below is complete enough to build
-from. The recommendation is not to build it yet, and the conditions for revisiting are written
-down at the end so the question does not have to be re-researched from scratch.
+Status: **designed 2026-08-15, and deferred — headline reversed 2026-08-16.**
+[stack-architecture.md](stack-architecture.md) Decision 4 decides to build an authorization server
+for TesseraQL's own users: this survey asked which library could be *embedded* and which companion
+to *adopt*, and never priced building a companion of our own, which is the category that won.
+Everything below — the candidate survey, the CVE records, the Keycloak embedding, theming and
+multi-node measurements — stands as the record of why each alternative lost, and the revisit
+conditions at the end are superseded by that decision. The implementation design is
+[token-issuance.md](token-issuance.md); its campaign started 2026-08-19.
+
+The original status: the design below is complete enough to build from, the recommendation is not
+to build it yet, and the conditions for revisiting are written down at the end so the question does
+not have to be re-researched from scratch.
 
 Two things escape the deferral, and both moved into
 [audit-hardening.md](audit-hardening.md) so they are not deferred with it: the SAML hardening of

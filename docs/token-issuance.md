@@ -1,19 +1,62 @@
 # Token issuance
 
-Status: **designed 2026-08-16** — nothing shipped. This is the implementation design for the
-authorization server [stack-architecture.md](stack-architecture.md) decided to build. That document
-decided *whether* and *what for*; this one decides *how*, and stops where a measurement it does not
-have would decide better.
+Status: **designed 2026-08-16; campaign started 2026-08-19.** This is the implementation design
+for the authorization server [stack-architecture.md](stack-architecture.md) decided to build. That
+document decided *whether* and *what for*; this one decides *how*, and stops where a measurement it
+does not have would decide better.
+
+The campaign-start revision reconciles the design with what shipped between those two dates — the
+stack surface runtime, the stack file's security graft, the per-application role model — and closes
+the two open questions that needed no measurement (the error domain, Decision 10; the fate of
+`TQL-SEC-4146`, Decision 9). The protocol design of 2026-08-16 is unchanged; what changed is where
+the endpoints live and how the rest of the stack comes to trust what they sign.
 
 **What it implements.** Decisions 4 through 11 of `stack-architecture.md`: an authorization server
 for TesseraQL's own users, colocated with the resource server, signing RS256, issuing refresh
 tokens, registering clients dynamically, and requiring consent. It is a stack-level surface at
-`/_tesseraql/oauth`, hosted the way Decision 14 hosts the other framework surfaces.
+`/_tesseraql/oauth`, mounted on the stack surface runtime the way Decision 14's other framework
+surfaces now are (Decision 8 below).
 
 **What it is not.** Not a general identity provider — no SAML brokering as a product, no federation
 beyond Decision 7 case B, no MFA. `authorization-server.md` records why each of those returns
 Keycloak's argument, and that document's survey of alternatives stands; only its headline decision
 was reversed.
+
+## What shipped since the design, and what each changes here
+
+When this document was written, "hosted the way Decision 14 hosts the other framework surfaces"
+was a plan. Three campaigns landed since, and each one either concretizes a sentence here or
+hands this design a mechanism it had to assume:
+
+- **The stack surface runtime exists** ([root-portal.md](root-portal.md)): a framework-owned
+  runtime at origin scope serves the portal, sign-in and the account surface behind the relay's
+  origin fence (`/_tesseraql/*`, `/assets/*`), and that document explicitly reserved
+  `/.well-known/*` at the origin for this one. Decision 8 makes the mounting concrete.
+- **The stack file's `security:` subtree grafts onto the surface runtime** (the deploy-surface
+  slice of the stack shells): `security.jwt.*` and `security.token.enabled` at the origin already
+  make the stack an HS256 issuer for its own surfaces — `tesseraql token --url <origin>` works and
+  the deploy endpoint validates bearers. Members deliberately kept their own `security.jwt`, and
+  that slice's shipped note says plainly that issuer unification belongs to this campaign.
+  Decision 9 takes it up.
+- **The per-application role model shipped end to end**
+  ([application-roles.md](application-roles.md)): principals carry store-resolved `roleGrants`,
+  activation narrows a request to one active view per tab (`/_as/<role>`), `SessionTokens` mints
+  an active view with an `acting_role` claim for `token --as`, and `TQL-SEC-4148` answers the
+  wrong-capacity case. Decision 4's contract paragraph — written into this document by that
+  campaign — now binds to shipped machinery rather than to a design.
+- **The `security` migration hoist**: the host migrates the `security` component once, before any
+  runtime starts, and hosted runtimes validate. Decision 3's "under the same lock the migration
+  takes" now names a shipped mechanism rather than asking for one.
+- **audit-hardening slices 6 and 7 are this campaign's to deliver.** `stack-architecture.md`
+  Decision 2 widened their deferral condition to "a deployment that puts MCP in front of users who
+  are not developers" — which is exactly who this server exists for. An authorization server
+  nobody is told about serves nobody: the resource-side metadata and the MCP transport gate are
+  sequenced in as slice 10, built to `audit-hardening.md`'s own decisions.
+
+One standing instruction carries over from `stack-architecture.md` Decision 5 and gains force with
+the start of implementation: **re-verify CXF's advisory record against primary sources at each
+slice**, and track the version rather than pinning and forgetting it. The 2026 record is the price
+of the no-second-process axis, and it is paid by attention.
 
 ## Decisions
 
@@ -23,18 +66,19 @@ Measured against CXF 4.2.3 in `stack-architecture.md` Decision 5: the endpoint p
 classes bound to JAX-RS, the grant layer needs only the `jakarta.ws.rs-api` jar, and of five grant
 families this needs `code` and `refresh`.
 
-A new module — sibling to `tesseraql-oidc`, `tesseraql-security` and `tesseraql-identity` — depends
-on `tesseraql-core`, `tesseraql-yaml`, `tesseraql-security`, CXF's `cxf-rt-rs-security-oauth2` and
-`jakarta.ws.rs-api`. **It must not depend on `tesseraql-camel-runtime`**, which is the rule
-`stack-architecture.md` Decision 15 records and the build check it asks for; the three existing
-framework-surface modules already satisfy it, and this one joins them rather than becoming the
-exception.
+The new module is **`tesseraql-oauth`**, mirroring `tesseraql-oidc`'s shape: it depends on
+`tesseraql-core`, `tesseraql-compiler` (the `RuntimeExtension` seam), `tesseraql-identity`,
+`tesseraql-security`, plus CXF's `cxf-rt-rs-security-oauth2` and `jakarta.ws.rs-api`. **It must not
+depend on `tesseraql-camel-runtime`**, which is the rule `stack-architecture.md` Decision 15
+records; the three existing framework-surface modules already satisfy it, and `tesseraql-oidc`
+proves the extension seam can mount routes without it. This module joins them rather than becoming
+the exception.
 
 CXF's own `services` classes are not used, and neither are its storage implementations —
 `JPACodeDataProvider`, `JCacheCodeDataProvider`, `DefaultEncryptingCodeDataProvider`. That is not
 merely a preference: those are the classes carrying several of the 2026 advisories, so declining
 them is the structural half of the mitigation Decision 5 promised. The other half is tracking the
-CXF version rather than pinning and forgetting it, which belongs in the campaign's standing work.
+CXF version rather than pinning and forgetting it, which is the campaign's standing work.
 
 ### 2. The store holds codes, refresh tokens, clients and consents — and not access tokens
 
@@ -76,6 +120,11 @@ look a token up by its value. Neither is built — sign-out revokes refresh toke
 an endpoint — but if either arrives, this is the method that has to grow an answer, and
 reconstructing a `ServerAccessToken` from validated JWT claims is how it should be answered.
 
+The tables ride the **`security` migration component**, beside sessions — which the hoist has the
+host migrate once for the whole stack, before any runtime starts. The store implementation reads
+the framework datasource through the extension seam (`ExtensionContext.frameworkDataSource()`),
+which is the same road `OidcStateStore` already travels.
+
 ### 3. Signing keys live in the framework datasource, so every replica serves one JWKS
 
 `stack-architecture.md` Decision 8 overturns `session-token-exchange.md`'s premise that no private
@@ -87,8 +136,9 @@ what lets every node publish one key set. It also matches TesseraQL's own model 
 identical, the database arbitrates — which is the property Decision 4 chose building over adopting
 to keep.
 
-A key pair is generated on first start if none exists, under the same lock the migration takes, so
-concurrent first starts cannot produce two.
+A key pair is generated on first start if none exists, at the host's one migration moment — the
+hoist gives the stack exactly one actor touching the `security` schema before runtimes exist, so
+concurrent first starts cannot produce two pairs.
 
 **Rotation is overlapping and `kid`-addressed**: a new key becomes the signer while the previous
 one stays published until every token it signed has expired, which is bounded by the access-token
@@ -100,8 +150,8 @@ and it should be stated in the operator documentation rather than left to be dis
 
 `/authorize` asks whether the caller holds a session and does nothing else about identity. There is
 no new authentication path: `tesseraql_sid` is the answer however it was obtained — the framework's
-own login, OIDC, or SAML — and its absence redirects to `/_tesseraql/login?next=…`, which already
-carries a caller back to where it was going.
+own login, OIDC, or SAML — and its absence redirects to `/_tesseraql/login?redirect=…`, which
+already carries a caller back to where it was going.
 
 Consent is a page in the same surface, and `stack-architecture.md` Decision 10 fixes its three
 properties. It is **mandatory**, because registration is open. Client-supplied metadata is
@@ -119,7 +169,7 @@ means "mint a new one". The consent record is read by our authorize endpoint bef
 page reads. The account surface (Decision 14) is where that page belongs, and revoking there deletes
 the consent and the refresh tokens together.
 
-**The consent screen is also where a multi-role user selects an acting role** — the OAuth face of the
+**The consent screen is also where a concurrent-role user selects an acting role** — the OAuth face of the
 role activation designed in [application-roles.md](application-roles.md) (its "three faces"
 section). The authorize endpoint holds the store-resolved role grants and the `resource`
 parameter's member, so it renders the acting-role selection beside consent for a user holding
@@ -131,6 +181,13 @@ cadence. Changing a connection's capacity is a re-authorization. Client-requeste
 deliberately not the carrier — the measured MCP clients let no user type a scope and their
 scope-sending behavior is unobserved; the server-side selection depends on neither. This lands
 with the authorize/consent slice.
+
+That contract now binds to shipped machinery, not to a design: the store-resolved `roleGrants`
+already ride every principal, the single-holder auto-confirm is the browser flow's own
+one-role-302 in consent form, `SessionTokens` already demonstrates the mint-from-active-view
+computation with its `acting_role` claim, and the refresh-time re-resolution reads the same store
+the member's activate step reads per request. The consent screen adds no second computation — it
+is the picker's OAuth face, selecting from the union and minting from the active view.
 
 PKCE is **required, `S256` only**, and `AuthorizationCodeGrantHandler` supports exactly that without
 modification: `setRequireCodeVerifier(true)` demands a verifier from every client rather than only
@@ -165,13 +222,23 @@ RFC 8414's insertion rule does not apply and authorization-server metadata sits 
 `/.well-known/oauth-authorization-server`. The endpoints it advertises — `/_tesseraql/oauth/authorize`,
 `/token`, `/register` — are listed explicitly and need not share the issuer's path.
 
+Serving that path is a one-line consequence the shipped relay makes visible: the origin fence
+forwards `/_tesseraql/*` and `/assets/*` to the surface runtime today, and `root-portal.md`
+reserved `/.well-known/*` for this document — the fence gains that prefix in the metadata slice,
+and nothing else about routing moves.
+
 RFC 9207's `iss` is included in the authorization response. It is cheap now and awkward later, and
 it costs nothing to a client that ignores it.
 
 Protected-resource metadata is **not this module's**. It describes an application's MCP surface, is
 produced by that application's runtime, and is relayed by the gateway — `stack-architecture.md`
 Decision 18. This module supplies only the issuer value that appears in the `authorization_servers`
-list.
+list. Building that resource side is nevertheless this campaign's work — slice 10, to
+`audit-hardening.md`'s own decisions, because its deferral condition is met by this server's own
+target audience (`stack-architecture.md` Decision 2). Note the path shape recorded there: RFC 9728
+**inserts** the well-known segment between host and path, so a member's document lives at
+`/.well-known/oauth-protected-resource/<member>/…` — origin scope, one more reason the fence owns
+`/.well-known/*` and relays by suffix.
 
 ### 7. Brokering is a login mode, not a second design
 
@@ -188,38 +255,182 @@ What this buys is the DCR proxy of Decision 7 — dynamic registration facing th
 ordinary pre-registered client facing the enterprise provider — which is the configuration that
 resolves the deadlock Decision 3 documented, without touching the customer's provider.
 
+### 8. The endpoints mount on the stack surface runtime, and the stack file turns them on
+
+*Added at campaign start, 2026-08-19 — the concrete form of "hosted the way Decision 14 hosts the
+other framework surfaces", which was a plan when this document was written and is a shipped runtime
+now.*
+
+**The authorization server is a stack-scoped surface.** Its issuer is the stack origin (Decision
+6), its subjects are the stack's users, and its resources are the stack's members — none of which
+an unhosted single runtime has. So it mounts on the **stack surface runtime** — the origin-scope
+runtime that already serves sign-in, the account surface and the portal — and nowhere else. The
+module self-installs through the `RuntimeExtension` seam exactly as `tesseraql-oidc` does, keyed on
+configuration only the surface runtime's config carries.
+
+**Enablement is a stack-file declaration, off by default.** `stack-architecture.md` Decision 7
+case A requires it: a component that issues credentials should exist because somebody decided it
+should, which is `token.enabled`'s own reasoning at stack scope. The stack file's `security:`
+subtree already grafts onto the surface runtime's config, so the switch is one more key in the same
+place the issuer's other settings live:
+
+    # tesseraql-stack.yml
+    security:
+      oauth:
+        enabled: true
+
+Lifetimes and rotation settings join it under `security.oauth.*` as the slices need them, riding
+the shipped graft rather than a new channel. **An application declaring the key itself is refused**
+at lint and boot — the surface-only rule would otherwise be one config line from silently minting
+a second issuer inside a member, and the shipped precedent is `TQL-APP-4212`'s: an explicit
+declaration in the wrong scope is a refusal naming the right one, not a silent override.
+
+The consent and authorize pages are served the way the surface's other pages are — on hc, behind
+the origin fence, with the session already at hand. Where exactly the page routes live (the
+`auth-ui` app beside sign-in, or the extension's own route builders) is open question 6, and it
+gates only the authorize/consent slice.
+
+### 9. One issuer per stack: members validate the published key, and the exchange signs with the private one
+
+*Added at campaign start, 2026-08-19. Resolves open question 5.*
+
+The stack shells left the stack with a deliberate seam: the surface runtime validates and mints
+HS256 from the stack file's `security.jwt.*`, while **members keep their own per-app `jwt` blocks
+and their own secrets** — the shipped note says issuer unification belongs to this campaign. This
+decision is that unification.
+
+**When the authorization server is enabled, the stack has one issuer and it signs RS256.** Three
+consequences, in dependency order:
+
+- **Members validate the stack's published key.** The host grafts bearer-validation configuration
+  onto every member: RS256, the stack origin as issuer, key material from the JWKS the surface
+  publishes. The machinery exists — `JwtAuthenticator` has validated RS256 via `jwksUri` since the
+  JWKS slice of the authentication phase — so this is configuration plumbing through
+  `HostContext`, not a new validator. Each member's **audience stays its own**: `aud` is the
+  boundary Decision 6 of `stack-architecture.md` makes real, and unifying the signer is precisely
+  what makes distinct audiences meaningful.
+- **A member's own explicit `security.jwt` while the stack issues is a refusal**, in `TQL-APP-4212`'s
+  shape — naming the stack file as where the issuer lives. The alternative (member config silently
+  outranked) is the divergence-fails-silently case Decision 16 exists to prevent; the alternative
+  in the other direction (two issuers accepted in parallel) is Decision 7 case C, rejected there.
+- **The session-token exchange signs with the same key.** `SessionTokens` — the one signer behind
+  `POST /_tesseraql/token` and the console token page — gains RS256 signing with the authorization
+  server's private key when the server is enabled. A token fetched by `tesseraql token --url` and a
+  token minted through `/authorize` then verify against the same JWKS at the same members: **two
+  acquisition paths, one issuer.** The exchange keeps its shape (session in, short-lived token out,
+  no refresh tokens) because its audience — a developer at a terminal — has not changed; what
+  changes is only whose key signs.
+
+**`TQL-SEC-4146` therefore narrows rather than dies.** It was minted for "issuing was enabled and
+there is nothing to sign with", correct while HS256 was the only signature TesseraQL could produce.
+With the authorization server enabled there *is* something to sign with, so the refusal fires only
+when issuing is enabled and neither an HS256 secret nor the stack's signing key exists. The
+exchange and the authorization server stop being alternatives within one application — the framing
+open question 5 carried from `stack-architecture.md` — and become two doors into one issuer.
+`session-token-exchange.md`'s Decision 1 premise is edited when this slice ships, not before,
+per the campaign rule that prose describing shipped behavior moves with the code.
+
+**What a unified token carries** follows `stack-architecture.md` Decision 11 and the shipped role
+model: `aud` is the resource identifier the grant was made for; roles and permissions are the
+active view for **that member** — the acting-role narrowing when one was selected, the member's
+union otherwise — never the subject's stack-wide authority. The exchange gains the member axis for
+the same reason (a token that only the surface accepts serves deploys, not applications); its
+parameter shape is open question 7.
+
+### 10. Protocol failures speak OAuth on the wire and `TQL-OAUTH` in the logs
+
+*Added at campaign start, 2026-08-19. Resolves open question 4.*
+
+OAuth prescribes its own error vocabulary — `invalid_grant`, `invalid_client`, `invalid_target`,
+redirect-carried error codes — and the wire answers are RFC-shaped regardless of what TesseraQL
+calls them internally. The open question was only what the logs and the error index say.
+
+**A new domain: `TQL-OAUTH`.** The per-module precedent is uniform — the OIDC relying party,
+SAML, SCIM each brought their own domain — and `tesseraql-oauth` is a module of the same standing.
+Reusing `TQL-SEC` was the thriftier option and loses on the property that decides it: `TQL-SEC`
+codes answer "the framework refused *your* credential", while the authorization server's failures
+answer "a protocol exchange between a client and this server went wrong" — different audience,
+different remedy, and an operator grepping an incident should not have to learn which 41xx numbers
+changed meaning. The domain joins `TqlDomain`, the reference index picks it up through the ordinary
+machinery, and the code space starts clean at 3000-series config / 4000-series refusals like its
+sibling modules.
+
+### 11. Done means a real client connects
+
+The campaign's acceptance is not a green unit suite over grant handlers; it is the chain
+`stack-architecture.md` built toward: **a business user on a measured MCP client — ChatGPT
+Desktop, Codex CLI, Claude Code — connects to a member's MCP surface through discovery,
+registration, consent and refresh, with no fixed credential and no developer in the loop.** The
+connect-and-observe pass (open questions 2 and 3) is therefore not optional homework: it is both
+the measurement two slices are gated on and the campaign's own finish line, run against a stack
+with the server enabled once slices 2 through 7 stand.
+
 ## Open questions
 
 1. ~~**Whether `getAccessToken` can reconstruct rather than retrieve.**~~ **Closed 2026-08-16 by the
    slice 1 spike: the question does not arise.** `grants` never calls it. Decision 2 records the
    measurement, and the risk that this would send the design back to Spring Authorization Server is
    retired.
-2. **The redirect-URI shape Codex actually registers** — *blocks Decision 5's validation.* Pending
-   the connect-and-observe pass `stack-architecture.md` open question 6 describes; not runnable
-   where this was written, since it needs the client and a browser.
+2. **The redirect-URI shape Codex actually registers** — *blocks slice 6's final validation; the
+   slice ships exact-match as the placeholder.* Pending the connect-and-observe pass
+   `stack-architecture.md` open question 6 describes; not runnable where this was written, since it
+   needs the client and a browser. The same pass now also records **whether the measured clients
+   send RFC 8707 `resource`**: Decision 4's consent-per-resource and Decision 9's per-member claims
+   key on it, the MCP specification requires clients to send it, and the recorded field evidence
+   (claude.ai omitting it) predates that requirement and concerns a hosted connector this does not
+   target. The placeholder is fail-loud: an authorize request without a resolvable `resource` is
+   refused with `invalid_target` rather than answered with a guessed audience.
 3. **Whether any client refuses to proceed without `scopes_supported`** — same pass. Decision 11 of
    `stack-architecture.md` advertises none; this confirms the choice survives contact.
-4. **The error-code range.** Reusing `TQL-SEC-` keeps one meaning per code in one registry; a new
-   domain would separate protocol failures from framework authentication failures. OAuth returns its
-   own error vocabulary on the wire regardless, so this decides only what the logs and the index say.
-5. **What `TQL-SEC-4146` becomes**, carried over from `stack-architecture.md` open question 5. The
-   refusal was correct while TesseraQL held no private key; once it does, the exchange and the
-   authorization server are alternatives within one application rather than one being impossible.
+4. ~~**The error-code range.**~~ **Closed 2026-08-19 — Decision 10: a new `TQL-OAUTH` domain.**
+5. ~~**What `TQL-SEC-4146` becomes.**~~ **Closed 2026-08-19 — Decision 9: it narrows.** The
+   exchange signs with the authorization server's key when the server is enabled; the refusal keeps
+   firing only when issuing is enabled and no key material of either kind exists.
+6. **Where the consent and authorize pages live** — *gates slice 4.* Two candidates: routes in the
+   bundled `auth-ui` application (declared YAML + hc templates beside the login page, provider
+   beans through the extension, the account surface's shape), or route builders owned entirely by
+   `tesseraql-oauth` (the OIDC module's shape). Recommended: **`auth-ui`** — consent is a page a
+   person reads next to sign-in, the app already carries the hc login markup and its lint/coverage
+   ride the declarative surface, and the protocol endpoints (`/token`, `/register`) stay in the
+   extension where no page exists to declare.
+7. **The exchange's member axis after unification** — *gates slice 9.* A unified token needs an
+   audience, and "the surface's own" serves only the deploy endpoint. Recommended: `tesseraql token
+   --url <origin>` and the console token page gain an **application selector** (`--app-name
+   <member>` / a page dropdown over the caller's entitled members), minting that member's audience
+   and that member's active view — the same computation Decision 9 fixes for the authorization
+   server — with the surface's own audience as the default when nothing is named, which is today's
+   behavior verbatim.
+8. **Refresh-token lifetimes and rotation windows** — *gates slice 5's configuration surface, not
+   its mechanics.* Rotation-on-use and reuse detection are decided (Decision 9 of
+   `stack-architecture.md`); the numbers (idle expiry, absolute expiry, the access-token lifetime
+   the JWKS rotation overlap is bounded by) should be chosen against the measured clients' refresh
+   behavior in the same observe pass rather than invented. Placeholder defaults ship with the slice
+   and are named in the operator documentation.
 
 ## Slices
 
-Sequenced so that the finding that could invalidate the approach is first.
+Numbering is stable — external references to "slice 6" stay true — and the sequence is the
+dependency order given below, not the numeric one.
 
 | # | Slice |
 | --- | --- |
 | 1 | ~~Spike: `getAccessToken` reconstruction against CXF's `code` and `refresh` flows~~ — **done 2026-08-16**, and it retired its own question |
-| 2 | Module, storage schema on the `security` migration component, the twelve-method provider |
-| 3 | Signing keys in the framework datasource, generation under the migration lock, JWKS publication, `kid` rotation |
-| 4 | `/authorize` over the existing session, consent page, consent persistence, `S256`-only PKCE |
-| 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection |
-| 6 | `/register`, the client registry, redirect validation once open question 2 answers |
-| 7 | RFC 8414 metadata, RFC 9207 `iss`, and the `authorization_servers` value the gateway relays |
+| 2 | The `tesseraql-oauth` module, storage schema on the `security` migration component, the twelve-method provider proven against CXF's `code` and `refresh` grant flows in unit tests |
+| 3 | Signing keys in the framework datasource, generation at the host's migration moment, JWKS publication at the origin (the fence gains `/.well-known/*`), `kid` rotation |
+| 4 | `/authorize` over the existing session, the consent page with the acting-role selection (Decision 4's contract), consent persistence per client and per resource, `S256`-only PKCE |
+| 5 | `/token` with authorization-code and refresh grants, refresh rotation with reuse detection retiring the chain |
+| 6 | `/register`, the client registry, exact-match redirect validation as the placeholder — final shape once open question 2 answers |
+| 7 | RFC 8414 metadata at the bare well-known, RFC 9207 `iss`, and the `authorization_servers` issuer value the resource metadata will carry |
 | 8 | Account-surface page: applications authorised, and revocation that deletes consent and refresh tokens together |
+| 9 | Issuer unification (Decision 9): members validate the stack JWKS, the explicit-member-jwt refusal, `SessionTokens` signs RS256, `TQL-SEC-4146` narrows, the exchange's member axis (open question 7), and the `session-token-exchange.md` premise edit |
+| 10 | The resource side, to `audit-hardening.md`'s decisions: RFC 9728 protected-resource metadata per member relayed at origin scope, the `WWW-Authenticate` challenge, the MCP transport gate and audience binding — then the connect-and-observe pass against the whole chain |
+
+**Sequence: 2 → 3 → 9 → 4 → 5 → 6 → 7 → 10 → 8.** Slice 9 lands third because it is where the
+stack first *uses* the new key material — `token --url` against a member API proves signing,
+publication and member validation end to end before any OAuth endpoint exists, and every later
+slice then ships against a stack whose tokens already work. Slices 6 and 7 close the client-facing
+chain, 10 makes it discoverable and runs the acceptance of Decision 11, and 8 completes the
+subject-facing story and can land any time after 5.
 
 Slice 1 was a spike rather than a slice: its output was a finding, and the finding decided whether
 slices 2 onward are written against CXF at all. **They are** — and the store surface is smaller than

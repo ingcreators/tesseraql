@@ -122,6 +122,10 @@ The target is precisely the gap `authorization-server.md` named and left open â€
 only identity source is TesseraQL's own IAM "cannot serve the hosted assistants through OAuth at
 all, because there is no authorization server to name in `authorization_servers`."
 
+*Campaign started 2026-08-19 â€” [token-issuance.md](token-issuance.md) is the implementation
+design, revised that day to the stack as shipped (the surface runtime, the stack file's security
+graft, the acting-role contract) and closing its own open questions 4 and 5.*
+
 ### 5. Two candidates remain, and the choice is whether a second process is acceptable
 
 Re-surveyed under the build framing rather than the embed framing.
