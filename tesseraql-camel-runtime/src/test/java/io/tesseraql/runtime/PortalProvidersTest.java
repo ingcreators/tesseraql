@@ -58,7 +58,7 @@ class PortalProvidersTest {
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> list(String tenantId, List<String> permissions) {
         ServiceProviders providers = new ServiceProviders();
-        PortalProviders.register(providers, MEMBERS);
+        PortalProviders.register(providers, MEMBERS, null);
         Map<String, Object> params = new HashMap<>();
         if (tenantId != null) {
             params.put("tenantId", tenantId);

@@ -95,6 +95,12 @@ public final class TokenCommand implements Callable<Integer> {
             "--ttl"}, paramLabel = "<duration>", description = "Lifetime, e.g. 30m, 12h, 7d (default 24h).")
     String ttl = "24h";
 
+    @Option(names = {"--as"}, paramLabel = "<role>", description = "Act as one held application "
+            + "role: with --url the server mints the active view (that role, the stack-wide "
+            + "roles, their permissions) plus an acting_role claim, refusing a role the account "
+            + "does not hold; with --app it stamps the acting_role claim on the local mint.")
+    String actingRole;
+
     @Override
     public Integer call() throws Exception {
         if ((app == null) == (url == null)) {
@@ -182,7 +188,18 @@ public final class TokenCommand implements Callable<Integer> {
             return 1;
         }
 
-        HttpResponse<String> minted = send(client, base + "/_tesseraql/token", "{}", cookie, csrf);
+        // The capacity statement (docs/application-roles.md): the server selects from the
+        // session's own grants, so --as can only narrow — an unheld role answers 403.
+        String exchangeBody = actingRole == null || actingRole.isBlank()
+                ? "{}"
+                : MAPPER.writeValueAsString(Map.of("actingRole", actingRole));
+        HttpResponse<String> minted = send(client, base + "/_tesseraql/token", exchangeBody,
+                cookie, csrf);
+        if (minted.statusCode() == 403 && actingRole != null) {
+            System.err.println("The account does not hold application role '" + actingRole
+                    + "', so a token cannot be minted acting as it (TQL-SEC-4148).");
+            return 1;
+        }
         if (minted.statusCode() == 404) {
             System.err.println("This application does not issue tokens: set "
                     + "tesseraql.security.token.enabled to true in its configuration.");
@@ -307,6 +324,11 @@ public final class TokenCommand implements Callable<Integer> {
             payload.put(permissionsClaim, permissions);
         }
         claims.forEach((name, value) -> payload.put(name, parseValue(value)));
+        // The local mint fabricates claims by design; --as stamps the capacity claim the same
+        // way, so a fixture token can rehearse the audit sentence a server-minted one carries.
+        if (actingRole != null && !actingRole.isBlank()) {
+            payload.put("acting_role", actingRole);
+        }
         payload.put("exp", Instant.now().plusSeconds(ttlSeconds(ttl)).getEpochSecond());
         // The app now refuses a token that is not addressed to it (docs/audit-hardening.md
         // Decision 1), so a token minted here has to carry the audience that app declares — an

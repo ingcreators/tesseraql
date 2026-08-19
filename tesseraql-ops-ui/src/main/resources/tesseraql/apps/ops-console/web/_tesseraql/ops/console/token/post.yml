@@ -13,12 +13,22 @@ recipe: query-html
 # app — and that guard is the whole reason the endpoint is safe to expose, since without it any
 # page that can make the browser POST could convert a visitor's session into a bearer token.
 
+input:
+  actingRole:
+    type: string
+    required: false
+
 sources:
   nav:
     service:
       name: ops.shell.nav
       params:
         permissions: principal.permissions
+  roles:
+    service:
+      name: ops.token.roles
+      params:
+        roleGrants: principal.roleGrants
   main:
     service:
       name: ops.token.issue
@@ -26,12 +36,19 @@ sources:
         # The ambient principal map already carries subject, loginId, tenantId, roles,
         # permissions and groups (docs/ambient-params.md). Display name is the one claim outside
         # that closed set, so it is wired explicitly and a token copied from this page carries
-        # the same name claim as one fetched from the endpoint.
+        # the same name claim as one fetched from the endpoint. The acting-role narrowing
+        # (docs/application-roles.md) rides the same discipline: the selection is the caller's,
+        # the grants it selects from are the route-resolved principal's own, so the mint can
+        # only narrow.
         displayName: principal.displayName
+        actingRole: params.actingRole
+        roleGrants: principal.roleGrants
+        directPermissions: principal.directPermissions
 response:
   html:
     status: 200
     template: token.html
     model:
       issue: main
+      roles: roles
       shellnav: nav

@@ -186,6 +186,7 @@ Obtain a bearer token: mint one from an app's HS256 secret (--app), or sign in t
 | `--permission <permission>` | — | Permission (repeatable); lands under the configured permissionsClaim. |
 | `--claim <name=value>` | — | Custom claim (repeatable). A value that parses as JSON ('["a","b"]', '7', 'true') is embedded structurally; anything else is a string. |
 | `--ttl <duration>` | — | Lifetime, e.g. 30m, 12h, 7d (default 24h). |
+| `--as <role>` | — | Act as one held application role: with --url the server mints the active view (that role, the stack-wide roles, their permissions) plus an acting_role claim, refusing a role the account does not hold; with --app it stamps the acting_role claim on the local mint. |
 
 ## `test`
 

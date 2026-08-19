@@ -72,6 +72,13 @@ the shell keep the documented `_account` contract, exactly like `_menu`. Request
 authenticated by bearer/API-key/mTLS (no browser session) leave `_account` unset and
 the shell renders without the region.
 
+On a hosted stack member whose caller holds [application
+roles](authentication.md#acting-roles-activation), the header also carries the **role
+switcher** (所属切替) from the reserved `_acting` variable: the acting role, and each other
+held role as a direct link that swaps the page's `/_as/<role>` segment in place. Opening an
+option in a new tab runs the two capacities side by side — the segment is the only carrier,
+so the tabs cannot mix.
+
 ## The bundled account app
 
 `/_tesseraql/account` ships as a classpath system app beside `auth-ui` (the login

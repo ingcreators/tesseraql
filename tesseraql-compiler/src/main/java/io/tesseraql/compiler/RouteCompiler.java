@@ -1819,6 +1819,11 @@ public final class RouteCompiler {
             // bean is absent and this is a no-op. Emitted here rather than decided here because
             // only the runtime knows its own topology, and public routes stay untouched.
             route.to("tesseraql-auth:fence");
+            // Role activation (docs/application-roles.md structural decision 4): after the
+            // union-scoped fence, the acting-role signal narrows the exchange's principal to
+            // the active view everything downstream reads. Same topology guard as the fence —
+            // absent bean, no-op — so the unhosted boot serves no activation step.
+            route.to("tesseraql-auth:activate");
         }
         if (security.csrfEnforced(httpMethod)) {
             route.to("tesseraql-auth:csrf");

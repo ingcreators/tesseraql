@@ -81,6 +81,9 @@ public final class RouteAudit implements Processor {
                 ? ids.traceId()
                 : null;
         sink.record(new RouteAuditSink.RouteAuditEvent(appName, routeId, method, path, actor,
+                // The swapped principal carries the capacity (docs/application-roles.md): the
+                // audit sentence is "who acted, as which role", structural, not inferred.
+                io.tesseraql.security.Activation.actingRole(principal),
                 principal == null ? null : principal.tenantId(),
                 status instanceof Number number ? number.intValue() : null,
                 (System.nanoTime() - startedNanos) / 1_000_000,

@@ -20,6 +20,20 @@ public final class TesseraqlProperties {
      * Components {@code installCsrfHeader} convention (design ch. 11.3).
      */
     public static final String CSRF_TOKEN = "TesseraqlCsrfToken";
+    /**
+     * The acting role the {@code activate} step validated for this request
+     * (docs/application-roles.md structural decision 5) — the decoded role code, set only
+     * after validation against the principal's own grants. {@link BasePath} reads it so every
+     * outbound URL keeps the caller's capacity.
+     */
+    public static final String ACTING_ROLE = "TesseraqlActingRole";
+    /**
+     * The internal header the stack relay mints from the address's {@code _as} segment (value
+     * still URL-encoded); the gateway strips it from every outside request unconditionally, and
+     * the member validates it against the caller's own grants — transport adds reach, never
+     * authority.
+     */
+    public static final String ACTING_ROLE_HEADER = "Tesseraql-Acting-Role";
     public static final String TENANT = "TesseraqlTenant";
     /** The resolved request locale as a BCP-47 language tag (roadmap Phase 22). */
     public static final String LOCALE = "TesseraqlLocale";

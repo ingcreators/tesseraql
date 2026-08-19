@@ -11,9 +11,13 @@ public interface RouteAuditSink {
 
     void record(RouteAuditEvent event);
 
-    /** One audited invocation; {@code paramsJson} holds only DECLARED, non-masked fields. */
+    /**
+     * One audited invocation; {@code paramsJson} holds only DECLARED, non-masked fields.
+     * {@code actingRole} is the capacity the caller had activated (docs/application-roles.md) —
+     * null for every request outside the activation model.
+     */
     record RouteAuditEvent(String appName, String routeId, String httpMethod, String urlPath,
-            String actor, String tenantId, Integer status, long durationMillis,
-            String paramsJson, String traceId, Instant occurredAt) {
+            String actor, String actingRole, String tenantId, Integer status,
+            long durationMillis, String paramsJson, String traceId, Instant occurredAt) {
     }
 }

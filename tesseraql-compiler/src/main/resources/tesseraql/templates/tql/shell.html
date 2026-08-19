@@ -67,6 +67,27 @@
             aria-label="Collapse navigation" type="button"><span class="hc-shell__collapse-icon" aria-hidden="true">&#171;</span></button>
     <strong th:text="${title}">TesseraQL</strong>
     <th:block th:replace="${header}"/>
+    <!-- The role switcher (所属切替, docs/application-roles.md structural decision 4): rendered
+         from the reserved `_acting` variable on a hosted member whose caller holds application
+         roles here. Each option is a direct link that swaps the /_as/<role> activation segment
+         in place — opening one in a new tab is precisely how two capacities run side by side,
+         and the address is the only carrier, so tabs can never mix. -->
+    <th:block th:if="${_acting != null}">
+      <button class="hc-button" data-variant="ghost" type="button" popovertarget="tql-acting-menu"
+              aria-label="Switch acting role">
+        <svg class="hc-icon" aria-hidden="true"><use th:href="@{/assets/_tesseraql/icons.svg#users}"/></svg>
+        <span th:text="${_acting.active != null ? _acting.active : 'Select role'}">role</span>
+      </button>
+      <div class="hc-popover" id="tql-acting-menu" popover data-side="bottom" data-align="start">
+        <nav class="hc-menu" aria-label="Acting role">
+          <span class="hc-menu__label">Acting as</span>
+          <span class="hc-menu__item" th:if="${_acting.active != null}" aria-current="true"
+                th:text="${_acting.active}">current</span>
+          <a class="hc-menu__item" th:each="option : ${_acting.options}" th:href="${option.href}"
+             th:text="${option.role}">other</a>
+        </nav>
+      </div>
+    </th:block>
     <!-- The signed-in user's menu (roadmap Phase 48): rendered from the reserved `_account`
          variable HtmlResponseRenderer publishes when the request rides a browser session. A
          native popover wearing the kit's hc-popover skin, anchored per the installPopover

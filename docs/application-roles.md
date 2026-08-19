@@ -60,6 +60,26 @@ materialization with `source = 'rule'` provenance plus the recompute actions, an
 rules page and attribute editors in IAM Admin. Shipped as two PRs by implementation
 choice: the SCIM enterprise capture, the SAML/OIDC attribute maps with re-sync, and the
 `tql_user_identities` federated keys are the second half.
+**Slice 5 is shipped** (activation): the `_as` address with relay normalization (a proxy
+interceptor, first in the chain so the swap-race retry never re-enters it; the
+`Tesseraql-Acting-Role` strip is unconditional and relay-local on every proxied request,
+surface included — deliberately distinct from the edge-conditional mTLS strip, whose
+edge-set value must survive), `tesseraql-auth:activate` after the fence with the same
+topology-bean no-op guard, the origin picker (`/_tesseraql/roles`, a portal route), the
+switcher chrome (`_acting`), TQL-SEC-4148 (the API 403 via the error renderer; the browser
+leg's picker redirect is issued by the activate step itself as a 302, so the renderer's
+403-never-redirects loop guard stays intact), the `acting_role` audit column (V2, three
+dialect dirs), and `token --as` + the token-page selector. Implementation decisions
+recorded: the acting role rides the swapped principal as the `actingRole` claim — no
+eleventh `Principal` component, so serialization is untouched and the audit and the mint
+read one seam; the internal header carries the role still URL-encoded (headers are
+Latin-1; codes are not) and the activate step decodes; the `base` model variable carries
+the segment while the `assets/` carve-out lands in the programmatic `BasePath.url` join —
+framework asset URLs are origin-absolute and never carry it; the ops token page passes
+`principal.roleGrants`/`directPermissions` as declared route params (route-resolved, never
+caller-writable), keeping the ambient map's closed field set untouched exactly as designed;
+and the switcher labels are role codes (display names are the picker's store read — the
+chrome reads no store).
 **Slice 4's second half is shipped** (SCIM/SSO capture and federated keys): the SCIM
 enterprise capture behind `tesseraql.scim.attributes.enabled` (+ `.map` for additional
 paths, keyed by the SCIM resource id — capture assumes the SCIM contracts manage the

@@ -10,7 +10,10 @@ It builds on three existing subsystems:
 
 - **The principal model** (`tesseraql-security` `Principal`) — `roles`, `groups`, `permissions`,
   and raw `claims`, populated identically by every [authentication](authentication.md) mechanism
-  (JWT, OIDC, SAML, API keys, mTLS).
+  (JWT, OIDC, SAML, API keys, mTLS). Under an [acting
+  role](authentication.md#acting-roles-activation) the principal a scope arm evaluates is the
+  **active view** — the tab's one activated application role plus the stack-wide roles — so a
+  兼務 user's rows follow the capacity they are acting in, not the union of everything they hold.
 - **[2-way SQL](two-way-sql.md)** — a scope predicate is injected at a site the author chooses,
   parameterized, and stays runnable in a plain SQL tool. No query is rewritten behind the
   author's back.

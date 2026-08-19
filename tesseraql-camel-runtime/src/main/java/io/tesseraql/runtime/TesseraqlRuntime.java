@@ -1771,7 +1771,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The portal's provider, only where the host handed this runtime the member list —
             // i.e. only on the stack surface runtime (docs/root-portal.md).
             if (stackMembers != null) {
-                PortalProviders.register(serviceProviders, stackMembers);
+                PortalProviders.register(serviceProviders, stackMembers, context);
             }
             // The per-application grant views (docs/application-roles.md slice 1), wherever
             // iam-admin mounts: the surface runtime (the member list) or the unhosted boot (a
@@ -2075,7 +2075,23 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // name the key that turns it on rather than answer a 500.
             serviceProviders
                     .register("ops.token.status", params -> sessionTokens.status())
-                    .register("ops.token.issue", sessionTokens::issue);
+                    .register("ops.token.issue", sessionTokens::issue)
+                    // The token page's role selector (docs/application-roles.md): the caller's
+                    // application-scoped grants, from the route-resolved principal.roleGrants —
+                    // never caller-writable, so the page can only offer what is held.
+                    .register("ops.token.roles", params -> {
+                        java.util.List<java.util.Map<String, Object>> rows = new java.util.ArrayList<>();
+                        if (params.get("roleGrants") instanceof java.util.List<?> grants) {
+                            for (Object element : grants) {
+                                if (element instanceof io.tesseraql.security.Principal.RoleGrant grant
+                                        && grant.application() != null) {
+                                    rows.add(java.util.Map.of("role", grant.role(),
+                                            "application", grant.application()));
+                                }
+                            }
+                        }
+                        return rows;
+                    });
             // The IAM Admin bulk endpoint (docs/hypermedia-ui.md "Bulk actions"): Java
             // because the form posts repeated ids fields, which the Simple-YAML input
             // surface deliberately does not model. Gated by the store-wide write atom like

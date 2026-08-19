@@ -383,6 +383,14 @@ final class StackRelay {
     private HttpProxy proxyFor(String appName, IntSupplier port) {
         HttpProxy proxy = HttpProxy.reverseProxy(client)
                 .origin(new LiveOrigin(port))
+                // First in the chain so the swap-race retry's re-send does not re-enter it;
+                // the normalization is idempotent anyway (a stripped path no longer matches).
+                .addInterceptor(new ActivationAddress(SURFACE.equals(appName)
+                        ? () -> null
+                        : () -> {
+                            InstalledApp entry = entryOf.apply(appName);
+                            return entry == null ? null : entry.basePath();
+                        }))
                 .addInterceptor(new RetryOnceAcrossTheSwap(port))
                 .addInterceptor(new BodylessRequestsHaveZeroLength());
         if (!trustedProxies.isEmpty()) {
@@ -390,6 +398,50 @@ final class StackRelay {
                     () -> stripOf.apply(appName), trustedProxies));
         }
         return proxy;
+    }
+
+    /**
+     * Normalizes the acting-role address (docs/application-roles.md structural decision 5):
+     * {@code /<member>/_as/<role>/…} forwards as {@code /<member>/…} with the role handed to the
+     * member as the internal {@code Tesseraql-Acting-Role} header, still URL-encoded — the
+     * member's activate step decodes and validates it against the caller's own grants, so the
+     * relay adds reach, never authority. The client's own copy of the header is removed first,
+     * unconditionally, on every proxied request — surface included: unlike the mTLS forwarded
+     * header (whose edge-set value must survive, see {@link StripUnlessFromATrustedEdge}), this
+     * header is relay-minted and no outside writer is ever legitimate.
+     *
+     * <p>Member route matching is untouched — the member never sees the segment — and a path
+     * without the segment forwards byte-identically to before.
+     */
+    private record ActivationAddress(java.util.function.Supplier<String> prefixOf)
+            implements
+                ProxyInterceptor {
+
+        @Override
+        public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+            ProxyRequest proxied = context.request();
+            proxied.headers().remove(
+                    io.tesseraql.camel.TesseraqlProperties.ACTING_ROLE_HEADER);
+            String prefix = prefixOf.get();
+            if (prefix != null) {
+                String uri = proxied.getURI();
+                int query = uri.indexOf('?');
+                String path = query < 0 ? uri : uri.substring(0, query);
+                String marker = prefix + "/_as/";
+                if (path.startsWith(marker)) {
+                    String remainder = path.substring(marker.length());
+                    int slash = remainder.indexOf('/');
+                    String role = slash < 0 ? remainder : remainder.substring(0, slash);
+                    String rest = slash < 0 ? "" : remainder.substring(slash);
+                    if (!role.isEmpty()) {
+                        proxied.setURI(prefix + rest + (query < 0 ? "" : uri.substring(query)));
+                        proxied.headers().set(
+                                io.tesseraql.camel.TesseraqlProperties.ACTING_ROLE_HEADER, role);
+                    }
+                }
+            }
+            return context.sendRequest();
+        }
     }
 
     /**

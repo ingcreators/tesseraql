@@ -4,3 +4,5 @@
 config/tesseraql.yml
 web/_tesseraql/portal/get.yml
 web/_tesseraql/portal/portal.html
+web/_tesseraql/roles/get.yml
+web/_tesseraql/roles/roles.html

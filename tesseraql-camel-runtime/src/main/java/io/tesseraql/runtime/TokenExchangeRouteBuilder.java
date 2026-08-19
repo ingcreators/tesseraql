@@ -93,18 +93,29 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
      */
     private void exchange(Exchange exchange) throws Exception {
         String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        java.util.Map<String, Object> body = LoginRouteBuilder.parseBody(exchange);
         String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
         if (token == null) {
-            Object field = LoginRouteBuilder.parseBody(exchange).get("_csrf");
+            Object field = body.get("_csrf");
             token = field == null ? null : String.valueOf(field);
         }
         new CsrfValidator(sessions).validate(cookie, token);
 
         SessionStore.Session session = sessions.session(sessions.sessionIdFromCookie(cookie));
 
+        // The token face of activation (docs/application-roles.md): `tesseraql token --as`
+        // states a capacity per token; the mint reads the session principal's own grants, so
+        // the statement can only narrow — an unheld role, or a session with no attribution at
+        // all, is refused (TQL-SEC-4148).
+        io.tesseraql.security.Principal principal = session.principal();
+        Object acting = body.get("actingRole");
+        if (acting != null && !String.valueOf(acting).isBlank()) {
+            principal = SessionTokens.activated(principal, String.valueOf(acting));
+        }
+
         exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
         exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(
-                MAPPER.writeValueAsString(tokens.mint(session.principal())));
+                MAPPER.writeValueAsString(tokens.mint(principal)));
     }
 }

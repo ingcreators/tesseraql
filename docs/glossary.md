@@ -7,6 +7,16 @@ full account and this is the one-line version.
 Binds and conditional blocks live in SQL comments, so the file runs unchanged in any SQL
 client. See [two-way-sql.md](two-way-sql.md).
 
+**acting role** — the one application role a caller is currently acting as, chosen per
+browser tab (the `/_as/<role>/` address segment) or per token (`tesseraql token --as`).
+Policies, scopes, menus, and field policies read the acting view; the `tql.app.use` fence
+and every framework atom check read the union. See
+[authentication.md](authentication.md#acting-roles-activation).
+
+**activation** — selecting an acting role at use time. Narrows, never widens: the active
+view is built from the caller's own grants, so a forged signal can only select among held
+roles. See [authentication.md](authentication.md#acting-roles-activation).
+
 **admission (route)** — the concurrency limit, rate limit, and execution lane a route
 declares. Not to be confused with the admission profile.
 
@@ -15,6 +25,10 @@ else installs it. See [admission.md](admission.md).
 
 **app / application** — a directory of YAML documents, SQL files, templates, and migrations
 that the framework serves. Yours, in your repository.
+
+**application role** — a role scoped to one application (`tql_roles.application`), such as
+承認者 in `orders`. A 兼務 user holding several activates one at a time per tab. Stack-wide
+roles (no application) are always active. See [iam-admin.md](iam-admin.md).
 
 **bindable path** — a reference to a value in the execution context, such as `params.id`,
 `rows`, or `steps.insert.keys.id`. Used wherever a declaration needs a value rather than a

@@ -147,6 +147,54 @@ final class ShellChrome {
     }
 
     /**
+     * Publishes the role switcher (所属切替, docs/application-roles.md structural decision 4)
+     * as the reserved {@code _acting} variable: on a hosted member whose caller holds
+     * application roles here, the active role plus each other held role as a direct link that
+     * swaps the {@code /_as/<role>} activation segment in place — the ops-shell
+     * member-switcher shape, carried by the address and nothing else. The swapped principal
+     * keeps its full grant attribution, which is exactly what lists the other capacities.
+     */
+    void acting() {
+        Principal principal = sessionPrincipal();
+        if (principal == null || !hostedMember()) {
+            return;
+        }
+        String member = String.valueOf(exchange.getContext().getRegistry()
+                .lookupByName(TesseraqlProperties.STACK_MEMBER_BEAN));
+        List<io.tesseraql.security.Principal.RoleGrant> held = io.tesseraql.security.Activation
+                .grantsFor(principal, member);
+        if (held.isEmpty()) {
+            return;
+        }
+        String active = io.tesseraql.security.Activation.actingRole(principal);
+        String base = io.tesseraql.camel.BasePath.of(exchange.getContext());
+        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String path = uri == null
+                ? "/"
+                : uri.indexOf('?') < 0
+                        ? uri
+                        : uri.substring(0, uri.indexOf('?'));
+        String within = path.startsWith(base) ? path.substring(base.length()) : path;
+        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String suffix = query == null || query.isBlank() ? "" : "?" + query;
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (io.tesseraql.security.Principal.RoleGrant grant : held) {
+            if (grant.role().equals(active)) {
+                continue;
+            }
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("role", grant.role());
+            option.put("href", base + "/_as/"
+                    + io.tesseraql.camel.BasePath.encodeSegment(grant.role()) + within + suffix);
+            options.add(option);
+        }
+        Map<String, Object> acting = new LinkedHashMap<>();
+        acting.put("active", active);
+        acting.put("options", options);
+        model.put("_acting", acting);
+    }
+
+    /**
      * Reads the page theme's two inputs (roadmap Phase 48): the request's theme cookie and the
      * signed-in user's stored {@code ui.theme}. Values are an enum lookup — a hostile cookie
      * value reads as absent, and nothing here is echoed as markup. {@link #themeAndUiDefaults()}

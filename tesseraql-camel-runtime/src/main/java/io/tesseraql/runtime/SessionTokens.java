@@ -59,6 +59,10 @@ final class SessionTokens {
      * that wired {@code subject: 'admin'} would be writing a parameter this method never reads.
      * Display name is the one field outside the ambient set, so the console route passes it
      * explicitly and a console-issued token carries the same name claim the endpoint's does.
+     * The acting-role narrowing (docs/application-roles.md) rides the same discipline: the
+     * console route passes {@code principal.roleGrants}/{@code principal.directPermissions} —
+     * resolved from the authenticated exchange, never caller-writable — and the mint selects
+     * from them, so a forged {@code actingRole} can only narrow to a role the caller holds.
      */
     Map<String, Object> issue(Map<String, Object> params) {
         if (!enabled) {
@@ -76,10 +80,33 @@ final class SessionTokens {
                 string(caller.get("subject")), string(caller.get("loginId")),
                 string(params.get("displayName")), string(caller.get("tenantId")),
                 strings(caller.get("groups")), strings(caller.get("roles")),
-                strings(caller.get("permissions")), Map.of());
+                strings(caller.get("permissions")), Map.of(),
+                grants(params.get("roleGrants")), strings(params.get("directPermissions")));
+        String acting = string(params.get("actingRole"));
+        if (acting != null && !acting.isBlank()) {
+            principal = activated(principal, acting);
+        }
         Map<String, Object> minted = new LinkedHashMap<>(status());
         minted.putAll(mint(principal));
         return minted;
+    }
+
+    /**
+     * The active view for one selected role (the token face of activation): the mint carries
+     * the narrowed roles and permissions plus the {@code acting_role} claim, refused with
+     * TQL-SEC-4148 when the caller does not hold the role — including a bearer whose claims
+     * assert roles but whose store attribution is empty.
+     */
+    static Principal activated(Principal principal, String acting) {
+        io.tesseraql.security.Principal.RoleGrant chosen = principal.roleGrants().stream()
+                .filter(grant -> acting.equals(grant.role()) && grant.application() != null)
+                .findFirst()
+                .orElseThrow(() -> new io.tesseraql.core.error.TqlException(
+                        io.tesseraql.security.Activation.WRONG_CAPACITY,
+                        "The caller does not hold application role '" + acting
+                                + "', so a token cannot be minted acting as it"));
+        return io.tesseraql.security.Activation.activate(principal, chosen.application(),
+                acting);
     }
 
     /** The endpoint's answer body: the token, its type, and when it stops working. */
@@ -117,6 +144,14 @@ final class SessionTokens {
         if (!principal.groups().isEmpty()) {
             payload.put(jwt.groupsClaim(), principal.groups());
         }
+        // The capacity claim (docs/application-roles.md): a token minted --as carries the
+        // active view above and says so, so the member's audit writes the same sentence for
+        // a machine caller as for a tab.
+        Object acting = principal.claims()
+                .get(io.tesseraql.security.Activation.ACTING_ROLE_CLAIM);
+        if (acting != null) {
+            payload.put("acting_role", String.valueOf(acting));
+        }
         if (jwt.issuer() != null && !jwt.issuer().isBlank()) {
             payload.put("iss", jwt.issuer());
         }
@@ -150,5 +185,18 @@ final class SessionTokens {
             return List.of();
         }
         return list.stream().map(String::valueOf).toList();
+    }
+
+    private static List<Principal.RoleGrant> grants(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Principal.RoleGrant> grants = new java.util.ArrayList<>();
+        for (Object element : list) {
+            if (element instanceof Principal.RoleGrant grant) {
+                grants.add(grant);
+            }
+        }
+        return grants;
     }
 }

@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A 兼務 user acts as one role per tab — or per token — and the trail says which**
+  (docs/application-roles.md slice 5, activation). The acting role rides the address:
+  `/<member>/_as/<role>/…` is normalized by the stack relay into an internal header the
+  member validates against the caller's **own** grants — a forged segment or header narrows,
+  never widens (TQL-SEC-4148: role picker for a browser, 403 otherwise). The new
+  `tesseraql-auth:activate` step (after the fence, same unhosted no-op guard) swaps the
+  exchange's principal for the active view: stack-wide roles plus the one activated role,
+  permissions recomputed from their bundles plus direct grants — policies, scopes, menus,
+  field policies and ambient binds all read it, while the fence, framework atom checks and
+  bearer minting keep the union. Browser entry is automatic (single role auto-activates,
+  several redirect to the origin picker `/_tesseraql/roles`); the member chrome gains the
+  role switcher (`_acting`); emitted links carry the segment, asset URLs do not;
+  `tql_route_audit` gains `acting_role` (V2 migration); and `tesseraql token --as <role>` +
+  the ops token page's selector mint the active view with an `acting_role` claim.
+  BREAKING (pre-1.0, no migration steps): `RouteAuditSink.RouteAuditEvent` widens by the
+  `actingRole` component.
+
 - **Provisioning and SSO land the attributes, and a federated identity links once**
   (docs/application-roles.md slice 4, second half). SCIM stops discarding the enterprise
   extension: `department`/`division`/`costCenter`/`employeeNumber`/`manager` (plus a
