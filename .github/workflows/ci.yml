@@ -37,6 +37,43 @@ jobs:
       - name: Verify
         run: ./mvnw -B -ntp verify
 
+  # Windows Server is a released production target (docs/runtime-footprint.md decision 2a):
+  # jpackage builds and release.yml attaches a Windows artifact, so the modules where platform
+  # semantics actually live run on the platform they are released for. Not the Testcontainers
+  # suite — it is slow and flaky on Windows agents and exercises a database, not a filesystem —
+  # just tesseraql-operations (install/upgrade/catalog: held-file and path semantics) and
+  # tesseraql-cli (paths, launchers, watch), which between them have exactly two Testcontainers
+  # classes to exclude. EmbeddedDbDevIntegrationTest resolves the windows-amd64 binary over the
+  # network (the one network fetch this job pays for) and boots a real postgres, asserting the
+  # server is the configured major — the measurement that answers which binary is live on
+  # Windows, permanent instead of logged once.
+  windows-tests:
+    name: Platform tests on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Two invocations so upstream reactor modules build without running their suites here:
+      # -am with the test goal would run every upstream module's tests on this runner too.
+      - name: Build the platform-semantics modules and their dependencies
+        shell: bash
+        run: ./mvnw -B -ntp -DskipTests -pl tesseraql-operations,tesseraql-cli -am install
+
+      - name: Run the suites (Testcontainers classes excluded)
+        shell: bash
+        run: |
+          ./mvnw -B -ntp -pl tesseraql-operations,tesseraql-cli test \
+            -Dtest='!AppLifecycleDbCommandsIntegrationTest,!JobCommandIntegrationTest'
+
   dist:
     name: CLI distribution
     runs-on: ubuntu-latest
