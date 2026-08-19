@@ -27,6 +27,8 @@ public final class AppInstaller {
 
     private static final TqlErrorCode INVALID_PACKAGE = new TqlErrorCode(TqlDomain.APP, 4041);
     private static final TqlErrorCode INSTALL_ERROR = new TqlErrorCode(TqlDomain.APP, 5002);
+    /** TQL-APP-4090: this version is already installed with different content. */
+    private static final TqlErrorCode VERSION_IMMUTABLE = new TqlErrorCode(TqlDomain.APP, 4090);
 
     private final SimpleYamlParser parser = new SimpleYamlParser();
 
@@ -84,10 +86,28 @@ public final class AppInstaller {
                                 INVALID_PACKAGE, "Package has no tesseraql.app.name: " + tqlapp));
                 String version = config.getString("tesseraql.app.version").orElse("0.0.0");
 
+                // A placed version directory is immutable (docs/runtime-footprint.md decision 4):
+                // nothing here ever deletes or replaces a tree a running host may hold files
+                // open under — Windows refuses that mid-walk and leaves a half-deleted version,
+                // Linux silently tolerates it, and either way rollback's "the previous version's
+                // files must still be present" depends on placed trees staying whole. Re-placing
+                // byte-identical content is the idempotent re-install
+                // (docs/stack-architecture.md Decision 23) as a true no-op; different content
+                // under an existing version is refused — moving a name forward means a new
+                // version. With the target guaranteed absent, the move is a same-volume rename:
+                // a crash mid-install leaves a stray staging directory, never a partial target.
                 Path target = installRoot.resolve(name).resolve(version);
-                deleteRecursively(target);
-                Files.createDirectories(target.getParent());
-                Files.move(staging, target, StandardCopyOption.REPLACE_EXISTING);
+                if (Files.isDirectory(target)) {
+                    if (!fileHashes(staging).equals(fileHashes(target))) {
+                        throw new TqlException(VERSION_IMMUTABLE, "Version " + version
+                                + " of app '" + name + "' is already installed with different"
+                                + " content; a placed version directory is immutable — bump the"
+                                + " package version.");
+                    }
+                } else {
+                    Files.createDirectories(target.getParent());
+                    Files.move(staging, target);
+                }
 
                 return new InstalledApp(name, version,
                         installRoot.relativize(target).toString().replace('\\', '/'),
@@ -166,6 +186,20 @@ public final class AppInstaller {
 
     private Map<String, Object> parseIfPresent(Path file) {
         return Files.isRegularFile(file) ? parser.parseTree(file) : Map.of();
+    }
+
+    /** The tree's regular files as slash-separated relative path → SHA-256, for equality checks. */
+    private static Map<String, String> fileHashes(Path root) throws IOException {
+        Map<String, String> hashes = new java.util.TreeMap<>();
+        try (var files = Files.walk(root)) {
+            for (Path path : (Iterable<Path>) files::iterator) {
+                if (Files.isRegularFile(path)) {
+                    hashes.put(root.relativize(path).toString().replace('\\', '/'),
+                            io.tesseraql.core.util.Hashing.sha256(path));
+                }
+            }
+        }
+        return hashes;
     }
 
     private static void deleteRecursively(Path root) throws IOException {
