@@ -77,25 +77,12 @@
       <version>${project.version}</version>
     </dependency>
 
-    <!-- Opt-in file-format codec modules (FileCodec SPI). Declared 'provided' so they stay OUT of
-         the CLI's base runtime classpath (dependency:copy-dependencies with includeScope=runtime),
-         preserving the opt-in boundary of docs/printable-documents.md. The build instead assembles
-         their dependency closure into target/modules, which the serve command loads from its
-         modules directory onto a child classloader so ServiceLoader discovers the pdf/excel codecs
-         only when asked. -->
-    <dependency>
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-pdf</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.tesseraql</groupId>
-      <artifactId>tesseraql-excel</artifactId>
-      <version>${project.version}</version>
-      <scope>provided</scope>
-    </dependency>
-
+    <!-- The opt-in codec modules (tesseraql-pdf/-excel) are deliberately absent, in every scope:
+         an application that uses them declares them in tesseraql.modules, and the CLI resolves
+         that declaration into the application's own module cache (docs/module-channel.md
+         decision 4). The distribution used to carry their closure as a 'provided' bag under
+         modules/, which nothing pointed at and which would have given development a codec the
+         deployment does not have. -->
     <dependency>
       <groupId>info.picocli</groupId>
       <artifactId>picocli</artifactId>
@@ -192,38 +179,6 @@
         <filtering>true</filtering>
       </resource>
     </resources>
-    <pluginManagement>
-      <plugins>
-        <!-- IDE-only (m2e / VS Code Maven): skip copy-dependencies in the workspace incremental
-             build. It copies the 'provided' reactor codec modules (tesseraql-pdf/-excel), which the
-             IDE resolves as target/classes directories rather than jars, tripping MDEP-187. The
-             command-line and CI builds run the execution normally. -->
-        <plugin>
-          <groupId>org.eclipse.m2e</groupId>
-          <artifactId>lifecycle-mapping</artifactId>
-          <version>1.0.0</version>
-          <configuration>
-            <lifecycleMappingMetadata>
-              <pluginExecutions>
-                <pluginExecution>
-                  <pluginExecutionFilter>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-dependency-plugin</artifactId>
-                    <versionRange>[0,)</versionRange>
-                    <goals>
-                      <goal>copy-dependencies</goal>
-                    </goals>
-                  </pluginExecutionFilter>
-                  <action>
-                    <ignore/>
-                  </action>
-                </pluginExecution>
-              </pluginExecutions>
-            </lifecycleMappingMetadata>
-          </configuration>
-        </plugin>
-      </plugins>
-    </pluginManagement>
     <plugins>
       <plugin>
         <!--
@@ -256,29 +211,6 @@
           </execution>
         </executions>
       </plugin>
-      <!-- Assemble the opt-in format codec modules (and their dependency closure) into
-           target/modules. Bound to package; the 'provided' scope filter keeps the base CLI runtime
-           classpath (target/dependency, includeScope=runtime) free of them - they are loaded only
-           when the serve command is pointed at this directory. -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.11.0</version>
-        <executions>
-          <execution>
-            <id>assemble-format-modules</id>
-            <phase>package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <includeScope>provided</includeScope>
-              <excludeScope>compile</excludeScope>
-              <outputDirectory>${project.build.directory}/modules</outputDirectory>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
     </plugins>
   </build>
 
@@ -292,7 +224,7 @@
         <plugins>
           <!-- Self-contained executable fat jar (tesseraql-cli-<version>-all.jar): the base runtime
                + embedded resolver, runnable as `java -jar` with no install. The opt-in pdf/excel
-               codecs are 'provided' (excluded) and load from the resolved module cache at runtime. -->
+               codecs are absent: they load from an application's own resolved module cache. -->
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-shade-plugin</artifactId>
@@ -330,8 +262,8 @@
               </execution>
             </executions>
           </plugin>
-          <!-- Zip/tar the fat jar, launcher scripts and the opt-in module cache into a portable
-               distribution archive (tesseraql-cli-<version>-dist.zip / .tar.gz). -->
+          <!-- Zip/tar the fat jar and the launcher scripts into a portable distribution archive
+               (tesseraql-cli-<version>-dist.zip / .tar.gz). -->
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-assembly-plugin</artifactId>

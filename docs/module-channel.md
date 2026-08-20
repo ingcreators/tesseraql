@@ -101,13 +101,15 @@ and when. There is no reason for four roads.
 
 [tesseraql-s3/pom.xml](../tesseraql-s3/pom.xml) selects the JDK-based synchronous client and says
 why: *A JDK-based synchronous HTTP client, so the SDK needs no Apache/Netty stack.* The
-`software.amazon.awssdk:s3` artifact depends on `apache-client` and `netty-nio-client`
-transitively, and nothing excludes them, so both ride along:
+`software.amazon.awssdk:s3` artifact depends on its default clients transitively, and nothing
+excludes them, so they ride along — `apache-client`, `netty-nio-client`, and (found while
+implementing, in SDK 2.51.4) a third, `apache5-client`, which is what actually drags Apache
+HttpClient 5 in:
 
 | Family | Jars | Size |
 | --- | --- | --- |
-| AWS SDK proper | 31 | 8.37 MB |
-| Apache HttpClient 5 | 3 | 2.17 MB |
+| AWS SDK proper | 31 | 8.31 MB |
+| Apache HttpClient 5, via `apache5-client` | 4 | 2.24 MB |
 | Netty NIO client | 2 | 0.43 MB |
 
 This is the same shape of defect as the bundled database binaries: a pom comment stating an
@@ -342,9 +344,14 @@ hands to someone else.
 
 ### 8. The S3 module excludes the HTTP stacks it does not use
 
-`apache-client` and `netty-nio-client` are excluded from `software.amazon.awssdk:s3`, removing
-2.6 MB and five artifacts from every application that opts into S3, and an enforcer rule in
-`tesseraql-s3` keeps them out.
+`apache-client`, `apache5-client` and `netty-nio-client` are excluded from
+`software.amazon.awssdk:s3`. Measured on 2.51.4: the module's own resolution drops from 64 to 49
+artifacts, and what an S3 application adds beyond the runtime closure drops from 37 jars and
+11.0 MB to 31 jars and 8.3 MB — **2.7 MB of HTTP stacks it never called**.
+
+The enforcer rule bans the three clients *and* the stacks they bring (`httpclient5`, `io.netty:*`)
+by their own coordinates, so a fourth default client in a later SDK release cannot reintroduce
+them under a name the rule has not heard of — which is exactly how `apache5-client` arrived.
 
 ## Guards
 

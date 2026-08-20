@@ -1,7 +1,9 @@
 <assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 https://maven.apache.org/xsd/assembly-2.2.0.xsd">
-  <!-- The installable TesseraQL CLI distribution: bin/ launchers, lib/ fat jar, modules/ codecs. -->
+  <!-- The installable TesseraQL CLI distribution: bin/ launchers and the lib/ fat jar. Opt-in
+       codecs are not here: an application declares them in tesseraql.modules and the CLI resolves
+       that into the application's own cache (docs/module-channel.md decision 4). -->
   <id>dist</id>
   <formats>
     <format>zip</format>
@@ -25,11 +27,6 @@
       <directory>${project.basedir}/src/main/dist/bin</directory>
       <outputDirectory>bin</outputDirectory>
       <fileMode>0755</fileMode>
-    </fileSet>
-    <!-- The opt-in pdf/excel codec closure, for offline `serve` with the modules directory. -->
-    <fileSet>
-      <directory>${project.build.directory}/modules</directory>
-      <outputDirectory>modules</outputDirectory>
     </fileSet>
   </fileSets>
 </assembly>
