@@ -113,10 +113,17 @@ Four times the worker count leaves room for the ordinary burst that a queue exis
 while keeping the queue a number an operator can see and reason about instead of "however
 much heap it takes".
 
-**Health and readiness are exempt.** They are checked before the permit, so a saturated
-runtime answers the question "are you saturated" truthfully instead of being killed for
-failing to answer it. This is the half of the change that turns a slowdown back into a
-slowdown.
+**Health and readiness are exempt.** They are checked before the permit, so the gate itself
+never refuses the one surface whose whole purpose is to be answerable when nothing else is.
+
+**Exempt from admission is not exempt from the worker pool** — recorded here because the first
+draft of this decision claimed more than the mechanism delivers. Route processing still needs a
+worker, so a health request behind a saturated pool still waits for one; what changes is that
+the wait is now bounded by `maxInFlight` instead of by however many requests arrived. Answering
+without a worker at all means serving the readiness roll-up from the event loop, off the result
+its TTL cache already holds (`tesseraql.diagnostics.readinessTtl`). That is a separate change to
+how readiness is computed rather than to how requests are admitted, and it is the remaining half
+of this decision.
 
 This is a runtime-wide floor, not a replacement for what routes already declare.
 `admission.concurrency.maxInFlight` stays the per-route limit and
@@ -161,7 +168,8 @@ and "not relied upon" are different things.
 2. **Pool defaults are declared** — `maximumPoolSize` and `connectionTimeoutMillis` get
    TesseraQL's defaults, documented beside the worker count.
 3. **The admission gate** — the router handler, the 503, the health exemption, and the test
-   that proves a saturated runtime still answers its readiness probe.
+   that proves a saturated runtime refuses ordinary traffic without refusing health. The
+   event-loop readiness answer is deferred with direction, above.
 4. **The shared Vert.x** — `MultiAppHost` owns one instance; the isolation model gains the
    paragraph decision 4 records.
 

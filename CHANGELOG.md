@@ -133,6 +133,34 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The HTTP edge admits or refuses, instead of queueing without a bound**
+  (docs/http-threading.md decision 3). Route processing runs on a fixed worker pool, and requests
+  arriving while every worker was blocked in JDBC queued in Vert.x's blocked-task queue, which
+  has no bound. Everything the runtime served queued with them — static assets, rendered
+  templates, and health and readiness, which is what turned a slowdown into an outage: an
+  orchestrator polling a runtime that could not answer concluded the process was dead and
+  restarted it, discarding the in-flight work that was about to finish. The runtime could not
+  report that it was saturated because reporting travelled the queue that saturation filled.
+
+  A handler on the platform router now takes a permit before the request reaches Camel and
+  releases it when the response ends, on completion and on failure alike. Beyond
+  `tesseraql.http.maxInFlight` (default `workerThreads x 4`) the answer is an immediate **503**
+  with `Retry-After` and `TQL-RATE-4293` — a slowdown a caller can retry, not a place in an
+  invisible queue. It installs ordered ahead of every route Camel registered, because the router
+  does not exist until the HTTP server has started.
+
+  **Health is checked before the permit**, so the gate never refuses the one surface whose whole
+  purpose is to be answerable when nothing else is. **Exempt from admission is not exempt from
+  the worker pool**, and the design says so rather than claiming otherwise: a health request
+  behind a saturated pool still waits for a worker, bounded now by `maxInFlight` instead of by
+  however many requests arrived. Answering without a worker means serving the readiness roll-up
+  from the event loop off the result its TTL cache already holds — a change to how readiness is
+  computed rather than to how requests are admitted, recorded as the remaining half.
+
+  This is a runtime-wide floor, not a replacement for `admission.concurrency.maxInFlight` (per
+  route) or `admission.lane` (per route, onto a named execution lane). Neither ever bounded the
+  runtime as a whole.
+
 - **A connection pool's size and acquisition timeout are TesseraQL's defaults, not Hikari's**
   (docs/http-threading.md decision 2). `DataSources` mapped every pool knob with `ifPresent` and
   set nothing, so an application that declared none got whatever the driver pool had decided —

@@ -114,6 +114,18 @@ that decide how much work the runtime does at once.
 | --- | --- | --- |
 | `tesseraql.http.workerThreads` | 10 | Concurrent route executions |
 | `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
+| `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests held at once before refusing |
+
+**Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
+adding the request to a queue with no bound. Four times the worker count leaves room for the
+ordinary burst a queue exists to absorb while keeping the queue a number you can see. A caller
+that gets this refusal should retry; a monitor that sees it should read it as "this runtime is
+at capacity", which is `TQL-RATE-4293`.
+
+Health (`/_tesseraql/health` and below) is checked before the bound, so the gate never refuses
+it. It still needs a worker to answer, so it can be slow when every worker is blocked — bounded
+now by `maxInFlight` rather than unbounded, which is the improvement rather than a promise of
+promptness. Use `/health/live` for liveness: it touches no dependency.
 
 **Raise it together with the connection pool.** The worker pool feeds
 `tesseraql.datasources.<name>.maximumPoolSize`, so a worker count above the pool size buys
