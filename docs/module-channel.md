@@ -357,7 +357,7 @@ them under a name the rule has not heard of — which is exactly how `apache5-cl
 
 | Module | Guard | What it refuses |
 | --- | --- | --- |
-| `tesseraql-camel-runtime` | `sso-modules-add-no-third-party` (new enforcer rule) | any third-party coordinate arriving through `tesseraql-oidc` / `-saml` / `-scim`; the promotion is justified by that closure being empty, so the closure is what is guarded |
+| `tesseraql-oidc`, `-saml`, `-scim` | `weightless-on-the-runtime` (new enforcer rule, one per module) | any declared dependency outside `io.tesseraql:*` (plus Jackson for SCIM) at compile or runtime scope. The guard lives in the module whose invariant it is, as every other boundary rule does: what justifies the promotion is that these modules stay weightless, and that is checkable where a dependency would be added |
 | `tesseraql-s3` | `no-unused-http-clients` (new enforcer rule) | `software.amazon.awssdk:apache-client`, `software.amazon.awssdk:netty-nio-client` |
 | `tesseraql-apptasks` | `AppPackagerTest` (extended) | an archive missing a declared module; a declaration with no lock; a closure that disagrees with the lock |
 | `tesseraql-camel-runtime` | `AppModulesTest` (extended) | a bundled module set silently composed with, or shadowed by, a stale `work/modules` |

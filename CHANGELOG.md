@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Corporate identity travels with the runtime: OIDC, SAML and SCIM are no longer opt-in jars**
+  (docs/module-channel.md decision 2, slice 2). `tesseraql-oidc`, `tesseraql-saml` and
+  `tesseraql-scim` join `tesseraql-camel-runtime`'s compile scope, so the developer CLI, the
+  deployment distribution and the host image all carry them: 195 runtime artifacts become 198,
+  the host's 199 become 202, and the three jars total 168 KB with no third-party artifact
+  behind them. Activation is unchanged — each is a `RuntimeExtension` whose `enabled` is false
+  without its own configuration key, and `tesseraql.plugins.allowlist` still gates classpath
+  providers as well as plugin jars — so presence activates nothing and configuration decides.
+  What changes is that enterprise SSO on a Windows Server or container deployment is now
+  configuration rather than adding a jar to an image, which the deployment distribution has no
+  supported way to do. A `weightless-on-the-runtime` enforcer rule in each of the three modules
+  fails the build if one ever declares a dependency outside `io.tesseraql:*` (plus Jackson for
+  SCIM), because that weightlessness is what justifies carrying them everywhere.
+
 - **The developer distribution stops carrying a module bag, and S3 stops carrying two unused
   HTTP stacks** (docs/module-channel.md decisions 4 and 8, slice 1). The CLI dist archive
   shipped a `modules/` directory holding the pdf/excel closure — 24 MB that nothing pointed

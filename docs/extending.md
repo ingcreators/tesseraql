@@ -122,6 +122,11 @@ An extension is discovered from the **runtime classpath** — a jar added with
 of the application the runtime serves. The classpath route is simpler and needs no signing;
 `plugins/` is the one that travels with the application.
 
+The framework's own extensions — OIDC, SAML and SCIM — are already on the runtime classpath and
+need neither route: configuration alone turns them on
+([module-channel.md](module-channel.md) decision 2). Both routes above are for extensions you or
+a third party write.
+
 `plugins/` is read from that one application. Extensions are a host decision: they register
 routes and beans on the runtime, which is runtime-wide, so a runtime hosting an application
 loads that application's plugins and no others. Under

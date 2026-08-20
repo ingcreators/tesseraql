@@ -365,8 +365,9 @@ but means the runtime fully trusts the edge's validation — see the lint warnin
 
 OIDC logs a browser user in through an external identity provider using the **authorization-code
 flow with PKCE**, then issues a TesseraQL browser session — the same session the SAML SP and
-password login produce. It is an opt-in leaf module: add the `tesseraql-oidc` jar to the runtime
-classpath and enable it. The provider's endpoints are **discovered** at runtime, and the ID token is
+password login produce. It travels with the runtime and is inert until enabled: set
+`tesseraql.oidc.enabled: true` and there is no jar to add. The provider's endpoints are
+**discovered** at runtime, and the ID token is
 validated with the same RS256/JWKS verifier as bearer JWT.
 
 ```yaml
