@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A `.tqlapp` carries the modules it declares** (docs/module-channel.md decision 3, slice 3).
+  Packaging excluded `work/`, where the resolved module cache lives, so an application that
+  declared `tesseraql.modules` produced an archive with none of them in it — and the host, having
+  no resolver, refused to start it (`TQL-APP-4216`) with a remedy that needed the developer CLI on
+  the deployment machine. `tesseraql package` and the `package-app` goal now resolve the closure
+  `modules.lock` pins and carry it inside the archive under `.tesseraql/modules/`; an installed
+  application loads that set and never consults `work/modules`, so a stale directory on the host
+  can neither join nor shadow what the archive was verified with. Packaging resolves rather than
+  demanding a prior command, because the lock — not the moment of resolution — is what makes the
+  archive reproducible: declaring modules with no lock is refused (`TQL-APP-4218`, naming
+  `tesseraql modules resolve`), and a closure that disagrees with the lock is refused
+  (`TQL-APP-4219`, the pack-time twin of the host's `TQL-APP-4217`). The Maven goal resolves the
+  locked coordinates through Maven's own repository system, which is also the only route it has:
+  the plugin has no command that writes a lock. A new lint (`TQL-YAML-1408`) warns when an export
+  uses a format whose codec the application neither declares nor carries, the case where a
+  wrapper-pom build works locally and the package fails at its first export after deployment.
+
 - **Corporate identity travels with the runtime: OIDC, SAML and SCIM are no longer opt-in jars**
   (docs/module-channel.md decision 2, slice 2). `tesseraql-oidc`, `tesseraql-saml` and
   `tesseraql-scim` join `tesseraql-camel-runtime`'s compile scope, so the developer CLI, the

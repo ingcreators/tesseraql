@@ -76,6 +76,7 @@ public final class AppLinter {
                 new ViewRules(),
                 new BasePathRules(),
                 new DuckDbRules(),
+                new ModuleDeclarationRules(),
                 new InputRules(),
                 new UnclaimedFileRules());
     }

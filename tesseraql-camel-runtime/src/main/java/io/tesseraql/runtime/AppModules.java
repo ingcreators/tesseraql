@@ -35,15 +35,26 @@ final class AppModules implements AutoCloseable {
     }
 
     /**
-     * Loads the application's modules from {@code work/modules} under its work home, composed
-     * with {@code extraModules} when the development override is set. Neither present → no
-     * child loader, built-ins only, nothing to close.
+     * Loads the application's modules — from the set its package carries
+     * ({@code .tesseraql/modules}) when it has one, otherwise from {@code work/modules} under its
+     * work home — composed with {@code extraModules} when the development override is set. Neither
+     * present → no child loader, built-ins only, nothing to close.
+     *
+     * <p>The two directories are never composed (docs/module-channel.md decision 3). An installed
+     * application's bundled set was resolved from {@code modules.lock} and verified when the
+     * archive was built; a {@code work/modules} left behind on the same host by an earlier resolve
+     * is not that set, and letting it join — or shadow — would make the running closure depend on
+     * what a machine happened to have done before. A source tree has no bundled directory and
+     * reads {@code work/modules} as it always did.
      */
     static AppModules load(Path appHome, io.tesseraql.yaml.config.AppConfig config,
             File extraModules) {
         List<File> dirs = new ArrayList<>();
-        dirs.add(io.tesseraql.yaml.config.WorkHome.resolve(appHome, config)
-                .resolve("modules").toFile());
+        File bundled = io.tesseraql.yaml.config.WorkHome.bundledModules(appHome).toFile();
+        dirs.add(!jars(bundled).isEmpty()
+                ? bundled
+                : io.tesseraql.yaml.config.WorkHome.resolve(appHome, config)
+                        .resolve("modules").toFile());
         if (extraModules != null) {
             dirs.add(extraModules);
         }

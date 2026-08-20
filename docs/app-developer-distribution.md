@@ -180,6 +180,12 @@ tesseraql:
 - `tesseraql modules add <coord>` is an ergonomic helper that **edits `tesseraql.yml` and
   refreshes the lock** (like `cargo add`), not a separate imperative cache mutation.
 - `dev` resolves the declared set on start; the resolver verifies repository checksums.
+- `package` resolves the closure the lock pins and **carries it inside the `.tqlapp`** under
+  `.tesseraql/modules/`, so a deployment — which has no resolver — installs the modules with the
+  application (docs/module-channel.md decision 3). Declaring modules without a lock is refused
+  (`TQL-APP-4218`); a closure that disagrees with the lock is refused (`TQL-APP-4219`). The jars
+  belong in neither the repository nor the lock: they are resolved into a work tree, and the
+  package is what moves them.
 - This stays distinct from signed third-party `plugins/` (Ed25519, isolated classloader).
 
 ### JDBC driver licensing policy

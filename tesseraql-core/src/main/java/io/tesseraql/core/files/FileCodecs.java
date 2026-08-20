@@ -48,6 +48,14 @@ public final class FileCodecs {
         return new FileCodecs(byFormat);
     }
 
+    /**
+     * Whether a codec for {@code format} is present — what the lint asks before telling an author
+     * that an export's module is neither declared nor available (docs/module-channel.md).
+     */
+    public boolean supports(String format) {
+        return codecs.containsKey(format);
+    }
+
     public FileCodec require(String format) {
         FileCodec codec = codecs.get(format);
         if (codec == null) {

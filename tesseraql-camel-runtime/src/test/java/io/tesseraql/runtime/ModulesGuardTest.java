@@ -81,6 +81,49 @@ class ModulesGuardTest {
                         .doesNotContain("TQL-APP-4217"));
     }
 
+    /**
+     * An installed package carries its modules under {@code .tesseraql/modules}
+     * (docs/module-channel.md decision 3), and that is what the guard reads: a deployment that
+     * never ran a resolve — and cannot, having no resolver — has an empty {@code work/modules}
+     * and must still start.
+     */
+    @Test
+    void aPackagedClosurePassesWithoutWorkModules(@TempDir Path dir) throws IOException {
+        writeApplication(dir, "orders", true);
+        Path jar = writeBundledJar(dir, "orders", "fn.jar", "module bytes");
+        Files.writeString(dir.resolve("orders/modules.lock"), """
+                {"lockfileVersion":1,"modules":["io.example:fn"],
+                 "artifacts":[{"coordinate":"io.example:fn:1","sha256":"%s"}]}
+                """.formatted(Hashing.sha256(jar)));
+
+        assertThatThrownBy(() -> MultiAppHost.start(dir))
+                .satisfies(failure -> assertThat(String.valueOf(failure.getMessage()))
+                        .doesNotContain("TQL-APP-4216")
+                        .doesNotContain("TQL-APP-4217"));
+    }
+
+    /**
+     * The bundled set is the application's set: a stale {@code work/modules} left on the host by
+     * an earlier resolve neither joins it nor shadows it, so the closure that runs is the one the
+     * archive was verified with. The lock names only the bundled jar, and the start gets past both
+     * guards despite a work directory holding something else entirely.
+     */
+    @Test
+    void aStaleWorkDirectoryDoesNotShadowThePackagedClosure(@TempDir Path dir) throws IOException {
+        writeApplication(dir, "orders", true);
+        Path bundled = writeBundledJar(dir, "orders", "fn.jar", "module bytes");
+        writeModuleJar(dir, "orders", "stale.jar", "left over from an earlier resolve");
+        Files.writeString(dir.resolve("orders/modules.lock"), """
+                {"lockfileVersion":1,"modules":["io.example:fn"],
+                 "artifacts":[{"coordinate":"io.example:fn:1","sha256":"%s"}]}
+                """.formatted(Hashing.sha256(bundled)));
+
+        assertThatThrownBy(() -> MultiAppHost.start(dir))
+                .satisfies(failure -> assertThat(String.valueOf(failure.getMessage()))
+                        .doesNotContain("TQL-APP-4216")
+                        .doesNotContain("TQL-APP-4217"));
+    }
+
     private static void writeApplication(Path stack, String name, boolean declaresModules)
             throws IOException {
         Path config = stack.resolve(name).resolve("config");
@@ -95,6 +138,15 @@ class ModulesGuardTest {
                       username: app
                       password: secret
                 """.formatted(name, declaresModules ? "  modules:\n    - io.example:fn\n" : ""));
+    }
+
+    private static Path writeBundledJar(Path stack, String name, String jarName, String content)
+            throws IOException {
+        Path modules = io.tesseraql.yaml.config.WorkHome.bundledModules(stack.resolve(name));
+        Files.createDirectories(modules);
+        Path jar = modules.resolve(jarName);
+        Files.writeString(jar, content);
+        return jar;
     }
 
     private static Path writeModuleJar(Path stack, String name, String jarName, String content)

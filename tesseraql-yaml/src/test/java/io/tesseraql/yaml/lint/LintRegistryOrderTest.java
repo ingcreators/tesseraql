@@ -74,6 +74,7 @@ class LintRegistryOrderTest {
                         "ViewRules",
                         "BasePathRules",
                         "DuckDbRules",
+                        "ModuleDeclarationRules",
                         "InputRules",
                         // Last: the sweep for files no loader claims at all.
                         "UnclaimedFileRules");

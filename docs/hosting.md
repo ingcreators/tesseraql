@@ -86,19 +86,24 @@ itself.
 
 ### Modules are resolved before the host starts
 
-An application's `tesseraql.modules` (drivers and the pdf/excel/s3 codecs) are resolved into its
-`work/modules` **before** hosting, because resolution reaches Maven repositories and a production
-host boots offline. A package ships the declaration and `modules.lock`, not the jars, so the
-operator runs the resolve once per install:
+An application's `tesseraql.modules` (drivers and the pdf/excel/s3 codecs) are resolved **before**
+hosting, because resolution reaches Maven repositories and a production host boots offline — the
+host distribution carries no resolver at all. `tesseraql package` resolves the closure its
+`modules.lock` pins and carries it inside the archive under `.tesseraql/modules/`, so deploying a
+package is the whole step; an installed application loads that set and never consults
+`work/modules`.
+
+An application installed as a directory rather than a package is the case that still needs the
+operator step, run on a machine that has the developer CLI:
 
 ```sh
 tesseraql modules resolve --stack /opt/tesseraql/apps   # every member, or --app for one
 ```
 
-The host refuses to start an application whose declared modules were never resolved
-(`TQL-APP-4216`), or whose `work/modules` disagrees with its `modules.lock` (`TQL-APP-4217`) —
+The host refuses to start an application that declares modules and carries none
+(`TQL-APP-4216`), or whose module set disagrees with its `modules.lock` (`TQL-APP-4217`) —
 running it silently without the functions, codecs and drivers it declared is the failure mode
-those refusals replace. Each hosted runtime then loads its own `work/modules` on its own
+those refusals replace. Each hosted runtime then loads its own module set on its own
 classloader: module visibility equals runtime scope, so two applications can carry the same
 driver at different versions, and a custom expression function is visible exactly to the
 application that declared it. Changing a member's module set is a redeploy of that member, not a
