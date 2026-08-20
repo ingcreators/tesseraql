@@ -96,6 +96,19 @@ create table tql_user_identities (
   primary key (provider, external_subject)
 );
 
+create table tql_sod_constraints (
+  constraint_id   varchar2(64) primary key,
+  constraint_name varchar2(200) not null,
+  severity        varchar2(16) not null,
+  description     varchar2(1000)
+);
+
+create table tql_sod_constraint_roles (
+  constraint_id varchar2(64) not null,
+  role_code     varchar2(200) not null,
+  primary key (constraint_id, role_code)
+);
+
 create table tql_grant_history (
   event_id        varchar2(64) primary key,
   occurred_at     timestamp not null,

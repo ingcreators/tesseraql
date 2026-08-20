@@ -474,7 +474,15 @@ public final class ErrorResponseRenderer implements Processor {
                 case 2848 -> 409; // download of an object that did not pass scanning
                 default -> 500;
             };
-            case IAM -> code.number() == 4030 ? 403 : 500;
+            // The IAM refusals are answers to the caller, not faults: a 500 hides the
+            // message, so an administrator told "you may not" read "Internal Server Error"
+            // and had nothing to act on (docs/access-governance.md slice 2 found this).
+            case IAM -> switch (code.number()) {
+                case 4030, 4031 -> 403; // the realm's capability refuses the write
+                case 4032, 4033 -> 400; // a malformed rule condition or role-admin input
+                case 4034 -> 409; // the grant conflicts with a separation-of-duties constraint
+                default -> 500;
+            };
             // 4040: unknown - or out-of-scope, which reads identically - event or execution,
             // matching the JSON ops API's Not Found body for the same code.
             case BATCH -> switch (code.number()) {

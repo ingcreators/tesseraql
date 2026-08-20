@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.iamAdmin.constraints.create
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  name:
+    type: string
+    required: true
+  severity:
+    type: string
+    required: true
+  firstRole:
+    type: string
+    required: true
+  secondRole:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.createConstraint
+      params:
+        name: params.name
+        severity: params.severity
+        firstRole: params.firstRole
+        secondRole: params.secondRole
+response:
+  redirect:
+    location: /_tesseraql/admin/constraints?created=1

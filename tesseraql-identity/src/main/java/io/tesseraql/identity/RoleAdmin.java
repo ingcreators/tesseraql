@@ -127,6 +127,13 @@ public final class RoleAdmin {
         Map<String, Object> key = new LinkedHashMap<>();
         key.put("userId", require(userId, "user"));
         key.put("roleCode", require(roleCode, "role code"));
+        // The first separation-of-duties checkpoint (docs/access-governance.md structural
+        // decision 2). A person is deciding here, so a blocking conflict refuses and says
+        // which side to revoke; nothing is written before the check.
+        SeparationOfDuties.requireNoBlockingConflict(
+                SeparationOfDuties.load(identity, realm),
+                SeparationOfDuties.heldRoles(identity, realm, String.valueOf(key.get("userId"))),
+                String.valueOf(key.get("roleCode")));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_ROLE, key);
         Map<String, Object> params = new LinkedHashMap<>(key);
         Timestamp from = window(startsAt);
@@ -337,6 +344,66 @@ public final class RoleAdmin {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() || "null".equals(value) ? null : value.trim();
+    }
+
+    /**
+     * Creates a separation-of-duties constraint with its first two role codes
+     * (docs/access-governance.md structural decision 2). Two is the minimum that can be
+     * violated, so a constraint is never created with fewer — one holding a single code
+     * would sit on the page asserting a protection it cannot provide.
+     */
+    public static Map<String, Object> createConstraint(IdentityService identity,
+            RealmConfig realm, String name, String severity, String firstRole,
+            String secondRole) {
+        requireRealm(identity, realm);
+        String level = require(severity, "severity");
+        if (!SeparationOfDuties.BLOCK.equals(level) && !SeparationOfDuties.WARN.equals(level)) {
+            throw new TqlException(INPUT_REFUSED, "A severity is '"
+                    + SeparationOfDuties.BLOCK + "' or '" + SeparationOfDuties.WARN
+                    + "', not '" + level + "'");
+        }
+        String first = require(firstRole, "first role code");
+        String second = require(secondRole, "second role code");
+        if (first.equals(second)) {
+            throw new TqlException(INPUT_REFUSED,
+                    "A constraint separates two different roles; both are '" + first + "'");
+        }
+        String constraintId = "sod-" + java.util.UUID.randomUUID();
+        Map<String, Object> create = new LinkedHashMap<>();
+        create.put("constraintId", constraintId);
+        create.put("constraintName", require(name, "constraint name"));
+        create.put("severity", level);
+        create.put("description", null);
+        identity.executeUpdate(realm, IdentityContracts.CREATE_SOD_CONSTRAINT, create);
+        addConstraintRole(identity, realm, constraintId, first);
+        addConstraintRole(identity, realm, constraintId, second);
+        return Map.of("created", constraintId);
+    }
+
+    /** Adds one more mutually exclusive role code to an existing constraint. */
+    public static Map<String, Object> addConstraintRole(IdentityService identity,
+            RealmConfig realm, String constraintId, String roleCode) {
+        requireRealm(identity, realm);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("constraintId", require(constraintId, "constraint"));
+        params.put("roleCode", require(roleCode, "role code"));
+        if (identity.executeUpdate(realm, IdentityContracts.ADD_SOD_CONSTRAINT_ROLE,
+                params) == 0) {
+            // Zero rows means the role code names nothing, because the insert is otherwise
+            // idempotent. A constraint over a code that does not exist can never fire.
+            throw new TqlException(INPUT_REFUSED,
+                    "No role '" + params.get("roleCode") + "' to constrain");
+        }
+        return Map.of("added", roleCode);
+    }
+
+    public static Map<String, Object> deleteConstraint(IdentityService identity,
+            RealmConfig realm, String constraintId) {
+        requireRealm(identity, realm);
+        Map<String, Object> params = Map.of("constraintId", require(constraintId, "constraint"));
+        identity.executeUpdate(realm, IdentityContracts.DELETE_SOD_CONSTRAINT_ROLES, params);
+        identity.executeUpdate(realm, IdentityContracts.DELETE_SOD_CONSTRAINT, params);
+        return Map.of("deleted", constraintId);
     }
 
     /**

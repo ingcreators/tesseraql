@@ -105,6 +105,17 @@ public final class IdentityContracts {
     /** The grant trail newest first, optionally filtered by user, application or instant. */
     public static final String LIST_GRANT_HISTORY = "list-grant-history";
 
+    // Separation of duties (docs/access-governance.md slice 2); optional, so a realm
+    // without them enforces no constraints and says so, rather than failing a grant write.
+    /** Every constraint with one of its mutually exclusive role codes per row. */
+    public static final String LIST_SOD_CONSTRAINTS = "list-sod-constraints";
+    public static final String CREATE_SOD_CONSTRAINT = "create-sod-constraint";
+    public static final String ADD_SOD_CONSTRAINT_ROLE = "add-sod-constraint-role";
+    public static final String DELETE_SOD_CONSTRAINT = "delete-sod-constraint";
+    public static final String DELETE_SOD_CONSTRAINT_ROLES = "delete-sod-constraint-roles";
+    /** Everybody already holding two or more codes of one constraint, for the report. */
+    public static final String FIND_SOD_VIOLATIONS = "find-sod-violations";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -112,7 +123,8 @@ public final class IdentityContracts {
                 ASSIGN_USER_ROLE, ASSIGN_ROLE_PERMISSION, UPSERT_DECLARED_ROLE,
                 CLEAR_ROLE_PERMISSIONS, SET_ROLE_SOURCE, CREATE_ROLE_RULE, DELETE_ROLE_RULE,
                 INSERT_RULE_CONDITION, DELETE_RULE_CONDITIONS, GRANT_USER_ROLE_RULE,
-                REVOKE_USER_ROLE_RULE, RECORD_GRANT_CHANGE);
+                REVOKE_USER_ROLE_RULE, RECORD_GRANT_CHANGE, CREATE_SOD_CONSTRAINT,
+                ADD_SOD_CONSTRAINT_ROLE, DELETE_SOD_CONSTRAINT, DELETE_SOD_CONSTRAINT_ROLES);
     }
 
     private IdentityContracts() {

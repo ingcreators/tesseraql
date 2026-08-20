@@ -30,6 +30,19 @@ re-assign that revokes and grants leaves **one** row, because it is one decision
 read joins the role's current application beside the recorded one, so a role that moved
 applications shows both truths instead of one rewritten one.
 
+**Slice 2 is shipped** (separation of duties): the two constraint tables across all four
+dialects, both checkpoints, the constraints page and the existing-violation report.
+Implementation decisions recorded: a constraint is created with at least two codes and each
+code must name a role that exists, because a constraint that can never fire reads as
+protection that is not there; both sides of a conflict *among rule-produced roles* are
+withheld, since keeping whichever the iteration reached first would grant an arbitrary
+capacity and call it a decision; a withheld role is **revoked** rather than merely not
+granted, or a constraint added today would never take effect on the people it was added
+for; and the refusal's constraint name and conflicting codes ride `TqlException.details`,
+the envelope's one declared-safe channel. **A defect surfaced and is fixed here**: the IAM
+domain mapped only 4030 to an HTTP status, so 4031/4032/4033 reached callers as
+"Internal Server Error" with their messages suppressed.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no

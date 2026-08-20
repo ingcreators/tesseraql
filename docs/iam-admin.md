@@ -113,6 +113,30 @@ carry rule provenance — a manually assigned role always survives, and a rule's
 goes away when the rule stops producing it. **Recompute now** (one user from their detail
 page, everyone from the rules page) applies rule edits without waiting for sign-ins.
 
+## Separation of duties
+
+The constraints page (`/_tesseraql/admin/constraints`) declares roles nobody may hold at
+once — the buyer who must not also approve, the developer who must not also release. A
+constraint names two or more role codes and a severity: **block** refuses the grant,
+**warn** records the conflict and lets it through.
+
+The constraint is checked where grants are made, which is the only place it can be:
+
+- **An administrator's assignment is refused** and the answer names the constraint and the
+  role already held, so the next step is obvious — revoke one side first.
+- **An assignment rule's role is withheld** rather than refused. Rules converge at sign-in,
+  and refusing there would lock somebody out of the product because two attribute rules
+  disagree. Nothing is written, and the constraint's effect shows in the violation report.
+
+**Existing violations** are listed below the constraints. A constraint added to a store
+where people already hold both sides has violations the day it is created; they are
+reported, never resolved automatically, because revoking somebody's access is a decision an
+administrator makes — and the [grant history](#grant-history) records who made it.
+
+This is *static* separation of duties. The *dynamic* half already holds without a
+constraint: a person acts as one role at a time per application, chosen at use time, and
+the audit records which capacity acted ([application roles](authentication.md)).
+
 ## Grant history
 
 The history page (`/_tesseraql/admin/history`) answers when a person got a role or a

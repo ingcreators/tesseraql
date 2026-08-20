@@ -1,0 +1,22 @@
+version: tesseraql/v1
+id: tql.iamAdmin.constraints.delete
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  constraintId:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.deleteConstraint
+      params:
+        constraintId: params.constraintId
+response:
+  redirect:
+    location: /_tesseraql/admin/constraints?deleted=1

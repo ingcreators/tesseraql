@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Separation of duties: roles nobody may hold at once, checked where grants are made**
+  (docs/access-governance.md structural decision 2, slice 2). Nothing anywhere compared two
+  grants, so a person could hold `orders.buyer` and `orders.approver` with nothing noticing. A
+  constraint now names two or more mutually exclusive role codes and a severity, and it is checked
+  at the only two paths that create an assignment. The administrator's write is **refused** with
+  `TQL-IAM-4034`, naming the constraint and the role already held. The rule converge **withholds**
+  the role instead: rules converge inside sign-in, and refusing there would lock somebody out of
+  the product because two attribute rules disagree. IAM Admin gains a constraints page with the
+  existing-violation report, because a constraint added over grants that predate it has violations
+  the day it is created — reported, never resolved automatically. Static separation of duties only:
+  the dynamic half already holds, because a person acts as one role at a time and the audit records
+  which capacity acted.
+
 - **Every grant change is recorded, from both paths that can make one**
   (docs/access-governance.md structural decision 1, slice 1). What a person holds could be
   changed two ways — an administrator's edit in IAM Admin, and the assignment rules' converge at
@@ -20,6 +33,14 @@ All notable changes to TesseraQL are documented here. The format follows
   not include it keeps its grant writes and says it holds no history.
 
 ### Fixed
+
+- **An IAM refusal says what it refused, instead of "Internal Server Error"**
+  (docs/access-governance.md slice 2 found this). Only `TQL-IAM-4030` had an HTTP status; every
+  other IAM code fell through to 500, so a capability refusal (`4031`), a malformed rule condition
+  (`4032`) and a rejected role-admin input (`4033`) all reached the administrator as a server
+  fault with the message suppressed. They now answer 403, 400 and 400, and the new
+  separation-of-duties conflict answers 409 with the constraint and the conflicting codes in the
+  envelope's declared-safe `details`.
 
 - **An application's declared modules can supply its object store and its runtime extensions**
   (docs/module-scope.md structural decision 2, corrected). Module jars load on the declaring

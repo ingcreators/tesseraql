@@ -1,0 +1,41 @@
+version: tesseraql/v1
+id: tql.iamAdmin.constraints.list
+kind: route
+recipe: query-html
+
+# Separation of duties (docs/access-governance.md structural decision 2): the constraints
+# and everybody already on both sides of one. The checks themselves live in the grant
+# writes -- this page is where they are declared and where the existing violations show.
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  created:
+    type: string
+    required: false
+  deleted:
+    type: string
+    required: false
+  added:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.constraints
+response:
+  html:
+    status: 200
+    template: constraints.html
+    model:
+      rows: main.rows
+      violations: main.violations
+      allRoles: main.roles
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      created: params.created
+      deleted: params.deleted
+      added: params.added

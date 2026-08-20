@@ -96,6 +96,19 @@ create table if not exists tql_user_identities (
   primary key (provider, external_subject)
 );
 
+create table if not exists tql_sod_constraints (
+  constraint_id   varchar(64) primary key,
+  constraint_name varchar(200) not null,
+  severity        varchar(16) not null,
+  description     varchar(1000)
+);
+
+create table if not exists tql_sod_constraint_roles (
+  constraint_id varchar(64) not null,
+  role_code     varchar(200) not null,
+  primary key (constraint_id, role_code)
+);
+
 create table if not exists tql_grant_history (
   event_id        varchar(64) primary key,
   occurred_at     datetime not null,

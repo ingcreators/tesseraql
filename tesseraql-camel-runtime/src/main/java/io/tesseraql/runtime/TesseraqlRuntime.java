@@ -1912,6 +1912,28 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 String.valueOf(params.get("actor")),
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("code"))));
+                // Separation of duties (docs/access-governance.md structural decision 2):
+                // the page reads constraints and existing violations; the checkpoints live
+                // inside the grant writes themselves, not here.
+                serviceProviders.register("iam.constraints",
+                        params -> io.tesseraql.identity.SeparationOfDuties.constraintsModel(
+                                iamIdentity.get(), iamRealm.get()));
+                serviceProviders.register("iam.createConstraint",
+                        params -> io.tesseraql.identity.RoleAdmin.createConstraint(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("name")),
+                                String.valueOf(params.get("severity")),
+                                String.valueOf(params.get("firstRole")),
+                                String.valueOf(params.get("secondRole"))));
+                serviceProviders.register("iam.addConstraintRole",
+                        params -> io.tesseraql.identity.RoleAdmin.addConstraintRole(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("constraintId")),
+                                String.valueOf(params.get("roleCode"))));
+                serviceProviders.register("iam.deleteConstraint",
+                        params -> io.tesseraql.identity.RoleAdmin.deleteConstraint(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("constraintId"))));
                 serviceProviders.register("iam.grantHistory",
                         params -> io.tesseraql.identity.GrantHistory.historyModel(
                                 iamIdentity.get(), iamRealm.get(),
