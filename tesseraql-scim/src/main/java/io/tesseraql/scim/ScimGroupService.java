@@ -1,6 +1,7 @@
 package io.tesseraql.scim;
 
 import io.tesseraql.core.dialect.SqlErrors;
+import io.tesseraql.core.sql.ContractStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -15,18 +16,31 @@ import javax.sql.DataSource;
  */
 public final class ScimGroupService {
 
-    private final DataSource dataSource;
     private final ScimGroupContract contract;
+    private ContractStatement statements;
 
     public ScimGroupService(DataSource dataSource, ScimGroupContract contract) {
-        this.dataSource = dataSource;
+        this.statements = ContractStatement.on(dataSource);
         this.contract = contract;
+    }
+
+    /**
+     * The bound every SCIM contract statement runs under, in seconds; {@code 0} leaves it unset
+     * (docs/contract-sql-execution.md structural decision 3).
+     *
+     * <p>There was none: a provisioning call's statement ran for as long as the driver allowed,
+     * holding a pooled connection, where the same statement on a route has been bounded by
+     * {@code tesseraql.sql.timeoutSeconds} all along.
+     */
+    public ScimGroupService sqlTimeoutSeconds(int seconds) {
+        this.statements = statements.timeoutSeconds(seconds);
+        return this;
     }
 
     /** Creates a group (and any members supplied), returning the persisted resource. */
     public ScimGroup create(ScimGroup group) {
         try {
-            Map<String, Object> row = ScimSql.queryOne(dataSource, contract.createSql(),
+            Map<String, Object> row = queryOne("create", contract.createSql(),
                     ScimGroupMapper.toParams(group));
             String id = row == null ? group.id() : string(row.get("id"));
             for (ScimGroup.Member member : group.members()) {
@@ -46,7 +60,7 @@ public final class ScimGroupService {
     /** Looks up a group (with its members) by service-provider id. */
     public Optional<ScimGroup> findById(String id) {
         try {
-            Map<String, Object> row = ScimSql.queryOne(dataSource, contract.findByIdSql(),
+            Map<String, Object> row = queryOne("findById", contract.findByIdSql(),
                     Map.of("id", id));
             return row == null
                     ? Optional.empty()
@@ -59,7 +73,7 @@ public final class ScimGroupService {
     /** Lists a page of groups (with members); {@code startIndex} is 1-based per SCIM. */
     public ScimListResponse<ScimGroup> list(int startIndex, int count) {
         try {
-            List<Map<String, Object>> rows = ScimSql.queryAll(dataSource, contract.listSql(),
+            List<Map<String, Object>> rows = queryAll("list", contract.listSql(),
                     Map.of("startIndex", startIndex, "count", count));
             List<ScimGroup> groups = rows.stream()
                     .map(row -> ScimGroupMapper.fromRow(row, members(string(row.get("id")))))
@@ -75,8 +89,7 @@ public final class ScimGroupService {
         if (contract.countSql() == null || contract.countSql().isBlank()) {
             return fallback;
         }
-        return ScimCount.toInt(ScimSql.queryOne(dataSource, contract.countSql(), Map.of()),
-                fallback);
+        return ScimCount.toInt(queryOne("count", contract.countSql(), Map.of()), fallback);
     }
 
     /**
@@ -88,7 +101,7 @@ public final class ScimGroupService {
         try {
             Map<String, Object> params = ScimGroupMapper.toParams(group);
             params.put("id", id);
-            Map<String, Object> row = ScimSql.queryOne(dataSource, contract.replaceSql(), params);
+            Map<String, Object> row = queryOne("replace", contract.replaceSql(), params);
             if (row == null) {
                 throw new ScimException(404, null, "Group not found: " + id);
             }
@@ -119,7 +132,7 @@ public final class ScimGroupService {
     /** Deletes a group by id; throws 404 when it does not exist. */
     public void delete(String id) {
         try {
-            if (ScimSql.queryOne(dataSource, contract.deleteSql(), Map.of("id", id)) == null) {
+            if (queryOne("delete", contract.deleteSql(), Map.of("id", id)) == null) {
                 throw new ScimException(404, null, "Group not found: " + id);
             }
         } catch (SQLException ex) {
@@ -140,16 +153,17 @@ public final class ScimGroupService {
     }
 
     private void addMember(String groupId, String memberId) {
-        run(contract.addMemberSql(), groupId, memberId, "add member");
+        run("addMember", contract.addMemberSql(), groupId, memberId, "add member");
     }
 
     private void removeMember(String groupId, String memberId) {
-        run(contract.removeMemberSql(), groupId, memberId, "remove member");
+        run("removeMember", contract.removeMemberSql(), groupId, memberId, "remove member");
     }
 
-    private void run(String sql, String groupId, String memberId, String what) {
+    private void run(String name, String sql, String groupId, String memberId, String what) {
         try {
-            ScimSql.update(dataSource, sql, Map.of("groupId", groupId, "memberId", memberId));
+            statements.update("scim.groups." + name, sql,
+                    Map.of("groupId", groupId, "memberId", memberId));
         } catch (SQLException ex) {
             if (SqlErrors.isUniqueViolation(ex)) {
                 return; // membership already present — keep PATCH idempotent
@@ -161,12 +175,28 @@ public final class ScimGroupService {
 
     private List<ScimGroup.Member> members(String groupId) {
         try {
-            return ScimSql
-                    .queryAll(dataSource, contract.listMembersSql(), Map.of("groupId", groupId))
+            return queryAll("listMembers", contract.listMembersSql(), Map.of("groupId", groupId))
                     .stream().map(ScimGroupMapper::memberFromRow).toList();
         } catch (SQLException ex) {
             throw new ScimException(500, null, "SCIM group members failed: " + ex.getMessage());
         }
+    }
+
+    /**
+     * One SCIM contract statement, named as its configuration key names it.
+     *
+     * <p>Labels come back exactly as the driver reports them: SCIM's attribute names are camelCase,
+     * so a contract has to quote its aliases on every dialect for the mapper to find them, and a
+     * quoted alias is not what Oracle's label folding is for.
+     */
+    private Map<String, Object> queryOne(String name, String sql, Map<String, Object> params)
+            throws SQLException {
+        return statements.queryOne("scim.groups." + name, sql, params);
+    }
+
+    private List<Map<String, Object>> queryAll(String name, String sql, Map<String, Object> params)
+            throws SQLException {
+        return statements.query("scim.groups." + name, sql, params);
     }
 
     private static String string(Object value) {
