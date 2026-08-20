@@ -234,6 +234,76 @@ class RoleStoreIntegrationTest {
                 GrantHistory.Change.admin("kenji", "u1", GrantHistory.ROLE_GRANTED, "x"));
     }
 
+    /**
+     * Slice 2 of docs/access-governance.md: the admin write refuses, the rule converge
+     * withholds, and a constraint added over existing grants reports them.
+     */
+    @Test
+    void separationOfDutiesRefusesAtTheAdminWriteAndWithholdsAtTheConverge() {
+        RoleAdmin.createRole(identity, MANAGED, "sod.buyer", "購買", "");
+        RoleAdmin.createRole(identity, MANAGED, "sod.approver", "承認", "");
+        RoleAdmin.createConstraint(identity, MANAGED, "Buyer and approver",
+                SeparationOfDuties.BLOCK, "sod.buyer", "sod.approver");
+
+        RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1", "sod.buyer", "", "");
+        assertThatThrownBy(() -> RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1",
+                "sod.approver", "", ""))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("Buyer and approver")
+                .hasMessageContaining("sod.buyer");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .doesNotContain("sod.approver");
+
+        // The refusal wrote nothing at all, the trail included.
+        assertThat(historyFor("sod.approver")).isEmpty();
+
+        // The rule converge withholds instead of refusing: sign-in must not fail because
+        // two rules disagree, so the conflicting role simply is not granted.
+        String ruleId = String.valueOf(RoleAdmin.createRule(identity, MANAGED,
+                "sod.approver", "post", "eq", "chief", false).get("created"));
+        RoleAdmin.setAttribute(identity, MANAGED, "u1", "post", "chief");
+        Principal after = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(after.roles()).contains("sod.buyer").doesNotContain("sod.approver");
+
+        // The existing-violation report is what makes the withheld grant visible.
+        RoleAdmin.deleteConstraint(identity, MANAGED, constraintId("Buyer and approver"));
+        RoleRules.recompute(identity, MANAGED, "u1");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .contains("sod.approver");
+        RoleAdmin.createConstraint(identity, MANAGED, "Buyer and approver",
+                SeparationOfDuties.BLOCK, "sod.buyer", "sod.approver");
+        assertThat(identity.execute(MANAGED, IdentityContracts.FIND_SOD_VIOLATIONS, Map.of()))
+                .anySatisfy(row -> {
+                    assertThat(row.get("constraint_name")).isEqualTo("Buyer and approver");
+                    assertThat(row.get("login_id")).isEqualTo("alice");
+                });
+
+        RoleAdmin.deleteRule(identity, MANAGED, ruleId);
+        RoleAdmin.deleteAttribute(identity, MANAGED, "u1", "post");
+        RoleAdmin.deleteConstraint(identity, MANAGED, constraintId("Buyer and approver"));
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "sod.buyer");
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "sod.approver");
+    }
+
+    /** A constraint over a role code nothing names cannot fire, so it is refused. */
+    @Test
+    void aConstraintOverAnUnknownRoleIsRefused() {
+        assertThatThrownBy(() -> RoleAdmin.createConstraint(identity, MANAGED, "Nope",
+                SeparationOfDuties.BLOCK, "orders.approver", "no.such.role"))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("No role 'no.such.role'");
+    }
+
+    private static String constraintId(String name) {
+        for (SeparationOfDuties.Constraint constraint : SeparationOfDuties.load(identity,
+                MANAGED)) {
+            if (name.equals(constraint.name())) {
+                return constraint.id();
+            }
+        }
+        throw new IllegalStateException("No constraint named " + name);
+    }
+
     private java.util.List<Map<String, Object>> historyFor(String code) {
         java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
         for (Map<String, Object> row : identity.execute(MANAGED,

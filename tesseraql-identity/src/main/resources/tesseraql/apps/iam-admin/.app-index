@@ -18,6 +18,11 @@ web/_tesseraql/admin/rules/delete/post.yml
 web/_tesseraql/admin/rules/recompute/post.yml
 web/_tesseraql/admin/history/get.yml
 web/_tesseraql/admin/history/history.html
+web/_tesseraql/admin/constraints/get.yml
+web/_tesseraql/admin/constraints/constraints.html
+web/_tesseraql/admin/constraints/create/post.yml
+web/_tesseraql/admin/constraints/roles/post.yml
+web/_tesseraql/admin/constraints/delete/post.yml
 web/_tesseraql/admin/users/{id}/attributes/set/post.yml
 web/_tesseraql/admin/users/{id}/attributes/delete/post.yml
 web/_tesseraql/admin/users/{id}/recompute/post.yml

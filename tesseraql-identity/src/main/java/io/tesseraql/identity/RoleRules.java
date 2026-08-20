@@ -160,6 +160,8 @@ public final class RoleRules {
      * Converges one user's rule-produced assignments: grants the missing, revokes the
      * no-longer-produced, and never touches an {@code admin} row (the revoke keys on
      * {@code source = 'rule'}; the grant skips a code the user already holds by any path).
+     * Returns what was actually granted, which is what the rules produced minus anything a
+     * blocking separation-of-duties constraint withheld.
      */
     public static Set<String> materialize(IdentityService identity, RealmConfig realm,
             String userId, Set<String> produced) {
@@ -168,7 +170,29 @@ public final class RoleRules {
                 IdentityContracts.LIST_RULE_ASSIGNMENTS_BY_USER_ID, Map.of("userId", userId))) {
             existing.add(String.valueOf(row.get("role_code")));
         }
-        for (String role : produced) {
+        // The second separation-of-duties checkpoint (docs/access-governance.md structural
+        // decision 2). This runs inside sign-in, so a blocking conflict WITHHOLDS the role
+        // the rules would have produced instead of refusing: locking somebody out of the
+        // product because two attribute rules disagree is the wrong failure. Nothing is
+        // written, so the violation report and the rules page are where it becomes visible.
+        List<SeparationOfDuties.Constraint> constraints = SeparationOfDuties.load(identity, realm);
+        Set<String> granting = produced;
+        if (!constraints.isEmpty()) {
+            Set<String> after = new LinkedHashSet<>(
+                    SeparationOfDuties.heldRoles(identity, realm, userId));
+            after.addAll(produced);
+            granting = new LinkedHashSet<>();
+            for (String role : produced) {
+                // Both sides of a conflict among produced roles are withheld: keeping
+                // whichever the iteration reached first would grant an arbitrary capacity
+                // and call it a decision.
+                if (SeparationOfDuties.violations(constraints, after, role,
+                        SeparationOfDuties.BLOCK).isEmpty()) {
+                    granting.add(role);
+                }
+            }
+        }
+        for (String role : granting) {
             if (!existing.contains(role)) {
                 Map<String, Object> params = new LinkedHashMap<>();
                 params.put("userId", userId);
@@ -182,7 +206,10 @@ public final class RoleRules {
             }
         }
         for (String role : existing) {
-            if (!produced.contains(role)) {
+            // Withheld roles are revoked, not merely not granted: a rule assignment that
+            // now conflicts must go away, or a constraint added today would never take
+            // effect on the people it was added for.
+            if (!granting.contains(role)) {
                 Map<String, Object> params = new LinkedHashMap<>();
                 params.put("userId", userId);
                 params.put("roleCode", role);
@@ -191,6 +218,6 @@ public final class RoleRules {
                         GrantHistory.Change.rule(userId, GrantHistory.ROLE_REVOKED, role));
             }
         }
-        return produced;
+        return granting;
     }
 }

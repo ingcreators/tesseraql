@@ -378,6 +378,37 @@ class IamAdminIntegrationTest {
                 .doesNotContain("role-revoked");
     }
 
+    /**
+     * The separation-of-duties surface (docs/access-governance.md slice 2): declared on its
+     * page, enforced in the grant write, and the people already on both sides reported.
+     */
+    @Test
+    void aSeparationOfDutiesConstraintIsDeclaredAndThenEnforced() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/roles/create",
+                "code=sod.left&name=Left&application=").statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/roles/create",
+                "code=sod.right&name=Right&application=").statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/constraints/create",
+                "name=Left+and+right&severity=block&firstRole=sod.left&secondRole=sod.right")
+                .statusCode()).isEqualTo(303);
+
+        String page = get("/_tesseraql/admin/constraints", true).body();
+        assertThat(page).contains("Left and right").contains("sod.left").contains("sod.right");
+
+        assertThat(postForm("/_tesseraql/admin/users/u2/roles/assign", "roleCode=sod.left")
+                .statusCode()).isEqualTo(303);
+        // The second side is refused, and the refusal names the constraint.
+        HttpResponse<String> refused = postForm("/_tesseraql/admin/users/u2/roles/assign",
+                "roleCode=sod.right");
+        assertThat(refused.statusCode()).isNotEqualTo(303);
+        assertThat(refused.body()).contains("Left and right");
+
+        // The violation report shows the one side that did land, so the constraint is
+        // visible against grants that predate it.
+        assertThat(get("/_tesseraql/admin/constraints", true).body())
+                .contains("sod.left").contains("bob");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
