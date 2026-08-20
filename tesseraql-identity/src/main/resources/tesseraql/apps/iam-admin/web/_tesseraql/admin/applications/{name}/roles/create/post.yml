@@ -14,10 +14,9 @@ input:
   code:
     type: string
     required: true
-  # roleName, not name: an input declared with a path parameter's own name types that path
-  # parameter (typed path parameters), so a body field sharing the name replaces it in the
-  # path.* namespace. The gate above is unaffected — it reads the URL — but `application:
-  # path.name` below would become whatever this field carried.
+  # roleName, not name: an input sharing a path parameter's name IS that path parameter
+  # (typed path parameters), sourced from the URL — so `name` here could only ever mean the
+  # application, never the role's own display name.
   roleName:
     type: string
     required: false

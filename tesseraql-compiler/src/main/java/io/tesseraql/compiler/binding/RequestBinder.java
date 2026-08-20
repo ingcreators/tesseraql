@@ -38,6 +38,12 @@ public final class RequestBinder implements Processor {
     private static final java.util.Set<String> RESERVED_FIELDS = java.util.Set.of("_csrf");
 
     private final RouteDefinition route;
+    /**
+     * The route's own URL template, or null for a document reached without one (an MCP
+     * primitive, a delegated workflow step). It is what the {@code path.*} namespace is read
+     * against — see {@link #pathValues}.
+     */
+    private final String urlPath;
     private final java.util.List<String> pathParams;
     /** Declared path-parameter name → the router's wire name (WireNames). */
     private final Map<String, String> wireNames;
@@ -47,19 +53,24 @@ public final class RequestBinder implements Processor {
     private final Map<String, io.tesseraql.core.expr.Expr> requiredWhen = new LinkedHashMap<>();
 
     public RequestBinder(RouteDefinition route) {
-        this(route, java.util.List.of(), null,
+        this(route, null, null,
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault());
     }
 
-    public RequestBinder(RouteDefinition route, java.util.List<String> pathParams) {
-        this(route, pathParams, null,
+    public RequestBinder(RouteDefinition route, String urlPath) {
+        this(route, urlPath, null,
                 io.tesseraql.core.expr.ExpressionFunctions.processDefault());
     }
 
-    public RequestBinder(RouteDefinition route, java.util.List<String> pathParams,
+    /**
+     * @param urlPath the route's URL template ({@code /users/{id}/roles}), or null for a
+     *                document with no URL of its own
+     */
+    public RequestBinder(RouteDefinition route, String urlPath,
             java.nio.file.Path appHome, io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.route = route;
-        this.pathParams = java.util.List.copyOf(pathParams);
+        this.urlPath = urlPath;
+        this.pathParams = declaredPathParams(urlPath);
         this.wireNames = WireNames.of(this.pathParams);
         this.appHome = appHome;
         route.input().forEach((name, field) -> {
@@ -90,11 +101,12 @@ public final class RequestBinder implements Processor {
     private void bind(Exchange exchange) {
         Map<String, Object> body = parseBody(exchange);
         guardMassAssignment(exchange, body);
+        Map<String, String> fromPath = pathValues(exchange);
 
         // The negotiated request locale (roadmap Phase 22) drives date/number input parsing.
         String localeTag = exchange.getProperty(TesseraqlProperties.LOCALE, "en", String.class);
         Map<String, Object> effective = InputBinder.bind(route.input(),
-                name -> rawValue(name, body, exchange),
+                name -> rawValue(name, body, exchange, fromPath),
                 name -> body.get(name),
                 java.util.Locale.forLanguageTag(localeTag),
                 exchange.getContext().getRegistry().lookupByNameAndType(
@@ -103,11 +115,11 @@ public final class RequestBinder implements Processor {
 
         // A path parameter declared under input: publishes its coerced, validated value in the
         // path.* namespace too (roadmap Phase 40 typed path params); undeclared ones stay raw.
+        // Either way the value came from the URL — the declaration types and validates a path
+        // parameter, it never sources one.
         Map<String, Object> path = new LinkedHashMap<>();
         for (String name : pathParams) {
-            path.put(name, effective.containsKey(name)
-                    ? effective.get(name)
-                    : exchange.getMessage().getHeader(wireNames.get(name), String.class));
+            path.put(name, effective.containsKey(name) ? effective.get(name) : fromPath.get(name));
         }
 
         Map<String, Object> context = new HashMap<>();
@@ -274,16 +286,67 @@ public final class RequestBinder implements Processor {
         return engine != null && engine.permits(policyId, principal);
     }
 
-    private String rawValue(String name, Map<String, Object> body, Exchange exchange) {
+    private String rawValue(String name, Map<String, Object> body, Exchange exchange,
+            Map<String, String> fromPath) {
+        // A declared input that is also a path parameter is typed by its declaration and
+        // sourced by the URL. Reading the body first here let a field of that name replace the
+        // segment the request was addressed to — in path.*, in params.*, and in every bind
+        // downstream — so a route saying path.id could be handed an id the body chose.
+        if (fromPath.containsKey(name)) {
+            return fromPath.get(name);
+        }
         if (body.containsKey(name) && body.get(name) != null) {
             return String.valueOf(body.get(name));
         }
-        String header = exchange.getMessage().getHeader(name, String.class);
-        if (header == null && wireNames.containsKey(name)) {
-            // A declared input that is also a path parameter arrives under its wire name.
-            header = exchange.getMessage().getHeader(wireNames.get(name), String.class);
+        return exchange.getMessage().getHeader(name, String.class);
+    }
+
+    /**
+     * The request's path parameters, read off the URL against this route's own template.
+     *
+     * <p>Not off the message headers the router publishes them in: the transport puts query
+     * parameters and form-body fields there too, under their own names, so a query parameter
+     * sharing a path parameter's name arrives joined with it and a body field of that name
+     * replaces it. {@code path.id} means the URL.
+     *
+     * <p>A document reached without a URL of its own (an MCP primitive, a delegated workflow
+     * step) declares no path parameters, so this is empty and nothing reads it.
+     */
+    private Map<String, String> pathValues(Exchange exchange) {
+        if (pathParams.isEmpty()) {
+            return Map.of();
         }
-        return header;
+        String requestPath = exchange.getMessage()
+                .getHeader(Exchange.HTTP_URI, String.class);
+        Map<String, String> values = io.tesseraql.core.http.PathTemplate.values(urlPath,
+                requestPath);
+        if (!values.isEmpty()) {
+            return values;
+        }
+        // No URL to read (a direct: invocation of a mounted route, a test harness): fall back
+        // to the router's headers, which is what this always used and is correct whenever
+        // nothing else claimed those names.
+        Map<String, String> fallback = new LinkedHashMap<>();
+        for (String name : pathParams) {
+            String header = exchange.getMessage().getHeader(wireNames.get(name), String.class);
+            if (header != null) {
+                fallback.put(name, header);
+            }
+        }
+        return fallback;
+    }
+
+    /** The {@code {name}} parameters a URL template declares, in template order. */
+    private static java.util.List<String> declaredPathParams(String urlPath) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        if (urlPath != null) {
+            java.util.regex.Matcher matcher = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER
+                    .matcher(urlPath);
+            while (matcher.find()) {
+                names.add(matcher.group(1));
+            }
+        }
+        return java.util.List.copyOf(names);
     }
 
     /** Every binding whose {@code params:} this route's SQL execution can read. */

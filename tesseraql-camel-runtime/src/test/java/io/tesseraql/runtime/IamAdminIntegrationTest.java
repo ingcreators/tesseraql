@@ -79,6 +79,20 @@ class IamAdminIntegrationTest {
         }
     }
 
+    /**
+     * A path parameter is what the URL says, whatever else the request carries under the same
+     * name. A query parameter used to reach the same message header and corrupt it — even
+     * {@code ?id=u1} on {@code /users/u1} answered "not found", because both values arrived
+     * joined — and a body field of that name replaced it outright.
+     */
+    @Test
+    void aQueryParameterCannotDisplaceAPathParameter() throws Exception {
+        assertThat(get("/_tesseraql/admin/users/u1?id=u2", true).body())
+                .contains("Administrator").doesNotContain("User not found.");
+        assertThat(get("/_tesseraql/admin/users/u1?id=u1", true).body())
+                .contains("Administrator").doesNotContain("User not found.");
+    }
+
     @Test
     void listsUsersForAuthorizedCaller() throws Exception {
         HttpResponse<String> response = get("/_tesseraql/admin/users", true);
@@ -464,6 +478,9 @@ class IamAdminIntegrationTest {
                 "/_tesseraql/admin/applications/user-admin/roles/create",
                 "code=user-admin.approver&roleName=Approver", delegated);
         assertThat(created.statusCode()).as("%s", created.body()).isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/applications/user-admin", delegated).body())
+                .as("the role belongs to the application in the URL")
+                .contains("user-admin.approver").contains("Approver");
         // The user is named by their login: an administrator confined to one application has
         // no store-wide user list to pick from.
         assertThat(postForm("/_tesseraql/admin/applications/user-admin/roles/assign",

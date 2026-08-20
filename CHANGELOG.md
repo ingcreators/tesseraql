@@ -258,6 +258,22 @@ All notable changes to TesseraQL are documented here. The format follows
   now, plugin jars and the classpath remain the other two sources, deduplication is still by
   implementation class, and `tesseraql.plugins.allowlist` still gates every source alike.
 
+- **A path parameter is what the URL says, not what the request also carried under that name.**
+  The HTTP transport publishes path parameters as message headers — and query parameters and
+  form-body fields there too, under their own names — and the binder read the header. So a query
+  parameter sharing a path parameter's name arrived *joined* with the path value
+  (`/users/u1?id=u2` bound `u1,u2`; so did `?id=u1`, and the route then matched nothing), and on
+  a route that also declared the name as an input, a body field of that name *replaced* it
+  outright. `path.id` could be an id the caller chose, and so could `params.id` and every
+  `sql.params` expression reading either — a route addressed to one row operating on another.
+
+  Path parameters are now read off the request's URL, matched against the route's own template
+  (`PathTemplate`, aligned from the end so a base path is ignored); the message header remains
+  the answer only where there is no URL to read, such as a `direct:` invocation. A declared
+  input sharing a path parameter's name still **types and validates** that path parameter
+  (typed path parameters) — it no longer *sources* it, so such a name can no longer double as a
+  body field.
+
 ### Added
 
 - **A stack runs on several nodes from one shared install root** (docs/hosting.md "A stack on more
