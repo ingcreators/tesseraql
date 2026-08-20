@@ -116,6 +116,17 @@ public final class IdentityContracts {
     /** Everybody already holding two or more codes of one constraint, for the report. */
     public static final String FIND_SOD_VIOLATIONS = "find-sod-violations";
 
+    // Eligibility and elevation (docs/access-governance.md slice 3); optional. An
+    // eligibility grants nothing and is deliberately absent from every resolution read.
+    /** What a person may take but does not hold, with any standing elevation's end. */
+    public static final String LIST_ROLE_ELIGIBILITY = "list-role-eligibility";
+    public static final String GRANT_ROLE_ELIGIBILITY = "grant-role-eligibility";
+    public static final String REVOKE_ROLE_ELIGIBILITY = "revoke-role-eligibility";
+    /** Lands an elevation as a windowed assignment stamped with its own provenance. */
+    public static final String GRANT_USER_ROLE_ELEVATION = "grant-user-role-elevation";
+    /** Ends an elevation early, never touching a standing grant of the same role. */
+    public static final String REVOKE_USER_ROLE_ELEVATION = "revoke-user-role-elevation";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -124,7 +135,9 @@ public final class IdentityContracts {
                 CLEAR_ROLE_PERMISSIONS, SET_ROLE_SOURCE, CREATE_ROLE_RULE, DELETE_ROLE_RULE,
                 INSERT_RULE_CONDITION, DELETE_RULE_CONDITIONS, GRANT_USER_ROLE_RULE,
                 REVOKE_USER_ROLE_RULE, RECORD_GRANT_CHANGE, CREATE_SOD_CONSTRAINT,
-                ADD_SOD_CONSTRAINT_ROLE, DELETE_SOD_CONSTRAINT, DELETE_SOD_CONSTRAINT_ROLES);
+                ADD_SOD_CONSTRAINT_ROLE, DELETE_SOD_CONSTRAINT, DELETE_SOD_CONSTRAINT_ROLES,
+                GRANT_ROLE_ELIGIBILITY, REVOKE_ROLE_ELIGIBILITY, GRANT_USER_ROLE_ELEVATION,
+                REVOKE_USER_ROLE_ELEVATION);
     }
 
     private IdentityContracts() {

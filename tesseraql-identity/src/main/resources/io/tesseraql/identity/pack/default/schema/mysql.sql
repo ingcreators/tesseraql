@@ -96,6 +96,16 @@ create table if not exists tql_user_identities (
   primary key (provider, external_subject)
 );
 
+create table if not exists tql_role_eligibility (
+  user_id           varchar(64) not null,
+  role_id           varchar(64) not null,
+  max_minutes       integer not null,
+  requires_reason   smallint default 0 not null,
+  requires_approval smallint default 0 not null,
+  expires_at        datetime,
+  primary key (user_id, role_id)
+);
+
 create table if not exists tql_sod_constraints (
   constraint_id   varchar(64) primary key,
   constraint_name varchar(200) not null,

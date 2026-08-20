@@ -102,7 +102,7 @@ public final class SeparationOfDuties {
             return constraintsOf(identity.execute(realm,
                     IdentityContracts.LIST_SOD_CONSTRAINTS, Map.of()));
         } catch (TqlException ex) {
-            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+            if (!IdentityService.featureUnavailable(ex)) {
                 throw ex;
             }
             return List.of();
@@ -198,7 +198,7 @@ public final class SeparationOfDuties {
             model.put("roles", identity.execute(realm, IdentityContracts.LIST_ROLES, Map.of()));
             model.put("available", 1);
         } catch (TqlException ex) {
-            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+            if (!IdentityService.featureUnavailable(ex)) {
                 throw ex;
             }
             return unavailable(model, ex.getMessage());

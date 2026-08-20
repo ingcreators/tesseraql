@@ -26,6 +26,14 @@ sources:
         tenantId: principal.tenantId
         roles: principal.roles
         permissions: principal.permissions
+  # What the caller may take but does not hold (docs/access-governance.md structural
+  # decision 3). A separate source because an eligibility is not part of the principal:
+  # it grants nothing, so it must stay out of every resolution read.
+  eligibility:
+    service:
+      name: account.eligibility
+      params:
+        subject: principal.subject
 response:
   html:
     status: 200
@@ -33,5 +41,7 @@ response:
     model:
       profile: main
       saved: params.saved
+      eligibility: eligibility.rows
+      eligibilityAvailable: eligibility.available
     headers:
       Cache-Control: "no-store"

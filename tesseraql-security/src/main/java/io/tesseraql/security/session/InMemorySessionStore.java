@@ -106,6 +106,20 @@ public final class InMemorySessionStore implements SessionStore {
         return sessions.get(sessionId);
     }
 
+    /**
+     * Swaps the principal, keeping the id, the CSRF token and the metadata: the same session,
+     * with what its owner holds re-read (docs/access-governance.md structural decision 3).
+     */
+    @Override
+    public boolean replacePrincipal(String sessionId, Principal principal) {
+        Session current = session(sessionId);
+        if (current == null || principal == null) {
+            return false;
+        }
+        sessions.put(sessionId, new Session(principal, current.csrfToken()));
+        return true;
+    }
+
     @Override
     public void touch(String sessionId) {
         Meta meta = sessionId == null ? null : metas.get(sessionId);

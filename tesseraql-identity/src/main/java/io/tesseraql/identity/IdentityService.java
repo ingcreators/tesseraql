@@ -27,7 +27,8 @@ import javax.sql.DataSource;
  */
 public final class IdentityService {
 
-    private static final TqlErrorCode EXEC_ERROR = new TqlErrorCode(TqlDomain.IAM, 1002);
+    /** A contract's SQL failed against the realm's datasource. */
+    public static final TqlErrorCode EXEC_ERROR = new TqlErrorCode(TqlDomain.IAM, 1002);
     private static final TqlErrorCode NO_DATASOURCE = new TqlErrorCode(TqlDomain.IAM, 1003);
     /** TQL-IAM-4030: a write was attempted on a realm whose capability is read-only. */
     public static final TqlErrorCode READ_ONLY = new TqlErrorCode(TqlDomain.IAM, 4030);
@@ -250,5 +251,24 @@ public final class IdentityService {
 
     private static String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * Whether a failed <em>read</em> means the store simply does not have this feature
+     * installed, rather than that something went wrong (docs/access-governance.md).
+     *
+     * <p>Two conditions look identical to a caller and mean the same thing. A {@code sql}
+     * realm whose pack has no such contract raises {@link ContractResolver#MISSING_CONTRACT};
+     * a managed realm whose schema predates the feature has the contract and no table, which
+     * raises {@link #EXEC_ERROR}. The standard schema is applied with
+     * {@code create table if not exists}, so an existing store gains new tables only when the
+     * operator re-runs it — an uninstalled feature is a normal state, not a fault.
+     *
+     * <p>Reads degrade on both. <b>Writes never do</b>: a grant that silently did not happen,
+     * or a trail row that silently was not written, is the failure this campaign exists to
+     * prevent.
+     */
+    public static boolean featureUnavailable(TqlException ex) {
+        return ContractResolver.MISSING_CONTRACT.equals(ex.code()) || EXEC_ERROR.equals(ex.code());
     }
 }

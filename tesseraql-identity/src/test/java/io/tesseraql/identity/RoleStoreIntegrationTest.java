@@ -285,6 +285,61 @@ class RoleStoreIntegrationTest {
         RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "sod.approver");
     }
 
+    /**
+     * Slice 3 of docs/access-governance.md: an eligibility grants nothing, elevating grants
+     * a bounded window, and the window is what expires it.
+     */
+    @Test
+    void anEligibilityGrantsNothingUntilItIsTaken() {
+        RoleAdmin.createRole(identity, MANAGED, "jit.release", "リリース", "");
+        Elevation.grantEligibility(identity, MANAGED, "u1", "jit.release", "30", true);
+
+        // The eligibility is deliberately absent from every resolution read.
+        Principal before = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(before.roles()).doesNotContain("jit.release");
+        assertThat(before.roleGrants())
+                .noneSatisfy(grant -> assertThat(grant.role()).isEqualTo("jit.release"));
+
+        assertThatThrownBy(() -> Elevation.elevate(identity, MANAGED, "u1", "jit.release",
+                "10", "")).isInstanceOf(TqlException.class).hasMessageContaining("reason");
+        assertThatThrownBy(() -> Elevation.elevate(identity, MANAGED, "u1", "jit.release",
+                "31", "release 4.2")).isInstanceOf(TqlException.class)
+                .hasMessageContaining("between 1 and 30");
+        assertThatThrownBy(() -> Elevation.elevate(identity, MANAGED, "u1", "no.such.role",
+                "10", "x")).isInstanceOf(TqlException.class).hasMessageContaining("not eligible");
+
+        Elevation.elevate(identity, MANAGED, "u1", "jit.release", "30", "release 4.2");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .contains("jit.release");
+        assertThat(historyFor("jit.release")).anySatisfy(row -> {
+            assertThat(row.get("source")).isEqualTo(Elevation.SOURCE);
+            assertThat(row.get("reason")).isEqualTo("release 4.2");
+            assertThat(row.get("ends_at")).isNotNull();
+        });
+
+        // Elevating into a role already held is refused: the assignment would collide, and
+        // extending a standing grant is a different feature.
+        assertThatThrownBy(() -> Elevation.elevate(identity, MANAGED, "u1", "jit.release",
+                "10", "again")).isInstanceOf(TqlException.class)
+                .hasMessageContaining("already holds");
+
+        Elevation.endElevation(identity, MANAGED, "kenji", "u1", "jit.release");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .doesNotContain("jit.release");
+        Elevation.revokeEligibility(identity, MANAGED, "u1", "jit.release");
+    }
+
+    /** Ending an elevation never touches a standing admin grant of the same role. */
+    @Test
+    void endingAnElevationLeavesAStandingGrantAlone() {
+        RoleAdmin.createRole(identity, MANAGED, "jit.both", "両方", "");
+        RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1", "jit.both", "", "");
+        Elevation.endElevation(identity, MANAGED, "kenji", "u1", "jit.both");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .contains("jit.both");
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "jit.both");
+    }
+
     /** A constraint over a role code nothing names cannot fire, so it is refused. */
     @Test
     void aConstraintOverAnUnknownRoleIsRefused() {

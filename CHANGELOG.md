@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Eligible roles: take one when you need it, and it expires by itself**
+  (docs/access-governance.md structural decision 3, slice 3). Every grant was either held or
+  not held, so recording "this person may take this role" meant granting it. An **eligibility**
+  now grants nothing and never reaches the principal — an eligible role is absent from the roles,
+  the permissions and the grant attribution alike. Taking one creates the windowed assignment the
+  store already had, so expiry needs no sweeper: the row stops resolving when the window closes.
+  Administrators make somebody eligible from their detail page with a limit and an optional
+  reason requirement; the person takes the role from their own account page. An elevation passes
+  the same separation-of-duties check as any other grant and is recorded with its reason and
+  window. **`SessionStore.replacePrincipal`** makes the elevation live on the taker's very next
+  request — deliberately narrow: it re-reads this caller's own principal into this caller's own
+  session, and nothing else about a signed-in principal refreshes mid-session.
+
 - **Separation of duties: roles nobody may hold at once, checked where grants are made**
   (docs/access-governance.md structural decision 2, slice 2). Nothing anywhere compared two
   grants, so a person could hold `orders.buyer` and `orders.approver` with nothing noticing. A

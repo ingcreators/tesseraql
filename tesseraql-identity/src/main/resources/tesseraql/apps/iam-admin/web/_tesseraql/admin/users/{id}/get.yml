@@ -39,6 +39,12 @@ input:
   recomputed:
     type: string
     required: false
+  eligible:
+    type: string
+    required: false
+  ineligible:
+    type: string
+    required: false
 
 sources:
   main:
@@ -76,6 +82,11 @@ sources:
       name: iam.grantHistory
       params:
         userId: path.id
+  eligibility:
+    service:
+      name: iam.eligibility
+      params:
+        userId: path.id
 response:
   html:
     status: 200
@@ -105,3 +116,7 @@ response:
       editorWritable: editor.writable
       history: history.rows
       historyAvailable: history.available
+      eligibility: eligibility.rows
+      eligibilityAvailable: eligibility.available
+      eligible: params.eligible
+      ineligible: params.ineligible

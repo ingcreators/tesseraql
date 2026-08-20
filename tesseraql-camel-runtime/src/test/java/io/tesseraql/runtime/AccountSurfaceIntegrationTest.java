@@ -504,6 +504,50 @@ class AccountSurfaceIntegrationTest {
         assertThat(sessions.session(tempSid)).isNull();
     }
 
+    /**
+     * Elevation, end to end (docs/access-governance.md structural decision 3): the store
+     * write is ordinary, and the part that only a live request can prove is the session
+     * refresh — a frozen principal would hold the elevation no sooner than the next login.
+     */
+    @Test
+    void takingAnEligibleRoleIsLiveInThisSession() throws Exception {
+        javax.sql.DataSource main = runtime.camelContext().getRegistry()
+                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        io.tesseraql.identity.IdentityService identity = new io.tesseraql.identity.IdentityService(
+                name -> main);
+        io.tesseraql.identity.RealmConfig realm = io.tesseraql.identity.RealmConfig
+                .managed("main", "main");
+        io.tesseraql.identity.RoleAdmin.createRole(identity, realm, "jit.oncall",
+                "On call", "");
+        io.tesseraql.identity.Elevation.grantEligibility(identity, realm, "pw-user",
+                "jit.oncall", "15", true);
+
+        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        String sid = sessions.create(
+                identity.resolvePrincipal(realm, "pw-user", null).orElseThrow(),
+                SessionStore.ClientInfo.NONE);
+        String cookie = sessions.cookieName() + "=" + sid;
+        assertThat(sessions.get(sid).roles()).doesNotContain("jit.oncall");
+
+        String page = get(runtime, cookie, "/_tesseraql/account").body();
+        assertThat(page).contains("jit.oncall").contains("/_tesseraql/account/elevate");
+
+        HttpResponse<String> taken = postForm(runtime, cookie, "/_tesseraql/account/elevate",
+                "roleCode=jit.oncall&minutes=15&reason=paged");
+        assertThat(taken.statusCode()).isEqualTo(303);
+        assertThat(taken.headers().firstValue("location").orElse(""))
+                .isEqualTo("/_tesseraql/account?saved=elevated");
+        // The same session id, with what its owner holds re-read into it.
+        assertThat(sessions.session(sid)).isNotNull();
+        assertThat(sessions.get(sid).roles()).contains("jit.oncall");
+
+        HttpResponse<String> ended = postForm(runtime, cookie, "/_tesseraql/account/elevate",
+                "roleCode=jit.oncall&end=1");
+        assertThat(ended.statusCode()).isEqualTo(303);
+        assertThat(sessions.get(sid).roles()).doesNotContain("jit.oncall");
+    }
+
     private static String establishSession(TesseraqlRuntime target) {
         SessionStore sessions = target.camelContext().getRegistry().lookupByNameAndType(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);

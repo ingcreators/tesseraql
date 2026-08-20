@@ -113,6 +113,25 @@ carry rule provenance — a manually assigned role always survives, and a rule's
 goes away when the rule stops producing it. **Recompute now** (one user from their detail
 page, everyone from the rules page) applies rule edits without waiting for sign-ins.
 
+## Eligible roles
+
+An **eligibility** says a person may take a role when they need it, and grants nothing
+until they do. It never reaches their principal: an eligible role is absent from their
+roles, absent from their permissions, and invisible to every policy — which is the whole
+difference between "may take" and "holds".
+
+Make somebody eligible from the **Eligible roles** card on their detail page, naming a
+limit in minutes and whether a reason is required. They then take the role from their own
+[account page](account.md), for a window up to that limit, and it **expires by itself** —
+no revocation to remember, because a validity window is what ends it.
+
+Taking one is live immediately in the session that took it. Their other sessions see it at
+their next sign-in, and nothing else about a signed-in principal refreshes mid-session.
+
+Every elevation is recorded in the [grant history](#grant-history) with its reason and its
+window, and it passes the same separation-of-duties check as any other grant — a temporary
+grant is exactly the kind a constraint exists to catch.
+
 ## Separation of duties
 
 The constraints page (`/_tesseraql/admin/constraints`) declares roles nobody may hold at

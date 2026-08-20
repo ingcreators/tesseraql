@@ -112,6 +112,28 @@ public final class JdbcSessionStore implements SessionStore {
         return insert(principal, client == null ? ClientInfo.NONE : client, Instant.now(), null);
     }
 
+    /**
+     * Rewrites one row's frozen principal, keeping every other column — id, CSRF token,
+     * handle, window and client facts (docs/access-governance.md structural decision 3).
+     * An update rather than a re-insert precisely because the session must stay the same
+     * one: the caller's cookie and CSRF token are already in their browser.
+     */
+    @Override
+    public boolean replacePrincipal(String sessionId, Principal principal) {
+        if (sessionId == null || principal == null || session(sessionId) == null) {
+            return false;
+        }
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement update = connection.prepareStatement(
+                        "update tql_session set principal_json = ? where session_id = ?")) {
+            update.setString(1, mapper.writeValueAsString(principal));
+            update.setString(2, sessionId);
+            return update.executeUpdate() > 0;
+        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to replace session principal", ex);
+        }
+    }
+
     /** Inserts one session row; {@code createdAt}/{@code expiresAt} carry on rotation. */
     private String insert(Principal principal, ClientInfo client, Instant createdAt,
             Instant expiresAt) {

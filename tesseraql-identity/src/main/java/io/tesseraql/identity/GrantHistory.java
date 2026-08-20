@@ -32,6 +32,10 @@ public final class GrantHistory {
     public static final String PERMISSION_GRANTED = "permission-granted";
     /** A direct permission grant was removed. */
     public static final String PERMISSION_REVOKED = "permission-revoked";
+    /** Somebody was put in a group; the subject code is the group's. */
+    public static final String GROUP_JOINED = "group-joined";
+    /** Somebody left a group, or the group was deleted out from under them. */
+    public static final String GROUP_LEFT = "group-left";
 
     /** An administrator's own edit. */
     public static final String SOURCE_ADMIN = "admin";
@@ -83,10 +87,17 @@ public final class GrantHistory {
     }
 
     /**
-     * Appends one change. A realm whose pack has no history contract keeps its grant writes
-     * and records nothing — the same degradation every optional contract takes. Any other
-     * failure propagates: losing the record of a change that did happen is not tolerable, so
-     * the write that caused it fails with the history write.
+     * Appends one change. A store with no trail installed keeps its grant writes and records
+     * nothing — the same degradation every optional contract takes, and the history page says
+     * plainly that the store keeps none.
+     *
+     * <p>The design first said a history write failure should propagate. Measurement corrected
+     * it: the standard schema is applied with {@code create table if not exists}, so an
+     * existing store gains {@code tql_grant_history} only when the operator re-runs it, and
+     * propagating would mean every grant write in that deployment fails until they do. Refusing
+     * all administration over an uninstalled table is the wrong failure — the same lesson the
+     * declared-role reconciler learned about never failing boot on an uninstalled store. Any
+     * failure that is <em>not</em> an uninstalled feature still propagates.
      */
     public static void record(IdentityService identity, RealmConfig realm, Change change) {
         if (identity == null || realm == null || change == null) {
@@ -108,7 +119,7 @@ public final class GrantHistory {
         try {
             identity.executeUpdate(realm, IdentityContracts.RECORD_GRANT_CHANGE, params);
         } catch (TqlException ex) {
-            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+            if (!IdentityService.featureUnavailable(ex)) {
                 throw ex;
             }
         }
@@ -134,7 +145,7 @@ public final class GrantHistory {
                     params));
             model.put("available", 1);
         } catch (TqlException ex) {
-            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+            if (!IdentityService.featureUnavailable(ex)) {
                 throw ex;
             }
             return unavailable(model, ex.getMessage());

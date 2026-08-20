@@ -43,6 +43,18 @@ the envelope's one declared-safe channel. **A defect surfaced and is fixed here*
 domain mapped only 4030 to an HTTP status, so 4031/4032/4033 reached callers as
 "Internal Server Error" with their messages suppressed.
 
+**Slice 3 is shipped** (eligibility and elevation): `tql_role_eligibility` across all four
+dialects, the elevate and end-early actions, `SessionStore.replacePrincipal` in both
+stores, the account card and the administrator's eligibility editor. Implementation
+decisions recorded: elevation is a `POST /_tesseraql/account/elevate` **Java route** beside
+the sign-out endpoints, because only that layer reads the session cookie — and it elevates
+the session's own subject, so the request names no target to validate; the elevated
+assignment is stamped `source = 'elevation'` so ending one early can key on that provenance
+and never touch an administrator's standing grant of the same role; re-granting an
+eligibility with different limits is a revoke and a grant rather than an upsert, so the
+caller sees one shape on every dialect; and `requires_approval` is carried in the schema
+but unused until slice 6, where an approval-gated elevation becomes a request.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no
@@ -124,9 +136,18 @@ route as a declared parameter (`actor: principal.loginId`), exactly as slice 5 t
 there is no person to name, and naming the signing-in user would be a lie about who decided.
 
 **Degradation.** Writing history is a `roleManagement` contract like every other grant
-write, so a `sql` realm without the contract degrades: the history page reports the store
-does not keep one, and grant writes are unaffected. A history write failure on a managed
-realm propagates — losing the record of a change that happened is not a tolerable outcome.
+write, so a realm without the trail installed degrades: the history page reports the store
+does not keep one, and grant writes are unaffected.
+
+*Corrected in implementation (slice 4).* This section first said a history write failure
+propagates, because losing the record of a change that happened is not tolerable. That is
+right about a *present* trail and wrong about an *absent* one, and the store cannot tell
+those apart from the failure alone. The standard schema is applied with
+`create table if not exists`, so an existing store gains the table only when the operator
+re-runs it — and propagating would mean every grant write in that deployment fails until
+they do. Refusing all administration over an uninstalled table is the wrong failure, the
+same lesson the declared-role reconciler learned about never failing boot on an uninstalled
+store. An uninstalled feature degrades; anything else still propagates.
 
 ## Structural decision 2: separation of duties is a constraint set, checked where grants are made
 
@@ -309,8 +330,8 @@ is the no-new-atoms-without-a-surface rule honoured rather than restated.
 
 `RoleAdmin`'s writes take a `Scope` describing what the caller may touch — store-wide for
 `tql.iam.admin.write`, application-limited for the delegated atom. A refusal is
-TQL-IAM-4035, naming the application and the code, so the message says why rather than
-just no.
+TQL-IAM-4036, naming the application and the code, so the message says why rather than
+just no. (4035 went to slice 3's elevation refusal, which shipped first.)
 
 ## Structural decision 8: context conditions are two layers, and only one of them is per-request
 
@@ -373,8 +394,8 @@ and 8 are independent of the rest and can move if the order needs changing.
 
 - **`FrameworkSurfaceGuardTest`** demands a registry entry for every new framework HTTP
   route; each slice adding a page adds its entry in the same commit.
-- **`ErrorCodeUniquenessTest`** refuses a code declared at two sites; TQL-IAM-4034/4035 and
-  TQL-SEC-4149 are declared once each, at the class that raises them.
+- **`ErrorCodeUniquenessTest`** refuses a code declared at two sites; TQL-IAM-4034/4035/4036
+  and TQL-SEC-4149 are declared once each, at the class that raises them.
 - **`GeneratedReferenceTest`** regenerates on any error-message or schema change.
 - **A new store guard** asserts that every table this design adds exists in all four dialect
   schema files, so a dialect cannot be forgotten — the trap slice 2 hit three times by hand.
