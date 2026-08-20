@@ -23,13 +23,9 @@ final class JwtConfigRules implements LintRule {
 
     private static final String JWT_AUDIENCE_MISSING = "TQL-SEC-4048";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         if (manifest.config().navigate("tesseraql.security.jwt") != null) {
             lintJwtConfig(manifest.config(), findings);
         }

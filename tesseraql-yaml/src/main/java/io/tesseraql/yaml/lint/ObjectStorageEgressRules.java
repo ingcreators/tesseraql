@@ -17,13 +17,9 @@ final class ObjectStorageEgressRules implements LintRule {
 
     private static final String INVALID_OBJECT_STORAGE_BUCKET = "TQL-SEC-4110";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintObjectStorageEgress(context.appHome(), manifest, findings);
     }
 

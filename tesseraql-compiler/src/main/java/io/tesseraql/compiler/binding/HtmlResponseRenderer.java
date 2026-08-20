@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -31,9 +30,6 @@ import org.apache.camel.Processor;
  */
 public final class HtmlResponseRenderer implements Processor {
 
-    // TQL-TPL-2001 is declared once, on TemplateResolution (the guard refuses a second site).
-    private static final TqlErrorCode RENDER_ERROR = TemplateResolution.RENDER_ERROR;
-
     /** TQL-VIEW-3317: response.html.shell must be auto, always, or never. */
     static final TqlErrorCode INVALID_SHELL = new TqlErrorCode(TqlDomain.VIEW, 3317);
 
@@ -52,7 +48,6 @@ public final class HtmlResponseRenderer implements Processor {
     private final ResponseHeaders headers;
     private final Map<String, Expr> compiledModel = new LinkedHashMap<>();
     private final java.util.List<JsonResponseRenderer.CompiledStatus> statusWhen;
-    private final ObjectMapper mapper = new ObjectMapper();
     /**
      * The application's base path, published to every template as {@code base}
      * (docs/base-path.md decision 2). Empty unless the deployment asked for a prefix, which

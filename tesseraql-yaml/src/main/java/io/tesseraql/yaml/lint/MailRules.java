@@ -27,13 +27,9 @@ final class MailRules implements LintRule {
 
     private static final String UNRESOLVED_MAIL_EXPRESSION = "TQL-TPL-2003";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintMailChannels(context.appHome(), manifest.config(), findings);
     }
 

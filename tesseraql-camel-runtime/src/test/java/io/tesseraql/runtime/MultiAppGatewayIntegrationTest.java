@@ -387,41 +387,6 @@ class MultiAppGatewayIntegrationTest {
                 java.net.http.HttpResponse.BodyHandlers.ofString()).statusCode();
     }
 
-    private static String itemNameForHost(MultiAppGateway target, String hostName)
-            throws Exception {
-        String response = rawGet(target, "/api/items", hostName);
-        int split = response.indexOf("\r\n\r\n");
-        String head = response.substring(0, split);
-        String body = response.substring(split + 4);
-        // The gateway relays the app's framing rather than re-declaring a length of its own, so an
-        // app answering chunked stays chunked on the wire here (docs/stack-architecture.md
-        // decision 13). Reading the body as-is parsed the chunk sizes as JSON.
-        if (head.toLowerCase(java.util.Locale.ROOT).contains("transfer-encoding: chunked")) {
-            body = dechunk(body);
-        }
-        JsonNode data = MAPPER.readTree(body).get("data");
-        assertThat(data).hasSize(1);
-        return data.get(0).get("name").asText();
-    }
-
-    /** The payload of a chunked body: alternating hex-size lines and their bytes, until a 0. */
-    private static String dechunk(String body) {
-        StringBuilder payload = new StringBuilder();
-        int cursor = 0;
-        while (true) {
-            int eol = body.indexOf("\r\n", cursor);
-            if (eol < 0) {
-                return payload.toString();
-            }
-            int size = Integer.parseInt(body.substring(cursor, eol).trim(), 16);
-            if (size == 0) {
-                return payload.toString();
-            }
-            payload.append(body, eol + 2, eol + 2 + size);
-            cursor = eol + 2 + size + 2;
-        }
-    }
-
     /** Sends a raw HTTP/1.1 GET so a custom Host header can be set (the HTTP client forbids it). */
     private static String rawGet(MultiAppGateway target, String path, String hostName)
             throws IOException {

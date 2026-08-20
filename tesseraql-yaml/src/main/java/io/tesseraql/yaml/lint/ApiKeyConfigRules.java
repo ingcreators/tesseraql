@@ -23,13 +23,9 @@ final class ApiKeyConfigRules implements LintRule {
 
     private static final String API_KEY_CLIENT_WITHOUT_GRANTS = "TQL-SEC-4046";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintApiKeyConfig(context.appHome(), manifest, manifest.config(), findings);
     }
 

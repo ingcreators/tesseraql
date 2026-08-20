@@ -16,13 +16,9 @@ final class ToolUiLinkRules implements LintRule {
 
     private static final String TOOL_UI_LINK_UNRESOLVED = "TQL-MCP-1012";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintToolUiLinks(context.appHome(), manifest, findings);
     }
 

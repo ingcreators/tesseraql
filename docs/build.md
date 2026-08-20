@@ -33,6 +33,15 @@ deliberate violation locally with `@SuppressWarnings` and a comment explaining w
 example, a codec that must not close a caller-owned stream, or a Testcontainers field whose
 lifecycle the `@Container` extension manages.
 
+The IDE runs a second, different analysis. The VS Code Java extension reports Eclipse JDT
+problems, and a few of its categories cannot model how this codebase hands a closeable to an
+owner that outlives the declaring method - a Camel context that adopts a service, a
+`@Container` field, a `stop()` or an `end()` that releases what no `close()` ever will. Those
+categories are turned off in
+[config/eclipse-jdt-settings.prefs](../config/eclipse-jdt-settings.prefs), wired up through
+`java.settings.url`, so that what the problems panel does show is worth acting on. Nothing
+`javac` can see is silenced there: the build stays the authority on warnings.
+
 ## Test reports and coverage
 
 The `tesseraql:test` and `tesseraql:coverage` goals run the app's declarative suites and write

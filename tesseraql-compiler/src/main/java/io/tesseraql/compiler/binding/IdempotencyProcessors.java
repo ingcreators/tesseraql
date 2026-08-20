@@ -55,7 +55,7 @@ public final class IdempotencyProcessors {
             String hash = requestHash(exchange);
             IdempotencyStore.BeginResult result = store.begin(scope, key, hash, ttlMillis);
             switch (result) {
-                case IdempotencyStore.Proceed ignored -> {
+                case IdempotencyStore.Proceed _ -> {
                     // first time: proceed; Complete will persist the response
                 }
                 case IdempotencyStore.Replay replay -> {

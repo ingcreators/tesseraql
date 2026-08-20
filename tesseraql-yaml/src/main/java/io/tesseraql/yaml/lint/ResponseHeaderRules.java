@@ -22,13 +22,9 @@ final class ResponseHeaderRules implements LintRule {
 
     private static final String RESPONSE_HEADER_WEAKENS_DEFAULT = "TQL-SEC-4134";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintResponseHeaderDefaults(context.appHome(), manifest,
                 manifest.config(), findings);
     }

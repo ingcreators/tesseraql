@@ -23,13 +23,9 @@ final class CatalogLocaleRules implements LintRule {
 
     private static final String CATALOG_LANGUAGE_IN_SINGLE_LOCALE_APP = "TQL-FIELD-4619";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         Path appHome = context.appHome();
         lintCatalogLanguages(appHome, manifest.config(), findings);
         lintCatalogFiles(appHome, findings);

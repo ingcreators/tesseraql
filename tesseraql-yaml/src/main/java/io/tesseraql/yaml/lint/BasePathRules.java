@@ -18,13 +18,9 @@ final class BasePathRules implements LintRule {
 
     private static final String ORIGIN_ROOTED_LINK = "TQL-TPL-2004";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintBasePathLinks(context.appHome(), manifest.config(), findings);
     }
 

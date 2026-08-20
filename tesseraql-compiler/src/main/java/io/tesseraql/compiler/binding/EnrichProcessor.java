@@ -40,7 +40,6 @@ public final class EnrichProcessor implements Processor {
     /** The source whose rows this enrichment folds into: the one it is declared on. */
     private final String into;
     private final String name;
-    private final EnrichSpec spec;
     private final KeyedReference reference;
 
     public EnrichProcessor(String into, String name, EnrichSpec spec, List<SqlNode> nodes,
@@ -48,7 +47,6 @@ public final class EnrichProcessor implements Processor {
             ExecutionBounds bounds) {
         this.into = into;
         this.name = name;
-        this.spec = spec;
         this.reference = new KeyedReference(name, spec, nodes, sourcePath, datasource, dialect,
                 bounds == null
                         ? KeyedReference.Bounds.none()

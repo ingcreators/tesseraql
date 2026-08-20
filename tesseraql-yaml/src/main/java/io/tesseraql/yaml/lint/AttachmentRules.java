@@ -23,13 +23,9 @@ final class AttachmentRules implements LintRule {
 
     private static final String ATTACHMENT_MAX_BYTES_MISSING = "TQL-ATTACH-3405";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintAttachments(context.appHome(), manifest, findings);
     }
 

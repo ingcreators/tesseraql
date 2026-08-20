@@ -192,7 +192,6 @@ interface WorkshopTargets {
         return value;
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> decodeBytes(Map<?, ?> map) {
         Map<String, Object> out = new LinkedHashMap<>();
         map.forEach((k, v) -> out.put(String.valueOf(k), decodeValue(v)));

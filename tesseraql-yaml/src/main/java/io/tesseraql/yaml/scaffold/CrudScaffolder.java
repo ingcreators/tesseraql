@@ -251,10 +251,6 @@ public final class CrudScaffolder {
         static String columnName(TableSchema.Column column) {
             return column.name().toLowerCase(Locale.ROOT);
         }
-
-        static String htmlId(TableSchema.Column column) {
-            return "field-" + columnName(column);
-        }
     }
 
     // ---------------------------------------------------------------- list page

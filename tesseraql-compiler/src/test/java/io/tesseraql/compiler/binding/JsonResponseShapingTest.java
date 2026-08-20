@@ -46,15 +46,6 @@ class JsonResponseShapingTest {
         assertThat(exchange.getMessage().getBody(String.class)).contains("\"odd\":null");
     }
 
-    /** An insertion-ordered row (Map.of iteration order is randomized). */
-    private static Map<String, Object> row(Object... kv) {
-        Map<String, Object> row = new java.util.LinkedHashMap<>();
-        for (int i = 0; i < kv.length; i += 2) {
-            row.put(String.valueOf(kv[i]), kv[i + 1]);
-        }
-        return row;
-    }
-
     @Test
     void statusWhenMapsBusinessConditionsToStatuses() throws Exception {
         ResponseSpec.JsonResponse response = new ResponseSpec.JsonResponse(200,

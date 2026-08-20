@@ -1,0 +1,18 @@
+# Eclipse JDT problem severities for the VS Code Java extension, wired up through
+# `java.settings.url` in .vscode/settings.json and .devcontainer/devcontainer.json.
+#
+# The Maven build stays the authority on warnings: maven-compiler-plugin runs
+# `-Xlint:all` with `failOnWarning`, so anything javac can see already fails the build.
+# This file only turns off a JDT-only analysis that cannot model how the codebase owns
+# its closeables, and it exists so the problems panel keeps showing findings that mean
+# something.
+#
+# Resource leaks: closeables here are routinely handed to an owner that outlives the
+# declaring method, and JDT reports every one of them as "never closed" -- a Camel context
+# adopts MDCService and closes it with the context, Testcontainers manages @Container
+# fields, PgNotifyListener is released through stop() rather than close(), Deflater and
+# Inflater are released through end(), and the CLI's push service deliberately owns a
+# lazily-started context for the lifetime of the process. None of these leaks, and the
+# analysis has no way to tell.
+org.eclipse.jdt.core.compiler.problem.unclosedCloseable=ignore
+org.eclipse.jdt.core.compiler.problem.potentiallyUnclosedCloseable=ignore

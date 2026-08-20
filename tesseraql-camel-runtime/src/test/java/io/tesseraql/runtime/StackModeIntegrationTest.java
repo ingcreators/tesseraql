@@ -177,38 +177,6 @@ class StackModeIntegrationTest {
                 .endsWith("%2Fshop-a%2Fusers%2Fboard");
     }
 
-    private static String cookieFrom(String rawResponse) {
-        Matcher matcher = Pattern.compile("(?i)Set-Cookie: ([^;\r\n]+)").matcher(rawResponse);
-        assertThat(matcher.find()).as(rawResponse).isTrue();
-        return matcher.group(1);
-    }
-
-    /** A raw HTTP/1.1 exchange, so the {@code Host} the gateway routes on can be set. */
-    private static String rawRequest(MultiAppGateway target, String method, String path,
-            String host, String body, String... cookie) throws IOException {
-        try (java.net.Socket socket = new java.net.Socket("localhost", target.port())) {
-            StringBuilder request = new StringBuilder(method + " " + path + " HTTP/1.1\r\n"
-                    + "Host: " + host + "\r\nConnection: close\r\n");
-            if (cookie.length > 0) {
-                request.append("Cookie: ").append(cookie[0]).append("\r\n");
-            }
-            if (body != null) {
-                request.append("Content-Type: application/json\r\nContent-Length: ")
-                        .append(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
-                        .append("\r\n");
-            }
-            request.append("\r\n");
-            if (body != null) {
-                request.append(body);
-            }
-            socket.getOutputStream().write(
-                    request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            socket.getOutputStream().flush();
-            return new String(socket.getInputStream().readAllBytes(),
-                    java.nio.charset.StandardCharsets.UTF_8);
-        }
-    }
-
     /**
      * {@code href}/{@code src}/{@code action} values that address the origin, not the app —
      * anything rooted outside the application's derived {@code /<name>} prefix, now that the
