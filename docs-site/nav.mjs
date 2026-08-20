@@ -257,4 +257,6 @@ export const EXCLUDED = [
   'studio-shell.md',
   // What the classpath carries, what the module channel carries, and how it travels, 2026-08-20.
   'module-channel.md',
+  // The rest of the role model: history, SoD, elevation, review, requests, 2026-08-20.
+  'access-governance.md',
 ];

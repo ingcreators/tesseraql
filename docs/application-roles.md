@@ -679,6 +679,14 @@ steps.
 Entries marked *deferred with direction* are wanted (the coverage direction in the status
 block) and name the shape they will take; the rest are stances, not omissions.
 
+**All six *deferred with direction* entries below are now designed in
+[access governance](access-governance.md) (2026-08-20).** That document turns each named
+shape into structure — grant history, separation-of-duties constraints, eligibility and
+elevation, group management, review campaigns, access requests, delegated administration
+and context conditions — and records one correction to the measurement below: the SCIM
+Groups endpoint does exist, on nine hand-authored SQL files, so what is missing is the
+managed-store default and the admin surface rather than the endpoint.
+
 - **Separation-of-duties constraints** — *deferred with direction.* Two facts frame the
   future design: the object-level SoD most business apps actually ship — the submitter
   cannot approve their own request — is **already expressible today** in a workflow guard
