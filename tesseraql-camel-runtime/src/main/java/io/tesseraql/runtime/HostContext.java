@@ -75,6 +75,14 @@ package io.tesseraql.runtime;
  *                            either fact; the runtime binds it as a topology bean, and the
  *                            workshop extension keys its faces on it. Always {@code false}
  *                            under {@code host} — no configuration turns Studio on there
+ * @param vertx               the one Vert.x instance every runtime in this host shares
+ *                            (docs/http-threading.md decision 4), built and owned by the host.
+ *                            Only the host can size it: a runtime that built its own got a worker
+ *                            pool and an event-loop pool per application, so the process thread
+ *                            count was a function of how many applications were installed rather
+ *                            than of anything an operator chose — the divergence-fails-silently
+ *                            case this record exists for. {@code null} standalone, where the
+ *                            runtime builds its own from its own configuration
  */
 public record HostContext(String basePath, String cookiePath, String externalOrigin,
         javax.sql.DataSource frameworkDataSource,
@@ -85,7 +93,8 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         java.util.Map<String, Object> surfaceSecurity,
         DeployPen deployPen,
         java.util.Map<String, Object> stackIssuerJwt,
-        boolean workshop) {
+        boolean workshop,
+        io.vertx.core.Vertx vertx) {
 
     /**
      * The host's live member-origin lookup: which internal port answers for a member's stable or
@@ -142,7 +151,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     public static HostContext stack() {
         return new HostContext(null, "/", null, null, null, null, null, null, null, null,
-                null, false);
+                null, false, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -155,7 +164,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, null, null, extraModules, null, null, stackIssuerJwt,
-                workshop);
+                workshop, vertx);
     }
 
     /**
@@ -172,7 +181,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             DeployPen deployPen) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
@@ -180,7 +189,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /**
@@ -190,14 +199,28 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext withWorkshop(boolean workshop) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+    }
+
+    /**
+     * These settings, carrying the host's one Vert.x instance (docs/http-threading.md decision 4).
+     *
+     * <p>Every runtime the host starts rides it, so the process has one worker pool and one
+     * event-loop pool however many applications are installed. The host owns it: a runtime closes
+     * only an instance it built itself, which is what lets one application be stopped or replaced
+     * without taking the transport out from under its neighbours.
+     */
+    HostContext withVertx(io.vertx.core.Vertx vertx) {
+        return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
+                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /**
@@ -207,6 +230,6 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext withStackIssuer(java.util.Map<String, Object> stackIssuerJwt) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop);
+                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 }

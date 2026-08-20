@@ -91,6 +91,34 @@ class MultiAppHostIntegrationTest {
     }
 
     /**
+     * Every runtime in the host serves on one Vert.x instance (docs/http-threading.md decision 4).
+     *
+     * <p>Each built its own. {@code VertxPlatformHttpServer} looks a Vert.x up in the runtime's own
+     * Camel registry and builds one when it finds none, so a host's worker and event-loop threads
+     * were a function of how many applications were installed — five applications on a twenty-core
+     * machine meant a hundred worker threads and two hundred event loops, and no configuration
+     * reduced it.
+     *
+     * <p>Asserted as identity rather than by counting threads: a thread census would be measuring
+     * whatever else shares the test JVM, and the property that matters is that these two runtimes
+     * are looking at the same object.
+     */
+    @Test
+    void everyRuntimeSharesTheHostsOneVertx() {
+        io.vertx.core.Vertx a = vertxOf("shop-a");
+        io.vertx.core.Vertx b = vertxOf("shop-b");
+
+        assertThat(a).isNotNull();
+        assertThat(b).isSameAs(a);
+    }
+
+    private static io.vertx.core.Vertx vertxOf(String appId) {
+        return host.app(appId).camelContext().getRegistry()
+                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.VERTX_BEAN,
+                        io.vertx.core.Vertx.class);
+    }
+
+    /**
      * Decision 28's headline (docs/module-scope.md): both applications declare a module
      * providing {@code shopgreets()} — same name, different semantics — and each answers with
      * its own. Under the retired process-global registry the last install replaced its

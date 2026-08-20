@@ -156,6 +156,15 @@ construction. The bulkhead survives; it moves from an undeclared side effect of 
 allocation to a declared number that refuses with a 503 instead of silently consuming a
 shared resource.
 
+**A hosted member does not size the transport it shares.** The host builds the one instance
+from its own `tesseraql-stack.yml`, using the same keys decision 1 defines, so a member's own
+`workerThreads`/`eventLoopThreads` reach nothing. Read, parsed and then ignored is the shape
+this codebase removes wherever it finds it, so the runtime says so in a warning naming the key
+and the file that decides it. It warns rather than refuses: the same declaration is correct for
+the same application run standalone, and an application is not wrong for having been hosted.
+`maxInFlight` is deliberately *not* on that list — that gate is per runtime, and per-member
+bounds are exactly what keep one application from consuming the shared pool.
+
 [app-isolation-model.md](app-isolation-model.md) decision 3 lists what mode ② separates —
 Camel contexts, URL spaces, Studio instances, traces, configuration. Thread pools were never
 on that list, so this is not a contract change; it is recorded here because "not promised"

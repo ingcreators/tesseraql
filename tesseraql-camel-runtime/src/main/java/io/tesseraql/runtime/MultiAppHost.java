@@ -216,10 +216,16 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         com.zaxxer.hikari.HikariDataSource frameworkPool = embedded
                 ? DataSources.create("tesseraql-stack-framework", dev.embeddedDb())
                 : frameworkPool(configs, settings);
+        // One Vert.x for the whole host (docs/http-threading.md decision 4), sized from the
+        // stack's own file. Each runtime used to build its own, so a host's worker and event-loop
+        // threads were a function of how many applications were installed rather than of anything
+        // an operator chose — and no configuration reduced it.
+        io.vertx.core.Vertx sharedVertx = io.vertx.core.Vertx.vertx(
+                TesseraqlRuntime.vertxOptions(settings.config()));
         HostContext settled = stack.withStackSettings(
                 settings.externalOrigin().orElse(
                         dev != null ? dev.defaultExternalOrigin() : null),
-                frameworkPool);
+                frameworkPool).withVertx(sharedVertx);
         HostContext context = dev != null && dev.extraModules() != null
                 ? settled.withExtraModules(dev.extraModules())
                 : settled;
@@ -912,6 +918,19 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                 stackFrameworkPool.close();
             } catch (Exception ex) {
                 LOG.warn("Failed to close the stack's framework pool: {}", ex.getMessage());
+            }
+        }
+        // Last, and only here: every runtime served on this instance and none of them closed it,
+        // which is what let one application be stopped or replaced without taking the transport
+        // out from under its neighbours (docs/http-threading.md decision 4).
+        if (context.vertx() != null) {
+            try {
+                context.vertx().close().toCompletionStage().toCompletableFuture()
+                        .get(30, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } catch (Exception ex) {
+                LOG.warn("Failed to close the host's Vert.x instance: {}", ex.getMessage());
             }
         }
     }

@@ -207,6 +207,12 @@ public final class TesseraqlProperties {
      * inheriting a default sized for a framework where blocking is the exception.
      */
     public static final String VERTX_OPTIONS_BEAN = "tesseraqlVertxOptions";
+    /**
+     * Registry bean name for the host's shared {@code Vertx} (docs/http-threading.md decision 4).
+     * Present only when a host built one; Camel looks it up by type and, finding it, does not
+     * build — or close — an instance of its own.
+     */
+    public static final String VERTX_BEAN = "tesseraqlVertx";
     public static final String SLOW_SQL_LOG_BEAN = "tesseraqlSlowSqlLog";
 
     /** Registry bean name for the {@code ExecutorService} backing a named execution lane. */
