@@ -20,6 +20,16 @@ role model is complete through slice 5, so `tql_roles.application`, `tql_user_pe
 validity windows, `source` provenance, `Principal.roleGrants`, the `_as` activation address
 and the `acting_role` audit column are all shipped ground this design stands on.
 
+**Status. Slice 1 is shipped** (the grant trail): `tql_grant_history` across all four
+dialects, the two optional contracts, both write paths recording, the history page and the
+per-user card. Implementation decisions recorded: the actor reaches `RoleAdmin` as a
+declared route parameter (`actor: principal.loginId`) — route-resolved and never
+caller-writable, the pattern the role picker established; an unnamed caller records as
+`unknown` rather than as a blank column, which would read as a bug in the trail; the
+re-assign that revokes and grants leaves **one** row, because it is one decision; and the
+read joins the role's current application beside the recorded one, so a role that moved
+applications shows both truths instead of one rewritten one.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no

@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.iamAdmin.history.list
+kind: route
+recipe: query-html
+
+# The grant trail (docs/access-governance.md structural decision 1): every change to what
+# a person holds, from both write paths -- the administrator's edit and the sign-in rule
+# converge. The route audit records the first and cannot record the second, because a
+# sign-in materialization is not a route invocation.
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  user:
+    in: query
+    type: string
+    required: false
+  app:
+    in: query
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.grantHistory
+      params:
+        userId: query.user
+        application: query.app
+response:
+  html:
+    status: 200
+    template: history.html
+    model:
+      rows: main.rows
+      available: main.available
+      reason: main.reason
+      user: main.userId
+      app: main.application

@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **Every grant change is recorded, from both paths that can make one**
+  (docs/access-governance.md structural decision 1, slice 1). What a person holds could be
+  changed two ways — an administrator's edit in IAM Admin, and the assignment rules' converge at
+  sign-in — and neither left a record. The route audit covers the first and structurally cannot
+  cover the second, because a sign-in materialization is not an HTTP call. `tql_grant_history` is
+  now written where the grant is written: who decided (the administrator's login id, or `rule`
+  when no person did), whose access changed, which code, which mechanism, and the validity window
+  when one was granted. IAM Admin gains a **Grant history** page filtered by user or application,
+  and a per-user card on the detail page. The trail is append-only, and a realm whose contracts do
+  not include it keeps its grant writes and says it holds no history.
+
 ### Fixed
 
 - **An application's declared modules can supply its object store and its runtime extensions**

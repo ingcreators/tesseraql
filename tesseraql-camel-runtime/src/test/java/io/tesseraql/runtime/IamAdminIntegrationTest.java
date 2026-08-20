@@ -351,6 +351,33 @@ class IamAdminIntegrationTest {
                 .isEqualTo(401);
     }
 
+    /**
+     * The grant trail end to end (docs/access-governance.md slice 1): the actor reaches the
+     * history row from the session principal, through the route's declared parameter — the
+     * one link in the chain that only a live request can prove.
+     */
+    @Test
+    void aRoleAssignmentIsRecordedWithTheAdministratorWhoMadeIt() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/users/u2/roles/assign", "roleCode=USER_READ")
+                .statusCode()).isEqualTo(303);
+
+        String history = get("/_tesseraql/admin/history?user=u2", true).body();
+        assertThat(history).contains("USER_READ").contains("role-granted")
+                .contains("iam-admin").contains("bob");
+
+        assertThat(postForm("/_tesseraql/admin/users/u2/roles/unassign", "roleCode=USER_READ")
+                .statusCode()).isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/history?user=u2", true).body())
+                .contains("role-revoked");
+
+        // The per-user card is the same trail, narrowed to the person being looked at.
+        assertThat(get("/_tesseraql/admin/users/u2", true).body())
+                .contains("Grant history").contains("role-revoked");
+        // Another person's page does not show it.
+        assertThat(get("/_tesseraql/admin/users/u1", true).body())
+                .doesNotContain("role-revoked");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

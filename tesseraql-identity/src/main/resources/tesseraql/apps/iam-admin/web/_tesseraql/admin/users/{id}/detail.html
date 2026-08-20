@@ -293,5 +293,31 @@
     </form>
   </div>
 </section>
+<!-- This person's grant trail (docs/access-governance.md structural decision 1): both
+     write paths, so a rule-produced assignment is as visible as an administrator's. -->
+<section class="hc-card" th:if="${historyAvailable == 1}">
+  <div class="hc-card__header">Grant history</div>
+  <div class="hc-card__body">
+    <div class="hc-empty" th:if="${#lists.isEmpty(history)}">
+      <p class="hc-empty__title">No recorded grant changes for this user.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(history)}">
+      <table class="hc-table">
+        <thead><tr><th>When</th><th>Actor</th><th>Change</th><th>Code</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr th:each="h : ${history}">
+            <td th:text="${h.occurred_at}"></td>
+            <td th:text="${h.actor}"></td>
+            <td th:text="${h.change_kind}"></td>
+            <td><code th:text="${h.subject_code}"></code></td>
+            <td th:text="${h.source}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <a class="hc-button" data-variant="ghost" data-size="sm" th:each="u : ${user}"
+       th:href="@{/_tesseraql/admin/history(user=${u.user_id})}">Open in grant history</a>
+  </div>
+</section>
 </div>
 </html>

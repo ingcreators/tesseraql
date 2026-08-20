@@ -126,12 +126,12 @@ class RoleStoreIntegrationTest {
                 .doesNotContain("keiri.member");
 
         // A manual assignment of the same role is admin provenance: recompute keeps it.
-        RoleAdmin.assignRole(identity, MANAGED, "u1", "keiri.member", "", "");
+        RoleAdmin.assignRole(identity, MANAGED, "admin", "u1", "keiri.member", "", "");
         RoleRules.recompute(identity, MANAGED, "u1");
         assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
                 .contains("keiri.member");
 
-        RoleAdmin.unassignRole(identity, MANAGED, "u1", "keiri.member");
+        RoleAdmin.unassignRole(identity, MANAGED, "admin", "u1", "keiri.member");
         RoleAdmin.deleteAttribute(identity, MANAGED, "u1", "department");
         RoleAdmin.deleteRule(identity, MANAGED, ruleId);
     }
@@ -146,7 +146,7 @@ class RoleStoreIntegrationTest {
         assertThat(DeclaredRoleReconciler.reconcile(identity, MANAGED, "shop",
                 java.util.List.of(approver, viewer))).isEmpty();
 
-        RoleAdmin.assignRole(identity, MANAGED, "u1", "shop.approver", "", "");
+        RoleAdmin.assignRole(identity, MANAGED, "admin", "u1", "shop.approver", "", "");
         Principal p = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
         // The declared bundle plus the implicit use atom — the fence implication as a row.
         assertThat(p.permissions()).contains("shop.approve", "tql.app.use.shop");
@@ -178,17 +178,89 @@ class RoleStoreIntegrationTest {
                 Map.of("application", "shop")))
                 .allSatisfy(row -> assertThat(row.get("source")).isEqualTo("declared"));
 
-        RoleAdmin.unassignRole(identity, MANAGED, "u1", "shop.approver");
+        RoleAdmin.unassignRole(identity, MANAGED, "admin", "u1", "shop.approver");
+    }
+
+    /**
+     * Slice 1 of docs/access-governance.md: both grant write paths leave a row, and the
+     * automatic one names the mechanism rather than the person who happened to sign in.
+     */
+    @Test
+    void bothGrantWritePathsRecordTheirChange() {
+        RoleAdmin.createRole(identity, MANAGED, "audit.reader", "監査", "");
+        RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1", "audit.reader", "",
+                "2030-01-01");
+        assertThat(historyFor("audit.reader")).anySatisfy(row -> {
+            assertThat(row.get("actor")).isEqualTo("kenji");
+            assertThat(row.get("change_kind")).isEqualTo(GrantHistory.ROLE_GRANTED);
+            assertThat(row.get("source")).isEqualTo(GrantHistory.SOURCE_ADMIN);
+            assertThat(row.get("ends_at")).isNotNull();
+            assertThat(row.get("subject_login_id")).isEqualTo("alice");
+        });
+
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "audit.reader");
+        assertThat(historyFor("audit.reader")).anySatisfy(
+                row -> assertThat(row.get("change_kind")).isEqualTo(GrantHistory.ROLE_REVOKED));
+
+        // The rule converge is the second path. It is not an HTTP call, which is exactly
+        // why the route audit could never have covered it.
+        RoleAdmin.createRole(identity, MANAGED, "audit.rule.role", "監査", "");
+        String ruleId = String.valueOf(RoleAdmin.createRule(identity, MANAGED,
+                "audit.rule.role", "grade", "eq", "manager", false).get("created"));
+        RoleAdmin.setAttribute(identity, MANAGED, "u1", "grade", "manager");
+        RoleRules.recompute(identity, MANAGED, "u1");
+        assertThat(historyFor("audit.rule.role")).anySatisfy(row -> {
+            assertThat(row.get("actor")).isEqualTo(GrantHistory.SOURCE_RULE);
+            assertThat(row.get("source")).isEqualTo(GrantHistory.SOURCE_RULE);
+            assertThat(row.get("change_kind")).isEqualTo(GrantHistory.ROLE_GRANTED);
+        });
+
+        RoleAdmin.deleteAttribute(identity, MANAGED, "u1", "grade");
+        RoleRules.recompute(identity, MANAGED, "u1");
+        assertThat(historyFor("audit.rule.role")).anySatisfy(
+                row -> assertThat(row.get("change_kind")).isEqualTo(GrantHistory.ROLE_REVOKED));
+        RoleAdmin.deleteRule(identity, MANAGED, ruleId);
+    }
+
+    /** A realm whose pack has no history contract keeps its writes and reports no trail. */
+    @Test
+    void aRealmWithoutTheHistoryContractDegradesRatherThanFailing(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path emptyPack) {
+        RealmConfig noHistory = RealmConfig.sql("bare", "main", emptyPack,
+                Capabilities.readWrite());
+        assertThat(GrantHistory.historyModel(identity, noHistory, null, null))
+                .containsEntry("available", 0);
+        GrantHistory.record(identity, noHistory,
+                GrantHistory.Change.admin("kenji", "u1", GrantHistory.ROLE_GRANTED, "x"));
+    }
+
+    private java.util.List<Map<String, Object>> historyFor(String code) {
+        java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (Map<String, Object> row : identity.execute(MANAGED,
+                IdentityContracts.LIST_GRANT_HISTORY, params("u1", null))) {
+            if (code.equals(row.get("subject_code"))) {
+                rows.add(row);
+            }
+        }
+        return rows;
+    }
+
+    private static Map<String, Object> params(String userId, String application) {
+        Map<String, Object> params = new java.util.LinkedHashMap<>();
+        params.put("userId", userId);
+        params.put("application", application);
+        params.put("since", null);
+        return params;
     }
 
     @Test
     void adminAssignmentWithAWindowRoundTrips() {
-        RoleAdmin.assignRole(identity, MANAGED, "u1", "orders.approver",
+        RoleAdmin.assignRole(identity, MANAGED, "admin", "u1", "orders.approver",
                 "2020-01-01T00:00", "2020-06-01T00:00");
         Principal expiredNow = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
         assertThat(expiredNow.roles()).doesNotContain("orders.approver");
 
-        RoleAdmin.assignRole(identity, MANAGED, "u1", "orders.approver", "", "");
+        RoleAdmin.assignRole(identity, MANAGED, "admin", "u1", "orders.approver", "", "");
         Principal back = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
         assertThat(back.roles()).contains("orders.approver");
     }

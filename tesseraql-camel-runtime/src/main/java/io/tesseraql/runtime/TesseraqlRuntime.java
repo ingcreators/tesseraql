@@ -1882,20 +1882,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 iamRealm.get(), String.valueOf(params.get("code")),
                                 String.valueOf(params.get("name")),
                                 String.valueOf(params.get("application"))));
+                // The actor is a declared route parameter (`actor: principal.loginId`), route-
+                // resolved and never caller-writable, exactly as the role picker declares
+                // principal.roleGrants (docs/access-governance.md structural decision 1).
                 serviceProviders.register("iam.assignRole",
                         params -> io.tesseraql.identity.RoleAdmin.assignRole(iamIdentity.get(),
-                                iamRealm.get(), String.valueOf(params.get("userId")),
+                                iamRealm.get(), String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("roleCode")),
                                 String.valueOf(params.get("startsAt")),
                                 String.valueOf(params.get("endsAt"))));
                 serviceProviders.register("iam.unassignRole",
                         params -> io.tesseraql.identity.RoleAdmin.unassignRole(
                                 iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("roleCode"))));
                 serviceProviders.register("iam.grantPermission",
                         params -> io.tesseraql.identity.RoleAdmin.grantPermission(
                                 iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("code")),
                                 String.valueOf(params.get("startsAt")),
@@ -1903,8 +1909,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 serviceProviders.register("iam.revokePermission",
                         params -> io.tesseraql.identity.RoleAdmin.revokePermission(
                                 iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("code"))));
+                serviceProviders.register("iam.grantHistory",
+                        params -> io.tesseraql.identity.GrantHistory.historyModel(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("application"))));
                 // Attributes and assignment rules (docs/application-roles.md slice 4).
                 boolean orgManaged = "managed".equals(manifest.config()
                         .getString("tesseraql.orgunit.mode").orElse("app"));

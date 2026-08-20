@@ -113,6 +113,23 @@ carry rule provenance — a manually assigned role always survives, and a rule's
 goes away when the rule stops producing it. **Recompute now** (one user from their detail
 page, everyone from the rules page) applies rule edits without waiting for sign-ins.
 
+## Grant history
+
+The history page (`/_tesseraql/admin/history`) answers when a person got a role or a
+permission, and who decided. Every change to what somebody holds is recorded as it is
+made: the administrator's own edits from the pages above, and the assignment rules'
+converge at sign-in. The actor column names the administrator who decided, or `rule` when
+a rule produced the change with no person deciding.
+
+Filter by user id or by application, or open one person's trail from the **Grant history**
+card on their detail page. The trail is append-only — nothing edits or removes a row — and
+a realm whose contracts do not include it keeps its grant writes and says here that it
+holds no history.
+
+This is not the [route audit](ops-console.md#audit): that records HTTP calls, and the rule
+converge is not one. Recording the grant where the grant is made is what makes the trail
+complete.
+
 ## Delegations
 
 The delegations page shows who is currently acting for whom, and over what period.
