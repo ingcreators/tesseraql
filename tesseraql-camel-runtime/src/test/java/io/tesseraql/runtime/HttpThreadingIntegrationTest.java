@@ -85,6 +85,68 @@ class HttpThreadingIntegrationTest {
     }
 
     /**
+     * A classpath asset is served while every worker is blocked in the database.
+     *
+     * <p>This is the coupling the move onto the router removed for the half it could reach
+     * (docs/http-threading.md decision 6). Assets were a Camel route, so a stylesheet took one of
+     * the same workers a slow query holds and a page's worth of them queued behind whatever the
+     * database was doing. Framework assets and vendored WebJars — the bulk of a page's bytes —
+     * are now answered from memory on the event loop, and take no worker at all.
+     *
+     * <p><strong>The filesystem half is not decoupled and this test does not pretend it is.</strong>
+     * A file goes out through {@code sendFile}, whose I/O Vert.x still dispatches to the worker
+     * pool: measured on this fixture at 7 ms for a classpath asset against 1689 ms for a file,
+     * with both workers held in {@code pg_sleep}. What that needs is an executor of its own, which
+     * the design records as the remaining half rather than leaving the reader to discover.
+     */
+    @Test
+    void aClasspathAssetIsServedWhileEveryWorkerIsBlocked() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> blocking = Stream
+                .generate(() -> CompletableFuture.supplyAsync(() -> get("/api/nap")))
+                .limit(4)
+                .toList();
+        // Long enough for both workers to be inside pg_sleep, with two more requests queued.
+        Thread.sleep(400);
+
+        long startedAt = System.currentTimeMillis();
+        HttpResponse<String> asset = get("/assets/_tesseraql/icons.svg");
+        long elapsedMs = System.currentTimeMillis() - startedAt;
+
+        assertThat(asset.statusCode()).isEqualTo(200);
+        // Four one-second statements against two workers is two seconds of queue. This does not
+        // join it, because it never asks for a worker.
+        assertThat(elapsedMs).isLessThan(500);
+        for (CompletableFuture<HttpResponse<String>> request : blocking) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * A file's validator does not require reading the file.
+     *
+     * <p>The old route hashed the content, so answering "not modified" — the cheapest response
+     * there is — cost a full read and a full SHA-256. A weak {@code (mtime, size)} validator is
+     * what lets a file be streamed instead of buffered.
+     */
+    @Test
+    void aFileAssetAnswers304FromAWeakValidator() throws Exception {
+        HttpResponse<String> first = get("/assets/app.css");
+        String etag = first.headers().firstValue("ETag").orElseThrow();
+
+        assertThat(etag).startsWith("W/");
+
+        HttpRequest conditional = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/assets/app.css"))
+                .header("If-None-Match", etag)
+                .build();
+        HttpResponse<String> second = HttpClient.newHttpClient()
+                .send(conditional, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(second.statusCode()).isEqualTo(304);
+        assertThat(second.body()).isEmpty();
+    }
+
+    /**
      * A datasource that declares no pool settings gets TesseraQL's defaults, not Hikari's.
      *
      * <p>They were the driver pool's, so the answer to "how many connections will this open"
@@ -185,6 +247,10 @@ class HttpThreadingIntegrationTest {
                       data: main.rows
                 """);
         Files.writeString(nap.resolve("nap.sql"), "select pg_sleep(1) as nap\n");
+
+        Path assets = target.resolve("assets");
+        Files.createDirectories(assets);
+        Files.writeString(assets.resolve("app.css"), ":root { --tql-test: 1; }\n");
         return target;
     }
 }

@@ -78,7 +78,12 @@ produced it, and inheriting it silently is the part worth fixing regardless of t
 **The default becomes 10, not 20.** With `maximumPoolSize` at 10 the effective ceiling was
 already 10; the other ten workers could do nothing but wait. Removing them costs no
 throughput, and it removes threads from a footprint the
-[runtime footprint](runtime-footprint.md) campaign spent a release reducing. Both numbers
+[runtime footprint](runtime-footprint.md) campaign spent a release reducing.
+
+**That reasoning covers routes that need a connection, and nothing else** — a correction decision
+6 forced. A static asset needs no connection, so the workers this removed were ones it could have
+used. The answer is not to raise the number back but to stop assets asking for a worker at all,
+which is what decision 6 does. Both numbers
 now say 10 because they answer one question, and decision 2 makes that relationship
 explicit rather than coincidental.
 
@@ -213,6 +218,46 @@ somebody's report. Without it, a hung member is contained by the bound above rat
 reclaimed: it holds its own permits and nothing else, and the stack answers 503 for that member
 while serving the rest.
 
+### 6. Static assets are answered off the worker pool
+
+Decision 1 lowered the worker pool from Vert.x's 20 to 10, reasoning that against a connection
+pool of 10 the other ten workers could only wait in `getConnection()`. **That reasoning holds
+only for routes that need a connection, and this decision corrects the over-generalisation.** An
+asset needs none, and under the old arrangement it took a worker anyway.
+
+Assets were a Camel route, so every stylesheet, script and icon went through `executeBlocking`
+and held one of the same ten workers a slow query holds. A page's worth of them queued behind
+whatever the database was doing. Each request also read the file **entirely into the heap** and
+SHA-256'd it — including to answer 304, the cheapest response there is — so a twenty-megabyte
+image on ten concurrent requests was two hundred megabytes of heap nobody asked for.
+
+They now mount on the platform router, after the admission gate and ahead of every Camel route.
+**The gate lets them through**: it bounds work that occupies a worker, and refusing a stylesheet
+because the database is busy would put back the coupling this decision removes.
+
+**The classpath half is cached; the filesystem half is not.** Framework assets and vendored
+WebJars come out of jars and cannot change while the process runs, so they are read once, hashed
+once, and answered from memory — there is no invalidation question to get wrong. Files are the
+mutable half and are never cached, which is precisely why the stale-validator bug that removed
+the previous cache cannot recur: the thing that changes is the thing that is re-read.
+
+A file's validator becomes a weak `(mtime, size)` rather than a content hash. A strong validator
+means reading and hashing the whole file on every request, including the 304s, which is what made
+streaming pointless. Weak validators are what a web server has always used here.
+
+**Vert.x resolved every path against the classpath first**, copying matches into a cache
+directory. Nothing here wants that — the classpath half is read directly and the filesystem half
+is an absolute path that can only ever miss — and the scan measured at **1328 ms for a stylesheet
+on an idle runtime**. `setClassPathResolvingEnabled(false)` took that to 187 ms.
+
+**Half of this decision is not done, and the measurement says which half.** With both workers
+held in `pg_sleep`, a classpath asset answers in **7 ms** and a file in **1689 ms**: `sendFile`
+streams instead of buffering, but Vert.x still dispatches its file I/O to the worker pool, so the
+filesystem half remains coupled to exactly what it was supposed to escape. Completing it means
+giving asset file reads an executor of their own — the one place in this design where virtual
+threads clearly fit, since file I/O blocks on something no connection pool bounds. Recorded here
+rather than left for the next reader to measure again.
+
 ## Slices
 
 1. **The worker pool is configurable** — `VertxOptions` in the registry, both keys, reference
@@ -226,6 +271,8 @@ while serving the rest.
    paragraph decision 4 records.
 5. **The front door's per-member bound** — the relay's permit, the sized client, the opt-in
    read-idle timeout. Found by asking what limited the gateway once the runtimes were bounded.
+6. **Assets off the worker pool** — the router mount, the classpath cache, the weak file
+   validator, the classpath-resolving fix. The filesystem half is measured and deferred, above.
 
 Slices 1 and 2 are independent. Slice 3 must land before slice 4: sharing the pool without a
 per-runtime bound would remove the accidental bulkhead and put nothing in its place.

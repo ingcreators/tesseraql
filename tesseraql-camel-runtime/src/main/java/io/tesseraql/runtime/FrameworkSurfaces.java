@@ -48,7 +48,6 @@ public final class FrameworkSurfaces {
                             + " the authorized ops API"),
             Map.entry("ops.health.live", "pure liveness; never touches a dependency"),
             Map.entry("ops.health.ready", "readiness roll-up for traffic shedding"),
-            Map.entry("tql.assets", "static asset bytes, served before any session exists"),
             Map.entry("system.login", "the endpoint that establishes a session"),
             Map.entry("tql.auth.login", "the login form; pre-authentication by definition"),
             Map.entry("tql.auth.reset", "the password-reset request form; pre-authentication"),

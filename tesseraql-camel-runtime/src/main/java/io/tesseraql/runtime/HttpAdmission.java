@@ -39,11 +39,20 @@ final class HttpAdmission {
 
     private final Semaphore permits;
     private final String healthPrefix;
+    /**
+     * The asset mount, which this gate lets through (docs/http-threading.md decision 6).
+     *
+     * <p>The bound exists to protect the worker pool, and since assets moved onto the router they
+     * do not take a worker. Refusing a stylesheet because the database is slow would put back the
+     * coupling that move exists to remove.
+     */
+    private final String assetPrefix;
     private final AtomicLong refused = new AtomicLong();
 
-    private HttpAdmission(int maxInFlight, String healthPrefix) {
+    private HttpAdmission(int maxInFlight, String healthPrefix, String assetPrefix) {
         this.permits = new Semaphore(maxInFlight);
         this.healthPrefix = healthPrefix;
+        this.assetPrefix = assetPrefix;
     }
 
     /**
@@ -56,13 +65,15 @@ final class HttpAdmission {
         VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
                 VertxPlatformHttpRouter.getRouterNameFromPort(port));
         HttpAdmission gate = new HttpAdmission(maxInFlight,
-                io.tesseraql.camel.BasePath.of(camelContext) + "/_tesseraql/health");
+                io.tesseraql.camel.BasePath.of(camelContext) + "/_tesseraql/health",
+                AssetRoutes.mountOf(camelContext));
         router.route().order(BEFORE_EVERY_ROUTE).handler(gate::admit);
         LOG.debug("HTTP admission installed: {} requests in flight", maxInFlight);
     }
 
     private void admit(io.vertx.ext.web.RoutingContext ctx) {
-        if (ctx.request().path().startsWith(healthPrefix)) {
+        String path = ctx.request().path();
+        if (path.startsWith(healthPrefix) || path.startsWith(assetPrefix)) {
             ctx.next();
             return;
         }
