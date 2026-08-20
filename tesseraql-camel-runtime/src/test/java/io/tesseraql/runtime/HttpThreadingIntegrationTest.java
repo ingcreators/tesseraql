@@ -85,6 +85,24 @@ class HttpThreadingIntegrationTest {
     }
 
     /**
+     * A datasource that declares no pool settings gets TesseraQL's defaults, not Hikari's.
+     *
+     * <p>They were the driver pool's, so the answer to "how many connections will this open"
+     * lived in a dependency's release notes and could change when that dependency changed its
+     * mind. The size matches the worker pool deliberately: a worker that cannot get a connection
+     * is a thread doing nothing but waiting.
+     */
+    @Test
+    void anUndeclaredPoolTakesTesseraqlsDefaults() {
+        com.zaxxer.hikari.HikariDataSource main = runtime.camelContext().getRegistry()
+                .lookupByNameAndType("main", com.zaxxer.hikari.HikariDataSource.class);
+
+        assertThat(main).isNotNull();
+        assertThat(main.getMaximumPoolSize()).isEqualTo(10);
+        assertThat(main.getConnectionTimeout()).isEqualTo(30_000L);
+    }
+
+    /**
      * A thread count that is not a positive integer refuses at startup.
      *
      * <p>A pool sized from a typo is worse than one left at its default: the runtime starts, and

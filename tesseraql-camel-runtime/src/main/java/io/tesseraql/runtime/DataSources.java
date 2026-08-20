@@ -21,6 +21,16 @@ public final class DataSources {
     public record MainDatasourceOverride(String jdbcUrl, String username, String password) {
     }
 
+    /**
+     * The pool size a datasource gets when it declares none, matching the HTTP worker pool's
+     * default: a worker that cannot get a connection is a thread doing nothing but waiting, and
+     * a connection no worker can reach is a connection the database holds open for nobody.
+     */
+    private static final int DEFAULT_MAX_POOL_SIZE = 10;
+
+    /** How long a borrower waits before failing, when the datasource declares nothing. */
+    private static final long DEFAULT_CONNECTION_TIMEOUT_MILLIS = 30_000L;
+
     /** Creates a HikariCP pool for the datasource named {@code name} under {@code tesseraql.datasources}. */
     public static HikariDataSource create(AppConfig config, String name) {
         return create(config, name, (java.nio.file.Path) null);
@@ -236,14 +246,20 @@ public final class DataSources {
         hikari.setJdbcUrl(config.requireString(prefix + "jdbcUrl"));
         config.getString(prefix + "username").ifPresent(hikari::setUsername);
         config.getString(prefix + "password").ifPresent(hikari::setPassword);
-        config.getString(prefix + "maximumPoolSize")
+        // TesseraQL's default, not Hikari's (docs/http-threading.md decision 2). These two
+        // decide how much concurrent database work a runtime does, and leaving them inherited
+        // meant the answer lived in a dependency's release notes: an application that declared
+        // neither got Hikari's 10 against an HTTP worker pool of 20, so half the workers could
+        // only ever wait here. The pool now matches tesseraql.http.workerThreads by default and
+        // the two are raised together.
+        hikari.setMaximumPoolSize(config.getString(prefix + "maximumPoolSize")
                 .map(Integer::parseInt)
-                .ifPresent(hikari::setMaximumPoolSize);
+                .orElse(DEFAULT_MAX_POOL_SIZE));
         // How long a borrower waits for a connection before failing (ms). Also bounds the
         // readiness probe's detection latency when the database is down (roadmap Phase 45).
-        config.getString(prefix + "connectionTimeoutMillis")
+        hikari.setConnectionTimeout(config.getString(prefix + "connectionTimeoutMillis")
                 .map(Long::parseLong)
-                .ifPresent(hikari::setConnectionTimeout);
+                .orElse(DEFAULT_CONNECTION_TIMEOUT_MILLIS));
         // The remaining pool tuning knobs (roadmap Phase 45): every production-relevant
         // Hikari setting is reachable from config instead of being locked to a default.
         config.getString(prefix + "minimumIdle")
