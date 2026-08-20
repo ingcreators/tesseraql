@@ -133,6 +133,35 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A multi-application host has one Vert.x, not one per application**
+  (docs/http-threading.md decision 4). `VertxPlatformHttpServer` looks a Vert.x up in the
+  runtime's own Camel registry and builds one when it finds none, and TesseraQL bound none — so
+  every hosted application got a worker pool and an event-loop pool of its own. A host's thread
+  count was a function of how many applications were installed rather than of anything an
+  operator chose: five applications on a twenty-core machine meant 100 worker threads and 200
+  event loops, and no configuration reduced it. The host now builds one instance from its own
+  `tesseraql-stack.yml` and every runtime rides it.
+
+  **The host owns it.** `VertxPlatformHttpServer` closes only an instance it built itself, which
+  is what lets one application be stopped or replaced — a canary activation, a `runtime-replace`
+  — without taking the transport out from under its neighbours. The host closes it last, after
+  every runtime and after the stack's framework pool.
+
+  **A hosted member no longer sizes what it shares, and is told so.** Its own
+  `tesseraql.http.workerThreads`/`eventLoopThreads` reach nothing once the host supplies the
+  instance, and read-parsed-then-ignored is the shape this codebase removes wherever it finds
+  it — so the runtime warns, naming the key and the file that decides it. A warning rather than
+  a refusal: the same declaration is correct for the same application run standalone.
+  `maxInFlight` stays per runtime, because per-member bounds are what keep one application from
+  consuming the shared pool.
+
+  **An accidental bulkhead is replaced, not dropped.** A worker pool per application meant one
+  application saturating its own could not reach its neighbours. `app-isolation-model.md` never
+  listed thread pools among what mode ② separates, so no promise changes — but "never promised"
+  and "never relied upon" are different things, and the isolation model now says which one this
+  was. The bound that replaces it is the per-runtime admission gate above, which refuses with a
+  503 rather than letting one application quietly consume the shared pool.
+
 - **The HTTP edge admits or refuses, instead of queueing without a bound**
   (docs/http-threading.md decision 3). Route processing runs on a fixed worker pool, and requests
   arriving while every worker was blocked in JDBC queued in Vert.x's blocked-task queue, which

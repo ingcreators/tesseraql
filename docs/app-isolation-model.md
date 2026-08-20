@@ -124,6 +124,21 @@ URL spaces, Studio instances, traces and configuration. It does not separate dat
 the operator's arrangement — and it cannot confine bytecode, because the JVM offers no
 in-process mechanism to do so.
 
+**Nor does it separate HTTP threads, and once it accidentally did.** Every runtime built its
+own Vert.x, so each application had a worker pool of its own — an unintended bulkhead, and
+the reason a host's thread count grew with the number of applications installed rather than
+with anything an operator chose. Since [http-threading.md](http-threading.md) decision 4 the
+host builds one instance and every runtime rides it. The bulkhead is not dropped: it moves to
+that decision's per-runtime admission bound, which refuses with a 503 instead of letting one
+application quietly consume a shared pool. Thread pools were never on the list above, so this
+changes no promise — recorded because "never promised" and "never relied upon" are different
+things, and this one was relied upon by accident.
+
+Module isolation is untouched by the sharing. Vert.x captures the thread context classloader
+when a context is created and restores it on dispatch, and no request path here reads the
+TCCL anyway: module drivers are handed to the connection pool explicitly, and Camel resolves
+classes through its own application context classloader.
+
 Two things follow. `MultiAppHost`'s javadoc claim that apps "share a process without sharing
 route paths **or data**" is wrong and is corrected. And the admission profile's
 declarative-only rule keeps its justification: while isolation is arranged rather than
