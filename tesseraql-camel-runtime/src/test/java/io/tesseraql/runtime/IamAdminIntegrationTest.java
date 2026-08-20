@@ -424,6 +424,39 @@ class IamAdminIntegrationTest {
     }
 
     /**
+     * The condition surface (docs/access-governance.md slice 8): a role's network and hours
+     * conditions are declared here, and a value the evaluator could never satisfy is refused
+     * at the write rather than quietly closing the role to everybody.
+     */
+    @Test
+    void aContextConditionIsDeclaredAndAMalformedOneIsRefused() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/roles/create",
+                "code=cond.role&name=Conditioned&application=").statusCode()).isEqualTo(303);
+
+        assertThat(postForm("/_tesseraql/admin/conditions/add",
+                "roleCode=cond.role&conditionKind=network&value=172.16.0.0%2F12").statusCode())
+                .isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/conditions/add",
+                "roleCode=cond.role&conditionKind=hours&value=MON-FRI+09%3A00-18%3A00")
+                .statusCode()).isEqualTo(303);
+
+        String page = get("/_tesseraql/admin/conditions", true).body();
+        assertThat(page).contains("cond.role").contains("172.16.0.0/12")
+                .contains("MON-FRI 09:00-18:00");
+
+        HttpResponse<String> refused = postForm("/_tesseraql/admin/conditions/add",
+                "roleCode=cond.role&conditionKind=network&value=10.0.0.0%2F99");
+        assertThat(refused.statusCode()).isNotEqualTo(303);
+        assertThat(refused.body()).contains("TQL-IAM-4033");
+
+        assertThat(postForm("/_tesseraql/admin/conditions/remove",
+                "roleCode=cond.role&conditionKind=network&value=172.16.0.0%2F12").statusCode())
+                .isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/conditions", true).body())
+                .doesNotContain("172.16.0.0/12").contains("MON-FRI 09:00-18:00");
+    }
+
+    /**
      * The group surface (docs/access-governance.md slice 4): the schema was complete and
      * nothing wrote it, so this is the first path that creates one and puts somebody in it.
      */

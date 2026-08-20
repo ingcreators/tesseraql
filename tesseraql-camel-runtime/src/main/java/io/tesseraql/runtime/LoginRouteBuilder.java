@@ -185,13 +185,13 @@ final class LoginRouteBuilder extends RouteBuilder {
         }
 
         // Client facts ride into the session for the visibility surfaces
-        // (docs/session-visibility.md): informational, recorded as presented.
+        // (docs/session-visibility.md): informational, recorded as presented. Admitting the
+        // address they were read from is layer A (docs/access-governance.md structural
+        // decision 8) — after the credential is proven, because a network refusal must not
+        // tell an outsider whether the password was right.
         throttle.recordSuccess(loginId);
-        String sessionId = sessions.create(principal.get(), SessionStore.ClientInfo.of(
-                exchange.getMessage().getHeader("User-Agent", String.class),
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
-                        String.class)));
+        String sessionId = sessions.create(principal.get(),
+                io.tesseraql.camel.auth.SignInAdmission.admitted(exchange));
         setSessionCookie(exchange, io.tesseraql.security.session.SessionCookie.issue(
                 sessions.cookieName(), sessionId, io.tesseraql.camel.CookiePath.of(exchange)));
         if (browserForm) {

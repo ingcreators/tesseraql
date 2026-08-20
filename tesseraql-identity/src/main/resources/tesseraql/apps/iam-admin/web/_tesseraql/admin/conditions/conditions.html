@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Conditions', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/constraints}">Separation of duties</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/history}">History</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status" th:if="${added != null}">Condition added.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${removed != null}">Condition removed.</p>
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">This realm carries no context conditions.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<!-- A grant-level condition narrows and never widens: the worst a spoofed address can do is
+     take capability away. The enforceable answer to "where may somebody sign in from" is the
+     deployment allow-list, tesseraql.security.network.allow, checked before a session exists
+     (docs/access-governance.md structural decision 8). -->
+<div class="hc-alert" role="note" th:if="${available == 1}">
+  <p class="hc-alert__title">A condition narrows a held role; it is not the network boundary.</p>
+  <p>The address judged is the one the edge presented. Use it to keep a capacity inside the
+    office or inside business hours — and <code>tesseraql.security.network.allow</code> to say
+    where anybody may sign in at all.</p>
+</div>
+<section class="hc-card" th:if="${available == 1 and writable == 1}">
+  <div class="hc-card__header">Add condition</div>
+  <div class="hc-card__body hc-stack">
+    <form method="post" th:action="@{/_tesseraql/admin/conditions/add}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Kind</span>
+        <select class="hc-input" name="conditionKind">
+          <option>network</option><option>hours</option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Value</span>
+        <input class="hc-input" name="value" required placeholder="10.0.0.0/8">
+        <span class="hc-field__message">A CIDR block such as <code>10.0.0.0/8</code>, or hours
+          such as <code>MON-FRI 09:00-18:00</code>.</span></label>
+      <button class="hc-button" data-variant="primary" type="submit">Add</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Conditions</div>
+  <div class="hc-card__body">
+    <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
+      <p class="hc-empty__title">No role carries a context condition.</p>
+      <p class="hc-empty__description">A condition says where a held role may be used from, or
+        when. Within one kind any condition admits, so two networks are two offices; across
+        kinds every kind must, so a network and an hours condition are two requirements.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
+      <table class="hc-table">
+        <thead><tr><th>Role</th><th>Application</th><th>Kind</th><th>Value</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="c : ${rows}">
+            <td><code th:text="${c.role_code}"></code></td>
+            <td th:text="${c.application != null ? c.application : 'stack-wide'}"></td>
+            <td th:text="${c.condition_kind}"></td>
+            <td><code th:text="${c.value}"></code></td>
+            <td th:if="${writable == 1}">
+              <form method="post" th:action="@{/_tesseraql/admin/conditions/remove}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="roleCode" th:value="${c.role_code}">
+                <input type="hidden" name="conditionKind" th:value="${c.condition_kind}">
+                <input type="hidden" name="value" th:value="${c.value}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</div>
+</html>

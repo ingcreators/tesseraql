@@ -597,6 +597,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
         context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
                 new PolicyEngine(security));
+        // Context conditions, both layers (docs/access-governance.md structural decision 8).
+        // Layer A is bound only when the deployment names its networks, so an unconfigured
+        // one looks up nothing and admits everybody. The zone is bound only when it differs
+        // from the JVM's, which is the same "absent means the default" reading.
+        io.tesseraql.security.net.SignInAllowList signInNetworks = io.tesseraql.security.net.SignInAllowList
+                .parse(manifest.config().getString("tesseraql.security.network.allow")
+                        .orElse(null));
+        if (signInNetworks.restricts()) {
+            context.getRegistry().bind(TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN,
+                    signInNetworks);
+        }
+        manifest.config().getString("tesseraql.security.conditions.zone")
+                .map(String::trim).filter(zone -> !zone.isEmpty())
+                .ifPresent(zone -> context.getRegistry().bind(
+                        TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.of(zone)));
         // Organizational data scoping (roadmap Phase 29): the resolver expands /*%scope ... */
         // into principal-derived predicates. Bound only when the app declares scopes, so the SQL
         // producer falls back to its reject-any-scope default everywhere else.
@@ -2264,6 +2279,24 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 iamIdentity.get(), iamRealm.get(),
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("roleCode"))));
+                // Grant context conditions (docs/access-governance.md structural decision 8).
+                // The page declares them; the evaluation is a compiled step on every secured
+                // route, so nothing here decides who gets in.
+                serviceProviders.register("iam.conditions",
+                        params -> io.tesseraql.identity.RoleConditions.conditionsModel(
+                                iamIdentity.get(), iamRealm.get()));
+                serviceProviders.register("iam.addCondition",
+                        params -> io.tesseraql.identity.RoleConditions.addCondition(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("conditionKind")),
+                                String.valueOf(params.get("value"))));
+                serviceProviders.register("iam.removeCondition",
+                        params -> io.tesseraql.identity.RoleConditions.removeCondition(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("conditionKind")),
+                                String.valueOf(params.get("value"))));
                 serviceProviders.register("iam.grantHistory",
                         params -> io.tesseraql.identity.GrantHistory.historyModel(
                                 iamIdentity.get(), iamRealm.get(),

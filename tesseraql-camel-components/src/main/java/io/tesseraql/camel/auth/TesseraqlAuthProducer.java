@@ -55,6 +55,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
                 case "csrf" -> csrf(exchange);
                 case "rotate" -> rotate(exchange);
                 case "fence" -> fence(exchange);
+                case "conditions" -> conditions(exchange);
                 case "activate" -> activate(exchange);
                 default -> throw new TqlException(UNSUPPORTED,
                         "Unsupported tesseraql-auth operation: " + operation);
@@ -220,6 +221,40 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         // "who was allowed into which application" needs to read.
         span.attribute("policy.resolved", resolved);
         return resolved;
+    }
+
+    /**
+     * Grant-level context conditions (docs/access-governance.md structural decision 8, layer B):
+     * a held role whose conditions this request does not satisfy is dropped from the exchange's
+     * principal before anything reads it.
+     *
+     * <p>Placed after the fence and before activation, because it is the same arithmetic as
+     * activation over the same grants — narrowing first means activation chooses among roles
+     * that are actually usable here and now, and the role picker offers the same set.
+     *
+     * <p><b>No topology guard</b>, unlike its two neighbours. A role's conditions are a property
+     * of the grant, not of the stack, so a single-application runtime evaluates them the same
+     * way a hosted member does. The cost on a deployment that uses none is one list scan that
+     * finds no conditions and returns the principal it was given.
+     */
+    private void conditions(Exchange exchange) {
+        Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
+        if (principal == null) {
+            return;
+        }
+        java.time.ZoneId zone = endpoint.getCamelContext().getRegistry().lookupByNameAndType(
+                TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.class);
+        // The presented address, resolved exactly as the session records it: the edge's
+        // forwarded value when there is one, else the peer of the connection.
+        String address = SessionStore.ClientInfo.of(null,
+                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
+                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
+                        String.class))
+                .remoteAddr();
+        exchange.setProperty(TesseraqlProperties.PRINCIPAL,
+                io.tesseraql.security.GrantConditions.narrow(principal, address,
+                        java.time.ZonedDateTime.now(
+                                zone == null ? java.time.ZoneId.systemDefault() : zone)));
     }
 
     /**

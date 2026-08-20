@@ -414,7 +414,10 @@ public final class ErrorResponseRenderer implements Processor {
                 // does not hold (docs/application-roles.md) — the browser leg redirects to
                 // the role picker before this renderer ever sees it, so what reaches here
                 // is the API caller's 403.
-                case 4031, 4032, 4148 -> 403;
+                // 4149: the sign-in came from a network this deployment does not admit
+                // (docs/access-governance.md structural decision 8) — the credential is not
+                // the problem, so it is a refusal and not a challenge.
+                case 4031, 4032, 4148, 4149 -> 403;
                 case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
                 // The SEC domain is the whole security namespace, not an auth-failure one:
                 // everything else is a server-side fault — config errors (4000, 4001, 4085-4089,
@@ -482,6 +485,11 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4032, 4033 -> 400; // a malformed rule condition or role-admin input
                 case 4034 -> 409; // the grant conflicts with a separation-of-duties constraint
                 case 4035 -> 400; // an elevation asked for is not one that can be granted
+                // 4036: the write is outside what this administrator may touch. Slice 7 added
+                // the refusal and not the mapping, so a delegated administrator reaching past
+                // their application read "Internal Server Error" — the same defect slice 2
+                // found in this very switch, in the very next number.
+                case 4036 -> 403;
                 default -> 500;
             };
             // 4040: unknown - or out-of-scope, which reads identically - event or execution,

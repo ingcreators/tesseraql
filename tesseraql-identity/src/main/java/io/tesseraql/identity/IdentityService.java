@@ -182,6 +182,13 @@ public final class IdentityService {
             grantRows = List.of();
             direct = List.of();
         }
+        // Context conditions ride the grant (docs/access-governance.md structural decision 8):
+        // read once here, evaluated per request against that request's own context. A realm
+        // without the contract or the table has none, which is an unnarrowed grant — what
+        // every deployment had before conditions existed.
+        Map<String, List<Principal.RoleGrant.Condition>> conditions = grantRows.isEmpty()
+                ? Map.of()
+                : RoleConditions.byRole(this, realm, asString(userId));
         return Optional.of(new Principal(
                 asString(userId),
                 asString(user.get("login_id")),
@@ -193,12 +200,13 @@ public final class IdentityService {
                 column(execute(realm, IdentityContracts.FIND_PERMISSIONS_BY_USER_ID, byUser),
                         "permission_code"),
                 claims,
-                roleGrants(grantRows),
+                roleGrants(grantRows, conditions),
                 direct));
     }
 
     /** Groups the role-grant rows (role_code, application, permission_code) by role. */
-    private static List<Principal.RoleGrant> roleGrants(List<Map<String, Object>> rows) {
+    private static List<Principal.RoleGrant> roleGrants(List<Map<String, Object>> rows,
+            Map<String, List<Principal.RoleGrant.Condition>> conditions) {
         Map<String, Map.Entry<String, List<String>>> byRole = new LinkedHashMap<>();
         for (Map<String, Object> row : rows) {
             String role = asString(row.get("role_code"));
@@ -218,7 +226,8 @@ public final class IdentityService {
         for (Map.Entry<String, Map.Entry<String, List<String>>> entry : byRole.entrySet()) {
             grants.add(new Principal.RoleGrant(entry.getKey(),
                     entry.getValue().getKey().isEmpty() ? null : entry.getValue().getKey(),
-                    entry.getValue().getValue()));
+                    entry.getValue().getValue(),
+                    conditions.getOrDefault(entry.getKey(), List.of())));
         }
         return grants;
     }

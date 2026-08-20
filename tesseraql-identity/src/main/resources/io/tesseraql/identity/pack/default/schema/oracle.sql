@@ -181,3 +181,10 @@ create table tql_grant_history (
   reason          varchar2(1000),
   correlation     varchar2(64)
 );
+
+create table tql_role_conditions (
+  role_id        varchar2(64) not null,
+  condition_kind varchar2(16) not null,
+  value          varchar2(200) not null,
+  primary key (role_id, condition_kind, value)
+);

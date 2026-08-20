@@ -165,6 +165,16 @@ public final class IdentityContracts {
     /** Decides a request, keyed on {@code pending} so two approvers cannot both grant. */
     public static final String DECIDE_ACCESS_REQUEST = "decide-access-request";
 
+    // Grant context conditions (docs/access-governance.md slice 8); optional. The resolution
+    // read rides sign-in beside the grant attribution: a condition is a property of the
+    // grant, so it is frozen with the principal and evaluated against each request.
+    /** The conditions on the roles one person holds, for the frozen principal. */
+    public static final String FIND_ROLE_CONDITIONS_BY_USER_ID = "find-role-conditions-by-user-id";
+    /** Every condition in the store with the role it narrows, for the admin surface. */
+    public static final String LIST_ROLE_CONDITIONS = "list-role-conditions";
+    public static final String ADD_ROLE_CONDITION = "add-role-condition";
+    public static final String REMOVE_ROLE_CONDITION = "remove-role-condition";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -184,7 +194,10 @@ public final class IdentityContracts {
                 CLOSE_ACCESS_REVIEW, MARK_REVIEW_ITEM_STALE,
                 // Asking for a role is not role management — anybody may ask. Recording an
                 // owner and deciding a request are, because both change what can be held.
-                ADD_ROLE_OWNER, REMOVE_ROLE_OWNER, DECIDE_ACCESS_REQUEST);
+                ADD_ROLE_OWNER, REMOVE_ROLE_OWNER, DECIDE_ACCESS_REQUEST,
+                // A condition changes what a role delivers and from where, which is role
+                // management however narrow the change looks.
+                ADD_ROLE_CONDITION, REMOVE_ROLE_CONDITION);
     }
 
     private IdentityContracts() {

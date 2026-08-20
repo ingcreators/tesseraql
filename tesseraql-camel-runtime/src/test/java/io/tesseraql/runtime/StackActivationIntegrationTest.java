@@ -268,6 +268,41 @@ class StackActivationIntegrationTest {
         return URI.create("http://localhost:" + gateway.port() + path);
     }
 
+    /**
+     * Context conditions compose with activation rather than competing with it
+     * (docs/access-governance.md structural decision 8): the conditions step runs before
+     * activation, so a grant this request's network does not admit is gone from the active
+     * view, gone from the picker, and unreachable through its own {@code _as} segment.
+     *
+     * <p>Two roles differing only in the network they name is the whole assertion: if the drop
+     * were a blanket one rather than a filter, the day role would go with the night role.
+     */
+    @Test
+    void aRoleDeniedByItsNetworkConditionLeavesTheActiveViewAndThePicker() throws Exception {
+        Session hazel = signIn("hazel");
+
+        // Two roles held, one usable here: choice of one is no choice, so the browser entry
+        // lands in the surviving role rather than at the picker.
+        HttpResponse<String> entry = get("/shop-a/admin/users", hazel);
+        assertThat(entry.statusCode()).isEqualTo(302);
+        assertThat(entry.headers().firstValue("Location").orElse(""))
+                .isEqualTo("/shop-a/_as/shop-a.day/admin/users");
+
+        HttpResponse<String> picker = get("/_tesseraql/roles?app=shop-a", hazel);
+        assertThat(picker.body()).contains("shop-a.day").doesNotContain("shop-a.night");
+
+        assertThat(get("/shop-a/_as/shop-a.day/admin/users", hazel).statusCode())
+                .as("the role whose condition this request satisfies is fully usable")
+                .isEqualTo(200);
+
+        // Asking to act as the dropped role is asking for a capacity the caller no longer
+        // holds — the same answer a forged segment gets, because it is the same check.
+        HttpResponse<String> night = get("/shop-a/_as/shop-a.night/admin/users", hazel);
+        assertThat(night.statusCode()).isEqualTo(302);
+        assertThat(night.headers().firstValue("Location").orElse(""))
+                .startsWith("/_tesseraql/roles?app=shop-a");
+    }
+
     /** Signs in at the origin — the stack's one door. */
     private static Session signIn(String loginId) throws Exception {
         HttpResponse<String> login = CLIENT.send(
@@ -345,6 +380,26 @@ class StackActivationIntegrationTest {
             seedUser(statement, hash, params, "solo", List.of("tql.app.use.shop-a"));
             statement.execute("insert into tql_user_roles (user_id, role_id)"
                     + " values ('u-solo','r-sales')");
+
+            // Context conditions (docs/access-governance.md structural decision 8): two more
+            // shop-a roles differing only in the network their condition names — one this
+            // loopback client is inside, one it is not.
+            statement.execute("insert into tql_roles (role_id, role_code, role_name,"
+                    + " application) values ('r-day','shop-a.day','日勤','shop-a')");
+            statement.execute("insert into tql_roles (role_id, role_code, role_name,"
+                    + " application) values ('r-night','shop-a.night','夜勤','shop-a')");
+            statement.execute("insert into tql_role_permissions values"
+                    + " ('r-day','shop-a.users.read')");
+            statement.execute("insert into tql_role_permissions values ('r-night','shop-a.read')");
+            statement.execute("insert into tql_role_conditions values"
+                    + " ('r-day','network','127.0.0.0/8')");
+            statement.execute("insert into tql_role_conditions values"
+                    + " ('r-night','network','203.0.113.0/24')");
+            seedUser(statement, hash, params, "hazel", List.of("tql.app.use.shop-a"));
+            statement.execute("insert into tql_user_roles (user_id, role_id)"
+                    + " values ('u-hazel','r-day')");
+            statement.execute("insert into tql_user_roles (user_id, role_id)"
+                    + " values ('u-hazel','r-night')");
         }
     }
 

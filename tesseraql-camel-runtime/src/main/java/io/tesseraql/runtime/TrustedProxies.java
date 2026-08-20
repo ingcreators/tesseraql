@@ -3,9 +3,7 @@ package io.tesseraql.runtime;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
+import io.tesseraql.core.net.CidrBlock;
 import java.util.List;
 
 /**
@@ -26,8 +24,13 @@ import java.util.List;
  * a gateway, and it would restore that as the default. So an operator who names no edge gets the
  * relay's plain behaviour and the trust contract stays where it already was; an operator who names
  * one gets defence in depth on top of it.
+ *
+ * <p>The block arithmetic itself is {@link CidrBlock}, shared with the sign-in allow-list and
+ * grant network conditions (docs/access-governance.md structural decision 8). The refusal stays
+ * here, because a malformed range in <em>this</em> setting is a boot failure and TQL-APP-4004 is
+ * what says so.
  */
-record TrustedProxies(List<Cidr> ranges) {
+record TrustedProxies(List<CidrBlock> ranges) {
 
     /** TQL-APP-4004: a trusted-proxy range is not a valid CIDR block. */
     private static final TqlErrorCode INVALID = new TqlErrorCode(TqlDomain.APP, 4004);
@@ -40,17 +43,11 @@ record TrustedProxies(List<Cidr> ranges) {
 
     /** Parses {@code 10.0.0.0/8,192.168.0.0/16} — blank entries and spacing are tolerated. */
     static TrustedProxies parse(String value) {
-        if (value == null || value.isBlank()) {
-            return NONE;
+        try {
+            return new TrustedProxies(CidrBlock.parseList(value));
+        } catch (IllegalArgumentException invalid) {
+            throw new TqlException(INVALID, "Not a trusted-proxy range: " + invalid.getMessage());
         }
-        List<Cidr> parsed = new ArrayList<>();
-        for (String entry : value.split(",")) {
-            String trimmed = entry.trim();
-            if (!trimmed.isEmpty()) {
-                parsed.add(Cidr.parse(trimmed));
-            }
-        }
-        return new TrustedProxies(parsed);
     }
 
     /** Whether anything is trusted at all; an empty list leaves every request alone. */
@@ -60,73 +57,6 @@ record TrustedProxies(List<Cidr> ranges) {
 
     /** Whether {@code address} — the peer of the connection, not a header — is a named edge. */
     boolean includes(String address) {
-        if (address == null || ranges.isEmpty()) {
-            return false;
-        }
-        byte[] candidate;
-        try {
-            // Numeric literal only: the peer address of a live connection always is one, and
-            // resolving a name here would put a DNS lookup on the event loop.
-            candidate = InetAddress.ofLiteral(address).getAddress();
-        } catch (IllegalArgumentException notAnAddress) {
-            return false;
-        }
-        return ranges.stream().anyMatch(range -> range.contains(candidate));
-    }
-
-    /** One CIDR block, held as the network bytes and the prefix length that is significant. */
-    record Cidr(byte[] network, int prefixBits) {
-
-        static Cidr parse(String block) {
-            int slash = block.indexOf('/');
-            String host = slash < 0 ? block : block.substring(0, slash);
-            byte[] address;
-            try {
-                address = InetAddress.getByName(host).getAddress();
-            } catch (UnknownHostException | RuntimeException invalid) {
-                throw new TqlException(INVALID, "Not an address in a trusted-proxy range: "
-                        + block + ". Expected a CIDR block such as 10.0.0.0/8.");
-            }
-            // A bare address is the single host it names, which is what an operator naming one
-            // edge means; /32 and /128 say the same thing more loudly.
-            int bits = address.length * 8;
-            if (slash < 0) {
-                return new Cidr(address, bits);
-            }
-            int prefix;
-            try {
-                prefix = Integer.parseInt(block.substring(slash + 1).trim());
-            } catch (NumberFormatException notANumber) {
-                throw new TqlException(INVALID, "Not a prefix length in a trusted-proxy range: "
-                        + block + ". Expected a CIDR block such as 10.0.0.0/8.");
-            }
-            if (prefix < 0 || prefix > bits) {
-                throw new TqlException(INVALID, "Prefix length " + prefix + " is out of range for "
-                        + block + "; an IPv" + (bits == 32 ? "4" : "6") + " block allows 0 to "
-                        + bits + ".");
-            }
-            return new Cidr(address, prefix);
-        }
-
-        /** Whether {@code candidate} shares this block's significant bits. */
-        boolean contains(byte[] candidate) {
-            if (candidate.length != network.length) {
-                // An IPv4 peer never matches an IPv6 block and the reverse; a deployment that
-                // wants both names both.
-                return false;
-            }
-            int wholeBytes = prefixBits / 8;
-            for (int i = 0; i < wholeBytes; i++) {
-                if (candidate[i] != network[i]) {
-                    return false;
-                }
-            }
-            int remainingBits = prefixBits % 8;
-            if (remainingBits == 0) {
-                return true;
-            }
-            int mask = 0xFF << (8 - remainingBits);
-            return (candidate[wholeBytes] & mask) == (network[wholeBytes] & mask);
-        }
+        return CidrBlock.anyContains(ranges, address);
     }
 }

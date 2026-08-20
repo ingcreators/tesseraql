@@ -45,6 +45,10 @@ web/_tesseraql/admin/groups/{code}/roles/grant/post.yml
 web/_tesseraql/admin/groups/{code}/roles/revoke/post.yml
 web/_tesseraql/admin/history/get.yml
 web/_tesseraql/admin/history/history.html
+web/_tesseraql/admin/conditions/get.yml
+web/_tesseraql/admin/conditions/conditions.html
+web/_tesseraql/admin/conditions/add/post.yml
+web/_tesseraql/admin/conditions/remove/post.yml
 web/_tesseraql/admin/constraints/get.yml
 web/_tesseraql/admin/constraints/constraints.html
 web/_tesseraql/admin/constraints/create/post.yml

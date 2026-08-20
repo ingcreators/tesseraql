@@ -175,6 +175,46 @@ This is *static* separation of duties. The *dynamic* half already holds without 
 constraint: a person acts as one role at a time per application, chosen at use time, and
 the audit records which capacity acted ([application roles](authentication.md)).
 
+## Context conditions
+
+The conditions page (`/_tesseraql/admin/conditions`) narrows *where* and *when* a held role
+may be used. A condition is one of two kinds:
+
+| Kind | Value | Example |
+| --- | --- | --- |
+| `network` | a CIDR block, or a bare address for a single host | `10.0.0.0/8`, `203.0.113.7` |
+| `hours` | `[<days> ]<HH:MM>-<HH:MM>` in the deployment's zone | `MON-FRI 09:00-18:00`, `SAT,SUN 10:00-16:00`, `09:00-18:00` |
+
+**Within one kind any condition admits; across kinds every kind must.** Two networks are two
+offices, and a role usable from either is what naming both means. A network *and* an hours
+condition are two separate requirements. A range whose end is at or before its start runs past
+midnight, and its days are the days the window *opens*: `MON-FRI 22:00-06:00` admits Saturday
+at 05:00 (Friday's window, still open) and refuses Monday at 05:00.
+
+Hours are read in `tesseraql.security.conditions.zone`, defaulting to the JVM's zone. Name one
+if your servers may move: "login hours" means the business's hours.
+
+A grant whose conditions this request does not satisfy is **dropped from the active view** —
+its role leaves `roles` and its permissions leave `permissions` unless another surviving grant
+or a direct grant delivers them, it is absent from the role picker, and acting as it through
+its `/_as/` address is refused like any unheld role. Nothing is revoked: the grant is intact
+and the same person from the office at 10:00 has it in full.
+
+**A condition narrows and never widens, and it is not the network boundary.** The address it
+judges is whatever the edge presented, so the worst a spoofed one can do is take capability
+away. The enforceable answer to "who may sign in from where" is the deployment allow-list
+[`tesseraql.security.network.allow`](authentication.md#where-a-session-may-be-established-from),
+checked before a session exists. Use a condition to keep a *capacity* inside the office or
+inside business hours; use the allow-list to keep *everybody* out of everywhere else.
+
+A condition value that could never be satisfied — a malformed block, an unreadable time range,
+an unknown kind — is refused when it is written. The evaluator fails closed on one, so an
+accepted typo would silently close the role to everybody rather than open anything.
+
+Conditions ride the grant into the principal at sign-in and are evaluated per request, so a
+condition added now reaches an existing session at its next sign-in — the same rule the rest of
+the frozen principal follows.
+
 ## Access requests
 
 The requests page (`/_tesseraql/admin/requests`) is the approver's side of self-service
