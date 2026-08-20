@@ -261,4 +261,6 @@ export const EXCLUDED = [
   'access-governance.md',
   // Worker pool, connection pool, edge admission, one Vert.x per host, 2026-08-20.
   'http-threading.md',
+  // How deployment-supplied contract SQL is executed: keys, timeout, transaction, 2026-08-20.
+  'contract-sql-execution.md',
 ];

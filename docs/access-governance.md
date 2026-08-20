@@ -306,10 +306,20 @@ keeps its own SQL — this adds a default, it does not remove a seam.
 **Deferred to its own slice (4b), for a measured reason.** `ScimGroupService.create` runs
 `createSql` through `executeQuery` and reads the assigned id from the returned row, so a
 bundled contract set would need `insert … returning` — which MySQL and SQL Server do not
-have. Making it portable means changing the create seam itself: mint the id before the
-insert, execute the insert as an update, then re-read. That is a change to a shipped
+have. Making it portable means changing the create seam itself. That is a change to a shipped
 provisioning contract, with every existing deployment's nine hand-authored files depending
 on the current shape, so it earns its own slice rather than riding the store work.
+
+*Measured again, 2026-08-20, and the seam is where the work belongs.* This section first
+proposed minting the id before the insert and re-reading. Measuring the executors says that
+changes the wrong half: minting takes id assignment away from the store, so every deployment
+whose table assigns its own — the shape the shipped example fixture uses — would have to change
+its schema. It also says the problem is not SCIM's. **Three executors run deployment-supplied
+2-way SQL** — the route pipeline, `IdentityService` and `ScimSql` — and only the route pipeline
+can ask a driver for generated keys, bound a statement by a timeout, span it, or run several
+statements in one transaction. Slice 4b therefore waits on
+[contract SQL execution](contract-sql-execution.md), which closes those gaps once for all three
+and reduces this slice to the bundled statements themselves.
 
 **The admin surface** gets a groups page, a group detail page with members and roles, and
 membership editing from the user detail page.
