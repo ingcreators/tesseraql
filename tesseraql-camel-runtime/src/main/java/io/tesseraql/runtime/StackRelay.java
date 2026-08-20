@@ -95,10 +95,49 @@ final class StackRelay {
      * continues over HTTP/1.1, so enabling this cannot make a hosted application unreachable.
      */
     static HttpClientOptions outboundOptions(boolean http2) {
-        HttpClientOptions options = new HttpClientOptions();
+        return outboundOptions(http2, 10);
+    }
+
+    /**
+     * As {@link #outboundOptions(boolean)}, sized to what the front door admits per member
+     * (docs/http-threading.md decision 5).
+     *
+     * <p>Both protocol modes are given the same number on purpose. The client's own defaults are
+     * five connections per origin on HTTP/1 and one connection with <em>unlimited</em> multiplexed
+     * streams on h2c, so the concurrency the front door could reach a member with changed by an
+     * order of magnitude — from five to unbounded — when an operator turned on a protocol flag.
+     * A protocol setting deciding a capacity setting is the kind of coupling that is only ever
+     * discovered under load.
+     */
+    static HttpClientOptions outboundOptions(boolean http2, int maxConcurrentPerMember) {
+        return outboundOptions(http2, maxConcurrentPerMember, 0);
+    }
+
+    /**
+     * As {@link #outboundOptions(boolean, int)}, reclaiming a forward whose member has gone quiet
+     * for {@code readIdleSeconds} ({@code 0} leaves it disabled, which is the default).
+     *
+     * <p><strong>Deliberately opt-in, and it cannot safely be defaulted.</strong> A member that
+     * has hung and a member running a legitimately long query look identical from here: both
+     * accept the request and send nothing until they are done. Event streams are the easy half —
+     * they heartbeat every 25 seconds — but a report with a raised {@code timeoutSeconds} can be
+     * silent for minutes and is not misbehaving. So the framework cannot pick a number that is
+     * both a hang detector and safe; an operator who knows their slowest legitimate response can.
+     * Without it, the per-member share above is what contains a hung member: it takes that
+     * member's own permits and nothing else, and the stack answers 503 for it rather than
+     * degrading for everyone.
+     */
+    static HttpClientOptions outboundOptions(boolean http2, int maxConcurrentPerMember,
+            int readIdleSeconds) {
+        int limit = Math.max(1, maxConcurrentPerMember);
+        HttpClientOptions options = new HttpClientOptions().setMaxPoolSize(limit);
+        if (readIdleSeconds > 0) {
+            options.setReadIdleTimeout(readIdleSeconds);
+        }
         return http2
                 ? options.setProtocolVersion(HttpVersion.HTTP_2)
                         .setHttp2ClearTextUpgrade(true)
+                        .setHttp2MultiplexingLimit(limit)
                 : options;
     }
 
@@ -110,6 +149,13 @@ final class StackRelay {
 
     /** TQL-APP-5020: the gateway failed to forward the request to the app's runtime (HTTP 502). */
     private static final String GATEWAY_ERROR = "TQL-APP-5020";
+
+    /**
+     * TQL-RATE-4294: the front door already has this member's share of forwards in flight
+     * (HTTP 503). The member's own {@code tesseraql.http.maxInFlight} is a different bound at a
+     * different place; this one keeps a slow member from consuming the front door for everyone.
+     */
+    private static final String MEMBER_AT_CAPACITY = "TQL-RATE-4294";
 
     /** The surface's key in the per-app proxy lookups; {@code #} is outside every legal name. */
     private static final String SURFACE = "#portal";
@@ -169,6 +215,21 @@ final class StackRelay {
      */
     private volatile boolean draining;
 
+    /**
+     * How many forwards one member may have in flight (docs/http-threading.md decision 5).
+     *
+     * <p>There was no declared bound and there was an undeclared one: the outbound client's own
+     * pool defaults to five connections per origin, so the front door forwarded at most five
+     * requests to a member at a time — fewer than the member's own worker pool — and queued the
+     * rest in the client's waiter queue, which is unbounded by default. The effective limit on
+     * the whole stack was a number nobody chose and nobody could see, and enabling h2c replaced
+     * it with no limit at all.
+     */
+    private volatile int maxConcurrentPerMember = 10;
+
+    /** One permit set per member, created on first forward to it. */
+    private final Map<String, java.util.concurrent.Semaphore> memberPermits = new ConcurrentHashMap<>();
+
     StackRelay(HttpClient client, Map<String, InstalledApp> appsByName,
             ToIntFunction<String> portOf) {
         this(client, appsByName, Map.of(), TrustedProxies.NONE, portOf, null, null);
@@ -215,6 +276,16 @@ final class StackRelay {
      */
     void beginDrain() {
         draining = true;
+    }
+
+    /**
+     * Sets how many forwards one member may have in flight, before the front starts serving.
+     * The outbound client's pool is sized to match, so what this admits the transport can carry
+     * without queueing behind it.
+     */
+    StackRelay maxConcurrentPerMember(int forwards) {
+        this.maxConcurrentPerMember = Math.max(1, forwards);
+        return this;
     }
 
     /** Requests accepted and not yet fully answered — what the stop drains to zero. */
@@ -278,9 +349,17 @@ final class StackRelay {
         // the stop's drain open forever.
         inFlight.incrementAndGet();
         AtomicBoolean released = new AtomicBoolean();
+        // The member permit rides the same guard rather than a second pair of handlers: Vert.x
+        // keeps one endHandler per response, so registering again would replace the drain's own
+        // and leak the count the stack's stop waits on.
+        java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Semaphore> held = new java.util.concurrent.atomic.AtomicReference<>();
         Runnable release = () -> {
             if (released.compareAndSet(false, true)) {
                 inFlight.decrementAndGet();
+                java.util.concurrent.Semaphore permit = held.getAndSet(null);
+                if (permit != null) {
+                    permit.release();
+                }
             }
         };
         request.response().endHandler(v -> release.run());
@@ -362,6 +441,18 @@ final class StackRelay {
             // only an origin to choose. The proxy resolves the port again itself: the value
             // checked above is only the early 404, never the routing decision, so a swap between
             // the two reads cannot strand the request on a retired runtime.
+            // Taken once the member is known and released on the guard above, so a member whose
+            // backend has stalled can hold only its own share of the front door. The gateway's
+            // own health answered above, before this: a stack that cannot say "that member is
+            // busy" is one an orchestrator removes for the silence.
+            java.util.concurrent.Semaphore permits = memberPermits.computeIfAbsent(appName,
+                    name -> new java.util.concurrent.Semaphore(maxConcurrentPerMember));
+            if (!permits.tryAcquire()) {
+                request.response().putHeader("Retry-After", "1");
+                respond(request, 503, MEMBER_AT_CAPACITY);
+                return;
+            }
+            held.set(permits);
             proxies.computeIfAbsent(appName,
                     name -> proxyFor(name, () -> portOf.applyAsInt(name)))
                     .handle(request);

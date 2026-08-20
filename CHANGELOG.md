@@ -133,6 +133,36 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The front door forwards under a declared bound, per member**
+  (docs/http-threading.md decision 5). The gateway's threads were never the problem — the relay
+  is non-blocking end to end, so a member blocked in JDBC costs it a connection and some memory
+  rather than a thread. Its **connections** were. `outboundOptions` passed the client's defaults
+  through untouched, which meant three things at once: **five** connections per member
+  (`maxPoolSize`), fewer than the member's own worker pool, so the front door rather than the
+  member was the ceiling; an **unbounded** wait queue behind them, the very queue removed inside
+  a runtime one slice earlier; and **unlimited** multiplexed streams under h2c, so turning on a
+  *protocol* flag replaced the limit of five with no limit at all. The effective concurrency of a
+  whole stack was a number nobody chose, nobody could see, and that changed by an order of
+  magnitude with a setting about protocols.
+
+  `tesseraql.gateway.maxConcurrentPerMember` now declares it, defaulting to the stack's
+  `tesseraql.http.workerThreads` — admitting more than a member can run only moves the queue one
+  hop earlier, and admitting fewer makes the member's own pool unreachable. Beyond it: 503 with
+  `Retry-After` and `TQL-RATE-4294`, **for that member only**, so a member whose database has
+  stalled holds its own permits and nothing else while the rest of the stack keeps serving. The
+  outbound client is sized to the same number in both protocol modes. The permit rides the drain
+  counter's existing exactly-once guard, because Vert.x keeps one `endHandler` per response and a
+  second registration would have silently replaced the count the stack's stop waits on.
+
+  **A read-idle timeout is offered and deliberately not defaulted.**
+  `tesseraql.gateway.readIdleTimeoutSeconds` is off unless an operator sets it: a hung member and
+  one running a legitimately long query are indistinguishable from the front door, since both
+  accept the request and stay silent until done. Event streams heartbeat every 25 seconds, but a
+  report with a raised `timeoutSeconds` can be silent for minutes and is not misbehaving — so any
+  number the framework chose would eventually cancel somebody's report. Containment comes from
+  the per-member bound instead; reclamation is the operator's call, because only they know their
+  slowest legitimate response.
+
 - **A multi-application host has one Vert.x, not one per application**
   (docs/http-threading.md decision 4). `VertxPlatformHttpServer` looks a Vert.x up in the
   runtime's own Camel registry and builds one when it finds none, and TesseraQL bound none — so

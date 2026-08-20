@@ -59,6 +59,9 @@ class StackRelayTest {
     private static HttpServer front;
     private static String base;
     private static int originPort;
+    /** A front bounded to two forwards per member, for the capacity refusal. */
+    private static HttpServer boundedFront;
+    private static String boundedBase;
     /** The same relay with cleartext HTTP/2 on, at both ends together. */
     private static HttpClient h2Client;
     private static HttpServer h2Front;
@@ -90,10 +93,20 @@ class StackRelayTest {
         h2Front = vertx.createHttpServer(StackRelay.frontOptions(0, true));
         h2Front.requestHandler(h2Relay::handle);
         h2Base = "http://localhost:" + await(h2Front.listen()).actualPort() + "/" + APP;
+
+        StackRelay bounded = new StackRelay(client, CATALOGUE, appId -> originPort)
+                .maxConcurrentPerMember(2);
+        boundedFront = vertx.createHttpServer(StackRelay.frontOptions(0, false));
+        boundedFront.requestHandler(bounded::handle);
+        boundedBase = "http://localhost:" + await(boundedFront.listen()).actualPort()
+                + "/" + APP;
     }
 
     @AfterAll
     static void stop() throws Exception {
+        if (boundedFront != null) {
+            await(boundedFront.close());
+        }
         if (h2Front != null) {
             await(h2Front.close());
         }
@@ -111,6 +124,68 @@ class StackRelayTest {
         }
         if (vertx != null) {
             await(vertx.close());
+        }
+    }
+
+    /**
+     * A forward beyond the member's share is refused, and the share is given back.
+     *
+     * <p>There was no declared bound and there was an undeclared one: the outbound client
+     * defaults to five connections per origin, so the front door forwarded five requests to a
+     * member at a time — fewer than the member's own worker pool — and queued the rest in the
+     * client's waiter queue, which is unbounded. The effective limit on the whole stack was a
+     * number nobody chose and nobody could see.
+     *
+     * <p>The second half of the assertion is the one that matters after an incident: a member
+     * that was busy has to be usable again once it is not, which means the permit is released on
+     * every way a response can end.
+     */
+    @Test
+    void aForwardBeyondTheMembersShareIsRefusedAndTheShareComesBack() throws Exception {
+        List<java.util.concurrent.CompletableFuture<HttpResponse<String>>> holding = List.of(
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                        () -> getBounded("/slow")),
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                        () -> getBounded("/slow")));
+        Thread.sleep(400);
+
+        HttpResponse<String> refused = getBounded("/slow");
+
+        assertThat(refused.statusCode()).isEqualTo(503);
+        assertThat(refused.body()).contains("TQL-RATE-4294");
+        assertThat(refused.headers().firstValue("Retry-After")).contains("1");
+
+        for (java.util.concurrent.CompletableFuture<HttpResponse<String>> held : holding) {
+            assertThat(held.get().statusCode()).isEqualTo(200);
+        }
+        assertThat(getBounded("/slow").statusCode()).isEqualTo(200);
+    }
+
+    /**
+     * The outbound client carries what the front door admits, in both protocol modes.
+     *
+     * <p>The client's own defaults are five connections per origin on HTTP/1 and one connection
+     * with unlimited multiplexed streams on h2c, so the concurrency the front could reach a
+     * member with changed by an order of magnitude — from five to unbounded — when an operator
+     * turned on a protocol flag. A protocol setting deciding a capacity setting is the kind of
+     * coupling only ever discovered under load.
+     */
+    @Test
+    void theOutboundClientIsSizedToWhatTheFrontAdmits() {
+        assertThat(StackRelay.outboundOptions(false, 7).getMaxPoolSize()).isEqualTo(7);
+        assertThat(StackRelay.outboundOptions(true, 7).getMaxPoolSize()).isEqualTo(7);
+        assertThat(StackRelay.outboundOptions(true, 7).getHttp2MultiplexingLimit()).isEqualTo(7);
+    }
+
+    private static HttpResponse<String> getBounded(String path) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(boundedBase + path))
+                    .timeout(java.time.Duration.ofSeconds(30))
+                    .build();
+            return java.net.http.HttpClient.newHttpClient()
+                    .send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
         }
     }
 
@@ -473,6 +548,9 @@ class StackRelayTest {
         if (path.endsWith("/sse")) {
             response.putHeader("Content-Type", "text/event-stream").setChunked(true);
             emit(response, 0);
+        } else if (path.endsWith("/slow")) {
+            // Held open, so a test can have forwards genuinely in flight rather than racing them.
+            vertx.setTimer(1_200, done -> response.end("slow"));
         } else if (path.endsWith("/chunked")) {
             response.setChunked(true);
             response.write("one-");
