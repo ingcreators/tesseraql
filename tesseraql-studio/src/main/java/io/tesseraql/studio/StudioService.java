@@ -104,7 +104,7 @@ public final class StudioService {
         // The collaborators read the app home through a supplier — reload() reassigns the field,
         // and a captured value would pin them to a stale manifest.
         this.auditTrail = new AuditTrail(() -> appHome);
-        this.renderer = new PreviewRenderer(() -> appHome, () -> manifest, this::source,
+        this.renderer = new PreviewRenderer(() -> appHome, this::source,
                 this::sourceIfExists, this::resolve, functions);
 
         this.draftStore = new DraftStore(() -> appHome, readOnly, this::preview,

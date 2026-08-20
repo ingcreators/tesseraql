@@ -15,13 +15,9 @@ final class ComponentPolicyRules implements LintRule {
 
     private static final String COMPONENT_ALLOWLIST_WITHOUT_EFFECT = "TQL-SEC-4139";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintComponentPolicy(manifest.config(), findings);
     }
 

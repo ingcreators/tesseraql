@@ -15,13 +15,9 @@ final class OrgUnitRules implements LintRule {
 
     private static final String INVALID_ORG_UNIT_MODE = "TQL-SCOPE-3020";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintOrgUnitConfig(manifest.config(), findings);
     }
 

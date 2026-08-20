@@ -1587,11 +1587,6 @@ public final class RouteCompiler {
             "LocaleResolution");
 
     /** Inserts the route telemetry step (span + invocation counter) at the route head (ch. 25). */
-    private void applyTelemetry(ProcessorDefinition<?> route, RouteFile routeFile) {
-        applyTelemetry(route, routeFile.definition().id(), routeFile.httpMethod(),
-                routeFile.urlPath());
-    }
-
     private void applyTelemetry(ProcessorDefinition<?> route, String id, String method,
             String path) {
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
@@ -1608,11 +1603,6 @@ public final class RouteCompiler {
      * The opt-in business-route audit trail (roadmap Phase 45): appended only when
      * {@code tesseraql.audit.routes.enabled} is set, so un-audited apps pay nothing.
      */
-    private void applyAudit(ProcessorDefinition<?> route, RouteFile routeFile) {
-        applyAudit(route, routeFile.definition().id(), routeFile.httpMethod(),
-                routeFile.urlPath(), routeFile.definition());
-    }
-
     private void applyAudit(ProcessorDefinition<?> route, String id, String method, String path,
             RouteDefinition definition) {
         if (!config.getString("tesseraql.audit.routes.enabled")

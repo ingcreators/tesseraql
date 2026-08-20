@@ -15,7 +15,6 @@ import io.tesseraql.studio.StudioService.PreviewResult;
 import io.tesseraql.studio.StudioService.RenderResult;
 import io.tesseraql.studio.StudioService.RowSource;
 import io.tesseraql.yaml.SimpleYamlParser;
-import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.model.ResponseSpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.io.IOException;
@@ -51,17 +50,15 @@ final class PreviewRenderer {
     private final SimpleYamlParser parser = new SimpleYamlParser();
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final Supplier<Path> appHome;
-    private final Supplier<AppManifest> manifest;
     private final Function<String, String> source;
     private final Function<String, String> sourceIfExists;
     private final Function<String, Path> resolve;
     private final ExpressionFunctions functions;
 
-    PreviewRenderer(Supplier<Path> appHome, Supplier<AppManifest> manifest,
+    PreviewRenderer(Supplier<Path> appHome,
             Function<String, String> source, Function<String, String> sourceIfExists,
             Function<String, Path> resolve, ExpressionFunctions functions) {
         this.appHome = appHome;
-        this.manifest = manifest;
         this.source = source;
         this.sourceIfExists = sourceIfExists;
         this.resolve = resolve;

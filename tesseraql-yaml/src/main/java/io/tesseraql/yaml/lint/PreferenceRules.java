@@ -13,13 +13,9 @@ import java.util.List;
  */
 final class PreferenceRules implements LintRule {
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintPreferences(context.appHome(), findings);
     }
 

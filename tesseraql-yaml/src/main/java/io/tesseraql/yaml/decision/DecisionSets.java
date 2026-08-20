@@ -581,7 +581,7 @@ public final class DecisionSets {
                 collectRoots(comparison.right(), roots);
             }
             case Expr.Call call -> call.args().forEach(arg -> collectRoots(arg, roots));
-            case Expr.Literal literal -> {
+            case Expr.Literal _ -> {
             }
         }
     }

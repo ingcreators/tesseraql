@@ -159,9 +159,9 @@ class ExportStreamingProfileIntegrationTest {
         private static Object wrap(Object result, List<String> calls) {
             Class<?> face = switch (result) {
                 case null -> null;
-                case ResultSet ignored -> ResultSet.class;
-                case PreparedStatement ignored -> PreparedStatement.class;
-                case Connection ignored -> Connection.class;
+                case ResultSet _ -> ResultSet.class;
+                case PreparedStatement _ -> PreparedStatement.class;
+                case Connection _ -> Connection.class;
                 default -> null;
             };
             return face == null

@@ -24,13 +24,9 @@ final class OidcSamlRules implements LintRule {
 
     private static final String SAML_WITHOUT_ACS_URL = "TQL-SEC-4092";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintOidcConfig(manifest.config(), findings);
         lintSamlConfig(manifest.config(), findings);
     }

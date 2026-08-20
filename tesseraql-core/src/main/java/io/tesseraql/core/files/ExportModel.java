@@ -136,7 +136,7 @@ public final class ExportModel {
 
     private static long count(Iterable<Map<String, Object>> rows) {
         long count = 0;
-        for (Map<String, Object> ignored : rows) {
+        for (Map<String, Object> _ : rows) {
             count++;
         }
         return count;

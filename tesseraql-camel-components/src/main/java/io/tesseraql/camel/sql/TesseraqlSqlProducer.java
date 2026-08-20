@@ -137,7 +137,6 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             Map<String, Object> result;
             if (paged) {
                 result = executeQuery(dataSource, paginated(bound, page));
-                @SuppressWarnings("unchecked")
                 List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
                 boolean hasNext = rows.size() > page.size();
                 if (hasNext) {

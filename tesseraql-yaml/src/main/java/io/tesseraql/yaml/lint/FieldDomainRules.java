@@ -23,13 +23,9 @@ final class FieldDomainRules implements LintRule {
 
     private static final String UNREFERENCED_DOMAIN = "TQL-FIELD-4611";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintFieldDomains(context.appHome(), manifest, findings);
     }
 

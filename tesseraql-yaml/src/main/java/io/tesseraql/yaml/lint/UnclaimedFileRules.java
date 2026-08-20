@@ -17,13 +17,9 @@ final class UnclaimedFileRules implements LintRule {
 
     private static final String UNLOADED_FILE = "TQL-APP-4205";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintUnclaimedFiles(context.appHome(), findings);
     }
 

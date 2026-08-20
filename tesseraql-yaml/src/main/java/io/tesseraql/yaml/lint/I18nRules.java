@@ -26,13 +26,9 @@ final class I18nRules implements LintRule {
 
     private static final String UNRESOLVED_MESSAGE_KEY = "TQL-FIELD-2005";
 
-    /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
-    private LintContext context;
-
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
-        this.context = context;
         lintI18n(context.appHome(), manifest, findings);
     }
 

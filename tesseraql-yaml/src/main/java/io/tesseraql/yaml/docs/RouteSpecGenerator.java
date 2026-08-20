@@ -211,10 +211,10 @@ public final class RouteSpecGenerator {
                             + (scope.asBoolean() ? " as boolean" : "");
                     controls.add(new RouteSpec.Control("scope", expression, depth));
                 }
-                case SqlNode.Text ignored -> {
+                case SqlNode.Text _ -> {
                     // Literal SQL text carries no binds or control structure.
                 }
-                case SqlNode.Embedded ignored -> {
+                case SqlNode.Embedded _ -> {
                     // An embedded variable interpolates into the SQL text, not a ? bind, and adds no
                     // control structure; its placeholders are surfaced through the route's inputs.
                 }
