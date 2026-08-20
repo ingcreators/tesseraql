@@ -16,6 +16,13 @@ web/_tesseraql/admin/rules/create/post.yml
 web/_tesseraql/admin/rules/conditions/post.yml
 web/_tesseraql/admin/rules/delete/post.yml
 web/_tesseraql/admin/rules/recompute/post.yml
+web/_tesseraql/admin/reviews/get.yml
+web/_tesseraql/admin/reviews/reviews.html
+web/_tesseraql/admin/reviews/open/post.yml
+web/_tesseraql/admin/reviews/{id}/get.yml
+web/_tesseraql/admin/reviews/{id}/review.html
+web/_tesseraql/admin/reviews/{id}/decide/post.yml
+web/_tesseraql/admin/reviews/{id}/close/post.yml
 web/_tesseraql/admin/groups/get.yml
 web/_tesseraql/admin/groups/groups.html
 web/_tesseraql/admin/groups/create/post.yml

@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.iamAdmin.reviews.detail
+kind: route
+recipe: query-html
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  decided:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.review
+      params:
+        reviewId: path.id
+response:
+  html:
+    status: 200
+    template: review.html
+    model:
+      reviewId: main.reviewId
+      review: main.review
+      items: main.items
+      open: main.open
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      decided: params.decided

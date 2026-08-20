@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Access reviews', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/history}">History</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status" th:if="${opened != null}">Review opened, and the grants in scope snapshotted into it.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${closed != null}">Review closed. Every revoke decision was executed.</p>
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">Access reviews are unavailable for this realm.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<section class="hc-card" th:if="${available == 1 and writable == 1}">
+  <div class="hc-card__header">Open a review</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">Opening snapshots who holds what right now. Reviewers decide
+      against that snapshot, so the campaign still answers what was certified even after the
+      grants themselves have moved.</p>
+    <form method="post" th:action="@{/_tesseraql/admin/reviews/open}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Name</span>
+        <input class="hc-input" name="name" required></label>
+      <label class="hc-field"><span class="hc-field__label">Scope</span>
+        <select class="hc-input" name="application">
+          <option value="">The whole store</option>
+          <option th:each="m : ${members}" th:value="${m}" th:text="${m}"></option>
+        </select></label>
+      <button class="hc-button" data-variant="primary" type="submit">Open</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Reviews</div>
+  <div class="hc-card__body">
+    <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
+      <p class="hc-empty__title">No access reviews.</p>
+      <p class="hc-empty__description">A review asks somebody to look at every grant in scope
+        and say whether it should stay.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
+      <table class="hc-table">
+        <thead><tr>
+          <th>Name</th><th>Scope</th><th>Opened</th><th>By</th><th>Items</th>
+          <th>Pending</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+          <tr th:each="v : ${rows}">
+            <td><a th:href="@{'/_tesseraql/admin/reviews/' + ${v.review_id}}"
+                   th:text="${v.review_name}"></a></td>
+            <td th:text="${v.application != null ? v.application : 'whole store'}"></td>
+            <td th:text="${v.opened_at}"></td>
+            <td th:text="${v.opened_by}"></td>
+            <td th:text="${v.item_count}"></td>
+            <td th:text="${v.pending_count}"></td>
+            <td th:text="${v.status}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</div>
+</html>

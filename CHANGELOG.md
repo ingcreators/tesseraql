@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Access review campaigns, decided against a snapshot** (docs/access-governance.md structural
+  decision 5, slice 5). Opening a review snapshots who holds what — every role held by any path,
+  every direct permission grant — into items a reviewer decides one at a time. The snapshot is
+  what makes the campaign answerable later: reading live grants would ask reviewers about a
+  moving target and could never say what was certified in a given quarter. Each item shows how
+  the grant arrived (an assignment, a rule, a group), because a role nobody individually gave is
+  a different question. **Close and apply** executes every `revoke` through the same write an
+  administrator uses, so each revocation is validated identically, lands in the grant trail, and
+  names the campaign that decided it; an item whose grant had already gone is recorded `stale`
+  rather than re-revoked. A closed campaign takes no further decisions — its items are the
+  record. The grant history page gains a **Cause** column showing that correlation.
+
 - **Groups are writable, and membership carries a validity window**
   (docs/access-governance.md structural decision 4, slice 4). `tql_groups`,
   `tql_user_groups` and `tql_group_roles` were read by three contracts at sign-in and written

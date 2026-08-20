@@ -149,14 +149,26 @@ public final class RoleAdmin {
 
     public static Map<String, Object> unassignRole(IdentityService identity, RealmConfig realm,
             String actor, String userId, String roleCode) {
+        return unassignRole(identity, realm, actor, userId, roleCode,
+                GrantHistory.SOURCE_ADMIN, null);
+    }
+
+    /**
+     * The same revocation, recorded as another mechanism's. A review close revokes exactly as
+     * an administrator does — same validation, same trail — but the trail should say which
+     * campaign decided it, so the source and the correlation travel with the write.
+     */
+    public static Map<String, Object> unassignRole(IdentityService identity, RealmConfig realm,
+            String actor, String userId, String roleCode, String source, String correlation) {
         requireRealm(identity, realm);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", require(userId, "user"));
         params.put("roleCode", require(roleCode, "role code"));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_ROLE, params);
-        GrantHistory.record(identity, realm, GrantHistory.Change.admin(actor(actor),
+        GrantHistory.record(identity, realm, new GrantHistory.Change(actor(actor),
                 String.valueOf(params.get("userId")), GrantHistory.ROLE_REVOKED,
-                String.valueOf(params.get("roleCode"))));
+                String.valueOf(params.get("roleCode")), null, source, null, null, null,
+                correlation));
         return Map.of("unassigned", roleCode);
     }
 
@@ -189,14 +201,23 @@ public final class RoleAdmin {
 
     public static Map<String, Object> revokePermission(IdentityService identity,
             RealmConfig realm, String actor, String userId, String code) {
+        return revokePermission(identity, realm, actor, userId, code,
+                GrantHistory.SOURCE_ADMIN, null);
+    }
+
+    /** The same revocation, attributed to the mechanism that decided it. */
+    public static Map<String, Object> revokePermission(IdentityService identity,
+            RealmConfig realm, String actor, String userId, String code, String source,
+            String correlation) {
         requireRealm(identity, realm);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", require(userId, "user"));
         params.put("code", require(code, "permission code"));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_PERMISSION, params);
-        GrantHistory.record(identity, realm, GrantHistory.Change.admin(actor(actor),
+        GrantHistory.record(identity, realm, new GrantHistory.Change(actor(actor),
                 String.valueOf(params.get("userId")), GrantHistory.PERMISSION_REVOKED,
-                String.valueOf(params.get("code"))));
+                String.valueOf(params.get("code")), null, source, null, null, null,
+                correlation));
         return Map.of("revoked", code);
     }
 

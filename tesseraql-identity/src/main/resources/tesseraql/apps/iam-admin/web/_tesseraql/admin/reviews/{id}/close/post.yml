@@ -1,0 +1,18 @@
+version: tesseraql/v1
+id: tql.iamAdmin.reviews.close
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+steps:
+  - id: main
+    service:
+      name: iam.closeReview
+      params:
+        actor: principal.loginId
+        reviewId: path.id
+response:
+  redirect:
+    location: /_tesseraql/admin/reviews?closed=1

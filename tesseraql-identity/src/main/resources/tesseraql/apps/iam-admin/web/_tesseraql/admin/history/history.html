@@ -38,7 +38,7 @@
       <table class="hc-table">
         <thead><tr>
           <th>When</th><th>Actor</th><th>Subject</th><th>Change</th><th>Code</th>
-          <th>Application</th><th>Source</th><th>Window</th>
+          <th>Application</th><th>Source</th><th>Cause</th><th>Window</th>
         </tr></thead>
         <tbody>
           <tr th:each="h : ${rows}">
@@ -52,6 +52,9 @@
                  what the role carries now. A role that moved shows the second. -->
             <td th:text="${h.application != null ? h.application : h.role_application}"></td>
             <td th:text="${h.source}"></td>
+            <!-- What caused it: the elevation, request or review this change belongs to.
+                 Empty for a plain administrative edit, which is its own cause. -->
+            <td th:text="${h.correlation != null ? h.correlation : '—'}"></td>
             <td th:text="|${h.starts_at != null ? h.starts_at : '—'} … ${h.ends_at != null ? h.ends_at : '—'}|"></td>
           </tr>
         </tbody>

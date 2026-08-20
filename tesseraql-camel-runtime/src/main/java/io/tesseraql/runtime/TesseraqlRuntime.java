@@ -1948,6 +1948,34 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         params -> io.tesseraql.identity.RoleAdmin.deleteConstraint(
                                 iamIdentity.get(), iamRealm.get(),
                                 String.valueOf(params.get("constraintId"))));
+                // Access review campaigns (docs/access-governance.md structural decision 5):
+                // a snapshot, decisions on it, and revocations executed through RoleAdmin at
+                // close so each one inherits its validation and its trail row.
+                serviceProviders.register("iam.reviews",
+                        params -> io.tesseraql.identity.AccessReview.reviewsModel(
+                                iamIdentity.get(), iamRealm.get(), grantViewMembers));
+                serviceProviders.register("iam.review",
+                        params -> io.tesseraql.identity.AccessReview.reviewModel(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("reviewId"))));
+                serviceProviders.register("iam.openReview",
+                        params -> io.tesseraql.identity.AccessReview.open(iamIdentity.get(),
+                                iamRealm.get(), String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("name")),
+                                String.valueOf(params.get("application"))));
+                serviceProviders.register("iam.decideReviewItem",
+                        params -> io.tesseraql.identity.AccessReview.decide(iamIdentity.get(),
+                                iamRealm.get(), String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("reviewId")),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("itemKind")),
+                                String.valueOf(params.get("subjectCode")),
+                                String.valueOf(params.get("decision")),
+                                String.valueOf(params.get("note"))));
+                serviceProviders.register("iam.closeReview",
+                        params -> io.tesseraql.identity.AccessReview.close(iamIdentity.get(),
+                                iamRealm.get(), String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("reviewId"))));
                 // Group management (docs/access-governance.md structural decision 4): the
                 // schema was complete and nothing wrote it. Membership writes take the
                 // actor for the trail, like the role and permission writes.

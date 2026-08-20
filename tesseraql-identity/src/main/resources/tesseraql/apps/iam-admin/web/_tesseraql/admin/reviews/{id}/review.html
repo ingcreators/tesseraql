@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Access review', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/reviews}">Reviews</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status" th:if="${decided != null}">Decision recorded.</p>
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">Access reviews are unavailable for this realm.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<section class="hc-card" th:if="${available == 1 and review != null}">
+  <div class="hc-card__header"><h1 th:text="${review.review_name}">review</h1></div>
+  <div class="hc-card__body hc-stack">
+    <p th:text="|Scope: ${review.application != null ? review.application : 'the whole store'} · opened ${review.opened_at} by ${review.opened_by} · ${review.status}|">meta</p>
+    <!-- Closing executes every revoke decision through the same write an administrator
+         uses, so each revocation is validated and recorded like any other. -->
+    <form th:if="${open == 1 and writable == 1}" method="post"
+          th:action="@{/_tesseraql/admin/reviews/{id}/close(id=${reviewId})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <button class="hc-button" data-variant="primary" type="submit"
+              data-hc-confirm="Close this review and revoke every grant marked revoke?">Close and apply</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Items</div>
+  <div class="hc-card__body">
+    <div class="hc-empty" th:if="${#lists.isEmpty(items)}">
+      <p class="hc-empty__title">Nothing was in scope when this review opened.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(items)}">
+      <table class="hc-table">
+        <thead><tr>
+          <th>User</th><th>Kind</th><th>Code</th><th>Arrived by</th><th>Decision</th>
+          <th>Decided by</th><th></th>
+        </tr></thead>
+        <tbody>
+          <tr th:each="i : ${items}">
+            <td><a th:href="@{'/_tesseraql/admin/users/' + ${i.user_id}}"
+                   th:text="${i.login_id != null ? i.login_id : i.user_id}"></a></td>
+            <td th:text="${i.item_kind}"></td>
+            <td><code th:text="${i.subject_code}"></code></td>
+            <!-- The source is worth showing: a role that arrived from a rule or a group is
+                 not something the person was individually given. -->
+            <td th:text="${i.source}"></td>
+            <td th:text="${i.decision}"></td>
+            <td th:text="${i.decided_by != null ? i.decided_by : '—'}"></td>
+            <td th:if="${open == 1 and writable == 1}">
+              <form method="post"
+                    th:action="@{/_tesseraql/admin/reviews/{id}/decide(id=${reviewId})}" class="hc-cluster">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="userId" th:value="${i.user_id}">
+                <input type="hidden" name="itemKind" th:value="${i.item_kind}">
+                <input type="hidden" name="subjectCode" th:value="${i.subject_code}">
+                <select class="hc-input" data-size="sm" name="decision">
+                  <option value="keep">keep</option>
+                  <option value="revoke">revoke</option>
+                </select>
+                <input class="hc-input" data-size="sm" name="note" placeholder="note">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Record</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</div>
+</html>

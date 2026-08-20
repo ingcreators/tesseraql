@@ -99,6 +99,30 @@ create table tql_user_identities (
   primary key (provider, external_subject)
 );
 
+create table tql_access_reviews (
+  review_id   varchar2(64) primary key,
+  review_name varchar2(200) not null,
+  application varchar2(200),
+  opened_at   timestamp not null,
+  opened_by   varchar2(200),
+  closed_at   timestamp,
+  closed_by   varchar2(200),
+  status      varchar2(16) not null
+);
+
+create table tql_access_review_items (
+  review_id    varchar2(64) not null,
+  user_id      varchar2(64) not null,
+  item_kind    varchar2(16) not null,
+  subject_code varchar2(200) not null,
+  source       varchar2(32),
+  decision     varchar2(16) not null,
+  decided_by   varchar2(200),
+  decided_at   timestamp,
+  note         varchar2(1000),
+  primary key (review_id, user_id, item_kind, subject_code)
+);
+
 create table tql_role_eligibility (
   user_id           varchar2(64) not null,
   role_id           varchar2(64) not null,
