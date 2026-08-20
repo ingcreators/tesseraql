@@ -1515,7 +1515,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             IdentityService identity = new IdentityService(
                     name -> context.lookup(name,
                             javax.sql.DataSource.class),
-                    datasourceDialect(manifest.config()));
+                    datasourceDialect(manifest.config()))
+                    // A sign-in's contract now runs under the same bound a page's query does
+                    // (docs/contract-sql-execution.md structural decision 3): it ran unbounded,
+                    // holding a pooled connection, on the one path nobody can work around.
+                    .sqlTimeoutSeconds(manifest.config()
+                            .getString("tesseraql.sql.timeoutSeconds")
+                            .map(Integer::parseInt)
+                            .orElse(io.tesseraql.core.sql.ContractStatement.DEFAULT_TIMEOUT_SECONDS));
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
             context.bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
             context.bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
