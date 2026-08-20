@@ -244,6 +244,71 @@ jobs:
           printf '%s' "$out" | grep -q 'items.search' \
             || { echo "the host launcher listed no routes" >&2; exit 1; }
 
+      # docs/module-channel.md decision 6: a framework database that is not PostgreSQL needs its
+      # driver on the base classpath, which no application's module channel can reach. The app
+      # image's route is app\ext\ plus one app.classpath line in the generated .cfg — the one
+      # placement mechanism this distribution has, asserted here rather than assumed, in both
+      # directions: refused without the jar, past that refusal with it.
+      - name: Assert the base-classpath extension route (framework driver on the app image)
+        shell: pwsh
+        run: |
+          $stack = Join-Path $env:RUNNER_TEMP 'driver-stack'
+          New-Item -ItemType Directory -Force -Path (Join-Path $stack 'demo') | Out-Null
+          Copy-Item -Recurse -Force 'examples\scaffold-demo-app\*' (Join-Path $stack 'demo')
+          # A here-string cannot be indented inside a YAML block scalar, so the file is written
+          # line by line — the stack declares a SQL Server framework datasource and the coordinate
+          # of the driver it needs.
+          $lines = @(
+            'framework:',
+            '  datasource:',
+            '    jdbcUrl: "jdbc:sqlserver://127.0.0.1:1433;databaseName=stack;loginTimeout=1"',
+            '    username: sa',
+            '    password: unused',
+            '    modules:',
+            '      - com.microsoft.sqlserver:mssql-jdbc'
+          )
+          Set-Content -Encoding utf8 -Path (Join-Path $stack 'tesseraql-stack.yml') -Value $lines
+
+          $exe = 'build\jpackage\tesseraql-host\tesseraql-host.exe'
+          $before = & $exe host --stack $stack --port 18443 2>&1 | Out-String
+          Write-Host $before
+          if ($before -notmatch 'TQL-APP-4220') {
+            Write-Error 'a missing framework driver did not raise TQL-APP-4220'
+            exit 1
+          }
+
+          # Place the driver the way an operator does: the jar beside the image, one classpath line.
+          $app = 'build\jpackage\tesseraql-host\app'
+          New-Item -ItemType Directory -Force -Path (Join-Path $app 'ext') | Out-Null
+          $version = (Select-String -Path pom.xml -Pattern '<mssql-jdbc.version>(.*)</mssql-jdbc.version>').Matches[0].Groups[1].Value
+          & ./mvnw.cmd -B -ntp -q dependency:get "-Dartifact=com.microsoft.sqlserver:mssql-jdbc:$version"
+          $jar = Get-ChildItem -Recurse -Filter 'mssql-jdbc-*.jar' "$env:USERPROFILE\.m2\repository\com\microsoft" |
+            Where-Object { $_.Name -notmatch 'sources|javadoc' } | Select-Object -First 1
+          if (-not $jar) { Write-Error 'no mssql-jdbc jar in the local repository'; exit 1 }
+          Copy-Item $jar.FullName (Join-Path $app 'ext')
+          # The entry belongs beside the existing app.classpath line, inside [Application]:
+          # appending to the end of the file lands it in [JavaOptions], where the launcher reads it
+          # as a JVM option and the classpath never grows. Insert, do not append.
+          $cfgPath = Join-Path $app 'tesseraql-host.cfg'
+          $cfg = [System.Collections.Generic.List[string]](Get-Content $cfgPath)
+          $last = ($cfg | Select-String -Pattern '^app\.classpath=' | Select-Object -Last 1).LineNumber
+          if (-not $last) { Write-Error 'the app image cfg has no app.classpath line'; exit 1 }
+          $cfg.Insert($last, "app.classpath=`$APPDIR\ext\$($jar.Name)")
+          Set-Content -Path $cfgPath -Value $cfg
+          Write-Host '--- tesseraql-host.cfg ---'
+          Get-Content $cfgPath | Write-Host
+
+          $after = & $exe host --stack $stack --port 18443 2>&1 | Out-String
+          Write-Host $after
+          if ($after -match 'TQL-APP-4220') {
+            Write-Error 'the placed driver did not reach the base classpath'
+            exit 1
+          }
+          # Both runs are expected to exit non-zero — that is the point: the host refuses, first
+          # for the missing driver and then because no SQL Server is listening. The step's verdict
+          # is the two assertions above, so the last native exit code must not become it.
+          exit 0
+
       - name: Start the runner's PostgreSQL and create the demo database
         shell: pwsh
         run: |

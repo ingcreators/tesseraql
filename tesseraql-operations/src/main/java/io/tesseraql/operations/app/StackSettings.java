@@ -82,6 +82,28 @@ public final class StackSettings {
     }
 
     /**
+     * The artifacts the stack's own classpath needs — {@code framework.datasource.modules}, in
+     * practice the JDBC driver of a framework database that is not PostgreSQL
+     * (docs/module-channel.md decision 6).
+     *
+     * <p>Stack-scoped pools do not go through the module channel by design: an application's
+     * modules load on that application's classloader, and the framework pool belongs to no
+     * application ({@link io.tesseraql.operations.app.StackSettings} decision 22,
+     * docs/module-scope.md structural decision 3). So this declaration is not a resolution
+     * instruction — nothing loads a jar because of it. It is what {@code tesseraql modules fetch}
+     * collects for a disconnected machine, and what a start-time refusal can name when no driver
+     * accepts the framework URL. Placing the jar stays an operator step.
+     */
+    public java.util.List<String> frameworkModules() {
+        Object declared = config.navigate("framework.datasource.modules");
+        if (!(declared instanceof java.util.List<?> modules)) {
+            return java.util.List.of();
+        }
+        return modules.stream().map(String::valueOf).map(String::trim)
+                .filter(coordinate -> !coordinate.isEmpty()).toList();
+    }
+
+    /**
      * The origin this stack is reached at from outside — what an MCP client or the authorization
      * server's metadata must echo character for character. A host behind an ingress cannot know
      * it, which is why it lives here and is never defaulted by {@code host}.

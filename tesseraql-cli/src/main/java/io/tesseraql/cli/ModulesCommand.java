@@ -207,6 +207,22 @@ final class ModulesCommand implements Runnable {
                 System.out.println(name + ": fetched " + resolved.size() + " artifact(s).");
             }
 
+            // The stack's own base-classpath artifacts (docs/module-channel.md decision 6): no
+            // application declares them, because no application's classloader can serve them.
+            if (stack != null) {
+                List<String> stackModules = io.tesseraql.operations.app.StackSettings.load(stack)
+                        .frameworkModules();
+                if (!stackModules.isEmpty()) {
+                    List<io.tesseraql.cli.modules.ResolvedModule> resolved = new io.tesseraql.cli.modules.ModuleResolver(
+                            ModulesInstaller.BOM_COORDINATE, false, true)
+                            .resolve(stackModules.stream()
+                                    .map(ModuleCoordinate::parse).toList());
+                    manifest.add("stack", resolved);
+                    System.out.println("stack: fetched " + resolved.size()
+                            + " base-classpath artifact(s).");
+                }
+            }
+
             if (platforms != null) {
                 String version = embeddedDbVersion != null
                         ? embeddedDbVersion

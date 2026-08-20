@@ -71,6 +71,41 @@ avoid needing.
 `tesseraql new` writes the file beside the application it creates — all guidance comments, which
 is enough: the file is also the stack's marker, and development commands find the stack by it.
 
+### A framework database that is not PostgreSQL
+
+The stack's pools — the framework datasource, the migration pool — are stack infrastructure, and
+their driver resolves through `DriverManager` on the process classpath. An application's
+`tesseraql.modules` cannot serve them: those jars load on that application's own classloader, and
+the framework pool belongs to no application. PostgreSQL ships with every distribution; Oracle,
+SQL Server and MySQL do not, and cannot, because their licences make redistribution the
+organization's decision rather than the framework's.
+
+So the stack declares the coordinate, and an operator places the jar:
+
+```yaml
+framework:
+  datasource:
+    jdbcUrl: "jdbc:sqlserver://db:1433;databaseName=stack"
+    username: ${secret.env.STACK_DB_USER}
+    password: ${secret.env.STACK_DB_PASSWORD}
+    modules:
+      - com.microsoft.sqlserver:mssql-jdbc   # version from the BOM
+```
+
+The declaration does not load anything — nothing resolves a jar at host start, by design. It is
+what `tesseraql modules fetch --stack` collects for a disconnected machine, and what the start-time
+refusal names. Placing it is one step, and each distribution reads one place:
+
+| Distribution | Where the jar goes |
+| --- | --- |
+| Container image | `/opt/tesseraql/lib/` (the image starts with `-cp 'lib/*'`) |
+| Developer CLI, `tesseraql-host` archive | `lib/ext/` beside the launcher, or any path in `TESSERAQL_CLASSPATH` |
+| Windows app image | `app\ext\`, plus an `app.classpath=$APPDIR\ext\<jar>` line **inside the `[Application]` section** of `app\tesseraql-host.cfg`, beside the one already there — appended at the end of the file it lands in `[JavaOptions]` and is read as a JVM option, so the classpath never grows |
+
+If no driver on the classpath accepts the URL, the host refuses to start with `TQL-APP-4220`,
+naming the declared coordinate and this step — in place of the JDBC layer's `No suitable driver`,
+which names neither.
+
 ## The install root
 
 An install root holds `catalog.json` — the list of installed applications, their versions,

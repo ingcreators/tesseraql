@@ -400,6 +400,11 @@ documentation.
    offline resolve out of it with no other configuration. The `settings.xml` fallback was not
    needed. One thing the implementation added: a bag must contain the BOM **and the parent POM the
    BOM inherits from**, which resolving into the bag produces on its own.
-2. **The Windows app-image classpath route.** Adding entries to the generated `.cfg` is the
-   candidate; whether it survives an image upgrade, and whether a wrapper-managed service picks it
-   up, is verified on the `windows-latest` job in slice 4b rather than asserted here.
+2. ~~**The Windows app-image classpath route.**~~ **Settled in slice 4b: `app\ext\` plus an
+   `app.classpath` line inside the generated `.cfg`'s `[Application]` section.** The jpackage job
+   asserts it in both directions on `windows-latest` — a stack whose framework datasource is SQL
+   Server is refused with `TQL-APP-4220` before the jar is placed, and gets past that refusal
+   after. The section matters, and the CI run is what found it: an entry appended at the end of the
+   file lands in `[JavaOptions]`, where the launcher reads it as a JVM option and the classpath
+   never grows. An image upgrade replaces the app directory, so the placement is repeated on
+   upgrade; that is the same contract the container image's `lib/` has.
