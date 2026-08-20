@@ -299,20 +299,30 @@ jobs:
               $ready = $true; break
             } catch { Start-Sleep -Seconds 2 }
           }
-          $out = "$svcDir\logs\tesseraql-host-service.out.log"
-          $err = "$svcDir\logs\tesseraql-host-service.err.log"
+          function Dump-ServiceLogs {
+            Get-ChildItem "$svcDir\logs" -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.Name) ---"
+              Get-Content $_.FullName
+            }
+          }
           if (-not $ready) {
-            Write-Host '--- service stdout ---'; if (Test-Path $out) { Get-Content $out }
-            Write-Host '--- service stderr ---'; if (Test-Path $err) { Get-Content $err }
+            Dump-ServiceLogs
             throw 'the hosted stack never answered /_tesseraql/health/live'
           }
 
-          # The assertion this job exists for: a service stop reaches the ordered drain.
-          & $winsw stop
-          $drained = (Test-Path $out) -and (Select-String -Path $out -Pattern 'Stack stopping' -Quiet)
+          # The assertion this job exists for: a service stop reaches the ordered drain. stopwait
+          # (not stop) blocks until the SCM reports the service stopped, i.e. after the drain;
+          # the drain line lands in the stderr log, where the structured log provider writes.
+          & $winsw stopwait
+          $drained = $false
+          for ($i = 0; $i -lt 15; $i++) {
+            $hits = Get-ChildItem "$svcDir\logs" -Filter *.log -ErrorAction SilentlyContinue |
+              Select-String -Pattern 'Stack stopping'
+            if (($hits | Measure-Object).Count -gt 0) { $drained = $true; break }
+            Start-Sleep -Seconds 1
+          }
           if (-not $drained) {
-            Write-Host '--- service stdout ---'; if (Test-Path $out) { Get-Content $out }
-            Write-Host '--- service stderr ---'; if (Test-Path $err) { Get-Content $err }
+            Dump-ServiceLogs
             throw 'the service stop did not reach the ordered drain (no "Stack stopping" line)'
           }
           & $winsw uninstall
