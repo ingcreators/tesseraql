@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.iamAdmin.applications.createRole
+kind: route
+recipe: command-json
+
+# Delegated administration of one application (docs/access-governance.md structural decision
+# 7). The atom is resolved from the address, so this route admits the application's own
+# administrator and the store-wide one, and nobody else. The application a role is created
+# for is the address, never a form field — a page addressed to orders creates orders' roles.
+security:
+  policy: tql.iam.write.{path.name}
+
+input:
+  code:
+    type: string
+    required: true
+  # roleName, not name: an input declared with a path parameter's own name types that path
+  # parameter (typed path parameters), so a body field sharing the name replaces it in the
+  # path.* namespace. The gate above is unaffected — it reads the URL — but `application:
+  # path.name` below would become whatever this field carried.
+  roleName:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.app.createRole
+      params:
+        application: path.name
+        permissions: principal.permissions
+        code: params.code
+        name: params.roleName
+response:
+  redirect:
+    location: /_tesseraql/admin/applications/{path.name}?created=1

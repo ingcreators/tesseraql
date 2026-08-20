@@ -85,6 +85,27 @@ public final class RoleAdmin {
         return model;
     }
 
+    /**
+     * The store's id for a login, for the surfaces that address a user by the name they sign in
+     * with rather than by a key (docs/access-governance.md structural decision 7).
+     *
+     * <p>The per-application pages name a user this way deliberately: an administrator confined
+     * to one application has no business enumerating the whole store to find one, so the form
+     * takes the login they were given and this resolves it. An unknown login is refused as an
+     * input, not answered as an empty write.
+     */
+    public static String userIdForLogin(IdentityService identity, RealmConfig realm,
+            String loginId) {
+        requireRealm(identity, realm);
+        String login = require(loginId, "login id");
+        List<Map<String, Object>> rows = identity.execute(realm,
+                IdentityContracts.FIND_USER_BY_LOGIN, Map.of("loginId", login));
+        if (rows.isEmpty()) {
+            throw new TqlException(INPUT_REFUSED, "No user signs in as '" + login + "'");
+        }
+        return String.valueOf(rows.get(0).get("user_id"));
+    }
+
     private static void requireRealm(IdentityService identity, RealmConfig realm) {
         if (identity == null || realm == null) {
             throw new TqlException(ContractResolver.MISSING_CONTRACT,

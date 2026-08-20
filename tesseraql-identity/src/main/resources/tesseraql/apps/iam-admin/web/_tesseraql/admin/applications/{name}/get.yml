@@ -3,8 +3,13 @@ id: tql.iamAdmin.applications.detail
 kind: route
 recipe: query-html
 
+# The policy resolves this page's atom from the address itself (docs/access-governance.md
+# structural decision 7): whoever asks for /applications/orders is checked for orders' own
+# tql.iam.view.orders. The store-wide tql.iam.admin.view passes too — it is the grant the
+# per-application one narrows, which the synthesized atom policy ORs in without this route
+# having to say so.
 security:
-  policy: tql.iam.admin.view
+  policy: tql.iam.view.{path.name}
 
 sources:
   main:
@@ -12,6 +17,9 @@ sources:
       name: iam.applicationGrants
       params:
         name: path.name
+        # What the caller may administer here, so the page offers only the writes that
+        # would be accepted. The control is AdminScope inside RoleAdmin, not this.
+        permissions: principal.permissions
 response:
   html:
     status: 200
@@ -24,6 +32,8 @@ response:
       known: main.known
       families: main.families
       appCodes: main.codes
+      roles: main.roles
+      canWrite: main.canWrite
       hasAny: main.hasAny
       available: main.available
       reason: main.reason

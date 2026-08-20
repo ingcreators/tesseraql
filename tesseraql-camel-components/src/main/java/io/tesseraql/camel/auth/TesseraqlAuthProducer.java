@@ -51,7 +51,7 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         try {
             switch (operation) {
                 case "authenticate" -> authenticate(exchange);
-                case "authorize" -> authorize(exchange);
+                case "authorize" -> authorize(exchange, span);
                 case "csrf" -> csrf(exchange);
                 case "rotate" -> rotate(exchange);
                 case "fence" -> fence(exchange);
@@ -185,10 +185,41 @@ public class TesseraqlAuthProducer extends DefaultProducer {
         }
     }
 
-    private void authorize(Exchange exchange) {
+    private void authorize(Exchange exchange, io.tesseraql.core.telemetry.Span span) {
         PolicyEngine engine = bean(PolicyEngine.class, TesseraqlProperties.POLICY_ENGINE_BEAN);
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL, Principal.class);
-        engine.authorize(endpoint.getPolicy(), principal);
+        engine.authorize(policyFor(exchange, span), principal);
+    }
+
+    /**
+     * The policy this request is checked against: the declared id, or — for a surface addressed
+     * to one application — the atom resolved from the request's own path
+     * (docs/access-governance.md structural decision 7).
+     *
+     * <p>The value is matched off the request's URL against the route's own template, never off
+     * the path-parameter headers the router publishes: a form body publishes its fields as
+     * headers too, so a field named after the path parameter overwrites one, and the gate would
+     * then be resolving from the caller's own body.
+     *
+     * <p>A path that resolves to no usable atom segment is a denial, not a fault. The request
+     * named no application the grammar admits, and the deny-by-default answer for that is the
+     * one the engine would give anyway — reached here without a policy id to hand it.
+     */
+    private String policyFor(Exchange exchange, io.tesseraql.core.telemetry.Span span) {
+        String declared = endpoint.getPolicy();
+        if (!io.tesseraql.security.policy.PolicyTemplate.isTemplate(declared)) {
+            return declared;
+        }
+        String resolved = io.tesseraql.security.policy.PolicyTemplate.resolve(declared,
+                endpoint.getPathTemplate(), wirePath(exchange));
+        if (resolved == null) {
+            throw new TqlException(PolicyEngine.FORBIDDEN, "Policy '" + declared + "' resolves"
+                    + " from this request's path, which names no application it can check");
+        }
+        // The template is on the span already; the atom actually checked is what an audit of
+        // "who was allowed into which application" needs to read.
+        span.attribute("policy.resolved", resolved);
+        return resolved;
     }
 
     /**

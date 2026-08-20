@@ -3,13 +3,19 @@ id: tql.iamAdmin.applications.list
 kind: route
 recipe: query-html
 
-security:
-  policy: tql.iam.admin.view
+# The one page in this family with no application in its address, so there is no atom for a
+# route policy to resolve (docs/access-governance.md structural decision 7). It takes the
+# stack shell's answer to the same shape — the ops console home carries no policy id and
+# narrows its switcher by the caller's grants — so the model, not the gate, decides what is
+# listed: every member for tql.iam.admin.view, their own for tql.iam.view.<name>, and an
+# empty list for a caller with neither. Not an open door: an empty page.
 
 sources:
   main:
     service:
       name: iam.applications
+      params:
+        permissions: principal.permissions
 response:
   html:
     status: 200

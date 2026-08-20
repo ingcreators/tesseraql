@@ -96,6 +96,134 @@
   </div>
 </section>
 </th:block>
+<!-- The delegated administrator's console for this application
+     (docs/access-governance.md structural decision 7). Rendered for whoever may write
+     here — its own administrator or the store-wide one — and offering only what the
+     writes accept: this application's roles, and codes carrying its name. The forms are
+     the convenience; AdminScope inside RoleAdmin refuses the rest whatever is posted. -->
+<th:block th:if="${canWrite == 1}">
+<section class="hc-card">
+  <div class="hc-card__header">Roles</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(roles)}">
+      <p class="hc-empty__title">This application has no roles yet.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(roles)}">
+      <table class="hc-table" data-density="compact">
+        <thead><tr><th>Code</th><th>Name</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr th:each="r : ${roles}">
+            <td><code th:text="${r.role_code}">code</code></td>
+            <td th:text="${r.role_name}"></td>
+            <td th:text="${r.source}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form method="post" class="hc-cluster"
+          th:action="@{/_tesseraql/admin/applications/{name}/roles/create(name=${name})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">New role code</span>
+        <input class="hc-input" name="code" required th:placeholder="${name} + '.approver'">
+        <span class="hc-field__message">Begins with this application's own name.</span>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Name</span>
+        <input class="hc-input" name="roleName">
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Create role</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card">
+  <div class="hc-card__header">Role assignments</div>
+  <div class="hc-card__body hc-stack">
+    <form method="post" class="hc-cluster"
+          th:action="@{/_tesseraql/admin/applications/{name}/roles/assign(name=${name})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Login</span>
+        <input class="hc-input" name="loginId" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${roles}" th:value="${r.role_code}"
+                  th:text="${r.role_code}">code</option>
+        </select>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">From</span>
+        <input class="hc-input" name="startsAt" type="date">
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Until</span>
+        <input class="hc-input" name="endsAt" type="date">
+        <span class="hc-field__message">Empty means open-ended.</span>
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Assign</button>
+    </form>
+    <form method="post" class="hc-cluster"
+          th:action="@{/_tesseraql/admin/applications/{name}/roles/unassign(name=${name})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Login</span>
+        <input class="hc-input" name="loginId" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${roles}" th:value="${r.role_code}"
+                  th:text="${r.role_code}">code</option>
+        </select>
+      </label>
+      <button class="hc-button" type="submit">Unassign</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card">
+  <div class="hc-card__header">Permission codes</div>
+  <div class="hc-card__body hc-stack">
+    <form method="post" class="hc-cluster"
+          th:action="@{/_tesseraql/admin/applications/{name}/permissions/grant(name=${name})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Login</span>
+        <input class="hc-input" name="loginId" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Code</span>
+        <input class="hc-input" name="code" required th:placeholder="${name} + '.approve'">
+        <span class="hc-field__message">Carries this application's own name; a framework
+          tql. code is never one application's to hand out.</span>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">From</span>
+        <input class="hc-input" name="startsAt" type="date">
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Until</span>
+        <input class="hc-input" name="endsAt" type="date">
+      </label>
+      <button class="hc-button" data-variant="primary" type="submit">Grant</button>
+    </form>
+    <form method="post" class="hc-cluster"
+          th:action="@{/_tesseraql/admin/applications/{name}/permissions/revoke(name=${name})}">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field">
+        <span class="hc-field__label">Login</span>
+        <input class="hc-input" name="loginId" required>
+      </label>
+      <label class="hc-field">
+        <span class="hc-field__label">Code</span>
+        <input class="hc-input" name="code" required>
+      </label>
+      <button class="hc-button" type="submit">Revoke</button>
+    </form>
+  </div>
+</section>
+</th:block>
 </th:block>
 </div>
 </html>

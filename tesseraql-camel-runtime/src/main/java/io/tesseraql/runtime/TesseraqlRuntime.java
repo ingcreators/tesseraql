@@ -1883,9 +1883,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.identity.GrantViews.ContractRunner runner = grantContracts.get();
                     return runner == null
                             ? io.tesseraql.identity.GrantViews.applicationsUnavailable(
-                                    grantViewMembers, "No identity realm is configured")
+                                    grantViewMembers, heldPermissions(params),
+                                    "No identity realm is configured")
                             : io.tesseraql.identity.GrantViews.applications(grantViewMembers,
-                                    runner);
+                                    heldPermissions(params), runner);
                 });
                 serviceProviders.register("iam.applicationGrants", params -> {
                     String memberName = String.valueOf(params.get("name"));
@@ -1895,7 +1896,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     memberName, grantViewMembers,
                                     "No identity realm is configured")
                             : io.tesseraql.identity.GrantViews.applicationGrants(memberName,
-                                    grantViewMembers, runner);
+                                    grantViewMembers, heldPermissions(params), runner);
                 });
                 // The role and grant editors (docs/application-roles.md slice 2): reads
                 // degrade like the views; writes are gated by the realm's role capability
@@ -1913,9 +1914,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // atom they hold. Derived from the route-declared principal permissions, so
                 // it is route-resolved and never caller-writable.
                 java.util.function.Function<Map<String, Object>, io.tesseraql.identity.AdminScope> adminScope = params -> io.tesseraql.identity.AdminScope
-                        .of(params.get("permissions") instanceof java.util.List<?> held
-                                ? held.stream().map(String::valueOf).toList()
-                                : java.util.List.of(), grantViewMembers);
+                        .of(heldPermissions(params),
+                                grantViewMembers);
+                // The same scope narrowed to the application the request is addressed to, for
+                // the per-application pages: the URL names one application, so a write arriving
+                // through it belongs to that one whoever the caller is.
+                java.util.function.Function<Map<String, Object>, io.tesseraql.identity.AdminScope> appScope = params -> adminScope
+                        .apply(params)
+                        .confinedTo(String.valueOf(params.get("application")));
                 serviceProviders.register("iam.roles",
                         params -> io.tesseraql.identity.RoleAdmin.rolesModel(iamIdentity.get(),
                                 iamRealm.get(), grantViewMembers));
@@ -1939,7 +1945,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 String.valueOf(params.get("userId")),
                                 String.valueOf(params.get("roleCode")),
                                 String.valueOf(params.get("startsAt")),
-                                String.valueOf(params.get("endsAt"))));
+                                String.valueOf(params.get("endsAt")),
+                                io.tesseraql.identity.GrantHistory.SOURCE_ADMIN, null));
                 serviceProviders.register("iam.unassignRole",
                         params -> io.tesseraql.identity.RoleAdmin.unassignRole(
                                 iamIdentity.get(), iamRealm.get(), adminScope.apply(params),
@@ -1960,6 +1967,47 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 iamIdentity.get(), iamRealm.get(), adminScope.apply(params),
                                 String.valueOf(params.get("actor")),
                                 String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("code")),
+                                io.tesseraql.identity.GrantHistory.SOURCE_ADMIN, null));
+                // The per-application writes (docs/access-governance.md structural decision 7).
+                // Same RoleAdmin calls as above, reached through a page addressed to one
+                // application: the scope is narrowed to it, and the user is named by the login
+                // the administrator was given rather than by a key only the store list shows.
+                serviceProviders.register("iam.app.createRole",
+                        params -> io.tesseraql.identity.RoleAdmin.createRole(iamIdentity.get(),
+                                iamRealm.get(), appScope.apply(params),
+                                String.valueOf(params.get("code")),
+                                String.valueOf(params.get("name")),
+                                String.valueOf(params.get("application"))));
+                serviceProviders.register("iam.app.assignRole",
+                        params -> io.tesseraql.identity.RoleAdmin.assignRole(iamIdentity.get(),
+                                iamRealm.get(), appScope.apply(params),
+                                String.valueOf(params.get("actor")),
+                                loginToUserId(iamIdentity.get(), iamRealm.get(), params),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("startsAt")),
+                                String.valueOf(params.get("endsAt")),
+                                io.tesseraql.identity.GrantHistory.SOURCE_ADMIN, null));
+                serviceProviders.register("iam.app.unassignRole",
+                        params -> io.tesseraql.identity.RoleAdmin.unassignRole(iamIdentity.get(),
+                                iamRealm.get(), appScope.apply(params),
+                                String.valueOf(params.get("actor")),
+                                loginToUserId(iamIdentity.get(), iamRealm.get(), params),
+                                String.valueOf(params.get("roleCode")),
+                                io.tesseraql.identity.GrantHistory.SOURCE_ADMIN, null));
+                serviceProviders.register("iam.app.grantPermission",
+                        params -> io.tesseraql.identity.RoleAdmin.grantPermission(
+                                iamIdentity.get(), iamRealm.get(), appScope.apply(params),
+                                String.valueOf(params.get("actor")),
+                                loginToUserId(iamIdentity.get(), iamRealm.get(), params),
+                                String.valueOf(params.get("code")),
+                                String.valueOf(params.get("startsAt")),
+                                String.valueOf(params.get("endsAt"))));
+                serviceProviders.register("iam.app.revokePermission",
+                        params -> io.tesseraql.identity.RoleAdmin.revokePermission(
+                                iamIdentity.get(), iamRealm.get(), appScope.apply(params),
+                                String.valueOf(params.get("actor")),
+                                loginToUserId(iamIdentity.get(), iamRealm.get(), params),
                                 String.valueOf(params.get("code")),
                                 io.tesseraql.identity.GrantHistory.SOURCE_ADMIN, null));
                 // Separation of duties (docs/access-governance.md structural decision 2):
@@ -2976,6 +3024,29 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 dataSource);
         store.ensureSchema();
         return new io.tesseraql.core.account.CachingPreferenceStore(store);
+    }
+
+    /**
+     * The caller's granted permission codes as the route declared them
+     * ({@code permissions: principal.permissions}), or none.
+     *
+     * <p>Route-resolved from the session principal and so never caller-writable: what arrives
+     * here is what the store granted, not what a request asked to be treated as.
+     */
+    private static java.util.List<String> heldPermissions(java.util.Map<String, Object> params) {
+        return params.get("permissions") instanceof java.util.List<?> held
+                ? held.stream().map(String::valueOf).toList()
+                : java.util.List.of();
+    }
+
+    /**
+     * The store id of the user a per-application write names by login
+     * (docs/access-governance.md structural decision 7).
+     */
+    private static String loginToUserId(io.tesseraql.identity.IdentityService identity,
+            io.tesseraql.identity.RealmConfig realm, java.util.Map<String, Object> params) {
+        return io.tesseraql.identity.RoleAdmin.userIdForLogin(identity, realm,
+                String.valueOf(params.get("loginId")));
     }
 
     /**

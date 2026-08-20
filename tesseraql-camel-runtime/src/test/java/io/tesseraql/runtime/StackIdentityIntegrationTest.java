@@ -240,10 +240,24 @@ class StackIdentityIntegrationTest {
                 .contains("tql.app.use.*");
     }
 
-    /** The views are IAM surfaces: no store-wide atom, no page; an unknown name is 404. */
+    /**
+     * The views are IAM surfaces. The per-application page checks the atom its address names,
+     * so a caller holding none is refused there; the list has no application in its address
+     * and nothing for a policy to resolve, so it narrows its rows instead — empty, not open
+     * (docs/access-governance.md structural decision 7). An unknown name is 404.
+     */
     @Test
     void theGrantViewsRefuseAndRefuseToGuess() throws Exception {
-        assertThat(get("/_tesseraql/admin/applications", userA).statusCode()).isEqualTo(403);
+        HttpResponse<String> list = get("/_tesseraql/admin/applications", userA);
+        assertThat(list.statusCode()).isEqualTo(200);
+        assertThat(list.body())
+                .as("a caller with no IAM grant sees no member of the stack")
+                .doesNotContain("/_tesseraql/admin/applications/shop-a")
+                .doesNotContain("/_tesseraql/admin/applications/shop-b");
+
+        assertThat(get("/_tesseraql/admin/applications/shop-a", userA).statusCode())
+                .as("the page does have an atom to resolve, and stays shut")
+                .isEqualTo(403);
         assertThat(get("/_tesseraql/admin/applications/nope", admin).statusCode())
                 .as("an application outside the stack is unknown, not empty")
                 .isEqualTo(404);

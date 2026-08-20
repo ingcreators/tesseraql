@@ -5,6 +5,11 @@ web/_tesseraql/admin/applications/applications.html
 web/_tesseraql/admin/applications/get.yml
 web/_tesseraql/admin/applications/{name}/application.html
 web/_tesseraql/admin/applications/{name}/get.yml
+web/_tesseraql/admin/applications/{name}/permissions/grant/post.yml
+web/_tesseraql/admin/applications/{name}/permissions/revoke/post.yml
+web/_tesseraql/admin/applications/{name}/roles/assign/post.yml
+web/_tesseraql/admin/applications/{name}/roles/create/post.yml
+web/_tesseraql/admin/applications/{name}/roles/unassign/post.yml
 web/_tesseraql/admin/delegations/delegations.html
 web/_tesseraql/admin/delegations/get.yml
 web/_tesseraql/admin/roles/get.yml

@@ -42,6 +42,10 @@ public record SecurityConfig(
      * policy behind it, and it cannot be shadowed: an application declaring its own policy id
      * under the mark is refused at lint and boot by the policy-code namespace fence, so the map
      * below never holds one.
+     *
+     * <p>Synthesis has three rungs: the atom itself, the terminal wildcard of its own family,
+     * and — for a per-application atom that narrows a store-wide one — the store-wide grant it
+     * narrows ({@code Atoms.narrowedFrom}, docs/access-governance.md structural decision 7).
      */
     public Optional<Policy> policy(String id) {
         if (id != null && id.startsWith(io.tesseraql.security.policy.Atoms.MARK)) {
@@ -53,6 +57,14 @@ public record SecurityConfig(
             int lastSegment = id.lastIndexOf('.');
             if (lastSegment > 0 && !id.endsWith(".*")) {
                 anyOf.add(Policy.Rule.ofPermission(id.substring(0, lastSegment + 1) + "*"));
+            }
+            // The store-wide grant this per-application atom narrows, if any
+            // (docs/access-governance.md structural decision 7). A route names the
+            // per-application atom — tql.iam.write.orders — and the store-wide administrator
+            // passes it by construction rather than by every such route remembering to say so.
+            String broader = io.tesseraql.security.policy.Atoms.narrowedFrom(id);
+            if (broader != null) {
+                anyOf.add(Policy.Rule.ofPermission(broader));
             }
             return Optional.of(new Policy(id, anyOf));
         }

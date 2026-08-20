@@ -17,7 +17,7 @@ import java.util.Set;
  * that refuses is the control.
  *
  * <p>A holder of the store-wide {@code tql.iam.admin.write} is unscoped. A holder of
- * {@code tql.iam.admin.app.<name>} may touch only that application's own access, and three
+ * {@code tql.iam.write.<name>} may touch only that application's own access, and three
  * boundaries define "own":
  *
  * <ul>
@@ -58,9 +58,9 @@ public final class AdminScope {
 
     /**
      * The scope a caller's granted permission codes buy. The store-wide write atom wins
-     * outright; otherwise every {@code tql.iam.admin.app.<name>} names one application.
+     * outright; otherwise every {@code tql.iam.write.<name>} names one application.
      *
-     * <p>The terminal wildcard {@code tql.iam.admin.app.*} is deliberately <b>not</b> read as
+     * <p>The terminal wildcard {@code tql.iam.write.*} is deliberately <b>not</b> read as
      * store-wide: it delegates every application, which is still not the stack-wide roles or
      * the framework's own atoms. A caller who should have those is granted the store-wide atom.
      */
@@ -68,20 +68,40 @@ public final class AdminScope {
         if (permissions == null) {
             return forApplications(Set.of());
         }
-        if (permissions.contains("tql.iam.admin.write")) {
+        if (permissions.contains(Atoms.IAM_ADMIN_WRITE)) {
             return storeWide();
         }
         Set<String> scoped = new LinkedHashSet<>();
-        if (permissions.contains(Atoms.IAM_ADMIN_APP_PREFIX + "*") && members != null) {
+        if (permissions.contains(Atoms.IAM_WRITE_PREFIX + "*") && members != null) {
             scoped.addAll(members);
         }
         for (String permission : permissions) {
-            if (permission.startsWith(Atoms.IAM_ADMIN_APP_PREFIX)
-                    && !permission.endsWith("*")) {
-                scoped.add(permission.substring(Atoms.IAM_ADMIN_APP_PREFIX.length()));
+            if (permission.startsWith(Atoms.IAM_WRITE_PREFIX) && !permission.endsWith("*")) {
+                scoped.add(permission.substring(Atoms.IAM_WRITE_PREFIX.length()));
             }
         }
         return forApplications(scoped);
+    }
+
+    /**
+     * This scope narrowed to one application — the caller's reach intersected with the
+     * application the request is addressed to.
+     *
+     * <p>The per-application pages write through a URL that names their application, so a write
+     * arriving there belongs to it whoever the caller is. For a delegated administrator this
+     * changes nothing (their scope is already no wider). For a store-wide one it is the
+     * difference between the page they are on and the whole store: a hand-made POST to
+     * {@code /applications/orders/…} carrying a {@code billing} role is refused rather than
+     * quietly honoured because the caller happened to be allowed everything.
+     */
+    public AdminScope confinedTo(String application) {
+        if (application == null || application.isBlank()) {
+            return forApplications(Set.of());
+        }
+        if (storeWide || applications.contains(application)) {
+            return forApplications(Set.of(application));
+        }
+        return forApplications(Set.of());
     }
 
     /** Whether this scope reaches everything, the store-wide administrator's answer. */

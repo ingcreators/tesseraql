@@ -35,6 +35,8 @@ final class RouteRules implements LintRule {
 
     private static final String INVALID_INPUT_POLICY = "TQL-FIELD-2006";
 
+    private static final String POLICY_TEMPLATE_UNRESOLVABLE = "TQL-YAML-1409";
+
     /** The run's memoized IO and cross-rule state, set at the top of {@link #lint}. */
     private LintContext context;
 
@@ -50,6 +52,17 @@ final class RouteRules implements LintRule {
 
     static final Set<String> KNOWN_ROUTE_RECIPES = Set.of("query-json", "command-json",
             "query-html", "page", "query-export", "file-import", "file-export", "webhook");
+
+    /** The {@code {name}} path parameters a URL template declares, in template order. */
+    private static List<String> pathParams(String urlPath) {
+        List<String> names = new java.util.ArrayList<>();
+        java.util.regex.Matcher matcher = io.tesseraql.core.sql.SqlIdentifiers.PLACEHOLDER
+                .matcher(urlPath == null ? "" : urlPath);
+        while (matcher.find()) {
+            names.add(matcher.group(1));
+        }
+        return names;
+    }
 
     /**
      * The route recipes whose compiled pipeline runs {@code validate:} — every recipe that can
@@ -163,11 +176,20 @@ final class RouteRules implements LintRule {
                 ExportRules.extractionSqlFile(route, definition), "", source, findings);
         DocumentRules.lintDatasource(context, config, route.source(), definition, source, findings);
         DocumentRules.lintEmbeddedVariables(context, route.source(), definition, source, findings);
-        if (definition.security() != null && definition.security().policy() != null
-                && !DocumentRules.policyDefined(config, definition.security().policy())) {
-            findings.add(new LintFinding(LintCodes.UNDEFINED_POLICY, WARNING, source,
-                    "Route references undefined policy '" + definition.security().policy()
-                            + "' (deny by default)"));
+        if (definition.security() != null && definition.security().policy() != null) {
+            // A policy that resolves an atom from the route's own path must resolve on this
+            // route (docs/access-governance.md structural decision 7). The compiler refuses the
+            // same thing at boot; here it is an error with a line number rather than a stack.
+            String templateViolation = io.tesseraql.yaml.app.PolicyCodes.templateViolation(
+                    definition.security().policy(), pathParams(route.urlPath()));
+            if (templateViolation != null) {
+                findings.add(new LintFinding(POLICY_TEMPLATE_UNRESOLVABLE, ERROR, source,
+                        templateViolation, context.lineOf(route.source(), "policy:"), null));
+            } else if (!DocumentRules.policyDefined(config, definition.security().policy())) {
+                findings.add(new LintFinding(LintCodes.UNDEFINED_POLICY, WARNING, source,
+                        "Route references undefined policy '" + definition.security().policy()
+                                + "' (deny by default)"));
+            }
         }
         if (definition.security() != null) {
             String csrf = definition.security().csrf();

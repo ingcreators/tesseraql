@@ -962,7 +962,8 @@ public final class RouteCompiler {
                     .to(fileDirect);
         }
         ProcessorDefinition<?> fileRoute = builder.from(fileDirect).routeId(routeId + ".file");
-        applySecurity(fileRoute, definition.security(), "GET");
+        applySecurity(fileRoute, definition.security(), "GET",
+                routeFile.urlPath() + "/{transferId}/file");
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
     }
 
@@ -980,7 +981,8 @@ public final class RouteCompiler {
             restEndpoint(builder, "GET", routeFile.urlPath() + "/{transferId}").to(direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId + ".status");
-        applySecurity(route, routeFile.definition().security(), "GET");
+        applySecurity(route, routeFile.definition().security(), "GET",
+                routeFile.urlPath() + "/{transferId}");
         route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(
                 routeFile.urlPath()));
     }
@@ -1288,7 +1290,7 @@ public final class RouteCompiler {
                 definition.id(), "MCP-RESOURCE", "/" + definition.id(), appName));
         applyConcurrency(route, definition);
         applyLane(route, definition);
-        applySecurity(route, definition.security(), "GET");
+        applySecurity(route, definition.security(), "GET", null);
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
@@ -1324,7 +1326,7 @@ public final class RouteCompiler {
                 definition.id(), "MCP-UI", "/" + definition.id(), appName));
         applyConcurrency(route, definition);
         applyLane(route, definition);
-        applySecurity(route, definition.security(), "GET");
+        applySecurity(route, definition.security(), "GET", null);
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
@@ -1550,7 +1552,7 @@ public final class RouteCompiler {
         applyAudit(route, id, method, path, definition);
         applyConcurrency(route, definition);
         applyLane(route, definition);
-        applySecurity(route, definition.security(), method);
+        applySecurity(route, definition.security(), method, path);
         applyTenancy(route);
         applyI18n(route);
     }
@@ -1565,7 +1567,7 @@ public final class RouteCompiler {
     private void applyAttachmentGovernance(ProcessorDefinition<?> route, String id, String method,
             String path, SecuritySpec security) {
         applyTelemetry(route, id, method, path);
-        applySecurity(route, security, method);
+        applySecurity(route, security, method, path);
         applyTenancy(route);
         applyI18n(route);
     }
@@ -1797,7 +1799,7 @@ public final class RouteCompiler {
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */
     private void applySecurity(ProcessorDefinition<?> route, SecuritySpec security,
-            String httpMethod) {
+            String httpMethod, String urlPath) {
         if (security == null) {
             return;
         }
@@ -1819,8 +1821,41 @@ public final class RouteCompiler {
             route.to("tesseraql-auth:csrf");
         }
         if (security.policy() != null && !security.policy().isBlank()) {
-            route.to("tesseraql-auth:authorize?policy=" + security.policy());
+            route.to("tesseraql-auth:authorize?policy="
+                    + policyUriValue(security.policy(), urlPath));
         }
+    }
+
+    /**
+     * The {@code policy=} value for the authorize endpoint, and the route's URL template beside
+     * it when the policy resolves from the path.
+     *
+     * <p>A fixed policy id goes on the URI as it always has, byte for byte. A policy that
+     * resolves an atom from the request (docs/access-governance.md structural decision 7) is
+     * refused here when it cannot resolve — the same rule the linter reports, so a configuration
+     * that never saw the linter still fails at its source rather than as a puzzling 403 at
+     * request time. The {@code path.} qualifier is dropped and the route's own template travels
+     * with it, so the producer reads the value off the request's URL: the router's headers
+     * would be the shorter path, but a form field named after the path parameter overwrites
+     * one, and the gate would then resolve from the caller's own body.
+     *
+     * <p>Both are percent-encoded because braces are not URI characters.
+     */
+    private String policyUriValue(String policy, String urlPath) {
+        if (!io.tesseraql.security.policy.PolicyTemplate.isTemplate(policy)) {
+            return policy;
+        }
+        String violation = io.tesseraql.yaml.app.PolicyCodes.templateViolation(policy,
+                urlPath == null ? java.util.List.of() : pathParams(urlPath));
+        if (violation != null) {
+            throw new TqlException(io.tesseraql.yaml.app.PolicyCodes.TEMPLATE_UNRESOLVABLE,
+                    violation);
+        }
+        return encode(policy.replace("{path.", "{")) + "&pathTemplate=" + encode(urlPath);
+    }
+
+    private static String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**

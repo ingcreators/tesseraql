@@ -1,0 +1,29 @@
+version: tesseraql/v1
+id: tql.iamAdmin.applications.unassignRole
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.write.{path.name}
+
+input:
+  loginId:
+    type: string
+    required: true
+  roleCode:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.app.unassignRole
+      params:
+        application: path.name
+        actor: principal.loginId
+        permissions: principal.permissions
+        loginId: params.loginId
+        roleCode: params.roleCode
+response:
+  redirect:
+    location: /_tesseraql/admin/applications/{path.name}?unassigned=1

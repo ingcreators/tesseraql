@@ -13,6 +13,7 @@ public class TesseraqlAuthEndpoint extends DefaultEndpoint {
     private final String operation;
     private String auth = "bearer";
     private String policy;
+    private String pathTemplate;
 
     public TesseraqlAuthEndpoint(String uri, TesseraqlAuthComponent component, String operation) {
         super(uri, component);
@@ -49,5 +50,22 @@ public class TesseraqlAuthEndpoint extends DefaultEndpoint {
     /** Policy id for {@code authorize}. */
     public void setPolicy(String policy) {
         this.policy = policy;
+    }
+
+    public String getPathTemplate() {
+        return pathTemplate;
+    }
+
+    /**
+     * The route's own URL template, set only when {@code policy} resolves from the path
+     * (docs/access-governance.md structural decision 7).
+     *
+     * <p>It is what lets the atom be read off the request's URL rather than off a header. The
+     * router does publish its path parameters as headers, but so does a form body: a field
+     * named after the path parameter overwrites it, and the gate would then be resolving from
+     * exactly the caller-shaped input this design refuses to build a gate from.
+     */
+    public void setPathTemplate(String pathTemplate) {
+        this.pathTemplate = pathTemplate;
     }
 }

@@ -1,0 +1,37 @@
+version: tesseraql/v1
+id: tql.iamAdmin.applications.grantPermission
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.write.{path.name}
+
+input:
+  loginId:
+    type: string
+    required: true
+  code:
+    type: string
+    required: true
+  startsAt:
+    type: string
+    required: false
+  endsAt:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.app.grantPermission
+      params:
+        application: path.name
+        actor: principal.loginId
+        permissions: principal.permissions
+        loginId: params.loginId
+        code: params.code
+        startsAt: params.startsAt
+        endsAt: params.endsAt
+response:
+  redirect:
+    location: /_tesseraql/admin/applications/{path.name}?granted=1

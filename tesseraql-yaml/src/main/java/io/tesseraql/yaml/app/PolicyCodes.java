@@ -36,7 +36,66 @@ public final class PolicyCodes {
      */
     public static final TqlErrorCode OUTSIDE_NAMESPACE = new TqlErrorCode(TqlDomain.YAML, 1406);
 
+    /**
+     * TQL-YAML-1409: a route's {@code policy:} resolves an atom from the request, but not from
+     * this route's own path — it interpolates something other than {@code path.<name>}, names a
+     * path parameter the route does not declare, or sits outside the framework's {@code tql.}
+     * mark where nothing is synthesized to resolve into.
+     *
+     * <p>Reported at lint and refused at boot, like the namespace fence above, because a policy
+     * that cannot resolve is a route with no working gate — and the failure would otherwise
+     * surface as a puzzling 403 at request time rather than as a refusal at the source.
+     */
+    public static final TqlErrorCode TEMPLATE_UNRESOLVABLE = new TqlErrorCode(TqlDomain.YAML, 1409);
+
+    /** {@code {path.name}} inside a policy id — the one interpolation a policy may carry. */
+    private static final java.util.regex.Pattern PLACEHOLDER = java.util.regex.Pattern
+            .compile("\\{([^{}]*)}");
+
     private PolicyCodes() {
+    }
+
+    /**
+     * Why {@code policy} cannot resolve on a route declaring {@code pathParams}, or {@code null}
+     * when it can — shared by the boot refusal and the lint rule, so the two read identically.
+     *
+     * <p>A policy id may interpolate a path parameter so a surface addressed to one application
+     * checks that application's atom ({@code tql.iam.write.{path.name}},
+     * docs/access-governance.md structural decision 7). Three things are refused. Anything but
+     * {@code path.<name>}, because a policy resolves from the addressed resource and never from
+     * a query string or a body the caller shapes freely. A name the route's own path does not
+     * declare, because it would resolve to nothing on every request. And a template outside the
+     * {@code tql.} mark, because only an atom id is synthesized from the granted code — a
+     * declared policy is a fixed name, so there is nothing for an interpolated one to find.
+     */
+    public static String templateViolation(String policy, java.util.List<String> pathParams) {
+        if (policy == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = PLACEHOLDER.matcher(policy);
+        boolean templated = false;
+        while (matcher.find()) {
+            templated = true;
+            String reference = matcher.group(1);
+            if (!reference.startsWith("path.")) {
+                return "policy '" + policy + "' interpolates '" + reference + "' — a policy"
+                        + " resolves from the route's own path and nothing else, so only"
+                        + " {path.<name>} is available. A query or body value is the caller's"
+                        + " to shape, which is not what a gate may be built from.";
+            }
+            String name = reference.substring("path.".length());
+            if (!pathParams.contains(name)) {
+                return "policy '" + policy + "' interpolates {path." + name + "}, but this"
+                        + " route's path declares " + pathParams + " — the reference would"
+                        + " resolve to nothing on every request.";
+            }
+        }
+        if (templated && !policy.startsWith("tql.")) {
+            return "policy '" + policy + "' interpolates a path parameter, but only a framework"
+                    + " atom under tql. is synthesized from the granted code itself. A declared"
+                    + " policy is a fixed id, so an interpolated one names no policy at all.";
+        }
+        return null;
     }
 
     /**
