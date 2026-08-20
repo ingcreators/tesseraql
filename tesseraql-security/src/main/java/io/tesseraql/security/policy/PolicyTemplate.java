@@ -1,6 +1,5 @@
 package io.tesseraql.security.policy;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -15,15 +14,11 @@ import java.util.regex.Pattern;
  * policy is one fixed atom, so a per-application grant can never be the thing a route checks —
  * the delegated administrator is refused at the route before any containment runs.
  *
- * <p><b>The value comes off the URL, not off a header.</b> The router does publish its path
- * parameters as message headers, and reading them would be the shorter path — but a form body
- * publishes its fields the same way, so a field named after the path parameter overwrites it. A
- * gate built on that header would resolve its atom from the caller's own body, which is
- * precisely the input this design refuses to build a gate from. So the route's URL template
- * travels with the policy and the segments are matched positionally against the request path.
- *
- * <p>The match aligns from the <em>end</em>, so a deployment served under a base path resolves
- * the same atoms as one served at the root.
+ * <p><b>The value comes off the URL, not off a header</b> ({@code PathTemplate}): the transport
+ * publishes path parameters, query parameters and form-body fields all as message headers and
+ * all under their own names, so a gate reading one would resolve its atom from input the caller
+ * steers. What this class adds on top is the check that the resolved value is one atom segment
+ * and nothing else.
  */
 public final class PolicyTemplate {
 
@@ -62,7 +57,8 @@ public final class PolicyTemplate {
         if (policyId == null) {
             return null;
         }
-        Map<String, String> values = pathValues(pathTemplate, requestPath);
+        Map<String, String> values = io.tesseraql.core.http.PathTemplate.values(pathTemplate,
+                requestPath);
         Matcher matcher = PLACEHOLDER.matcher(policyId);
         StringBuilder out = new StringBuilder();
         while (matcher.find()) {
@@ -76,56 +72,4 @@ public final class PolicyTemplate {
         return out.toString();
     }
 
-    /**
-     * The request's value for each {@code {name}} in the template, matched positionally from
-     * the end of both paths so a base-path prefix on the request is simply ignored.
-     *
-     * <p>A literal segment that does not match is an empty answer rather than a partial one:
-     * the request did not come through this template, so nothing it carries is that template's
-     * parameter.
-     */
-    private static Map<String, String> pathValues(String pathTemplate, String requestPath) {
-        Map<String, String> values = new LinkedHashMap<>();
-        if (pathTemplate == null || requestPath == null) {
-            return values;
-        }
-        String[] template = segments(pathTemplate);
-        String[] actual = segments(stripQuery(requestPath));
-        if (template.length == 0 || actual.length < template.length) {
-            return values;
-        }
-        int offset = actual.length - template.length;
-        for (int i = 0; i < template.length; i++) {
-            Matcher placeholder = PLACEHOLDER.matcher(template[i]);
-            if (placeholder.matches()) {
-                values.put(placeholder.group(1), decode(actual[offset + i]));
-            } else if (!template[i].equals(actual[offset + i])) {
-                return Map.of();
-            }
-        }
-        return values;
-    }
-
-    private static String[] segments(String path) {
-        String trimmed = path.startsWith("/") ? path.substring(1) : path;
-        return trimmed.isEmpty() ? new String[0] : trimmed.split("/", -1);
-    }
-
-    private static String stripQuery(String path) {
-        int query = path.indexOf('?');
-        return query < 0 ? path : path.substring(0, query);
-    }
-
-    /**
-     * A percent-triplet in the path is decoded before it is checked, so an escaped separator is
-     * caught by {@link #SEGMENT} rather than smuggled through as an opaque string.
-     */
-    private static String decode(String segment) {
-        try {
-            return java.net.URLDecoder.decode(segment,
-                    java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException ex) {
-            return segment;
-        }
-    }
 }

@@ -405,7 +405,7 @@ public final class RouteCompiler {
             route.process(preCommand);
         }
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         // http: sources run before the command, which is the whole point of allowing them here:
@@ -564,7 +564,7 @@ public final class RouteCompiler {
             String dialect = datasourceDialect(DEFAULT_DATASOURCE);
             ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
             applyCommonGovernance(route, routeId, "POST", urlPath, definition);
-            route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome,
+            route.process(new RequestBinder(definition, urlPath, compiledAppHome,
                     functions))
                     .process(new io.tesseraql.compiler.binding.CatalogBinder())
                     .process(new io.tesseraql.compiler.binding.WorkflowDispatchProcessor(
@@ -674,7 +674,7 @@ public final class RouteCompiler {
                 null, java.util.Map.of(), workflowResponse());
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
-        route.process(new RequestBinder(definition, pathParams(urlPath), compiledAppHome,
+        route.process(new RequestBinder(definition, urlPath, compiledAppHome,
                 functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder())
                 .process(new io.tesseraql.compiler.binding.WorkflowDelegateProcessor(def.id(),
@@ -800,7 +800,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
                 definition);
-        route.process(new RequestBinder(definition, java.util.List.of(), compiledAppHome,
+        route.process(new RequestBinder(definition, null, compiledAppHome,
                 functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         route.process(new io.tesseraql.compiler.binding.QueueDedupProcessor(
@@ -869,7 +869,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder(
                         formatDeclaration(spec == null ? null : spec.locale(),
@@ -937,7 +937,7 @@ public final class RouteCompiler {
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
         ProcessorDefinition<?> exportStep = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 // The export's own locale, not the requesting browser's (docs/lookups.md,
                 // decision 12): a document must not carry names in one language and its
@@ -1074,7 +1074,7 @@ public final class RouteCompiler {
         applyCommonGovernance(route, routeFile);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, pathParams(routeFile.urlPath()),
+                .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         // Declarative pagination (roadmap Phase 41): compute the page window before the main
@@ -1226,7 +1226,7 @@ public final class RouteCompiler {
         applyCommonGovernance(route, definition.id(), "MCP", "/" + definition.id(), definition);
         applyIdempotencyBegin(route, definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome,
+                .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
 
@@ -1294,7 +1294,7 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome,
+                .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         for (var entry : definition.sources().entrySet()) {
@@ -1330,7 +1330,7 @@ public final class RouteCompiler {
         applyTenancy(route);
         applyI18n(route);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome,
+                .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         for (var entry : definition.sources().entrySet()) {
@@ -1381,7 +1381,7 @@ public final class RouteCompiler {
         applyCommonGovernance(route, definition.id(), "MCP-PROMPT", "/" + definition.id(),
                 definition);
         ProcessorDefinition<?> step = route
-                .process(new RequestBinder(definition, java.util.List.of(), compiledAppHome,
+                .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
         for (var entry : definition.sources().entrySet()) {
