@@ -104,6 +104,14 @@ jobs:
         run: |
           tar xzf tesseraql-cli/target/tesseraql-cli-*-dist.tar.gz -C "$RUNNER_TEMP"
           TQL=$(echo "$RUNNER_TEMP"/tesseraql-*/bin/tesseraql)
+          # The distribution carries no module bag (docs/module-channel.md decision 4): opt-in
+          # codecs reach an application through its own tesseraql.modules, never through a
+          # directory shipped beside the launcher that would give development a codec the
+          # deployment does not have.
+          if [ -d "$(dirname "$TQL")/../modules" ]; then
+            echo 'The dist archive carries a modules/ directory; it must not.'
+            ls -la "$(dirname "$TQL")/../modules"; exit 1
+          fi
           "$TQL" lint --app examples/inventory-app
           "$TQL" admission --app examples/inventory-app
           # The documented operator step for the app's analytics engine (docs/duckdb.md):

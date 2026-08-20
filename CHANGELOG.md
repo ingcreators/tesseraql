@@ -6,6 +6,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **The developer distribution stops carrying a module bag, and S3 stops carrying two unused
+  HTTP stacks** (docs/module-channel.md decisions 4 and 8, slice 1). The CLI dist archive
+  shipped a `modules/` directory holding the pdf/excel closure — 24 MB that nothing pointed
+  at: the launcher never passed `--modules`, and an application's opt-in codecs reach it
+  through its own `tesseraql.modules` cache instead. Shipping it could only ever have given
+  development a codec the deployment does not have, so it is gone, and the dist CI job fails
+  if it returns. `tesseraql-s3` selects the JDK-based `url-connection-client` and said so in
+  a comment, while `software.amazon.awssdk:s3` kept pulling its default clients transitively —
+  `apache-client`, `netty-nio-client`, and `apache5-client`, the one that actually drags in
+  Apache HttpClient 5. Excluding all three takes the module's resolution from 64 artifacts to
+  49, and what an S3 application adds beyond the runtime closure from 37 jars and 11.0 MB to
+  31 jars and 8.3 MB — 2.7 MB of HTTP stacks it never called. A `no-unused-http-clients`
+  enforcer rule bans the clients and the stacks they bring, so a fourth default client cannot
+  reintroduce them under a new name.
+
 ### Added
 
 - **Windows Server has a deployment artifact and a supervision story**
