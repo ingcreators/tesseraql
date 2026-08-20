@@ -260,6 +260,21 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * How many requests this runtime will hold in flight (docs/http-threading.md decision 3).
+     *
+     * <p>Four times the worker pool by default: enough room for the ordinary burst a queue exists
+     * to absorb, while keeping the queue a number an operator can see rather than "however much
+     * heap it takes". Beyond it the answer is an immediate 503, which is a slowdown a caller can
+     * retry — where an unbounded queue is an outage that takes health and readiness with it.
+     */
+    private static int maxInFlight(AppConfig config) {
+        return threadCount("tesseraql.http.maxInFlight",
+                config.getString("tesseraql.http.maxInFlight"))
+                .orElseGet(() -> threadCount("tesseraql.http.workerThreads",
+                        config.getString("tesseraql.http.workerThreads")).orElse(10) * 4);
+    }
+
+    /**
      * A declared thread count: absent, or a positive integer.
      *
      * <p>A thread pool sized from a typo is worse than one left at its default, because the
@@ -2651,6 +2666,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.start();
             // Unicode route paths match their percent-encoded requests (UnicodePaths).
             UnicodePaths.install(context, port);
+            // The runtime-wide in-flight bound (docs/http-threading.md decision 3). Installed here
+            // because the platform router does not exist until the HTTP server service has
+            // started, and ordered ahead of every route Camel registered before it.
+            HttpAdmission.install(context, port, maxInFlight(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
         } catch (Exception ex) {
             // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
