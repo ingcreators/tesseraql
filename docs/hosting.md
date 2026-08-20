@@ -100,7 +100,7 @@ refusal names. Placing it is one step, and each distribution reads one place:
 | --- | --- |
 | Container image | `/opt/tesseraql/lib/` (the image starts with `-cp 'lib/*'`) |
 | Developer CLI, `tesseraql-host` archive | `lib/ext/` beside the launcher, or any path in `TESSERAQL_CLASSPATH` |
-| Windows app image | `app\ext\` plus one `app.classpath=$APPDIR\ext\<jar>` line in `app\tesseraql-host.cfg` |
+| Windows app image | `app\ext\`, plus an `app.classpath=$APPDIR\ext\<jar>` line **inside the `[Application]` section** of `app\tesseraql-host.cfg`, beside the one already there — appended at the end of the file it lands in `[JavaOptions]` and is read as a JVM option, so the classpath never grows |
 
 If no driver on the classpath accepts the URL, the host refuses to start with `TQL-APP-4220`,
 naming the declared coordinate and this step — in place of the JDBC layer's `No suitable driver`,

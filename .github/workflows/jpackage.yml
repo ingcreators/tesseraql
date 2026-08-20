@@ -286,7 +286,17 @@ jobs:
             Where-Object { $_.Name -notmatch 'sources|javadoc' } | Select-Object -First 1
           if (-not $jar) { Write-Error 'no mssql-jdbc jar in the local repository'; exit 1 }
           Copy-Item $jar.FullName (Join-Path $app 'ext')
-          Add-Content (Join-Path $app 'tesseraql-host.cfg') "app.classpath=`$APPDIR\ext\$($jar.Name)"
+          # The entry belongs beside the existing app.classpath line, inside [Application]:
+          # appending to the end of the file lands it in [JavaOptions], where the launcher reads it
+          # as a JVM option and the classpath never grows. Insert, do not append.
+          $cfgPath = Join-Path $app 'tesseraql-host.cfg'
+          $cfg = [System.Collections.Generic.List[string]](Get-Content $cfgPath)
+          $last = ($cfg | Select-String -Pattern '^app\.classpath=' | Select-Object -Last 1).LineNumber
+          if (-not $last) { Write-Error 'the app image cfg has no app.classpath line'; exit 1 }
+          $cfg.Insert($last, "app.classpath=`$APPDIR\ext\$($jar.Name)")
+          Set-Content -Path $cfgPath -Value $cfg
+          Write-Host '--- tesseraql-host.cfg ---'
+          Get-Content $cfgPath | Write-Host
 
           $after = & $exe host --stack $stack --port 18443 2>&1 | Out-String
           Write-Host $after
