@@ -1,0 +1,47 @@
+<!--
+  TesseraQL host as a Windows service, supervised through WinSW
+  (https://github.com/winsw/winsw — MIT-licensed service wrapper; docs/hosting.md, the
+  Windows Server section).
+
+  Setup:
+    1. Unzip tesseraql-host-<version>-windows-x86_64.zip, e.g. under C:\Program Files\tesseraql.
+    2. Download WinSW-x64.exe and place it BESIDE this file, renamed tesseraql-host-service.exe
+       (WinSW pairs the executable with the .xml sharing its base name).
+    3. Adjust the stack directory and port below, and the database credentials your
+       applications' config expects.
+    4. tesseraql-host-service.exe install
+       net start tesseraql-host
+
+  Stopping the service sends the console signal that triggers the JVM shutdown hook — the
+  same ordered drain SIGTERM reaches in the container image, so in-flight work finishes
+  before the process exits ("Stack stopping" in the service log is the drain starting).
+  Upgrades never replace these files while the service runs: `tesseraql-host deploy` installs
+  the new version BESIDE the old one and switches the catalog pointer (docs/hosting.md).
+-->
+<service>
+  <id>tesseraql-host</id>
+  <name>TesseraQL Host</name>
+  <description>Serves every installed TesseraQL application from one port, each in its own runtime.</description>
+
+  <executable>%BASE%\tesseraql-host\tesseraql-host.exe</executable>
+  <arguments>host --stack C:\ProgramData\tesseraql\stack --port 8080</arguments>
+
+  <!-- Environment placeholders an application's config/application.yml references
+       (e.g. ${DB_USER:...}) are provided here, not in the package. -->
+  <!--
+  <env name="DB_USER" value="app"/>
+  <env name="DB_PASSWORD" value="secret"/>
+  -->
+
+  <!-- The ordered drain gets a full minute before the wrapper escalates. -->
+  <stoptimeout>60 sec</stoptimeout>
+
+  <!-- stdout/stderr become the service log, rolled by size, next to this file under logs\. -->
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+
+  <onfailure action="restart" delay="10 sec"/>
+</service>

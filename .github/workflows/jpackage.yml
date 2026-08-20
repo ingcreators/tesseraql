@@ -9,6 +9,8 @@ on:
   pull_request:
     paths:
       - 'tesseraql-cli/**'
+      - 'tesseraql-host/**'
+      - 'deploy/windows/**'
       - '.github/workflows/jpackage.yml'
       - 'pom.xml'
   workflow_dispatch:
@@ -160,6 +162,198 @@ jobs:
           TAG="$GITHUB_REF_NAME"
           # release.yml publishes the release near the END of its run (verify + deploy first), so
           # this per-OS job will usually finish first — poll until the release exists, then attach.
+          for i in $(seq 1 60); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" "$ASSET" --clobber
+              echo "Attached $ASSET to $TAG"
+              exit 0
+            fi
+            echo "Waiting for release $TAG ($i/60)..."
+            sleep 20
+          done
+          echo "Release $TAG did not appear within the timeout" >&2
+          exit 1
+
+  # The Windows Server deployment artifact (docs/runtime-footprint.md decision 2a): the
+  # tesseraql-host distribution as a jpackage app image, plus the WinSW service definition it is
+  # supervised with. Windows only — a Linux deployment is the container image
+  # (deploy/Dockerfile), which the deploy-image CI job already proves. Beyond building it, this
+  # job installs the image as a real Windows service against a real PostgreSQL and asserts the
+  # stop path: a service stop must reach the JVM shutdown hook's ordered drain ("Stack
+  # stopping"), the same contract SIGTERM has in the container.
+  host-image:
+    name: Host image on windows-latest
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Build the host fat jar
+        shell: bash
+        run: ./mvnw -B -ntp -pl tesseraql-host -am -Pdist -DskipTests package
+
+      - name: Build the host app image
+        shell: bash
+        run: |
+          VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+          APPVER=${VERSION%-SNAPSHOT}
+          # jpackage rejects a zero major version; pre-1.0 dev builds use a 1.0.0 bundle
+          # placeholder — the authoritative version stays in the jar manifest.
+          case "$APPVER" in 0.*) APPVER=1.0.0 ;; esac
+          mkdir -p build/jpackage-input
+          cp tesseraql-host/target/tesseraql-host-*-all.jar build/jpackage-input/tesseraql-host.jar
+          # --win-console for the same reason the CLI image carries it — and here the service
+          # wrapper captures the console streams as the service log, so a silent GUI-subsystem
+          # launcher would produce an unsupervised service with an empty log.
+          jpackage --type app-image --name tesseraql-host \
+            --input build/jpackage-input --main-jar tesseraql-host.jar \
+            --main-class io.tesseraql.cli.TesseraqlHostCli \
+            --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive" \
+            --java-options -XX:+UseCompactObjectHeaders \
+            --java-options --sun-misc-unsafe-memory-access=allow \
+            --java-options -XX:+AutoCreateSharedArchive \
+            --java-options '-XX:SharedArchiveFile=$APPDIR/app-cds.jsa' \
+            --java-options -Xlog:cds=error:stderr \
+            --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
+            --app-version "$APPVER" \
+            --win-console \
+            --dest build/jpackage
+
+      - name: Give the runtime a compact-object-headers base archive
+        shell: bash
+        run: |
+          # Same reasoning as the CLI image: the launchers run with compact object headers, for
+          # which the JVM maps classes_coh.jsa; the jlink-generated layouts are dropped.
+          JAVA=$(find build/jpackage -type f -path '*bin*' -name java.exe | head -1)
+          "$JAVA" -XX:+UseCompactObjectHeaders -Xshare:dump
+          find build/jpackage \( -name classes.jsa -o -name classes_nocoops.jsa \) -delete
+
+      - name: Smoke-test the launcher
+        shell: bash
+        run: |
+          out=$(build/jpackage/tesseraql-host/tesseraql-host.exe routes --app examples/scaffold-demo-app)
+          printf '%s\n' "$out"
+          printf '%s' "$out" | grep -q 'items.search' \
+            || { echo "the host launcher listed no routes" >&2; exit 1; }
+
+      - name: Start the runner's PostgreSQL and create the demo database
+        shell: pwsh
+        run: |
+          # The windows-latest image ships PostgreSQL preinstalled with its service stopped
+          # (user postgres, password root, $env:PGBIN published by the image).
+          $svc = Get-Service -Name postgresql*
+          Set-Service -InputObject $svc -Status running -StartupType manual
+          & "$env:PGBIN\createdb.exe" -U postgres scaffold_demo
+        env:
+          PGPASSWORD: root
+
+      - name: Install the host as a Windows service (WinSW) and assert the ordered drain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $svcDir = "$env:RUNNER_TEMP\tesseraql-host-svc"
+          $stack = "$env:RUNNER_TEMP\stack"
+          New-Item -ItemType Directory -Force -Path $svcDir, $stack | Out-Null
+          Copy-Item -Recurse examples/scaffold-demo-app "$stack\scaffold-demo"
+
+          # WinSW 2.12.0, pinned by checksum: the wrapper is part of the documented supervision
+          # story (deploy/windows/tesseraql-host-service.xml), so the drain is proven through the
+          # exact stop path an operator uses.
+          $winsw = "$svcDir\tesseraql-host-service.exe"
+          Invoke-WebRequest -Uri 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe' -OutFile $winsw
+          $hash = (Get-FileHash -Algorithm SHA256 $winsw).Hash.ToLowerInvariant()
+          if ($hash -ne '05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da') {
+            throw "WinSW checksum mismatch: $hash"
+          }
+
+          $exe = (Resolve-Path 'build/jpackage/tesseraql-host/tesseraql-host.exe').Path
+          @"
+          <service>
+            <id>tesseraql-host</id>
+            <name>TesseraQL Host (CI)</name>
+            <description>Drain assertion for the Windows Server execution story.</description>
+            <executable>$exe</executable>
+            <arguments>host --stack $stack --port 18080</arguments>
+            <env name="DB_USER" value="postgres"/>
+            <env name="DB_PASSWORD" value="root"/>
+            <stoptimeout>60 sec</stoptimeout>
+            <logpath>$svcDir\logs</logpath>
+            <log mode="append"/>
+          </service>
+          "@ | Set-Content "$svcDir\tesseraql-host-service.xml"
+
+          & $winsw install
+          & $winsw start
+          $ready = $false
+          for ($i = 0; $i -lt 90; $i++) {
+            try {
+              Invoke-WebRequest -Uri 'http://localhost:18080/_tesseraql/health/live' -UseBasicParsing | Out-Null
+              $ready = $true; break
+            } catch { Start-Sleep -Seconds 2 }
+          }
+          function Dump-ServiceLogs {
+            Get-ChildItem "$svcDir\logs" -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.Name) ---"
+              Get-Content $_.FullName
+            }
+          }
+          if (-not $ready) {
+            Dump-ServiceLogs
+            throw 'the hosted stack never answered /_tesseraql/health/live'
+          }
+
+          # The assertion this job exists for: a service stop reaches the ordered drain. stopwait
+          # (not stop) blocks until the SCM reports the service stopped, i.e. after the drain;
+          # the drain line lands in the stderr log, where the structured log provider writes.
+          & $winsw stopwait
+          $drained = $false
+          for ($i = 0; $i -lt 15; $i++) {
+            $hits = Get-ChildItem "$svcDir\logs" -Filter *.log -ErrorAction SilentlyContinue |
+              Select-String -Pattern 'Stack stopping'
+            if (($hits | Measure-Object).Count -gt 0) { $drained = $true; break }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $drained) {
+            Dump-ServiceLogs
+            throw 'the service stop did not reach the ordered drain (no "Stack stopping" line)'
+          }
+          & $winsw uninstall
+
+      - name: Archive the host image
+        shell: bash
+        run: |
+          ROOT="$PWD"
+          VERSION=$(./mvnw -q help:evaluate -Dexpression=project.version -DforceStdout)
+          VERSION=${VERSION%-SNAPSHOT}
+          ARCH=$(uname -m)
+          ASSET="tesseraql-host-${VERSION}-windows-${ARCH}.zip"
+          cp deploy/windows/tesseraql-host-service.xml build/jpackage/
+          ( cd build/jpackage && 7z a -tzip "$ROOT/$ASSET" tesseraql-host tesseraql-host-service.xml > /dev/null )
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - name: Upload the host image
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tesseraql-host-windows
+          path: build/jpackage
+          if-no-files-found: error
+
+      - name: Attach the host image to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
           for i in $(seq 1 60); do
             if gh release view "$TAG" >/dev/null 2>&1; then
               gh release upload "$TAG" "$ASSET" --clobber

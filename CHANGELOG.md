@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Windows Server has a deployment artifact and a supervision story**
+  (docs/runtime-footprint.md decision 2a, slice 5). Releases now attach
+  `tesseraql-host-<version>-windows-x86_64.zip`: the `tesseraql-host` distribution as a
+  jpackage app image with a bundled Java runtime, plus `tesseraql-host-service.xml` — a
+  WinSW service definition, so the host runs under the Service Control Manager with the
+  console streams as the service log. A service stop reaches the same ordered drain SIGTERM
+  reaches in the container, and CI asserts it: the release build installs the image as a
+  real Windows service against a real PostgreSQL, serves a stack, stops the service, and
+  fails unless the drain ran. docs/hosting.md gained the Windows Server section.
+
 - **The deployment distribution: `tesseraql-host`** (docs/runtime-footprint.md decision 1,
   slice 2). A deployment now ships the host, not the workshop: the new module carries the
   runtime and the operator verbs (`host`, `deploy`, `routes`, `token`, `migrate`, `job`,
