@@ -2,9 +2,6 @@
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.format.settings.url": "config/eclipse-formatter.xml",
   "java.format.settings.profile": "TesseraQL",
-  // JDT-only problem severities; the Maven build (-Xlint:all + failOnWarning) is still
-  // the authority on warnings. See the file for what is turned off and why.
-  "java.settings.url": "config/eclipse-jdt-settings.prefs",
   "java.completion.importOrder": ["#"],
   "[java]": {
     "editor.codeActionsOnSave": {

@@ -48,7 +48,7 @@ class SqlBuilderTest {
                   and active = /* active */ false
                 /*%end*/;
                 """.stripTrailing());
-        // No column chosen yet -> a TODO predicate (and no params mapping).
+        // No column chosen yet -> a placeholder predicate (and no params mapping).
         assertThat(SqlBuilder.generate(USERS, "select-by-column", ""))
                 .contains("where /* TODO: pick a column */;").doesNotContain("sql.params");
     }

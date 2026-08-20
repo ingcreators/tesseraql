@@ -39,7 +39,6 @@
         "java.configuration.updateBuildConfiguration": "automatic",
         "java.format.settings.url": "config/eclipse-formatter.xml",
         "java.format.settings.profile": "TesseraQL",
-        "java.settings.url": "config/eclipse-jdt-settings.prefs",
         "java.completion.importOrder": ["#"],
         "java.compile.nullAnalysis.mode": "disabled",
         "[java]": {

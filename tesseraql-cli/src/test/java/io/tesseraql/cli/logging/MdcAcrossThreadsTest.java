@@ -28,6 +28,7 @@ class MdcAcrossThreadsTest {
     }
 
     @Test
+    @SuppressWarnings("resource") // the Camel context adopts the service and closes it
     void theTraceIdsFollowTheExchangeAcrossAThreadHandoff() throws Exception {
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             MDCService mdc = new MDCService();
@@ -68,6 +69,7 @@ class MdcAcrossThreadsTest {
     }
 
     @Test
+    @SuppressWarnings("resource") // the Camel context adopts the service and closes it
     void camelsOwnIdentifiersRideAlongWithoutBeingThreadedThrough() throws Exception {
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             new MDCService().init(context);

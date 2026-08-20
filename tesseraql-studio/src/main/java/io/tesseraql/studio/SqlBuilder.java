@@ -124,7 +124,7 @@ public final class SqlBuilder {
         return render(binds, "delete from " + table.name() + "\nwhere " + where + ";\n");
     }
 
-    /** The {@code where} predicate over the primary key (each bound from {@code params}), or a TODO. */
+    /** The {@code where} predicate over the primary key (each bound from {@code params}), or a placeholder. */
     private static String keyPredicate(CatalogSchema.Table table, List<Bind> binds) {
         if (table.primaryKey().isEmpty()) {
             return "1 = 1 /* TODO: add a key predicate */";

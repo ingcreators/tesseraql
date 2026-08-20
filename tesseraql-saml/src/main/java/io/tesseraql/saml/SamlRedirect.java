@@ -18,6 +18,7 @@ public final class SamlRedirect {
     }
 
     /** Raw-DEFLATEs and base64-encodes a SAML message for a redirect {@code SAMLRequest}. */
+    @SuppressWarnings("resource") // a Deflater releases through end(), not close()
     public static String deflateAndEncode(String xml) {
         Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
         deflater.setInput(xml.getBytes(StandardCharsets.UTF_8));
@@ -96,6 +97,7 @@ public final class SamlRedirect {
     }
 
     /** Base64-decodes and raw-INFLATEs a redirect-binding SAML message. */
+    @SuppressWarnings("resource") // an Inflater releases through end(), not close()
     public static String decodeAndInflate(String encoded) {
         byte[] compressed = Base64.getMimeDecoder().decode(encoded);
         Inflater inflater = new Inflater(true);
