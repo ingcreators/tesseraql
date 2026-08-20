@@ -41,15 +41,18 @@ final class LoginRouteBuilder extends RouteBuilder {
     private final SessionStore sessions;
     private final io.tesseraql.core.credential.TotpStore totp;
     private final io.tesseraql.security.throttle.CredentialThrottle throttle;
+    private final io.tesseraql.identity.IdentityService identity;
 
     LoginRouteBuilder(PasswordAuthenticator authenticator, RealmConfig realm,
             SessionStore sessions, io.tesseraql.core.credential.TotpStore totp,
-            io.tesseraql.security.throttle.CredentialThrottle throttle) {
+            io.tesseraql.security.throttle.CredentialThrottle throttle,
+            io.tesseraql.identity.IdentityService identity) {
         this.authenticator = authenticator;
         this.realm = realm;
         this.sessions = sessions;
         this.totp = totp;
         this.throttle = throttle;
+        this.identity = identity;
     }
 
     /** The presented address, the ClientInfo resolution: XFF first, else the peer. */
@@ -114,6 +117,15 @@ final class LoginRouteBuilder extends RouteBuilder {
         rest().post("/_tesseraql/logout-others").to("direct:tql.logoutOthers");
         from("direct:tql.logoutOthers").routeId("system.logout.others")
                 .process(this::logoutOthers);
+
+        // Just-in-time elevation (docs/access-governance.md structural decision 3). A Java
+        // route for the same reason as its logout siblings: only this layer reads the
+        // cookie, and taking an eligible role has to reach the caller's own session — a
+        // principal frozen at sign-in would otherwise hold the new role only after a
+        // re-login, which makes the feature useless for its purpose.
+        rest().post("/_tesseraql/account/elevate").to("direct:tql.elevate");
+        from("direct:tql.elevate").routeId("system.account.elevate")
+                .process(this::elevate);
     }
 
     private void login(Exchange exchange) throws Exception {
@@ -264,6 +276,60 @@ final class LoginRouteBuilder extends RouteBuilder {
         new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
         sessions.invalidateOthersFor(session.principal().subject(), sessionId);
         redirect(exchange, 303, "/_tesseraql/account?saved=signed-out-others");
+    }
+
+    /**
+     * Takes an eligible role for a bounded window and makes it live in this session
+     * (docs/access-governance.md structural decision 3). Two halves: the store write, which
+     * is an ordinary windowed grant, and the session refresh, which is the only part that
+     * needed building — a frozen principal would otherwise hold the elevation no sooner
+     * than the caller's next sign-in.
+     *
+     * <p>The re-resolution is narrow on purpose. It re-reads this caller's own principal
+     * into this caller's own session; it is not a general mid-session refresh, and the
+     * person's other sessions see the elevation at their next sign-in.
+     */
+    private void elevate(Exchange exchange) throws Exception {
+        String cookie = exchange.getMessage().getHeader("Cookie", String.class);
+        String sessionId = sessions.sessionIdFromCookie(cookie);
+        SessionStore.Session session = sessionId == null ? null : sessions.session(sessionId);
+        if (session == null) {
+            throw new TqlException(PolicyEngine.UNAUTHORIZED, "No session");
+        }
+        Map<String, Object> body = parseBody(exchange);
+        String token = exchange.getMessage().getHeader("X-CSRF-Token", String.class);
+        if (token == null) {
+            Object field = body.get("_csrf");
+            token = field == null ? null : String.valueOf(field);
+        }
+        new io.tesseraql.security.session.CsrfValidator(sessions).validate(cookie, token);
+        if (identity == null) {
+            throw new TqlException(io.tesseraql.identity.Elevation.REFUSED,
+                    "This deployment has no identity realm to elevate against");
+        }
+        // The subject is the session's, never the request's: a caller may only ever
+        // elevate themselves, so there is no target to validate.
+        String subject = session.principal().subject();
+        String role = str(body.get("roleCode"));
+        if ("1".equals(str(body.get("end"))) || "true".equals(str(body.get("end")))) {
+            io.tesseraql.identity.Elevation.endElevation(identity, realm, subject, subject,
+                    role);
+        } else {
+            io.tesseraql.identity.Elevation.elevate(identity, realm, subject, role,
+                    str(body.get("minutes")), str(body.get("reason")));
+        }
+        refreshPrincipal(sessionId, session);
+        redirect(exchange, 303, "/_tesseraql/account?saved=elevated");
+    }
+
+    /** Re-reads the session owner's principal so the change is live on the next request. */
+    private void refreshPrincipal(String sessionId, SessionStore.Session session) {
+        String loginId = session.principal().loginId();
+        if (loginId == null) {
+            return;
+        }
+        identity.resolvePrincipal(realm, loginId, session.principal().tenantId())
+                .ifPresent(fresh -> sessions.replacePrincipal(sessionId, fresh));
     }
 
     /** Shared with the recovery endpoints (roadmap Phase 50), same package. */

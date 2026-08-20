@@ -104,6 +104,17 @@ create table tql_user_identities (
   primary key (provider, external_subject)
 );
 
+if object_id('tql_role_eligibility', 'U') is null
+create table tql_role_eligibility (
+  user_id           varchar(64) not null,
+  role_id           varchar(64) not null,
+  max_minutes       int not null,
+  requires_reason   smallint not null default 0,
+  requires_approval smallint not null default 0,
+  expires_at        datetime2,
+  primary key (user_id, role_id)
+);
+
 if object_id('tql_sod_constraints', 'U') is null
 create table tql_sod_constraints (
   constraint_id   varchar(64) primary key,

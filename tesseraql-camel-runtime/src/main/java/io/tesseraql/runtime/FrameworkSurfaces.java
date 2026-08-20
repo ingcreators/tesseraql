@@ -101,7 +101,11 @@ public final class FrameworkSurfaces {
                             + " token before invalidating anything"),
             Map.entry("system.logout.device",
                     "LoginRouteBuilder#logoutDevice requires a session and validates the CSRF"
-                            + " token; the handle is scoped to the caller's own subject"));
+                            + " token; the handle is scoped to the caller's own subject"),
+            Map.entry("system.account.elevate",
+                    "LoginRouteBuilder#elevate requires a session and validates the CSRF"
+                            + " token; the subject elevated is the session's own, so the"
+                            + " request names no target to validate"));
 
     /** Whether this route is allowed to answer without an {@code authenticate} step. */
     public static boolean exempt(String routeId) {

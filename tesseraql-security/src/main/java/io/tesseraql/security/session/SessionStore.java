@@ -121,6 +121,25 @@ public interface SessionStore {
         return fresh;
     }
 
+    /**
+     * Replaces one session's principal in place, keeping its id and CSRF token
+     * (docs/access-governance.md structural decision 3). A principal is frozen at sign-in,
+     * which is right for every other surface and wrong for exactly one: an elevation the
+     * caller just took would otherwise not reach them until their next login, which makes
+     * the feature useless for its purpose.
+     *
+     * <p>Deliberately narrow. This re-reads <em>this</em> caller's own principal into
+     * <em>this</em> caller's own session; it is not a general mid-session refresh, and the
+     * person's other sessions still see the change at their next sign-in. Returns whether a
+     * session resolved — an expired session mid-flight is the caller's next 401, not a crash.
+     *
+     * <p>The default keeps the id by re-creating the entry, which stores whose sessions are a
+     * map can do directly; stores with a cheaper primitive override.
+     */
+    default boolean replacePrincipal(String sessionId, Principal principal) {
+        return false;
+    }
+
     /** Invalidates the session named by a {@code Cookie} header, if one resolves (logout). */
     default void invalidateFromCookie(String cookieHeader) {
         String sessionId = Cookies.value(cookieHeader, cookieName());

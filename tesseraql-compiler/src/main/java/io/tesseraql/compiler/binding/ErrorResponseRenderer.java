@@ -481,6 +481,7 @@ public final class ErrorResponseRenderer implements Processor {
                 case 4030, 4031 -> 403; // the realm's capability refuses the write
                 case 4032, 4033 -> 400; // a malformed rule condition or role-admin input
                 case 4034 -> 409; // the grant conflicts with a separation-of-duties constraint
+                case 4035 -> 400; // an elevation asked for is not one that can be granted
                 default -> 500;
             };
             // 4040: unknown - or out-of-scope, which reads identically - event or execution,

@@ -26,6 +26,8 @@ web/_tesseraql/admin/constraints/delete/post.yml
 web/_tesseraql/admin/users/{id}/attributes/set/post.yml
 web/_tesseraql/admin/users/{id}/attributes/delete/post.yml
 web/_tesseraql/admin/users/{id}/recompute/post.yml
+web/_tesseraql/admin/users/{id}/eligibility/grant/post.yml
+web/_tesseraql/admin/users/{id}/eligibility/revoke/post.yml
 web/_tesseraql/admin/users/{id}/roles/assign/post.yml
 web/_tesseraql/admin/users/{id}/roles/unassign/post.yml
 web/_tesseraql/admin/users/{id}/permissions/grant/post.yml

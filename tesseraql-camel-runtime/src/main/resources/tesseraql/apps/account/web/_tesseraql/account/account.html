@@ -21,6 +21,8 @@
   <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'app'}">Setting saved.</p>
   <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'elevated'}">Elevation updated. It is active on this session now.</p>
+  <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'delegation'}">Out-of-office delegation saved.</p>
   <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'delegation-cleared'}">Out-of-office delegation cleared.</p>
@@ -145,6 +147,42 @@
         </form>
       </li>
     </ul>
+    </div>
+  </section>
+  <!-- Just-in-time elevation (docs/access-governance.md structural decision 3): an
+       eligibility grants nothing until it is taken, and what is taken expires by itself. -->
+  <section class="hc-card" th:if="${eligibilityAvailable == 1 and !#lists.isEmpty(eligibility)}">
+    <div class="hc-card__header">Roles you can take when you need them</div>
+    <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">You are eligible for these roles but do not hold them.
+      Taking one grants it for the window you ask for, up to its limit, and it expires by
+      itself — every elevation is recorded with the reason you gave.</p>
+    <div th:each="e : ${eligibility}" class="hc-cluster">
+      <span><code th:text="${e.role_code}"></code>
+        <span th:if="${e.application != null}" class="hc-badge" th:text="${e.application}"></span>
+      </span>
+      <form th:if="${e.held_until == null}" method="post"
+            th:action="@{/_tesseraql/account/elevate}" class="hc-cluster">
+        <input type="hidden" name="_csrf" th:value="${_csrf}">
+        <input type="hidden" name="roleCode" th:value="${e.role_code}">
+        <label class="hc-field"><span class="hc-field__label">Minutes</span>
+          <input class="hc-input" data-size="sm" name="minutes" type="number" min="1"
+                 th:max="${e.max_minutes}" th:value="${e.max_minutes}"></label>
+        <label class="hc-field"><span class="hc-field__label">Reason</span>
+          <input class="hc-input" data-size="sm" name="reason"
+                 th:required="${e.requires_reason == 1}"></label>
+        <button class="hc-button" data-variant="primary" data-size="sm" type="submit">Take</button>
+      </form>
+      <span th:if="${e.held_until != null}" class="hc-cluster">
+        <span th:text="|Active until ${e.held_until}|">until</span>
+        <form method="post" th:action="@{/_tesseraql/account/elevate}">
+          <input type="hidden" name="_csrf" th:value="${_csrf}">
+          <input type="hidden" name="roleCode" th:value="${e.role_code}">
+          <input type="hidden" name="end" value="1">
+          <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">End now</button>
+        </form>
+      </span>
+    </div>
     </div>
   </section>
   <section class="hc-card" th:if="${profile.delegation.available}">

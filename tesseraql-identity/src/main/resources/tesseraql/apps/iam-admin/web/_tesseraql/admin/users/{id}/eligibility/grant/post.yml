@@ -1,0 +1,31 @@
+version: tesseraql/v1
+id: tql.iamAdmin.users.grantEligibility
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  roleCode:
+    type: string
+    required: true
+  maxMinutes:
+    type: string
+    required: false
+  requiresReason:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.grantEligibility
+      params:
+        userId: path.id
+        roleCode: params.roleCode
+        maxMinutes: params.maxMinutes
+        requiresReason: params.requiresReason
+response:
+  redirect:
+    location: /_tesseraql/admin/users/{path.id}?eligible=1

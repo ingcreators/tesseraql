@@ -1600,6 +1600,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             TesseraqlProperties.DELEGATION_STORE_BEAN,
                                             io.tesseraql.core.workflow.DelegationStore.class),
                                     shortcuts))
+                    // What the caller may elevate into (docs/access-governance.md
+                    // structural decision 3). Identity and realm resolve at call time,
+                    // like account.invite below: they bind after this chain builds.
+                    .register("account.eligibility",
+                            params -> io.tesseraql.identity.Elevation.eligibilityModel(
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class),
+                                    String.valueOf(params.get("subject"))))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -1934,6 +1946,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         params -> io.tesseraql.identity.RoleAdmin.deleteConstraint(
                                 iamIdentity.get(), iamRealm.get(),
                                 String.valueOf(params.get("constraintId"))));
+                // Eligibility, the administrator's side of elevation
+                // (docs/access-governance.md structural decision 3). Taking the role is
+                // the account surface's own Java route, because only that layer can make
+                // the elevation live in the caller's session.
+                serviceProviders.register("iam.eligibility",
+                        params -> io.tesseraql.identity.Elevation.eligibilityModel(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId"))));
+                serviceProviders.register("iam.grantEligibility",
+                        params -> io.tesseraql.identity.Elevation.grantEligibility(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("maxMinutes")),
+                                "1".equals(String.valueOf(params.get("requiresReason")))));
+                serviceProviders.register("iam.revokeEligibility",
+                        params -> io.tesseraql.identity.Elevation.revokeEligibility(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("roleCode"))));
                 serviceProviders.register("iam.grantHistory",
                         params -> io.tesseraql.identity.GrantHistory.historyModel(
                                 iamIdentity.get(), iamRealm.get(),
@@ -2124,7 +2156,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             context.getRegistry().bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
             context.addRoutes(new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore, totpStore,
-                    credentialThrottle));
+                    credentialThrottle, identity));
             // A session buys a short-lived bearer (docs/session-token-exchange.md). Off by
             // default: an endpoint that turns a session into a credential should exist because
             // somebody decided it should, not because they upgraded.

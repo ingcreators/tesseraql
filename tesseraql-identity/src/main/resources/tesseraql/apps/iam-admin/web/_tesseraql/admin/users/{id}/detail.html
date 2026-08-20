@@ -293,6 +293,54 @@
     </form>
   </div>
 </section>
+<!-- Eligibility (docs/access-governance.md structural decision 3): what this person may
+     take when they need it. It grants nothing until they take it, and never reaches the
+     principal, so it is invisible to every policy until an elevation lands. -->
+<section class="hc-card" th:if="${eligibilityAvailable == 1}">
+  <div class="hc-card__header">Eligible roles</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(eligibility)}">
+      <p class="hc-empty__title">No eligible roles.</p>
+      <p class="hc-empty__description">An eligibility lets this person take a role for a
+        bounded window from their own account page, without holding it the rest of the
+        time.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(eligibility)}">
+      <table class="hc-table">
+        <thead><tr><th>Role</th><th>Limit</th><th>Reason required</th><th>Active until</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="e : ${eligibility}">
+            <td><code th:text="${e.role_code}"></code></td>
+            <td th:text="|${e.max_minutes} min|"></td>
+            <td th:text="${e.requires_reason == 1 ? 'yes' : 'no'}"></td>
+            <td th:text="${e.held_until != null ? e.held_until : '—'}"></td>
+            <td th:if="${editorWritable == 1}">
+              <form th:each="u : ${user}" method="post"
+                    th:action="@{/_tesseraql/admin/users/{id}/eligibility/revoke(id=${u.user_id})}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="roleCode" th:value="${e.role_code}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${editorWritable == 1}" th:each="u : ${user}" method="post"
+          th:action="@{/_tesseraql/admin/users/{id}/eligibility/grant(id=${u.user_id})}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Limit (minutes)</span>
+        <input class="hc-input" name="maxMinutes" type="number" min="1" value="60"></label>
+      <label class="hc-field"><span class="hc-field__label">Reason required</span>
+        <input class="hc-checkbox" name="requiresReason" type="checkbox" value="1" checked></label>
+      <button class="hc-button" data-variant="primary" type="submit">Make eligible</button>
+    </form>
+  </div>
+</section>
 <!-- This person's grant trail (docs/access-governance.md structural decision 1): both
      write paths, so a rule-produced assignment is as visible as an administrator's. -->
 <section class="hc-card" th:if="${historyAvailable == 1}">

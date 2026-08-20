@@ -193,6 +193,22 @@ Password change is a runtime-provided service: verify the current credential, ha
 update through the local identity contract pack. It is registered only when password
 login is active; the account app renders the SSO state otherwise.
 
+## Roles you can take when you need them
+
+The card appears when an administrator has made you **eligible** for a role you do not
+hold ([IAM Admin](iam-admin.md#eligible-roles)). Taking one grants it for the window you
+ask for, up to its limit, with a reason when the eligibility requires one — and it expires
+by itself, so there is nothing to remember to give back. **End now** returns it early.
+
+Taking a role is the one thing that changes a signed-in principal without a new sign-in.
+Your session's principal is re-read on the spot, so the role is live on your very next
+request. Your other sessions pick it up when they next sign in; nothing else about a
+signed-in principal refreshes mid-session, and that stays true.
+
+`POST /_tesseraql/account/elevate` is a framework route rather than a declared one, for the
+same reason as the sign-out endpoints beside it: only that layer reads the session cookie.
+It elevates the session's own subject, so the request names no target.
+
 ## App-declared preference groups
 
 The piece that turns a settings page into a platform surface. An app declares:
