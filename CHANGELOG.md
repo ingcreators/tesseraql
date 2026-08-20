@@ -150,6 +150,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A static asset file was read on the worker pool it had just been moved off**
+  (docs/http-threading.md decision 6). Serving assets from the router took the classpath half off
+  the workers and left the filesystem half where it was: `sendFile` streams rather than buffers,
+  but Vert.x dispatches the reads behind it to the worker pool, so with every worker held in the
+  database a file answered in 1689 ms against a classpath asset's 7 ms. Files are now read on
+  virtual threads the runtime owns and written a chunk at a time, each chunk waiting for the
+  connection to take the one before it — the backpressure that keeps a large file from becoming a
+  large write queue, and the reason blocking a thread is the right shape here rather than a cost.
+  The same fixture now answers a file in 22 ms beside the classpath half's 23 ms, so the two are
+  the same request again.
+
+  One rule now decides where an asset request runs: in memory on the event loop, storage on a
+  virtual thread. Drawn there rather than around "files", it also caught two reads that were on
+  the event loop by accident — the first read of a classpath resource, and the generated message
+  module, whose catalog is read live off disk on every request so a Studio message edit is served
+  without a restart.
+
 - **Static assets are answered off the worker pool** (docs/http-threading.md decision 6). They
   were a Camel route, so every stylesheet, script and icon went through `executeBlocking` and held
   one of the same ten workers a slow query holds — a page's worth of them queued behind whatever
@@ -168,13 +185,6 @@ All notable changes to TesseraQL are documented here. The format follows
   Vert.x also resolved every path against the classpath first, copying matches into a cache
   directory — a scan that measured **1328 ms for a stylesheet on an idle runtime**. Disabling it
   took that to 187 ms.
-
-  **Half of this is not done, and the measurement says which half.** With both workers held in
-  `pg_sleep`, a classpath asset answers in **7 ms** and a file in **1689 ms**: `sendFile` streams
-  instead of buffering, but Vert.x still dispatches its file I/O to the worker pool, so the
-  filesystem half stays coupled to what it was meant to escape. Completing it means giving asset
-  file reads an executor of their own. The test is named for the half that works rather than the
-  half that was designed.
 
   The `FrameworkSurfaces.PUBLIC_BY_DESIGN` entry for `tql.assets` is removed rather than left
   pointing at a route that no longer exists — a guard test caught it, which is what that registry

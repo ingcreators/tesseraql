@@ -87,17 +87,11 @@ class HttpThreadingIntegrationTest {
     /**
      * A classpath asset is served while every worker is blocked in the database.
      *
-     * <p>This is the coupling the move onto the router removed for the half it could reach
-     * (docs/http-threading.md decision 6). Assets were a Camel route, so a stylesheet took one of
-     * the same workers a slow query holds and a page's worth of them queued behind whatever the
-     * database was doing. Framework assets and vendored WebJars — the bulk of a page's bytes —
-     * are now answered from memory on the event loop, and take no worker at all.
-     *
-     * <p><strong>The filesystem half is not decoupled and this test does not pretend it is.</strong>
-     * A file goes out through {@code sendFile}, whose I/O Vert.x still dispatches to the worker
-     * pool: measured on this fixture at 7 ms for a classpath asset against 1689 ms for a file,
-     * with both workers held in {@code pg_sleep}. What that needs is an executor of its own, which
-     * the design records as the remaining half rather than leaving the reader to discover.
+     * <p>This is the coupling the move onto the router removed (docs/http-threading.md decision
+     * 6). Assets were a Camel route, so a stylesheet took one of the same workers a slow query
+     * holds and a page's worth of them queued behind whatever the database was doing. Framework
+     * assets and vendored WebJars — the bulk of a page's bytes — are now answered from memory on
+     * the event loop, and take no worker at all.
      */
     @Test
     void aClasspathAssetIsServedWhileEveryWorkerIsBlocked() throws Exception {
@@ -119,6 +113,52 @@ class HttpThreadingIntegrationTest {
         for (CompletableFuture<HttpResponse<String>> request : blocking) {
             assertThat(request.get().statusCode()).isEqualTo(200);
         }
+    }
+
+    /**
+     * A file is served while every worker is blocked in the database.
+     *
+     * <p>The half moving onto the router could not reach by itself, and the reason the test above
+     * was named for the other one. {@code sendFile} streams instead of buffering, but Vert.x
+     * dispatches the reads behind it to the worker pool, so a file asset stayed coupled to
+     * exactly what leaving the Camel route was meant to escape — 1689 ms on this fixture against
+     * a classpath asset's 7 ms. Reading it on threads the runtime owns is what closes that gap.
+     */
+    @Test
+    void aFileAssetIsServedWhileEveryWorkerIsBlocked() throws Exception {
+        List<CompletableFuture<HttpResponse<String>>> blocking = Stream
+                .generate(() -> CompletableFuture.supplyAsync(() -> get("/api/nap")))
+                .limit(4)
+                .toList();
+        // Long enough for both workers to be inside pg_sleep, with two more requests queued.
+        Thread.sleep(400);
+
+        long startedAt = System.currentTimeMillis();
+        HttpResponse<String> asset = get("/assets/app.css");
+        long elapsedMs = System.currentTimeMillis() - startedAt;
+
+        assertThat(asset.statusCode()).isEqualTo(200);
+        assertThat(elapsedMs).isLessThan(500);
+        for (CompletableFuture<HttpResponse<String>> request : blocking) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
+     * A file larger than one chunk arrives whole, and says how long it is.
+     *
+     * <p>Streaming is only worth having if it delivers what buffering delivered. The read is a
+     * loop now — each pass waiting for the connection to take the previous chunk — and a mistake
+     * in it would arrive as a stylesheet that stops halfway rather than as an error.
+     */
+    @Test
+    void aFileLargerThanOneChunkArrivesWhole() {
+        HttpResponse<String> asset = get("/assets/large.txt");
+
+        assertThat(asset.statusCode()).isEqualTo(200);
+        assertThat(asset.body()).isEqualTo(largeAsset());
+        assertThat(asset.headers().firstValue("Content-Length"))
+                .contains(String.valueOf(largeAsset().length()));
     }
 
     /**
@@ -192,6 +232,15 @@ class HttpThreadingIntegrationTest {
         }
     }
 
+    /** Three chunks and a remainder, so the read loop runs several times and ends part-way. */
+    private static String largeAsset() {
+        StringBuilder text = new StringBuilder();
+        for (int line = 0; text.length() < 200_000; line++) {
+            text.append("/* line ").append(line).append(" */\n");
+        }
+        return text.toString();
+    }
+
     private static int freePort() throws IOException {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
@@ -251,6 +300,7 @@ class HttpThreadingIntegrationTest {
         Path assets = target.resolve("assets");
         Files.createDirectories(assets);
         Files.writeString(assets.resolve("app.css"), ":root { --tql-test: 1; }\n");
+        Files.writeString(assets.resolve("large.txt"), largeAsset());
         return target;
     }
 }

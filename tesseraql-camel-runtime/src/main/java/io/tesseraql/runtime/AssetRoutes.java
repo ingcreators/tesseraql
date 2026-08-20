@@ -1,5 +1,7 @@
 package io.tesseraql.runtime;
 
+import io.vertx.core.Context;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
@@ -10,10 +12,16 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.camel.CamelContext;
 import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
+import org.apache.camel.support.service.ServiceSupport;
 
 /**
  * Serves static assets under {@code GET /assets/**} directly on the platform router
@@ -27,10 +35,20 @@ import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
  * a full hash. A twenty-megabyte image on ten concurrent requests was two hundred megabytes of
  * heap that nothing had asked for.
  *
- * <p>Here a file is answered with {@code sendFile} — the event loop streams it, nothing is
- * buffered — and the classpath half is cached, which is safe because those bytes come out of jars
- * and cannot change while the process runs. The mutable half is exactly the half that is never
- * cached, which is why the stale-validator bug that removed the previous cache cannot recur.
+ * <p><strong>One rule decides where a request runs.</strong> An asset already held in memory is
+ * answered on the event loop, because answering it is a map lookup and a write. Anything that has
+ * to reach storage — the first read of a classpath resource, the generated message module whose
+ * catalog is read live, and every file — runs on this instance's own virtual threads. Nothing in
+ * either path touches the worker pool, which is the coupling this exists to remove, and nothing
+ * blocking runs on the event loop, which is the way that coupling could have been reintroduced.
+ *
+ * <p>A file is streamed rather than buffered: chunks are read on the virtual thread and handed to
+ * the connection's context one at a time, each waiting for the previous write to complete. That
+ * wait is what keeps a large file from becoming a large write queue — backpressure a virtual
+ * thread can express by blocking, which is why this is where virtual threads belong. The
+ * classpath half is cached, safe because those bytes come out of jars and cannot change while the
+ * process runs; the mutable half is exactly the half that is never cached, which is why the
+ * stale-validator bug that removed the previous cache cannot recur.
  *
  * <p><strong>Public by design, and this is where that is now said.</strong> As a Camel route it
  * was carried in {@code FrameworkSurfaces.PUBLIC_BY_DESIGN} — "static asset bytes, served before
@@ -45,7 +63,7 @@ import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
  * 304, {@code Cache-Control}, {@code nosniff}, the CORS opening for Studio's sandboxed preview,
  * and the app's {@code security.responseHeaders}.
  */
-final class AssetRoutes {
+final class AssetRoutes extends ServiceSupport {
 
     /**
      * After the admission gate, before every route Camel registered.
@@ -55,6 +73,15 @@ final class AssetRoutes {
      * whole change exists to remove.
      */
     private static final int AFTER_THE_GATE = Integer.MIN_VALUE + 1;
+
+    /**
+     * How much of a file is read before the connection is written to.
+     *
+     * <p>Large enough that an ordinary asset is one chunk and one hop to the event loop, small
+     * enough that a large file never has more than this in flight — the property that makes
+     * streaming worth doing at all.
+     */
+    private static final int CHUNK_BYTES = 64 * 1024;
 
     private static final String FRAMEWORK_PREFIX = "_tesseraql";
     private static final String VENDOR_PREFIX = "vendor";
@@ -83,6 +110,10 @@ final class AssetRoutes {
     private record Jarred(byte[] bytes, String etag) {
     }
 
+    /** What the handler read off the request before leaving the event loop. */
+    private record Asked(String path, String ifNoneMatch, String locale) {
+    }
+
     private final CamelContext camelContext;
     private final Path mainAssets;
     private final Map<String, Path> appAssets;
@@ -96,6 +127,23 @@ final class AssetRoutes {
      * question to get wrong. Files are deliberately absent: those are the ones an operator edits.
      */
     private final Map<String, Jarred> jarred = new ConcurrentHashMap<>();
+    /**
+     * Where storage is read: this runtime's own threads, and nobody else's.
+     *
+     * <p>Vert.x streams a file with {@code sendFile}, but dispatches the reads behind it to the
+     * worker pool, so an asset served that way stayed coupled to exactly what moving it off a
+     * Camel route was meant to escape — measured at 1689 ms for a file against 7 ms for a
+     * classpath asset, with every worker held in the database, and at 22 ms against 23 ms once
+     * the read moved here. Virtual threads fit here as they fit nowhere else in this design: file
+     * I/O blocks on something no connection pool bounds, a thread costs nothing while it waits,
+     * and the JDK compensates its carriers rather than letting the blocking spread. No second permit guards it — the admission gate deliberately
+     * does not bound assets, and a bound here would be that refusal under another name.
+     *
+     * <p>Registered as a Camel service so it is shut down when the context is, which matters to a
+     * host that stops and replaces one application while the process keeps running.
+     */
+    private final ExecutorService storage = Executors.newThreadPerTaskExecutor(
+            Thread.ofVirtual().name("tql-asset-io-", 0).factory());
 
     private AssetRoutes(CamelContext camelContext, Path mainAssets, Map<String, Path> appAssets,
             ClientMessages clientMessages) {
@@ -111,6 +159,11 @@ final class AssetRoutes {
         VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
                 VertxPlatformHttpRouter.getRouterNameFromPort(port));
         AssetRoutes assets = new AssetRoutes(camelContext, mainAssets, appAssets, clientMessages);
+        try {
+            camelContext.addService(assets);
+        } catch (Exception refused) {
+            throw new IllegalStateException("Static asset serving could not be started", refused);
+        }
         String mount = io.tesseraql.camel.BasePath.of(camelContext) + "/assets";
         router.route(HttpMethod.GET, mount + "/*").order(AFTER_THE_GATE)
                 .handler(ctx -> assets.serve(ctx, mount));
@@ -121,6 +174,11 @@ final class AssetRoutes {
         return io.tesseraql.camel.BasePath.of(camelContext) + "/assets";
     }
 
+    @Override
+    protected void doStop() {
+        storage.shutdownNow();
+    }
+
     private void serve(RoutingContext ctx, String mount) {
         String path = requestPath(ctx.request().path(), mount);
         if (path == null || path.isBlank() || !CONTENT_TYPES.containsKey(extension(path))
@@ -128,59 +186,150 @@ final class AssetRoutes {
             ctx.response().setStatusCode(404).end();
             return;
         }
-        try {
-            if (MESSAGES_MODULE.equals(path)) {
-                // Generated per locale rather than read, so it has no file to stream and no
-                // stable identity to cache: hashed on the spot, as it always was.
-                byte[] script = clientMessages.script(ctx.request().getParam("locale"));
-                sendBytes(ctx, path, script, "\"" + sha256(script) + "\"");
-                return;
-            }
-            byte[] fromJar = jarBytes(path);
-            if (fromJar != null) {
-                sendBytes(ctx, path, fromJar, jarred.get(path).etag());
-                return;
-            }
-            Path file = file(path);
-            if (file == null) {
-                ctx.response().setStatusCode(404).end();
-                return;
-            }
-            sendFile(ctx, path, file);
-        } catch (IOException unreadable) {
-            ctx.response().setStatusCode(404).end();
+        Jarred held = jarred.get(path);
+        if (held != null) {
+            // Already in memory: a lookup and a write, which is what the event loop is for.
+            sendBytes(ctx.response(), path, held.bytes(), held.etag(),
+                    ctx.request().getHeader("If-None-Match"));
+            return;
         }
+        fromStorage(ctx, new Asked(path, ctx.request().getHeader("If-None-Match"),
+                ctx.request().getParam("locale")));
     }
 
     /**
-     * A file, streamed.
+     * Everything that has to read something, on a virtual thread of this runtime's own.
+     *
+     * <p>The request is read here, on the event loop, and only the values travel: a handler that
+     * has left its context must not reach back into it for them. Response mutations make the
+     * opposite trip — every one of them is dispatched to the connection's context, which is the
+     * only thread allowed to touch a response, and the queue preserves their order.
+     */
+    private void fromStorage(RoutingContext ctx, Asked asked) {
+        HttpServerResponse response = ctx.response();
+        Context connection = ctx.vertx().getOrCreateContext();
+        AtomicBoolean gone = new AtomicBoolean();
+        response.closeHandler(closed -> gone.set(true));
+        response.exceptionHandler(failure -> gone.set(true));
+        storage.execute(() -> {
+            try {
+                if (MESSAGES_MODULE.equals(asked.path())) {
+                    // Generated per locale rather than read, so it has no file to stream and no
+                    // stable identity to cache: hashed on the spot, as it always was. Its catalog
+                    // is read live off disk, which is why it belongs on this side of the line.
+                    byte[] script = clientMessages.script(asked.locale());
+                    deliver(connection, gone, response, asked, script,
+                            "\"" + sha256(script) + "\"");
+                    return;
+                }
+                byte[] fromJar = jarBytes(asked.path());
+                if (fromJar != null) {
+                    deliver(connection, gone, response, asked, fromJar,
+                            jarred.get(asked.path()).etag());
+                    return;
+                }
+                Path file = file(asked.path());
+                if (file == null) {
+                    notFound(connection, gone, response);
+                    return;
+                }
+                stream(connection, gone, response, asked, file);
+            } catch (IOException unreadable) {
+                notFound(connection, gone, response);
+            }
+        });
+    }
+
+    /**
+     * A file, streamed a chunk at a time.
      *
      * <p>Its validator is {@code (mtime, size)} rather than a content hash, and weak because that
      * is what it is. A strong validator would mean reading and hashing the whole file to answer
      * every request — including the 304s, which are the requests worth making cheap — so the
      * content hash was the reason the old route could not stream. Weak validators are what a web
      * server has always used here.
+     *
+     * <p>Each chunk waits for the previous write to complete before the next read starts, so a
+     * file arrives at the speed the client takes it and never at the speed the disk gives it. A
+     * client that leaves mid-file stops the read at the next chunk boundary rather than paying
+     * for the rest of the file it will not receive.
      */
-    private void sendFile(RoutingContext ctx, String path, Path file) throws IOException {
+    private void stream(Context connection, AtomicBoolean gone, HttpServerResponse response,
+            Asked asked, Path file) throws IOException {
         BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
-        String etag = "W/\"" + attributes.lastModifiedTime().toMillis() + "-"
-                + attributes.size() + "\"";
-        if (headers(ctx, path, etag)) {
+        long size = attributes.size();
+        String etag = "W/\"" + attributes.lastModifiedTime().toMillis() + "-" + size + "\"";
+        if (etag.equals(asked.ifNoneMatch())) {
+            onContext(connection, () -> {
+                headers(response, etag);
+                response.setStatusCode(304).end();
+            });
             return;
         }
-        ctx.response().setStatusCode(200).sendFile(file.toString());
+        onContext(connection, () -> {
+            headers(response, etag);
+            response.putHeader("Content-Type", CONTENT_TYPES.get(extension(asked.path())));
+            response.putHeader("Content-Length", Long.toString(size));
+            response.setStatusCode(200);
+        });
+        long written = 0;
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] chunk = new byte[CHUNK_BYTES];
+            int read;
+            while (!gone.get() && (read = in.read(chunk)) > 0) {
+                write(connection, gone, response, Buffer.buffer(Arrays.copyOf(chunk, read)));
+                written += read;
+            }
+        }
+        long delivered = written;
+        onContext(connection, () -> {
+            if (gone.get() || response.ended()) {
+                return;
+            }
+            if (delivered == size) {
+                response.end();
+            } else {
+                // The file changed under the read, so the length already announced is a promise
+                // this response cannot keep. Dropping the connection tells the client the
+                // transfer failed; ending it short would leave the client waiting for bytes that
+                // are never coming.
+                response.reset();
+            }
+        });
     }
 
-    private void sendBytes(RoutingContext ctx, String path, byte[] bytes, String etag) {
-        if (headers(ctx, path, etag)) {
+    /** Bytes already in hand, delivered on the connection's context. */
+    private void deliver(Context connection, AtomicBoolean gone, HttpServerResponse response,
+            Asked asked, byte[] bytes, String etag) {
+        onContext(connection, () -> {
+            if (gone.get() || response.ended()) {
+                return;
+            }
+            sendBytes(response, asked.path(), bytes, etag, asked.ifNoneMatch());
+        });
+    }
+
+    private void sendBytes(HttpServerResponse response, String path, byte[] bytes, String etag,
+            String ifNoneMatch) {
+        headers(response, etag);
+        if (etag.equals(ifNoneMatch)) {
+            response.setStatusCode(304).end();
             return;
         }
-        ctx.response().setStatusCode(200).end(io.vertx.core.buffer.Buffer.buffer(bytes));
+        response.putHeader("Content-Type", CONTENT_TYPES.get(extension(path)));
+        response.setStatusCode(200).end(Buffer.buffer(bytes));
     }
 
-    /** The common response headers; true when the client's validator matched and 304 was sent. */
-    private boolean headers(RoutingContext ctx, String path, String etag) {
-        HttpServerResponse response = ctx.response();
+    private void notFound(Context connection, AtomicBoolean gone, HttpServerResponse response) {
+        onContext(connection, () -> {
+            if (!gone.get() && !response.ended()) {
+                response.setStatusCode(404).end();
+            }
+        });
+    }
+
+    /** The response headers every asset carries, whether it is answered 200 or 304. */
+    private void headers(HttpServerResponse response, String etag) {
         response.putHeader("ETag", etag);
         response.putHeader("Cache-Control", "public, max-age=300");
         response.putHeader("X-Content-Type-Options", "nosniff");
@@ -191,12 +340,55 @@ final class AssetRoutes {
         // The app's security.responseHeaders: an asset is a response leaving the runtime like any
         // other, and it is served by a hand-written surface the compiler never sees.
         securityHeaders().forEach(response::putHeader);
-        if (etag.equals(ctx.request().getHeader("If-None-Match"))) {
-            response.setStatusCode(304).end();
-            return true;
+    }
+
+    /**
+     * Runs one response mutation on the connection's context — the only thread allowed to touch a
+     * response — without waiting for it. The context runs what it is given in the order it was
+     * given, so headers precede the first chunk and the end follows the last one without this
+     * side of the handover ever blocking to find out.
+     */
+    private static void onContext(Context connection, Runnable mutation) {
+        connection.runOnContext(run -> mutation.run());
+    }
+
+    /**
+     * Writes one chunk and waits for the connection to have taken it.
+     *
+     * <p>This wait is the backpressure: without it a slow client would be served at disk speed
+     * into Vert.x's write queue, which is the heap cost this whole decision removes, only spelled
+     * differently.
+     */
+    private static void write(Context connection, AtomicBoolean gone, HttpServerResponse response,
+            Buffer chunk) throws IOException {
+        CompletableFuture<Void> written = new CompletableFuture<>();
+        connection.runOnContext(run -> {
+            if (gone.get() || response.ended()) {
+                written.completeExceptionally(new IOException("The client closed the connection"));
+                return;
+            }
+            response.write(chunk).onComplete(result -> {
+                if (result.succeeded()) {
+                    written.complete(null);
+                } else {
+                    gone.set(true);
+                    written.completeExceptionally(result.cause());
+                }
+            });
+        });
+        try {
+            // get(), not join(): this is the one place a shutting-down runtime has to be able to
+            // interrupt, since a client that stops reading would otherwise hold the thread for as
+            // long as it likes.
+            written.get();
+        } catch (InterruptedException stopped) {
+            Thread.currentThread().interrupt();
+            gone.set(true);
+            throw new IOException("The runtime stopped while the file was being sent", stopped);
+        } catch (java.util.concurrent.ExecutionException failed) {
+            gone.set(true);
+            throw new IOException(failed.getCause());
         }
-        response.putHeader("Content-Type", CONTENT_TYPES.get(extension(path)));
-        return false;
     }
 
     @SuppressWarnings("unchecked")
