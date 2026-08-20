@@ -304,6 +304,10 @@ jobs:
             Write-Error 'the placed driver did not reach the base classpath'
             exit 1
           }
+          # Both runs are expected to exit non-zero — that is the point: the host refuses, first
+          # for the missing driver and then because no SQL Server is listening. The step's verdict
+          # is the two assertions above, so the last native exit code must not become it.
+          exit 0
 
       - name: Start the runner's PostgreSQL and create the demo database
         shell: pwsh
