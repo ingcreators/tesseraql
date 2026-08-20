@@ -277,6 +277,12 @@ Ordered so that each lands independently and the guard arrives before the long t
    in the same two cells. Two executors losing the same cells on their own is the argument for a
    registry rather than another round of per-fix patching. Both now resolve the dialect variant
    beside their SQL and run under `tesseraql.sql.timeoutSeconds`.
+   **Closing the cell against the default left the override half open.** `JobExecutor` read the
+   app-wide value and nothing else, so a job step's, chunk reader's or chunk writer's own
+   `timeoutSeconds:` parsed, validated and did nothing — the matrix cell read *covered* because
+   the default arrived, which is the same trap this section exists to name. Each binding now
+   resolves its own declaration first. An `export:` step still takes the transfer service's
+   app-wide bound, because `InlineExport` carries none.
    **Their scope cells were never holes.** Each passes — or defaults to —
    `ScopeResolver.UNSUPPORTED`, so a `/*%scope%*/` fails with `TQL-SQL-2106` instead of rendering
    unscoped and returning every tenant's rows. "Absent" and "fail-safe" look identical in a

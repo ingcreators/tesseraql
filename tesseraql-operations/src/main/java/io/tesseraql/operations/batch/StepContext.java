@@ -55,7 +55,10 @@ final class StepContext {
             io.tesseraql.core.expr.ExpressionFunctions functions) {
     }
 
-    /** The bounds every step inherits from the runtime: the SQL timeout and the result caps. */
+    /**
+     * The app-wide bounds a step starts from: the SQL timeout and the result caps. A binding's
+     * own {@code timeoutSeconds:} overrides the timeout ({@link #timeoutSecondsFor}).
+     */
     record Bounds(int sqlTimeoutSeconds, int maxRows, String onOverflow) {
     }
 
@@ -115,8 +118,17 @@ final class StepContext {
         return services.functions();
     }
 
-    int sqlTimeoutSeconds() {
-        return bounds.sqlTimeoutSeconds();
+    /**
+     * The statement timeout one binding runs under: its own {@code timeoutSeconds:} when declared,
+     * otherwise the app-wide default — the same precedence a route and a command apply.
+     *
+     * <p>A job step's declaration was parsed, documented and then ignored: every runner read the
+     * app-wide value, so an extract that legitimately takes minutes could not be given room
+     * without loosening the bound every request in the application ran under.
+     */
+    int timeoutSecondsFor(io.tesseraql.yaml.model.Binding binding) {
+        Integer declared = binding == null ? null : binding.timeoutSeconds();
+        return declared != null ? Math.max(0, declared) : bounds.sqlTimeoutSeconds();
     }
 
     int maxRows() {
@@ -290,7 +302,9 @@ final class StepContext {
         }
         DataSource pool = stepDataSource();
         List<Map<String, Object>> enriched = enrichWindow(
-                enrichments(step.sql().enrich(), dialectOf(pool)), pool,
+                enrichments(step.sql().enrich(), dialectOf(pool),
+                        timeoutSecondsFor(step.sql())),
+                pool,
                 (List<Map<String, Object>>) rows);
         Map<String, Object> updated = new LinkedHashMap<>(result);
         updated.put("rows", enriched);
@@ -310,13 +324,14 @@ final class StepContext {
      * {@code EnrichSpec} rather than beside any one caller.
      */
     List<io.tesseraql.yaml.enrich.KeyedReference> enrichments(
-            Map<String, io.tesseraql.yaml.model.EnrichSpec> declared, String dialect) {
+            Map<String, io.tesseraql.yaml.model.EnrichSpec> declared, String dialect,
+            int timeoutSeconds) {
         List<io.tesseraql.yaml.enrich.KeyedReference> references = new java.util.ArrayList<>();
         declared.forEach((name, spec) -> {
             if (spec.sql() == null) {
                 references.add(new io.tesseraql.yaml.enrich.KeyedReference(name, spec,
                         List.of(), null, null, dialect,
-                        new io.tesseraql.yaml.enrich.KeyedReference.Bounds(sqlTimeoutSeconds(), -1),
+                        new io.tesseraql.yaml.enrich.KeyedReference.Bounds(timeoutSeconds, -1),
                         io.tesseraql.yaml.http.HttpRows::of));
                 return;
             }
@@ -326,7 +341,7 @@ final class StepContext {
                     io.tesseraql.core.sql.Sql2WayParser.parse(read(file), functions()),
                     file.toString(),
                     spec.sql().datasource(), dialect,
-                    new io.tesseraql.yaml.enrich.KeyedReference.Bounds(sqlTimeoutSeconds(), -1),
+                    new io.tesseraql.yaml.enrich.KeyedReference.Bounds(timeoutSeconds, -1),
                     io.tesseraql.yaml.http.HttpRows::of));
         });
         return references;

@@ -84,6 +84,39 @@ class SqlTimeoutIntegrationTest {
     }
 
     /**
+     * A batch step's own {@code timeoutSeconds:} raises the bound it runs under.
+     *
+     * <p>It did not. The declaration parsed, the schema documented it as a "per-binding SQL
+     * statement timeout override", and {@code JobExecutor} then built every step's bounds from
+     * the app-wide value alone — so a nightly extract that legitimately takes minutes could only
+     * be given room by loosening the bound every request in the application ran under.
+     */
+    @Test
+    void aBatchStepRaisesTheBoundItDeclares() {
+        // 5s declared against the 1s app-wide default; the statement sleeps 2s. Before the fix
+        // the app default cancelled it at 1s and the job reported FAILED.
+        var execution = runtime.runJob("patient.job", java.util.Map.of());
+
+        // The reason travels with the status: a bound that is ignored and a fixture
+        // that is wrong both report FAILED, and only one of them is this test's subject.
+        assertThat(String.valueOf(execution.status()))
+                .as("exit: %s", execution.exitMessage())
+                .isEqualTo("COMPLETED");
+    }
+
+    /** A chunk reader is a binding of its own, and carries its own bound. */
+    @Test
+    void aChunkReaderRaisesTheBoundItDeclares() {
+        var execution = runtime.runJob("patient.chunk", java.util.Map.of());
+
+        // The reason travels with the status: a bound that is ignored and a fixture
+        // that is wrong both report FAILED, and only one of them is this test's subject.
+        assertThat(String.valueOf(execution.status()))
+                .as("exit: %s", execution.exitMessage())
+                .isEqualTo("COMPLETED");
+    }
+
+    /**
      * A batch step runs the dialect variant beside its file.
      *
      * <p>It ran the generic one. This executor resolved the SQL path itself and never asked the
@@ -341,6 +374,58 @@ class SqlTimeoutIntegrationTest {
                 """);
         Files.writeString(patient.resolve("patient.sql"),
                 "select 'done' as answer from pg_sleep(2)\n");
+
+        // The batch counterparts of the route above: a step, and a chunk reader, each declaring
+        // more room than the app-wide 1s. Both statements sleep 2s, so either bound being
+        // ignored shows up as a FAILED execution rather than a slow one.
+        Path patientJob = target.resolve("batch/patient");
+        Files.createDirectories(patientJob);
+        Files.writeString(patientJob.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: patient.job
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: main
+                    sql:
+                      file: nap.sql
+                      mode: query
+                      timeoutSeconds: 5
+                """);
+        Files.writeString(patientJob.resolve("nap.sql"),
+                "select 'done' as answer from pg_sleep(2)\n");
+
+        Path patientChunk = target.resolve("batch/patient-chunk");
+        Files.createDirectories(patientChunk);
+        Files.writeString(patientChunk.resolve("job.yml"), """
+                version: tesseraql/v1
+                id: patient.chunk
+                kind: job
+                recipe: batch-pipeline
+                pipeline:
+                  - id: load
+                    chunk:
+                      reader:
+                        sql:
+                          file: reader.sql
+                          timeoutSeconds: 5
+                      writer:
+                        sql:
+                          file: writer.sql
+                      key: item_key
+                      commitEvery: 5
+                """);
+        // One sleep for the whole cursor, not one per row: the nap is its own single-row source
+        // joined to the keys, so the 2s is the statement's, not the keyset's.
+        Files.writeString(patientChunk.resolve("reader.sql"),
+                "select k.item_key from (select generate_series(1, 10) as item_key) k,"
+                        + " (select pg_sleep(2)) nap order by k.item_key\n");
+        Files.writeString(patientChunk.resolve("writer.sql"),
+                "insert into chunk_target (item_key) values (/* row.item_key */0)\n");
+        Files.createDirectories(target.resolve("db/migration"));
+        Files.writeString(target.resolve("db/migration/V1__chunk_target.sql"),
+                "create table chunk_target (item_key integer primary key);\n");
+
         return target;
     }
 }

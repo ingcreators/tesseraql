@@ -96,7 +96,8 @@ final class ChunkStepRunner {
                         io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED);
         this.writerTemplate = io.tesseraql.core.sql.Sql2WayParser
                 .parse(StepContext.read(writerPath), context.functions());
-        this.enrichments = context.enrichments(chunk.enrich(), dialect);
+        this.enrichments = context.enrichments(chunk.enrich(), dialect,
+                context.timeoutSecondsFor(chunk.reader()));
     }
 
     /**
@@ -178,8 +179,9 @@ final class ChunkStepRunner {
         if (select == null) {
             return;
         }
-        if (context.sqlTimeoutSeconds() > 0) {
-            select.setQueryTimeout(context.sqlTimeoutSeconds());
+        int timeoutSeconds = context.timeoutSecondsFor(chunk.reader());
+        if (timeoutSeconds > 0) {
+            select.setQueryTimeout(timeoutSeconds);
         }
         select.setFetchSize(Math.max(100, Math.min(chunk.effectiveCommitEvery(), 1000)));
         StepContext.bind(select, boundReader);
@@ -338,8 +340,9 @@ final class ChunkStepRunner {
                 return cached;
             }
             PreparedStatement statement = connection.prepareStatement(boundWriter.sql());
-            if (context.sqlTimeoutSeconds() > 0) {
-                statement.setQueryTimeout(context.sqlTimeoutSeconds());
+            int timeoutSeconds = context.timeoutSecondsFor(chunk.writer());
+            if (timeoutSeconds > 0) {
+                statement.setQueryTimeout(timeoutSeconds);
             }
             statements.put(boundWriter.sql(), statement);
             return statement;
