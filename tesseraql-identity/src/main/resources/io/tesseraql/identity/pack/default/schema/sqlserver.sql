@@ -107,6 +107,32 @@ create table tql_user_identities (
   primary key (provider, external_subject)
 );
 
+if object_id('tql_access_reviews', 'U') is null
+create table tql_access_reviews (
+  review_id   varchar(64) primary key,
+  review_name varchar(200) not null,
+  application varchar(200),
+  opened_at   datetime2 not null,
+  opened_by   varchar(200),
+  closed_at   datetime2,
+  closed_by   varchar(200),
+  status      varchar(16) not null
+);
+
+if object_id('tql_access_review_items', 'U') is null
+create table tql_access_review_items (
+  review_id    varchar(64) not null,
+  user_id      varchar(64) not null,
+  item_kind    varchar(16) not null,
+  subject_code varchar(200) not null,
+  source       varchar(32),
+  decision     varchar(16) not null,
+  decided_by   varchar(200),
+  decided_at   datetime2,
+  note         varchar(1000),
+  primary key (review_id, user_id, item_kind, subject_code)
+);
+
 if object_id('tql_role_eligibility', 'U') is null
 create table tql_role_eligibility (
   user_id           varchar(64) not null,

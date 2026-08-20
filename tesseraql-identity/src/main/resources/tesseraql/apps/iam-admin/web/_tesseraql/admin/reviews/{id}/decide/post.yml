@@ -1,0 +1,40 @@
+version: tesseraql/v1
+id: tql.iamAdmin.reviews.decide
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  userId:
+    type: string
+    required: true
+  itemKind:
+    type: string
+    required: true
+  subjectCode:
+    type: string
+    required: true
+  decision:
+    type: string
+    required: true
+  note:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.decideReviewItem
+      params:
+        actor: principal.loginId
+        reviewId: path.id
+        userId: params.userId
+        itemKind: params.itemKind
+        subjectCode: params.subjectCode
+        decision: params.decision
+        note: params.note
+response:
+  redirect:
+    location: /_tesseraql/admin/reviews/{path.id}?decided=1

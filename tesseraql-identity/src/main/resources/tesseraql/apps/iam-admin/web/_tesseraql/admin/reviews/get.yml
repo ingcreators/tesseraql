@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.iamAdmin.reviews.list
+kind: route
+recipe: query-html
+
+# Access review campaigns (docs/access-governance.md structural decision 5): opening one
+# snapshots who holds what, so the campaign can answer "what did we certify" long after
+# the grants themselves have moved.
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  opened:
+    type: string
+    required: false
+  closed:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.reviews
+response:
+  html:
+    status: 200
+    template: reviews.html
+    model:
+      rows: main.rows
+      members: main.members
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      opened: params.opened
+      closed: params.closed

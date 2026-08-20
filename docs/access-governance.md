@@ -66,6 +66,17 @@ keys to catch a membership pointing at a group that is gone. The managed-store S
 contract set is deferred to slice 4b — see structural decision 4 for the portability
 measurement that forced it.
 
+**Slice 5 is shipped** (access review): the two campaign tables across all four dialects,
+open/decide/close with the snapshot, and the reviews and per-review pages. Implementation
+decisions recorded: `RoleAdmin`'s revocations gained a source-and-correlation form so a
+close's revokes are attributed to the campaign rather than to a plain administrative edit,
+and the history page gained the **Cause** column that renders it; the close is deliberately
+not transactional across items, because each revocation is an independent decision with its
+own trail row and one that fails should not silently undo the ones that worked; the
+snapshot's permission arm carries a bare null application rather than a cast (a union takes
+the column's type from the arms that have one, so no dialect is excluded) and an
+application-scoped review reaches a direct permission through the code prefix instead.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no

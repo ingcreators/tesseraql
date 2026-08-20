@@ -143,6 +143,17 @@ public final class IdentityContracts {
     public static final String GRANT_GROUP_ROLE = "grant-group-role";
     public static final String REVOKE_GROUP_ROLE = "revoke-group-role";
 
+    // Access review campaigns (docs/access-governance.md slice 5); optional.
+    public static final String CREATE_ACCESS_REVIEW = "create-access-review";
+    /** Copies the grants in scope into the campaign's items, each pending. */
+    public static final String SNAPSHOT_REVIEW_ITEMS = "snapshot-review-items";
+    public static final String LIST_ACCESS_REVIEWS = "list-access-reviews";
+    public static final String LIST_REVIEW_ITEMS = "list-review-items";
+    public static final String DECIDE_REVIEW_ITEM = "decide-review-item";
+    public static final String CLOSE_ACCESS_REVIEW = "close-access-review";
+    /** Records an item whose grant was already gone when the campaign closed. */
+    public static final String MARK_REVIEW_ITEM_STALE = "mark-review-item-stale";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -157,7 +168,9 @@ public final class IdentityContracts {
                 // Group identity and its role bundle are role management; membership is
                 // not — delegating "who is in sales" is not delegating "what sales may do".
                 CREATE_GROUP, DELETE_GROUP, CLEAR_GROUP_ROLES, GRANT_GROUP_ROLE,
-                REVOKE_GROUP_ROLE);
+                REVOKE_GROUP_ROLE,
+                CREATE_ACCESS_REVIEW, SNAPSHOT_REVIEW_ITEMS, DECIDE_REVIEW_ITEM,
+                CLOSE_ACCESS_REVIEW, MARK_REVIEW_ITEM_STALE);
     }
 
     private IdentityContracts() {

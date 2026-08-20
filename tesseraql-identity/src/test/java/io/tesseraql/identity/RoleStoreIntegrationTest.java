@@ -382,6 +382,60 @@ class RoleStoreIntegrationTest {
                 .noneSatisfy(row -> assertThat(row.get("group_code")).isEqualTo("SALES"));
     }
 
+    /**
+     * Slice 5 of docs/access-governance.md: a campaign snapshots, decisions are recorded
+     * against the snapshot, and closing executes the revokes through the ordinary write.
+     */
+    @Test
+    void aReviewSnapshotsDecidesAndExecutesOnClose() {
+        RoleAdmin.createRole(identity, MANAGED, "rev.keep", "残す", "");
+        RoleAdmin.createRole(identity, MANAGED, "rev.drop", "外す", "");
+        RoleAdmin.createRole(identity, MANAGED, "rev.gone", "消える", "");
+        RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1", "rev.keep", "", "");
+        RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1", "rev.drop", "", "");
+        RoleAdmin.assignRole(identity, MANAGED, "kenji", "u1", "rev.gone", "", "");
+
+        String reviewId = String.valueOf(AccessReview.open(identity, MANAGED, "kenji",
+                "Q3 review", "").get("opened"));
+        assertThat(AccessReview.reviewModel(identity, MANAGED, reviewId).get("items"))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .anySatisfy(row -> assertThat(((Map<?, ?>) row).get("subject_code"))
+                        .isEqualTo("rev.keep"));
+
+        AccessReview.decide(identity, MANAGED, "kenji", reviewId, "u1", "role", "rev.keep",
+                AccessReview.KEEP, "still needed");
+        AccessReview.decide(identity, MANAGED, "kenji", reviewId, "u1", "role", "rev.drop",
+                AccessReview.REVOKE, "left the team");
+        AccessReview.decide(identity, MANAGED, "kenji", reviewId, "u1", "role", "rev.gone",
+                AccessReview.REVOKE, "left the team");
+        assertThatThrownBy(() -> AccessReview.decide(identity, MANAGED, "kenji", reviewId,
+                "u1", "role", "rev.keep", "maybe", null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("A decision is");
+
+        // The gap between snapshot and close is visible: this grant went away meanwhile.
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "rev.gone");
+
+        Map<String, Object> closed = AccessReview.close(identity, MANAGED, "kenji", reviewId);
+        assertThat(closed).containsEntry("revoked", 1).containsEntry("stale", 1);
+        Principal after = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(after.roles()).contains("rev.keep").doesNotContain("rev.drop", "rev.gone");
+
+        // The revocation is attributed to the campaign, not to a plain administrative edit.
+        assertThat(historyFor("rev.drop")).anySatisfy(row -> {
+            assertThat(row.get("source")).isEqualTo(AccessReview.SOURCE);
+            assertThat(row.get("correlation")).isEqualTo(reviewId);
+        });
+
+        // A closed campaign is the record of what was certified; it takes no more decisions.
+        assertThatThrownBy(() -> AccessReview.decide(identity, MANAGED, "kenji", reviewId,
+                "u1", "role", "rev.keep", AccessReview.KEEP, null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("No open review item");
+        assertThatThrownBy(() -> AccessReview.close(identity, MANAGED, "kenji", reviewId))
+                .isInstanceOf(TqlException.class).hasMessageContaining("No open review");
+
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "rev.keep");
+    }
+
     /** A constraint over a role code nothing names cannot fire, so it is refused. */
     @Test
     void aConstraintOverAnUnknownRoleIsRefused() {

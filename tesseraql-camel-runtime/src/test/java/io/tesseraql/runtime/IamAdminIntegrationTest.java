@@ -441,6 +441,44 @@ class IamAdminIntegrationTest {
                 .contains("group-left");
     }
 
+    /**
+     * The access-review surface (docs/access-governance.md slice 5): open, decide, close —
+     * and the close revoking through the ordinary write, so the trail names the campaign.
+     */
+    @Test
+    void anAccessReviewSnapshotsDecidesAndAppliesOnClose() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/roles/create",
+                "code=rev.temp&name=Temp&application=").statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/users/u2/roles/assign", "roleCode=rev.temp")
+                .statusCode()).isEqualTo(303);
+
+        assertThat(postForm("/_tesseraql/admin/reviews/open", "name=Q3+review&application=")
+                .statusCode()).isEqualTo(303);
+        String list = get("/_tesseraql/admin/reviews", true).body();
+        assertThat(list).contains("Q3 review").contains("whole store");
+
+        String prefix = "/_tesseraql/admin/reviews/";
+        String reviewId = list.substring(list.indexOf(prefix + "rv-") + prefix.length());
+        reviewId = reviewId.substring(0, reviewId.indexOf('"'));
+
+        String detail = get("/_tesseraql/admin/reviews/" + reviewId, true).body();
+        assertThat(detail).contains("rev.temp").contains("pending");
+
+        assertThat(postForm("/_tesseraql/admin/reviews/" + reviewId + "/decide",
+                "userId=u2&itemKind=role&subjectCode=rev.temp&decision=revoke&note=gone")
+                .statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/reviews/" + reviewId + "/close", "")
+                .statusCode()).isEqualTo(303);
+
+        // The grant is gone, and the trail says which campaign decided it. Asserted on the
+        // trail rather than on the user page, because that page's role dropdown lists every
+        // role in the store — its absence there would prove nothing.
+        assertThat(get("/_tesseraql/admin/history?user=u2", true).body())
+                .contains("role-revoked").contains("rev.temp").contains(reviewId);
+        assertThat(get("/_tesseraql/admin/reviews/" + reviewId, true).body())
+                .contains("closed");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

@@ -1,0 +1,27 @@
+version: tesseraql/v1
+id: tql.iamAdmin.reviews.open
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  name:
+    type: string
+    required: true
+  application:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.openReview
+      params:
+        actor: principal.loginId
+        name: params.name
+        application: params.application
+response:
+  redirect:
+    location: /_tesseraql/admin/reviews?opened=1

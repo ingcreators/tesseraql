@@ -175,6 +175,30 @@ This is *static* separation of duties. The *dynamic* half already holds without 
 constraint: a person acts as one role at a time per application, chosen at use time, and
 the audit records which capacity acted ([application roles](authentication.md)).
 
+## Access reviews
+
+The reviews page (`/_tesseraql/admin/reviews`) runs the periodic question: *is all of this
+still needed?* Opening a campaign takes a **snapshot** of who holds what — every role held
+by any path, and every direct permission grant — and each becomes one item to decide.
+
+The snapshot is the point. A campaign that read live grants would ask reviewers about a
+moving target and could never answer "what did we certify in Q3". Because it snapshots, it
+answers both, and the gap between opening and closing stays visible: an item whose grant has
+already gone by the time the campaign closes is recorded **stale** rather than revoked,
+because claiming to have removed something that was not there is a false entry in a record
+whose whole value is being true.
+
+Each item shows how the grant **arrived** — an administrator's assignment, a rule, a group —
+because a role somebody was never individually given is a different question for a reviewer.
+Decide **keep** or **revoke**, with a note.
+
+**Close and apply** executes every revoke through the same write an administrator uses, so
+each revocation is validated exactly as usual, appears in the [grant history](#grant-history)
+like any other change, and names the campaign that decided it in the **Cause** column. Once
+closed, a campaign takes no more decisions: its items are the record of what was certified.
+
+Scope is the whole store or one application.
+
 ## Grant history
 
 The history page (`/_tesseraql/admin/history`) answers when a person got a role or a
