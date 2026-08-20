@@ -87,11 +87,10 @@ class HttpAdmissionIntegrationTest {
      * answerable when nothing else is, and a runtime killed for failing to say "I am busy" has
      * turned a slowdown into an outage.
      *
-     * <p><strong>Exempt from admission is not exempt from the worker pool.</strong> Route
-     * processing still needs a worker, so this answer can be slow when every worker is blocked —
-     * bounded now by {@code maxInFlight} rather than unbounded, which is the improvement, not a
-     * guarantee of promptness. Answering without a worker at all means serving a cached readiness
-     * result from the event loop, which is recorded in the design as the remaining half.
+     * <p><strong>And it is prompt, not merely admitted.</strong> Health was a Camel route, so
+     * being let past the gate still left it queueing for a worker — bounded by {@code maxInFlight}
+     * rather than unbounded, which was an improvement and not an answer. It is now answered on
+     * the router, so the elapsed time here is a real assertion rather than a hopeful one.
      */
     @Test
     void healthIsNotRefusedWhileTheRuntimeIsAtItsBound() throws Exception {
@@ -102,10 +101,14 @@ class HttpAdmissionIntegrationTest {
 
         // Proves the gate is saturated for ordinary traffic at the moment health is asked.
         assertThat(get("/api/nap").statusCode()).isEqualTo(503);
+        long startedAt = System.currentTimeMillis();
         HttpResponse<String> health = get("/_tesseraql/health/live");
+        long elapsedMs = System.currentTimeMillis() - startedAt;
 
         assertThat(health.statusCode()).isEqualTo(200);
         assertThat(health.body()).contains("UP");
+        // The one worker is inside pg_sleep for a second; this did not wait for it.
+        assertThat(elapsedMs).isLessThan(500);
         for (CompletableFuture<HttpResponse<String>> request : saturating) {
             assertThat(request.get().statusCode()).isEqualTo(200);
         }

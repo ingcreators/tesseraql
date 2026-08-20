@@ -121,14 +121,26 @@ much heap it takes".
 **Health and readiness are exempt.** They are checked before the permit, so the gate itself
 never refuses the one surface whose whole purpose is to be answerable when nothing else is.
 
-**Exempt from admission is not exempt from the worker pool** — recorded here because the first
-draft of this decision claimed more than the mechanism delivers. Route processing still needs a
-worker, so a health request behind a saturated pool still waits for one; what changes is that
-the wait is now bounded by `maxInFlight` instead of by however many requests arrived. Answering
-without a worker at all means serving the readiness roll-up from the event loop, off the result
-its TTL cache already holds (`tesseraql.diagnostics.readinessTtl`). That is a separate change to
-how readiness is computed rather than to how requests are admitted, and it is the remaining half
-of this decision.
+**Exempt from admission was not exempt from the worker pool, and now it is.** Recorded in two
+parts because it took two. The first draft of this decision claimed more than the gate delivered:
+route processing needs a worker, so a health request behind a saturated pool still waited for one
+— bounded by `maxInFlight` rather than by however many requests had arrived, which was an
+improvement and not an answer. Liveness and readiness are now answered on the router, off the
+roll-up `OpsDashboard` already memoizes (`tesseraql.diagnostics.readinessTtl`), so a poll costs a
+map read on the event loop and nothing that saturation can take away. Nothing about the answer
+changes — the same roll-up, the same status word, the same 503 — only which thread produces it.
+
+**A roll-up that cannot be refreshed is not a readiness answer.** Serving a memo introduces exactly
+one new way to be wrong, and the failure that makes it concrete is a database that accepts
+connections and never replies: the probe hangs for `connectionTimeout`, thirty seconds by default,
+and a runtime answering `UP` throughout would be worse than the route it replaced, which at least
+hung and let the orchestrator's own timeout fire. So the memo is an answer while it is younger
+than **three times its TTL**, and beyond that readiness answers `DOWN` — the runtime does not know
+that it is ready, and not knowing is not readiness. Three rather than one because a refresh
+legitimately takes as long as the probe it performs, so the memo is routinely a little older than
+its TTL while the next one is computed; three means two consecutive refreshes failed to land. The
+refresh runs behind the answer, on a virtual thread, one at a time, so a burst of polls is still
+one probe.
 
 This is a runtime-wide floor, not a replacement for what routes already declare.
 `admission.concurrency.maxInFlight` stays the per-route limit and
@@ -287,8 +299,8 @@ process keeps running needs it to do.
 2. **Pool defaults are declared** — `maximumPoolSize` and `connectionTimeoutMillis` get
    TesseraQL's defaults, documented beside the worker count.
 3. **The admission gate** — the router handler, the 503, the health exemption, and the test
-   that proves a saturated runtime refuses ordinary traffic without refusing health. The
-   event-loop readiness answer is deferred with direction, above.
+   that proves a saturated runtime refuses ordinary traffic without refusing health. Half the
+   decision: the event-loop readiness answer is slice 8.
 4. **The shared Vert.x** — `MultiAppHost` owns one instance; the isolation model gains the
    paragraph decision 4 records.
 5. **The front door's per-member bound** — the relay's permit, the sized client, the opt-in
@@ -299,6 +311,9 @@ process keeps running needs it to do.
 7. **Asset reads on the runtime's own threads** — the virtual-thread executor, the chunked write
    that blocks for backpressure, and the file counterpart of slice 6's decoupling test. The other
    half, found by measuring the first.
+8. **Readiness off the worker pool** — liveness and readiness on the router, the staleness rule
+   that keeps a served memo honest, and slice 3's test upgraded from "not refused" to "answered
+   promptly". The other half of slice 3.
 
 Slices 1 and 2 are independent. Slice 3 must land before slice 4: sharing the pool without a
 per-runtime bound would remove the accidental bulkhead and put nothing in its place.

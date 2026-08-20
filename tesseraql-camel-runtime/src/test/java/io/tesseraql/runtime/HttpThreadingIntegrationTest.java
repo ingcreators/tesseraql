@@ -116,6 +116,38 @@ class HttpThreadingIntegrationTest {
     }
 
     /**
+     * Readiness is answered while every worker is blocked in the database.
+     *
+     * <p>The other half of decision 3, and the reason the admission gate's exemption was only
+     * half an answer: being let past the gate still left health queueing for a worker, and a
+     * runtime that cannot say "I am saturated" is one an orchestrator restarts — turning a
+     * slowdown into an outage. The roll-up now comes off the memo the dashboard already keeps,
+     * on the event loop, so saying so costs nothing that saturation can take away.
+     */
+    @Test
+    void readinessIsAnsweredWhileEveryWorkerIsBlocked() throws Exception {
+        // The first roll-up exists before the workers are taken: a cold start computes one, and
+        // this test is about the answer, not about the once-per-process case that produces it.
+        assertThat(get("/_tesseraql/health/ready").statusCode()).isEqualTo(200);
+        List<CompletableFuture<HttpResponse<String>>> blocking = Stream
+                .generate(() -> CompletableFuture.supplyAsync(() -> get("/api/nap")))
+                .limit(4)
+                .toList();
+        Thread.sleep(400);
+
+        long startedAt = System.currentTimeMillis();
+        HttpResponse<String> ready = get("/_tesseraql/health/ready");
+        long elapsedMs = System.currentTimeMillis() - startedAt;
+
+        assertThat(ready.statusCode()).isEqualTo(200);
+        assertThat(ready.body()).contains("UP");
+        assertThat(elapsedMs).isLessThan(500);
+        for (CompletableFuture<HttpResponse<String>> request : blocking) {
+            assertThat(request.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
      * A file is served while every worker is blocked in the database.
      *
      * <p>The half moving onto the router could not reach by itself, and the reason the test above
