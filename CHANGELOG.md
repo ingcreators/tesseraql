@@ -133,6 +133,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **The HTTP worker pool is a declared number, not an inherited default**
+  (docs/http-threading.md decision 1). Every request runs on it — `camel-platform-http-vertx`
+  hands each exchange to `executeBlocking` — so its size is a runtime's ceiling on concurrent
+  route execution. TesseraQL bound no `VertxOptions`, so that ceiling was Vert.x's default of
+  **20**, a size chosen for a framework where blocking is the exception, against a connection
+  pool left at Hikari's default of **10**. Half the workers could therefore only ever wait in
+  `getConnection()`, for up to the also-unset 30-second acquisition timeout. Two libraries had
+  each answered half of one question and nothing in TesseraQL stated either number.
+  `tesseraql.http.workerThreads` (default **10**, matching the connection pool) and
+  `tesseraql.http.eventLoopThreads` (Vert.x's `2 x cores` unless set) now say it, and a count
+  that is not a positive integer refuses at startup with `TQL-YAML-1112` rather than starting
+  with a pool nobody asked for.
+
 - **A batch step's declared `timeoutSeconds:` is the bound it runs under**. The schema accepted
   it, `reference-yaml-surface.md` documented it as a "per-binding SQL statement timeout override",
   and the parser carried the value all the way into the model — where the batch executor then
