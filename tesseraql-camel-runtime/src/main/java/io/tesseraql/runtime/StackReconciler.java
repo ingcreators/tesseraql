@@ -79,6 +79,20 @@ final class StackReconciler implements AutoCloseable {
     /** Coalesces the burst a single deploy writes (catalogue + state) into one pass. */
     private static final long DEBOUNCE_MILLIS = 200;
 
+    /**
+     * How often a pass runs even when the watch service reported nothing
+     * (docs/hosting.md "A stack on more than one node").
+     *
+     * <p>A watch service reports what <em>this host</em> did to the directory. On a shared install
+     * root — the supported way to run one stack on several nodes — the writer is another host, and
+     * inotify (or its platform equivalent) never sees it: without a sweep the other nodes would sit
+     * on the old version indefinitely, which is the silent half of a split fleet. A pass is a
+     * catalogue read and a diff against what is already running, so an idle sweep costs one small
+     * file read; {@code tesseraql.stack.reconcile.interval} tunes it, and {@code 0} switches it off
+     * for a node-local install root that wants events only.
+     */
+    static final java.time.Duration DEFAULT_SWEEP = java.time.Duration.ofSeconds(15);
+
     private final Path installRoot;
     private final HostOperations host;
     private final AppUpgrader upgrader = new AppUpgrader();
@@ -95,27 +109,69 @@ final class StackReconciler implements AutoCloseable {
     private final Thread watchThread;
 
     StackReconciler(Path installRoot, HostOperations host) {
+        this(installRoot, host, DEFAULT_SWEEP);
+    }
+
+    /**
+     * @param sweep how often to reconcile without an event; {@link java.time.Duration#ZERO} for
+     *              events only. Package-private with the interval so a test can prove the sweep
+     *              converges on its own — the case a shared install root depends on, and the one
+     *              a same-host test cannot reach through the watch service.
+     */
+    StackReconciler(Path installRoot, HostOperations host, java.time.Duration sweep) {
         this.installRoot = installRoot;
         this.host = host;
+        WatchService registered = null;
         try {
             Files.createDirectories(installRoot.resolve(".upgrade"));
-            this.watcher = installRoot.getFileSystem().newWatchService();
-            installRoot.register(watcher, StandardWatchEventKinds.ENTRY_CREATE,
+            registered = installRoot.getFileSystem().newWatchService();
+            installRoot.register(registered, StandardWatchEventKinds.ENTRY_CREATE,
                     StandardWatchEventKinds.ENTRY_MODIFY);
-            installRoot.resolve(".upgrade").register(watcher,
+            installRoot.resolve(".upgrade").register(registered,
                     StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY,
                     StandardWatchEventKinds.ENTRY_DELETE);
-        } catch (IOException ex) {
-            passes.shutdownNow();
-            throw new java.io.UncheckedIOException(
-                    "Could not watch the install root for deploys: " + installRoot, ex);
+        } catch (IOException cannotWatch) {
+            // A filesystem that cannot be watched is not a reason to refuse the stack when the
+            // sweep can carry it: some network mounts reject registration outright, and that is
+            // exactly the topology the sweep exists for. Without a sweep there would be nothing
+            // left to converge with, so that combination still fails.
+            closeQuietly(registered);
+            registered = null;
+            if (sweep.isZero()) {
+                passes.shutdownNow();
+                throw new java.io.UncheckedIOException(
+                        "Could not watch the install root for deploys and the reconcile sweep is"
+                                + " disabled, so nothing would notice one: " + installRoot,
+                        cannotWatch);
+            }
+            LOG.warn("Cannot watch {} for deploys ({}); reconciling on the {}s sweep alone.",
+                    installRoot, cannotWatch.getMessage(), sweep.toSeconds());
         }
-        this.watchThread = new Thread(this::watch, "tesseraql-stack-reconciler-watch");
-        watchThread.setDaemon(true);
-        watchThread.start();
+        this.watcher = registered;
+        if (watcher != null) {
+            this.watchThread = new Thread(this::watch, "tesseraql-stack-reconciler-watch");
+            watchThread.setDaemon(true);
+            watchThread.start();
+        } else {
+            this.watchThread = null;
+        }
+        if (!sweep.isZero()) {
+            long millis = Math.max(sweep.toMillis(), DEBOUNCE_MILLIS);
+            passes.scheduleWithFixedDelay(this::runPass, millis, millis, TimeUnit.MILLISECONDS);
+        }
         // One pass at start: boot already reconciled, and this closes the window between boot's
         // read and the watch registration — idempotence makes it a no-op when nothing landed.
         requestPass();
+    }
+
+    private static void closeQuietly(WatchService service) {
+        if (service != null) {
+            try {
+                service.close();
+            } catch (IOException ignored) {
+                // Nothing to do about a watch service that will not close; it is being abandoned.
+            }
+        }
     }
 
     private void watch() {
@@ -295,11 +351,9 @@ final class StackReconciler implements AutoCloseable {
 
     @Override
     public void close() {
-        try {
-            watcher.close();
-        } catch (IOException ignored) {
-            // Closing the watch service is what stops the watch thread; nothing to add.
-        }
+        // Closing the watch service is what stops the watch thread; a reconciler running on the
+        // sweep alone has neither.
+        closeQuietly(watcher);
         passes.shutdownNow();
     }
 }

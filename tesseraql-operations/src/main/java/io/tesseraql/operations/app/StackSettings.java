@@ -104,6 +104,30 @@ public final class StackSettings {
     }
 
     /**
+     * How often a host reconciles the install root without a filesystem event —
+     * {@code stack.reconcile.interval}, an ISO-8601 duration ({@code PT30S}) or a plain number of
+     * seconds. Absent means the built-in default; {@code 0} means events only.
+     *
+     * <p>It belongs to the stack file because it describes the install root rather than any
+     * application: a directory shared between nodes needs the sweep, because a watch service sees
+     * only what its own host wrote (docs/hosting.md "A stack on more than one node"). An
+     * unparseable value yields empty rather than refusing the stack — the caller falls back to the
+     * default, which is the safe direction for a safety net.
+     */
+    public Optional<java.time.Duration> reconcileInterval() {
+        return config.getString("stack.reconcile.interval").flatMap(value -> {
+            String trimmed = value.trim();
+            try {
+                return Optional.of(trimmed.chars().allMatch(Character::isDigit)
+                        ? java.time.Duration.ofSeconds(Long.parseLong(trimmed))
+                        : java.time.Duration.parse(trimmed));
+            } catch (RuntimeException unparseable) {
+                return Optional.empty();
+            }
+        });
+    }
+
+    /**
      * The origin this stack is reached at from outside — what an MCP client or the authorization
      * server's metadata must echo character for character. A host behind an ingress cannot know
      * it, which is why it lives here and is never defaulted by {@code host}.

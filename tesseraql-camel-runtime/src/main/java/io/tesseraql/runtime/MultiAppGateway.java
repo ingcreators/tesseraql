@@ -165,7 +165,7 @@ public final class MultiAppGateway implements AutoCloseable {
                     failed);
         }
         this.reconciler = java.nio.file.Files.isRegularFile(installRoot.resolve("catalog.json"))
-                ? new StackReconciler(installRoot, host)
+                ? new StackReconciler(installRoot, host, reconcileSweep(installRoot))
                 : null;
     }
 
@@ -290,6 +290,27 @@ public final class MultiAppGateway implements AutoCloseable {
      */
     int appPort(String appName) {
         return host.port(appName);
+    }
+
+    /**
+     * How often this node reconciles without a filesystem event, from the stack file's
+     * {@code stack.reconcile.interval} (an ISO-8601 duration or a plain number of seconds).
+     *
+     * <p>It lives in {@code tesseraql-stack.yml} because it describes the install root — shared
+     * between nodes or not — which is a property of the deployment rather than of any application
+     * (docs/hosting.md "A stack on more than one node"). An unreadable or negative value falls back
+     * to the default rather than refusing the stack: the sweep is a safety net, and a stack that
+     * will not start is worse than one sweeping at the default interval.
+     */
+    private static java.time.Duration reconcileSweep(java.nio.file.Path installRoot) {
+        try {
+            return io.tesseraql.operations.app.StackSettings.load(installRoot)
+                    .reconcileInterval()
+                    .filter(interval -> !interval.isNegative())
+                    .orElse(StackReconciler.DEFAULT_SWEEP);
+        } catch (RuntimeException unreadable) {
+            return StackReconciler.DEFAULT_SWEEP;
+        }
     }
 
     /** Resolves the port for {@code appName}, splitting traffic to a canary candidate by its weight. */

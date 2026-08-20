@@ -8,6 +8,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A stack runs on several nodes from one shared install root** (docs/hosting.md "A stack on more
+  than one node"). A host converged to the install root on filesystem events alone, and a watch
+  service reports only what its own host wrote — so on a shared directory a deploy performed by one
+  node was invisible to the others, which kept serving the old version with no signal. The host now
+  also reconciles on a **sweep**, every `stack.reconcile.interval` (default 15 seconds, `0` for
+  events only), and a directory that cannot be watched at all — some network mounts refuse
+  registration — degrades to the sweep with a warning instead of refusing to start. A pass is a
+  catalogue read and a diff against the running slots, so an idle sweep costs one small file read.
+  With that, `tesseraql deploy` and the ops console's deploy page reach every node of a stack that
+  shares its install root; the ops console page says so, and says what happens when nodes keep
+  independent roots. Choosing which node runs which application, separating batch work onto its own
+  nodes, and a fleet-wide view are deliberately not here — they are recorded, with the positions
+  already taken, as roadmap Phase 61.
+
 - **One place to put a framework database driver, on every distribution** (docs/module-channel.md
   decision 6, slice 4b). A stack's own pools — the framework datasource, the migration pool —
   resolve their driver through `DriverManager` on the process classpath, which an application's
