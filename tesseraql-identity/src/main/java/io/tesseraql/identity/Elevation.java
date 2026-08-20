@@ -55,7 +55,7 @@ public final class Elevation {
                     IdentityContracts.LIST_ROLE_ELIGIBILITY, params));
             model.put("available", 1);
         } catch (TqlException ex) {
-            if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
+            if (!IdentityService.featureUnavailable(ex)) {
                 throw ex;
             }
             model.put("rows", List.of());

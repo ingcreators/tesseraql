@@ -136,9 +136,18 @@ route as a declared parameter (`actor: principal.loginId`), exactly as slice 5 t
 there is no person to name, and naming the signing-in user would be a lie about who decided.
 
 **Degradation.** Writing history is a `roleManagement` contract like every other grant
-write, so a `sql` realm without the contract degrades: the history page reports the store
-does not keep one, and grant writes are unaffected. A history write failure on a managed
-realm propagates — losing the record of a change that happened is not a tolerable outcome.
+write, so a realm without the trail installed degrades: the history page reports the store
+does not keep one, and grant writes are unaffected.
+
+*Corrected in implementation (slice 4).* This section first said a history write failure
+propagates, because losing the record of a change that happened is not tolerable. That is
+right about a *present* trail and wrong about an *absent* one, and the store cannot tell
+those apart from the failure alone. The standard schema is applied with
+`create table if not exists`, so an existing store gains the table only when the operator
+re-runs it — and propagating would mean every grant write in that deployment fails until
+they do. Refusing all administration over an uninstalled table is the wrong failure, the
+same lesson the declared-role reconciler learned about never failing boot on an uninstalled
+store. An uninstalled feature degrades; anything else still propagates.
 
 ## Structural decision 2: separation of duties is a constraint set, checked where grants are made
 
