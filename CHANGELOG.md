@@ -136,6 +136,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Contract SQL runs bounded, through one executor** (docs/contract-sql-execution.md,
+  structural decisions 1 and 3, slice 1). The 2-way SQL a deployment supplies to satisfy a
+  framework contract — an identity realm's contracts, SCIM inbound provisioning's — had grown
+  three hand-rolled executors that diverged from the route pipeline and from each other on
+  everything after rendering, and the divergence that mattered most is that two of them applied
+  no statement timeout at all: a sign-in's contract ran for as long as the driver allowed while
+  a page's query was cancelled at 30 seconds. Rendering, preparing, binding, bounding, reading
+  and classifying is now one primitive, `io.tesseraql.core.sql.ContractStatement`, and the bound
+  it applies is the same `tesseraql.sql.timeoutSeconds` a route runs under — the same default of
+  30 and the same explicit `0` opt-out, because a second key would be a second thing to forget.
+  A failure now arrives as a `ContractSqlException` naming the contract that asked and carrying
+  the portable classification of what the driver answered; it is still a `SQLException` carrying
+  the driver's own SQLState and vendor code, so what callers already asked of it still holds.
+  The route pipeline is deliberately not converted here — it also does pagination, export
+  streaming, scope resolution and tenant routing, and a defect fixed in three places at once is
+  three chances to be wrong.
+
 - **The IAM admin applications list no longer carries a policy id**, and narrows its rows by
   the caller's grants instead — every member for `tql.iam.admin.view`, their own for
   `tql.iam.view.<name>`, none for neither. It is the one page in that family with no

@@ -4,6 +4,7 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.ext.ExtensionContext;
 import io.tesseraql.compiler.ext.RuntimeExtension;
 import io.tesseraql.core.outbox.OutboxEventSink;
+import io.tesseraql.core.sql.ContractStatement;
 import io.tesseraql.scim.JdbcScimResourceMapping;
 import io.tesseraql.scim.ScimContract;
 import io.tesseraql.scim.ScimGroupContract;
@@ -77,6 +78,18 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
         };
     }
 
+    /**
+     * The bound a SCIM contract statement runs under: the same {@code tesseraql.sql.timeoutSeconds}
+     * a route's statement runs under, because a provisioning call has no claim to run longer than a
+     * page (docs/contract-sql-execution.md structural decision 3). Package-private so the test
+     * that pins the key name can read it without booting a runtime.
+     */
+    static int sqlTimeoutSeconds(AppConfig config) {
+        return config.getString("tesseraql.sql.timeoutSeconds")
+                .map(Integer::parseInt)
+                .orElse(ContractStatement.DEFAULT_TIMEOUT_SECONDS);
+    }
+
     /** Builds the SCIM user service from the configured contract SQL files (design ch. 10.15). */
     private static ScimUserService buildUserService(
             AppManifest manifest, javax.sql.DataSource dataSource) {
@@ -88,7 +101,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readSql(manifest, "tesseraql.scim.users.delete"),
                 readSql(manifest, "tesseraql.scim.users.findByUserName"),
                 readSqlOptional(manifest, "tesseraql.scim.users.count"));
-        return new ScimUserService(dataSource, contract);
+        return new ScimUserService(dataSource, contract)
+                .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()));
     }
 
     /**
@@ -110,7 +124,8 @@ public final class ScimRuntimeExtension implements RuntimeExtension {
                 readSql(manifest, "tesseraql.scim.groups.addMember"),
                 readSql(manifest, "tesseraql.scim.groups.removeMember"),
                 readSqlOptional(manifest, "tesseraql.scim.groups.count"));
-        return new ScimGroupService(dataSource, contract);
+        return new ScimGroupService(dataSource, contract)
+                .sqlTimeoutSeconds(sqlTimeoutSeconds(manifest.config()));
     }
 
     /**
