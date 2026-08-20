@@ -59,6 +59,10 @@ public final class OpsDashboard {
     /** A roll-up and the moment it was computed. */
     private record Memoized(HealthReport report, long computedAtMillis) {
     }
+
+    /** A roll-up already computed, and how long ago (docs/http-threading.md decision 3). */
+    public record HeldHealth(HealthReport report, long ageMillis) {
+    }
     private java.util.function.Supplier<Map<String, Integer>> outboxCounts;
     private java.util.function.Supplier<Map<String, Integer>> eventCounts;
     private java.util.function.Supplier<Map<String, Boolean>> datasourceProbe;
@@ -186,6 +190,28 @@ public final class OpsDashboard {
         return new Overview(new BatchSummary(executions.size(), byStatus, recent),
                 laneStatuses(lanes), slowSql.recent(), traces(appFilter), traceMetrics(),
                 pinning(), !alerts.isEmpty(), alerts);
+    }
+
+    /**
+     * The roll-up this dashboard already holds, without computing one.
+     *
+     * <p>{@code health()} answers the question "what is the state" and pays whatever that costs;
+     * this answers "what was the state, and how long ago", which is what a caller that must not
+     * block needs (docs/http-threading.md decision 3). Empty until the first roll-up exists, so a
+     * caller has to decide what to do before there is anything to serve rather than be handed a
+     * default that looks like an answer.
+     */
+    public java.util.Optional<HeldHealth> heldHealth() {
+        Memoized cached = cachedHealth.get();
+        return cached == null
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(new HeldHealth(cached.report(),
+                        System.currentTimeMillis() - cached.computedAtMillis()));
+    }
+
+    /** How long a roll-up is reused before a refresh is due. */
+    public java.time.Duration healthTtl() {
+        return healthTtl;
     }
 
     /** How long a health roll-up is reused; the runtime binds the declared key. */

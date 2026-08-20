@@ -150,6 +150,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A saturated runtime could not say that it was saturated** (docs/http-threading.md decision 3).
+  The admission gate let health past without taking a permit, which was half the answer: health
+  was still a Camel route, so it still queued for one of the workers the slow query was holding.
+  An orchestrator that gets no answer to "are you busy" concludes the process is dead and restarts
+  it, which is how a slowdown becomes an outage. Liveness and readiness are now answered on the
+  platform router, off the roll-up the ops dashboard already memoizes, so a poll costs a map read
+  on the event loop. The answer is unchanged — the same roll-up, the same status word, the same
+  503 when it is `DOWN` — and only the thread that produces it is different.
+
+  **A roll-up that cannot be refreshed is no longer served as one.** Answering from a memo has one
+  new way to be wrong, and a database that accepts connections and never replies is what makes it
+  concrete: the probe hangs for `connectionTimeout`, thirty seconds by default. The memo is an
+  answer while it is younger than three times `tesseraql.diagnostics.readinessTtl`; beyond that
+  readiness answers `DOWN`, because not knowing whether the runtime is ready is not readiness. The
+  refresh runs behind the answer on a virtual thread, one at a time, so a burst of polls is still
+  one probe.
+
 - **A static asset file was read on the worker pool it had just been moved off**
   (docs/http-threading.md decision 6). Serving assets from the router took the classpath half off
   the workers and left the filesystem half where it was: `sendFile` streams rather than buffers,

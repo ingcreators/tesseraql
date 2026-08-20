@@ -155,17 +155,9 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // /health/live is pure liveness (the process answers; never touches a dependency);
         // /health/ready and the bare /health run the full roll-up incl. the datasource probe
         // and answer 503 on DOWN, so traffic actually sheds when the app cannot serve.
-        rest().get("/_tesseraql/health").to("direct:ops.health");
-        rest().get("/_tesseraql/health/live").to("direct:ops.health.live");
-        // Its own direct: the REST consumers inline their direct bodies into one route each
-        // (the Phase 42 hot-reload shape), so two consumers must not share a route id.
-        rest().get("/_tesseraql/health/ready").to("direct:ops.health.ready");
-
-        from("direct:ops.health").routeId("ops.health").process(readiness());
-        from("direct:ops.health.ready").routeId("ops.health.ready").process(readiness());
-
-        from("direct:ops.health.live").routeId("ops.health.live")
-                .process(jsonProcessor(exchange -> java.util.Map.of("status", "UP")));
+        // Liveness and readiness are not routes: they are answered on the platform router,
+        // off the roll-up the dashboard already holds, so a saturated runtime can still say that
+        // it is saturated (docs/http-threading.md decision 3, and see HealthRoutes).
 
         // The Prometheus text exposition (roadmap Phase 45, decision point 9): opt-in, and
         // bearer + ops.metrics.view policy by default — metric labels reveal route ids, so
@@ -661,19 +653,6 @@ final class OperationsRouteBuilder extends RouteBuilder {
             throw new io.tesseraql.core.error.TqlException(BAD_RUN_BODY,
                     "Request body is not valid JSON: " + ex.getOriginalMessage());
         }
-    }
-
-    /** The readiness roll-up: the status word, 503 when DOWN so a balancer sheds traffic. */
-    private Processor readiness() {
-        return exchange -> {
-            String status = dashboard.health().status();
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
-                    "DOWN".equals(status) ? 503 : 200);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
-                    "application/json; charset=utf-8");
-            exchange.getMessage().setBody(
-                    mapper.writeValueAsString(java.util.Map.of("status", status)));
-        };
     }
 
     private Processor jsonProcessor(java.util.function.Function<Exchange, Object> handler) {

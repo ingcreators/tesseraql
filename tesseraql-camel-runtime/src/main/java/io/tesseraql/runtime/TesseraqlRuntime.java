@@ -1578,6 +1578,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     manifest.config().getString("tesseraql.i18n.defaultLocale").orElse("en"));
             sseEndpoints.add(() -> AssetRoutes.install(context, port, assetRoot, assetTrees,
                     clientMessages));
+            // Liveness and readiness, answered on the router off the roll-up the dashboard holds
+            // (docs/http-threading.md decision 3): the surface that has to be answerable when
+            // nothing else is must not need the resource everything else is waiting for.
+            io.tesseraql.opsui.OpsDashboard health = opsDashboard;
+            sseEndpoints.add(() -> HealthRoutes.install(context, port, health));
             // The ops API needs each job's owning app so per-app scope can gate listing and runs.
             Map<String, String> ownedJobs = new LinkedHashMap<>();
             jobs.keySet().forEach(id -> ownedJobs.put(id, jobOwners.getOrDefault(id, appName)));
