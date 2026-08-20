@@ -554,7 +554,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             case "blob" -> {
                 io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores
-                        .create(manifest.config(), appHome);
+                        .create(manifest.config(), appHome, modules.loader());
                 if (blobStore instanceof io.tesseraql.core.blob.FileBlobStore) {
                     LOG.warn("tesseraql.temp.store: blob with the local file provider is still"
                             + " node-local; configure tesseraql.object-storage.provider (or use"
@@ -855,7 +855,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // upload/list/download routes; an app with no attachments gets neither.
         if (attachmentsNeedManagedStore(manifest)) {
             io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores.create(
-                    manifest.config(), appHome);
+                    manifest.config(), appHome, modules.loader());
             context.getRegistry().bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
             io.tesseraql.operations.attachment.JdbcAttachmentStore attachmentStore = new io.tesseraql.operations.attachment.JdbcAttachmentStore(
                     dataSource);
@@ -2241,7 +2241,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Optional feature modules (SCIM, SAML, ...) self-install via ServiceLoader, from the
             // classpath or from signature-verified plugin jars in isolated loaders (ch. 47).
             for (io.tesseraql.compiler.ext.RuntimeExtension extension : RuntimeExtensions
-                    .discover(manifest.config(), appHome)) {
+                    .discover(manifest.config(), appHome, modules.loader())) {
                 if (extension.enabled(manifest.config())) {
                     extension.install(new io.tesseraql.compiler.ext.ExtensionContext(
                             context, manifest, dataSource, frameworkDataSource));

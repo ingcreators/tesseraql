@@ -390,6 +390,12 @@ in slice 1 in passing.
   points at it. How the resolved cache reaches a machine that cannot run that step —
   packaged into the `.tqlapp`, or carried in a fetched repository bag — is
   [module-channel.md](module-channel.md).
+
+*Correction, 2026-08-20.* Structural decision 2's slice table says "codec, blob-store, and
+runtime-extension discovery take the loader". Only the codec side shipped that way: blob stores and
+runtime extensions kept reading the thread context classloader, so an application that declared
+either in `tesseraql.modules` was served by neither — a blob store answered `TQL-YAML-1108` and an
+extension was simply never found. Both take the loader now, and a test pins each direction.
 - **Module hot-swap under `--watch`.** Restart is the contract, stated in the docs sweep.
 - **Widening the module SPI surface** (secret resolvers, app sources, scanners from module
   jars). Plugins already cover per-app extension jars with an allowlist; merging the two
