@@ -286,6 +286,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * {@code camel.threadId}), so a structured log line carries the route and exchange it came
      * from without the framework threading them through by hand.
      */
+    @SuppressWarnings("resource") // the Camel context adopts the service and closes it
     private static void bridgeMdcAcrossAsyncBoundaries(DefaultCamelContext context) {
         org.apache.camel.mdc.MDCService mdc = new org.apache.camel.mdc.MDCService();
         mdc.setCustomProperties(TesseraqlProperties.TRACE_ID + ","
@@ -919,6 +920,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // named credentials, the timeouts, and the per-host circuit breaker.
         io.tesseraql.operations.http.HttpCallClient httpCallClient = new io.tesseraql.operations.http.HttpCallClient(
                 httpOutbound, manifest.config(), tracer, effectiveMeter);
+        // push: pipeline steps deliver a produced transfer to a partner drop — local, or
+        // SFTP/FTPS under the push policy block's deny-by-default allow-list
+        // (docs/analytics-experience.md).
+        @SuppressWarnings("resource") // shares the runtime's Camel context, closed with it
+        FilePushService filePush = new FilePushService(context,
+                io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), appHome);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer,
                 modules.functions())
                 // A running job says so on a clock, and overlap: skip believes a previous run
@@ -954,12 +961,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // export: pipeline steps write through the same transfer machinery HTTP
                 // file-export routes use (docs/analytics-experience.md track 3).
                 .fileTransfers(fileTransfers, appHome)
-                // push: pipeline steps deliver a produced transfer to a partner drop —
-                // local, or SFTP/FTPS under the push policy block's deny-by-default
-                // allow-list (docs/analytics-experience.md).
-                .filePush(new FilePushService(context,
-                        io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()),
-                        appHome)::push)
+                .filePush(filePush::push)
                 // ETL job SQL on a duckdb datasource resolves ${scope.*} placeholders through the
                 // same declared file scopes as routes (docs/duckdb.md).
                 .filePathResolvers(datasourceName -> datasourceName != null
