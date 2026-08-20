@@ -27,14 +27,26 @@ public final class ModuleResolver {
 
     private final String bomCoordinate;
     private final boolean offline;
+    private final boolean alwaysImportBom;
 
     public ModuleResolver(String bomCoordinate) {
         this(bomCoordinate, false);
     }
 
     public ModuleResolver(String bomCoordinate, boolean offline) {
+        this(bomCoordinate, offline, false);
+    }
+
+    /**
+     * With {@code alwaysImportBom}, the synthetic POM imports the BOM even when every declared
+     * coordinate carries its version — what {@code modules fetch} needs, because the bag it fills
+     * has to contain the BOM for a later resolve whose declaration omits one
+     * (docs/module-channel.md decision 5).
+     */
+    public ModuleResolver(String bomCoordinate, boolean offline, boolean alwaysImportBom) {
         this.bomCoordinate = bomCoordinate;
         this.offline = offline;
+        this.alwaysImportBom = alwaysImportBom;
     }
 
     /** Resolves the closure of {@code declared}, sorted by coordinate for a stable lock/classpath. */
@@ -77,7 +89,7 @@ public final class ModuleResolver {
      */
     private Path writePom(List<ModuleCoordinate> declared) {
         StringBuilder dependencies = new StringBuilder();
-        boolean needsBom = false;
+        boolean needsBom = alwaysImportBom;
         for (ModuleCoordinate coordinate : declared) {
             needsBom |= !coordinate.hasVersion();
             dependencies.append("    <dependency><groupId>").append(coordinate.groupId())

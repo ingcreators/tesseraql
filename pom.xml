@@ -119,6 +119,10 @@
     <hikaricp.version>7.1.0</hikaricp.version>
     <postgresql.version>42.7.13</postgresql.version>
     <mysql.version>9.7.0</mysql.version>
+    <!-- MariaDB Connector/J speaks the MySQL protocol under LGPL-2.1, so it is the redistributable
+         way out of mysql-connector-j's GPLv2 + FOSS Exception (docs/module-channel.md decision 7).
+         Version-managed only: the framework never depends on it. -->
+    <mariadb.version>3.5.7</mariadb.version>
     <picocli.version>4.7.7</picocli.version>
     <slf4j.version>2.0.18</slf4j.version>
     <!-- Test-only: an in-process SFTP server for the Phase 26 poll-trigger integration test. -->
