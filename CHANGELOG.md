@@ -133,6 +133,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **A batch step's declared `timeoutSeconds:` is the bound it runs under**. The schema accepted
+  it, `reference-yaml-surface.md` documented it as a "per-binding SQL statement timeout override",
+  and the parser carried the value all the way into the model — where the batch executor then
+  ignored it. `JobExecutor` built every step's bounds from the app-wide `tesseraql.sql.timeoutSeconds`
+  alone, so a declaration on a job step, a chunk reader or a chunk writer parsed cleanly and did
+  nothing. An extract that legitimately takes minutes could only be given room by loosening the
+  bound every request in the application ran under, and the failure looked like a slow statement
+  being cancelled rather than a setting that was never read. Each binding now resolves its own
+  declaration first and falls back to the app-wide default — the precedence a route and a command
+  have always applied — and a step's `enrich:` references inherit the bound their owning binding
+  resolved, as they do on a route.
+
+  **An `export:` step is not covered yet.** It renders its arm and hands the `BoundSql` to
+  `JdbcFileTransferService`, which applies its own app-wide timeout; `InlineExport` carries no
+  bound, so honouring the declaration there means changing a core contract the route export path
+  shares. That is a wider decision than this fix, and it is recorded rather than half-made.
+
 - **An IAM refusal says what it refused, instead of "Internal Server Error"**
   (docs/access-governance.md slice 2 found this). Only `TQL-IAM-4030` had an HTTP status; every
   other IAM code fell through to 500, so a capability refusal (`4031`), a malformed rule condition

@@ -62,8 +62,9 @@ final class SqlStepRunner {
         long startedAt = System.currentTimeMillis();
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(bound.sql())) {
-            if (context.sqlTimeoutSeconds() > 0) {
-                statement.setQueryTimeout(context.sqlTimeoutSeconds());
+            int timeoutSeconds = context.timeoutSecondsFor(step.sql());
+            if (timeoutSeconds > 0) {
+                statement.setQueryTimeout(timeoutSeconds);
             }
             StepContext.bind(statement, bound);
             Map<String, Object> result = switch (mode) {
