@@ -134,6 +134,30 @@ a prototype that declines any route that is not a plain chain, and no completion
 are slices 2 to 4. The prototype lives in test sources, because slice 1's job was to produce a
 number and be cheap to abandon.
 
+### The failure path
+
+Slice 1 measured the happy path, which is the easy half. The hard half is the one decision 5 names
+below and deliberately keeps off its list, because it is not a line item: Camel's unit of work runs
+`addOnCompletion` whether the exchange succeeded or failed, and re-implementing that is easy while
+noticing everything that depends on it is not.
+
+**Counted rather than feared: five registrations, and none of them asks the unit of work for
+anything else.** The route audit row, the per-route concurrency permit, the lane permit, the
+telemetry span, and the SQL producer's streamed body — `getUnitOfWork` appears nowhere in main
+sources. So draining the registrations is the whole of what has to be reproduced rather than a
+first approximation of it, and it is drained with Camel's own
+`UnitOfWorkHelper.doneSynchronizations`, so a completion runs off a route exactly as it runs on
+one.
+
+**The test is a route that always fails, declaring `maxInFlight: 1`.** A permit that is not given
+back is invisible on the first request and refuses the second. With the drain, three sequential
+requests all produce the route's own error. Without it — checked by removing it — the second
+request comes back `TQL-RATE-4291`, which is the leak, visible.
+
+The envelope itself needs no reimplementation: the `onException` clauses are the instances the
+compiler put in the model, so a refusal produced here is the framework's refusal, and the response
+is identical through both edges.
+
 ## Structural decisions
 
 ### 1. The request pipeline runs on a virtual thread per request
@@ -217,6 +241,7 @@ it.
 Camel's unit of work runs `addOnCompletion` whether the exchange succeeded or failed. Audit rows,
 span closure and resource release ride on that guarantee. Re-implementing it is easy; noticing
 every place that depends on it is not, and the failure mode is silent and only on the error path.
+Slice 2 counted them — five, all `addOnCompletion` — and proved the drain by removing it.
 
 ## Slices
 
@@ -227,7 +252,9 @@ every place that depends on it is not, and the failure mode is silent and only o
    records why. **Done: 3627 ms to 1033 ms, and the same answer. The abandon clause did not
    fire.**
 2. **The error envelope and the completion guarantee** — `try`/`catch` to `ErrorResponseRenderer`,
-   and an explicit completion hook with a test that proves it runs on the failure path.
+   and an explicit completion hook with a test that proves it runs on the failure path. **Done:
+   the envelope is the route's own instances, and the drain is proven by a route that always fails
+   under `maxInFlight: 1` — remove it and the second request is refused with `TQL-RATE-4291`.**
 3. **The route registry** — pipelines by id, replacing `direct:`; `ProducerTemplate` callers move
    to it; hot reload becomes a swap.
 4. **The mount and the base path** — REST DSL's `contextPath` replaced by the router mount every

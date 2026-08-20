@@ -12,6 +12,8 @@ import org.apache.camel.model.ProcessDefinition;
 import org.apache.camel.model.ProcessorDefinition;
 import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.model.ToDefinition;
+import org.apache.camel.spi.Synchronization;
+import org.apache.camel.support.UnitOfWorkHelper;
 
 /**
  * A compiled route as a list of processors, run without a route (docs/http-edge.md slice 1).
@@ -112,6 +114,9 @@ final class EdgePipeline {
                 }
             }
         } catch (Exception failure) {
+            // What `handled(true)` means: the exception stops being the exchange's and becomes a
+            // property, so the completions below run as completions rather than as failures —
+            // which is what the audit row and the released permit are recorded against.
             exchange.setException(null);
             exchange.setProperty(Exchange.EXCEPTION_CAUGHT, failure);
             Processor renderer = rendererFor(failure);
@@ -123,6 +128,30 @@ final class EdgePipeline {
             } catch (Exception unrenderable) {
                 throw new IllegalStateException(unrenderable);
             }
+        } finally {
+            done(exchange);
+        }
+    }
+
+    /**
+     * The completion guarantee: what Camel's unit of work runs whether the exchange succeeded or
+     * failed, and the thing docs/http-edge.md named as most likely to be got wrong.
+     *
+     * <p>Five places in this framework register one — the route audit row, the per-route
+     * concurrency permit, the lane permit, the telemetry span, and the SQL producer's streamed
+     * body — and every one of them leaks or goes missing on the error path if nobody runs it. Not
+     * one of them asks the unit of work for anything else, which is why draining the
+     * registrations is the whole of what has to be reproduced rather than a first approximation
+     * of it.
+     *
+     * <p>Drained with Camel's own helper, so a completion runs here exactly as it runs on a
+     * route: {@code onFailure} when the exchange is still failed, {@code onComplete} when the
+     * envelope above has already answered for it.
+     */
+    private static void done(Exchange exchange) {
+        List<Synchronization> completions = exchange.getExchangeExtension().handoverCompletions();
+        if (completions != null && !completions.isEmpty()) {
+            UnitOfWorkHelper.doneSynchronizations(exchange, completions);
         }
     }
 
