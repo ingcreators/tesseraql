@@ -133,10 +133,17 @@ public final class MultiAppGateway implements AutoCloseable {
 
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
             java.nio.file.Path installRoot, Settings settings, int frontPort,
-            String rootTarget) {
+            String rootTarget, io.tesseraql.operations.app.StackSettings stackSettings) {
         this.host = host;
         this.vertx = Vertx.vertx();
-        this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2()));
+        // What the front door will forward to one member at a time (docs/http-threading.md
+        // decision 5), read from the stack's own file — the same place the host reads the worker
+        // count it defaults to, because the two answer one question: how much concurrent work
+        // does a member do. The client is sized to match, so what the relay admits the transport
+        // carries rather than queues behind.
+        int perMember = maxConcurrentPerMember(stackSettings);
+        this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2(),
+                perMember, readIdleSeconds(stackSettings)));
         // Every per-app lookup is the host's live slot state (docs/runtime-replace.md): a
         // replace swaps which runtime, which entry and which strip set answer for a member, and
         // the relay reads all three per request rather than from a start-time copy. Membership
@@ -145,7 +152,8 @@ public final class MultiAppGateway implements AutoCloseable {
                 hostedApps.stream().map(InstalledApp::name)
                         .collect(java.util.stream.Collectors.toUnmodifiableSet()),
                 host::entry, host::ingressStrip,
-                settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget);
+                settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
+                .maxConcurrentPerMember(perMember);
         this.server = vertx.createHttpServer(
                 StackRelay.frontOptions(frontPort, settings.http2()));
         server.requestHandler(relay::handle);
@@ -257,11 +265,65 @@ public final class MultiAppGateway implements AutoCloseable {
                     .filter(app -> host.appNames().contains(app.name()))
                     .toList();
             return new MultiAppGateway(host, hosted, installRoot, settings, frontPort,
-                    rootTarget);
+                    rootTarget, stackSettings);
         } catch (RuntimeException ex) {
             host.close();
             throw ex;
         }
+    }
+
+    /**
+     * How many forwards the front door will have in flight to one member.
+     *
+     * <p>Defaults to the member worker count the stack declares, because a front door that admits
+     * more than a member can run only moves the queue one hop earlier, and one that admits fewer
+     * makes the member's own pool unreachable. Where the stack declares neither, ten — the same
+     * number both sides default to everywhere else in this design.
+     */
+    private static int maxConcurrentPerMember(
+            io.tesseraql.operations.app.StackSettings stackSettings) {
+        if (stackSettings == null) {
+            return 10;
+        }
+        io.tesseraql.yaml.config.AppConfig config = stackSettings.config();
+        return config.getString("tesseraql.gateway.maxConcurrentPerMember")
+                .or(() -> config.getString("tesseraql.http.workerThreads"))
+                .map(declared -> {
+                    try {
+                        return Math.max(1, Integer.parseInt(declared.trim()));
+                    } catch (NumberFormatException notANumber) {
+                        LOG.warn("tesseraql.gateway.maxConcurrentPerMember is not a number: {}."
+                                + " Using 10.", declared);
+                        return 10;
+                    }
+                })
+                .orElse(10);
+    }
+
+    /**
+     * How long a member may send nothing before the front door reclaims the forward; 0 disables
+     * it, and that is the default.
+     *
+     * <p>Not defaulted to a number on purpose: a hung member and one running a legitimately long
+     * query are indistinguishable from here — both accept the request and stay silent until they
+     * are done — so any value the framework picked would eventually cancel somebody's report. An
+     * operator who knows their slowest legitimate response can set one.
+     */
+    private static int readIdleSeconds(io.tesseraql.operations.app.StackSettings stackSettings) {
+        if (stackSettings == null) {
+            return 0;
+        }
+        return stackSettings.config().getString("tesseraql.gateway.readIdleTimeoutSeconds")
+                .map(declared -> {
+                    try {
+                        return Math.max(0, Integer.parseInt(declared.trim()));
+                    } catch (NumberFormatException notANumber) {
+                        LOG.warn("tesseraql.gateway.readIdleTimeoutSeconds is not a number: {}."
+                                + " Leaving it disabled.", declared);
+                        return 0;
+                    }
+                })
+                .orElse(0);
     }
 
     public int port() {

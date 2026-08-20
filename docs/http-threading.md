@@ -170,6 +170,49 @@ Camel contexts, URL spaces, Studio instances, traces, configuration. Thread pool
 on that list, so this is not a contract change; it is recorded here because "not promised"
 and "not relied upon" are different things.
 
+### 5. The front door forwards under a declared bound, per member
+
+Decision 4 asked whether the gateway needed its own Vert.x sized, and answered no: it is one
+instance for the process, so it does not multiply with applications installed. That was the
+right answer to the question asked, and the wrong question. **The gateway's threads were never
+the problem; its connections were.**
+
+The relay is non-blocking end to end — routing is map lookups, entitlement reads an in-memory
+record, and `vertx-http-proxy` forwards without touching a worker. A member blocked in JDBC
+therefore costs the front door a connection and some memory, not a thread. Three things were
+wrong anyway, all of them from `outboundOptions` passing the client's defaults through
+untouched:
+
+| | Default in force | Consequence |
+| --- | --- | --- |
+| Connections per member | 5 (`maxPoolSize`) | Fewer than a member's own worker pool, so the front door — not the member — was the ceiling |
+| Wait queue | unbounded (`maxWaitQueueSize` −1) | The queue decision 3 removed inside a runtime, still present in front of it |
+| h2c multiplexing | unlimited (`http2MultiplexingLimit` −1) | Turning on a *protocol* flag replaced the limit of five with no limit at all |
+
+So the effective concurrency of the whole stack was a number nobody chose, nobody could see,
+and that changed by an order of magnitude with a setting about protocols.
+
+**One declared number, taken in the relay.** `tesseraql.gateway.maxConcurrentPerMember`
+defaults to the stack's `tesseraql.http.workerThreads` — a front door that admits more than a
+member can run only moves the queue one hop earlier, and one that admits fewer makes the
+member's own pool unreachable. Beyond it the answer is 503 with `Retry-After` and
+`TQL-RATE-4294`. The permit rides the drain counter's existing exactly-once guard, because
+Vert.x keeps one `endHandler` per response and a second registration would silently replace the
+count the stack's stop waits on. The outbound client is sized to the same number in **both**
+protocol modes, so the protocol flag stops deciding a capacity.
+
+The gateway's own `/health/live` is answered before the permit, for decision 3's reason.
+
+**A read-idle timeout is offered and deliberately not defaulted.**
+`tesseraql.gateway.readIdleTimeoutSeconds` is unset unless an operator sets it. A hung member
+and a member running a legitimately long query are indistinguishable from the front door: both
+accept the request and send nothing until they are done. Event streams are the easy half —
+they heartbeat every 25 seconds — but a report with a raised `timeoutSeconds` can be silent for
+minutes and is not misbehaving, so any number the framework picked would eventually cancel
+somebody's report. Without it, a hung member is contained by the bound above rather than
+reclaimed: it holds its own permits and nothing else, and the stack answers 503 for that member
+while serving the rest.
+
 ## Slices
 
 1. **The worker pool is configurable** — `VertxOptions` in the registry, both keys, reference
@@ -181,6 +224,8 @@ and "not relied upon" are different things.
    event-loop readiness answer is deferred with direction, above.
 4. **The shared Vert.x** — `MultiAppHost` owns one instance; the isolation model gains the
    paragraph decision 4 records.
+5. **The front door's per-member bound** — the relay's permit, the sized client, the opt-in
+   read-idle timeout. Found by asking what limited the gateway once the runtimes were bounded.
 
 Slices 1 and 2 are independent. Slice 3 must land before slice 4: sharing the pool without a
 per-runtime bound would remove the accidental bulkhead and put nothing in its place.

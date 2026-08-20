@@ -122,6 +122,23 @@ ordinary burst a queue exists to absorb while keeping the queue a number you can
 that gets this refusal should retry; a monitor that sees it should read it as "this runtime is
 at capacity", which is `TQL-RATE-4293`.
 
+### The front door's share of each member
+
+Under `tesseraql host`, requests reach a member through the gateway, which applies its own bound
+first. It is declared in `tesseraql-stack.yml`:
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `tesseraql.gateway.maxConcurrentPerMember` | `tesseraql.http.workerThreads` | Forwards in flight to one member |
+| `tesseraql.gateway.readIdleTimeoutSeconds` | off | Reclaim a forward whose member has sent nothing for this long |
+
+Beyond the bound the gateway answers 503 with `Retry-After` and `TQL-RATE-4294` — **for that
+member only**. A member whose database has stalled holds its own permits and nothing else, so
+the rest of the stack keeps serving. That containment is the reason to leave the read-idle
+timeout off unless you need it: a hung member and one running a legitimately long report look
+the same from the front door, so a timeout short enough to catch the first will eventually
+cancel the second. Set it only if you know your slowest legitimate response.
+
 Health (`/_tesseraql/health` and below) is checked before the bound, so the gate never refuses
 it. It still needs a worker to answer, so it can be slow when every worker is blocked — bounded
 now by `maxInFlight` rather than unbounded, which is the improvement rather than a promise of
