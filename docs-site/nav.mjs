@@ -259,4 +259,6 @@ export const EXCLUDED = [
   'module-channel.md',
   // The rest of the role model: history, SoD, elevation, review, requests, 2026-08-20.
   'access-governance.md',
+  // Worker pool, connection pool, edge admission, one Vert.x per host, 2026-08-20.
+  'http-threading.md',
 ];
