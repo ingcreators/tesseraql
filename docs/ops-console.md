@@ -119,6 +119,13 @@ The gate is display only. The form posts to the endpoint itself, which checks th
 so the page can widen what is listed, never what is deployed. A refusal (wrong application,
 stale version, failed preflight) renders inline on the form and writes nothing.
 
+The upload writes to **the install root of the node that served the request**, and the versions
+listed are that node's. On a stack running on several nodes that is enough only when they share
+one install root — the supported multi-node shape, which
+[hosting.md](hosting.md#a-stack-on-more-than-one-node) describes with the reconcile sweep that
+carries another node's write to this one. With independent node-local install roots, a deploy from
+this page reaches one node and the rest keep serving what they have.
+
 ## What the console does not do
 
 The console watches; it does not author. Three neighbouring surfaces do the rest:

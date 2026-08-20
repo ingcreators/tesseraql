@@ -1356,6 +1356,59 @@ offered four auth modes where the framework accepts five, and `auth: public` is 
 offered and integration-asserted. **Phase 57 is complete and milestone M22 is
 met.**
 
+## The operated fleet (cross-cutting)
+
+### Phase 61 — placement, node roles, and a fleet view
+
+Recorded 2026-08-20, deliberately deferred. A stack is one process
+([stack-architecture.md](stack-architecture.md) Decision 27) and multi-node coordination was
+excluded from [runtime-replace.md](runtime-replace.md) as the orchestrator's job. That holds for
+container fleets. It does not answer the audience the Windows Server distribution targets, which
+has no orchestrator — so the minimum was shipped instead: **a shared install root plus the
+reconcile sweep** ([hosting.md](hosting.md#a-stack-on-more-than-one-node)), which makes one deploy
+reach every node with no new storage, no new protocol, and no new surface. Everything below is
+what that minimum deliberately leaves out, with the positions this project has already taken on
+each, so the phase starts from decisions rather than from a blank page.
+
+- **Placement is environment state, not a deploy argument.** Which applications run on which nodes
+  changes with capacity and topology, not with releases; putting it in `deploy` would make every
+  release restate it and one forgotten flag silently move an application. It belongs beside the
+  catalogue, written by the operator — who is the only one who knows the production topology —
+  and edited through a CLI verb and the ops console, never through an imperative "start X on node
+  B" call.
+- **Selectors, never node names.** `NodeIdentity` defaults to hostname + PID and changes on every
+  restart, so a placement that names nodes breaks on the first restart. A node declares what it
+  is; a member declares what it wants.
+- **Two vocabularies, not one.** The *behavioural* role the framework itself branches on
+  (`web`/`batch`/`all`) is a closed set whose unknown value fails the boot, like an unknown
+  messaging transport (`TQL-YAML-1106`) or object-storage provider (`TQL-YAML-1108`). *Placement
+  labels* (`eu-west`, `heavy-io`) are the operator's free vocabulary, which the framework matches
+  and never interprets — with a grammar, reserved words, and a visible "this selector matches no
+  live node" state, so a typo cannot become a silent nowhere.
+- **`batch` means self-initiated work, and only that**: scheduled firings, poll triggers, queue
+  consumers, the outbox dispatcher, the housekeeping sweeps. Request-initiated work — a
+  `file-export` route, an upload, an ops run-now — executes where the request landed, because
+  there is no dispatch hop; the supported way to move heavy extraction off the request path is
+  already there, which is to declare it as a job with an export step.
+- **A batch node declares itself unfit for traffic through the signal that already exists**: its
+  per-application readiness answers 503 while liveness stays 200, so the health check a load
+  balancer already runs keeps application traffic away with no load-balancer configuration. It
+  must still serve when addressed — refusing would break its own ops shell, which delegates over
+  loopback.
+- **A fleet view needs a node registry, and reads it from the shared database.** The ops console
+  is per-node by construction (the shell delegates over loopback), so today it can only ever show
+  the node that answered. One row per node — identity, version, role, hosted members and versions,
+  heartbeat — is what turns any node's console into a fleet view, and it must be *read from the
+  shared table*, never proxied node to node: cross-node RPC would invent an authenticated surface
+  between hosts, which is a far larger security question than a table with a pulse. Operators who
+  already run Prometheus can aggregate `/_tesseraql/metrics` per node instead; the registry is for
+  those who do not.
+- **Pull-based deploy from a shared store** (the framework database by default — `JdbcTempStore`
+  is the precedent — object storage opt-in) is the last resort, for fleets that cannot share a
+  directory. It brings package storage, garbage collection, per-node convergence status, and
+  asynchronous deploy outcomes with it, which is why the shared install root is the answer until
+  a real deployment cannot use it.
+
 ## Continuous tracks
 
 - **Platform maintenance**: weekly Dependabot triage (policy encoded in

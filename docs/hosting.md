@@ -119,6 +119,39 @@ directory, or copies a `.tqlapp` package to the host and runs `tesseraql deploy`
 `AppInstaller`/`AppUpgrader` library stays for tooling that wants to drive the same lifecycle
 itself.
 
+### A stack on more than one node
+
+One host process serves one stack. Running the stack on several nodes means several hosts, and
+what makes them one stack is **the install root they read**. There are two supported shapes:
+
+| Topology | How a deploy reaches every node |
+| --- | --- |
+| **Baked image** | The install root is inside the image. Deploying is building a new image and rolling the nodes — your orchestrator's job, and it already does it well. |
+| **Shared install root** | Every node mounts one directory (NFS, SMB, a shared volume). A deploy writes there once — `tesseraql deploy`, or the ops console's deploy page — and every node's reconciler converges to it. |
+
+A host reconciles on two signals: the filesystem watch, and a **sweep** every
+`stack.reconcile.interval` (default 15 seconds, `0` disables it). The sweep is what makes the
+shared root work — a watch service reports what *its own host* wrote, so a deploy performed by
+another node is invisible to it. A pass reads the catalogue and diffs it against what is running,
+so an idle sweep costs one small file read.
+
+```yaml
+# tesseraql-stack.yml
+stack:
+  reconcile:
+    interval: PT15S      # or a plain number of seconds; 0 = filesystem events only
+```
+
+What this does **not** give you: choosing which node runs which application, separating batch work
+onto its own nodes, or a fleet-wide view of who is running what. Every node hosts every member and
+every node can run any member's scheduled jobs (exactly one node runs each firing, by claim). That
+work is recorded as roadmap Phase 61.
+
+**Independent, node-local install roots are the shape to avoid.** Nothing refuses it, and nothing
+reconciles across it: a `.tqlapp` uploaded to the ops console lands on whichever node served the
+request, that node converges, and the others keep serving the old version — a split fleet with no
+signal. Bake the image or share the directory.
+
 ### Modules are resolved before the host starts
 
 An application's `tesseraql.modules` (drivers and the pdf/excel/s3 codecs) are resolved **before**
