@@ -1,6 +1,10 @@
 # The JVM baseline
 
-Status: **designed 2026-08-14** — four slices below, none shipped yet.
+Status: **designed 2026-08-14, complete 2026-08-14** — all four slices shipped: the Spring adapter
+left the reactor (`2bb270a0d`, #790), Camel moved to the 4.22 LTS line (`e7bf72bc8`, #796), Java 25
+became the baseline (`91bcf5cfa`, #797), and the JVM settings moved into the launchers
+(`348300662`, #798). Reconciled 2026-08-20 by reading the tree: the reactor holds no Spring module,
+`camel.version` is 4.22.0, and both launchers carry the compact-object-headers and CDS flags.
 
 TesseraQL runs its own process. Every documented way to ship an application — the baked
 image, `tesseraql host`, the CLI — starts a JVM the framework packages or picks. That fact

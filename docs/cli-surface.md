@@ -1,8 +1,12 @@
 # CLI surface
 
-Status: **designed 2026-08-16** — nothing shipped. Blocks
-[stack-architecture.md](stack-architecture.md) slice 3, which cannot name its development-loop
-entry point until this decides what a command's arguments mean.
+Status: **designed 2026-08-16; every slice shipped over 2026-08-16/17** (#839–#849, with the
+`--app-name` work landing beside slice 1 as this document said it would). Reconciled 2026-08-20 by
+reading the tree: `serve` is `dev` (#846), the three option sets and their shape guard are in place
+(#849), `new` takes `--stack`, and `reference-cli.md` regenerates from the commands themselves.
+It was recorded at design time as blocking [stack-architecture.md](stack-architecture.md) slice 3,
+which could not name its development-loop entry point until this decided what a command's arguments
+mean.
 
 The CLI grew one command at a time and the options grew with it. Measured 2026-08-16 across the
 26 commands in [reference-cli.md](reference-cli.md):
