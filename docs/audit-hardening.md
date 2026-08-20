@@ -1,7 +1,15 @@
 # Audit hardening
 
-Status: **designed 2026-08-15** — thirteen slices below, none shipped yet. §Order records the
-sequence they land in and why.
+Status: **designed 2026-08-15, complete 2026-08-19** — all thirteen slices shipped. Eleven landed
+as #809–#820 over 2026-08-15/16; slices 6 and 7, deferred at the time on conditions rather than on
+vibes, were carried by the authorization-server campaign's resource slice (#890) once the stack had
+an issuer to name. §Slices carries the commit each landed in, §Order records the sequence they
+landed in and why.
+
+This status was reconciled on 2026-08-20 by reading the tree rather than the plan: the slice table
+below still said "none shipped", while every decision had implementing code citing it. A backlog
+that misreports what is done is worse than no backlog — it makes the next planning conversation
+start from a false premise, which is what happened.
 
 Two audits of the Camel dependency — what it does today, and whether to lean on it further —
 found almost nothing worth changing about Camel and eleven things worth changing about
@@ -479,21 +487,24 @@ neither depends on anything else in this campaign.
 
 ## Slices
 
-| # | Slice | Pre-1.0 | Notes |
-| --- | --- | --- | --- |
-| 1 | Audience and expiry on the bearer path, plus the required-audience refusal | yes | Blast radius below; the only slice that fails an existing app's boot |
-| 2 | The surface registry stops attesting a gate that does not run | no | Land first; it is half a day |
-| 3 | SQL Server constraint classification, including the xopenStates path | yes | Gated dialect round-trip required |
-| 4 | Per-file poll exclusion on every transport | yes | New key, new table, new migration |
-| 5 | Shutdown ordering and boot-failure teardown | no | Land early regardless |
-| 6 | ~~MCP transport gate: `tesseraql.mcp.auth` and audience binding~~ — **shipped 2026-08-19 with the authorization-server campaign's resource slice** (token-issuance.md slice 10): `public` by default, `bearer` binds the audience to the canonical resource identifier, derived from the address | yes | Depends on slices 1 and 12 |
-| 7 | ~~MCP Protected Resource Metadata and a conformant challenge~~ — **shipped 2026-08-19, same slice**: path-inserted per-member documents at the stack origin, `authorization_servers` = the stack issuer, and the 401 challenge carries `resource_metadata` | yes | Depends on slice 6 |
-| 8 | Node identity, heartbeat, and a bounded stop | yes | Timer-driven heartbeat, not boundary writes |
-| 9 | The reaper, and `overlap: skip` asking whether the owner is alive | yes | Depends on slice 8 |
-| 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and stack-mode tracing | yes | Reaches every log line and the console's trace pages |
-| 11 | Readiness memoization, camel-health as a signal, camel-main removed, JDK gauges | yes | Two new keys (readiness TTL, ring capacity); dist-jar boot check required |
-| 12 | MCP security defaults: a floor for primitives that declare none | yes | Open question 4's mechanism; the only slice an intranet deployment needs. Ships with [session-token-exchange.md](session-token-exchange.md) |
-| 13 | SAML parse-time structural hardening | yes | Decision 10; independent of everything else here |
+Every slice has shipped. The commit is the one that carried it, so a reader who doubts a row can
+read the diff rather than the claim.
+
+| # | Slice | Shipped |
+| --- | --- | --- |
+| 1 | Audience and expiry on the bearer path, plus the required-audience refusal | `268c7461f` (#812) — the campaign's only breaking change, and its largest fan-out |
+| 2 | The surface registry stops attesting a gate that does not run | `7d98081a1` (#809) |
+| 3 | SQL Server constraint classification, including the xopenStates path | `0fdbab8f2` (#813) |
+| 4 | Per-file poll exclusion on every transport | `fb3f62d3a` (#814) |
+| 5 | Shutdown ordering and boot-failure teardown | `c54d5cf3f` (#811) |
+| 6 | MCP transport gate: `tesseraql.mcp.auth` and audience binding | #890 — deferred here, carried by the authorization-server campaign's resource slice ([token-issuance.md](token-issuance.md) slice 10): `public` by default, `bearer` binds the audience to the canonical resource identifier |
+| 7 | MCP Protected Resource Metadata and a conformant challenge | #890, same slice: path-inserted per-member documents at the stack origin, `authorization_servers` = the stack issuer, `resource_metadata` on the 401 |
+| 8 | Node identity, heartbeat, and a bounded stop | `03f0eee3c` (#815) |
+| 9 | The reaper, and `overlap: skip` asking whether the owner is alive | `a9cc884d5` (#816) |
+| 10 | One span identity via an `IdGenerator`, W3C-shaped ring ids, and stack-mode tracing | `05c68529a` (#817) |
+| 11 | Readiness memoization, camel-health as a signal, camel-main removed, JDK gauges | `67895e818` (#818) |
+| 12 | MCP security defaults: a floor for primitives that declare none | `4ccda2389` (#820) |
+| 13 | SAML parse-time structural hardening | `37b5184bd` (#810) |
 
 The numbers run in decision order, not schedule order — §Order carries the schedule. Slices 12
 and 13 were added after the first draft: 12 because open question 4 closed on a mechanism that no
@@ -756,11 +767,16 @@ identity format and a set of metric names.
     `Authorization` header into each `direct:mcp.*` route. What slice 6 adds is discovery and a
     floor, and slice 12 supplies the floor on its own.
 
-    **Slices 6 and 7 are deferred, not cancelled**, on conditions rather than on vibes: a
+    **Slices 6 and 7 were deferred, not cancelled**, on conditions rather than on vibes: a
     deployment that needs claude.ai or ChatGPT's hosted connector, which no fixed credential
     reaches and which therefore has no alternative. They land with an authorization server to name
     in `authorization_servers`, the companion documentation, and an MCP dogfood app — without which
     a gate would ship over a surface no application exercises.
+
+    *Those conditions were met on 2026-08-19.* The authorization-server campaign gave the stack an
+    issuer, and #890 shipped both slices together: the transport gate defaulting to `public`, the
+    audience bound to the canonical resource identifier, and per-member Protected Resource Metadata
+    at the stack origin with `resource_metadata` on the challenge.
 
     Nothing pre-1.0 turns on the deferral. The specification's two unconditional MUSTs attach the
     moment a server accepts a bearer token at its MCP endpoint, and it accepts none; slice 2 made

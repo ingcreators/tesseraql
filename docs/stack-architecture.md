@@ -1,7 +1,14 @@
 # Stack architecture
 
-Status: **designed 2026-08-16** — nothing shipped. This document records a chain of decisions and
-the reasoning that forced each one; the implementation designs it calls for are named at the end.
+Status: **designed 2026-08-16; implemented across 2026-08-16/20.** This document records a chain of
+decisions and the reasoning that forced each one; the implementation designs it calls for are named
+at the end, and each carries its own status — [cli-surface.md](cli-surface.md) (#839–#849),
+[module-scope.md](module-scope.md) (Decision 28), [runtime-replace.md](runtime-replace.md)
+(Decision 29), [stack-shells.md](stack-shells.md), [studio-shell.md](studio-shell.md),
+[token-issuance.md](token-issuance.md) and [runtime-footprint.md](runtime-footprint.md) are all
+shipped. Decision 27's one-framework-datasource-per-stack rule is deliberately documentation rather
+than a guard — the decision says a guard belongs at the `security` migration hoist *if* the rule
+needs more than a sentence, and nothing has shown that it does.
 
 This began as a narrow question — can an ordinary business user connect a chat client to an
 application's MCP surface — and did not stay narrow. The answer required an authorization server,
