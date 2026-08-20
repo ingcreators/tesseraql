@@ -250,13 +250,35 @@ directory. Nothing here wants that — the classpath half is read directly and t
 is an absolute path that can only ever miss — and the scan measured at **1328 ms for a stylesheet
 on an idle runtime**. `setClassPathResolvingEnabled(false)` took that to 187 ms.
 
-**Half of this decision is not done, and the measurement says which half.** With both workers
-held in `pg_sleep`, a classpath asset answers in **7 ms** and a file in **1689 ms**: `sendFile`
-streams instead of buffering, but Vert.x still dispatches its file I/O to the worker pool, so the
-filesystem half remains coupled to exactly what it was supposed to escape. Completing it means
-giving asset file reads an executor of their own — the one place in this design where virtual
-threads clearly fit, since file I/O blocks on something no connection pool bounds. Recorded here
-rather than left for the next reader to measure again.
+**The filesystem half needed threads of its own, and the measurement is what found that.**
+`sendFile` streams instead of buffering, but Vert.x dispatches the file I/O behind it to the
+worker pool, so a file asset stayed coupled to exactly what leaving the Camel route was meant to
+escape: with both workers held in `pg_sleep`, a classpath asset answered in **7 ms** and a file in
+**1689 ms**. The router mount alone was therefore half a decision, and the half it delivered was
+not the half it was designed for. Asset reads now run on virtual threads the runtime owns — the
+one place in this design where virtual threads clearly fit, since file I/O blocks on something no
+connection pool bounds and a thread that costs nothing while it waits is the whole point. On the
+same fixture the file now answers in **22 ms**, beside the classpath half's 23 ms: the difference
+between the two halves is gone, which is the result the number was being watched for.
+
+**One rule decides where a request runs: in memory on the event loop, storage on a virtual
+thread.** Drawing it there rather than around "files" caught two reads that were on the event loop
+by accident — the first read of a classpath resource, and the generated message module, whose
+catalog is read live off disk so that a Studio edit is served on the next request. Answering from
+the cache stays a map lookup and a write, which is what an event loop is for.
+
+**A file is written a chunk at a time, and the thread blocks between chunks.** That wait is the
+backpressure: without it a slow client would be served at the speed of the disk into Vert.x's
+write queue, which is the heap cost this decision removes, spelled differently. Expressing
+backpressure by blocking is what makes a thread the right shape here, and what makes it cheap is
+that the thread is virtual. A client that leaves mid-file stops the read at the next chunk
+boundary rather than paying for the rest of a file nobody will receive.
+
+**No second bound guards them.** The admission gate deliberately lets assets through, so a permit
+here would be that refusal under another name; what bounds the platform threads is the JDK, which
+compensates a blocked carrier rather than letting the blocking spread. The executor is owned by
+the runtime and stops with it, which is what a host that replaces one application while the
+process keeps running needs it to do.
 
 ## Slices
 
@@ -272,7 +294,11 @@ rather than left for the next reader to measure again.
 5. **The front door's per-member bound** — the relay's permit, the sized client, the opt-in
    read-idle timeout. Found by asking what limited the gateway once the runtimes were bounded.
 6. **Assets off the worker pool** — the router mount, the classpath cache, the weak file
-   validator, the classpath-resolving fix. The filesystem half is measured and deferred, above.
+   validator, the classpath-resolving fix. Half the decision: the filesystem half is measured and
+   deferred, above.
+7. **Asset reads on the runtime's own threads** — the virtual-thread executor, the chunked write
+   that blocks for backpressure, and the file counterpart of slice 6's decoupling test. The other
+   half, found by measuring the first.
 
 Slices 1 and 2 are independent. Slice 3 must land before slice 4: sharing the pool without a
 per-runtime bound would remove the accidental bulkhead and put nothing in its place.
