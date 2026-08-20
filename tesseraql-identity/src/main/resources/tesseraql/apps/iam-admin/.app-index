@@ -16,6 +16,8 @@ web/_tesseraql/admin/rules/create/post.yml
 web/_tesseraql/admin/rules/conditions/post.yml
 web/_tesseraql/admin/rules/delete/post.yml
 web/_tesseraql/admin/rules/recompute/post.yml
+web/_tesseraql/admin/history/get.yml
+web/_tesseraql/admin/history/history.html
 web/_tesseraql/admin/users/{id}/attributes/set/post.yml
 web/_tesseraql/admin/users/{id}/attributes/delete/post.yml
 web/_tesseraql/admin/users/{id}/recompute/post.yml

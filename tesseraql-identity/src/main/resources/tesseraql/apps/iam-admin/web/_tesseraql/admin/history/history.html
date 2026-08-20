@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Grant history', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/rules}">Rules</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">This realm keeps no grant history.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Filter</div>
+  <div class="hc-card__body">
+    <form method="get" th:action="@{/_tesseraql/admin/history}" class="hc-cluster">
+      <label class="hc-field"><span class="hc-field__label">User id</span>
+        <input class="hc-input" data-size="sm" name="user" th:value="${user}"></label>
+      <label class="hc-field"><span class="hc-field__label">Application</span>
+        <input class="hc-input" data-size="sm" name="app" th:value="${app}"></label>
+      <button class="hc-button" data-size="sm" type="submit">Show</button>
+      <a class="hc-button" data-variant="ghost" data-size="sm"
+         th:href="@{/_tesseraql/admin/history}">Clear</a>
+    </form>
+  </div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Grant history</div>
+  <div class="hc-card__body">
+    <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
+      <p class="hc-empty__title">No recorded grant changes.</p>
+      <p class="hc-empty__body">Changes made from now on are recorded here, whether an
+        administrator made them or an assignment rule produced them.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
+      <table class="hc-table">
+        <thead><tr>
+          <th>When</th><th>Actor</th><th>Subject</th><th>Change</th><th>Code</th>
+          <th>Application</th><th>Source</th><th>Window</th>
+        </tr></thead>
+        <tbody>
+          <tr th:each="h : ${rows}">
+            <td th:text="${h.occurred_at}"></td>
+            <td th:text="${h.actor}"></td>
+            <td><a th:href="@{'/_tesseraql/admin/users/' + ${h.subject_user_id}}"
+                   th:text="${h.subject_login_id != null ? h.subject_login_id : h.subject_user_id}"></a></td>
+            <td th:text="${h.change_kind}"></td>
+            <td><code th:text="${h.subject_code}"></code></td>
+            <!-- The recorded application is what the writer asserted; the joined one is
+                 what the role carries now. A role that moved shows the second. -->
+            <td th:text="${h.application != null ? h.application : h.role_application}"></td>
+            <td th:text="${h.source}"></td>
+            <td th:text="|${h.starts_at != null ? h.starts_at : '—'} … ${h.ends_at != null ? h.ends_at : '—'}|"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</div>
+</html>

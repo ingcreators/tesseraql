@@ -116,34 +116,47 @@ public final class RoleAdmin {
         return Map.of("created", roleCode);
     }
 
-    /** Assigns a role (replacing any admin assignment's window) as an admin grant. */
+    /**
+     * Assigns a role (replacing any admin assignment's window) as an admin grant, and records
+     * the change in the grant trail (docs/access-governance.md structural decision 1). The
+     * re-assign is a revoke and a grant, but it is one decision, so it leaves one row.
+     */
     public static Map<String, Object> assignRole(IdentityService identity, RealmConfig realm,
-            String userId, String roleCode, String startsAt, String endsAt) {
+            String actor, String userId, String roleCode, String startsAt, String endsAt) {
         requireRealm(identity, realm);
         Map<String, Object> key = new LinkedHashMap<>();
         key.put("userId", require(userId, "user"));
         key.put("roleCode", require(roleCode, "role code"));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_ROLE, key);
         Map<String, Object> params = new LinkedHashMap<>(key);
-        params.put("startsAt", window(startsAt));
-        params.put("endsAt", window(endsAt));
+        Timestamp from = window(startsAt);
+        Timestamp until = window(endsAt);
+        params.put("startsAt", from);
+        params.put("endsAt", until);
         identity.executeUpdate(realm, IdentityContracts.GRANT_USER_ROLE, params);
+        GrantHistory.record(identity, realm, GrantHistory.Change.granted(actor(actor),
+                String.valueOf(key.get("userId")), GrantHistory.ROLE_GRANTED,
+                String.valueOf(key.get("roleCode")), from, until));
         return Map.of("assigned", roleCode);
     }
 
     public static Map<String, Object> unassignRole(IdentityService identity, RealmConfig realm,
-            String userId, String roleCode) {
+            String actor, String userId, String roleCode) {
         requireRealm(identity, realm);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", require(userId, "user"));
         params.put("roleCode", require(roleCode, "role code"));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_ROLE, params);
+        GrantHistory.record(identity, realm, GrantHistory.Change.admin(actor(actor),
+                String.valueOf(params.get("userId")), GrantHistory.ROLE_REVOKED,
+                String.valueOf(params.get("roleCode"))));
         return Map.of("unassigned", roleCode);
     }
 
     /** Grants a permission code directly (creating the code row if it is new). */
     public static Map<String, Object> grantPermission(IdentityService identity,
-            RealmConfig realm, String userId, String code, String startsAt, String endsAt) {
+            RealmConfig realm, String actor, String userId, String code, String startsAt,
+            String endsAt) {
         requireRealm(identity, realm);
         String permission = require(code, "permission code");
         Map<String, Object> ensure = new LinkedHashMap<>();
@@ -156,19 +169,27 @@ public final class RoleAdmin {
         key.put("code", permission);
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_PERMISSION, key);
         Map<String, Object> params = new LinkedHashMap<>(key);
-        params.put("startsAt", window(startsAt));
-        params.put("endsAt", window(endsAt));
+        Timestamp from = window(startsAt);
+        Timestamp until = window(endsAt);
+        params.put("startsAt", from);
+        params.put("endsAt", until);
         identity.executeUpdate(realm, IdentityContracts.GRANT_USER_PERMISSION, params);
+        GrantHistory.record(identity, realm, GrantHistory.Change.granted(actor(actor),
+                String.valueOf(key.get("userId")), GrantHistory.PERMISSION_GRANTED, permission,
+                from, until));
         return Map.of("granted", permission);
     }
 
     public static Map<String, Object> revokePermission(IdentityService identity,
-            RealmConfig realm, String userId, String code) {
+            RealmConfig realm, String actor, String userId, String code) {
         requireRealm(identity, realm);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", require(userId, "user"));
         params.put("code", require(code, "permission code"));
         identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_PERMISSION, params);
+        GrantHistory.record(identity, realm, GrantHistory.Change.admin(actor(actor),
+                String.valueOf(params.get("userId")), GrantHistory.PERMISSION_REVOKED,
+                String.valueOf(params.get("code"))));
         return Map.of("revoked", code);
     }
 
@@ -316,5 +337,15 @@ public final class RoleAdmin {
 
     private static String blankToNull(String value) {
         return value == null || value.isBlank() || "null".equals(value) ? null : value.trim();
+    }
+
+    /**
+     * The actor recorded in the grant trail. An unnamed caller records as {@code unknown}
+     * rather than as nobody: the row saying a change happened without saying who is still
+     * worth having, and a blank column reads as a bug in the trail.
+     */
+    private static String actor(String value) {
+        String named = blankToNull(value);
+        return named == null ? "unknown" : named;
     }
 }

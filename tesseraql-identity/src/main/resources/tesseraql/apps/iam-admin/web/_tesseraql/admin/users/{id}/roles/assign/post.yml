@@ -22,6 +22,9 @@ steps:
     service:
       name: iam.assignRole
       params:
+        # Who decided, for the grant trail (docs/access-governance.md structural
+        # decision 1): route-resolved from the session principal, never caller-writable.
+        actor: principal.loginId
         userId: path.id
         roleCode: params.roleCode
         startsAt: params.startsAt

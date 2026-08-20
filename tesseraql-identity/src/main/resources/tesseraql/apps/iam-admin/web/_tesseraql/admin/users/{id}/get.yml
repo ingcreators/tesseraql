@@ -71,6 +71,11 @@ sources:
       name: iam.grantEditor
       params:
         userId: path.id
+  history:
+    service:
+      name: iam.grantHistory
+      params:
+        userId: path.id
 response:
   html:
     status: 200
@@ -98,3 +103,5 @@ response:
       allRoles: editor.roles
       editorAvailable: editor.available
       editorWritable: editor.writable
+      history: history.rows
+      historyAvailable: history.available

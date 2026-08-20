@@ -174,6 +174,11 @@ public final class RoleRules {
                 params.put("userId", userId);
                 params.put("roleCode", role);
                 identity.executeUpdate(realm, IdentityContracts.GRANT_USER_ROLE_RULE, params);
+                // The converge is the second grant write path, so it records like the first
+                // (docs/access-governance.md structural decision 1). It is not an HTTP call,
+                // which is exactly why the route audit could never have covered it.
+                GrantHistory.record(identity, realm,
+                        GrantHistory.Change.rule(userId, GrantHistory.ROLE_GRANTED, role));
             }
         }
         for (String role : existing) {
@@ -182,6 +187,8 @@ public final class RoleRules {
                 params.put("userId", userId);
                 params.put("roleCode", role);
                 identity.executeUpdate(realm, IdentityContracts.REVOKE_USER_ROLE_RULE, params);
+                GrantHistory.record(identity, realm,
+                        GrantHistory.Change.rule(userId, GrantHistory.ROLE_REVOKED, role));
             }
         }
         return produced;

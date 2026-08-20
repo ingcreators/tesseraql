@@ -16,6 +16,7 @@ steps:
     service:
       name: iam.unassignRole
       params:
+        actor: principal.loginId
         userId: path.id
         roleCode: params.roleCode
 response:

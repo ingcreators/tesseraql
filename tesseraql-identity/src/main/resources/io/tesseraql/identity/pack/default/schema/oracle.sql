@@ -95,3 +95,18 @@ create table tql_user_identities (
   external_subject varchar2(255) not null,
   primary key (provider, external_subject)
 );
+
+create table tql_grant_history (
+  event_id        varchar2(64) primary key,
+  occurred_at     timestamp not null,
+  actor           varchar2(200),
+  subject_user_id varchar2(64) not null,
+  change_kind     varchar2(32) not null,
+  subject_code    varchar2(200) not null,
+  application     varchar2(200),
+  source          varchar2(32) not null,
+  starts_at       timestamp,
+  ends_at         timestamp,
+  reason          varchar2(1000),
+  correlation     varchar2(64)
+);

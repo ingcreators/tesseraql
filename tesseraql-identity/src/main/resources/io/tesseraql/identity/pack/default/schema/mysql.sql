@@ -95,3 +95,18 @@ create table if not exists tql_user_identities (
   external_subject varchar(255) not null,
   primary key (provider, external_subject)
 );
+
+create table if not exists tql_grant_history (
+  event_id        varchar(64) primary key,
+  occurred_at     datetime not null,
+  actor           varchar(200),
+  subject_user_id varchar(64) not null,
+  change_kind     varchar(32) not null,
+  subject_code    varchar(200) not null,
+  application     varchar(200),
+  source          varchar(32) not null,
+  starts_at       datetime,
+  ends_at         datetime,
+  reason          varchar(1000),
+  correlation     varchar(64)
+);

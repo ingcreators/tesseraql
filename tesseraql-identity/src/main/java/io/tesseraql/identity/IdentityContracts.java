@@ -97,6 +97,14 @@ public final class IdentityContracts {
     /** Re-syncs a federated user's mutable profile (login id, display name, email). */
     public static final String UPDATE_FEDERATED_USER = "update-federated-user";
 
+    // The grant trail (docs/access-governance.md slice 1); optional like the rest of the
+    // application-role surface, so a sql realm without them keeps its grant writes and
+    // reports that it holds no history, rather than failing.
+    /** Appends one row to the append-only grant trail. */
+    public static final String RECORD_GRANT_CHANGE = "record-grant-change";
+    /** The grant trail newest first, optionally filtered by user, application or instant. */
+    public static final String LIST_GRANT_HISTORY = "list-grant-history";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -104,7 +112,7 @@ public final class IdentityContracts {
                 ASSIGN_USER_ROLE, ASSIGN_ROLE_PERMISSION, UPSERT_DECLARED_ROLE,
                 CLEAR_ROLE_PERMISSIONS, SET_ROLE_SOURCE, CREATE_ROLE_RULE, DELETE_ROLE_RULE,
                 INSERT_RULE_CONDITION, DELETE_RULE_CONDITIONS, GRANT_USER_ROLE_RULE,
-                REVOKE_USER_ROLE_RULE);
+                REVOKE_USER_ROLE_RULE, RECORD_GRANT_CHANGE);
     }
 
     private IdentityContracts() {
