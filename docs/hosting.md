@@ -143,9 +143,9 @@ stack:
 ```
 
 What this does **not** give you: choosing which node runs which application, separating batch work
-onto its own nodes, or a fleet-wide view of who is running what. Every node hosts every member and
-every node can run any member's scheduled jobs (exactly one node runs each firing, by claim). That
-work is recorded as roadmap Phase 61.
+onto its own nodes, or a fleet-wide view of who is running what. Every node hosts every member, and
+every node can run any member's scheduled jobs — exactly one node runs each firing, by claim, so
+the work is done once wherever it lands.
 
 **Independent, node-local install roots are the shape to avoid.** Nothing refuses it, and nothing
 reconciles across it: a `.tqlapp` uploaded to the ops console lands on whichever node served the
