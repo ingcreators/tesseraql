@@ -67,13 +67,20 @@ final class ModulesGuard {
                 continue;
             }
             Path appHome = installRoot.resolve(app.path()).normalize();
-            List<Path> jars = jars(io.tesseraql.yaml.config.WorkHome
-                    .resolve(appHome, config).resolve("modules"));
+            // The package's own set first, exactly as AppModules loads it: a .tqlapp carries the
+            // closure it was verified with (docs/module-channel.md decision 3), and only an
+            // application installed from a directory falls back to what a resolve left on disk.
+            List<Path> jars = jars(io.tesseraql.yaml.config.WorkHome.bundledModules(appHome));
+            if (jars.isEmpty()) {
+                jars = jars(io.tesseraql.yaml.config.WorkHome
+                        .resolve(appHome, config).resolve("modules"));
+            }
             if (jars.isEmpty()) {
                 throw new TqlException(MODULES_UNRESOLVED, "Application '" + app.name()
                         + "' declares " + declared.size() + " module(s) under tesseraql.modules"
-                        + " but its work/modules holds no jars — run 'tesseraql modules"
-                        + " resolve' against " + appHome + " before hosting it");
+                        + " but carries none and its work/modules holds no jars — package it with"
+                        + " 'tesseraql package' (which bundles the locked closure) or run"
+                        + " 'tesseraql modules resolve' against " + appHome + " before hosting it");
             }
             verifyAgainstLock(app.name(), appHome, jars);
         }

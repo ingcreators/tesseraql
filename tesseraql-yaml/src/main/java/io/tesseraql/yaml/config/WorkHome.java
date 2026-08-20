@@ -17,7 +17,23 @@ import java.nio.file.Path;
  */
 public final class WorkHome {
 
+    /**
+     * The module set a package carries, under the archive's reserved namespace
+     * (docs/module-channel.md decision 3). An installed application reads its modules from here
+     * and never from {@code work/modules}: packaging resolved them from {@code modules.lock} and
+     * the archive was verified with them, while a work directory on a deployed host is whatever
+     * the last run happened to leave. A source tree has no such directory and reads
+     * {@code work/modules} as before. The constant lives here because both sides of that branch —
+     * the packager and the runtime — resolve application paths through this class.
+     */
+    public static final String BUNDLED_MODULES = ".tesseraql/modules";
+
     private WorkHome() {
+    }
+
+    /** The bundled module directory of an installed application, whether or not it exists. */
+    public static Path bundledModules(Path appHome) {
+        return appHome.resolve(BUNDLED_MODULES);
     }
 
     /** The app's work directory: the declared {@code tesseraql.app.work}, else {@code work/}. */

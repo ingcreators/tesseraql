@@ -18,7 +18,8 @@ import java.util.zip.ZipOutputStream;
  * mounted app home without the source tree carrying derived files. Excluding source-tree
  * {@code .tesseraql/} keeps run-dependent overlays a later phase may write there (the v2
  * {@code report.json}/{@code history.json}) out of the reproducible archive, regardless of goal
- * ordering — only freshly generated docs enter the reserved namespace.
+ * ordering — only freshly generated docs and the lock-verified module closure enter the reserved
+ * namespace.
  */
 public final class AppPackager {
 
@@ -26,6 +27,10 @@ public final class AppPackager {
 
     /** Archive prefix for build-generated documentation artifacts (documentation portal v1). */
     public static final String GENERATED_DOCS_PREFIX = ".tesseraql/docs/";
+
+    /** Archive prefix for the module set the package carries (docs/module-channel.md decision 3). */
+    public static final String MODULES_PREFIX = io.tesseraql.yaml.config.WorkHome.BUNDLED_MODULES
+            + "/";
 
     /** Packs {@code appHome} into {@code output} (no generated docs merged), returning it. */
     public Path pack(Path appHome, Path output) throws IOException {
@@ -38,6 +43,22 @@ public final class AppPackager {
      * {@link #GENERATED_DOCS_PREFIX}. Returns {@code output}.
      */
     public Path pack(Path appHome, Path generatedDocs, Path output) throws IOException {
+        return pack(appHome, generatedDocs, null, output);
+    }
+
+    /**
+     * Like {@link #pack(Path, Path, Path)}, but also carries the jars in {@code modulesDir} — the
+     * closure the caller resolved from {@code modules.lock} — under {@link #MODULES_PREFIX}, so an
+     * installed application has the modules it declared without a resolver on the deployment
+     * machine (docs/module-channel.md decision 3). A null or empty directory packs nothing extra,
+     * which is the shape of an application that declares no modules.
+     *
+     * <p>Reproducibility rests on the lock rather than on the directory: the jars come from a work
+     * tree, and what makes two builds of the same commit produce the same archive is that
+     * {@link PackagedModules} verified the closure against {@code modules.lock} first.
+     */
+    public Path pack(Path appHome, Path generatedDocs, Path modulesDir, Path output)
+            throws IOException {
         Path home = appHome.toAbsolutePath().normalize();
         Path work = io.tesseraql.yaml.config.WorkHome.resolve(home,
                 io.tesseraql.yaml.manifest.ManifestLoader.configOnly(home));
@@ -60,6 +81,14 @@ public final class AppPackager {
                 stream.filter(Files::isRegularFile)
                         .forEach(path -> entries.put(GENERATED_DOCS_PREFIX
                                 + docs.relativize(path).toString().replace('\\', '/'), path));
+            }
+        }
+        if (modulesDir != null && Files.isDirectory(modulesDir)) {
+            try (var stream = Files.list(modulesDir)) {
+                stream.filter(Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().endsWith(".jar"))
+                        .forEach(path -> entries.put(
+                                MODULES_PREFIX + path.getFileName(), path));
             }
         }
         if (output.getParent() != null) {

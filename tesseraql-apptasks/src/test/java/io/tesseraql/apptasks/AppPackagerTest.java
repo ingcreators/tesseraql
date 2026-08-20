@@ -1,6 +1,7 @@
 package io.tesseraql.apptasks;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,6 +95,65 @@ class AppPackagerTest {
 
         assertThat(entries(out)).contains("config/tesseraql.yml")
                 .noneMatch(name -> name.startsWith(".tesseraql/"));
+    }
+
+    @Test
+    void carriesTheResolvedModuleClosureUnderTheReservedPrefix(@TempDir Path dir)
+            throws Exception {
+        Path appHome = dir.resolve("app");
+        Files.createDirectories(appHome.resolve("config"));
+        Files.writeString(appHome.resolve("config/tesseraql.yml"),
+                "tesseraql:\n  app:\n    name: t\n");
+        Path modules = dir.resolve("work/modules");
+        Files.createDirectories(modules);
+        Files.writeString(modules.resolve("tesseraql-pdf-0.1.0.jar"), "jar bytes");
+        Files.writeString(modules.resolve("notes.txt"), "not a jar");
+
+        Path out = dir.resolve("app.tqlapp");
+        new AppPackager().pack(appHome, null, modules, out);
+
+        assertThat(entries(out)).contains(".tesseraql/modules/tesseraql-pdf-0.1.0.jar")
+                .doesNotContain(".tesseraql/modules/notes.txt");
+
+        // Deterministic with the modules too: same lock, same closure, same bytes.
+        Path out2 = dir.resolve("app2.tqlapp");
+        new AppPackager().pack(appHome, null, modules, out2);
+        assertThat(Files.readAllBytes(out)).isEqualTo(Files.readAllBytes(out2));
+    }
+
+    @Test
+    void declaredModulesWithoutALockAreRefused(@TempDir Path dir) throws Exception {
+        Path appHome = dir.resolve("app");
+        Files.createDirectories(appHome);
+        io.tesseraql.yaml.config.AppConfig config = new io.tesseraql.yaml.config.AppConfig(
+                java.util.Map.of("tesseraql",
+                        java.util.Map.of("modules", List.of("io.tesseraql:tesseraql-pdf"))));
+
+        assertThatThrownBy(() -> PackagedModules.requireLock(appHome, config))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-APP-4218")
+                .hasMessageContaining("modules resolve");
+    }
+
+    @Test
+    void aClosureThatDisagreesWithTheLockIsRefused(@TempDir Path dir) throws Exception {
+        Path appHome = dir.resolve("app");
+        Path modules = appHome.resolve("work/modules");
+        Files.createDirectories(modules);
+        Files.writeString(modules.resolve("codec-1.0.jar"), "resolved bytes");
+        Path lock = appHome.resolve("modules.lock");
+        Files.writeString(lock, "{\"artifacts\":[{\"coordinate\":\"g:codec:1.0\","
+                + "\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}]}");
+
+        assertThatThrownBy(() -> PackagedModules.verifyAgainstLock(appHome, modules, lock))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-APP-4219");
+
+        // The same closure, locked by its real checksum, passes.
+        Files.writeString(lock, "{\"artifacts\":[{\"coordinate\":\"g:codec:1.0\",\"sha256\":\""
+                + io.tesseraql.core.util.Hashing.sha256(modules.resolve("codec-1.0.jar"))
+                + "\"}]}");
+        PackagedModules.verifyAgainstLock(appHome, modules, lock);
     }
 
     private static List<String> entries(Path zip) throws Exception {
