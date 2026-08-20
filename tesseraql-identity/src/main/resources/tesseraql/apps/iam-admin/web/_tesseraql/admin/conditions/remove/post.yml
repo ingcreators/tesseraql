@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.iamAdmin.conditions.remove
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  roleCode:
+    type: string
+    required: true
+  conditionKind:
+    type: string
+    required: true
+  value:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.removeCondition
+      params:
+        roleCode: params.roleCode
+        conditionKind: params.conditionKind
+        value: params.value
+response:
+  redirect:
+    location: /_tesseraql/admin/conditions?removed=1

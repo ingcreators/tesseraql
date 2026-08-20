@@ -1811,6 +1811,12 @@ public final class RouteCompiler {
             // bean is absent and this is a no-op. Emitted here rather than decided here because
             // only the runtime knows its own topology, and public routes stay untouched.
             route.to("tesseraql-auth:fence");
+            // Grant context conditions (docs/access-governance.md structural decision 8): a
+            // held role whose network or hours conditions this request does not satisfy leaves
+            // the principal here, before activation chooses among what is left. Unlike its two
+            // neighbours this step has no topology guard — a role's conditions belong to the
+            // grant, not to the stack, so the unhosted boot evaluates them too.
+            route.to("tesseraql-auth:conditions");
             // Role activation (docs/application-roles.md structural decision 4): after the
             // union-scoped fence, the acting-role signal narrows the exchange's principal to
             // the active view everything downstream reads. Same topology guard as the fence —

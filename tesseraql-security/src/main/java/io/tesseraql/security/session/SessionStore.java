@@ -33,12 +33,22 @@ public interface SessionStore {
                     : userAgent;
         }
 
-        /** First {@code X-Forwarded-For} entry when the edge presents one, else the peer. */
+        /**
+         * First {@code X-Forwarded-For} entry when the edge presents one, else the peer —
+         * reduced to the bare host.
+         *
+         * <p>The peer arrives as {@code host:port}, which was invisible while the address was
+         * only ever displayed and became load-bearing the moment a network condition compared
+         * it against a CIDR block (docs/access-governance.md structural decision 8): a value
+         * carrying a port is inside no block, so an allow-list naming the loopback network
+         * would have refused the loopback.
+         */
         public static ClientInfo of(String userAgent, String forwardedFor, String peerAddress) {
             String address = forwardedFor != null && !forwardedFor.isBlank()
                     ? forwardedFor.split(",")[0].trim()
                     : peerAddress;
-            return new ClientInfo(userAgent, address);
+            return new ClientInfo(userAgent,
+                    io.tesseraql.core.net.PresentedAddress.hostOf(address));
         }
     }
 

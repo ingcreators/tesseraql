@@ -522,6 +522,35 @@ header on htmx requests, and no-JS forms carry it as a hidden `_csrf` field.
 > The hand-built Studio **JSON API** under `/_tesseraql/studio/*` (distinct from the `/ui` pages)
 > stays `auth: bearer` for programmatic callers; only the browser UI uses sessions.
 
+## Where a session may be established from
+
+`tesseraql.security.network.allow` is a comma-separated CIDR list. When it names anything, a
+sign-in presenting an address outside it is refused with `TQL-SEC-4149` **before a session
+exists** — no cookie, nothing to carry forward — however the session was being established:
+the password login, the OIDC callback and the SAML assertion consumer all pass through the
+same admission.
+
+```yaml
+tesseraql:
+  security:
+    network:
+      allow: "10.0.0.0/8, 192.168.0.0/16, 203.0.113.7"
+```
+
+A bare address is the single host it names. An unset or empty list admits everybody, which is
+the shipped behaviour: a deployment that names no network has not asked for this control.
+
+The check runs **after the credential is proven**, so a refusal from outside the office says
+nothing about whether the password was right. The address judged is the one the edge presented
+— the first `X-Forwarded-For` entry when there is one, else the peer — so this control is worth
+exactly as much as the edge's discipline about that header, which is the same duty the
+[mTLS section](#mutual-tls-client-certificates) puts on it. A restricted deployment refuses a
+request whose address it cannot read at all rather than admitting the unjudgeable.
+
+This is the deployment-wide layer. Its per-role counterpart — a held role usable only from
+named networks or during named hours — is a [context condition](iam-admin.md#context-conditions),
+which narrows what a signed-in caller may do rather than deciding whether they may sign in.
+
 ## Acting roles (activation)
 
 A user holding several [application roles](iam-admin.md) for the same hosted application —
@@ -566,6 +595,7 @@ Returned at request time (distinct from the lint codes below, which are static c
 | `TQL-SEC-4001` | 500 | **The authenticator is not configured** — the route's `auth:` mode needs a bean the application never bound, usually because its `tesseraql.security.<mode>` block is missing. No credential can succeed, which is why this is a server fault and not a 401: a 401 would send clients into token-refresh retries against a server where nothing could work. The build-time counterpart is `TQL-SEC-4047`. |
 | `TQL-SEC-4032` | 403 | **CSRF check failed** — a state-changing `auth: browser` request arrived without a valid CSRF token. Send the page's `X-CSRF-Token` header (htmx does this automatically) or the `_csrf` form field from a live session. |
 | `TQL-SEC-4148` | 403 | **Wrong capacity** — the caller asked to act as an application role they do not hold (a revoked bookmark, someone else's link, an unheld `--as`). A browser navigation is redirected to the role picker instead; choose a held role there. |
+| `TQL-SEC-4149` | 403 | **Sign-in not allowed from this network** — the deployment names its sign-in networks in `tesseraql.security.network.allow` and the address this request presented is not inside one. The credential is not the problem, so it is a refusal and not a challenge. Sign in from a listed network, or add the network. Also raised at startup when a configured entry is not a valid CIDR block. |
 
 ## Lint rules
 

@@ -160,11 +160,10 @@ final class OidcRouteBuilder extends RouteBuilder {
         Principal validated = validator(metadata).validate(idToken, pending.nonce());
         Principal principal = link(validated, metadata.issuer());
 
-        String sessionId = sessions.create(principal, SessionStore.ClientInfo.of(
-                exchange.getMessage().getHeader("User-Agent", String.class),
-                exchange.getMessage().getHeader("X-Forwarded-For", String.class),
-                exchange.getMessage().getHeader("CamelVertxPlatformHttpRemoteAddress",
-                        String.class)));
+        // The deployment's sign-in allow-list applies however the session was established
+        // (docs/access-governance.md structural decision 8, layer A).
+        String sessionId = sessions.create(principal,
+                io.tesseraql.camel.auth.SignInAdmission.admitted(exchange));
         exchange.getMessage().setHeader("Set-Cookie",
                 io.tesseraql.security.session.SessionCookie.issue(sessions.cookieName(),
                         sessionId, io.tesseraql.camel.CookiePath.of(exchange)));

@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Context conditions, in two layers** (docs/access-governance.md structural decision 8,
+  slice 8). `tesseraql.security.network.allow` is a CIDR list naming the networks a session may
+  be established from; a sign-in from anywhere else is refused with `TQL-SEC-4149` before a
+  session exists, however it was being established — password, OIDC or SAML. The check runs
+  after the credential is proven, so a refusal says nothing about whether the password was
+  right, and an unset list admits everybody as before. Per-role conditions are the second layer:
+  a role may carry `network` (a CIDR block) or `hours` (`MON-FRI 09:00-18:00`) conditions,
+  declared on the new conditions page, and a grant this request's context does not admit is
+  dropped from the active view — its role and its permissions leave, it is absent from the role
+  picker, and its `/_as/` address is refused like any unheld role. Within one kind any condition
+  admits, across kinds every kind must, and a condition the runtime cannot read never admits.
+  Nothing is revoked: the same person from the office at 10:00 holds the role in full. This
+  narrows and never widens, so a spoofed address can only cost capability — the enforceable
+  answer to where somebody may sign in is layer A, and the documentation says so rather than
+  implying otherwise. Hours are read in `tesseraql.security.conditions.zone`, defaulting to the
+  JVM's zone.
+
 - **Delegated administration, one application at a time** (docs/access-governance.md structural
   decision 7, slice 7). `tql.iam.view.<name>` and `tql.iam.write.<name>` hand one application's
   own access to somebody who administers nothing else — seeing and writing as two grants, the
@@ -132,6 +149,20 @@ All notable changes to TesseraQL are documented here. The format follows
   surface's atom.
 
 ### Fixed
+
+- **The address a request presented carried a port, so it was inside no network.** The peer of a
+  connection reaches the framework as `host:port` — for IPv6 without brackets, as
+  `0:0:0:0:0:0:0:1:52344` — which was invisible while the value was only ever displayed on the
+  session-visibility surface and became load-bearing the moment a CIDR block was compared
+  against it: a sign-in allow-list naming the loopback network would have refused the loopback.
+  The presented address is now reduced to its bare host where it is resolved, which also drops
+  an ephemeral source port from what a person sees when reviewing their own sessions.
+
+- **A delegated administrator's refusal reached callers as "Internal Server Error".**
+  `TQL-IAM-4036` — the containment refusal added with delegated administration — had no HTTP
+  status mapping, so the envelope suppressed its message behind a 500. It is now the 403 it
+  always was. This is the same defect the separation-of-duties slice found in the same switch,
+  one number earlier: an IAM refusal is an answer to the caller, not a fault.
 
 - **The front door forwards under a declared bound, per member**
   (docs/http-threading.md decision 5). The gateway's threads were never the problem — the relay

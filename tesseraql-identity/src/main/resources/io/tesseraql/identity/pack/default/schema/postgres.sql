@@ -181,3 +181,10 @@ create table if not exists tql_grant_history (
   reason          varchar(1000),
   correlation     varchar(64)
 );
+
+create table if not exists tql_role_conditions (
+  role_id        varchar(64) not null,
+  condition_kind varchar(16) not null,
+  value          varchar(200) not null,
+  primary key (role_id, condition_kind, value)
+);

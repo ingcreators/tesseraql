@@ -37,9 +37,29 @@ public record Principal(
      * store-resolved principals; claim-asserted principals (bearer, API key, mTLS) carry
      * none and never activate.
      */
-    public record RoleGrant(String role, String application, List<String> permissions) {
+    public record RoleGrant(String role, String application, List<String> permissions,
+            List<Condition> conditions) {
+
+        /**
+         * One context condition the grant carries (docs/access-governance.md structural
+         * decision 8) — {@code network} with a CIDR block, or {@code hours} with a local-time
+         * range. The conditions ride the grant into the frozen principal and are evaluated
+         * against each request's own context by {@link GrantConditions}, which is why they are
+         * data here and behaviour there.
+         */
+        public record Condition(String kind, String value) {
+        }
+
         public RoleGrant {
             permissions = permissions == null ? List.of() : List.copyOf(permissions);
+            // A principal serialized before conditions existed deserializes without them, and
+            // an unconditioned grant is the normal case besides.
+            conditions = conditions == null ? List.of() : List.copyOf(conditions);
+        }
+
+        /** A grant carrying no conditions — every construction site outside the store read. */
+        public RoleGrant(String role, String application, List<String> permissions) {
+            this(role, application, permissions, List.of());
         }
     }
 

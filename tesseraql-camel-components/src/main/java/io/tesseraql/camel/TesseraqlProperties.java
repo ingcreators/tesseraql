@@ -181,6 +181,20 @@ public final class TesseraqlProperties {
     /** Registry bean name for the in-app inbox store (roadmap Phase 49), if any inbox channel. */
     public static final String INBOX_STORE_BEAN = "tesseraqlInboxStore";
 
+    /**
+     * Registry bean name for the deployment's sign-in allow-list ({@code SignInAllowList},
+     * docs/access-governance.md structural decision 8, layer A). Bound only when
+     * {@code tesseraql.security.network.allow} names a network, so an unconfigured deployment
+     * looks up nothing and admits everybody.
+     */
+    public static final String SIGN_IN_ALLOW_LIST_BEAN = "tesseraqlSignInAllowList";
+    /**
+     * Registry bean name for the zone grant hour conditions are read in ({@code ZoneId},
+     * {@code tesseraql.security.conditions.zone}). Absent means the JVM's own zone: "login
+     * hours" means the business's hours, so a deployment whose servers move zones names one.
+     */
+    public static final String CONDITION_ZONE_BEAN = "tesseraqlConditionZone";
+
     /** The shared lease ledger behind cluster-scoped rate limits (docs/deployment.md). */
     public static final String RATE_BUDGET_BEAN = "tesseraqlRateBudget";
     /** The one gateway every outbound HTTP call leaves through (docs/lookups.md, decision 15). */

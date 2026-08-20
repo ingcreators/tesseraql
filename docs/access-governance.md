@@ -87,6 +87,28 @@ on `pending`, so two approvers racing produce one decision rather than two grant
 approved request's grant is attributed to the request; and a rejection writes no grant row
 at all, because nothing about what is held changed and the request is its own record.
 
+**Slice 7 is shipped** (delegated administration): the verb-split atom pair, `RoleAdmin.Scope`,
+the parameterized atom policy and the writable per-application pages. Its implementation
+decisions are recorded in structural decision 7 below, where the departure from the atom this
+design first named is argued rather than merely noted.
+
+**Slice 8 is shipped** (context conditions): both layers, `tql_role_conditions` across all four
+dialects, the `tesseraql-auth:conditions` step and the conditions page. Implementation decisions
+recorded: within one kind any condition admits and across kinds every kind must, because two
+networks are two offices while a network and an hours condition are two requirements; a
+condition this runtime cannot read — an unknown kind, a malformed value — **never admits**,
+since a narrowing filter that fails closed can only cost capability, and the write refuses such
+a value at the point of writing so a typo is a rejected input rather than a role that silently
+stopped working; an hours range whose end is at or before its start runs past midnight and takes
+the day set of the day the window *opens*; and layer A is checked **after the credential is
+proven**, so a network refusal never tells an outsider whether the password was right. **Two
+defects surfaced and are fixed here**: the peer address arrives from the transport as
+`host:port` and was therefore inside no CIDR block at all — an allow-list naming the loopback
+network would have refused the loopback — so the presented address is now reduced to its bare
+host where it is resolved, which also improves what the session-visibility surface displays; and
+TQL-IAM-4036, slice 7's containment refusal, had no HTTP status mapping and reached callers as
+"Internal Server Error", the same defect slice 2 found in the same switch one number earlier.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no
@@ -556,7 +578,7 @@ Each gated on the slice it blocks, with a recommendation.
    verb-split pair makes it structural rather than a rule: `tql.iam.view.<name>` *is* sight of
    one application, granted beside `tql.iam.write.<name>`. Store-wide sight stays a store-wide
    grant.
-8. **Are hours evaluated in the server's zone or the deployment's?** — *gates slice 8.*
-   Recommended: a configured zone (`tesseraql.security.conditions.zone`), defaulting to the
-   JVM's, because "login hours" means the business's hours and a server moving zones must
-   not change who may work.
+8. **Are hours evaluated in the server's zone or the deployment's?** — *settled in slice 8.* A
+   configured zone (`tesseraql.security.conditions.zone`), defaulting to the JVM's, because
+   "login hours" means the business's hours and a server moving zones must not change who may
+   work.

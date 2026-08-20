@@ -1,0 +1,36 @@
+version: tesseraql/v1
+id: tql.iamAdmin.conditions.list
+kind: route
+recipe: query-html
+
+# Grant context conditions (docs/access-governance.md structural decision 8): where a held
+# role may be used from, and when. The evaluation is a compiled step on every secured route;
+# this page is only where the conditions are declared.
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  added:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.conditions
+response:
+  html:
+    status: 200
+    template: conditions.html
+    model:
+      rows: main.rows
+      allRoles: main.roles
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      added: params.added
+      removed: params.removed
