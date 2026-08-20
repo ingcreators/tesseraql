@@ -340,6 +340,48 @@ class RoleStoreIntegrationTest {
         RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "jit.both");
     }
 
+    /**
+     * Slice 4 of docs/access-governance.md: groups are writable, membership carries the
+     * same window every other assignment carries, and the trail records joins and leaves.
+     */
+    @Test
+    void groupsAreWritableAndMembershipCarriesAWindow() {
+        RoleAdmin.createRole(identity, MANAGED, "grp.reader", "閲覧", "");
+        GroupAdmin.createGroup(identity, MANAGED, "SALES", "営業部");
+        GroupAdmin.grantRole(identity, MANAGED, "SALES", "grp.reader");
+        GroupAdmin.addMember(identity, MANAGED, "kenji", "SALES", "u1", "", "");
+
+        Principal member = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(member.groups()).contains("SALES");
+        assertThat(member.roles()).contains("grp.reader");
+        assertThat(historyFor("SALES")).anySatisfy(row -> {
+            assertThat(row.get("change_kind")).isEqualTo(GrantHistory.GROUP_JOINED);
+            assertThat(row.get("actor")).isEqualTo("kenji");
+        });
+
+        // The membership window filters at resolution, exactly like a role assignment's.
+        GroupAdmin.removeMember(identity, MANAGED, "kenji", "SALES", "u1");
+        GroupAdmin.addMember(identity, MANAGED, "kenji", "SALES", "u1", "2020-01-01",
+                "2020-06-01");
+        Principal expired = identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow();
+        assertThat(expired.groups()).doesNotContain("SALES");
+        assertThat(expired.roles()).doesNotContain("grp.reader");
+
+        // A membership that names nothing is refused rather than silently doing nothing.
+        assertThatThrownBy(() -> GroupAdmin.addMember(identity, MANAGED, "kenji", "NOPE",
+                "u1", "", "")).isInstanceOf(TqlException.class).hasMessageContaining("No group");
+        assertThatThrownBy(() -> GroupAdmin.grantRole(identity, MANAGED, "SALES",
+                "no.such.role")).isInstanceOf(TqlException.class)
+                .hasMessageContaining("to bundle");
+
+        // Deleting empties the joins first, and records a leave for whoever was in it.
+        GroupAdmin.deleteGroup(identity, MANAGED, "kenji", "SALES");
+        assertThat(historyFor("SALES")).anySatisfy(
+                row -> assertThat(row.get("change_kind")).isEqualTo(GrantHistory.GROUP_LEFT));
+        assertThat(identity.execute(MANAGED, IdentityContracts.LIST_GROUPS, Map.of()))
+                .noneSatisfy(row -> assertThat(row.get("group_code")).isEqualTo("SALES"));
+    }
+
     /** A constraint over a role code nothing names cannot fire, so it is refused. */
     @Test
     void aConstraintOverAnUnknownRoleIsRefused() {

@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: tql.iamAdmin.groups.delete
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  groupCode:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.deleteGroup
+      params:
+        actor: principal.loginId
+        groupCode: params.groupCode
+response:
+  redirect:
+    location: /_tesseraql/admin/groups?deleted=1

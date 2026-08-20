@@ -1,0 +1,26 @@
+version: tesseraql/v1
+id: tql.iamAdmin.groups.create
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  code:
+    type: string
+    required: true
+  name:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.createGroup
+      params:
+        code: params.code
+        name: params.name
+response:
+  redirect:
+    location: /_tesseraql/admin/groups?created=1

@@ -1,0 +1,23 @@
+version: tesseraql/v1
+id: tql.iamAdmin.groups.grantRole
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  roleCode:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.grantGroupRole
+      params:
+        groupCode: path.code
+        roleCode: params.roleCode
+response:
+  redirect:
+    location: /_tesseraql/admin/groups/{path.code}?granted=1

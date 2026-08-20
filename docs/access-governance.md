@@ -55,6 +55,17 @@ eligibility with different limits is a revoke and a grant rather than an upsert,
 caller sees one shape on every dialect; and `requires_approval` is carried in the schema
 but unused until slice 6, where an approval-gated elevation becomes a request.
 
+**Slice 4 is shipped** (groups): eleven contracts, `source` and the membership window on
+`tql_user_groups` across all four dialects with the resolution reads filtering on it, and
+the groups and per-group pages. Implementation decisions recorded: the member list on a
+group's page is unfiltered while the list page's member count is not, because an
+administrator edits memberships that a signing-in user would never see; a membership or a
+bundle write that affects zero rows is a refusal rather than a silent no-op; deleting a
+group empties its joins before dropping it, since the standard schema carries no foreign
+keys to catch a membership pointing at a group that is gone. The managed-store SCIM Group
+contract set is deferred to slice 4b — see structural decision 4 for the portability
+measurement that forced it.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no
@@ -248,6 +259,14 @@ because a second time model would be a second thing to explain.
 realm builds its `ScimGroupContract` from bundled SQL against `tql_groups`/`tql_user_groups`
 instead of requiring nine files. The nine config keys stay, and a deployment that sets them
 keeps its own SQL — this adds a default, it does not remove a seam.
+
+**Deferred to its own slice (4b), for a measured reason.** `ScimGroupService.create` runs
+`createSql` through `executeQuery` and reads the assigned id from the returned row, so a
+bundled contract set would need `insert … returning` — which MySQL and SQL Server do not
+have. Making it portable means changing the create seam itself: mint the id before the
+insert, execute the insert as an update, then re-read. That is a change to a shipped
+provisioning contract, with every existing deployment's nine hand-authored files depending
+on the current shape, so it earns its own slice rather than riding the store work.
 
 **The admin surface** gets a groups page, a group detail page with members and roles, and
 membership editing from the user detail page.

@@ -127,6 +127,22 @@ public final class IdentityContracts {
     /** Ends an elevation early, never touching a standing grant of the same role. */
     public static final String REVOKE_USER_ROLE_ELEVATION = "revoke-user-role-elevation";
 
+    // Group management (docs/access-governance.md slice 4); optional. The schema was
+    // complete and nothing wrote it: these are the writes, plus the reads the admin
+    // surface needs. Membership is a fact about a person, so the two membership writes
+    // answer to the user capability while the rest answer to the role capability.
+    public static final String LIST_GROUPS = "list-groups";
+    public static final String LIST_GROUP_MEMBERS = "list-group-members";
+    public static final String LIST_GROUP_ROLES = "list-group-roles";
+    public static final String CREATE_GROUP = "create-group";
+    public static final String DELETE_GROUP = "delete-group";
+    public static final String CLEAR_GROUP_MEMBERS = "clear-group-members";
+    public static final String CLEAR_GROUP_ROLES = "clear-group-roles";
+    public static final String ADD_GROUP_MEMBER = "add-group-member";
+    public static final String REMOVE_GROUP_MEMBER = "remove-group-member";
+    public static final String GRANT_GROUP_ROLE = "grant-group-role";
+    public static final String REVOKE_GROUP_ROLE = "revoke-group-role";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -137,7 +153,11 @@ public final class IdentityContracts {
                 REVOKE_USER_ROLE_RULE, RECORD_GRANT_CHANGE, CREATE_SOD_CONSTRAINT,
                 ADD_SOD_CONSTRAINT_ROLE, DELETE_SOD_CONSTRAINT, DELETE_SOD_CONSTRAINT_ROLES,
                 GRANT_ROLE_ELIGIBILITY, REVOKE_ROLE_ELIGIBILITY, GRANT_USER_ROLE_ELEVATION,
-                REVOKE_USER_ROLE_ELEVATION);
+                REVOKE_USER_ROLE_ELEVATION,
+                // Group identity and its role bundle are role management; membership is
+                // not — delegating "who is in sales" is not delegating "what sales may do".
+                CREATE_GROUP, DELETE_GROUP, CLEAR_GROUP_ROLES, GRANT_GROUP_ROLE,
+                REVOKE_GROUP_ROLE);
     }
 
     private IdentityContracts() {

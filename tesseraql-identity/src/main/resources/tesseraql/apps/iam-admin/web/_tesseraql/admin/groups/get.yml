@@ -1,0 +1,34 @@
+version: tesseraql/v1
+id: tql.iamAdmin.groups.list
+kind: route
+recipe: query-html
+
+# Groups (docs/access-governance.md structural decision 4): the schema was complete and
+# nothing wrote it -- three contracts read groups at sign-in and no surface made one.
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  created:
+    type: string
+    required: false
+  deleted:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.groups
+response:
+  html:
+    status: 200
+    template: groups.html
+    model:
+      rows: main.rows
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      created: params.created
+      deleted: params.deleted
