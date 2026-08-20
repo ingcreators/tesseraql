@@ -77,6 +77,16 @@ snapshot's permission arm carries a bare null application rather than a cast (a 
 the column's type from the arms that have one, so no dialect is excluded) and an
 application-scoped review reaches a direct permission through the code prefix instead.
 
+**Slice 6 is shipped** (access requests): `tql_role_owners` and `tql_access_requests` across
+all four dialects, the requester's account card and the owner's queue. Implementation
+decisions recorded: the queue is filtered by ownership **in Java against the caller's own
+principal**, because their groups are already there and a per-row store read would be both
+slower and a second source of truth; the decision is written **before** the grant and keyed
+on `pending`, so two approvers racing produce one decision rather than two grants;
+`RoleAdmin.assignRole` gained the same source-and-correlation form its revokes have, so an
+approved request's grant is attributed to the request; and a rejection writes no grant row
+at all, because nothing about what is held changed and the request is its own record.
+
 ## The one correction the measurement forced
 
 The deferred entry for group provisioning reads "no SCIM Groups endpoint, no admin UI, no

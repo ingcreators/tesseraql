@@ -1614,6 +1614,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
                                     String.valueOf(params.get("subject"))))
+                    // The requester's own side of access requests
+                    // (docs/access-governance.md structural decision 6): what they may ask
+                    // for, and what they have asked for. Never anybody else's.
+                    .register("account.requests",
+                            params -> io.tesseraql.identity.AccessRequests.myRequestsModel(
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class),
+                                    String.valueOf(params.get("subject"))))
+                    .register("account.requestRole",
+                            params -> io.tesseraql.identity.AccessRequests.request(
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                                            io.tesseraql.identity.IdentityService.class),
+                                    context.getRegistry().lookupByNameAndType(
+                                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                                            io.tesseraql.identity.RealmConfig.class),
+                                    String.valueOf(params.get("subject")),
+                                    String.valueOf(params.get("roleCode")),
+                                    String.valueOf(params.get("reason")),
+                                    String.valueOf(params.get("minutes"))))
                     .register("account.language.save",
                             params -> AccountViews.saveLanguage(params, preferences,
                                     accountLocales))
@@ -1948,6 +1972,39 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         params -> io.tesseraql.identity.RoleAdmin.deleteConstraint(
                                 iamIdentity.get(), iamRealm.get(),
                                 String.valueOf(params.get("constraintId"))));
+                // Self-service access requests (docs/access-governance.md structural
+                // decision 6). The approver queue is filtered by ownership against the
+                // caller's own principal, so a request only ever reaches somebody who owns
+                // the role it asks for.
+                serviceProviders.register("iam.requestQueue",
+                        params -> io.tesseraql.identity.AccessRequests.queueModel(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("subject")),
+                                params.get("groups") instanceof java.util.List<?> held
+                                        ? held.stream().map(String::valueOf).toList()
+                                        : java.util.List.of()));
+                serviceProviders.register("iam.decideRequest",
+                        params -> io.tesseraql.identity.AccessRequests.decide(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("requestId")),
+                                String.valueOf(params.get("decision")),
+                                String.valueOf(params.get("note"))));
+                serviceProviders.register("iam.roleOwners",
+                        params -> io.tesseraql.identity.AccessRequests.ownersModel(
+                                iamIdentity.get(), iamRealm.get()));
+                serviceProviders.register("iam.addRoleOwner",
+                        params -> io.tesseraql.identity.AccessRequests.addOwner(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("ownerKind")),
+                                String.valueOf(params.get("ownerRef"))));
+                serviceProviders.register("iam.removeRoleOwner",
+                        params -> io.tesseraql.identity.AccessRequests.removeOwner(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("roleCode")),
+                                String.valueOf(params.get("ownerKind")),
+                                String.valueOf(params.get("ownerRef"))));
                 // Access review campaigns (docs/access-governance.md structural decision 5):
                 // a snapshot, decisions on it, and revocations executed through RoleAdmin at
                 // close so each one inherits its validation and its trail row.

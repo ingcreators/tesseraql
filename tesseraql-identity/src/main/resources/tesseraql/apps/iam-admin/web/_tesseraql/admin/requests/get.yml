@@ -1,0 +1,43 @@
+version: tesseraql/v1
+id: tql.iamAdmin.requests.list
+kind: route
+recipe: query-html
+
+# The approver's queue (docs/access-governance.md structural decision 6). Filtered by
+# ownership against the caller's own principal, so a request only ever reaches somebody
+# who owns the role it asks for -- the page cannot show what the caller may not decide.
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  decided:
+    type: string
+    required: false
+  owned:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.requestQueue
+      params:
+        subject: principal.subject
+        groups: principal.groups
+  owners:
+    service:
+      name: iam.roleOwners
+response:
+  html:
+    status: 200
+    template: requests.html
+    model:
+      rows: main.rows
+      available: main.available
+      reason: main.reason
+      owners: owners.rows
+      allRoles: owners.roles
+      writable: owners.writable
+      decided: params.decided
+      owned: params.owned

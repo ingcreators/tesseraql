@@ -123,6 +123,19 @@ public final class RoleAdmin {
      */
     public static Map<String, Object> assignRole(IdentityService identity, RealmConfig realm,
             String actor, String userId, String roleCode, String startsAt, String endsAt) {
+        return assignRole(identity, realm, actor, userId, roleCode, startsAt, endsAt,
+                GrantHistory.SOURCE_ADMIN, null);
+    }
+
+    /**
+     * The same assignment, attributed to the mechanism that decided it — an approved access
+     * request rather than a plain administrative edit. Everything else is identical, which is
+     * the point: a grant from a request passes the same checks and leaves the same kind of
+     * row, so nothing has to trust a second write path.
+     */
+    public static Map<String, Object> assignRole(IdentityService identity, RealmConfig realm,
+            String actor, String userId, String roleCode, String startsAt, String endsAt,
+            String source, String correlation) {
         requireRealm(identity, realm);
         Map<String, Object> key = new LinkedHashMap<>();
         key.put("userId", require(userId, "user"));
@@ -141,9 +154,10 @@ public final class RoleAdmin {
         params.put("startsAt", from);
         params.put("endsAt", until);
         identity.executeUpdate(realm, IdentityContracts.GRANT_USER_ROLE, params);
-        GrantHistory.record(identity, realm, GrantHistory.Change.granted(actor(actor),
+        GrantHistory.record(identity, realm, new GrantHistory.Change(actor(actor),
                 String.valueOf(key.get("userId")), GrantHistory.ROLE_GRANTED,
-                String.valueOf(key.get("roleCode")), from, until));
+                String.valueOf(key.get("roleCode")), null, source, from, until, null,
+                correlation));
         return Map.of("assigned", roleCode);
     }
 

@@ -175,6 +175,25 @@ This is *static* separation of duties. The *dynamic* half already holds without 
 constraint: a person acts as one role at a time per application, chosen at use time, and
 the audit records which capacity acted ([application roles](authentication.md)).
 
+## Access requests
+
+The requests page (`/_tesseraql/admin/requests`) is the approver's side of self-service
+access. It shows only requests for roles **you** own — by name, or through a group you are
+in — so it cannot offer you a decision you are not entitled to make.
+
+A role becomes requestable by having an **owner**, recorded on the same page. A role with no
+owner cannot be asked for at all: that is the answer to "who approves this", rather than
+falling back to whoever happens to administer the store.
+
+Approving lands the grant through the same write an administrator uses, so it passes the
+separation-of-duties check and appears in the [grant history](#grant-history) naming the
+request that caused it. When the requester asked for a duration, the grant is **time-boxed**
+to it. Rejecting changes nothing about what is held, so it leaves no grant row — the request
+itself is the record. A decided request is final; two approvers acting at once produce one
+decision, not two grants.
+
+People ask from their own [account page](account.md).
+
 ## Access reviews
 
 The reviews page (`/_tesseraql/admin/reviews`) runs the periodic question: *is all of this

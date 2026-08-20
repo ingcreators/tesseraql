@@ -23,6 +23,8 @@
   <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'elevated'}">Elevation updated. It is active on this session now.</p>
   <p class="hc-alert" data-variant="success" role="status"
+     th:if="${saved == 'requested'}">Request sent to the role's owner.</p>
+  <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'delegation'}">Out-of-office delegation saved.</p>
   <p class="hc-alert" data-variant="success" role="status"
      th:if="${saved == 'delegation-cleared'}">Out-of-office delegation cleared.</p>
@@ -147,6 +149,41 @@
         </form>
       </li>
     </ul>
+    </div>
+  </section>
+  <!-- Self-service access requests (docs/access-governance.md structural decision 6): a
+       role with an owner can be asked for; the owner decides, and an approval lands the
+       grant through the same write an administrator uses. -->
+  <section class="hc-card" th:if="${requestsAvailable == 1 and (!#lists.isEmpty(requestable) or !#lists.isEmpty(myRequests))}">
+    <div class="hc-card__header">Ask for access</div>
+    <div class="hc-card__body hc-stack">
+    <form th:if="${!#lists.isEmpty(requestable)}" method="post"
+          th:action="@{/_tesseraql/account/request}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${requestable}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Why</span>
+        <input class="hc-input" name="reason" required></label>
+      <label class="hc-field"><span class="hc-field__label">Minutes (blank = no limit)</span>
+        <input class="hc-input" name="minutes" type="number" min="1"></label>
+      <button class="hc-button" data-variant="primary" type="submit">Request</button>
+    </form>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(myRequests)}">
+      <table class="hc-table">
+        <thead><tr><th>Role</th><th>Asked</th><th>Status</th><th>Decided by</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr th:each="q : ${myRequests}">
+            <td><code th:text="${q.role_code}"></code></td>
+            <td th:text="${q.requested_at}"></td>
+            <td th:text="${q.status}"></td>
+            <td th:text="${q.decided_by != null ? q.decided_by : '—'}"></td>
+            <td th:text="${q.decision_note != null ? q.decision_note : '—'}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     </div>
   </section>
   <!-- Just-in-time elevation (docs/access-governance.md structural decision 3): an

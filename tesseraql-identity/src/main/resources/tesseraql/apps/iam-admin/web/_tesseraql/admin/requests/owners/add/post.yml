@@ -1,0 +1,30 @@
+version: tesseraql/v1
+id: tql.iamAdmin.requests.addOwner
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  roleCode:
+    type: string
+    required: true
+  ownerKind:
+    type: string
+    required: true
+  ownerRef:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.addRoleOwner
+      params:
+        roleCode: params.roleCode
+        ownerKind: params.ownerKind
+        ownerRef: params.ownerRef
+response:
+  redirect:
+    location: /_tesseraql/admin/requests?owned=1

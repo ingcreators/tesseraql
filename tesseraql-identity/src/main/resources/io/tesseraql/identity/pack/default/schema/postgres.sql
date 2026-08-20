@@ -99,6 +99,27 @@ create table if not exists tql_user_identities (
   primary key (provider, external_subject)
 );
 
+create table if not exists tql_role_owners (
+  role_id    varchar(64) not null,
+  owner_kind varchar(16) not null,
+  owner_ref  varchar(200) not null,
+  primary key (role_id, owner_kind, owner_ref)
+);
+
+create table if not exists tql_access_requests (
+  request_id        varchar(64) primary key,
+  requested_at      timestamp not null,
+  requester_id      varchar(64) not null,
+  role_code         varchar(200) not null,
+  reason            varchar(1000),
+  requested_minutes integer,
+  status            varchar(16) not null,
+  decided_by        varchar(200),
+  decided_at        timestamp,
+  decision_note     varchar(1000),
+  granted_until     timestamp
+);
+
 create table if not exists tql_access_reviews (
   review_id   varchar(64) primary key,
   review_name varchar(200) not null,

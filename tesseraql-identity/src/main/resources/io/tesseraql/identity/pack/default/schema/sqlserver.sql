@@ -107,6 +107,29 @@ create table tql_user_identities (
   primary key (provider, external_subject)
 );
 
+if object_id('tql_role_owners', 'U') is null
+create table tql_role_owners (
+  role_id    varchar(64) not null,
+  owner_kind varchar(16) not null,
+  owner_ref  varchar(200) not null,
+  primary key (role_id, owner_kind, owner_ref)
+);
+
+if object_id('tql_access_requests', 'U') is null
+create table tql_access_requests (
+  request_id        varchar(64) primary key,
+  requested_at      datetime2 not null,
+  requester_id      varchar(64) not null,
+  role_code         varchar(200) not null,
+  reason            varchar(1000),
+  requested_minutes int,
+  status            varchar(16) not null,
+  decided_by        varchar(200),
+  decided_at        datetime2,
+  decision_note     varchar(1000),
+  granted_until     datetime2
+);
+
 if object_id('tql_access_reviews', 'U') is null
 create table tql_access_reviews (
   review_id   varchar(64) primary key,
