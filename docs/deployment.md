@@ -103,6 +103,54 @@ member's declared timeout, or the platform's SIGKILL cuts the drain short.
   the `file` default keeps them on the producing node, which then needs session affinity.
 - Framework and app migrations take Flyway's lock, so concurrent node startups serialize.
 
+## Request threads
+
+Every HTTP request runs on the **worker pool**: route processing is blocking work, and the
+platform HTTP layer hands each exchange to a pool of platform threads. The pool size is
+therefore this runtime's ceiling on concurrent route execution, and it is one of two numbers
+that decide how much work the runtime does at once.
+
+| Key | Default | What it sizes |
+| --- | --- | --- |
+| `tesseraql.http.workerThreads` | 10 | Concurrent route executions |
+| `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
+
+**Raise it together with the connection pool.** The worker pool feeds
+`tesseraql.datasources.<name>.maximumPoolSize`, so a worker count above the pool size buys
+nothing except threads waiting in connection acquisition — for up to `connectionTimeoutMillis`
+each. The defaults are deliberately the same number.
+
+Each datasource takes its pool settings under `tesseraql.datasources.<name>`:
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `maximumPoolSize` | 10 | Connections this datasource may open |
+| `connectionTimeoutMillis` | 30000 | How long a borrower waits before failing |
+| `minimumIdle` | pool size | Connections kept open when idle |
+| `idleTimeoutMillis` | Hikari's | When a surplus idle connection is retired |
+| `maxLifetimeMillis` | Hikari's | When a connection is retired regardless of use |
+| `keepaliveTimeMillis` | Hikari's | How often an idle connection is probed |
+| `leakDetectionThresholdMillis` | off | Logs a stack trace for a connection held this long |
+
+The first two are TesseraQL's own defaults rather than the driver pool's, so they cannot
+change under you when a dependency changes its mind. `leakDetectionThresholdMillis` stays off
+because it is a debugging aid whose log volume is an operator's decision, not a default.
+
+Background work — [jobs](jobs.md), file transfers, streams — borrows from these same pools
+outside the worker pool. That is deliberate: contention shows up as request latency you can
+measure rather than hiding in a second pool. Watch `tesseraql_pool_threads_awaiting` in the
+[metrics](#metrics-prometheus) below; a non-zero reading is the pool, not the database, being
+the constraint.
+
+Size it from measured latency rather than from a guess: concurrency is throughput times
+latency, so routes averaging 50 ms saturate 10 workers at roughly 200 requests a second, and
+routes averaging a second saturate them at 10. If the answer is "many more threads", check
+first whether the database can absorb the connections that come with them — the pool that
+matters is the one at the far end.
+
+A count that is not a positive integer refuses at startup (`TQL-YAML-1112`) rather than
+starting with a pool nobody asked for.
+
 ## Transport security (TLS and HSTS)
 
 TesseraQL serves HTTP and **assumes TLS terminates at the deployment edge** — a reverse
