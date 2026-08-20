@@ -12,22 +12,37 @@ DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 #                                          sun.misc.Unsafe prints at every start on JDK 25
 OPTS="-XX:+UseCompactObjectHeaders --sun-misc-unsafe-memory-access=allow"
 
-# The archive is written on first run. It is tied to the jar it was built from, and a NEWER jar
-# at the same path does not cause it to be rebuilt: the JVM quietly stops using it and start-up
-# returns to where it began, with nothing printed. So the jar's size names the file — an upgrade
-# lands on a new name and builds a fresh archive — and stale ones are dropped when a new name
-# first appears. If the cache directory cannot be written (read-only home, HOME unset), the
-# archive is skipped entirely.
+# The base classpath, extensible in one documented place (docs/module-channel.md decision 6).
+# Stack-scoped pools — the framework datasource, the migration pool — resolve their driver through
+# DriverManager on the process classpath, which no application's module channel can reach. So a
+# jar dropped in lib/ext/, or named in TESSERAQL_CLASSPATH, joins the classpath here; the container
+# image's `-cp lib/*` is the same idea, spelled for that layout.
+CP="$DIR/../lib/tesseraql.jar"
+EXT="$DIR/../lib/ext"
+if [ -d "$EXT" ]; then
+  for JAR in "$EXT"/*.jar; do
+    [ -e "$JAR" ] || break
+    CP="$CP:$JAR"
+  done
+fi
+[ -n "${TESSERAQL_CLASSPATH:-}" ] && CP="$CP:$TESSERAQL_CLASSPATH"
+
+# The archive is written on first run. It is tied to the CLASSPATH it was built from, and a
+# changed classpath does not cause it to be rebuilt: the JVM quietly stops using it and start-up
+# returns to where it began, with nothing printed. So the classpath's own fingerprint names the
+# file — an upgrade, or an added extension jar, lands on a new name and builds a fresh archive —
+# and stale ones are dropped when a new name first appears. If the cache directory cannot be
+# written (read-only home, HOME unset), the archive is skipped entirely.
 #
 # -Xlog:cds=error keeps the run that writes it from reporting which classes it skipped — normal
 # detail of building an archive, alarming in a terminal — while still reporting the one thing an
 # operator would want to know: that an archive exists and the JVM refused it.
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tesseraql"
-SIZE=$(ls -ln "$DIR/../lib/tesseraql.jar" 2>/dev/null | awk '{print $5}')
-if [ -n "$SIZE" ] && mkdir -p "$CACHE" 2>/dev/null; then
-  ARCHIVE="$CACHE/cds-$SIZE.jsa"
+FINGERPRINT=$(ls -ln $(echo "$CP" | tr ':' ' ') 2>/dev/null | awk '{print $5, $9}' | cksum | cut -d' ' -f1)
+if [ -n "$FINGERPRINT" ] && mkdir -p "$CACHE" 2>/dev/null; then
+  ARCHIVE="$CACHE/cds-$FINGERPRINT.jsa"
   [ -f "$ARCHIVE" ] || rm -f "$CACHE"/cds-*.jsa 2>/dev/null || true
   OPTS="$OPTS -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=$ARCHIVE -Xlog:cds=error:stderr"
 fi
 
-exec java $OPTS ${TESSERAQL_JAVA_OPTS:-} -jar "$DIR/../lib/tesseraql.jar" "$@"
+exec java $OPTS ${TESSERAQL_JAVA_OPTS:-} -cp "$CP" io.tesseraql.cli.TesseraqlCli "$@"

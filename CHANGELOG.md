@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **One place to put a framework database driver, on every distribution** (docs/module-channel.md
+  decision 6, slice 4b). A stack's own pools — the framework datasource, the migration pool —
+  resolve their driver through `DriverManager` on the process classpath, which an application's
+  module channel cannot reach: those jars load on that application's classloader, and the framework
+  pool belongs to no application. A stack whose framework database was SQL Server, Oracle or MySQL
+  therefore could not start under `dev` at all, and failed with the JDBC layer's `No suitable
+  driver` elsewhere. Now `tesseraql-stack.yml` declares what the stack's classpath needs
+  (`framework.datasource.modules`), `tesseraql modules fetch --stack` collects it, and each
+  distribution reads one place: `lib/` in the container image, `lib/ext/` (or `TESSERAQL_CLASSPATH`)
+  beside a launcher, and `app\ext\` plus an `app.classpath` line on the Windows app image — the
+  last asserted on `windows-latest` in both directions. When no driver accepts the framework URL
+  the host refuses with `TQL-APP-4220`, naming the declared coordinate and the placement step. The
+  launchers now compose an explicit classpath instead of `java -jar`, and their class-data-sharing
+  archive is keyed on the whole classpath rather than the fat jar's size — an added extension jar
+  used to leave the JVM silently refusing a stale archive, costing start-up time with nothing
+  printed.
+
 - **`tesseraql modules fetch` — one bag for a disconnected machine** (docs/module-channel.md
   decision 5, slice 4a). Everything a distribution does not carry is a Maven coordinate, and each
   used to travel its own road: an application's modules through `modules resolve --offline` against

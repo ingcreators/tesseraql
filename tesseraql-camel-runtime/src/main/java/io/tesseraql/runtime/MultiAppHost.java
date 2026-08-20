@@ -68,6 +68,19 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
      */
     static final TqlErrorCode FRAMEWORK_OVERRIDDEN = new TqlErrorCode(TqlDomain.APP, 4212);
 
+    /**
+     * TQL-APP-4220: no JDBC driver on the base classpath accepts the stack's framework datasource
+     * URL (docs/module-channel.md decision 6).
+     *
+     * <p>The framework pool is stack infrastructure, built from a URL and resolved through
+     * {@code DriverManager}, so a framework database that is not PostgreSQL needs its driver on
+     * the process classpath — an application's module channel cannot reach it. The refusal names
+     * what {@code tesseraql-stack.yml} declared under {@code framework.datasource.modules} and
+     * where this distribution reads placed jars, in place of the JDBC layer's
+     * {@code No suitable driver}.
+     */
+    static final TqlErrorCode FRAMEWORK_DRIVER_ABSENT = new TqlErrorCode(TqlDomain.APP, 4220);
+
     private static final String CANARY_SLOT = "#canary";
 
     /**
@@ -660,6 +673,38 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     }
 
     /**
+     * Refuses the start ({@code TQL-APP-4220}) when no JDBC driver on the base classpath accepts
+     * the stack's framework URL (docs/module-channel.md decision 6).
+     *
+     * <p>Stack-scoped pools are built from a URL alone and resolve their driver through
+     * {@link java.sql.DriverManager}, so a framework database that is not PostgreSQL needs its
+     * driver on the process classpath — the module channel cannot supply it, because it belongs to
+     * no application. Without this, the story ends in {@code No suitable driver}, a message from
+     * the JDBC layer that names neither the placement step nor the declaration.
+     *
+     * <p>The check is on the symptom rather than on {@code framework.datasource.modules}: a Maven
+     * coordinate does not map to a class, so "is this artifact on the classpath" is not a question
+     * that can be asked. The declaration is what the message can name once the symptom appears.
+     */
+    private static void requireFrameworkDriver(String jdbcUrl, List<String> declaredModules) {
+        try {
+            java.sql.DriverManager.getDriver(jdbcUrl);
+        } catch (java.sql.SQLException noDriver) {
+            String named = declaredModules.isEmpty()
+                    ? "The stack declares none under framework.datasource.modules, so add both the"
+                            + " coordinate and the jar"
+                    : "The stack declares " + String.join(", ", declaredModules);
+            throw new TqlException(FRAMEWORK_DRIVER_ABSENT, "No JDBC driver on the classpath"
+                    + " accepts the stack's framework datasource URL. " + named + ". The framework"
+                    + " pool is stack infrastructure, so its driver ships with the deployment"
+                    + " rather than with any application: place the jar where this distribution"
+                    + " reads one — lib/ in the container image, lib/ext/ beside the launcher, or"
+                    + " a path in TESSERAQL_CLASSPATH — and start again. 'tesseraql modules fetch"
+                    + " --stack' collects what the declaration names.");
+        }
+    }
+
+    /**
      * The stack's framework pool when its file supplies a coordinate, after both of decision
      * 22's guards — or {@code null} with the applications checked for agreement.
      *
@@ -691,6 +736,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                         + ".");
             }
             io.tesseraql.operations.app.StackSettings.Coordinate coordinate = supplied.get();
+            requireFrameworkDriver(coordinate.jdbcUrl(), settings.frameworkModules());
             return DataSources.create("tesseraql-stack-framework",
                     new DataSources.MainDatasourceOverride(coordinate.jdbcUrl(),
                             coordinate.username(), coordinate.password()));
