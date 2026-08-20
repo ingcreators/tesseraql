@@ -85,12 +85,12 @@ tesseraql modules fetch --stack /path/to/stack --into ./tesseraql-bag \
     --platform linux-amd64,windows-amd64
 ```
 
-It resolves each member's `tesseraql.modules` closure exactly as `modules.lock` pins it (an
-application with no lock is refused: the lock is what says which closure was reviewed), imports the
-BOM so a later resolve of an unversioned coordinate works, and adds the embedded PostgreSQL binary
-for each `--platform` you name — the one artifact whose coordinate depends on the target machine
-rather than on the application. `bag.json` at the root records what was collected, from which
-application, with a SHA-256 each.
+It resolves each member's `tesseraql.modules` closure exactly as `modules.lock` pins it, and
+refuses an application that has no lock — the lock is what says which closure was reviewed. It
+imports the BOM too, so a later resolve of an unversioned coordinate works. Each `--platform` you
+name adds an embedded PostgreSQL binary: that is the one artifact whose coordinate depends on the
+target machine rather than on the application. `bag.json` at the root records what was collected,
+from which application, with a SHA-256 each.
 
 Carry the directory across, then point the disconnected side at it:
 

@@ -83,27 +83,40 @@ class ModulesFetchIntegrationTest {
     }
 
     /**
-     * Copies the reactor's own BOM and the parent it inherits from into the bag, so a SNAPSHOT
-     * build has them to import. A released version resolves both from Central like any other
-     * artifact — which is also why a bag built by resolving contains them without being told to.
+     * Seeds the bag with the framework's own BOM and the parent it inherits from, so the fetch's
+     * BOM import has somewhere to find them. A released version resolves both from Central like
+     * any other artifact — which is also why a bag built by resolving contains them without being
+     * told to. A SNAPSHOT build has them only in the developer's local repository, and on CI
+     * (which runs {@code verify}, not {@code install}) not even there, so the reactor's own POM
+     * files are the fallback.
      */
     private static void seedFrameworkPoms(Path bag) throws Exception {
-        Path localRepo = Path.of(System.getProperty("user.home"), ".m2", "repository");
         String version = io.tesseraql.core.TesseraqlVersion.current();
-        for (String artifact : new String[]{"tesseraql-bom", "tesseraql-parent"}) {
-            Path source = localRepo.resolve("io/tesseraql").resolve(artifact).resolve(version);
-            if (!Files.isDirectory(source)) {
-                continue;
-            }
-            Path target = bag.resolve("io/tesseraql").resolve(artifact).resolve(version);
-            Files.createDirectories(target);
-            try (Stream<Path> files = Files.list(source)) {
+        Path localRepo = Path.of(System.getProperty("user.home"), ".m2", "repository");
+        seed(bag, "tesseraql-bom", version,
+                localRepo.resolve("io/tesseraql/tesseraql-bom").resolve(version),
+                Path.of("..", "tesseraql-bom", "pom.xml"));
+        seed(bag, "tesseraql-parent", version,
+                localRepo.resolve("io/tesseraql/tesseraql-parent").resolve(version),
+                Path.of("..", "pom.xml"));
+    }
+
+    /** One artifact into the bag: the installed directory when it exists, else the source POM. */
+    private static void seed(Path bag, String artifact, String version, Path installed,
+            Path sourcePom) throws Exception {
+        Path target = bag.resolve("io/tesseraql").resolve(artifact).resolve(version);
+        Files.createDirectories(target);
+        if (Files.isDirectory(installed)) {
+            try (Stream<Path> files = Files.list(installed)) {
                 for (Path file : files.sorted(Comparator.naturalOrder()).toList()) {
                     if (Files.isRegularFile(file)) {
                         Files.copy(file, target.resolve(file.getFileName()));
                     }
                 }
             }
+            return;
         }
+        Files.copy(sourcePom.toAbsolutePath().normalize(),
+                target.resolve(artifact + "-" + version + ".pom"));
     }
 }
