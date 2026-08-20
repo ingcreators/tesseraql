@@ -150,6 +150,43 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Static assets are answered off the worker pool** (docs/http-threading.md decision 6). They
+  were a Camel route, so every stylesheet, script and icon went through `executeBlocking` and held
+  one of the same ten workers a slow query holds — a page's worth of them queued behind whatever
+  the database was doing. Each request also read the file **entirely into the heap** and SHA-256'd
+  it, including to answer 304, the cheapest response there is: a twenty-megabyte image on ten
+  concurrent requests was two hundred megabytes of heap nobody asked for.
+
+  Assets now mount on the platform router, ahead of every Camel route, and the admission gate lets
+  them through — that bound protects the worker pool, and refusing a stylesheet because the
+  database is busy would put back the coupling this removes. Framework assets and vendored WebJars
+  are read once, hashed once and answered from memory; files are streamed with `sendFile` under a
+  weak `(mtime, size)` validator, because a content hash means reading the whole file to answer
+  every request. **The cached half is the immutable half**, which is why the stale-validator bug
+  that removed the previous cache cannot recur: what changes is what is re-read.
+
+  Vert.x also resolved every path against the classpath first, copying matches into a cache
+  directory — a scan that measured **1328 ms for a stylesheet on an idle runtime**. Disabling it
+  took that to 187 ms.
+
+  **Half of this is not done, and the measurement says which half.** With both workers held in
+  `pg_sleep`, a classpath asset answers in **7 ms** and a file in **1689 ms**: `sendFile` streams
+  instead of buffering, but Vert.x still dispatches its file I/O to the worker pool, so the
+  filesystem half stays coupled to what it was meant to escape. Completing it means giving asset
+  file reads an executor of their own. The test is named for the half that works rather than the
+  half that was designed.
+
+  The `FrameworkSurfaces.PUBLIC_BY_DESIGN` entry for `tql.assets` is removed rather than left
+  pointing at a route that no longer exists — a guard test caught it, which is what that registry
+  is for. A router handler has no auth gate to be exempted from, so the reasoning it carried
+  ("static asset bytes, served before any session exists") moves into `AssetRoutes` itself, where
+  a reviewer asking why this surface is unauthenticated will now find the answer.
+
+  This also **corrects decision 1's justification**. Lowering the worker pool from 20 to 10 was
+  argued from the connection pool being 10 — true for routes that need a connection, and an
+  over-generalisation for those that do not. An asset needs none, so the workers this removed were
+  ones it could have used. The answer is not raising the number back; it is this.
+
 - **The address a request presented carried a port, so it was inside no network.** The peer of a
   connection reaches the framework as `host:port` — for IPv6 without brackets, as
   `0:0:0:0:0:0:0:1:52344` — which was invisible while the value was only ever displayed on the
