@@ -127,6 +127,16 @@ final class EmbeddedPostgresSupport {
                 .orElseGet(EmbeddedPostgresSupport::binariesVersion);
     }
 
+    /**
+     * Fetches the binary for another machine's platform into whatever local repository is
+     * configured — what {@code modules fetch --platform} needs, since this artifact is the one
+     * whose coordinate depends on the target machine rather than on any application
+     * (docs/module-channel.md decision 5).
+     */
+    static Path fetchBinary(String classifier, String version) {
+        return resolveBinaryJar(classifier, version, false);
+    }
+
     private static Path resolveBinaryJar(String classifier, String version, boolean offline) {
         String coordinate = BINARIES_GROUP + ":embedded-postgres-binaries-" + classifier + ":"
                 + version;

@@ -6,6 +6,22 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **`tesseraql modules fetch` — one bag for a disconnected machine** (docs/module-channel.md
+  decision 5, slice 4a). Everything a distribution does not carry is a Maven coordinate, and each
+  used to travel its own road: an application's modules through `modules resolve --offline` against
+  a hand-seeded repository, the framework database driver through prose, and the embedded
+  PostgreSQL binary — resolved on demand since the zonky exclusions — through nothing at all.
+  `modules fetch --stack <dir> --into <bag>` collects all of it in one pass: each member's closure
+  as `modules.lock` pins it (an application with no lock is refused), the BOM, and the embedded
+  PostgreSQL binary for every `--platform` named, with a `bag.json` manifest recording what came
+  from where with a checksum each. The bag is built by *resolving into* it rather than copying
+  jars, so it carries the poms and metadata an offline resolve checks. The disconnected side reads
+  it with the new `--repo <dir>` option — `modules resolve`, `package` and `dev` all take it, and
+  with `--offline` nothing leaves the machine. MariaDB Connector/J (LGPL-2.1) joins the BOM's
+  managed coordinates as the redistributable alternative to `mysql-connector-j`.
+
 ### Changed
 
 - **A `.tqlapp` carries the modules it declares** (docs/module-channel.md decision 3, slice 3).

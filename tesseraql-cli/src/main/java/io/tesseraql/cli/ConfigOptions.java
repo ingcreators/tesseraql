@@ -17,14 +17,29 @@ public final class ConfigOptions {
             + " (also TESSERAQL_ENV).")
     public String env;
 
+    @Option(names = {"--repo"}, paramLabel = "<dir>", description = "Local artifact repository to"
+            + " resolve modules from — a bag produced by 'tesseraql modules fetch' on a connected"
+            + " machine (also -Dmaven.repo.local). Combine with --offline to resolve nothing over"
+            + " the network.")
+    public java.nio.file.Path repo;
+
     /**
-     * Applies the profile before any manifest loads — the same system property the environment
-     * variable feeds, so every loader on the call path resolves the same profile. A no-op when
-     * the flag was not given, leaving {@code TESSERAQL_ENV}/{@code -Dtesseraql.env} in charge.
+     * Applies the profile and the repository location before any manifest loads or any module
+     * resolves — the same system properties the environment feeds, so every loader and resolver
+     * on the call path sees the same answer. Each is a no-op when its flag was not given, leaving
+     * {@code TESSERAQL_ENV}/{@code -Dtesseraql.env} and {@code -Dmaven.repo.local} in charge.
+     *
+     * <p>{@code --repo} is a system property rather than a resolver argument because that is what
+     * the embedded resolver already reads (ShrinkWrap's settings builder honors
+     * {@code maven.repo.local}, as Maven itself does), so one flag relocates every resolution a
+     * command performs without a second code path.
      */
     public void apply() {
         if (env != null) {
             System.setProperty("tesseraql.env", env);
+        }
+        if (repo != null) {
+            System.setProperty("maven.repo.local", repo.toAbsolutePath().toString());
         }
     }
 }

@@ -202,6 +202,14 @@
         <artifactId>mysql-connector-j</artifactId>
         <version>${mysql.version}</version>
       </dependency>
+      <!-- MariaDB Connector/J: the same MySQL wire protocol under LGPL-2.1, so an organization
+           that cannot redistribute mysql-connector-j has a documented exit (docs/module-channel.md
+           decision 7). Version-managed only; nothing in the framework depends on it. -->
+      <dependency>
+        <groupId>org.mariadb.jdbc</groupId>
+        <artifactId>mariadb-java-client</artifactId>
+        <version>${mariadb.version}</version>
+      </dependency>
       <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only (the jar
            bundles per-platform native libraries; a bare coordinate resolves to this version). -->
       <dependency>

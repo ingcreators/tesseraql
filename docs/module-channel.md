@@ -394,10 +394,12 @@ documentation.
 
 ## Open questions
 
-1. **Whether the resolver honors `maven.repo.local`.** `--repo` is specified against that property
-   because it is the Maven-native way to relocate a local repository, and the embedded ShrinkWrap
-   resolver's support for it is unverified. Slice 4a settles it; the fallback, if it does not, is a
-   generated `settings.xml` carrying `<localRepository>`, which the resolver already honors.
+1. ~~**Whether the resolver honors `maven.repo.local`.**~~ **Settled in slice 4a: it does.**
+   ShrinkWrap's `MavenSettingsBuilder` reads the property as its `ALT_LOCAL_REPOSITORY_LOCATION`,
+   and `ModulesFetchIntegrationTest` proves the round trip — a bag filled by `fetch`, then an
+   offline resolve out of it with no other configuration. The `settings.xml` fallback was not
+   needed. One thing the implementation added: a bag must contain the BOM **and the parent POM the
+   BOM inherits from**, which resolving into the bag produces on its own.
 2. **The Windows app-image classpath route.** Adding entries to the generated `.cfg` is the
    candidate; whether it survives an image upgrade, and whether a wrapper-managed service picks it
    up, is verified on the `windows-latest` job in slice 4b rather than asserted here.

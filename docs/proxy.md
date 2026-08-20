@@ -77,10 +77,36 @@ TESSERAQL_JAVA_OPTS="-Djavax.net.ssl.trustStore=/etc/ssl/corp.jks -Djavax.net.ss
 
 ## Air-gapped / offline
 
-Commit `modules.lock` and pre-seed the module cache (or use an internal mirror). After the first
-fetch, `tesseraql modules resolve --offline` and `serve` resolve reproducibly with no outbound
-calls. Resolve modules at build/CI time and bake the cache into the image so a production `serve`
-performs no module-resolution outbound.
+Everything a disconnected machine needs is a Maven coordinate, so one command collects it. On a
+connected machine, fetch a **bag** — a portable local repository:
+
+```sh
+tesseraql modules fetch --stack /path/to/stack --into ./tesseraql-bag \
+    --platform linux-amd64,windows-amd64
+```
+
+It resolves each member's `tesseraql.modules` closure exactly as `modules.lock` pins it, and
+refuses an application that has no lock — the lock is what says which closure was reviewed. It
+imports the BOM too, so a later resolve of an unversioned coordinate works. Each `--platform` you
+name adds an embedded PostgreSQL binary: that is the one artifact whose coordinate depends on the
+target machine rather than on the application. `bag.json` at the root records what was collected,
+from which application, with a SHA-256 each.
+
+Carry the directory across, then point the disconnected side at it:
+
+```sh
+tesseraql modules resolve --stack /opt/tesseraql/apps --repo ./tesseraql-bag --offline
+tesseraql package --app ./orders --repo ./tesseraql-bag --offline
+tesseraql dev --embedded-db --repo ./tesseraql-bag
+```
+
+`--repo` sets the local repository (the same thing `-Dmaven.repo.local` does), and `--offline`
+means nothing leaves the machine. An internal mirror configured in `~/.m2/settings.xml` remains
+the alternative when the disconnected side can reach one.
+
+A **production host** needs none of this: it has no resolver, and `tesseraql package` carries an
+application's locked closure inside the `.tqlapp`. The bag is for developer machines, CI runners
+that build packages offline, and operators preparing an image.
 
 ## Next
 

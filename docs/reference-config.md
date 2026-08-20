@@ -232,7 +232,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.modules` | [PackagedModules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/PackagedModules.java), [ModulesGuard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/ModulesGuard.java), [ModuleDeclarationRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ModuleDeclarationRules.java) | [admission](admission.md), [extending](extending.md), [getting-started](getting-started.md), +2 more |
+| `tesseraql.modules` | [PackagedModules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-apptasks/src/main/java/io/tesseraql/apptasks/PackagedModules.java), [ModulesGuard.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/ModulesGuard.java), [ModuleDeclarationRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ModuleDeclarationRules.java) | [admission](admission.md), [extending](extending.md), [getting-started](getting-started.md), +3 more |
 
 ## tesseraql.notifications
 
