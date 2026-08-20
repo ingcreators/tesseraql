@@ -22,6 +22,7 @@ steps:
     service:
       name: iam.createRole
       params:
+        permissions: principal.permissions
         code: params.code
         name: params.name
         application: params.application

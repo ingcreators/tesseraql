@@ -85,6 +85,27 @@ public final class RoleAdmin {
         return model;
     }
 
+    /**
+     * The store's id for a login, for the surfaces that address a user by the name they sign in
+     * with rather than by a key (docs/access-governance.md structural decision 7).
+     *
+     * <p>The per-application pages name a user this way deliberately: an administrator confined
+     * to one application has no business enumerating the whole store to find one, so the form
+     * takes the login they were given and this resolves it. An unknown login is refused as an
+     * input, not answered as an empty write.
+     */
+    public static String userIdForLogin(IdentityService identity, RealmConfig realm,
+            String loginId) {
+        requireRealm(identity, realm);
+        String login = require(loginId, "login id");
+        List<Map<String, Object>> rows = identity.execute(realm,
+                IdentityContracts.FIND_USER_BY_LOGIN, Map.of("loginId", login));
+        if (rows.isEmpty()) {
+            throw new TqlException(INPUT_REFUSED, "No user signs in as '" + login + "'");
+        }
+        return String.valueOf(rows.get(0).get("user_id"));
+    }
+
     private static void requireRealm(IdentityService identity, RealmConfig realm) {
         if (identity == null || realm == null) {
             throw new TqlException(ContractResolver.MISSING_CONTRACT,
@@ -99,9 +120,18 @@ public final class RoleAdmin {
      */
     public static Map<String, Object> createRole(IdentityService identity, RealmConfig realm,
             String code, String name, String application) {
+        return createRole(identity, realm, AdminScope.storeWide(), code, name, application);
+    }
+
+    /** The same creation, confined to what the caller may administer. */
+    public static Map<String, Object> createRole(IdentityService identity, RealmConfig realm,
+            AdminScope scope, String code, String name, String application) {
         requireRealm(identity, realm);
         String roleCode = require(code, "role code");
         String app = blankToNull(application);
+        // The role being created carries the application the request names, so the scope
+        // check reads that rather than the store -- there is no row yet to classify it.
+        scope.requireRole(roleCode, app);
         if (app != null && !roleCode.startsWith(app + ".")) {
             throw new TqlException(INPUT_REFUSED, "An application role's code carries its "
                     + "application's name as its first segment: expected '" + app
@@ -123,8 +153,8 @@ public final class RoleAdmin {
      */
     public static Map<String, Object> assignRole(IdentityService identity, RealmConfig realm,
             String actor, String userId, String roleCode, String startsAt, String endsAt) {
-        return assignRole(identity, realm, actor, userId, roleCode, startsAt, endsAt,
-                GrantHistory.SOURCE_ADMIN, null);
+        return assignRole(identity, realm, AdminScope.storeWide(), actor, userId, roleCode,
+                startsAt, endsAt, GrantHistory.SOURCE_ADMIN, null);
     }
 
     /**
@@ -136,7 +166,17 @@ public final class RoleAdmin {
     public static Map<String, Object> assignRole(IdentityService identity, RealmConfig realm,
             String actor, String userId, String roleCode, String startsAt, String endsAt,
             String source, String correlation) {
+        return assignRole(identity, realm, AdminScope.storeWide(), actor, userId, roleCode,
+                startsAt, endsAt, source, correlation);
+    }
+
+    /** The same assignment, confined to what the caller may administer. */
+    public static Map<String, Object> assignRole(IdentityService identity, RealmConfig realm,
+            AdminScope scope, String actor, String userId, String roleCode, String startsAt,
+            String endsAt, String source, String correlation) {
         requireRealm(identity, realm);
+        scope.requireRole(require(roleCode, "role code"),
+                AdminScope.applicationOf(identity, realm, roleCode.trim()));
         Map<String, Object> key = new LinkedHashMap<>();
         key.put("userId", require(userId, "user"));
         key.put("roleCode", require(roleCode, "role code"));
@@ -163,7 +203,7 @@ public final class RoleAdmin {
 
     public static Map<String, Object> unassignRole(IdentityService identity, RealmConfig realm,
             String actor, String userId, String roleCode) {
-        return unassignRole(identity, realm, actor, userId, roleCode,
+        return unassignRole(identity, realm, AdminScope.storeWide(), actor, userId, roleCode,
                 GrantHistory.SOURCE_ADMIN, null);
     }
 
@@ -174,7 +214,17 @@ public final class RoleAdmin {
      */
     public static Map<String, Object> unassignRole(IdentityService identity, RealmConfig realm,
             String actor, String userId, String roleCode, String source, String correlation) {
+        return unassignRole(identity, realm, AdminScope.storeWide(), actor, userId, roleCode,
+                source, correlation);
+    }
+
+    /** The same revocation, confined to what the caller may administer. */
+    public static Map<String, Object> unassignRole(IdentityService identity, RealmConfig realm,
+            AdminScope scope, String actor, String userId, String roleCode, String source,
+            String correlation) {
         requireRealm(identity, realm);
+        scope.requireRole(require(roleCode, "role code"),
+                AdminScope.applicationOf(identity, realm, roleCode.trim()));
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", require(userId, "user"));
         params.put("roleCode", require(roleCode, "role code"));
@@ -190,8 +240,17 @@ public final class RoleAdmin {
     public static Map<String, Object> grantPermission(IdentityService identity,
             RealmConfig realm, String actor, String userId, String code, String startsAt,
             String endsAt) {
+        return grantPermission(identity, realm, AdminScope.storeWide(), actor, userId, code,
+                startsAt, endsAt);
+    }
+
+    /** The same grant, confined to what the caller may administer. */
+    public static Map<String, Object> grantPermission(IdentityService identity,
+            RealmConfig realm, AdminScope scope, String actor, String userId, String code,
+            String startsAt, String endsAt) {
         requireRealm(identity, realm);
         String permission = require(code, "permission code");
+        scope.requirePermission(permission);
         Map<String, Object> ensure = new LinkedHashMap<>();
         ensure.put("permissionId", permission);
         ensure.put("permissionCode", permission);
@@ -215,7 +274,7 @@ public final class RoleAdmin {
 
     public static Map<String, Object> revokePermission(IdentityService identity,
             RealmConfig realm, String actor, String userId, String code) {
-        return revokePermission(identity, realm, actor, userId, code,
+        return revokePermission(identity, realm, AdminScope.storeWide(), actor, userId, code,
                 GrantHistory.SOURCE_ADMIN, null);
     }
 
@@ -223,7 +282,16 @@ public final class RoleAdmin {
     public static Map<String, Object> revokePermission(IdentityService identity,
             RealmConfig realm, String actor, String userId, String code, String source,
             String correlation) {
+        return revokePermission(identity, realm, AdminScope.storeWide(), actor, userId, code,
+                source, correlation);
+    }
+
+    /** The same revocation, confined to what the caller may administer. */
+    public static Map<String, Object> revokePermission(IdentityService identity,
+            RealmConfig realm, AdminScope scope, String actor, String userId, String code,
+            String source, String correlation) {
         requireRealm(identity, realm);
+        scope.requirePermission(require(code, "permission code"));
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("userId", require(userId, "user"));
         params.put("code", require(code, "permission code"));

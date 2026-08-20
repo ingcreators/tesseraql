@@ -106,7 +106,9 @@ class ErrorCodeUniquenessTest {
             Map.entry("VIEW-3318", "an embedded view that embeds further"),
             Map.entry("YAML-1007", "a message catalog file is malformed"),
             Map.entry("YAML-1102", "a notification channel that is not usable - invalid where"
-                    + " it is declared, or named where it is not"));
+                    + " it is declared, or named where it is not"),
+            Map.entry("YAML-1409", "a route policy that resolves an atom from the request but"
+                    + " cannot resolve on this route"));
 
     private static final Pattern DECLARATION = Pattern.compile(
             "TqlErrorCode\\s+([A-Z_0-9]+)\\s*=\\s*new\\s+TqlErrorCode\\(\\s*TqlDomain\\.([A-Z]+)"

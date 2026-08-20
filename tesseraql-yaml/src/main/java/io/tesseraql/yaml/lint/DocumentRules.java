@@ -165,8 +165,16 @@ final class DocumentRules {
     /**
      * Policy ids are dotted names ({@code users.read}): literal keys of the policies map, not
      * nested config paths, so a {@code navigate} walk on the full path never finds them.
+     *
+     * <p>An id under the framework's {@code tql.} mark is defined by construction: it is the
+     * synthesized atom check, permitting whoever holds that granted code, with no declaration
+     * behind it (docs/stack-shells.md structural decision 1). Reading it as undefined warned
+     * every application that referenced a framework surface's atom on a route of its own.
      */
     static boolean policyDefined(AppConfig config, String policy) {
+        if (policy != null && policy.startsWith("tql.")) {
+            return true;
+        }
         return config.navigate("tesseraql.security.policies") instanceof java.util.Map<?, ?> map
                 && map.containsKey(policy);
     }

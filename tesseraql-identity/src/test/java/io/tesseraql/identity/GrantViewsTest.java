@@ -14,6 +14,10 @@ class GrantViewsTest {
 
     private static final List<String> MEMBERS = List.of("shop-a", "shop-b");
 
+    /** The store-wide administrator: sees every member and may write in each.  */
+    private static final List<String> STORE_WIDE = List.of("tql.iam.admin.view",
+            "tql.iam.admin.write");
+
     /** A store as maps: exact code → holder rows, plus the prefix listing. */
     private static GrantViews.ContractRunner store(Map<String, List<Map<String, Object>>> holders,
             List<Map<String, Object>> codes) {
@@ -21,6 +25,7 @@ class GrantViewsTest {
             case IdentityContracts.FIND_PERMISSION_HOLDERS ->
                 holders.getOrDefault(String.valueOf(params.get("code")), List.of());
             case IdentityContracts.LIST_PERMISSIONS_BY_PREFIX -> codes;
+            case IdentityContracts.LIST_ROLES_BY_APPLICATION -> List.of();
             default -> throw new IllegalArgumentException(contract);
         };
     }
@@ -36,7 +41,8 @@ class GrantViewsTest {
                 "tql.app.use.shop-a", List.of(holder("usera", "r-usera", "DIRECT")),
                 "tql.app.use.*", List.of(holder("admin", "r-admin", "DIRECT"))),
                 List.of());
-        Map<String, Object> model = GrantViews.applicationGrants("shop-a", MEMBERS, runner);
+        Map<String, Object> model = GrantViews.applicationGrants("shop-a", MEMBERS, STORE_WIDE,
+                runner);
 
         assertThat(model.get("known")).isEqualTo(1);
         assertThat(model.get("hasAny")).isEqualTo(1);
@@ -53,7 +59,7 @@ class GrantViewsTest {
     @Test
     void aMemberNobodyIsGrantedAnswersTheDenyByDefaultState() {
         Map<String, Object> model = GrantViews.applicationGrants("shop-b", MEMBERS,
-                store(Map.of(), List.of()));
+                STORE_WIDE, store(Map.of(), List.of()));
 
         assertThat(model.get("hasAny")).isEqualTo(0);
         @SuppressWarnings("unchecked")
@@ -65,7 +71,7 @@ class GrantViewsTest {
     @Test
     void anApplicationOutsideTheStackAnswersUnknown() {
         Map<String, Object> model = GrantViews.applicationGrants("nope", MEMBERS,
-                store(Map.of(), List.of()));
+                STORE_WIDE, store(Map.of(), List.of()));
         assertThat(model.get("known")).isEqualTo(0);
         assertThat(model).doesNotContainKey("families");
     }
@@ -77,7 +83,8 @@ class GrantViewsTest {
                         holder("usera", "g-role", "GROUP"))),
                 List.of(Map.of("permission_code", "shop-a.users.read",
                         "permission_name", "read users")));
-        Map<String, Object> model = GrantViews.applicationGrants("shop-a", MEMBERS, runner);
+        Map<String, Object> model = GrantViews.applicationGrants("shop-a", MEMBERS, STORE_WIDE,
+                runner);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> codes = (List<Map<String, Object>>) model.get("codes");
@@ -91,11 +98,12 @@ class GrantViewsTest {
         GrantViews.ContractRunner missing = (contract, params) -> {
             throw new TqlException(new TqlErrorCode(TqlDomain.IAM, 1001), "no such contract");
         };
-        Map<String, Object> detail = GrantViews.applicationGrants("shop-a", MEMBERS, missing);
+        Map<String, Object> detail = GrantViews.applicationGrants("shop-a", MEMBERS, STORE_WIDE,
+                missing);
         assertThat(detail.get("available")).isEqualTo(0);
         assertThat(String.valueOf(detail.get("reason"))).contains("no such contract");
 
-        Map<String, Object> list = GrantViews.applications(MEMBERS, missing);
+        Map<String, Object> list = GrantViews.applications(MEMBERS, STORE_WIDE, missing);
         assertThat(list.get("available")).isEqualTo(0);
         assertThat((List<?>) list.get("rows")).extracting("name")
                 .containsExactly("shop-a", "shop-b");
@@ -106,7 +114,7 @@ class GrantViewsTest {
         GrantViews.ContractRunner broken = (contract, params) -> {
             throw new TqlException(new TqlErrorCode(TqlDomain.IAM, 2000), "exec failed");
         };
-        assertThatThrownBy(() -> GrantViews.applications(MEMBERS, broken))
+        assertThatThrownBy(() -> GrantViews.applications(MEMBERS, STORE_WIDE, broken))
                 .isInstanceOf(TqlException.class).hasMessageContaining("exec failed");
     }
 
@@ -116,7 +124,7 @@ class GrantViewsTest {
                 "tql.app.use.shop-a", List.of(holder("usera", "r-a", "DIRECT"),
                         holder("usera", "r-b", "GROUP"), holder("other", "r-a", "DIRECT"))),
                 List.of());
-        Map<String, Object> model = GrantViews.applications(MEMBERS, runner);
+        Map<String, Object> model = GrantViews.applications(MEMBERS, STORE_WIDE, runner);
 
         assertThat((List<?>) model.get("rows")).extracting("holders").containsExactly(2, 0);
         assertThat(model.get("wildcardHolders")).isEqualTo(0);

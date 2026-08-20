@@ -442,6 +442,142 @@ class IamAdminIntegrationTest {
     }
 
     /**
+     * Delegated administration end to end (docs/access-governance.md structural decision 7):
+     * the route resolves its atom from the address, so a per-application grant is the thing
+     * the gate checks — the link no unit test can prove, because it is the compiled endpoint,
+     * the router's headers and the synthesized policy meeting on a live request.
+     */
+    @Test
+    void aDelegatedAdministratorReachesOneApplicationAndWritesInsideIt() throws Exception {
+        Session delegated = session("orders-admin",
+                List.of("tql.iam.view.user-admin", "tql.iam.write.user-admin"));
+
+        // The page the address names, checked against the atom the address resolves to.
+        assertThat(get("/_tesseraql/admin/applications/user-admin", delegated).statusCode())
+                .isEqualTo(200);
+        // Another application's page is refused at the route, before any model runs — 403,
+        // not the 404 an unknown member would answer a store-wide administrator.
+        assertThat(get("/_tesseraql/admin/applications/billing", delegated).statusCode())
+                .isEqualTo(403);
+
+        HttpResponse<String> created = postForm(
+                "/_tesseraql/admin/applications/user-admin/roles/create",
+                "code=user-admin.approver&roleName=Approver", delegated);
+        assertThat(created.statusCode()).as("%s", created.body()).isEqualTo(303);
+        // The user is named by their login: an administrator confined to one application has
+        // no store-wide user list to pick from.
+        assertThat(postForm("/_tesseraql/admin/applications/user-admin/roles/assign",
+                "loginId=bob&roleCode=user-admin.approver", delegated).statusCode())
+                .isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/history?user=u2", true).body())
+                .contains("user-admin.approver").contains("role-granted")
+                .contains("orders-admin");
+
+        assertThat(postForm("/_tesseraql/admin/applications/user-admin/permissions/grant",
+                "loginId=bob&code=user-admin.approve", delegated).statusCode()).isEqualTo(303);
+    }
+
+    /** The three boundaries, refused on live requests rather than inferred from the scope. */
+    @Test
+    void containmentRefusesWhatTheDelegatedAtomDoesNotReach() throws Exception {
+        Session delegated = session("orders-admin",
+                List.of("tql.iam.view.user-admin", "tql.iam.write.user-admin"));
+
+        // A stack-wide role belongs to the deployment, never to one application. USER_READ is
+        // seeded with no application, so this is that boundary on a real row.
+        HttpResponse<String> stackWide = postForm(
+                "/_tesseraql/admin/applications/user-admin/roles/assign",
+                "loginId=bob&roleCode=USER_READ", delegated);
+        assertThat(stackWide.statusCode()).isNotEqualTo(303);
+        assertThat(stackWide.body()).contains("TQL-IAM-4036").contains("stack-wide");
+
+        // Delegating one application must not become a path to granting framework atoms.
+        HttpResponse<String> atom = postForm(
+                "/_tesseraql/admin/applications/user-admin/permissions/grant",
+                "loginId=bob&code=tql.app.deploy.user-admin", delegated);
+        assertThat(atom.statusCode()).isNotEqualTo(303);
+        assertThat(atom.body()).contains("TQL-IAM-4036").contains("framework grant");
+
+        // A code outside the application's own namespace is not this administrator's.
+        HttpResponse<String> foreign = postForm(
+                "/_tesseraql/admin/applications/user-admin/permissions/grant",
+                "loginId=bob&code=billing.approve", delegated);
+        assertThat(foreign.statusCode()).isNotEqualTo(303);
+        assertThat(foreign.body()).contains("TQL-IAM-4036");
+    }
+
+    /**
+     * The store-wide administrator passes the per-application gate by construction — the atom
+     * policy ORs in the grant it narrows — and is still confined by the address they wrote
+     * through, so a page addressed to one application cannot be used to reach another's role.
+     */
+    @Test
+    void theStoreWideAdministratorPassesTheGateAndIsConfinedByTheAddress() throws Exception {
+        assertThat(get("/_tesseraql/admin/applications/user-admin", true).statusCode())
+                .isEqualTo(200);
+
+        HttpResponse<String> crossApplication = postForm(
+                "/_tesseraql/admin/applications/user-admin/roles/assign",
+                "loginId=bob&roleCode=USER_READ");
+        assertThat(crossApplication.statusCode()).isNotEqualTo(303);
+        assertThat(crossApplication.body()).contains("TQL-IAM-4036");
+    }
+
+    /**
+     * The applications list is the one page in the family with no application in its address,
+     * so nothing resolves and the model narrows instead: a caller holding no IAM grant sees an
+     * empty list rather than an open door (the stack shell's answer to the same shape).
+     */
+    @Test
+    void theApplicationsListNarrowsToWhatTheCallerHolds() throws Exception {
+        assertThat(get("/_tesseraql/admin/applications", true).body())
+                .contains("/_tesseraql/admin/applications/user-admin");
+
+        Session none = session("nobody", List.of());
+        HttpResponse<String> empty = get("/_tesseraql/admin/applications", none);
+        assertThat(empty.statusCode()).isEqualTo(200);
+        assertThat(empty.body()).doesNotContain("/_tesseraql/admin/applications/user-admin");
+        // And the page itself stays shut, since that one does have an atom to resolve.
+        assertThat(get("/_tesseraql/admin/applications/user-admin", none).statusCode())
+                .isEqualTo(403);
+    }
+
+    /** A browser session with its CSRF token, for a caller other than the store-wide admin. */
+    private record Session(String cookie, String csrf) {
+    }
+
+    private static Session session(String login, List<String> permissions) {
+        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
+                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                        io.tesseraql.security.session.SessionStore.class);
+        String sid = sessions.create(new io.tesseraql.security.Principal(login, login, login,
+                null, List.of(), List.of(), permissions, Map.of()),
+                io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
+        return new Session(sessions.cookieName() + "=" + sid,
+                sessions.session(sid).csrfToken());
+    }
+
+    private static HttpResponse<String> get(String path, Session session) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", session.cookie())
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static HttpResponse<String> postForm(String path, String form, Session session)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf())
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
      * The access-review surface (docs/access-governance.md slice 5): open, decide, close —
      * and the close revoking through the ordinary write, so the trail names the campaign.
      */

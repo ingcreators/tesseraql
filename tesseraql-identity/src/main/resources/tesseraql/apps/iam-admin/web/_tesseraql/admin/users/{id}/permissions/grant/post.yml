@@ -23,6 +23,7 @@ steps:
       name: iam.grantPermission
       params:
         actor: principal.loginId
+        permissions: principal.permissions
         userId: path.id
         code: params.code
         startsAt: params.startsAt

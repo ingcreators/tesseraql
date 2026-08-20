@@ -17,6 +17,7 @@ steps:
       name: iam.revokePermission
       params:
         actor: principal.loginId
+        permissions: principal.permissions
         userId: path.id
         code: params.code
 response:

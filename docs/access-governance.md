@@ -352,10 +352,50 @@ is an ordinary access request. Both land a windowed grant through the same call.
 
 ## Structural decision 7: delegated administration is a scoped atom with containment
 
-The atom is `tql.iam.admin.app.<name>`, and its wildcard `tql.iam.admin.app.*` — the
-`tql.<family>.<verb>.<name|*>` grammar, unchanged. It arrives with its surface: slice 1's
-per-application page becomes writable for the applications the caller may administer, which
-is the no-new-atoms-without-a-surface rule honoured rather than restated.
+The atoms are `tql.iam.view.<name>` and `tql.iam.write.<name>`, with their wildcards — the
+`tql.<family>.<verb>.<name|*>` grammar, unchanged. Seeing and writing are two grants, not one,
+exactly as `tql.ops.view.<name>` and `tql.ops.run.<name>` are two grants where neither implies
+the other; a delegated administrator is granted both, as the store-wide one is granted
+`tql.iam.admin.view` and `tql.iam.admin.write`. That is also the answer to the open question
+below: the delegated atom does not *imply* sight of its application, it *is* sight of it.
+
+> The design first named one four-segment atom, `tql.iam.admin.app.<name>`. Implementation
+> replaced it with the verb-split pair: the single atom did not actually fit the grammar it
+> claimed to leave unchanged, it made "may see its own application" an implication rather than
+> a grant, and — because a per-application atom must be checkable at a route where the
+> store-wide administrator also passes — it could not be paired with a store-wide counterpart
+> per verb. The pair can, which is what the narrowing table below rests on.
+
+It arrives with its surface: slice 1's per-application page becomes writable for the
+applications the caller may administer, which is the no-new-atoms-without-a-surface rule
+honoured rather than restated.
+
+**The route resolves its atom from its own address.** A route's `policy:` was one fixed id, so
+a per-application grant could never be the thing a route checked — the delegated administrator
+was refused at the route before any containment ran. A policy may now interpolate the route's
+own path (`policy: tql.iam.write.{path.name}`), which is the general mechanism, not an IAM one.
+Three things are refused at lint and at boot (TQL-YAML-1409): anything but `{path.<name>}`,
+because a gate resolves from the addressed resource and never from a query string or a body the
+caller shapes; a name the route's own path does not declare; and a template outside the `tql.`
+mark, where nothing is synthesized for an interpolated id to find. At request time the value is
+matched off the URL against the route's own template — *not* off the router's path-parameter
+headers, because a form body publishes its fields as headers too and a field named after the
+path parameter overwrites one. A resolved segment must be a single atom segment: an asterisk
+would resolve to the terminal wildcard, and a dot would forge a neighbouring atom.
+
+**The store-wide administrator passes by construction.** `Atoms` records which store-wide atom
+each per-application prefix narrows — `tql.iam.view.` narrows `tql.iam.admin.view`,
+`tql.iam.write.` narrows `tql.iam.admin.write` — and the synthesized atom policy ORs it in
+beside the exact grant and the family's terminal wildcard. Stated once, as data, because the
+alternative is restating the pair at every route that checks a per-application atom, and a
+route that forgot half of it would be a gate only one of the two administrators could pass,
+which looks like nothing in review.
+
+**The applications list is the exception, and takes the shell's answer.** It is the one page in
+this family with no application in its address, so there is no atom for a policy to resolve. It
+carries no policy id and narrows its rows by the caller's grants instead — every member for
+`tql.iam.admin.view`, their own for `tql.iam.view.<name>`, none for neither — which is what the
+ops console home already does with its member switcher. An empty list, not an open door.
 
 **Containment is the whole design**, and it is enforced in `RoleAdmin`, not in the page:
 
@@ -372,6 +412,16 @@ is the no-new-atoms-without-a-surface rule honoured rather than restated.
 `tql.iam.admin.write`, application-limited for the delegated atom. A refusal is
 TQL-IAM-4036, naming the application and the code, so the message says why rather than
 just no. (4035 went to slice 3's elevation refusal, which shipped first.)
+
+The per-application pages narrow that scope once more, to the application their address names.
+For a delegated administrator this changes nothing; for a store-wide one it is the difference
+between the page they are on and the whole store, so a hand-made POST to
+`/applications/orders/…` carrying a `billing` role is refused rather than quietly honoured
+because the caller happened to be allowed everything.
+
+Those pages name their user by **login**, not by store id. An administrator confined to one
+application has no business enumerating the store to find somebody, so the form takes the login
+they were given and the write resolves it; an unknown login is refused as an input.
 
 ## Structural decision 8: context conditions are two layers, and only one of them is per-request
 
@@ -502,9 +552,10 @@ Each gated on the slice it blocks, with a recommendation.
 6. **Can a requester cancel a pending request?** — *gates slice 6.* Recommended: yes, and it
    records a history row with no grant change, because the request trail is part of the
    record even when nothing was granted.
-7. **Does the delegated atom imply `tql.iam.admin.view`?** — *gates slice 7.* Recommended:
-   no. The atom grants its own view of its own application; store-wide sight stays a
-   store-wide grant.
+7. **Does the delegated atom imply `tql.iam.admin.view`?** — *settled in slice 7.* No, and the
+   verb-split pair makes it structural rather than a rule: `tql.iam.view.<name>` *is* sight of
+   one application, granted beside `tql.iam.write.<name>`. Store-wide sight stays a store-wide
+   grant.
 8. **Are hours evaluated in the server's zone or the deployment's?** — *gates slice 8.*
    Recommended: a configured zone (`tesseraql.security.conditions.zone`), defaulting to the
    JVM's, because "login hours" means the business's hours and a server moving zones must

@@ -8,6 +8,29 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Delegated administration, one application at a time** (docs/access-governance.md structural
+  decision 7, slice 7). `tql.iam.view.<name>` and `tql.iam.write.<name>` hand one application's
+  own access to somebody who administers nothing else — seeing and writing as two grants, the
+  `tql.ops.view` / `tql.ops.run` pair applied to identity. The per-application page becomes
+  their console: this application's roles, assignment and revocation by login, and permission
+  codes carrying its name. Containment is enforced in the write, not the page — a stack-wide
+  role is never one application's, a code must carry the application's name, and nothing under
+  the `tql.` mark is ever a delegated administrator's to hand out (`TQL-IAM-4036`). The
+  store-wide administrator writing through one of these pages is confined to the application it
+  addresses, so a page cannot be used to reach another's role.
+
+- **A route policy can resolve its atom from the route's own path.** `policy:
+  tql.iam.write.{path.name}` checks the atom the address names, which is what lets a
+  per-application grant be the thing a route gates on at all; before this a route's policy was
+  one fixed id and a delegated administrator was refused before any containment ran. Only
+  `{path.<name>}` is interpolable and only under the `tql.` mark — a gate resolves from the
+  addressed resource, never from a query string or a body — and the value is read off the
+  request's URL rather than off the router's path-parameter headers, because a form field named
+  after the path parameter overwrites one of those. An unresolvable template is refused at lint
+  and at boot as `TQL-YAML-1409`. A per-application atom is also satisfied by the store-wide
+  grant it narrows, recorded once in `Atoms` as data, so a route naming the narrower atom
+  admits the store-wide administrator without restating the pair.
+
 - **Self-service access requests, approved by the role's owner** (docs/access-governance.md
   structural decision 6, slice 6). A role becomes requestable by having an **owner** — a person
   or a group; a role with no owner cannot be asked for at all, which is the deny-by-default
@@ -93,6 +116,20 @@ All notable changes to TesseraQL are documented here. The format follows
   when one was granted. IAM Admin gains a **Grant history** page filtered by user or application,
   and a per-user card on the detail page. The trail is append-only, and a realm whose contracts do
   not include it keeps its grant writes and says it holds no history.
+
+### Changed
+
+- **The IAM admin applications list no longer carries a policy id**, and narrows its rows by
+  the caller's grants instead — every member for `tql.iam.admin.view`, their own for
+  `tql.iam.view.<name>`, none for neither. It is the one page in that family with no
+  application in its address, so there is no atom for a policy to resolve; this is the answer
+  the ops console home already gives for its member switcher. A caller holding nothing sees an
+  empty list rather than a 403, and no more of the deployment than their grants already showed.
+
+- **A route referencing a `tql.` policy id is no longer linted as an undefined policy**
+  (`TQL-SEC-4030`). An id under the framework's mark is the synthesized atom check, defined by
+  construction; warning on it flagged every application that gated a route on a framework
+  surface's atom.
 
 ### Fixed
 

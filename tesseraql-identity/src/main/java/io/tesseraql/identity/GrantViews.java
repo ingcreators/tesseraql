@@ -28,6 +28,8 @@ public final class GrantViews {
             new Family("opsView", "May see its operational data", Atoms.OPS_VIEW_PREFIX),
             new Family("opsRun", "May act on its operations", Atoms.OPS_RUN_PREFIX),
             new Family("deploy", "May deploy it", Atoms.APP_DEPLOY_PREFIX),
+            new Family("iamView", "May see its access", Atoms.IAM_VIEW_PREFIX),
+            new Family("iamWrite", "May administer its access", Atoms.IAM_WRITE_PREFIX),
             new Family("studio", "May edit it in Studio (reserved)", Atoms.STUDIO_EDIT_PREFIX));
 
     /** Executes one identity contract; the runtime binds this to the realm's service. */
@@ -44,11 +46,12 @@ public final class GrantViews {
      * {@code tql.app.use.<name>} holder count, plus the wildcard holders shown once — a
      * wildcard grant reaches every member, so it is not a per-row number.
      */
-    public static Map<String, Object> applications(List<String> members, ContractRunner runner) {
+    public static Map<String, Object> applications(List<String> members, List<String> permissions,
+            ContractRunner runner) {
         Map<String, Object> model = new LinkedHashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
         try {
-            for (String member : members) {
+            for (String member : visible(members, permissions)) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("name", member);
                 row.put("holders",
@@ -62,18 +65,42 @@ public final class GrantViews {
             if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
                 throw ex;
             }
-            return applicationsUnavailable(members, ex.getMessage());
+            return applicationsUnavailable(members, permissions, ex.getMessage());
         }
         model.put("rows", rows);
         return model;
     }
 
+    /**
+     * The applications this caller may see: every member for the store-wide
+     * {@code tql.iam.admin.view}, otherwise the ones whose {@code tql.iam.view.<name>} they
+     * hold (docs/access-governance.md structural decision 7).
+     *
+     * <p>The list is the one page in this family with no application in its address, so there
+     * is no atom for a route policy to resolve. It follows the stack shell's answer to the same
+     * shape — the ops console home carries no policy id and narrows its switcher by the
+     * caller's grants — so a caller holding nothing here sees an empty list rather than an open
+     * door, and sees no more of the deployment than their grants already showed them.
+     */
+    private static List<String> visible(List<String> members, List<String> permissions) {
+        if (permissions != null && permissions.contains(Atoms.IAM_ADMIN_VIEW)) {
+            return members;
+        }
+        List<String> mine = new ArrayList<>();
+        for (String member : members) {
+            if (Atoms.holds(permissions, Atoms.IAM_VIEW_PREFIX, member)) {
+                mine.add(member);
+            }
+        }
+        return mine;
+    }
+
     /** The list's degraded model: names only, and the page says why (never fails). */
     public static Map<String, Object> applicationsUnavailable(List<String> members,
-            String reason) {
+            List<String> permissions, String reason) {
         Map<String, Object> model = new LinkedHashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (String member : members) {
+        for (String member : visible(members, permissions)) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("name", member);
             rows.add(row);
@@ -91,13 +118,18 @@ public final class GrantViews {
      * anything in answers {@code hasAny: 0} so the page can render the deny-by-default state.
      */
     public static Map<String, Object> applicationGrants(String name, List<String> members,
-            ContractRunner runner) {
+            List<String> permissions, ContractRunner runner) {
         Map<String, Object> model = new LinkedHashMap<>();
         model.put("name", name);
         model.put("known", members.contains(name) ? 1 : 0);
         if (!members.contains(name)) {
             return model;
         }
+        // Whether this caller may write here at all, so the page offers only what the writes
+        // would accept. The forms are the convenience; AdminScope inside RoleAdmin is the
+        // control, and it runs again on every POST whatever this page rendered.
+        model.put("canWrite",
+                AdminScope.of(permissions, members).confinedTo(name).canWrite() ? 1 : 0);
         try {
             boolean any = false;
             List<Map<String, Object>> families = new ArrayList<>();
@@ -131,6 +163,10 @@ public final class GrantViews {
             }
             model.put("codes", codes);
             model.put("hasAny", any || !codes.isEmpty() ? 1 : 0);
+            // This application's own roles, for the assignment form's choices — the same set
+            // the writes will accept, since a role outside it is not this application's.
+            model.put("roles", runner.run(IdentityContracts.LIST_ROLES_BY_APPLICATION,
+                    Map.of("application", name)));
             model.put("available", 1);
         } catch (TqlException ex) {
             if (!ContractResolver.MISSING_CONTRACT.equals(ex.code())) {
@@ -149,7 +185,11 @@ public final class GrantViews {
         model.put("known", members.contains(name) ? 1 : 0);
         model.put("families", List.of());
         model.put("codes", List.of());
+        model.put("roles", List.of());
         model.put("hasAny", 0);
+        // A store that cannot answer the reads behind this page is not one to write through:
+        // the forms would offer choices nothing verified.
+        model.put("canWrite", 0);
         model.put("available", 0);
         model.put("reason", reason);
         return model;

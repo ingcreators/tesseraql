@@ -20,6 +20,43 @@ here. Browser-session *usage patterns* (forms, CSRF in templates) are in
 All JWT and API-key crypto is JDK-only — there is no JOSE/JWT third-party dependency, matching the
 SAML module's supply-chain posture.
 
+## A policy resolved from the route's own path
+
+A route addressed to one thing can check that thing's own grant, by interpolating a path
+parameter into the policy id:
+
+```yaml
+# /_tesseraql/admin/applications/{name}/roles/assign
+security:
+  policy: tql.iam.write.{path.name}   # checks tql.iam.write.orders under /applications/orders
+```
+
+This exists for per-subject delegation — administering one application, not the whole store
+(see [access-governance.md](access-governance.md)) — where one fixed policy id cannot express
+what the route is actually gating.
+
+The rules are narrow on purpose:
+
+- **Only `{path.<name>}`.** A gate resolves from the addressed resource, never from a query
+  string or a body field, which the caller shapes freely. The value is read off the request's
+  URL, matched against the route's own template.
+- **The name must be one the route's own path declares.** Otherwise it would resolve to nothing
+  on every request.
+- **Only under the `tql.` mark.** An id under the mark is the synthesized atom check, derived
+  from the granted code itself; a declared policy is a fixed name, so an interpolated one would
+  name no policy at all.
+- **The resolved value must be a single atom segment** — no `.`, `*`, `/`, `%` or whitespace. An
+  asterisk would otherwise resolve to a family's terminal wildcard, and a dot would forge a
+  neighbouring atom out of the segment the request supplied. A request that resolves to nothing
+  usable is refused with `TQL-SEC-4031`, like any other denial.
+
+The first three are reported by the linter and refused at boot as `TQL-YAML-1409`, so a policy
+that cannot resolve fails at its source rather than as a puzzling 403 on every request.
+
+A framework atom checked this way is also satisfied by the store-wide grant it narrows, where
+one exists, so a route naming the per-application atom still admits the store-wide
+administrator without saying so.
+
 ## Route security defaults
 
 Routes of the same kind almost always share the same `security:` choices — every `/api/**` route

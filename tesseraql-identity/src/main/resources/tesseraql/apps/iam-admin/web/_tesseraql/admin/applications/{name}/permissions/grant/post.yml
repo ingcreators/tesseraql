@@ -1,13 +1,16 @@
 version: tesseraql/v1
-id: tql.iamAdmin.users.assignRole
+id: tql.iamAdmin.applications.grantPermission
 kind: route
 recipe: command-json
 
 security:
-  policy: tql.iam.admin.write
+  policy: tql.iam.write.{path.name}
 
 input:
-  roleCode:
+  loginId:
+    type: string
+    required: true
+  code:
     type: string
     required: true
   startsAt:
@@ -20,16 +23,15 @@ input:
 steps:
   - id: main
     service:
-      name: iam.assignRole
+      name: iam.app.grantPermission
       params:
-        # Who decided, for the grant trail (docs/access-governance.md structural
-        # decision 1): route-resolved from the session principal, never caller-writable.
+        application: path.name
         actor: principal.loginId
         permissions: principal.permissions
-        userId: path.id
-        roleCode: params.roleCode
+        loginId: params.loginId
+        code: params.code
         startsAt: params.startsAt
         endsAt: params.endsAt
 response:
   redirect:
-    location: /_tesseraql/admin/users/{path.id}?assigned=1
+    location: /_tesseraql/admin/applications/{path.name}?granted=1
