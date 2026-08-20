@@ -213,7 +213,7 @@ All 550 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | Code | Meaning | Documented in | Raised in |
 | --- | --- | --- | --- |
 | `TQL-IAM-1001` | Raised when the realm provides no SQL for a requested contract. | — | [ContractResolver.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-identity/src/main/java/io/tesseraql/identity/ContractResolver.java) |
-| `TQL-IAM-1002` | Contract '…' failed: … | — | [IdentityService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-identity/src/main/java/io/tesseraql/identity/IdentityService.java) |
+| `TQL-IAM-1002` | A contract's SQL failed against the realm's datasource. | — | [IdentityService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-identity/src/main/java/io/tesseraql/identity/IdentityService.java) |
 | `TQL-IAM-1003` | No datasource '…' for realm … | — | [IdentityService.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-identity/src/main/java/io/tesseraql/identity/IdentityService.java) |
 | `TQL-IAM-1010` | No managed schema for dialect '…' | — | [DefaultIdentityPack.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-identity/src/main/java/io/tesseraql/identity/DefaultIdentityPack.java) |
 | `TQL-IAM-2000` | Unsupported tesseraql-iam operation: … | — | [TesseraqlIamProducer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-components/src/main/java/io/tesseraql/camel/iam/TesseraqlIamProducer.java) |
