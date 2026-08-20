@@ -31,7 +31,7 @@
   <div class="hc-card__body">
     <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
       <p class="hc-empty__title">No recorded grant changes.</p>
-      <p class="hc-empty__body">Changes made from now on are recorded here, whether an
+      <p class="hc-empty__description">Changes made from now on are recorded here, whether an
         administrator made them or an assignment rule produced them.</p>
     </div>
     <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
