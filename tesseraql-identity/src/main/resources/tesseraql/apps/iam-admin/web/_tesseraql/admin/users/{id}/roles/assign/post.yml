@@ -25,6 +25,7 @@ steps:
         # Who decided, for the grant trail (docs/access-governance.md structural
         # decision 1): route-resolved from the session principal, never caller-writable.
         actor: principal.loginId
+        permissions: principal.permissions
         userId: path.id
         roleCode: params.roleCode
         startsAt: params.startsAt

@@ -29,6 +29,18 @@ public final class Atoms {
     /** The atom prefix reserved for Studio editing of one application ({@code tql.studio.edit.<name>}). */
     public static final String STUDIO_EDIT_PREFIX = "tql.studio.edit.";
 
+    /**
+     * The atom prefix delegating administration of one application's own access
+     * ({@code tql.iam.admin.app.<name>}, docs/access-governance.md structural decision 7).
+     *
+     * <p>It is strictly narrower than the store-wide {@code tql.iam.admin.write}: a holder
+     * touches only roles classified to an application they hold it for, grants only permission
+     * codes carrying that application's name, and never reaches a stack-wide role or anything
+     * under the {@code tql.} mark. Delegating administration of {@code orders} must not become
+     * a path to granting {@code tql.app.deploy.*}.
+     */
+    public static final String IAM_ADMIN_APP_PREFIX = "tql.iam.admin.app.";
+
     private Atoms() {
     }
 
