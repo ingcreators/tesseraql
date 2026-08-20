@@ -263,4 +263,6 @@ export const EXCLUDED = [
   'http-threading.md',
   // How deployment-supplied contract SQL is executed: keys, timeout, transaction, 2026-08-20.
   'contract-sql-execution.md',
+  // Which library owns the socket and which thread a request pipeline runs on, 2026-08-20.
+  'http-edge.md',
 ];
