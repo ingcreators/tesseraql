@@ -92,27 +92,28 @@
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-mysql</artifactId>
     </dependency>
-    <!-- Opt-in feature: the runtime has no compile dependency on SCIM; it self-installs via the
-         RuntimeExtension SPI when the jar is on the classpath. Test scope keeps the ITs here. -->
+    <!-- Corporate identity — SCIM provisioning, SAML and OIDC sign-in — travels with the runtime
+         (docs/module-channel.md decision 2). These three are first-party, add no third-party
+         artifact to this closure (168 KB in total, and each one's own pom is guarded against
+         growing one), and stay inert until configured: each is a RuntimeExtension whose
+         enabled(AppConfig) is false without its configuration key, and tesseraql.plugins.allowlist
+         gates classpath providers as well as plugin providers. Carrying them means an enterprise
+         deployment configures SSO instead of adding jars to an image — which the deployment
+         distribution has no supported way to do. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-scim</artifactId>
       <version>${project.version}</version>
-      <scope>test</scope>
     </dependency>
-    <!-- Opt-in feature: same RuntimeExtension pattern as SCIM above. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-saml</artifactId>
       <version>${project.version}</version>
-      <scope>test</scope>
     </dependency>
-    <!-- Opt-in feature: same RuntimeExtension pattern as SCIM/SAML above. -->
     <dependency>
       <groupId>io.tesseraql</groupId>
       <artifactId>tesseraql-oidc</artifactId>
       <version>${project.version}</version>
-      <scope>test</scope>
     </dependency>
     <!-- The authorization server (docs/token-issuance.md): a framework surface of the stack,
          gated by the stack file's security.oauth.enabled — inert everywhere the graft does

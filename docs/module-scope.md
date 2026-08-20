@@ -172,6 +172,10 @@ owner:
 `extending.md`'s "Two ways in" names **"a jar added with `--modules`"** as the classpath route,
 and the `tesseraql-oidc`/`-saml`/`-scim` leaf modules — test-scoped in the runtime POM, absent
 from the distribution, activated by config — are exactly the jars an operator adds that way.
+(Those three now ship *on* the runtime classpath and are activated by configuration alone —
+[module-channel.md](module-channel.md) decision 2 — so they are no longer the example; the
+per-runtime `RuntimeExtension` route this decision builds is unchanged, and serves an
+application's own extension jars.)
 `RuntimeExtensions.discover` already merges two sources (the base `ServiceLoader.load` and each
 plugin jar's own loader, deduplicated by class name); it gains the application's module loader as
 a third, between them. This also heals the current shape's worst accident: under `dev`'s union

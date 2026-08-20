@@ -11,10 +11,9 @@ Once enabled, the login page shows **Sign in with SAML**, linking to
 and is always sanitized to a same-origin path after login, so it cannot become an open
 redirect.
 
-Like OIDC, SAML is an opt-in leaf module: add the `tesseraql-saml` jar to the runtime classpath
-(or drop a signed jar in the app's plugin directory) and set `tesseraql.saml.enabled: true` — the
-SP routes install themselves. All SAML processing is JDK-only; there is no third-party SAML or XML
-security dependency.
+Like OIDC, SAML travels with the runtime: set `tesseraql.saml.enabled: true` and the SP routes
+install themselves. Nothing to add to a classpath — configuration is what turns it on. All SAML
+processing is JDK-only; there is no third-party SAML or XML security dependency.
 
 ## Configuration
 
@@ -188,10 +187,10 @@ failure, `400 {"error": "Invalid SAML request"}` for a malformed one — with no
 - **401 for one particular user, others fine.** With `link.enabled: true` and provisioning off,
   a federated login with no matching local account is rejected — create the local user (or enable
   `link.provision`).
-- **No "Sign in with SAML" on the login page.** `enabled` is not `true`, the `tesseraql-saml` jar
-  is not on the classpath, or `sp.acsUrl` / `idp.ssoUrl` is missing (the login route only installs
-  when both are known). A plugin allowlist (`tesseraql.plugins.allowlist`) must include `saml` if
-  one is declared.
+- **No "Sign in with SAML" on the login page.** `enabled` is not `true`, or `sp.acsUrl` /
+  `idp.ssoUrl` is missing (the login route only installs when both are known). A plugin allowlist
+  (`tesseraql.plugins.allowlist`) must include `saml` if one is declared — the allowlist gates
+  extensions that arrive on the classpath as well as ones that arrive as plugin jars.
 
 ## Related pages
 

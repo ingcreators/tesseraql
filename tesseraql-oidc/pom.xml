@@ -57,4 +57,42 @@
     </dependency>
   </dependencies>
 
+  <build>
+    <plugins>
+      <plugin>
+        <!--
+          The promotion's guard (docs/module-channel.md decision 2): this module travels with
+          every runtime because it is first-party and weightless, so it may declare nothing but
+          TesseraQL modules at compile or runtime scope. A third-party dependency added here
+          would reach every deployment silently, which is the property the promotion rests on —
+          so it fails this module's own build instead. Test scope stays free.
+        -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>weightless-on-the-runtime</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>*</exclude>
+                  </excludes>
+                  <includes>
+                    <include>io.tesseraql:*</include>
+                    <include>*:*:*:*:test</include>
+                  </includes>
+                  <searchTransitive>false</searchTransitive>
+                </bannedDependencies>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
 </project>
