@@ -6,6 +6,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Fixed
+
+- **An application's declared modules can supply its object store and its runtime extensions**
+  (docs/module-scope.md structural decision 2, corrected). Module jars load on the declaring
+  application's own classloader, and two discovery sites never looked there: `BlobStores` and
+  `RuntimeExtensions` read the thread context classloader, which in a hosted runtime is the process
+  classpath. So an application that declared `io.tesseraql:tesseraql-s3` in `tesseraql.modules` and
+  set `tesseraql.object-storage.provider: s3` was told at start that its provider was missing
+  (`TQL-YAML-1108`), and an extension delivered as a module was never discovered at all — while the
+  codec side of the same decision had worked all along. Both take the application's module loader
+  now, plugin jars and the classpath remain the other two sources, deduplication is still by
+  implementation class, and `tesseraql.plugins.allowlist` still gates every source alike.
+
 ### Added
 
 - **One place to put a framework database driver, on every distribution** (docs/module-channel.md

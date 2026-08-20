@@ -330,6 +330,26 @@ archive is keyed on the fat jar's size alone — a classpath the archive was not
 silently refused by the JVM, costing start-up time with nothing printed — so the cache key becomes
 the whole classpath, the extension jars included.
 
+**A framework surface has no module channel, and the same shape would serve it.** The stack surface
+runtime — sign-in, the account pages, the portal, the ops shell, IAM Admin — runs the bundled
+`portal` application from the classpath. It declares no `tesseraql.modules` and has no resolved
+cache, so a provider it needed could only come from the base classpath, exactly like the framework
+database's driver. Nothing needs one today: no bundled application declares attachments, and
+`SystemApps` does not even merge attachment documents, so a mounted surface cannot declare one.
+
+If that changes, the shape is this decision's, not a new one: the stack file declares
+`framework.objectStorage` (the provider and the coordinate that supplies it) beside
+`framework.datasource`, the operator places the jar where this table says, and the refusal already
+exists — `BlobStores` answers `TQL-YAML-1108` naming the provider it could not find, which is the
+symptom-shaped refusal `TQL-APP-4220` had to be written by hand for. The key is deliberately not
+added now: a declaration nothing reads is a promise the runtime does not keep, and the surface's
+configuration is grafted from the stack file one subtree at a time (`security:` today) rather than
+wholesale.
+
+Member runtimes are a different matter and need nothing here: an application declares its object
+store in its own `tesseraql.modules`, and the loader that resolution filled is the one discovery
+reads.
+
 ### 7. MariaDB Connector/J becomes a BOM-managed coordinate
 
 `mysql-connector-j` is GPLv2 with the FOSS exception, which makes redistribution a question every

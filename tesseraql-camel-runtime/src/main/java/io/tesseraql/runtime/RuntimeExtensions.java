@@ -27,11 +27,26 @@ final class RuntimeExtensions {
     }
 
     static List<RuntimeExtension> discover(AppConfig config, Path appHome) {
+        return discover(config, appHome, null);
+    }
+
+    /**
+     * As {@link #discover(AppConfig, Path)}, also reading the application's own module loader —
+     * the third source docs/module-scope.md structural decision 2 names, so an extension declared
+     * in {@code tesseraql.modules} is discovered by the runtime that declared it and by no
+     * neighbour. Providers reachable through the loader's parent are the classpath's own and
+     * deduplicate against it by implementation class.
+     */
+    static List<RuntimeExtension> discover(AppConfig config, Path appHome, ClassLoader modules) {
         // Keyed by implementation class so a provider visible through both the classpath and a
         // plugin loader's parent delegation is only installed once.
         Map<String, RuntimeExtension> byClass = new LinkedHashMap<>();
         ServiceLoader.load(RuntimeExtension.class).forEach(
                 extension -> byClass.putIfAbsent(extension.getClass().getName(), extension));
+        if (modules != null) {
+            ServiceLoader.load(RuntimeExtension.class, modules).forEach(
+                    extension -> byClass.putIfAbsent(extension.getClass().getName(), extension));
+        }
         for (Plugins.PluginJar plugin : Plugins.load(config, appHome)) {
             LOG.info("Loaded plugin jar '{}'", plugin.name());
             ServiceLoader.load(RuntimeExtension.class, plugin.classLoader())
