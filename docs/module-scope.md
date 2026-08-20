@@ -383,7 +383,9 @@ in slice 1 in passing.
 
 - **The `tesseraql install` command** (and any notify-a-running-host machinery). Decision 23/29
   territory; this design leaves a named operator step (`modules resolve`) and a refusal that
-  points at it.
+  points at it. How the resolved cache reaches a machine that cannot run that step —
+  packaged into the `.tqlapp`, or carried in a fetched repository bag — is
+  [module-channel.md](module-channel.md).
 - **Module hot-swap under `--watch`.** Restart is the contract, stated in the docs sweep.
 - **Widening the module SPI surface** (secret resolvers, app sources, scanners from module
   jars). Plugins already cover per-app extension jars with an allowlist; merging the two
