@@ -8,6 +8,25 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Groups are writable, and membership carries a validity window**
+  (docs/access-governance.md structural decision 4, slice 4). `tql_groups`,
+  `tql_user_groups` and `tql_group_roles` were read by three contracts at sign-in and written
+  by none: the identity pack had no create-group, no membership write and no group-role write,
+  so a deployment could only populate them by hand. Eleven contracts now cover the gap, and IAM
+  Admin gains a groups page and a per-group page editing members and the roles the group
+  delivers. `tql_user_groups` gains `source` and `starts_at`/`ends_at`, filtered at resolution
+  by the same predicate its sibling assignment tables already use — the deferral said group
+  membership windows would be decided here, and they are the same window as everywhere else.
+  Joins and leaves are recorded in the grant trail; deleting a group empties its memberships
+  first and records a leave for everybody who was in it.
+
+  **Not in this slice, for a measured reason**: pointing the SCIM `/Groups` endpoint at the
+  managed store. `ScimGroupService.create` runs its contract SQL through `executeQuery` and
+  reads the assigned id from the returned row, so a bundled contract set would need
+  `insert … returning`, which MySQL and SQL Server do not have. Making it portable means
+  changing that create seam, which every existing deployment's hand-authored contract SQL
+  depends on — recorded in the design as its own slice.
+
 - **Eligible roles: take one when you need it, and it expires by itself**
   (docs/access-governance.md structural decision 3, slice 3). Every grant was either held or
   not held, so recording "this person may take this role" meant granting it. An **eligibility**

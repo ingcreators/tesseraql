@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Group', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/groups}">Groups</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/users}">Users</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status" th:if="${added != null}">Member added.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${removed != null}">Member removed.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${granted != null}">Role added to the group.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${revoked != null}">Role removed from the group.</p>
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">Groups are unavailable for this realm.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header"><h1 th:text="${groupCode}">group</h1></div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Members</div>
+  <div class="hc-card__body hc-stack">
+    <!-- Unlike the sign-in reads this list is unfiltered: an administrator needs to see a
+         membership that has not started yet, or has ended, in order to edit it. -->
+    <div class="hc-empty" th:if="${#lists.isEmpty(members)}">
+      <p class="hc-empty__title">Nobody is in this group.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(members)}">
+      <table class="hc-table">
+        <thead><tr><th>User</th><th>From</th><th>Until</th><th>Source</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="m : ${members}">
+            <td><a th:href="@{'/_tesseraql/admin/users/' + ${m.user_id}}"
+                   th:text="${m.login_id != null ? m.login_id : m.user_id}"></a></td>
+            <td th:text="${m.starts_at != null ? m.starts_at : '—'}"></td>
+            <td th:text="${m.ends_at != null ? m.ends_at : '—'}"></td>
+            <td th:text="${m.source}"></td>
+            <td th:if="${writable == 1}">
+              <form method="post"
+                    th:action="@{/_tesseraql/admin/groups/{code}/members/remove(code=${groupCode})}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="userId" th:value="${m.user_id}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${writable == 1}" method="post"
+          th:action="@{/_tesseraql/admin/groups/{code}/members/add(code=${groupCode})}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">User id</span>
+        <input class="hc-input" name="userId" required></label>
+      <label class="hc-field"><span class="hc-field__label">From</span>
+        <input class="hc-input" name="startsAt" type="datetime-local"></label>
+      <label class="hc-field"><span class="hc-field__label">Until</span>
+        <input class="hc-input" name="endsAt" type="datetime-local"></label>
+      <button class="hc-button" data-variant="primary" type="submit">Add</button>
+    </form>
+  </div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Roles this group delivers</div>
+  <div class="hc-card__body hc-stack">
+    <div class="hc-empty" th:if="${#lists.isEmpty(groupRoles)}">
+      <p class="hc-empty__title">This group delivers no roles.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(groupRoles)}">
+      <table class="hc-table">
+        <thead><tr><th>Role</th><th>Application</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="r : ${groupRoles}">
+            <td><code th:text="${r.role_code}"></code></td>
+            <td th:text="${r.application != null ? r.application : '—'}"></td>
+            <td th:if="${writable == 1}">
+              <form method="post"
+                    th:action="@{/_tesseraql/admin/groups/{code}/roles/revoke(code=${groupCode})}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="roleCode" th:value="${r.role_code}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${writable == 1}" method="post"
+          th:action="@{/_tesseraql/admin/groups/{code}/roles/grant(code=${groupCode})}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
+        </select></label>
+      <button class="hc-button" data-variant="primary" type="submit">Add</button>
+    </form>
+  </div>
+</section>
+</div>
+</html>

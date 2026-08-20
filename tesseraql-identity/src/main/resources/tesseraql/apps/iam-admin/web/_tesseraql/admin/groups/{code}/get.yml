@@ -1,0 +1,44 @@
+version: tesseraql/v1
+id: tql.iamAdmin.groups.detail
+kind: route
+recipe: query-html
+
+security:
+  policy: tql.iam.admin.view
+
+input:
+  added:
+    type: string
+    required: false
+  removed:
+    type: string
+    required: false
+  granted:
+    type: string
+    required: false
+  revoked:
+    type: string
+    required: false
+
+sources:
+  main:
+    service:
+      name: iam.group
+      params:
+        groupCode: path.code
+response:
+  html:
+    status: 200
+    template: group.html
+    model:
+      groupCode: main.groupCode
+      members: main.members
+      groupRoles: main.groupRoles
+      allRoles: main.roles
+      available: main.available
+      writable: main.writable
+      reason: main.reason
+      added: params.added
+      removed: params.removed
+      granted: params.granted
+      revoked: params.revoked

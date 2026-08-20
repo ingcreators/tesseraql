@@ -113,6 +113,25 @@ carry rule provenance — a manually assigned role always survives, and a rule's
 goes away when the rule stops producing it. **Recompute now** (one user from their detail
 page, everyone from the rules page) applies rule edits without waiting for sign-ins.
 
+## Groups
+
+The groups page (`/_tesseraql/admin/groups`) creates a group, and a group's own page edits
+its two halves: **who is in it**, and **what it delivers**. A group is a bundle of roles
+with a membership — the way to give the same access to many people once, and to take it
+away once.
+
+Membership carries the same **validity window** as every other assignment. Somebody added
+until the end of a secondment stops being a member then, with nothing to remember: the
+window is what ends it. The member list on the group page is unfiltered on purpose — an
+administrator needs to see a membership that has not started yet, or has ended, in order to
+edit it — while the member count on the list page counts only live ones.
+
+Joins and leaves are recorded in the [grant history](#grant-history). Deleting a group
+empties its memberships first and records a leave for everybody who was in it, so nobody's
+access changes without a trail saying so.
+
+Changes reach people at their next sign-in, like every grant change.
+
 ## Eligible roles
 
 An **eligibility** says a person may take a role when they need it, and grants nothing

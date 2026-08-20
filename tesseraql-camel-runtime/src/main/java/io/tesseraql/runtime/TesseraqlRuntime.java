@@ -1946,6 +1946,50 @@ public final class TesseraqlRuntime implements AutoCloseable {
                         params -> io.tesseraql.identity.RoleAdmin.deleteConstraint(
                                 iamIdentity.get(), iamRealm.get(),
                                 String.valueOf(params.get("constraintId"))));
+                // Group management (docs/access-governance.md structural decision 4): the
+                // schema was complete and nothing wrote it. Membership writes take the
+                // actor for the trail, like the role and permission writes.
+                serviceProviders.register("iam.groups",
+                        params -> io.tesseraql.identity.GroupAdmin.groupsModel(
+                                iamIdentity.get(), iamRealm.get()));
+                serviceProviders.register("iam.group",
+                        params -> io.tesseraql.identity.GroupAdmin.groupModel(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("groupCode"))));
+                serviceProviders.register("iam.createGroup",
+                        params -> io.tesseraql.identity.GroupAdmin.createGroup(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("code")),
+                                String.valueOf(params.get("name"))));
+                serviceProviders.register("iam.deleteGroup",
+                        params -> io.tesseraql.identity.GroupAdmin.deleteGroup(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("groupCode"))));
+                serviceProviders.register("iam.addGroupMember",
+                        params -> io.tesseraql.identity.GroupAdmin.addMember(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("groupCode")),
+                                String.valueOf(params.get("userId")),
+                                String.valueOf(params.get("startsAt")),
+                                String.valueOf(params.get("endsAt"))));
+                serviceProviders.register("iam.removeGroupMember",
+                        params -> io.tesseraql.identity.GroupAdmin.removeMember(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("actor")),
+                                String.valueOf(params.get("groupCode")),
+                                String.valueOf(params.get("userId"))));
+                serviceProviders.register("iam.grantGroupRole",
+                        params -> io.tesseraql.identity.GroupAdmin.grantRole(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("groupCode")),
+                                String.valueOf(params.get("roleCode"))));
+                serviceProviders.register("iam.revokeGroupRole",
+                        params -> io.tesseraql.identity.GroupAdmin.revokeRole(
+                                iamIdentity.get(), iamRealm.get(),
+                                String.valueOf(params.get("groupCode")),
+                                String.valueOf(params.get("roleCode"))));
                 // Eligibility, the administrator's side of elevation
                 // (docs/access-governance.md structural decision 3). Taking the role is
                 // the account surface's own Java route, because only that layer can make

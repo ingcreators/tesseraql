@@ -369,7 +369,9 @@ class TestRunnerIntegrationTest {
                     + "role_id varchar(64), source varchar(32) default 'admin', "
                     + "starts_at timestamp, ends_at timestamp)");
             statement.execute(
-                    "create table tql_user_groups (user_id varchar(64), group_id varchar(64))");
+                    "create table tql_user_groups (user_id varchar(64), group_id varchar(64),"
+                            + " source varchar(32) default 'admin', starts_at timestamp,"
+                            + " ends_at timestamp)");
             statement.execute(
                     "create table tql_group_roles (group_id varchar(64), role_id varchar(64))");
             statement.execute("insert into tql_users (user_id, login_id, display_name, status) "

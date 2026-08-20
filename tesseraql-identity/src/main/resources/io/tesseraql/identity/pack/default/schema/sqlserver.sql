@@ -42,6 +42,9 @@ if object_id('tql_user_groups', 'U') is null
 create table tql_user_groups (
   user_id  varchar(64) not null,
   group_id varchar(64) not null,
+  source   varchar(32) not null default 'admin',
+  starts_at datetime2,
+  ends_at   datetime2,
   primary key (user_id, group_id)
 );
 

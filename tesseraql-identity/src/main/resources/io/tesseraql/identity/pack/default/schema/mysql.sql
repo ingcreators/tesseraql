@@ -37,6 +37,9 @@ create table if not exists tql_permissions (
 create table if not exists tql_user_groups (
   user_id  varchar(64) not null,
   group_id varchar(64) not null,
+  source   varchar(32) not null default 'admin',
+  starts_at datetime,
+  ends_at   datetime,
   primary key (user_id, group_id)
 );
 

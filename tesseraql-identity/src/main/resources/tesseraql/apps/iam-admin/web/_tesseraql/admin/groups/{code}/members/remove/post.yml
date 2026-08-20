@@ -1,0 +1,24 @@
+version: tesseraql/v1
+id: tql.iamAdmin.groups.removeMember
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  userId:
+    type: string
+    required: true
+
+steps:
+  - id: main
+    service:
+      name: iam.removeGroupMember
+      params:
+        actor: principal.loginId
+        groupCode: path.code
+        userId: params.userId
+response:
+  redirect:
+    location: /_tesseraql/admin/groups/{path.code}?removed=1

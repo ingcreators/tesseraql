@@ -409,6 +409,38 @@ class IamAdminIntegrationTest {
                 .contains("sod.left").contains("bob");
     }
 
+    /**
+     * The group surface (docs/access-governance.md slice 4): the schema was complete and
+     * nothing wrote it, so this is the first path that creates one and puts somebody in it.
+     */
+    @Test
+    void groupsAreCreatedEditedAndDeletedFromTheirOwnPages() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/groups/create", "code=FINANCE&name=Finance")
+                .statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/roles/create",
+                "code=finance.read&name=Read&application=").statusCode()).isEqualTo(303);
+
+        assertThat(get("/_tesseraql/admin/groups", true).body())
+                .contains("FINANCE").contains("/_tesseraql/admin/groups/FINANCE");
+
+        assertThat(postForm("/_tesseraql/admin/groups/FINANCE/roles/grant",
+                "roleCode=finance.read").statusCode()).isEqualTo(303);
+        assertThat(postForm("/_tesseraql/admin/groups/FINANCE/members/add", "userId=u2")
+                .statusCode()).isEqualTo(303);
+
+        String detail = get("/_tesseraql/admin/groups/FINANCE", true).body();
+        assertThat(detail).contains("finance.read").contains("bob");
+        // The membership shows in the trail, like every other change to what bob holds.
+        assertThat(get("/_tesseraql/admin/history?user=u2", true).body())
+                .contains("group-joined").contains("FINANCE");
+
+        assertThat(postForm("/_tesseraql/admin/groups/delete", "groupCode=FINANCE")
+                .statusCode()).isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/groups", true).body()).doesNotContain("FINANCE");
+        assertThat(get("/_tesseraql/admin/history?user=u2", true).body())
+                .contains("group-left");
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))

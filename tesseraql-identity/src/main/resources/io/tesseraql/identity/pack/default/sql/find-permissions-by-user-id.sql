@@ -24,6 +24,8 @@ from
   join tql_permissions p on p.permission_id = rp.permission_id
 where
   ug.user_id = /* userId */ 'u1'
+  and (ug.starts_at is null or ug.starts_at <= current_timestamp)
+  and (ug.ends_at is null or ug.ends_at > current_timestamp)
 
 union
 

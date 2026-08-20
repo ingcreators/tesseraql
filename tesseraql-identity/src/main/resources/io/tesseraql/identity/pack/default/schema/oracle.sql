@@ -37,6 +37,9 @@ create table tql_permissions (
 create table tql_user_groups (
   user_id  varchar2(64) not null,
   group_id varchar2(64) not null,
+  source   varchar2(32) default 'admin' not null,
+  starts_at timestamp,
+  ends_at   timestamp,
   primary key (user_id, group_id)
 );
 
