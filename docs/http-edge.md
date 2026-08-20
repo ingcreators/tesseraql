@@ -106,6 +106,34 @@ obvious reading is wrong.
 the connection pool — which is what [http-threading.md](http-threading.md) decision 2 said the
 system's one question was.
 
+### And then on a real route
+
+The table above proves what a thread pool does and nothing about this framework: the work was a
+hand-written blocking call. Slice 1 serves an actual compiled route — its security gate, its
+binder, its `tesseraql-sql:` producer, its response renderer, in the order the compiler put them —
+from a Vert.x handler on a virtual thread, beside the Camel route it was compiled into.
+
+**What a compiled route turned out to be**, read out of the model rather than assumed: two
+`onException` clauses, five `process` steps, one `to` (the `tesseraql-sql:` producer) and one more
+`process`. Every element is a `Processor` or resolves to one, so running the route is a loop over a
+list, and the adapter around it is small — build an `Exchange` the processors recognise, write a
+response out of the one they produce.
+
+| Same route, two workers, six one-second statements already in flight | Elapsed |
+| --- | --- |
+| Via the Camel route | **3627 ms** |
+| Via the router, on a virtual thread | **1033 ms** |
+
+The edge pays its own second and nobody else's; the route pays the queue first. And unsaturated,
+the two answers are identical — same status, same body, same `Content-Type` — which is the half
+that had to be true before the other half meant anything.
+
+**What this does not prove**, said here so the next slice is scoped against it rather than
+surprised by it: one route shape (a public `GET` with no path parameters, no upload, no session),
+a prototype that declines any route that is not a plain chain, and no completion guarantee. Those
+are slices 2 to 4. The prototype lives in test sources, because slice 1's job was to produce a
+number and be cheap to abandon.
+
 ## Structural decisions
 
 ### 1. The request pipeline runs on a virtual thread per request
@@ -196,7 +224,8 @@ every place that depends on it is not, and the failure mode is silent and only o
    handler running its own `Processor` chain on a virtual thread, beside the Camel edge rather
    than replacing it, with the dispatch measurement above repeated against a real route. If the
    numbers do not hold on a real pipeline, everything after this is abandoned and this document
-   records why.
+   records why. **Done: 3627 ms to 1033 ms, and the same answer. The abandon clause did not
+   fire.**
 2. **The error envelope and the completion guarantee** — `try`/`catch` to `ErrorResponseRenderer`,
    and an explicit completion hook with a test that proves it runs on the failure path.
 3. **The route registry** — pipelines by id, replacing `direct:`; `ProducerTemplate` callers move
