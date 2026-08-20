@@ -546,7 +546,7 @@ final class ErrorIndex {
             "runtime-footprint.md",
             "lint-restructure.md", "prompt-as-recipe.md", "cli-surface.md", "root-portal.md",
             "module-scope.md", "runtime-replace.md", "stack-shells.md",
-            "application-roles.md", "studio-shell.md");
+            "application-roles.md", "studio-shell.md", "module-channel.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

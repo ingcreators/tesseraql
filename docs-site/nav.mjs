@@ -255,4 +255,6 @@ export const EXCLUDED = [
   'application-roles.md',
   // The Studio shell and the workshop extraction (stack-shells slice 8), 2026-08-19.
   'studio-shell.md',
+  // What the classpath carries, what the module channel carries, and how it travels, 2026-08-20.
+  'module-channel.md',
 ];

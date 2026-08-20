@@ -45,7 +45,9 @@ and the additions decompose into four clusters — the clusters are the whole st
 starts the gateway directly; it never touches `ModulesInstaller`. An application's declared
 `tesseraql.modules` are resolved into its `work/modules` cache by `dev` or the `modules` command
 *before* deployment, each runtime builds its own loader over what that resolve left on disk
-([module-scope.md](module-scope.md)), and a `.tqlapp` ships the cache it was verified with. So the
+([module-scope.md](module-scope.md)), and a `.tqlapp` ships the cache it was verified with — which
+`package` does not yet do, and [module-channel.md](module-channel.md) decision 3 is where that
+clause stops being aspirational. So the
 deployment classpath is `tesseraql-camel-runtime`'s 195 artifacts plus picocli, apptasks, and the
 CLI jar itself — roughly 63 jars and 73 MB smaller than what ships today, with the zonky binaries
 alone accounting for 62 MB of that.
