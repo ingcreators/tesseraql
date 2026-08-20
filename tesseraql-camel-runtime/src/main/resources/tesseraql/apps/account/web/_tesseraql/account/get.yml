@@ -34,6 +34,12 @@ sources:
       name: account.eligibility
       params:
         subject: principal.subject
+  # What the caller may ask for, and what they have asked for. Their own, always.
+  requests:
+    service:
+      name: account.requests
+      params:
+        subject: principal.subject
 response:
   html:
     status: 200
@@ -43,5 +49,8 @@ response:
       saved: params.saved
       eligibility: eligibility.rows
       eligibilityAvailable: eligibility.available
+      requestable: requests.requestable
+      myRequests: requests.rows
+      requestsAvailable: requests.available
     headers:
       Cache-Control: "no-store"

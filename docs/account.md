@@ -193,6 +193,16 @@ Password change is a runtime-provided service: verify the current credential, ha
 update through the local identity contract pack. It is registered only when password
 login is active; the account app renders the SSO state otherwise.
 
+## Ask for access
+
+The **Ask for access** card offers the roles that have an owner and that you do not already
+hold. Say why you need it, and optionally for how long; the request goes to that role's
+owner ([IAM Admin](iam-admin.md#access-requests)), and the card shows what you have asked for
+and how each request was decided.
+
+An approval lands the grant through the same write an administrator uses — so it is checked
+and recorded like any other — and it is time-boxed when you asked for a duration.
+
 ## Roles you can take when you need them
 
 The card appears when an administrator has made you **eligible** for a role you do not

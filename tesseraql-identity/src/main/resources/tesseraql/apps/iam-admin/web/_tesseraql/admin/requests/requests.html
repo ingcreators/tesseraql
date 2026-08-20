@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{tql/shell :: page('IAM Admin · Access requests', ~{:: #page-header}, ~{:: #page-content})}">
+<th:block id="page-header">
+  <span class="hc-spacer"></span>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/roles}">Roles</a>
+  <a class="hc-button" data-variant="ghost" data-size="sm" th:href="@{/_tesseraql/admin/history}">History</a>
+</th:block>
+<div id="page-content" class="hc-stack">
+<p class="hc-alert" data-variant="success" role="status" th:if="${decided != null}">Decision recorded.</p>
+<p class="hc-alert" data-variant="success" role="status" th:if="${owned != null}">Role owners updated.</p>
+<div th:if="${available == 0}" class="hc-alert" data-variant="warning" role="status">
+  <p class="hc-alert__title">Access requests are unavailable for this realm.</p>
+  <p th:text="${reason}">reason</p>
+</div>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Waiting for you</div>
+  <div class="hc-card__body">
+    <!-- Only requests for roles this caller owns: the queue is filtered against their own
+         principal, so it cannot show what they may not decide. -->
+    <div class="hc-empty" th:if="${#lists.isEmpty(rows)}">
+      <p class="hc-empty__title">No requests are waiting for you.</p>
+      <p class="hc-empty__description">A request reaches you when you own the role it asks
+        for — by name, or through a group you are in.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(rows)}">
+      <table class="hc-table">
+        <thead><tr><th>Who</th><th>Role</th><th>Reason</th><th>For</th><th>Asked</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="q : ${rows}">
+            <td><a th:href="@{'/_tesseraql/admin/users/' + ${q.requester_id}}"
+                   th:text="${q.requester_login != null ? q.requester_login : q.requester_id}"></a></td>
+            <td><code th:text="${q.role_code}"></code></td>
+            <td th:text="${q.reason != null ? q.reason : '—'}"></td>
+            <td th:text="${q.requested_minutes != null ? q.requested_minutes + ' min' : 'no limit'}"></td>
+            <td th:text="${q.requested_at}"></td>
+            <td th:if="${writable == 1}">
+              <form method="post" th:action="@{/_tesseraql/admin/requests/decide}" class="hc-cluster">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="requestId" th:value="${q.request_id}">
+                <select class="hc-input" data-size="sm" name="decision">
+                  <option value="approved">approve</option>
+                  <option value="rejected">reject</option>
+                </select>
+                <input class="hc-input" data-size="sm" name="note" placeholder="note">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Decide</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<section class="hc-card" th:if="${available == 1}">
+  <div class="hc-card__header">Role owners</div>
+  <div class="hc-card__body hc-stack">
+    <p class="hc-field__message">A role with no owner cannot be requested at all. That is the
+      answer to "who approves this" — not whoever happens to administer the store.</p>
+    <div class="hc-empty" th:if="${#lists.isEmpty(owners)}">
+      <p class="hc-empty__title">No role has an owner yet.</p>
+    </div>
+    <div class="hc-table-scroll" th:if="${!#lists.isEmpty(owners)}">
+      <table class="hc-table">
+        <thead><tr><th>Role</th><th>Owner</th><th>Kind</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="o : ${owners}">
+            <td><code th:text="${o.role_code}"></code></td>
+            <td th:text="${o.owner_ref}"></td>
+            <td th:text="${o.owner_kind}"></td>
+            <td th:if="${writable == 1}">
+              <form method="post" th:action="@{/_tesseraql/admin/requests/owners/remove}">
+                <input type="hidden" name="_csrf" th:value="${_csrf}">
+                <input type="hidden" name="roleCode" th:value="${o.role_code}">
+                <input type="hidden" name="ownerKind" th:value="${o.owner_kind}">
+                <input type="hidden" name="ownerRef" th:value="${o.owner_ref}">
+                <button class="hc-button" data-variant="ghost" data-size="sm" type="submit">Remove</button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <form th:if="${writable == 1}" method="post"
+          th:action="@{/_tesseraql/admin/requests/owners/add}" class="hc-cluster">
+      <input type="hidden" name="_csrf" th:value="${_csrf}">
+      <label class="hc-field"><span class="hc-field__label">Role</span>
+        <select class="hc-input" name="roleCode" required>
+          <option th:each="r : ${allRoles}" th:value="${r.role_code}" th:text="${r.role_code}"></option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Kind</span>
+        <select class="hc-input" name="ownerKind">
+          <option value="user">user</option>
+          <option value="group">group</option>
+        </select></label>
+      <label class="hc-field"><span class="hc-field__label">Owner (subject or group code)</span>
+        <input class="hc-input" name="ownerRef" required></label>
+      <button class="hc-button" data-variant="primary" type="submit">Add owner</button>
+    </form>
+  </div>
+</section>
+</div>
+</html>

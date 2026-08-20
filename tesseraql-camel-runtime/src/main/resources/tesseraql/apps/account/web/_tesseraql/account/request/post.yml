@@ -1,0 +1,32 @@
+version: tesseraql/v1
+id: tql.account.requestRole
+kind: route
+recipe: command-json
+
+# Asking for a role (docs/access-governance.md structural decision 6). The requester is
+# always the session principal -- the route maps principal.subject into the service params,
+# so nobody can ask on somebody else's behalf.
+
+input:
+  roleCode:
+    type: string
+    required: true
+  reason:
+    type: string
+    required: false
+  minutes:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: account.requestRole
+      params:
+        subject: principal.subject
+        roleCode: params.roleCode
+        reason: params.reason
+        minutes: params.minutes
+response:
+  redirect:
+    location: /_tesseraql/account?saved=requested

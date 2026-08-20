@@ -8,6 +8,24 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Self-service access requests, approved by the role's owner** (docs/access-governance.md
+  structural decision 6, slice 6). A role becomes requestable by having an **owner** — a person
+  or a group; a role with no owner cannot be asked for at all, which is the deny-by-default
+  answer to "who approves this" rather than falling back to whoever administers the store.
+  People ask from their account page; owners decide from a queue filtered against their own
+  principal, so it cannot offer a decision they are not entitled to make. Approving lands the
+  grant through the same write an administrator uses — the separation-of-duties check, the
+  window, the trail row naming the request — and time-boxes it when a duration was asked for.
+  A decided request is final: the decision is recorded before the grant and keyed on `pending`,
+  so two approvers acting at once produce one decision, not two grants.
+
+  **Deliberately not a workflow document.** The deferral proposed composing the approval-workflow
+  engine with the identity write contracts. A transition's command is app-authored 2-way SQL over
+  an app-owned table and the engine has no seam for calling a framework service, so landing a
+  grant from one would mean writing `tql_user_roles` directly — bypassing the very checks this
+  campaign adds. Requests are framework store rows with a framework write path, and the engine
+  stays what it is: how an *application* moves *its* documents.
+
 - **Access review campaigns, decided against a snapshot** (docs/access-governance.md structural
   decision 5, slice 5). Opening a review snapshots who holds what — every role held by any path,
   every direct permission grant — into items a reviewer decides one at a time. The snapshot is

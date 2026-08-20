@@ -16,6 +16,11 @@ web/_tesseraql/admin/rules/create/post.yml
 web/_tesseraql/admin/rules/conditions/post.yml
 web/_tesseraql/admin/rules/delete/post.yml
 web/_tesseraql/admin/rules/recompute/post.yml
+web/_tesseraql/admin/requests/get.yml
+web/_tesseraql/admin/requests/requests.html
+web/_tesseraql/admin/requests/decide/post.yml
+web/_tesseraql/admin/requests/owners/add/post.yml
+web/_tesseraql/admin/requests/owners/remove/post.yml
 web/_tesseraql/admin/reviews/get.yml
 web/_tesseraql/admin/reviews/reviews.html
 web/_tesseraql/admin/reviews/open/post.yml

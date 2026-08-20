@@ -436,6 +436,94 @@ class RoleStoreIntegrationTest {
         RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "rev.keep");
     }
 
+    /**
+     * Slice 6 of docs/access-governance.md: an unowned role cannot be asked for, an
+     * approval lands the grant through the ordinary write, and a decided request is final.
+     */
+    @Test
+    void anAccessRequestNeedsAnOwnerAndItsApprovalLandsTheGrant() {
+        RoleAdmin.createRole(identity, MANAGED, "req.unowned", "誰のものでもない", "");
+        RoleAdmin.createRole(identity, MANAGED, "req.owned", "持ち主あり", "");
+
+        // Deny by default: with no owner there is nobody to approve, so nothing to ask.
+        assertThatThrownBy(() -> AccessRequests.request(identity, MANAGED, "u1",
+                "req.unowned", "please", null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("no owner");
+        assertThatThrownBy(() -> AccessRequests.addOwner(identity, MANAGED, "no.such.role",
+                AccessRequests.OWNER_USER, "kenji"))
+                .isInstanceOf(TqlException.class).hasMessageContaining("No role");
+
+        AccessRequests.addOwner(identity, MANAGED, "req.owned", AccessRequests.OWNER_USER,
+                "kenji");
+        assertThat(AccessRequests.myRequestsModel(identity, MANAGED, "u1").get("requestable"))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .anySatisfy(row -> assertThat(((Map<?, ?>) row).get("role_code"))
+                        .isEqualTo("req.owned"));
+
+        AccessRequests.request(identity, MANAGED, "u1", "req.owned", "covering a release",
+                "30");
+        Map<String, Object> pending = onlyRequest("u1", "req.owned");
+        assertThat(pending).containsEntry("status", AccessRequests.PENDING);
+
+        String requestId = String.valueOf(pending.get("request_id"));
+        AccessRequests.decide(identity, MANAGED, "kenji", requestId,
+                AccessRequests.APPROVED, "ok");
+        assertThat(identity.resolvePrincipal(MANAGED, "alice", null).orElseThrow().roles())
+                .contains("req.owned");
+        // Time-boxed by the duration asked for, and attributed to the request.
+        assertThat(historyFor("req.owned")).anySatisfy(row -> {
+            assertThat(row.get("source")).isEqualTo(AccessRequests.SOURCE);
+            assertThat(row.get("correlation")).isEqualTo(requestId);
+            assertThat(row.get("ends_at")).isNotNull();
+        });
+
+        // A decided request is final: a second approver's click grants nothing twice.
+        assertThatThrownBy(() -> AccessRequests.decide(identity, MANAGED, "hana", requestId,
+                AccessRequests.APPROVED, null))
+                .isInstanceOf(TqlException.class).hasMessageContaining("already been decided");
+
+        RoleAdmin.unassignRole(identity, MANAGED, "kenji", "u1", "req.owned");
+    }
+
+    /** Ownership by group: anybody in the owning group sees the request in their queue. */
+    @Test
+    void aGroupOwnerSeesTheQueueAndAStrangerDoesNot() {
+        RoleAdmin.createRole(identity, MANAGED, "req.bygroup", "班", "");
+        AccessRequests.addOwner(identity, MANAGED, "req.bygroup", AccessRequests.OWNER_GROUP,
+                "OWNERS");
+        AccessRequests.request(identity, MANAGED, "u1", "req.bygroup", "please", null);
+
+        assertThat(AccessRequests.queueModel(identity, MANAGED, "someone",
+                java.util.List.of("OWNERS")).get("rows"))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .anySatisfy(row -> assertThat(((Map<?, ?>) row).get("role_code"))
+                        .isEqualTo("req.bygroup"));
+        assertThat(AccessRequests.queueModel(identity, MANAGED, "someone",
+                java.util.List.of("OTHERS")).get("rows"))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .noneSatisfy(row -> assertThat(((Map<?, ?>) row).get("role_code"))
+                        .isEqualTo("req.bygroup"));
+
+        AccessRequests.decide(identity, MANAGED, "hana",
+                String.valueOf(onlyRequest("u1", "req.bygroup").get("request_id")),
+                AccessRequests.REJECTED, "not now");
+        // A rejection changes nothing held, so it leaves no grant row — only the request.
+        assertThat(historyFor("req.bygroup")).isEmpty();
+    }
+
+    private Map<String, Object> onlyRequest(String userId, String roleCode) {
+        Map<String, Object> params = new java.util.LinkedHashMap<>();
+        params.put("requesterId", userId);
+        params.put("status", null);
+        for (Map<String, Object> row : identity.execute(MANAGED,
+                IdentityContracts.LIST_ACCESS_REQUESTS, params)) {
+            if (roleCode.equals(String.valueOf(row.get("role_code")))) {
+                return row;
+            }
+        }
+        throw new IllegalStateException("No request for " + roleCode);
+    }
+
     /** A constraint over a role code nothing names cannot fire, so it is refused. */
     @Test
     void aConstraintOverAnUnknownRoleIsRefused() {

@@ -1,0 +1,31 @@
+version: tesseraql/v1
+id: tql.iamAdmin.requests.decide
+kind: route
+recipe: command-json
+
+security:
+  policy: tql.iam.admin.write
+
+input:
+  requestId:
+    type: string
+    required: true
+  decision:
+    type: string
+    required: true
+  note:
+    type: string
+    required: false
+
+steps:
+  - id: main
+    service:
+      name: iam.decideRequest
+      params:
+        actor: principal.loginId
+        requestId: params.requestId
+        decision: params.decision
+        note: params.note
+response:
+  redirect:
+    location: /_tesseraql/admin/requests?decided=1

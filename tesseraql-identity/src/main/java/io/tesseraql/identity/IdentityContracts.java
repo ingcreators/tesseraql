@@ -154,6 +154,17 @@ public final class IdentityContracts {
     /** Records an item whose grant was already gone when the campaign closed. */
     public static final String MARK_REVIEW_ITEM_STALE = "mark-review-item-stale";
 
+    // Self-service access requests (docs/access-governance.md slice 6); optional.
+    /** Roles that have an owner and that this person neither holds nor has asked for. */
+    public static final String LIST_REQUESTABLE_ROLES = "list-requestable-roles";
+    public static final String LIST_ROLE_OWNERS = "list-role-owners";
+    public static final String ADD_ROLE_OWNER = "add-role-owner";
+    public static final String REMOVE_ROLE_OWNER = "remove-role-owner";
+    public static final String CREATE_ACCESS_REQUEST = "create-access-request";
+    public static final String LIST_ACCESS_REQUESTS = "list-access-requests";
+    /** Decides a request, keyed on {@code pending} so two approvers cannot both grant. */
+    public static final String DECIDE_ACCESS_REQUEST = "decide-access-request";
+
     /** The write contracts gated by the realm's role capability, not its user capability. */
     public static java.util.Set<String> roleManagementContracts() {
         return java.util.Set.of(CREATE_ROLE, GRANT_USER_ROLE, REVOKE_USER_ROLE,
@@ -170,7 +181,10 @@ public final class IdentityContracts {
                 CREATE_GROUP, DELETE_GROUP, CLEAR_GROUP_ROLES, GRANT_GROUP_ROLE,
                 REVOKE_GROUP_ROLE,
                 CREATE_ACCESS_REVIEW, SNAPSHOT_REVIEW_ITEMS, DECIDE_REVIEW_ITEM,
-                CLOSE_ACCESS_REVIEW, MARK_REVIEW_ITEM_STALE);
+                CLOSE_ACCESS_REVIEW, MARK_REVIEW_ITEM_STALE,
+                // Asking for a role is not role management — anybody may ask. Recording an
+                // owner and deciding a request are, because both change what can be held.
+                ADD_ROLE_OWNER, REMOVE_ROLE_OWNER, DECIDE_ACCESS_REQUEST);
     }
 
     private IdentityContracts() {

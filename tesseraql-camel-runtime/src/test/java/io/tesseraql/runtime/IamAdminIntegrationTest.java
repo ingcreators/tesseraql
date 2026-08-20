@@ -479,6 +479,54 @@ class IamAdminIntegrationTest {
                 .contains("closed");
     }
 
+    /**
+     * The request surface (docs/access-governance.md slice 6): the approver queue is
+     * filtered by ownership against the caller's own principal, and approving lands the
+     * grant through the ordinary write.
+     */
+    @Test
+    void anAccessRequestReachesItsOwnerAndApprovalLandsTheGrant() throws Exception {
+        assertThat(postForm("/_tesseraql/admin/roles/create",
+                "code=req.duty&name=Duty&application=").statusCode()).isEqualTo(303);
+
+        // With no owner the role is not requestable, and the queue shows nothing.
+        assertThat(get("/_tesseraql/admin/requests", true).body())
+                .contains("No requests are waiting for you");
+
+        assertThat(postForm("/_tesseraql/admin/requests/owners/add",
+                "roleCode=req.duty&ownerKind=user&ownerRef=iam-admin").statusCode())
+                .isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/requests", true).body())
+                .contains("req.duty").contains("iam-admin");
+
+        io.tesseraql.identity.IdentityService identity = new io.tesseraql.identity.IdentityService(
+                name -> dataSource());
+        io.tesseraql.identity.RealmConfig realm = io.tesseraql.identity.RealmConfig
+                .managed("main", "main");
+        io.tesseraql.identity.AccessRequests.request(identity, realm, "u2", "req.duty",
+                "on call this week", null);
+
+        String queue = get("/_tesseraql/admin/requests", true).body();
+        assertThat(queue).contains("bob").contains("on call this week");
+        String marker = "name=\"requestId\" value=\"";
+        String requestId = queue.substring(queue.indexOf(marker) + marker.length());
+        requestId = requestId.substring(0, requestId.indexOf('"'));
+
+        assertThat(postForm("/_tesseraql/admin/requests/decide",
+                "requestId=" + requestId + "&decision=approved&note=ok").statusCode())
+                .isEqualTo(303);
+        assertThat(get("/_tesseraql/admin/history?user=u2", true).body())
+                .contains("req.duty").contains("request").contains(requestId);
+    }
+
+    private static javax.sql.DataSource dataSource() {
+        org.postgresql.ds.PGSimpleDataSource source = new org.postgresql.ds.PGSimpleDataSource();
+        source.setUrl(POSTGRES.getJdbcUrl());
+        source.setUser(POSTGRES.getUsername());
+        source.setPassword(POSTGRES.getPassword());
+        return source;
+    }
+
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
