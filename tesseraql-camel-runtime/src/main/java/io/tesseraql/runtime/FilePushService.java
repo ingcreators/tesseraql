@@ -10,25 +10,20 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
-import org.apache.camel.ProducerTemplate;
-import org.apache.camel.impl.DefaultCamelContext;
 
 /**
  * Delivers a produced file to a {@code push:} step's target (docs/analytics-experience.md):
  * a local drop directory under the push block's {@code allowedPaths} roots, or a remote
  * SFTP/FTPS server under the same deny-by-default allow-list, credential, and
- * server-verification treatment the {@code poll:} consumers get — the URI mechanics are the
- * shared {@link RemoteFileUris}, so the two directions cannot drift apart.
+ * server-verification treatment the {@code poll:} consumers get — the client is the
+ * one its poll sibling reads with, so the two directions cannot drift apart.
  *
- * <p>Delivery is atomic for the partner's poller: the local target writes a {@code .part}
- * file and renames it into place; the remote targets ride the Camel producer's
- * {@code tempPrefix}, which uploads under a dot-name and renames on completion.
+ * <p>Delivery is atomic for the partner's poller: the local target writes a {@code .part} file
+ * and renames it into place, and the remote targets do the same thing over the wire — uploaded
+ * under a dot-name, renamed on completion.
  *
- * <p>The Camel context is either the serving runtime's or — for a CLI {@code job run} — an
- * owned one, created lazily on the first remote push and closed with the service, so a run
- * without a push step never pays for it.
+ * <p>A push connects when it delivers and disconnects afterwards, so a job with no push step
+ * costs nothing and nothing is held between deliveries (docs/camel-removal.md decision 4).
  */
 public final class FilePushService implements AutoCloseable {
 
@@ -39,22 +34,7 @@ public final class FilePushService implements AutoCloseable {
 
     private final FileConnectors connectors;
     private final Path appHome;
-    private CamelContext camel;
-    private final boolean ownsCamel;
-    private ProducerTemplate producer;
-
-    /** The serving runtime's shape: remote pushes ride the running context's producer. */
-    public FilePushService(CamelContext camel, FileConnectors connectors, Path appHome) {
-        this.camel = camel;
-        this.ownsCamel = false;
-        this.connectors = connectors;
-        this.appHome = appHome.toAbsolutePath().normalize();
-    }
-
-    /** The CLI shape: a context of its own, started only if a remote push actually runs. */
     public FilePushService(FileConnectors connectors, Path appHome) {
-        this.camel = null;
-        this.ownsCamel = true;
         this.connectors = connectors;
         this.appHome = appHome.toAbsolutePath().normalize();
     }
@@ -73,10 +53,7 @@ public final class FilePushService implements AutoCloseable {
         }
         switch (spec.effectiveTransport()) {
             case "local" -> pushLocal(spec, filename, content);
-            case "sftp" -> pushRemote("sftp", spec, 22, filename, content,
-                    RemoteFileUris.sftpHostKeyOptions(connectors, appHome));
-            case "ftps" -> pushRemote("ftps", spec, 21, filename, content,
-                    RemoteFileUris.ftpsTransportOptions(connectors, appHome, spec.host()));
+            case "sftp", "ftps" -> pushRemote(spec, filename, content);
             default -> throw new TqlException(PUSH_FAILED,
                     "Unsupported push transport '" + spec.transport() + "'");
         }
@@ -105,19 +82,24 @@ public final class FilePushService implements AutoCloseable {
         }
     }
 
-    private void pushRemote(String scheme, PushSpec spec, int defaultPort, String filename,
-            InputStream content, String transportOptions) {
+    /**
+     * Delivers to a remote target, through the same client its poll sibling reads with
+     * (docs/camel-removal.md decision 4).
+     *
+     * <p>Both directions calling one implementation is the property the shared URI builder existed
+     * to keep: every transport and identity guarantee — the host-key check, the encrypted FTPS data
+     * channel, the exactly-one-authentication-method rule — has to hold for a push exactly as it
+     * holds for a poll, and the year the data channel stayed unencrypted is what happens when they
+     * are written twice.
+     */
+    private void pushRemote(PushSpec spec, String filename, InputStream content) {
         if (!connectors.isHostAllowed(spec.host())) {
             throw new TqlException(HOST_NOT_ALLOWED, "Push target host '" + spec.host()
                     + "' is not in tesseraql.connectors.push.allowedHosts (deny by default)");
         }
-        // tempPrefix uploads as .uploading-<name> and renames on completion — the remote
-        // twin of the local .part dance, so the partner's poller never reads a partial file.
-        String uri = RemoteFileUris.remoteUri(scheme, connectors, spec.host(), spec.port(),
-                defaultPort, spec.path(), spec.credential(),
-                "tempPrefix=.uploading-" + transportOptions);
-        try (content) {
-            producer().sendBodyAndHeader(uri, content, Exchange.FILE_NAME, filename);
+        String scheme = spec.effectiveTransport();
+        try (content; RemoteFiles remote = remote(spec)) {
+            remote.upload(filename, content);
         } catch (TqlException refused) {
             throw refused;
         } catch (Exception ex) {
@@ -127,25 +109,19 @@ public final class FilePushService implements AutoCloseable {
         }
     }
 
-    private synchronized ProducerTemplate producer() {
-        if (camel == null) {
-            DefaultCamelContext owned = new DefaultCamelContext();
-            owned.start();
-            camel = owned;
-        }
-        if (producer == null) {
-            producer = camel.createProducerTemplate();
-        }
-        return producer;
+    /** The client for this target, connected on first use and closed with the delivery. */
+    private RemoteFiles remote(PushSpec spec) {
+        return "sftp".equals(spec.effectiveTransport())
+                ? new SftpClient(SftpClient.settings(connectors, spec.host(), spec.port(),
+                        spec.path(), spec.credential(), appHome))
+                : new FtpsClient(FtpsClient.settings(connectors, spec.host(), spec.port(),
+                        spec.path(), spec.credential(), appHome));
     }
 
     @Override
-    public synchronized void close() {
-        if (producer != null) {
-            producer.stop();
-        }
-        if (ownsCamel && camel != null) {
-            camel.stop();
-        }
+    public void close() {
+        // Nothing held between deliveries: a push connects, uploads and disconnects, so there is
+        // no context, template or producer cache to stop. The method stays because the CLI and the
+        // runtime both own one of these and both close what they own.
     }
 }

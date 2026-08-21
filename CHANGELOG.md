@@ -136,6 +136,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Every file connector is the runtime's own, in both directions** (docs/camel-removal.md
+  structural decision 4). FTPS joins local and SFTP on the runtime's poll cycle, and a `push:`
+  step delivers through the same client its poll sibling reads with. That sharing is the point
+  rather than the tidiness: the poll consumers and the push producers were assembled from one
+  endpoint-URI builder because the FTPS data channel had already stayed unencrypted for a year
+  when that logic had a consumer home and a lookalike copy — so the host-key check, `PBSZ 0`/
+  `PROT P`, the trust-store refusal and the exactly-one-authentication-method rule are written
+  once and true in both directions by construction. A push connects when it delivers and
+  disconnects afterwards, so `FilePushService` no longer owns a Camel context or a producer
+  template. `camel-file`, `camel-ftp` and `camel-ftp-common` leave, and `jsch` and `commons-net`
+  — already on the classpath under them — are declared. **168 jars, 44 MB; Camel is down to 15,
+  with no component among them.** The `poll:` and `push:` YAML is unchanged.
+
 - **The runtime's schedules are its own: eleven sweeps and one cron, without a scheduler**
   (docs/camel-removal.md structural decision 5). A `timer:` route is a consumer, a route and an
   exchange for something that is a loop with a sleep in it; the `quartz:` route was a whole

@@ -8,20 +8,23 @@ import com.jcraft.jsch.SftpATTRS;
 import com.jcraft.jsch.SftpException;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.connectors.FileConnectors;
-import io.tesseraql.yaml.model.PollSpec;
 import java.io.IOException;
-import java.nio.file.Files;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Vector;
 
 /**
- * A polled directory on a remote SFTP server (docs/camel-removal.md slice 1), over the same JSch
- * client the framework already shipped — it arrived under {@code camel-ftp}, which is why slice 1
- * declares it rather than continuing to borrow it. A borrowed type is a borrowed dependency.
+ * An SFTP server, over the JSch client the framework already shipped — it arrived under
+ * {@code camel-ftp}, which is why slice 1 declared it rather than continuing to borrow it. A
+ * borrowed type is a borrowed dependency.
+ *
+ * <p>Both directions call this one object (docs/camel-removal.md decision 4): a {@code poll:}
+ * source through {@link RemotePollSource}, a {@code push:} target through {@link #upload}. The
+ * credential rules and the host-key check are therefore the same rules in both, which is the
+ * property the shared URI builder existed to keep and the one worth keeping without it.
  *
  * <p><strong>The settings are computed apart from the connection</strong> ({@link #settings}) so
  * that the rules worth pinning can be asserted without a server: host-key strictness, the
@@ -33,10 +36,10 @@ import java.util.Vector;
  * another option — is now an argument to a method call. There is no query string for a secret to
  * be re-encoded in, and no place for an {@code include:} to smuggle an extra consumer option.
  */
-final class SftpPollSource implements PollSource {
+final class SftpClient implements RemoteFiles {
 
     private static final System.Logger LOG = System
-            .getLogger(SftpPollSource.class.getName());
+            .getLogger(SftpClient.class.getName());
 
     /** How long to wait for the server, matching what the component asked for. */
     private static final int CONNECT_TIMEOUT_MILLIS = 30_000;
@@ -59,13 +62,11 @@ final class SftpPollSource implements PollSource {
     }
 
     private final Settings settings;
-    private final Path workDirectory;
     private Session session;
     private ChannelSftp channel;
 
-    SftpPollSource(Settings settings, Path workDirectory) {
+    SftpClient(Settings settings) {
         this.settings = settings;
-        this.workDirectory = workDirectory;
     }
 
     /**
@@ -77,23 +78,24 @@ final class SftpPollSource implements PollSource {
      * resolves a relative path against the session's working directory, which is that home, so the
      * declaration passes through instead of being rewritten.
      */
-    static Settings settings(FileConnectors connectors, PollSpec poll, Path appHome) {
-        if (poll.credential() == null || poll.credential().isBlank()) {
-            throw new TqlException(RemoteFileUris.REMOTE_NEEDS_CREDENTIAL,
-                    "Poll source 'sftp' needs a credential: declare one under"
-                            + " tesseraql.connectors.poll.credentials and reference it with"
-                            + " credential:");
+    static Settings settings(FileConnectors connectors, String host, Integer port, String path,
+            String credentialName, Path appHome) {
+        if (credentialName == null || credentialName.isBlank()) {
+            throw new TqlException(RemoteFiles.REMOTE_NEEDS_CREDENTIAL,
+                    capitalize(connectors.block()) + " " + noun(connectors) + " 'sftp' needs a"
+                            + " credential: declare one under tesseraql.connectors."
+                            + connectors.block()
+                            + ".credentials and reference it with credential:");
         }
-        FileConnectors.Credential credential = connectors.requireCredential(poll.credential());
+        FileConnectors.Credential credential = connectors.requireCredential(credentialName);
         Optional<String> password = credential.setting("password");
         Optional<String> privateKey = credential.setting("privateKeyFile");
         if (password.isPresent() == privateKey.isPresent()) {
-            throw new TqlException(RemoteFileUris.CREDENTIAL_METHOD, "Poll credential '"
-                    + credential.name() + "' needs exactly one of password: or privateKeyFile:,"
-                    + " not " + (password.isPresent() ? "both" : "neither"));
+            throw new TqlException(RemoteFiles.CREDENTIAL_METHOD, capitalize(connectors.block())
+                    + " credential '" + credential.name() + "' needs exactly one of password: or"
+                    + " privateKeyFile:, not " + (password.isPresent() ? "both" : "neither"));
         }
-        return new Settings(poll.host(), poll.port() == null ? 22 : poll.port(),
-                directory(poll.path()),
+        return new Settings(host, port == null ? 22 : port, directory(path),
                 credential.require("username"), password.orElse(null), privateKey.orElse(null),
                 credential.setting("privateKeyPassphrase").orElse(null),
                 connectors.knownHostsFile()
@@ -108,6 +110,14 @@ final class SftpPollSource implements PollSource {
      * still means what it meant — one slash, absolute — rather than becoming a path with an empty
      * first segment.
      */
+    private static String noun(FileConnectors connectors) {
+        return "poll".equals(connectors.block()) ? "source" : "target";
+    }
+
+    private static String capitalize(String block) {
+        return block.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + block.substring(1);
+    }
+
     private static String directory(String path) {
         if (path == null || path.isBlank()) {
             return ".";
@@ -116,9 +126,9 @@ final class SftpPollSource implements PollSource {
     }
 
     @Override
-    public List<PolledFile> list() throws IOException {
+    public List<PollSource.PolledFile> list() throws IOException {
         ChannelSftp sftp = connected();
-        List<PolledFile> files = new ArrayList<>();
+        List<PollSource.PolledFile> files = new ArrayList<>();
         try {
             Vector<ChannelSftp.LsEntry> entries = sftp.ls(settings.directory());
             for (ChannelSftp.LsEntry entry : entries) {
@@ -126,54 +136,68 @@ final class SftpPollSource implements PollSource {
                 if (attributes.isDir() || attributes.isLink()) {
                     continue;
                 }
-                files.add(new PolledFile(entry.getFilename(), attributes.getSize(),
+                files.add(new PollSource.PolledFile(entry.getFilename(), attributes.getSize(),
                         attributes.getMTime() * 1000L));
             }
         } catch (SftpException ex) {
             throw failure("list " + settings.directory(), ex);
         }
-        files.sort(Comparator.comparing(PolledFile::name));
         return files;
     }
 
     @Override
-    public Optional<PolledFile> stat(String name) throws IOException {
+    public Optional<PollSource.PolledFile> stat(String name) throws IOException {
         try {
             SftpATTRS attributes = connected().stat(remote(name));
-            return Optional.of(new PolledFile(name, attributes.getSize(),
+            return Optional.of(new PollSource.PolledFile(name, attributes.getSize(),
                     attributes.getMTime() * 1000L));
         } catch (SftpException gone) {
             return Optional.empty();
         }
     }
 
+    @Override
+    public void download(String name, Path target) throws IOException {
+        try {
+            connected().get(remote(name), target.toString());
+        } catch (SftpException ex) {
+            throw failure("download " + name, ex);
+        }
+    }
+
     /**
-     * Downloads the file under the work directory rather than handing over a network stream.
+     * Uploads under a dot-name and renames on completion.
      *
-     * <p>The remote components default to loading the whole file into memory before a route sees
-     * it, which is why the endpoint asked for a {@code localWorkDirectory}. Downloading here keeps
-     * that promise for the same reason: the spool that follows is a disk-to-disk copy, a large
-     * file never materialises in heap, and the remote file is still there to be retried or moved.
+     * <p>The remote twin of the local {@code .part} dance, and what the producer's
+     * {@code tempPrefix} option did: a partner's poller must never read a file this one is still
+     * writing.
      */
     @Override
-    public Fetched fetch(PolledFile file) throws IOException {
-        Files.createDirectories(workDirectory);
-        Path target = workDirectory.resolve(file.name());
+    public void upload(String filename, InputStream content) throws IOException {
+        ChannelSftp sftp = connected();
+        String temporary = remote(".uploading-" + filename);
+        String target = remote(filename);
         try {
-            connected().get(remote(file.name()), target.toString());
+            ensureDirectory(sftp, settings.directory());
+            sftp.put(content, temporary);
+            try {
+                sftp.rm(target);
+            } catch (SftpException absent) {
+                LOG.log(System.Logger.Level.TRACE, "No previous {0} to replace", target);
+            }
+            sftp.rename(temporary, target);
         } catch (SftpException ex) {
-            throw failure("download " + file.name(), ex);
+            throw failure("upload " + filename, ex);
         }
-        return new Fetched(target, true);
     }
 
     @Override
-    public void archive(PolledFile file, String subDirectory) throws IOException {
+    public void archive(String name, String subDirectory) throws IOException {
         ChannelSftp sftp = connected();
         String directory = settings.directory() + "/" + subDirectory;
         try {
             ensureDirectory(sftp, directory);
-            String target = directory + "/" + file.name();
+            String target = directory + "/" + name;
             // The server refuses a rename onto an existing name, so the previous delivery of the
             // same file name gives way — the archive directory keeps the latest, as it does
             // locally, rather than the poll failing on the second file of the same name.
@@ -182,9 +206,9 @@ final class SftpPollSource implements PollSource {
             } catch (SftpException absent) {
                 LOG.log(System.Logger.Level.TRACE, "No previous {0} to replace", target);
             }
-            sftp.rename(remote(file.name()), target);
+            sftp.rename(remote(name), target);
         } catch (SftpException ex) {
-            throw failure("archive " + file.name() + " to " + subDirectory, ex);
+            throw failure("archive " + name + " to " + subDirectory, ex);
         }
     }
 

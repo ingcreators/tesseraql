@@ -127,6 +127,11 @@
       reason jsch is.
     -->
     <quartz.version>2.5.2</quartz.version>
+    <!--
+      The FTPS client the poll cycle and the push step drive (docs/camel-removal.md decision 4).
+      Arrived under camel-ftp; declared here for the same reason jsch is.
+    -->
+    <commons-net.version>3.13.0</commons-net.version>
     <jackson.version>2.22.1</jackson.version>
     <hikaricp.version>7.1.0</hikaricp.version>
     <postgresql.version>42.7.13</postgresql.version>
@@ -209,6 +214,12 @@
         <groupId>org.quartz-scheduler</groupId>
         <artifactId>quartz</artifactId>
         <version>${quartz.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>commons-net</groupId>
+        <artifactId>commons-net</artifactId>
+        <version>${commons-net.version}</version>
       </dependency>
 
       <!-- Jackson (imported BOM) -->
