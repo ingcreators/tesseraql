@@ -136,6 +136,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The runtime declares the Camel components it uses instead of taking the aggregate**
+  (docs/camel-removal.md slice 0). `camel-core` is a convenience bundle of 27 artifacts, of which
+  this framework resolves six; the rest is an expression-language stack, an XML processing stack
+  and a set of test components that no source imports. Declaring `camel-core-engine` plus
+  `direct`, `timer`, `quartz`, `file`, `ftp` and `http-base` takes the deployment image from
+  **205 jars and 48 MB to 181 jars and 46 MB** with no source change. Two of the departures are
+  worth naming: `camel-xslt` and `camel-xpath` were an XML processing stack carried by a framework
+  that evaluates no XPath anywhere, and `camel-rest` outlived the REST DSL by two slices — an
+  aggregate dependency has no way to say that one of its members stopped being used. A component
+  that is not on the classpath cannot be auto-discovered, which is the surface
+  docs/component-guard.md exists to defend.
+
 - **Vert.x moves to 5.1.6** (docs/http-edge.md decision 3). Camel used to pin it transitively
   through `camel-platform-http-vertx`; that component left the build, and this followed the same
   day because nothing was holding it back. The upgrade cost one API break — connection pooling

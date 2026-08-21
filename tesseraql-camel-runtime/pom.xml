@@ -144,9 +144,14 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!--
+      Which headers leave a runtime is Camel's own answer, and it lives here rather than in the
+      component that used to bring it: the edge asks HttpHeaderFilterStrategy (RouteEdge), and
+      camel-platform-http had nothing else left to give once the runtime owned its server.
+    -->
     <dependency>
       <groupId>org.apache.camel</groupId>
-      <artifactId>camel-platform-http</artifactId>
+      <artifactId>camel-http-base</artifactId>
     </dependency>
     <!--
       Uploaded parts reach a route as attachments (docs/http-edge.md decision 1). The runtime's
@@ -175,6 +180,22 @@
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-http-proxy</artifactId>
+    </dependency>
+    <!--
+      The components this runtime actually resolves, declared one by one rather than taken from
+      the camel-core aggregate. camel-core is a convenience bundle of 27 jars, of which this
+      framework uses six; the rest is an expression-language stack, an XML processing stack and a
+      set of test components that no source here imports. Declaring what is used keeps the guard
+      in docs/component-guard.md honest as well: a component that is not on the classpath cannot
+      be auto-discovered, refused, or exploited.
+    -->
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-direct</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-timer</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.camel</groupId>
