@@ -40,9 +40,15 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!--
+      The route model and the engine that runs it, without the camel-core aggregate's other 20
+      jars: this module compiles YAML into processor chains and never asks Camel to evaluate an
+      expression, transform XML, or resolve a component by name. The components the runtime does
+      resolve are declared beside it in tesseraql-camel-runtime.
+    -->
     <dependency>
       <groupId>org.apache.camel</groupId>
-      <artifactId>camel-core</artifactId>
+      <artifactId>camel-core-engine</artifactId>
     </dependency>
     <dependency>
       <groupId>org.thymeleaf</groupId>
