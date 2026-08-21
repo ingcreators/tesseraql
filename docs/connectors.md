@@ -346,9 +346,10 @@ tesseraql:
 Outside that window the same bytes are imported again. With `consumeOnce` off — today's behaviour
 for every source — a re-sent file is always re-imported.
 
-`move:` and `moveFailed:` must be plain relative directory names. Camel evaluates them as Simple
-expressions, so a value like `${file:parent}/../archive` would write the polled file outside the
-poll tree; such values are rejected rather than escaped.
+`move:` and `moveFailed:` must be plain relative directory names. A value like
+`${file:parent}/../archive` would write the polled file outside the poll tree — on the FTPS
+transport it is evaluated as an expression, not read as a name — so such values are rejected
+rather than escaped.
 
 import:                          # the same import: block a file-import route uses
   format: csv
@@ -365,8 +366,8 @@ pipeline:
 Each file is ingested through the same asynchronous, off-heap path an HTTP upload takes and is
 tracked as a **transfer** in the operations console — so row-level outcomes (rejected rows under
 `onError: skip`) show up there, exactly like an uploaded file. A file moves to `move` once it has
-been ingested; a file that cannot be read moves to `moveFailed`. The underlying Camel
-`file`/`sftp`/`ftps` consumer is an implementation detail; the YAML never names an endpoint.
+been ingested; a file that cannot be read moves to `moveFailed`. How a directory is reached is an
+implementation detail; the YAML never names an endpoint.
 
 ### Remote sources
 

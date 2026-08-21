@@ -136,6 +136,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A local or SFTP `poll:` source is served by the runtime's own poll cycle**
+  (docs/camel-removal.md slice 1). What a file consumer does, once the endpoint URI is taken away,
+  is four operations per transport — list the directory, re-read a file's fingerprint, put its
+  bytes on local disk, move it aside — and one set of rules that is the same for every transport:
+  the `include:` glob, the write-stability check, the cross-replica claim, the archive
+  directories, and the wait for the import to resolve before either happens. The `poll:` YAML is
+  unchanged, and so is everything downstream of it: the import pipeline, the consumption store,
+  the poll-source registry the console and the Prometheus gauges read. FTPS keeps its Camel
+  consumer until its transport settings have a home outside a URI. **Removing the URI removed a
+  class of defect with it**: every value that needed `RAW(...)` wrapping is now an argument to a
+  method call, so an `include:` glob containing an `&` matches a file name containing an `&` and
+  can do nothing else. The rules worth pinning — host-key strictness, the
+  exactly-one-authentication-method rule, the remote path grammar — are now resolved before
+  anything connects and asserted without a server, with the same error codes. Two differences are
+  deliberate: the stability wait is taken once per cycle rather than once per file, and the
+  `consumeOnce:` key is this framework's spelling of name-size-modified rather than Camel's, so a
+  file consumed before the upgrade and still inside the retention window can be imported once
+  more. JSch is now a declared dependency: it was already on the classpath under `camel-ftp`, and
+  using it from there is the borrowed-dependency mistake the HTTP edge campaign paid for once.
+
 - **The runtime declares the Camel components it uses instead of taking the aggregate**
   (docs/camel-removal.md slice 0). `camel-core` is a convenience bundle of 27 artifacts, of which
   this framework resolves six; the rest is an expression-language stack, an XML processing stack
