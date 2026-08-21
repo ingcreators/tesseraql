@@ -267,4 +267,6 @@ export const EXCLUDED = [
   'http-edge.md',
   // Taking Camel out of the build entirely: pipelines, schedules, connectors, 2026-08-21.
   'camel-removal.md',
+  // The request pipeline's shape after Camel: one bag split into a request and a response, 2026-08-21.
+  'vertx-native.md',
 ];
