@@ -168,7 +168,7 @@ jobs:
           # an exit-code-only check while being useless.
           out=$(docker run --rm tesseraql-deploy-check routes --app /stack/app)
           printf '%s\n' "$out"
-          printf '%s' "$out" | grep -q 'items.search' \
+          grep -q 'items.search' <<<"$out" \
             || { echo "the image listed no routes" >&2; exit 1; }
 
       - name: Assert the shared archive was trained into the image
