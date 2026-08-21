@@ -237,6 +237,35 @@ streamed here on the virtual thread that is already ours, so an attachment or an
 neither a worker nor the heap it used to be read into. Decision 1 expected that coupling to die by
 evacuation when the worker pool emptied; it dies earlier, by ownership.
 
+### The body, and the end of the hand-back
+
+The cutover kept a request carrying a body on the Camel route behind it, because a form reaches a
+route as parsed attributes and the adapter had not learned what that looks like. It has now, and
+the hand-back is gone: **every request the runtime serves is served here**. Eight concurrent
+one-second commands against two workers take **1040 ms**, the same one wave the read path takes.
+
+What a body turns into was read out of the consumer rather than guessed, and it is three things:
+
+- **A form — urlencoded, or the non-file parts of a multipart — arrives as a `Map` body *and* as
+  headers**, both appended so a repeated field is a list. The duplication is not tidiness: one
+  binder reads the map and another reads the header, and a route written against either has to
+  keep working.
+- **Uploaded parts arrive as attachments** on the message, with `CamelAttachmentsSize` beside
+  them, which is how three processors already read them.
+- **Everything else is the raw buffer**, which is what a JSON body has always been.
+
+**The body handler is the router's own instance** — the one the Camel consumer would have used,
+with whatever the server configured on it — so an upload spools where it already spooled and a
+form parses the way it already parsed. Reproducing the parsing as well as the shape would have
+been a second place for the two to disagree.
+
+**The upload coupling ends by evacuation, not by rewrite, and the difference is worth stating.**
+Vert.x spools an upload through its own file I/O, which is dispatched to the worker pool, and that
+has not changed. What changed is that the worker pool has no other tenants: no request runs there
+any more, so an upload competes with nothing and nothing competes with it. That is exactly what
+decision 1 said would happen, and it is the honest version of "the coupling died" — the pool did
+not stop being used, it stopped being shared.
+
 ## Structural decisions
 
 ### 1. The request pipeline runs on a virtual thread per request
@@ -340,9 +369,13 @@ Slice 2 counted them — five, all `addOnCompletion` — and proved the drain by
    against two workers.** `direct:` and `ProducerTemplate` turned out not to need replacing at
    all — camel-core stays, and of the external callers exactly one addresses an HTTP route
    pipeline.
-5. **The edge becomes the only edge** — request bodies (form and multipart) move across, the REST
-   DSL and `camel-platform-http-vertx` leave the build, and the upload coupling is re-measured to
-   confirm it died. The download half already has.
+5. **and 5b. Split, because they are different work.** **5 is done**: request bodies move across,
+   the hand-back goes, and every request the runtime serves is served on the router — eight
+   concurrent one-second form posts against two workers in 1040 ms. **5b remains**: the REST DSL
+   and `camel-platform-http-vertx` leave the build, which means TesseraQL owns the HTTP server,
+   the router and the body handler rather than borrowing them, and `HttpMessage` needs a
+   replacement. That is a different kind of change from moving a body, and folding them would
+   have made the reversible half irreversible.
 6. **Sweeps and cron** — the `timer:` and `quartz:` routes.
 
 Slice 5 must not land before the rest: it removes the mechanism they replace, and the hand-back it

@@ -145,12 +145,14 @@ All notable changes to TesseraQL are documented here. The format follows
   thread and the only bound left on work that needs a connection is the connection pool. Eight
   concurrent one-second routes against two workers went from about four seconds to **1046 ms**.
 
-  **A request carrying a body is handed back to the Camel route still mounted behind it**, because
-  form and multipart arrive at a route as parsed attributes today and reproducing that faithfully
-  is its own change. The route model is unchanged and both paths exist, which is what makes this
-  reversible; the answer, the error envelope, the audit row and every permit are the route's own
-  either way. `tesseraql.http.maxInFlight` becomes the runtime-wide ceiling it was always going to
-  be, rather than a floor under a pool.
+  **Every request the runtime serves is served this way**, bodies included: a form arrives as a
+  `Map` body and as headers, uploaded parts arrive as attachments, and everything else is the raw
+  buffer — the three shapes a route already reads, built from the router's own body handler so an
+  upload spools where it already spooled. Eight concurrent one-second form posts against two
+  workers take 1040 ms, the same one wave the read path takes. The route model is unchanged, and
+  the answer, the error envelope, the audit row and every permit are the route's own.
+  `tesseraql.http.maxInFlight` becomes the runtime-wide ceiling it was always going to be, rather
+  than a floor under a pool.
 
   **A download stops paying twice.** A response body that is a stream is streamed on that same
   virtual thread, so an attachment or an export costs neither a worker nor the heap it used to be
