@@ -53,9 +53,9 @@ class OpsConsoleIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
-                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
-                        io.tesseraql.security.session.SessionStore.class);
+        io.tesseraql.security.session.SessionStore sessions = runtime.context().lookup(
+                io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                io.tesseraql.security.session.SessionStore.class);
         String adminSid = sessions.create(
                 new io.tesseraql.security.Principal("ops-user", "ops-user", "Ops User", null,
                         List.of(), List.of("ADMIN"), List.of(), Map.of()),
@@ -460,7 +460,7 @@ class OpsConsoleIntegrationTest {
     }
 
     private static io.tesseraql.operations.outbox.JdbcOutboxStore outboxStore() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 io.tesseraql.camel.TesseraqlProperties.OUTBOX_STORE_BEAN,
                 io.tesseraql.operations.outbox.JdbcOutboxStore.class);
     }
@@ -479,7 +479,7 @@ class OpsConsoleIntegrationTest {
     }
 
     private static io.tesseraql.core.messaging.EventChannelStore eventStore() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 io.tesseraql.camel.TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN,
                 io.tesseraql.core.messaging.EventChannelStore.class);
     }

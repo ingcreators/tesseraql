@@ -284,7 +284,7 @@ class FrameworkSurfaceGuardTest {
     private static Map<String, Mounted> frameworkMounts() {
         Map<String, Mounted> framework = new LinkedHashMap<>();
         for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
-                .all(runtime.camelContext())) {
+                .all(runtime.context())) {
             String path = java.net.URLDecoder.decode(mount.path(),
                     java.nio.charset.StandardCharsets.UTF_8);
             if (FRAMEWORK_PATHS.stream().anyMatch(path::startsWith)) {
@@ -295,7 +295,7 @@ class FrameworkSurfaceGuardTest {
     }
 
     private static io.tesseraql.compiler.pipeline.Pipelines pipelines() {
-        return io.tesseraql.compiler.pipeline.Pipelines.of(runtime.camelContext());
+        return io.tesseraql.compiler.pipeline.Pipelines.of(runtime.context());
     }
 
     /** The verb and path a framework route actually answers on. */

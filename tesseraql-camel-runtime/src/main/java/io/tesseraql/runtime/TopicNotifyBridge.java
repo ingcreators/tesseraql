@@ -1,10 +1,10 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import javax.sql.DataSource;
-import org.apache.camel.support.service.ServiceSupport;
 import org.postgresql.PGConnection;
 import org.postgresql.PGNotification;
 import org.slf4j.Logger;
@@ -20,7 +20,10 @@ import org.slf4j.LoggerFactory;
  * freshness hint with no durability to recover, so unlike the messaging listener there is
  * nothing to drain after a reconnect — subscribers simply refresh on their next signal.
  */
-final class TopicNotifyBridge extends ServiceSupport {
+final class TopicNotifyBridge implements RuntimeContext.Service {
+
+    /** Whether this service is running; a stop is asked for, not waited on. */
+    private volatile boolean running;
 
     private static final Logger LOG = LoggerFactory.getLogger(TopicNotifyBridge.class);
     private static final long RECONNECT_DELAY_MS = 5_000;
@@ -28,7 +31,6 @@ final class TopicNotifyBridge extends ServiceSupport {
 
     private final DataSource dataSource;
     private final LiveStreams local;
-    private volatile boolean running;
     private volatile Thread thread;
     private volatile Connection connection;
 
@@ -38,7 +40,8 @@ final class TopicNotifyBridge extends ServiceSupport {
     }
 
     @Override
-    protected void doStart() {
+    public void start() {
+        running = true;
         running = true;
         thread = new Thread(this::run, "tql-live-topics");
         thread.setDaemon(true);
@@ -47,7 +50,8 @@ final class TopicNotifyBridge extends ServiceSupport {
     }
 
     @Override
-    protected void doStop() {
+    public void stop() {
+        running = false;
         running = false;
         Thread current = thread;
         if (current != null) {

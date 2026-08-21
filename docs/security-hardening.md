@@ -108,22 +108,19 @@ portability suites run out of the per-change path), the day the depth of explora
 worth the dependency. Until then, deterministic generation catches the whole class of
 crash bug — it already found the two above — while staying green and reproducible.
 
-## Camel component guard
+## Component exposure
 
-Application YAML never carries a raw Camel endpoint URI — recipes construct every endpoint — so
-component exposure comes from the classpath, not from routes. The runtime guards it anyway:
-every component registration on the CamelContext passes a policy, and a refused component fails
-app boot (`TQL-SEC-4138`) naming the component and the reason.
+There is no component registry to guard. Application YAML never carries a raw endpoint URI —
+recipes construct every step — and since the framework stopped resolving anything by name off
+the classpath (docs/camel-removal.md, design record), a dependency upgrade or a plugin JAR can
+no longer arm an `exec` or `groovy` endpoint by being present.
 
-- **A built-in baseline refuses `exec`, `script`, `groovy`, `class`, `language`, and `bean`**
-  with or without configuration — a dependency upgrade or a plugin JAR that drags a scripting
-  component onto the classpath cannot quietly arm it.
-- `tesseraql.camel.components.denied` adds to the baseline; `allowed:` narrows further, and
-  governs only what the application adds beyond the framework's own components. Config narrows,
-  never widens: an `allowed:` entry naming a baseline-denied component is ignored and linted
-  (`TQL-SEC-4139`).
-
-Details and the threat model: docs/component-guard.md (design record).
+That closed a control rather than weakening one. The guard that used to refuse such
+registrations at boot — and the lint that caught an attempt to re-allow one — was deleted with
+the mechanism it defended, error codes included; the threat model it was written against is
+kept as a record in docs/component-guard.md. What the classpath can still reach is bounded by the
+dependencies the runtime declares — 153 jars, enforcer-pinned — and by the egress allow-list
+below, which governs the outbound calls a step can actually make.
 
 ## ASVS control map
 

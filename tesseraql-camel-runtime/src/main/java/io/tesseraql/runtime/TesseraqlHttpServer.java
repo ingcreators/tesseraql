@@ -1,13 +1,12 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.ext.web.Router;
 import java.util.concurrent.TimeUnit;
-import org.apache.camel.CamelContext;
-import org.apache.camel.support.service.ServiceSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,40 +25,44 @@ import org.slf4j.LoggerFactory;
  * the same rule the component followed, and the reason a canary activation does not take the other
  * members' event loops with it.
  */
-final class TesseraqlHttpServer extends ServiceSupport {
+final class TesseraqlHttpServer implements RuntimeContext.Service {
+
+    /** Whether this service is running; a stop is asked for, not waited on. */
+    private volatile boolean running;
 
     private static final Logger LOG = LoggerFactory.getLogger(TesseraqlHttpServer.class);
 
     private static final long BIND_TIMEOUT_SECONDS = 30;
 
-    private final CamelContext camelContext;
+    private final RuntimeContext camelContext;
     private final String host;
     private final int port;
     private Vertx vertx;
     private Vertx created;
     private HttpServer server;
 
-    TesseraqlHttpServer(CamelContext camelContext, String host, int port) {
+    TesseraqlHttpServer(RuntimeContext camelContext, String host, int port) {
         this.camelContext = camelContext;
         this.host = host;
         this.port = port;
     }
 
     @Override
-    protected void doStart() throws Exception {
-        vertx = camelContext.getRegistry().findSingleByType(Vertx.class);
+    public void start() throws Exception {
+        running = true;
+        vertx = camelContext.findSingleByType(Vertx.class);
         if (vertx == null) {
-            VertxOptions options = camelContext.getRegistry().findSingleByType(VertxOptions.class);
+            VertxOptions options = camelContext.findSingleByType(VertxOptions.class);
             created = options == null ? Vertx.vertx() : Vertx.vertx(options);
             vertx = created;
             // Bound so the rest of the runtime finds the same instance the way it finds a shared
             // one: a surface should not have to know whether the host provided it.
-            camelContext.getRegistry().bind("tesseraqlVertx", created);
+            camelContext.bind("tesseraqlVertx", created);
             LOG.debug("Created a Vert.x instance for this runtime");
         }
         Router router = Router.router(vertx);
-        camelContext.getRegistry().bind(HttpEdgeBeans.ROUTER, router);
-        camelContext.getRegistry().bind(HttpEdgeBeans.BODY_HANDLER,
+        camelContext.bind(HttpEdgeBeans.ROUTER, router);
+        camelContext.bind(HttpEdgeBeans.BODY_HANDLER,
                 HttpEdgeBeans.newBodyHandler());
         server = vertx.createHttpServer(new HttpServerOptions())
                 .requestHandler(router);
@@ -69,7 +72,8 @@ final class TesseraqlHttpServer extends ServiceSupport {
     }
 
     @Override
-    protected void doStop() throws Exception {
+    public void stop() throws Exception {
+        running = false;
         if (server != null) {
             server.close().toCompletionStage().toCompletableFuture()
                     .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);

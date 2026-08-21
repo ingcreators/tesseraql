@@ -101,8 +101,7 @@ class SessionCookiePathIntegrationTest {
 
     /** The prefix the runtime was started under — it serves there, so the test asks there. */
     private static String basePathOf(TesseraqlRuntime runtime) {
-        return io.tesseraql.camel.BasePath.of(
-                io.tesseraql.camel.CamelBeans.of(runtime.camelContext()));
+        return io.tesseraql.camel.BasePath.of(runtime.context().beans());
     }
 
     private static void seedDatabase() throws Exception {

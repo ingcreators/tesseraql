@@ -59,7 +59,6 @@ class LintRegistryOrderTest {
                         "FieldDomainRules",
                         "ResponseHeaderRules",
                         "AmbientPrincipalRules",
-                        "ComponentPolicyRules",
                         "RuleSetRules",
                         "DecisionRules",
                         "ScopeRules",

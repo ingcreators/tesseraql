@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.BrowserAuthenticator;
 import io.tesseraql.security.session.SessionStore;
@@ -14,7 +15,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-import org.apache.camel.CamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +60,8 @@ public final class SseRoutes {
 
     /** The app's configured response headers, empty when the app declares none. */
     @SuppressWarnings("unchecked")
-    private static java.util.Map<String, String> securityHeaders(CamelContext camelContext) {
-        java.util.Map<String, String> headers = camelContext.getRegistry().lookupByNameAndType(
+    private static java.util.Map<String, String> securityHeaders(RuntimeContext camelContext) {
+        java.util.Map<String, String> headers = camelContext.lookup(
                 TesseraqlProperties.RESPONSE_HEADERS_BEAN, java.util.Map.class);
         return headers == null ? java.util.Map.of() : headers;
     }
@@ -72,15 +72,16 @@ public final class SseRoutes {
      * router routes, so Camel's REST configuration — where the prefix reaches every other
      * framework endpoint at once — does not apply to them.
      */
-    public static void register(CamelContext camelContext, int port, String path, Handler handler) {
+    public static void register(RuntimeContext camelContext, int port, String path,
+            Handler handler) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         String mounted = io.tesseraql.camel.BasePath
-                .of(io.tesseraql.camel.CamelBeans.of(camelContext)) + path;
+                .of(camelContext.beans()) + path;
         router.route(HttpMethod.GET, mounted)
                 .handler(ctx -> serve(camelContext, router, ctx, mounted, handler));
     }
 
-    private static void serve(CamelContext camelContext, io.vertx.ext.web.Router router,
+    private static void serve(RuntimeContext camelContext, io.vertx.ext.web.Router router,
             RoutingContext ctx, String path, Handler handler) {
         HttpServerResponse response = ctx.response();
         // The connection's event-loop context — captured here, on it — is where every
@@ -91,7 +92,7 @@ public final class SseRoutes {
         response.exceptionHandler(failure -> gone.set(true));
         Thread.ofVirtual().name("tql-sse-" + path).start(() -> {
             try {
-                SessionStore sessions = camelContext.getRegistry().lookupByNameAndType(
+                SessionStore sessions = camelContext.lookup(
                         TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
                 String cookie = ctx.request().getHeader("Cookie");
                 Principal principal = new BrowserAuthenticator(sessions).authenticate(cookie);

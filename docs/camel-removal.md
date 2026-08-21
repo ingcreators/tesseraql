@@ -274,9 +274,10 @@ returning an anonymous builder to be handed back to it. **`RouteBuilder` and `ad
 zero times.** What is left of Camel is three roles: a registry, a service lifecycle, and a header
 filter.
 
-**6b: the context itself** — the registry and the service list become the runtime's own, the header
-filter is rewritten, the component guard retires with the mechanism it guarded, and Camel leaves
-the build.
+**6b done: the context itself.** The registry and the service list are the runtime's own, the
+header filter is written from the bytecode that specified it, the component guard retires with the
+mechanism it guarded, and **Apache Camel is out of the build**: 168 jars to 153, 44 MB to 38, and
+the only artifacts left with "camel" in the name are this repository's own two modules.
 
 **6c: the names** — the `tesseraql-camel-*` modules, the `io.tesseraql.camel` package, and the
 header *values*, which still read `CamelHttpResponseCode` because slice 3b changed where a name
@@ -550,6 +551,42 @@ bytecode is the contract.
 sent `CamelHttpResponseCode: 200` back to every caller as a response header. **The fifth borrowed
 property, and the first one found before it broke something** — because this time the campaign
 looked at the bytecode before writing the replacement rather than after the suite complained.
+
+## What slice 6b found
+
+**An engine was being carried for a map and a list.** Of the 64 calls the framework ever made on
+the Camel context, 63 were a lookup by name; the rest were `addService`, `start` and `stop`. The
+replacement is a `ConcurrentHashMap`, an `ArrayList`, and the rule that stopping runs in reverse.
+
+**A security control retired with its subject, which is the campaign's clearest before-and-after.**
+`ComponentGuard`, `ComponentPolicy`, their lint rule and their two error codes existed because
+Camel registers whatever component it finds on the classpath. Nothing resolves a component by name
+any more, so there is nothing to refuse — and the control is gone rather than kept as scenery. That
+was written down as part of the return in the first section of this document, before any of it was
+built.
+
+**A greedy regex deleted 146 lines of unrelated dependencies, and only a downstream compile
+failure said so.** Removing two `<dependency>` blocks from a pom with a pattern that spanned
+elements ate everything from the file's first dependency to the second target. The lesson is the
+one slice 2b already recorded one level down — a blind mechanical edit finds things that look like
+its target — and the reason it was caught in seconds rather than in review is that a module that
+lost its dependencies cannot compile.
+
+**A test asserted the absence of the error its subject is documented to mint.** The full verify
+failed once on `StackDeployIntegrationTest`: waiting for a deploy to converge, it polled the
+served endpoint through a helper that asserts 200 — so the single 502 the swap is *allowed* to
+produce (`StackRelay` refuses to replay a request the retiring origin may already have acted on)
+failed the test instead of being waited through. The wait now tolerates that one transient and
+the assertion after it stays strict, so a 502 that does not clear still fails. Worth recording
+because the shape recurs: **a wait loop that asserts on every poll is not a wait, it is an
+assertion repeated under a deadline** — and it was the correction to my own wrong account of this
+flake, earlier in this campaign, that made the real mechanism legible enough to fix.
+
+**One conversion bug, caught by a test this campaign had already rewritten twice.** Two services
+had only a stop, so the generated `running` flag was never set and they reported themselves as not
+running while serving. `RoutePipelinesLifecycleTest` — the leak test that moved from a
+`ProducerTemplate` to the pipeline runner in slice 3b — is what noticed. A test kept alive across
+three rewrites of its subject caught a defect in the fourth.
 
 ## What this does not buy, said before anyone expects it
 

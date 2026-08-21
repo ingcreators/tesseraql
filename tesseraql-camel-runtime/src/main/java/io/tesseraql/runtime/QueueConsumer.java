@@ -4,8 +4,8 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
 import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.List;
-import org.apache.camel.CamelContext;
 
 /**
  * Drains a messaging channel's durable log into the {@code queue-consume} routes that subscribe to
@@ -33,7 +33,7 @@ final class QueueConsumer {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(QueueConsumer.class);
 
-    private final CamelContext context;
+    private final RuntimeContext context;
     private final EventChannelStore store;
     private final List<Subscription> subscriptions;
     private final int maxAttempts;
@@ -43,7 +43,7 @@ final class QueueConsumer {
     record Subscription(String channel, String topic, String routeId) {
     }
 
-    QueueConsumer(CamelContext context, EventChannelStore store, List<Subscription> subscriptions,
+    QueueConsumer(RuntimeContext context, EventChannelStore store, List<Subscription> subscriptions,
             int maxAttempts) {
         this.context = context;
         this.store = store;

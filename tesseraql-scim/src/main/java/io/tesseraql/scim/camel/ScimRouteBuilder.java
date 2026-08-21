@@ -8,13 +8,13 @@ import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.scim.ScimError;
 import io.tesseraql.scim.ScimException;
 import io.tesseraql.scim.ScimGroup;
 import io.tesseraql.scim.ScimGroupService;
 import io.tesseraql.scim.ScimUser;
 import io.tesseraql.scim.ScimUserService;
-import org.apache.camel.CamelContext;
 
 /**
  * Serves SCIM 2.0 inbound provisioning under {@code /scim/v2} (design ch. 10.15): users at
@@ -49,7 +49,7 @@ public final class ScimRouteBuilder {
         this.capture = capture;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(ScimException.class, this::scimError),
@@ -80,7 +80,7 @@ public final class ScimRouteBuilder {
         }
     }
 
-    private void configureGroups(CamelContext context, Pipelines.Compilation pipelines) {
+    private void configureGroups(RuntimeContext context, Pipelines.Compilation pipelines) {
         HttpMounts.mount(context, "POST", "/scim/v2/Groups", "scim.createGroup");
         HttpMounts.mount(context, "GET", "/scim/v2/Groups/{id}", "scim.getGroup");
         HttpMounts.mount(context, "GET", "/scim/v2/Groups", "scim.listGroups");

@@ -54,7 +54,7 @@ class CrossNodeLiveViewIntegrationTest {
         homeB = prepareAppHome();
         nodeA = TesseraqlRuntime.start(homeA, freePort());
         nodeB = TesseraqlRuntime.start(homeB, freePort());
-        SessionStore sessions = nodeA.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = nodeA.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("cross-user", "cross-user", "Cross User",
                 null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
@@ -94,7 +94,7 @@ class CrossNodeLiveViewIntegrationTest {
             assertThat(frames.readLine()).startsWith("retry:");
             assertThat(frames.readLine()).isEmpty();
 
-            SessionStore sessions = nodeA.camelContext().getRegistry().lookupByNameAndType(
+            SessionStore sessions = nodeA.context().lookup(
                     TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
             HttpResponse<String> commit = HttpClient.newHttpClient().send(
                     HttpRequest.newBuilder(URI.create("http://localhost:" + nodeA.port()

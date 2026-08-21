@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -90,7 +90,7 @@ class McpPromptRecipeTest {
     /** Compiles the fixture app and maps each route id to its processors' simple class names. */
     private static Map<String, List<String>> compile(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
-        try (DefaultCamelContext context = new DefaultCamelContext()) {
+        try (RuntimeContext context = new RuntimeContext()) {
             new RouteCompiler().appName("prompt-test")
                     .compile(context, manifest, false, null);
             return CompiledPipelines.stepsById(context);

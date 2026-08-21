@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.RouteTelemetry;
 import io.tesseraql.pipeline.Exchange;
-import org.apache.camel.impl.DefaultCamelContext;
+import io.tesseraql.pipeline.RuntimeContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -24,10 +24,10 @@ class RouteTelemetryMdcTest {
 
     @Test
     void processPutsTheSpanIdsIntoTheMdc() throws Exception {
-        try (DefaultCamelContext context = new DefaultCamelContext()) {
-            context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN,
+        try (RuntimeContext context = new RuntimeContext()) {
+            context.bind(TesseraqlProperties.TRACER_BEAN,
                     new io.tesseraql.core.telemetry.RingTracer(10));
-            Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+            Exchange exchange = new Exchange(context.beans());
             new RouteTelemetry("users.search", "GET", "/api/users", "app", false)
                     .process(exchange);
 

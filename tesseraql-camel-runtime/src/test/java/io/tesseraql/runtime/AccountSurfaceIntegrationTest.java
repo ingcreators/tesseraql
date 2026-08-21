@@ -49,8 +49,7 @@ class AccountSurfaceIntegrationTest {
         // A local-realm user for the password-change loop (slice 4): the standard identity
         // schema plus one seeded account, through the same pack contracts the CLI's
         // identity-schema command runs, on the runtime's own datasource.
-        javax.sql.DataSource main = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = main.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
             statement.execute(io.tesseraql.identity.DefaultIdentityPack.schema("postgres"));
@@ -109,7 +108,7 @@ class AccountSurfaceIntegrationTest {
 
     @Test
     void thePreferenceStoreIsLiveAndPersists() {
-        PreferenceStore store = runtime.camelContext().getRegistry().lookupByNameAndType(
+        PreferenceStore store = runtime.context().lookup(
                 TesseraqlProperties.PREFERENCE_STORE_BEAN, PreferenceStore.class);
         assertThat(store).isNotNull();
 
@@ -238,8 +237,8 @@ class AccountSurfaceIntegrationTest {
     /** Slice 3: a recipient-naming notification skips enqueue for an opted-out subject. */
     @Test
     void aRecipientNotificationHonorsTheOptOutAtEnqueue() throws Exception {
-        io.tesseraql.operations.outbox.JdbcOutboxStore outbox = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(TesseraqlProperties.OUTBOX_STORE_BEAN,
+        io.tesseraql.operations.outbox.JdbcOutboxStore outbox = runtime.context()
+                .lookup(TesseraqlProperties.OUTBOX_STORE_BEAN,
                         io.tesseraql.operations.outbox.JdbcOutboxStore.class);
         try {
             preferenceStore().put(null, "account-user", "notify.user-mail.optOut", "true");
@@ -265,7 +264,7 @@ class AccountSurfaceIntegrationTest {
     /** Slice 4: the session list counts this device and sign-out-others keeps only it. */
     @Test
     void theSessionListCountsAndSignOutOthersKeepsOnlyThisSession() throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String otherSid = sessions.create(new Principal(
                 "account-user", "account-user", "Account User", null, List.of(),
@@ -424,7 +423,7 @@ class AccountSurfaceIntegrationTest {
     }
 
     private static PreferenceStore preferenceStore() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.PREFERENCE_STORE_BEAN, PreferenceStore.class);
     }
 
@@ -438,7 +437,7 @@ class AccountSurfaceIntegrationTest {
             assertThat(get(disabled, cookie, "/_tesseraql/account").statusCode())
                     .isEqualTo(404);
             // ...and no preference store is bound.
-            assertThat(disabled.camelContext().getRegistry().lookupByNameAndType(
+            assertThat(disabled.context().lookup(
                     TesseraqlProperties.PREFERENCE_STORE_BEAN, PreferenceStore.class))
                     .isNull();
             // A signed-in shell page still shows the user menu — just without the settings
@@ -462,7 +461,7 @@ class AccountSurfaceIntegrationTest {
      */
     @Test
     void sessionsListSignsOutDevices() throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         // Another device of the same subject.
         String phone = sessions.create(new Principal(
@@ -511,8 +510,7 @@ class AccountSurfaceIntegrationTest {
      */
     @Test
     void takingAnEligibleRoleIsLiveInThisSession() throws Exception {
-        javax.sql.DataSource main = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
         io.tesseraql.identity.IdentityService identity = new io.tesseraql.identity.IdentityService(
                 name -> main);
         io.tesseraql.identity.RealmConfig realm = io.tesseraql.identity.RealmConfig
@@ -522,7 +520,7 @@ class AccountSurfaceIntegrationTest {
         io.tesseraql.identity.Elevation.grantEligibility(identity, realm, "pw-user",
                 "jit.oncall", "15", true);
 
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(
                 identity.resolvePrincipal(realm, "pw-user", null).orElseThrow(),
@@ -549,7 +547,7 @@ class AccountSurfaceIntegrationTest {
     }
 
     private static String establishSession(TesseraqlRuntime target) {
-        SessionStore sessions = target.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = target.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal(
                 "account-user", "account-user", "Account User", null, List.of(),
@@ -558,7 +556,7 @@ class AccountSurfaceIntegrationTest {
     }
 
     private static String csrfFor(TesseraqlRuntime target, String cookie) {
-        SessionStore sessions = target.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = target.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         return sessions.csrfTokenFromCookie(cookie);
     }

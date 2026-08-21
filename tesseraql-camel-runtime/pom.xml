@@ -145,24 +145,6 @@
     </dependency>
 
     <!--
-      Which headers leave a runtime is Camel's own answer, and it lives here rather than in the
-      component that used to bring it: the edge asks HttpHeaderFilterStrategy (RouteEdge), and
-      camel-platform-http had nothing else left to give once the runtime owned its server.
-    -->
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-http-base</artifactId>
-    </dependency>
-    <!--
-      Uploaded parts reach a route as attachments (docs/http-edge.md decision 1). The runtime's
-      own edge builds them now rather than inheriting them from the platform-http consumer, so
-      the dependency is declared here instead of arriving through one.
-    -->
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-attachments</artifactId>
-    </dependency>
-    <!--
       The gateway's relay (docs/stack-architecture.md decision 13). Vert.x is already here through
       camel-platform-http-vertx, so this adds one jar at a version the runtime already resolves;
       its only transitive dependency is the vertx-core already on the classpath. A hand-rolled

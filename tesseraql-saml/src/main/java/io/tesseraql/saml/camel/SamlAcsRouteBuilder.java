@@ -7,6 +7,7 @@ import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.saml.AuthnRequest;
 import io.tesseraql.saml.LogoutRequest;
 import io.tesseraql.saml.LogoutResponse;
@@ -28,7 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.camel.CamelContext;
 
 /**
  * SAML 2.0 SP web endpoints under {@code /_tesseraql/saml} (design ch. 10.14): the Assertion Consumer
@@ -98,7 +98,7 @@ final class SamlAcsRouteBuilder {
         this.throttle = throttle;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(SamlException.class, this::unauthorized),

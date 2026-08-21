@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -108,7 +108,7 @@ class PolicyTemplateCompilationTest {
     private static List<io.tesseraql.camel.auth.AuthStep> authorizeGates(Path dir)
             throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
-        try (DefaultCamelContext context = new DefaultCamelContext()) {
+        try (RuntimeContext context = new RuntimeContext()) {
             new RouteCompiler().appName("policy-template-test")
                     .compile(context, manifest, false, null);
             return CompiledPipelines.steps(context, io.tesseraql.camel.auth.AuthStep.class)

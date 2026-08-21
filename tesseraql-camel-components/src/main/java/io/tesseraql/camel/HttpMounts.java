@@ -1,9 +1,9 @@
 package io.tesseraql.camel;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import org.apache.camel.CamelContext;
 
 /**
  * Where each HTTP surface answers, declared as data rather than as a REST DSL definition
@@ -44,7 +44,7 @@ public final class HttpMounts {
      * route re-declares its mount, and a table that grew an entry per reload would mount the same
      * URL twice.
      */
-    public static synchronized void mount(CamelContext context, String method, String path,
+    public static synchronized void mount(RuntimeContext context, String method, String path,
             String pipeline) {
         HttpMounts held = of(context);
         held.mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
@@ -52,20 +52,20 @@ public final class HttpMounts {
     }
 
     /** Every mount declared so far, in declaration order. */
-    public static synchronized List<Mount> all(CamelContext context) {
+    public static synchronized List<Mount> all(RuntimeContext context) {
         return List.copyOf(of(context).mounts);
     }
 
     /** Forgets the mounts of routes being replaced, so a hot reload does not accumulate them. */
-    public static synchronized void forget(CamelContext context, String pipeline) {
+    public static synchronized void forget(RuntimeContext context, String pipeline) {
         of(context).mounts.removeIf(mount -> mount.pipeline().equals(pipeline));
     }
 
-    private static HttpMounts of(CamelContext context) {
-        HttpMounts mounts = context.getRegistry().lookupByNameAndType(BEAN, HttpMounts.class);
+    private static HttpMounts of(RuntimeContext context) {
+        HttpMounts mounts = context.lookup(BEAN, HttpMounts.class);
         if (mounts == null) {
             mounts = new HttpMounts();
-            context.getRegistry().bind(BEAN, mounts);
+            context.bind(BEAN, mounts);
         }
         return mounts;
     }

@@ -1,8 +1,8 @@
 package io.tesseraql.compiler.ext;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import javax.sql.DataSource;
-import org.apache.camel.CamelContext;
 
 /**
  * What a {@link RuntimeExtension} sees of the runtime being assembled: the Camel context (add
@@ -14,7 +14,7 @@ import org.apache.camel.CamelContext;
  * @param manifest   the main app manifest
  * @param dataSource the main datasource
  */
-public record ExtensionContext(CamelContext camel, AppManifest manifest, DataSource dataSource,
+public record ExtensionContext(RuntimeContext camel, AppManifest manifest, DataSource dataSource,
         DataSource frameworkDataSource) {
 
     /**
@@ -29,11 +29,11 @@ public record ExtensionContext(CamelContext camel, AppManifest manifest, DataSou
 
     /** Looks up a framework bean by name, or null when absent. */
     public <T> T bean(String name, Class<T> type) {
-        return camel.getRegistry().lookupByNameAndType(name, type);
+        return camel.lookup(name, type);
     }
 
     /** Binds a bean into the Camel registry under {@code name}. */
     public void bind(String name, Object bean) {
-        camel.getRegistry().bind(name, bean);
+        camel.bind(name, bean);
     }
 }

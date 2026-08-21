@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -60,15 +60,15 @@ class RedirectRendererTest {
      */
     @Test
     void aRedirectCarriesTheApplicationsBasePath() {
-        DefaultCamelContext context = new DefaultCamelContext();
+        RuntimeContext context = new RuntimeContext();
         io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
 
-        Exchange plain = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+        Exchange plain = new Exchange(context.beans());
         plain.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         renderer.process(plain);
         assertThat(plain.getMessage().getHeader("Location")).isEqualTo("/apps/shop-a/items/42");
 
-        Exchange htmx = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+        Exchange htmx = new Exchange(context.beans());
         htmx.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         htmx.getMessage().setHeader("HX-Request", "true");
         renderer.process(htmx);
@@ -78,9 +78,9 @@ class RedirectRendererTest {
     /** An off-site redirect is not this application's to prefix. */
     @Test
     void anAbsoluteRedirectIsLeftAlone() {
-        DefaultCamelContext context = new DefaultCamelContext();
+        RuntimeContext context = new RuntimeContext();
         io.tesseraql.camel.BasePath.bind(context, "/apps/shop-a");
-        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+        Exchange exchange = new Exchange(context.beans());
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of());
 
         new RedirectRenderer(new RedirectResponse(303, "https://example.test/pay"))
@@ -92,7 +92,7 @@ class RedirectRendererTest {
 
     private static Exchange exchange(String hxRequest) {
         Exchange exchange = new Exchange(
-                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
+                new RuntimeContext().beans());
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("params", Map.of("id", 42)));
         if (hxRequest != null) {
             exchange.getMessage().setHeader("HX-Request", hxRequest);

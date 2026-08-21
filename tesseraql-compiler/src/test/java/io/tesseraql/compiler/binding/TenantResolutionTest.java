@@ -8,31 +8,31 @@ import io.tesseraql.compiler.binding.TenancySettings.ResolverType;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.tenant.TenantContext;
 import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class TenantResolutionTest {
 
-    private static DefaultCamelContext camel;
+    private static RuntimeContext camel;
 
     @BeforeAll
-    static void start() {
-        camel = new DefaultCamelContext();
+    static void start() throws Exception {
+        camel = new RuntimeContext();
         camel.start();
     }
 
     @AfterAll
     static void stop() {
-        camel.stop();
+        camel.close();
     }
 
     private static Exchange exchange() {
-        return new Exchange(io.tesseraql.camel.CamelBeans.of(camel));
+        return new Exchange(camel.beans());
     }
 
     @Test

@@ -58,7 +58,7 @@ class DelegationIntegrationTest {
         seedDatabase();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("approver-1", "approver-1", "Approver",
                 null, List.of(), List.of(), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
@@ -147,7 +147,7 @@ class DelegationIntegrationTest {
     @Test
     void theOperatorPanelListsUnexpiredRules() throws Exception {
         putRule("colleague-9", "deputy-9");
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("ops-admin", "ops-admin", "Ops", null,
                 List.of(), List.of("ADMIN"), List.of("tql.iam.admin.view"), Map.of()),
@@ -166,7 +166,7 @@ class DelegationIntegrationTest {
     }
 
     private static void putRule(String subject, String delegate) {
-        runtime.camelContext().getRegistry().lookupByNameAndType(
+        runtime.context().lookup(
                 TesseraqlProperties.DELEGATION_STORE_BEAN,
                 io.tesseraql.core.workflow.DelegationStore.class)
                 .put(null, subject, delegate, Instant.now().minusSeconds(60),
@@ -174,7 +174,7 @@ class DelegationIntegrationTest {
     }
 
     private static void clearRule(String subject) {
-        runtime.camelContext().getRegistry().lookupByNameAndType(
+        runtime.context().lookup(
                 TesseraqlProperties.DELEGATION_STORE_BEAN,
                 io.tesseraql.core.workflow.DelegationStore.class).clear(null, subject);
     }

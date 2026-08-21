@@ -223,7 +223,7 @@ class WorkflowTransitionIntegrationTest {
                 + "where doc_id = ? and status = 'OPEN'", "ER-1")).isNotNull();
 
         // The cluster-safe sweeper escalates the overdue task to the onBreach.reassign resolver.
-        WorkflowSweeper sweeper = runtime.camelContext().getRegistry().lookupByNameAndType(
+        WorkflowSweeper sweeper = runtime.context().lookup(
                 TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
         assertThat(sweeper.sweep()).isEqualTo(1);
         assertThat(openTaskAssignee("ER-1")).isEqualTo("dept-head-1");
@@ -247,7 +247,7 @@ class WorkflowTransitionIntegrationTest {
 
         // The deadline breach auto-fires the approve transition as the system: the state advances,
         // the command runs (audit.user = system), the task completes, and history records it.
-        WorkflowSweeper sweeper = runtime.camelContext().getRegistry().lookupByNameAndType(
+        WorkflowSweeper sweeper = runtime.context().lookup(
                 TesseraqlProperties.WORKFLOW_SWEEPER_BEAN, WorkflowSweeper.class);
         assertThat(sweeper.sweep()).isEqualTo(1);
         assertThat(instanceState("auto_request", "AU-1")).isEqualTo("approved");

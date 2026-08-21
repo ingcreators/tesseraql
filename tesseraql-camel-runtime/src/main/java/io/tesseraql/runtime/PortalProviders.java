@@ -3,13 +3,13 @@ package io.tesseraql.runtime;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.operations.app.InstalledApp;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.LoginRedirects;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * The portal's providers, registered only when this runtime is the stack surface — the one
@@ -23,7 +23,7 @@ final class PortalProviders {
     }
 
     static void register(ServiceProviders providers, List<InstalledApp> members,
-            CamelContext context) {
+            RuntimeContext context) {
         providers.register("portal.apps.list", params -> appsFor(members, params));
         providers.register("portal.roles.list", params -> rolesFor(members, context, params));
     }
@@ -63,7 +63,7 @@ final class PortalProviders {
      * grants come from the caller's own session principal — resolved from the authenticated
      * exchange, never caller-writable — so the picker can only ever offer what is held.
      */
-    private static Map<String, Object> rolesFor(List<InstalledApp> members, CamelContext context,
+    private static Map<String, Object> rolesFor(List<InstalledApp> members, RuntimeContext context,
             Map<String, Object> params) {
         String app = params.get("app") == null ? "" : String.valueOf(params.get("app"));
         boolean known = members.stream().anyMatch(member -> member.name().equals(app));
@@ -92,15 +92,15 @@ final class PortalProviders {
     }
 
     /** {@code role_code → role_name} for one application; a realm without the contract: codes. */
-    private static Map<String, String> roleNames(CamelContext context, String app) {
+    private static Map<String, String> roleNames(RuntimeContext context, String app) {
         Map<String, String> names = new LinkedHashMap<>();
         if (context == null) {
             return names;
         }
-        io.tesseraql.identity.IdentityService identity = context.getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                        io.tesseraql.identity.IdentityService.class);
-        io.tesseraql.identity.RealmConfig realm = context.getRegistry().lookupByNameAndType(
+        io.tesseraql.identity.IdentityService identity = context.lookup(
+                TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                io.tesseraql.identity.IdentityService.class);
+        io.tesseraql.identity.RealmConfig realm = context.lookup(
                 TesseraqlProperties.IDENTITY_REALM_BEAN,
                 io.tesseraql.identity.RealmConfig.class);
         if (identity == null || realm == null) {

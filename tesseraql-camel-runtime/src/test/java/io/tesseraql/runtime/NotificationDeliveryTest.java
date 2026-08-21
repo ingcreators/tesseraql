@@ -9,6 +9,7 @@ import com.icegreen.greenmail.util.ServerSetupTest;
 import com.sun.net.httpserver.HttpServer;
 import io.tesseraql.core.notify.HmacSignatures;
 import io.tesseraql.core.outbox.OutboxEvent;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.notify.NotificationChannels;
 import io.tesseraql.yaml.notify.NotifyEvents;
@@ -21,7 +22,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -44,14 +44,14 @@ class NotificationDeliveryTest {
     @TempDir
     static Path appHome;
 
-    static DefaultCamelContext camel;
+    static RuntimeContext camel;
     static HttpServer receiver;
     static final AtomicReference<Map<String, String>> received = new AtomicReference<>();
     static volatile int receiverStatus = 200;
 
     @BeforeAll
     static void start() throws Exception {
-        camel = new DefaultCamelContext();
+        camel = new RuntimeContext();
         camel.start();
         Files.createDirectories(appHome.resolve("templates/mail"));
         Files.writeString(appHome.resolve("templates/mail/welcome.txt"), """
@@ -79,7 +79,7 @@ class NotificationDeliveryTest {
     @AfterAll
     static void stop() throws Exception {
         if (camel != null) {
-            camel.stop();
+            camel.close();
         }
         if (receiver != null) {
             receiver.stop(0);

@@ -49,7 +49,7 @@ class LiveViewIntegrationTest {
             statement.execute("insert into orders (status) values ('PENDING')");
         }
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("live-user", "live-user", "Live User", null,
                 List.of(), List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
@@ -142,7 +142,7 @@ class LiveViewIntegrationTest {
      */
     @Test
     void invalidatingTheSessionEndsAnOpenStream() throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("evicted", "evicted", "Evicted", null,
                 List.of(), List.of("ADMIN"), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
@@ -229,7 +229,7 @@ class LiveViewIntegrationTest {
     }
 
     private static HttpResponse<String> postCommand(String form) throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/orders/approve"))

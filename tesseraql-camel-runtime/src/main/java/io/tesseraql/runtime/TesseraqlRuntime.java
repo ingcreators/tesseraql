@@ -12,6 +12,7 @@ import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.idempotency.JdbcIdempotencyStore;
 import io.tesseraql.operations.outbox.JdbcOutboxStore;
 import io.tesseraql.operations.outbox.OutboxDispatcher;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.PolicyEngine;
@@ -24,8 +25,6 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.CamelContext;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +46,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private static final io.tesseraql.core.error.TqlErrorCode BAD_THREAD_COUNT = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.YAML, 1112);
 
-    private final CamelContext camelContext;
+    /** The declared drain bound, in milliseconds; Long.MAX_VALUE when forceOnTimeout is off. */
+    static final String SHUTDOWN_TIMEOUT_BEAN = "tesseraqlShutdownTimeoutMillis";
+
+    private final RuntimeContext camelContext;
     private final Map<String, HikariDataSource> dataSources;
     private final HikariDataSource mainDataSource;
     private final int port;
@@ -76,7 +78,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     private volatile String drainReason = "stopped: the runtime is shutting down"
             + " (cooperative stop)";
 
-    private TesseraqlRuntime(CamelContext camelContext, Map<String, HikariDataSource> dataSources,
+    private TesseraqlRuntime(RuntimeContext camelContext, Map<String, HikariDataSource> dataSources,
             int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, Map<String, String> jobOwners, String appName,
@@ -426,10 +428,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // surfaces that live at the stack's origin scope never mount into it
         // (docs/stack-shells.md structural decision 2).
         boolean hostedMember = hostContext != null && stackMembers == null;
-        DefaultCamelContext context = new DefaultCamelContext();
+        RuntimeContext context = new RuntimeContext();
         // The component policy guards every registration from here on
-        // (docs/component-guard.md): baseline-denied components fail boot, config or not.
-        ComponentGuard.install(context, manifest);
         // The prefix this application is served under, published before anything mounts a route
         // or emits a URL (docs/base-path.md). The compiler sets it on the REST configuration;
         // the surfaces outside the REST DSL — static assets, the SSE streams — and the response
@@ -444,7 +444,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         Map<String, HikariDataSource> dataSources = DataSources.createAll(manifest.config(),
                 override, appHome, modules.present() ? modules.loader() : null);
         HikariDataSource dataSource = dataSources.get("main");
-        dataSources.forEach((name, pool) -> context.getRegistry().bind(name, pool));
+        dataSources.forEach((name, pool) -> context.bind(name, pool));
         // Ambient framework state - sessions, tokens, replay guards, rate leases, audit,
         // preferences - may ride its own pool or database (docs/framework-datasource.md).
         // Transactionally- and integrity-coupled stores (outbox, workflow, idempotency,
@@ -508,16 +508,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
             LOG.info("Environment profile active: {} (config/env/{}.yml)", activeProfile,
                     activeProfile);
         }
-        context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
-        context.getRegistry().bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
+        context.bind(TesseraqlProperties.TRACER_BEAN, effectiveTracer);
+        context.bind(TesseraqlProperties.METER_BEAN, effectiveMeter);
         // This runtime's function set, bound where the tracer and lanes bind so the SQL
         // producers parse against it (docs/module-scope.md).
-        context.getRegistry().bind(TesseraqlProperties.FUNCTIONS_BEAN, modules.functions());
+        context.bind(TesseraqlProperties.FUNCTIONS_BEAN, modules.functions());
 
         io.tesseraql.core.threading.ExecutionLanes lanes = LaneConfigs.load(manifest.config());
-        context.getRegistry().bind(TesseraqlProperties.LANES_BEAN, lanes);
+        context.bind(TesseraqlProperties.LANES_BEAN, lanes);
         for (io.tesseraql.core.threading.Lane lane : lanes.all()) {
-            context.getRegistry().bind(
+            context.bind(
                     TesseraqlProperties.laneExecutorRef(lane.name()), lane.executor());
         }
 
@@ -527,7 +527,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .map(Long::parseLong).orElse(200L);
         io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog = new io.tesseraql.core.diag.RingSqlExecutionLog(
                 slowSqlCapacity, slowSqlMillis);
-        context.getRegistry().bind(TesseraqlProperties.SLOW_SQL_LOG_BEAN, slowSqlLog);
+        context.bind(TesseraqlProperties.SLOW_SQL_LOG_BEAN, slowSqlLog);
 
         io.tesseraql.core.diag.PinningMonitor pinningMonitor = new io.tesseraql.core.diag.PinningMonitor(
                 100);
@@ -544,7 +544,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         TenantDataSources tenantDataSources = TenantDataSources.load(manifest.config(),
                 modules.present() ? modules.loader() : null);
         if (!tenantDataSources.isEmpty()) {
-            context.getRegistry().bind(
+            context.bind(
                     TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN, tenantDataSources);
         }
 
@@ -571,11 +571,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The version table carries an invalidation to the runtimes that did not serve the
             // command; failing to create it disables the stamp, never the catalogs.
             catalogStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.CATALOG_STORE_BEAN, catalogStore);
+            context.bind(TesseraqlProperties.CATALOG_STORE_BEAN, catalogStore);
         }
 
         SecurityConfig security = SecurityConfigFactory.build(manifest.config());
-        context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
+        context.bind(TesseraqlProperties.POLICY_ENGINE_BEAN,
                 new PolicyEngine(security));
         // Context conditions, both layers (docs/access-governance.md structural decision 8).
         // Layer A is bound only when the deployment names its networks, so an unconfigured
@@ -585,18 +585,18 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .parse(manifest.config().getString("tesseraql.security.network.allow")
                         .orElse(null));
         if (signInNetworks.restricts()) {
-            context.getRegistry().bind(TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN,
+            context.bind(TesseraqlProperties.SIGN_IN_ALLOW_LIST_BEAN,
                     signInNetworks);
         }
         manifest.config().getString("tesseraql.security.conditions.zone")
                 .map(String::trim).filter(zone -> !zone.isEmpty())
-                .ifPresent(zone -> context.getRegistry().bind(
+                .ifPresent(zone -> context.bind(
                         TesseraqlProperties.CONDITION_ZONE_BEAN, java.time.ZoneId.of(zone)));
         // Organizational data scoping (roadmap Phase 29): the resolver expands /*%scope ... */
         // into principal-derived predicates. Bound only when the app declares scopes, so the SQL
         // producer falls back to its reject-any-scope default everywhere else.
         if (!manifest.scopes().isEmpty()) {
-            context.getRegistry().bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+            context.bind(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
                     new io.tesseraql.identity.scope.CompiledScopeResolver(
                             manifest.scopes(), datasourceDialect(manifest.config()),
                             modules.functions()));
@@ -606,20 +606,20 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // default applies.
         FileScopes fileScopes = FileScopes.fromConfig(appHome, manifest.config());
         if (fileScopes.anyDuckDbDatasource()) {
-            context.getRegistry().bind(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN, fileScopes);
+            context.bind(TesseraqlProperties.FILE_PATH_RESOLVER_BEAN, fileScopes);
         }
         if (security.jwt() != null) {
-            context.getRegistry().bind(
+            context.bind(
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN,
                     new JwtAuthenticator(security.jwt()));
         }
         if (security.apiKeys() != null) {
-            context.getRegistry().bind(
+            context.bind(
                     TesseraqlProperties.API_KEY_AUTHENTICATOR_BEAN,
                     new io.tesseraql.security.apikey.ApiKeyAuthenticator(security.apiKeys()));
         }
         if (security.mtls() != null) {
-            context.getRegistry().bind(
+            context.bind(
                     TesseraqlProperties.MTLS_AUTHENTICATOR_BEAN,
                     new io.tesseraql.security.mtls.MtlsAuthenticator(security.mtls()));
         }
@@ -658,7 +658,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     "tesseraql.temp.store must be 'file', 'db', or 'blob', got '"
                             + tempStoreKind + "'");
         };
-        context.getRegistry().bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
+        context.bind(TesseraqlProperties.TEMP_STORE_BEAN, tempStore);
 
         // The transport this runtime serves on (docs/http-threading.md decisions 1 and 4).
         // Hosted, the host built one instance for every runtime and sized it, so this runtime
@@ -667,11 +667,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // are what stop the server from inheriting a default sized for a framework where blocking
         // is the exception.
         if (hostContext != null && hostContext.vertx() != null) {
-            context.getRegistry().bind(TesseraqlProperties.VERTX_BEAN, hostContext.vertx());
+            context.bind(TesseraqlProperties.VERTX_BEAN, hostContext.vertx());
             warnOnMemberThreadSizing(manifest.config(),
                     io.tesseraql.yaml.app.ApplicationName.of(manifest.config()));
         } else {
-            context.getRegistry().bind(TesseraqlProperties.VERTX_OPTIONS_BEAN,
+            context.bind(TesseraqlProperties.VERTX_OPTIONS_BEAN,
                     vertxOptions(manifest.config()));
         }
 
@@ -680,11 +680,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // runtime's strategy keeps the full default filter minus exactly that header — request
         // hop-by-hop headers still never echo back. Bound by name now that no component holds it
         // (docs/http-edge.md decision 1).
-        org.apache.camel.http.base.HttpHeaderFilterStrategy httpHeaderFilter = new org.apache.camel.http.base.HttpHeaderFilterStrategy();
-        httpHeaderFilter.getOutFilter().removeIf("cache-control"::equalsIgnoreCase);
-        httpHeaderFilter.getInFilter().removeIf("cache-control"::equalsIgnoreCase);
-        context.getRegistry().bind(HttpEdgeBeans.HEADER_FILTER,
-                httpHeaderFilter);
         // SSE endpoints register on the platform's Vert.x router, which exists only once
         // the context (and with it the HTTP server) has started — collected here, run
         // right after context.start() (see SseRoutes for why they are not Camel routes).
@@ -740,7 +735,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.security.session.SessionStore.DEFAULT_COOKIE_NAME, sessionTtl,
                     sessionIdle, sessionCap);
         }
-        context.getRegistry().bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
+        context.bind(TesseraqlProperties.SESSION_STORE_BEAN, sessionStore);
         // Keyed credential throttle (docs/credential-throttle.md): on by default with
         // generous failures-only budgets; enabled: false is the visible test/dev escape.
         io.tesseraql.security.throttle.CredentialThrottle credentialThrottle = new io.tesseraql.security.throttle.CredentialThrottle(
@@ -764,7 +759,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                                 "tesseraql.security.credentialThrottle.addressWindow")
                                         .orElse("15m")))),
                 effectiveMeter);
-        context.getRegistry().bind(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
+        context.bind(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                 credentialThrottle);
         // A run is stamped with the node that owns it (docs/audit-hardening.md Decision 6). The
         // default is derived from host and pid so two replicas of one image are distinguishable
@@ -775,10 +770,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
         jobRepository.ensureSchema();
         JdbcIdempotencyStore idempotencyStore = new JdbcIdempotencyStore(dataSource);
         idempotencyStore.ensureSchema();
-        context.getRegistry().bind(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, idempotencyStore);
+        context.bind(TesseraqlProperties.IDEMPOTENCY_STORE_BEAN, idempotencyStore);
         JdbcOutboxStore outboxStore = new JdbcOutboxStore(dataSource);
         outboxStore.ensureSchema();
-        context.getRegistry().bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
+        context.bind(TesseraqlProperties.OUTBOX_STORE_BEAN, outboxStore);
         // The opt-in business-route audit log (roadmap Phase 45): who called what, with the
         // declared decision-relevant params, per-app scoped like every other ops table.
         //
@@ -794,7 +789,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             routeAuditStore = new io.tesseraql.operations.audit.JdbcRouteAuditStore(
                     dataSource);
             routeAuditStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
+            context.bind(TesseraqlProperties.ROUTE_AUDIT_SINK_BEAN,
                     routeAuditStore);
         }
         // The account surface (roadmap Phase 48): the managed per-user preference store, plus
@@ -806,15 +801,15 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .enabled(manifest.config()) ? accountPreferenceStore(frameworkDataSource) : null;
         final io.tesseraql.core.account.ShortcutStore shortcuts;
         if (preferences != null) {
-            context.getRegistry().bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
-            context.getRegistry().bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
+            context.bind(TesseraqlProperties.PREFERENCE_STORE_BEAN, preferences);
+            context.bind(TesseraqlProperties.ACCOUNT_SURFACE_BEAN, Boolean.TRUE);
             // Pins and recents (roadmap Phase 51) ride the account surface: the sidebar's
             // Pinned group reads through the same wrapper the mutations refresh.
             io.tesseraql.operations.account.JdbcShortcutStore jdbcShortcuts = new io.tesseraql.operations.account.JdbcShortcutStore(
                     frameworkDataSource);
             jdbcShortcuts.ensureSchema();
             shortcuts = new io.tesseraql.core.account.CachingShortcutStore(jdbcShortcuts);
-            context.getRegistry().bind(TesseraqlProperties.SHORTCUT_STORE_BEAN, shortcuts);
+            context.bind(TesseraqlProperties.SHORTCUT_STORE_BEAN, shortcuts);
         } else {
             shortcuts = null;
         }
@@ -822,7 +817,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // user has no stored or cookie choice. Values outside the enum are ignored.
         String uiTheme = manifest.config().getString("tesseraql.ui.theme").orElse(null);
         if ("light".equals(uiTheme) || "dark".equals(uiTheme)) {
-            context.getRegistry().bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
+            context.bind(TesseraqlProperties.UI_THEME_BEAN, uiTheme);
         }
         // The app's UI defaults (docs/hypermedia-ui.md "UI defaults"): the neutral ramp and
         // control density every shell renders. The renderer defaults to slate + compact; only
@@ -831,12 +826,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
         String uiNeutral = manifest.config().getString("tesseraql.ui.neutral").orElse(null);
         if (uiNeutral != null
                 && java.util.Set.of("neutral", "slate", "zinc", "stone").contains(uiNeutral)) {
-            context.getRegistry().bind(TesseraqlProperties.UI_NEUTRAL_BEAN, uiNeutral);
+            context.bind(TesseraqlProperties.UI_NEUTRAL_BEAN, uiNeutral);
         }
         String uiDensity = manifest.config().getString("tesseraql.ui.density").orElse(null);
         if (uiDensity != null
                 && java.util.Set.of("comfortable", "compact", "dense").contains(uiDensity)) {
-            context.getRegistry().bind(TesseraqlProperties.UI_DENSITY_BEAN, uiDensity);
+            context.bind(TesseraqlProperties.UI_DENSITY_BEAN, uiDensity);
         }
         // Whether the password form (and so self-service password change) is on: the same
         // flag the bundled login page reads (roadmap Phase 48 slice 4).
@@ -852,14 +847,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.webhook.JdbcWebhookReplayStore webhookReplayStore = new io.tesseraql.operations.webhook.JdbcWebhookReplayStore(
                 dataSource);
         webhookReplayStore.ensureSchema();
-        context.getRegistry().bind(TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN,
+        context.bind(TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN,
                 webhookReplayStore);
         // Messaging channel event log backing the built-in pg-notify transport (roadmap Phase 27):
         // the durable bus a publish: relay writes to and a queue-consume route claims from.
         io.tesseraql.operations.messaging.JdbcEventChannelStore eventChannelStore = new io.tesseraql.operations.messaging.JdbcEventChannelStore(
                 dataSource);
         eventChannelStore.ensureSchema();
-        context.getRegistry().bind(TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, eventChannelStore);
+        context.bind(TesseraqlProperties.EVENT_CHANNEL_STORE_BEAN, eventChannelStore);
         // Managed org-unit hierarchy for data scoping (roadmap Phase 29 slice 2): provisioned and
         // bound only in `managed` mode, so an app that owns its own org tables (the `app` default)
         // gets no managed schema. A subtree scope joins tql_org_closure; this store maintains it.
@@ -867,7 +862,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.operations.org.JdbcOrgUnitStore orgUnitStore = new io.tesseraql.operations.org.JdbcOrgUnitStore(
                     dataSource);
             orgUnitStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.ORG_UNIT_STORE_BEAN, orgUnitStore);
+            context.bind(TesseraqlProperties.ORG_UNIT_STORE_BEAN, orgUnitStore);
         }
         // Managed approval-workflow state (roadmap Phase 28 slice 1): provisioned and bound when any
         // declared workflow runs in `managed` mode (the app-wide default or a per-workflow
@@ -877,7 +872,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.operations.workflow.JdbcWorkflowStore workflowStore = new io.tesseraql.operations.workflow.JdbcWorkflowStore(
                     dataSource);
             workflowStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.WORKFLOW_STORE_BEAN, workflowStore);
+            context.bind(TesseraqlProperties.WORKFLOW_STORE_BEAN, workflowStore);
         }
         // Managed approval-workflow task inbox (roadmap Phase 28 slice 2): provisioned and bound when
         // any transition assigns a task, independent of where the workflow keeps its state, so one
@@ -887,26 +882,26 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.operations.workflow.JdbcWorkflowTaskStore taskStore = new io.tesseraql.operations.workflow.JdbcWorkflowTaskStore(
                     dataSource);
             taskStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
+            context.bind(TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, taskStore);
             // Standing absence rules (roadmap Phase 52): built wherever the task inbox is -
             // every assignee funnel resolves through this one store, one hop, never a chain.
             io.tesseraql.operations.workflow.JdbcDelegationStore delegationStore = new io.tesseraql.operations.workflow.JdbcDelegationStore(
                     dataSource);
             delegationStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.DELEGATION_STORE_BEAN,
+            context.bind(TesseraqlProperties.DELEGATION_STORE_BEAN,
                     delegationStore);
             // Deadline escalation (roadmap Phase 28 slice 3): a sweeper reassigns overdue tasks per
             // each state's onBreach.reassign resolver, recording history through the managed store.
             List<WorkflowSweeper.Rule> rules = buildSweeperRules(manifest,
                     datasourceDialect(manifest.config()), modules.functions());
             if (!rules.isEmpty()) {
-                io.tesseraql.core.workflow.WorkflowStore historyStore = context.getRegistry()
-                        .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN,
-                                io.tesseraql.core.workflow.WorkflowStore.class);
+                io.tesseraql.core.workflow.WorkflowStore historyStore = context.lookup(
+                        TesseraqlProperties.WORKFLOW_STORE_BEAN,
+                        io.tesseraql.core.workflow.WorkflowStore.class);
                 workflowSweeper = new WorkflowSweeper(rules, taskStore, historyStore, outboxStore,
                         io.tesseraql.yaml.app.ApplicationName.of(manifest.config()),
                         dataSource, delegationStore);
-                context.getRegistry().bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
+                context.bind(TesseraqlProperties.WORKFLOW_SWEEPER_BEAN,
                         workflowSweeper);
             }
         }
@@ -916,7 +911,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.operations.sequence.JdbcDocumentSequences documentSequences = new io.tesseraql.operations.sequence.JdbcDocumentSequences(
                 dataSource);
         documentSequences.ensureSchema();
-        context.getRegistry().bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
+        context.bind(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN, documentSequences);
         // Asynchronous file imports/exports (design ch. 28); codecs arrive via ServiceLoader, so
         // adding the optional tesseraql-excel module to the classpath is the whole install.
         io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
@@ -929,7 +924,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         fileTransfers.sqlTimeoutSeconds(manifest.config().getString("tesseraql.sql.timeoutSeconds")
                 .map(Integer::parseInt).orElse(30));
         fileTransfers.ensureSchema();
-        context.getRegistry().bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
+        context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
         // Transfer retention (docs/file-transfers.md): opt-in, because nothing expires by
         // default — the DuckLake stance, retention policy belongs to the app. When set,
         // produced files older than retentionDays are reclaimed on a periodic sweep.
@@ -957,11 +952,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
         if (attachmentsNeedManagedStore(manifest)) {
             io.tesseraql.core.blob.BlobStore blobStore = io.tesseraql.yaml.blob.BlobStores.create(
                     manifest.config(), appHome, modules.loader());
-            context.getRegistry().bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
+            context.bind(TesseraqlProperties.BLOB_STORE_BEAN, blobStore);
             io.tesseraql.operations.attachment.JdbcAttachmentStore attachmentStore = new io.tesseraql.operations.attachment.JdbcAttachmentStore(
                     dataSource);
             attachmentStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
+            context.bind(TesseraqlProperties.ATTACHMENT_STORE_BEAN, attachmentStore);
             // Scan-passed attachments become owner-gated ${dataset.*} references on duckdb
             // datasources, bridged into the fence's one spool directory (docs/duckdb.md).
             fileScopes.wireDatasets(attachmentStore, new DatasetSpool(blobStore,
@@ -979,7 +974,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // non-clean download gate holds pending objects back, so fail-closed is intact.
             boolean asyncScan = "async".equalsIgnoreCase(manifest.config()
                     .getString("tesseraql.attachments.scan.mode").orElse("sync"));
-            context.getRegistry().bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
+            context.bind(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
                     new io.tesseraql.operations.attachment.DefaultAttachmentService(blobStore,
                             attachmentStore, scanner, onInfected, asyncScan));
             if (asyncScan) {
@@ -1070,7 +1065,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.operations.rate.JdbcRateLeaseStore rateLeases = new io.tesseraql.operations.rate.JdbcRateLeaseStore(
                     frameworkDataSource);
             rateLeases.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
+            context.bind(TesseraqlProperties.RATE_BUDGET_BEAN, rateLeases);
         }
         // An enrichment's http: reference calls through the same gateway, so it counts toward
         // binding it — otherwise the reference fails at request time with no route-level http:
@@ -1079,7 +1074,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 .anyMatch(binding -> binding.isHttp()
                         || binding.enrich().values().stream()
                                 .anyMatch(enrich -> enrich.http() != null)))) {
-            context.getRegistry().bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+            context.bind(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
                     outboundGateway(httpCallClient));
         }
         // Notification channels and operations alerts (roadmap Phase 20).
@@ -1124,7 +1119,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // wrapper, so every mutation pushes a fresh badge with no per-caller wiring.
             inboxStore = new NotifyingInboxStore(
                     new io.tesseraql.core.inbox.CachingInboxStore(jdbcInbox), liveStreams);
-            context.getRegistry().bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
+            context.bind(TesseraqlProperties.INBOX_STORE_BEAN, inboxStore);
         } else {
             inboxStore = null;
         }
@@ -1136,7 +1131,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             if (!declaredTopics.isEmpty()) {
                 boolean postgres = "postgresql".equals(
                         io.tesseraql.core.util.DatabaseVendors.vendor(dataSource).orElse(null));
-                context.getRegistry().bind(TesseraqlProperties.TOPIC_BUS_BEAN, postgres
+                context.bind(TesseraqlProperties.TOPIC_BUS_BEAN, postgres
                         ? new CrossNodeTopicBus(liveStreams, dataSource)
                         : liveStreams);
                 if (postgres) {
@@ -1327,7 +1322,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // Per-node poll-source health (docs/poll-source-status.md): fed by the polling
         // wiring below, read by the dashboard's alerts and the console's jobs page.
         io.tesseraql.opsui.PollSourceStatus pollSourceStatus = new io.tesseraql.opsui.PollSourceStatus();
-        context.getRegistry().bind("tesseraqlPollSourceStatus", pollSourceStatus);
+        context.bind("tesseraqlPollSourceStatus", pollSourceStatus);
         io.tesseraql.opsui.OpsDashboard opsDashboard;
         try {
             // The effective tracer, not the supplied one: with OTLP configured the supplied tracer
@@ -1357,9 +1352,6 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .pollSources(pollSourceStatus)
                     // A job firing unfiltered because its calendar would not resolve.
                     .calendars(calendarStatus)
-                    // Camel's own view of its routes, as a signal rather than a gate
-                    // (docs/audit-hardening.md Decision 9).
-                    .routeStatus(() -> RouteHealthSignals.stoppedRoutes(context))
                     // Truthful readiness (roadmap Phase 45): every configured datasource is
                     // probed live; any failure rolls health up to DOWN so a load balancer
                     // actually sheds traffic.
@@ -1438,14 +1430,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
             } else if (hostedApps.contains("iam-admin")) {
                 systemNav.put("iamHref", basePath + "/_tesseraql/admin/users");
             }
-            context.getRegistry().bind(TesseraqlProperties.SYSTEM_NAV_BEAN,
+            context.bind(TesseraqlProperties.SYSTEM_NAV_BEAN,
                     java.util.Collections.unmodifiableMap(systemNav));
             if (hostedMember) {
                 // The one topology signal a hosted member's request handling reads: the login
                 // bounce and the account-surface links switch to the origin scope on its
                 // presence, and the tql.app.use fence refuses on its value
                 // (docs/stack-shells.md structural decision 3).
-                context.getRegistry().bind(TesseraqlProperties.STACK_MEMBER_BEAN, appName);
+                context.bind(TesseraqlProperties.STACK_MEMBER_BEAN, appName);
             }
             // Application-declared MCP tools, resources, and UI resources (roadmap Phase 24): the
             // compiler emitted a direct:mcp.<id> route per tool, a direct:mcp.resource.<id> route
@@ -1530,7 +1522,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
             // The surfaces that write their own responses — static assets and the SSE streams —
             // are the ones no compiled route covers, so they read the block from the registry.
-            context.getRegistry().bind(TesseraqlProperties.RESPONSE_HEADERS_BEAN,
+            context.bind(TesseraqlProperties.RESPONSE_HEADERS_BEAN,
                     io.tesseraql.yaml.config.ResponseHeaderDefaults.from(manifest.config())
                             .headers());
             // Served on the router rather than as a Camel route (docs/http-threading.md
@@ -1552,7 +1544,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // decision 1). Mounted ahead of the Camel routes rather than instead of them: a
             // request this adapter does not reproduce faithfully is handed back, and the route
             // model is unchanged either way.
-            sseEndpoints.add(() -> context.getRegistry().bind(RouteEdge.BEAN,
+            sseEndpoints.add(() -> context.bind(RouteEdge.BEAN,
                     RouteEdge.install(context, port)));
             // The ops API needs each job's owning app so per-app scope can gate listing and runs.
             Map<String, String> ownedJobs = new LinkedHashMap<>();
@@ -1705,11 +1697,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                     accountLocales, optOutChannels, sessionStore,
                                     passwordLoginEnabled,
                                     io.tesseraql.yaml.account.PreferencesSpec.live(appHome),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.TOTP_STORE_BEAN,
                                             io.tesseraql.core.credential.TotpStore.class),
                                     appName,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.DELEGATION_STORE_BEAN,
                                             io.tesseraql.core.workflow.DelegationStore.class),
                                     shortcuts))
@@ -1718,10 +1710,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // like account.invite below: they bind after this chain builds.
                     .register("account.eligibility",
                             params -> io.tesseraql.identity.Elevation.eligibilityModel(
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
                                     String.valueOf(params.get("subject"))))
@@ -1730,19 +1722,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // for, and what they have asked for. Never anybody else's.
                     .register("account.requests",
                             params -> io.tesseraql.identity.AccessRequests.myRequestsModel(
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
                                     String.valueOf(params.get("subject"))))
                     .register("account.requestRole",
                             params -> io.tesseraql.identity.AccessRequests.request(
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
                                     String.valueOf(params.get("subject")),
@@ -1777,10 +1769,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     .register("identity.invite",
                             params -> IdentityInvites.invite(params, credentialTokens,
                                     outboxStore,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
                                     inviteChannel, inviteUrl, inviteTtl, appName,
@@ -1864,10 +1856,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // lazily like identity.invite (they bind later).
                     .register("iam.disableUser", params -> {
                         String userId = String.valueOf(params.get("userId"));
-                        context.getRegistry().lookupByNameAndType(
+                        context.lookup(
                                 TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                 io.tesseraql.identity.IdentityService.class)
-                                .executeUpdate(context.getRegistry().lookupByNameAndType(
+                                .executeUpdate(context.lookup(
                                         TesseraqlProperties.IDENTITY_REALM_BEAN,
                                         io.tesseraql.identity.RealmConfig.class),
                                         io.tesseraql.identity.IdentityContracts.DISABLE_USER,
@@ -1880,31 +1872,31 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // identity/realm; disable re-verifies the password.
                     .register("account.totp.begin",
                             params -> AccountViews.totpBegin(params,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.TOTP_STORE_BEAN,
                                             io.tesseraql.core.credential.TotpStore.class)))
                     .register("account.totp.confirm",
                             params -> AccountViews.totpConfirm(params,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.TOTP_STORE_BEAN,
                                             io.tesseraql.core.credential.TotpStore.class)))
                     .register("account.totp.disable",
                             params -> AccountViews.totpDisable(params,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.TOTP_STORE_BEAN,
                                             io.tesseraql.core.credential.TotpStore.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class)))
                     // The operator's delegation visibility (roadmap Phase 52 slice 2):
                     // read-only rows for the IAM admin panel, tenant-scoped to the caller.
                     .register("identity.delegations", params -> {
-                        io.tesseraql.core.workflow.DelegationStore store = context.getRegistry()
-                                .lookupByNameAndType(TesseraqlProperties.DELEGATION_STORE_BEAN,
-                                        io.tesseraql.core.workflow.DelegationStore.class);
+                        io.tesseraql.core.workflow.DelegationStore store = context.lookup(
+                                TesseraqlProperties.DELEGATION_STORE_BEAN,
+                                io.tesseraql.core.workflow.DelegationStore.class);
                         java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
                         if (store != null) {
                             java.time.Instant now = java.time.Instant.now();
@@ -1934,30 +1926,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // task inbox, identity/realm resolve lazily like the neighbours.
                     .register("account.delegation.save",
                             params -> AccountViews.saveDelegation(params,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.DELEGATION_STORE_BEAN,
                                             io.tesseraql.core.workflow.DelegationStore.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class)))
                     .register("account.delegation.clear",
                             params -> AccountViews.clearDelegation(params,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.DELEGATION_STORE_BEAN,
                                             io.tesseraql.core.workflow.DelegationStore.class)))
                     .register("account.password.change",
                             params -> AccountViews.changePassword(params,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                             io.tesseraql.identity.IdentityService.class),
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.IDENTITY_REALM_BEAN,
                                             io.tesseraql.identity.RealmConfig.class),
                                     passwordLoginEnabled,
-                                    context.getRegistry().lookupByNameAndType(
+                                    context.lookup(
                                             TesseraqlProperties.SESSION_STORE_BEAN,
                                             io.tesseraql.security.session.SessionStore.class)));
             // The portal's provider, only where the host handed this runtime the member list —
@@ -1976,14 +1968,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .map(io.tesseraql.operations.app.InstalledApp::name).toList()
                         : java.util.List.of(appName);
                 java.util.function.Supplier<io.tesseraql.identity.GrantViews.ContractRunner> grantContracts = () -> {
-                    io.tesseraql.identity.IdentityService identity = context
-                            .getRegistry().lookupByNameAndType(
-                                    TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                    io.tesseraql.identity.IdentityService.class);
-                    io.tesseraql.identity.RealmConfig realm = context.getRegistry()
-                            .lookupByNameAndType(
-                                    TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                    io.tesseraql.identity.RealmConfig.class);
+                    io.tesseraql.identity.IdentityService identity = context.lookup(
+                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                            io.tesseraql.identity.IdentityService.class);
+                    io.tesseraql.identity.RealmConfig realm = context.lookup(
+                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                            io.tesseraql.identity.RealmConfig.class);
                     if (identity == null || realm == null) {
                         return null;
                     }
@@ -2013,11 +2003,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 // degrade like the views; writes are gated by the realm's role capability
                 // inside IdentityService.executeUpdate.
                 java.util.function.Supplier<io.tesseraql.identity.IdentityService> iamIdentity = () -> context
-                        .getRegistry().lookupByNameAndType(
+                        .lookup(
                                 TesseraqlProperties.IDENTITY_SERVICE_BEAN,
                                 io.tesseraql.identity.IdentityService.class);
                 java.util.function.Supplier<io.tesseraql.identity.RealmConfig> iamRealm = () -> context
-                        .getRegistry().lookupByNameAndType(
+                        .lookup(
                                 TesseraqlProperties.IDENTITY_REALM_BEAN,
                                 io.tesseraql.identity.RealmConfig.class);
                 // What this caller may administer (docs/access-governance.md structural
@@ -2350,7 +2340,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 OpsShellProviders.register(serviceProviders, shellTargets);
                 new OpsShellRouteBuilder(shellTargets).install(context);
             }
-            context.getRegistry().bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
+            context.bind(TesseraqlProperties.SERVICE_PROVIDERS_BEAN,
                     serviceProviders);
             Map<String, String> claimKeys = new LinkedHashMap<>();
             jobs.keySet().forEach(
@@ -2457,12 +2447,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             }
 
             IdentityService identity = new IdentityService(
-                    name -> context.getRegistry().lookupByNameAndType(name,
+                    name -> context.lookup(name,
                             javax.sql.DataSource.class),
                     datasourceDialect(manifest.config()));
             RealmConfig realm = IdentityConfigFactory.defaultRealm(manifest.config(), appHome);
-            context.getRegistry().bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
-            context.getRegistry().bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
+            context.bind(TesseraqlProperties.IDENTITY_SERVICE_BEAN, identity);
+            context.bind(TesseraqlProperties.IDENTITY_REALM_BEAN, realm);
             // Declared application roles converge into the store at boot
             // (docs/application-roles.md slice 3): managed realm only, no-op without a
             // declaration and without previously declared rows.
@@ -2474,7 +2464,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.operations.credential.JdbcTotpStore totpStore = new io.tesseraql.operations.credential.JdbcTotpStore(
                     dataSource);
             totpStore.ensureSchema();
-            context.getRegistry().bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
+            context.bind(TesseraqlProperties.TOTP_STORE_BEAN, totpStore);
             new LoginRouteBuilder(
                     new PasswordAuthenticator(identity), realm, sessionStore, totpStore,
                     credentialThrottle, identity).install(context);
@@ -2502,10 +2492,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     // The authorize surface resolves resources against these; bound before the
                     // extensions install, so the oauth extension finds them
                     // (docs/token-issuance.md decision 4).
-                    context.getRegistry().bind(
+                    context.bind(
                             io.tesseraql.oauth.OAuthRuntimeExtension.MEMBER_ADDRESSES_BEAN,
                             memberAddresses);
-                    context.getRegistry().bind(
+                    context.bind(
                             io.tesseraql.oauth.OAuthRuntimeExtension.EXTERNAL_ORIGIN_BEAN,
                             hostContext.externalOrigin());
                 }
@@ -2513,7 +2503,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             SessionTokens sessionTokens = new SessionTokens(security.jwt(),
                     io.tesseraql.core.util.Durations.parse(tokenTtl), tokenTtl, tokenIssuing,
                     stackIssuer
-                            ? () -> context.getRegistry().lookupByNameAndType(
+                            ? () -> context.lookup(
                                     io.tesseraql.oauth.OAuthRuntimeExtension.TOKEN_SIGNER_BEAN,
                                     io.tesseraql.oauth.AccessTokenSigner.class)
                             : null,
@@ -2540,7 +2530,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // oauth extension bound no store, so the unhosted account app renders the honest
             // state instead of meeting a missing provider.
             OAuthAccountProviders.register(serviceProviders,
-                    name -> context.getRegistry().lookupByName(name));
+                    name -> context.lookup(name, Object.class));
             serviceProviders
                     .register("ops.token.status", params -> sessionTokens.status())
                     .register("ops.token.issue", sessionTokens::issue)
@@ -2607,13 +2597,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // demand without threading it through the runtime constructor.
             RouteReloader reloader = new RouteReloader(context, appHome, manifest, appName,
                     mountedApps, modules.functions());
-            context.getRegistry().bind(RouteWatcher.BEAN, new RouteWatcher(appHome, reloader));
+            context.bind(RouteWatcher.BEAN, new RouteWatcher(appHome, reloader));
             // The boot facts a runtime extension may need beyond its ExtensionContext
             // (docs/studio-shell.md structural decision 3): published as one bean, before the
             // extensions install, so the workshop extension can assemble what the inlined
             // Studio wiring used to reach as locals. Runtime types only — no Studio type is
             // named here.
-            context.getRegistry().bind(TesseraqlProperties.RUNTIME_SEAMS_BEAN, new RuntimeSeams(
+            context.bind(TesseraqlProperties.RUNTIME_SEAMS_BEAN, new RuntimeSeams(
                     port, appName, java.util.Map.copyOf(dataSources), tenantDataSources,
                     calendarDecisions, notificationChannels, reloader, sseEndpoints::add,
                     httpOutbound, modules.loader(), datasourceDialect(manifest.config()),
@@ -2638,10 +2628,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The outbox always logs deliveries; the notification sink (mail/webhooks, roadmap
             // Phase 20) and an extension-contributed sink (e.g. SCIM outbound provisioning) are
             // composed on top when configured/bound.
-            io.tesseraql.core.outbox.OutboxEventSink extensionSink = context.getRegistry()
-                    .lookupByNameAndType(
-                            TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
-                            io.tesseraql.core.outbox.OutboxEventSink.class);
+            io.tesseraql.core.outbox.OutboxEventSink extensionSink = context.lookup(
+                    TesseraqlProperties.OUTBOX_EVENT_SINK_BEAN,
+                    io.tesseraql.core.outbox.OutboxEventSink.class);
             io.tesseraql.core.outbox.OutboxEventSink notificationSink = notificationChannels
                     .isEmpty()
                             ? null
@@ -2670,12 +2659,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // sweep also reclaims aged attachment rows and their blobs (roadmap Phase 30 slice 3).
             var retentionSweep = manifest.config().getString("tesseraql.retention.sweep");
             if (retentionSweep.isPresent()) {
-                io.tesseraql.core.attachment.AttachmentStore attachmentStore = context.getRegistry()
-                        .lookupByNameAndType(TesseraqlProperties.ATTACHMENT_STORE_BEAN,
-                                io.tesseraql.core.attachment.AttachmentStore.class);
-                io.tesseraql.core.blob.BlobStore blobStore = context.getRegistry()
-                        .lookupByNameAndType(TesseraqlProperties.BLOB_STORE_BEAN,
-                                io.tesseraql.core.blob.BlobStore.class);
+                io.tesseraql.core.attachment.AttachmentStore attachmentStore = context.lookup(
+                        TesseraqlProperties.ATTACHMENT_STORE_BEAN,
+                        io.tesseraql.core.attachment.AttachmentStore.class);
+                io.tesseraql.core.blob.BlobStore blobStore = context.lookup(
+                        TesseraqlProperties.BLOB_STORE_BEAN,
+                        io.tesseraql.core.blob.BlobStore.class);
                 java.time.Duration attachmentRetention = manifest.config()
                         .getString("tesseraql.retention.attachments")
                         .map(io.tesseraql.core.util.Durations::parse).orElse(null);
@@ -2712,12 +2701,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // number nobody had chosen, and no declared key said so. Configuring it does not make
             // a stop safe: SIGKILL, OOM and node loss strand rows at any timeout, which is why the
             // reaper exists. It makes the bound deliberate and visible.
-            context.getShutdownStrategy().setTimeout(io.tesseraql.core.util.Durations
-                    .parse(manifest.config().getString("tesseraql.shutdown.timeout")
-                            .orElse("45s"))
-                    .toSeconds());
-            context.getShutdownStrategy().setShutdownNowOnTimeout(manifest.config()
-                    .getBoolean("tesseraql.shutdown.forceOnTimeout", true));
+            // The drain bound is a value the runtime holds now rather than a setting on an
+            // engine's strategy, and forceOnTimeout keeps its meaning: false waits for the last
+            // request however long it takes, which is what "do not force" always said.
+            context.bind(SHUTDOWN_TIMEOUT_BEAN, manifest.config()
+                    .getBoolean("tesseraql.shutdown.forceOnTimeout", true)
+                            ? io.tesseraql.core.util.Durations
+                                    .parse(manifest.config().getString("tesseraql.shutdown.timeout")
+                                            .orElse("45s"))
+                                    .toMillis()
+                            : Long.MAX_VALUE);
             context.start();
             // Unicode route paths match their percent-encoded requests (UnicodePaths).
             UnicodePaths.install(context, port);
@@ -2736,7 +2729,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // Each step is best-effort for the same reason the ordering matters: on this path one
             // failing close must not strand the resources after it, and the exception that
             // actually explains the boot failure is the one being rethrown.
-            closeQuietly(context::stop);
+            closeQuietly(context::close);
             closeQuietly(pinningSource);
             closeQuietly(otelSdk);
             closeQuietly(tenantDataSources);
@@ -3052,7 +3045,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     /** The asynchronous file transfer service (design ch. 28). */
     public io.tesseraql.core.files.FileTransferService fileTransfers() {
-        return camelContext.getRegistry().lookupByNameAndType(
+        return camelContext.lookup(
                 TesseraqlProperties.FILE_TRANSFER_BEAN,
                 io.tesseraql.core.files.FileTransferService.class);
     }
@@ -3065,8 +3058,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * fixed. The watcher runs on a daemon thread and stops with {@link #close()}.
      */
     public AutoCloseable watchRoutes(java.util.function.Consumer<String> out) {
-        RouteWatcher watcher = camelContext.getRegistry()
-                .lookupByNameAndType(RouteWatcher.BEAN, RouteWatcher.class);
+        RouteWatcher watcher = camelContext.lookup(RouteWatcher.BEAN, RouteWatcher.class);
         watcher.start(out);
         return watcher;
     }
@@ -3075,7 +3067,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         return port;
     }
 
-    public CamelContext camelContext() {
+    public RuntimeContext context() {
         return camelContext;
     }
 
@@ -3092,8 +3084,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
     @Override
     public void close() {
         // Stop the --watch file watcher first so no reload races the context shutdown.
-        closeQuietly(camelContext.getRegistry()
-                .lookupByNameAndType(RouteWatcher.BEAN, RouteWatcher.class));
+        closeQuietly(camelContext.lookup(RouteWatcher.BEAN, RouteWatcher.class));
         // A running job is drained by asking, not only by waiting (docs/runtime-replace.md):
         // before the Camel drain starts waiting on the exchanges that carry job runs, every run
         // this runtime owns is asked to stop at its next step or chunk boundary — a committed
@@ -3105,14 +3096,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // docs/camel-removal.md decision 1). Camel's shutdown strategy drains what it can count,
         // and a compiled route is no longer one of its routes — so the edge counts its own and is
         // asked here, under the same declared bound the strategy uses.
-        RouteEdge edge = camelContext.getRegistry()
-                .lookupByNameAndType(RouteEdge.BEAN, RouteEdge.class);
+        RouteEdge edge = camelContext.lookup(RouteEdge.BEAN, RouteEdge.class);
         if (edge != null) {
-            closeQuietly(() -> edge.drain(camelContext.getShutdownStrategy().getTimeUnit()
-                    .toMillis(camelContext.getShutdownStrategy().getTimeout())));
+            Long bound = camelContext.lookup(SHUTDOWN_TIMEOUT_BEAN, Long.class);
+            closeQuietly(() -> edge.drain(bound == null ? 45_000L : bound));
         }
         try {
-            camelContext.stop();
+            camelContext.close();
         } finally {
             // Everything below outlives the drain, because the drain is what it observes and
             // serves (docs/audit-hardening.md Decision 5). The tracer and meter bound into the
@@ -3126,7 +3116,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             closeQuietly(pinningSource);
             closeQuietly(otelSdk);
             io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = camelContext
-                    .getRegistry().lookupByNameAndType(
+                    .lookup(
                             TesseraqlProperties.FILE_TRANSFER_BEAN,
                             io.tesseraql.operations.files.JdbcFileTransferService.class);
             if (fileTransfers != null) {

@@ -45,7 +45,7 @@ class InboxDeliveryIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal(
                 "inbox-user", "inbox-user", "Inbox User", null, List.of(),
@@ -108,8 +108,8 @@ class InboxDeliveryIntegrationTest {
     /** The Phase 48 opt-out silences the inbox at enqueue: no outbox row, no message. */
     @Test
     void theOptOutSilencesTheInboxAtEnqueue() throws Exception {
-        io.tesseraql.core.account.PreferenceStore preferences = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(TesseraqlProperties.PREFERENCE_STORE_BEAN,
+        io.tesseraql.core.account.PreferenceStore preferences = runtime.context()
+                .lookup(TesseraqlProperties.PREFERENCE_STORE_BEAN,
                         io.tesseraql.core.account.PreferenceStore.class);
         InboxStore inbox = inboxStore();
         int before = inbox.recent(null, "inbox-user", 100).size();
@@ -213,7 +213,7 @@ class InboxDeliveryIntegrationTest {
     }
 
     private static HttpResponse<String> postForm(String path, String form) throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
@@ -226,12 +226,12 @@ class InboxDeliveryIntegrationTest {
     }
 
     private static InboxStore inboxStore() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.INBOX_STORE_BEAN, InboxStore.class);
     }
 
     private static HttpResponse<String> postCommand(String form) throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         HttpRequest request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/decide"))

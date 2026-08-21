@@ -62,7 +62,6 @@ public final class AppLinter {
                 new FieldDomainRules(),
                 new ResponseHeaderRules(),
                 new AmbientPrincipalRules(),
-                new ComponentPolicyRules(),
                 new RuleSetRules(),
                 new DecisionRules(),
                 new ScopeRules(),

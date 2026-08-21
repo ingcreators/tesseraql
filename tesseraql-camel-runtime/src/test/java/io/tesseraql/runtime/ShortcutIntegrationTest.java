@@ -48,7 +48,7 @@ class ShortcutIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("pin-user", "pin-user", "Pin User",
                 null, List.of(), List.of("ADMIN"), List.of(), Map.of()),
@@ -155,7 +155,7 @@ class ShortcutIntegrationTest {
     }
 
     private static ShortcutStore store() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.SHORTCUT_STORE_BEAN, ShortcutStore.class);
     }
 

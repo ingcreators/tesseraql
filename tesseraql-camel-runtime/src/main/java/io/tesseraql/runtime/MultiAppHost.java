@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * Hosts every app a directory holds at once (design ch. 32.7): an install root's catalogue, or
  * application homes with no catalogue at all (docs/cli-surface.md Decision 2).
  *
- * <p>Each installed app runs in its own isolated {@link TesseraqlRuntime} — a separate CamelContext,
+ * <p>Each installed app runs in its own isolated {@link TesseraqlRuntime} — a separate RuntimeContext,
  * datasource set, and HTTP port — so apps share a process without sharing route paths or data. If
  * any app fails to start, the apps already started are shut down and the failure is propagated.
  *

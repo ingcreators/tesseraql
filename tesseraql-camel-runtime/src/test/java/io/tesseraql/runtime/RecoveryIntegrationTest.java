@@ -47,8 +47,7 @@ class RecoveryIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        javax.sql.DataSource main = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = main.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
             statement.execute(io.tesseraql.identity.DefaultIdentityPack.schema("postgres"));
@@ -86,7 +85,7 @@ class RecoveryIntegrationTest {
     @Test
     void theFullLoopRotatesOnceKillsSessionsAndTheTokenNeverWorksTwice() throws Exception {
         // A live session that must die with the reset.
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal(
                 "reset-user", "reset-user", "Reset User", null, List.of(),
@@ -166,7 +165,7 @@ class RecoveryIntegrationTest {
     }
 
     private static long resetMailCount() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.OUTBOX_STORE_BEAN,
                 io.tesseraql.operations.outbox.JdbcOutboxStore.class)
                 .recent(200).stream()
@@ -177,7 +176,7 @@ class RecoveryIntegrationTest {
     }
 
     private static String latestResetUrl() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.OUTBOX_STORE_BEAN,
                 io.tesseraql.operations.outbox.JdbcOutboxStore.class)
                 .recent(200).stream()

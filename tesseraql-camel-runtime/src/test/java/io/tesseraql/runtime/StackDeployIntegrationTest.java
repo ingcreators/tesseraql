@@ -155,7 +155,7 @@ class StackDeployIntegrationTest {
                 .isEqualTo("2.0.0");
         long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
-            if ("s2".equals(itemName())) {
+            if ("s2".equals(servedItemName())) {
                 return;
             }
             Thread.sleep(200);
@@ -279,7 +279,7 @@ class StackDeployIntegrationTest {
         assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
                 .isEqualTo("3.0.0");
         long deadline = System.currentTimeMillis() + 60_000;
-        while (System.currentTimeMillis() < deadline && !"s1".equals(itemName())) {
+        while (System.currentTimeMillis() < deadline && !"s1".equals(servedItemName())) {
             Thread.sleep(200);
         }
         assertThat(itemName()).as("the reconciler replaced the serving runtime").isEqualTo("s1");
@@ -384,13 +384,37 @@ class StackDeployIntegrationTest {
         return bytes.toByteArray();
     }
 
+    /**
+     * The served item name, asserting the endpoint answers — for the assertion that ends a wait.
+     */
     private static String itemName() throws Exception {
-        HttpResponse<String> response = CLIENT.send(
+        HttpResponse<String> response = items();
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+    }
+
+    /**
+     * The same read, tolerating the one transient the swap is documented to produce: a request
+     * that reaches a runtime retiring mid-flight gets a 502, because {@code StackRelay} refuses
+     * to replay a request the origin may already have acted on
+     * (docs/runtime-replace.md). Waiting for a swap by asserting 200 on every poll asserts the
+     * absence of exactly the error the swap is allowed to mint, which is why this returns null
+     * instead — the wait keeps polling, and the assertion after it is still strict, so a 502
+     * that does not clear still fails the test.
+     */
+    private static String servedItemName() throws Exception {
+        HttpResponse<String> response = items();
+        if (response.statusCode() != 200) {
+            return null;
+        }
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+    }
+
+    private static HttpResponse<String> items() throws Exception {
+        return CLIENT.send(
                 HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + gateway.port() + "/shop/api/items")).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertThat(response.statusCode()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
     }
 
     private static void seedDatabase() throws Exception {

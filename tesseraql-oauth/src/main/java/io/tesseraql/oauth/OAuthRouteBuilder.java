@@ -5,12 +5,12 @@ import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import org.apache.camel.CamelContext;
 
 /**
  * The authorization server's HTTP surface, growing slice by slice (docs/token-issuance.md).
@@ -53,7 +53,7 @@ final class OAuthRouteBuilder {
         refreshGrant.setDataProvider(provider);
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         // The error envelope every other framework surface carries, which these seven did not:
         // an unexpected failure on an OAuth endpoint left the caller holding an open connection
         // rather than answering (docs/camel-removal.md slice 2b).

@@ -1,11 +1,10 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.camel.CamelContext;
-import org.apache.camel.support.service.ServiceSupport;
 
 /**
  * Runs a compiled pipeline by id, for the callers that are not the HTTP edge
@@ -21,27 +20,37 @@ import org.apache.camel.support.service.ServiceSupport;
  * <p>Pipelines are cached because resolving one creates producers, and a producer per MCP call is
  * a leak with a slow fuse. A reload evicts the entry it replaces.
  */
-final class RoutePipelines extends ServiceSupport {
+final class RoutePipelines implements RuntimeContext.Service {
+
+    /**
+     * Running from the moment it exists: this service has nothing to start, and is registered so
+     * that something stops it (docs/camel-removal.md decision 2).
+     */
+    private volatile boolean running = true;
+
+    /** Whether this runner is still the context's, for the test that pins the lifecycle. */
+    boolean isRunning() {
+        return running;
+    }
 
     /** Registry name, so a caller with a context can find it. */
     static final String BEAN = "tesseraqlRoutePipelines";
 
-    private final CamelContext context;
+    private final RuntimeContext context;
     private final Map<String, RoutePipeline> resolved = new ConcurrentHashMap<>();
 
-    private RoutePipelines(CamelContext context) {
+    private RoutePipelines(RuntimeContext context) {
         this.context = context;
     }
 
     /** The runtime's runner, created and registered as a service on first use. */
-    static RoutePipelines of(CamelContext context) {
-        RoutePipelines existing = context.getRegistry()
-                .lookupByNameAndType(BEAN, RoutePipelines.class);
+    static RoutePipelines of(RuntimeContext context) {
+        RoutePipelines existing = context.lookup(BEAN, RoutePipelines.class);
         if (existing != null) {
             return existing;
         }
         RoutePipelines created = new RoutePipelines(context);
-        context.getRegistry().bind(BEAN, created);
+        context.bind(BEAN, created);
         try {
             // As a service, so the producers it resolves are stopped when the context is.
             context.addService(created);
@@ -63,7 +72,7 @@ final class RoutePipelines extends ServiceSupport {
         if (pipeline == null) {
             return Optional.empty();
         }
-        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+        Exchange exchange = new Exchange(context.beans());
         prepare.accept(exchange);
         try {
             pipeline.run(exchange);
@@ -98,7 +107,8 @@ final class RoutePipelines extends ServiceSupport {
     }
 
     @Override
-    protected void doStop() {
+    public void stop() {
+        running = false;
         resolved.values().forEach(RoutePipeline::stop);
         resolved.clear();
     }

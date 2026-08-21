@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.vertx.core.Context;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpMethod;
@@ -18,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.camel.CamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +61,7 @@ final class RouteEdge {
     /** TQL-CAMEL-5000, the code {@code ErrorResponseRenderer} uses for a failure it cannot map. */
     private static final String UNRENDERED_FAILURE = "{\"error\":{\"code\":\"TQL-CAMEL-5000\",\"message\":\"Internal error\"}}";
 
-    private final CamelContext camelContext;
+    private final RuntimeContext camelContext;
     /**
      * Pipelines by route id, looked up per request rather than captured by the handler.
      *
@@ -77,7 +77,7 @@ final class RouteEdge {
     private final AtomicInteger inFlight = new AtomicInteger();
     private final Object idle = new Object();
 
-    private RouteEdge(CamelContext camelContext) {
+    private RouteEdge(RuntimeContext camelContext) {
         this.camelContext = camelContext;
     }
 
@@ -89,7 +89,7 @@ final class RouteEdge {
      * mean a declared URL answering 404 for the life of the process. A runtime that cannot serve
      * what it was asked to serve should say so while somebody is still watching it start.
      */
-    static RouteEdge install(CamelContext camelContext, int port) {
+    static RouteEdge install(RuntimeContext camelContext, int port) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         RouteEdge edge = new RouteEdge(camelContext);
         edge.router = router;
@@ -231,7 +231,7 @@ final class RouteEdge {
      */
     private String path(String declared) {
         StringBuilder mountedPath = new StringBuilder(
-                io.tesseraql.camel.BasePath.of(io.tesseraql.camel.CamelBeans.of(camelContext)));
+                io.tesseraql.camel.BasePath.of(camelContext.beans()));
         for (String segment : declared.split("/", -1)) {
             if (segment.isEmpty()) {
                 continue;
@@ -329,7 +329,7 @@ final class RouteEdge {
      */
     private Exchange request(RoutingContext ctx, String routeId) {
         HttpServerRequest request = ctx.request();
-        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(camelContext));
+        Exchange exchange = new Exchange(camelContext.beans());
         // Which route this is, which a route running on a route never has to be told. Two
         // renderers ask: the redirect renderer, and the HTML renderer, which publishes the
         // Studio shell's member segment only for a route under `tql.studio.` — so an exchange
@@ -342,13 +342,11 @@ final class RouteEdge {
         io.tesseraql.pipeline.Message message = exchange.getMessage();
         Map<String, Object> headers = new java.util.LinkedHashMap<>();
         headers.put(Headers.HTTP_PATH, ctx.normalizedPath());
-        org.apache.camel.spi.HeaderFilterStrategy filter = headerFilter();
-        applyInbound(headers, exchange, filter, request.headers());
+        applyInbound(headers, request.headers());
         if (!ctx.queryParams().isEmpty()) {
-            applyInbound(headers, exchange, filter, ctx.queryParams());
+            applyInbound(headers, ctx.queryParams());
         }
-        ctx.pathParams().forEach((name, value) -> org.apache.camel.util.CollectionHelper
-                .appendEntry(headers, name, value));
+        ctx.pathParams().forEach((name, value) -> appendEntry(headers, name, value));
         if (request.localAddress() != null) {
             headers.put(io.tesseraql.camel.PlatformHttpHeaders.LOCAL_ADDRESS,
                     request.localAddress());
@@ -362,7 +360,7 @@ final class RouteEdge {
         headers.put(Headers.HTTP_URI, request.uri());
         headers.put(Headers.HTTP_QUERY, request.query());
         headers.put(Headers.HTTP_RAW_QUERY, request.query());
-        body(ctx, exchange, message, headers, filter);
+        body(ctx, exchange, message, headers);
         message.setHeaders(headers);
         attachments(ctx, message);
         return exchange;
@@ -378,15 +376,13 @@ final class RouteEdge {
      * body has always been.
      */
     private static void body(RoutingContext ctx, Exchange exchange,
-            io.tesseraql.pipeline.Message message, Map<String, Object> headers,
-            org.apache.camel.spi.HeaderFilterStrategy filter) {
+            io.tesseraql.pipeline.Message message, Map<String, Object> headers) {
         if (isForm(ctx)) {
             Map<String, Object> form = new java.util.LinkedHashMap<>();
             io.vertx.core.MultiMap attributes = ctx.request().formAttributes();
             for (String name : attributes.names()) {
                 for (String value : attributes.getAll(name)) {
-                    if (filter != null
-                            && filter.applyFilterToExternalHeaders(name, value, null)) {
+                    if (!io.tesseraql.pipeline.HeaderFilter.enters(name)) {
                         continue;
                     }
                     appendEntry(headers, name, value);
@@ -437,19 +433,15 @@ final class RouteEdge {
     }
 
     /** Request headers and query parameters, filtered and appended the way a consumer does it. */
-    private static void applyInbound(Map<String, Object> headers, Exchange exchange,
-            org.apache.camel.spi.HeaderFilterStrategy filter, io.vertx.core.MultiMap source) {
+    private static void applyInbound(Map<String, Object> headers,
+            io.vertx.core.MultiMap source) {
         source.forEach(entry -> {
             String name = entry.getKey();
             String value = entry.getValue();
-            if (filter == null || !filter.applyFilterToExternalHeaders(name, value, null)) {
+            if (io.tesseraql.pipeline.HeaderFilter.enters(name)) {
                 appendEntry(headers, name, value);
             }
         });
-    }
-
-    private org.apache.camel.spi.HeaderFilterStrategy headerFilter() {
-        return HttpEdgeBeans.headerFilter(camelContext);
     }
 
     /**
@@ -585,7 +577,6 @@ final class RouteEdge {
     private void headers(HttpServerResponse response, Exchange exchange) {
         Integer code = exchange.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, Integer.class);
         response.setStatusCode(code == null ? 200 : code);
-        org.apache.camel.spi.HeaderFilterStrategy filter = headerFilter();
         // Camel writes the content type itself rather than through the filter, which strips it
         // from the generic copy; doing the same here is why a JSON response says so.
         String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
@@ -593,8 +584,7 @@ final class RouteEdge {
             response.putHeader("Content-Type", contentType);
         }
         exchange.getMessage().getHeaders().forEach((name, value) -> {
-            if (value == null || (filter != null
-                    && filter.applyFilterToCamelHeaders(name, value, null))) {
+            if (value == null || !io.tesseraql.pipeline.HeaderFilter.leaves(name)) {
                 return;
             }
             response.putHeader(name, String.valueOf(value));

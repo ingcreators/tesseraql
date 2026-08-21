@@ -2,11 +2,11 @@ package io.tesseraql.compiler;
 
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * Reads what the compiler emitted, for the tests that assert on the chain rather than on
@@ -23,14 +23,14 @@ final class CompiledPipelines {
     }
 
     /** Each pipeline's steps, by id: a processor's simple class name, or an endpoint's URI. */
-    static Map<String, List<String>> stepsById(CamelContext context) {
+    static Map<String, List<String>> stepsById(RuntimeContext context) {
         Map<String, List<String>> byId = new LinkedHashMap<>();
         Pipelines.of(context).all().forEach((id, pipeline) -> byId.put(id, names(pipeline)));
         return byId;
     }
 
     /** Every step of {@code type} any pipeline holds, in compilation order. */
-    static <T> List<T> steps(CamelContext context, Class<T> type) {
+    static <T> List<T> steps(RuntimeContext context, Class<T> type) {
         List<T> found = new ArrayList<>();
         for (Pipeline pipeline : Pipelines.of(context).all().values()) {
             for (io.tesseraql.pipeline.Step step : pipeline.steps()) {

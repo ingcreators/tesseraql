@@ -65,9 +65,9 @@ class PollImportLocalIntegrationTest {
     void theDroppedCsvIsImportedAndArchived() throws Exception {
         long deadline = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
         Map<String, Integer> rows = new LinkedHashMap<>();
-        // Both conditions, not just the rows: the import now completes inside the consumer's
-        // exchange, so the rows become visible a moment *before* Camel archives the polled file.
-        // Waiting on the rows alone used to imply the move had happened; it no longer does.
+        // Both conditions, not just the rows: the import now completes inside the poll loop's
+        // exchange, so the rows become visible a moment *before* the file is archived. Waiting
+        // on the rows alone used to imply the move had happened; it no longer does.
         while (System.currentTimeMillis() < deadline
                 && (rows.size() < 2 || !Files.exists(inbound.resolve(".done/orders.csv")))) {
             rows.clear();
@@ -116,9 +116,9 @@ class PollImportLocalIntegrationTest {
      */
     @Test
     void thePollSourceRegistryTracksThisNode() throws Exception {
-        io.tesseraql.opsui.PollSourceStatus status = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("tesseraqlPollSourceStatus",
-                        io.tesseraql.opsui.PollSourceStatus.class);
+        io.tesseraql.opsui.PollSourceStatus status = runtime.context().lookup(
+                "tesseraqlPollSourceStatus",
+                io.tesseraql.opsui.PollSourceStatus.class);
         io.tesseraql.opsui.PollSourceStatus.SourceState wired = status.forJob("orders.intake")
                 .orElseThrow();
         assertThat(wired.skipped()).isFalse();

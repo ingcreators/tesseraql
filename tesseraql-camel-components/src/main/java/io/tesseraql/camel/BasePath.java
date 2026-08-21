@@ -2,7 +2,7 @@ package io.tesseraql.camel;
 
 import io.tesseraql.core.http.BasePaths;
 import io.tesseraql.pipeline.Exchange;
-import org.apache.camel.CamelContext;
+import io.tesseraql.pipeline.RuntimeContext;
 
 /**
  * The prefix this runtime's application is served under ({@code tesseraql.http.basePath},
@@ -25,8 +25,8 @@ public final class BasePath {
     }
 
     /** Publishes the normalized prefix for every surface that emits a URL. */
-    public static void bind(CamelContext context, String configured) {
-        context.getRegistry().bind(TesseraqlProperties.BASE_PATH_BEAN,
+    public static void bind(RuntimeContext context, String configured) {
+        context.bind(TesseraqlProperties.BASE_PATH_BEAN,
                 BasePaths.normalize(configured));
     }
 

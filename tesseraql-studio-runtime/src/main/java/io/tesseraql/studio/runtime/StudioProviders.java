@@ -26,6 +26,7 @@ import static io.tesseraql.studio.runtime.StudioSupport.tryInvoke;
 import static io.tesseraql.studio.runtime.StudioSupport.urlEncode;
 
 import com.zaxxer.hikari.HikariDataSource;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.runtime.AppMigrations;
 import io.tesseraql.runtime.CalendarDecisions;
 import io.tesseraql.runtime.RouteReloader;
@@ -36,7 +37,6 @@ import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * The service providers backing the bundled Studio app (design ch. 16, 47), extracted verbatim
@@ -62,7 +62,7 @@ final class StudioProviders {
             io.tesseraql.studio.StudioService.FieldMask studioMask,
             io.tesseraql.studio.StudioService.PdfRender studioPdf, boolean scaffoldEnabled,
             boolean testRunnerEnabled, RouteReloader reloader, AppManifest manifest,
-            Path appHome, String appName, int port, CamelContext context,
+            Path appHome, String appName, int port, RuntimeContext context,
             HikariDataSource dataSource, Map<String, HikariDataSource> dataSources,
             TenantDataSources tenantDataSources, CalendarDecisions calendarDecisions,
             io.tesseraql.yaml.notify.NotificationChannels notificationChannels,
@@ -86,7 +86,7 @@ final class StudioProviders {
         Path appHome = deps.appHome();
         String appName = deps.appName();
         int port = deps.port();
-        CamelContext context = deps.context();
+        RuntimeContext context = deps.context();
         HikariDataSource dataSource = deps.dataSource();
         Map<String, HikariDataSource> dataSources = deps.dataSources();
         TenantDataSources tenantDataSources = deps.tenantDataSources();
@@ -1906,7 +1906,7 @@ final class StudioProviders {
                             sample == null ? null : String.valueOf(sample), rows,
                             studioMask, studioPdf),
                             io.tesseraql.camel.BasePath
-                                    .of(io.tesseraql.camel.CamelBeans.of(context)));
+                                    .of(context.beans()));
                 })
                 .register("studio.runTests",
                         params -> studioTests

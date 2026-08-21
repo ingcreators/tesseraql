@@ -41,8 +41,7 @@ class CredentialThrottleIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        javax.sql.DataSource main = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = main.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
             statement.execute(io.tesseraql.identity.DefaultIdentityPack.schema("postgres"));

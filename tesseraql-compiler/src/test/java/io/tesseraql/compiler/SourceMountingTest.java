@@ -2,13 +2,13 @@ package io.tesseraql.compiler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -77,7 +77,7 @@ class SourceMountingTest {
     private static Map<String, List<String>> compile(Path dir) throws Exception {
         writeApp(dir);
         AppManifest manifest = new ManifestLoader().load(dir);
-        try (DefaultCamelContext context = new DefaultCamelContext()) {
+        try (RuntimeContext context = new RuntimeContext()) {
             new RouteCompiler().appName("source-mounting-test")
                     .compile(context, manifest, false, null);
             return CompiledPipelines.stepsById(context);

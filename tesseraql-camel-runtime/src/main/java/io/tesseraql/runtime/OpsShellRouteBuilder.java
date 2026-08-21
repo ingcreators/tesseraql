@@ -9,10 +9,10 @@ import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * The one ops-shell surface that cannot be a service provider: a member's transfer-file
@@ -30,7 +30,7 @@ final class OpsShellRouteBuilder {
         this.targets = targets;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),

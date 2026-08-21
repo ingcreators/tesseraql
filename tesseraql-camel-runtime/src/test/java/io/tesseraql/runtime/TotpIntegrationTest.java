@@ -44,8 +44,7 @@ class TotpIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        mainDataSource = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        mainDataSource = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = mainDataSource.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
             statement.execute(io.tesseraql.identity.DefaultIdentityPack.schema("postgres"));
@@ -86,7 +85,7 @@ class TotpIntegrationTest {
         // Begin: the pending secret renders to its owner; nothing enforces yet.
         assertThat(postForm(cookie, csrf, "/_tesseraql/account/totp/begin", "")
                 .statusCode()).isEqualTo(303);
-        TotpStore store = runtime.camelContext().getRegistry().lookupByNameAndType(
+        TotpStore store = runtime.context().lookup(
                 TesseraqlProperties.TOTP_STORE_BEAN, TotpStore.class);
         String secret = store.enrollment(null, "totp-user").orElseThrow().secret();
         String pendingPage = get(cookie, "/_tesseraql/account").body();
@@ -160,7 +159,7 @@ class TotpIntegrationTest {
     }
 
     private static String csrfFor(String cookie) {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         return sessions.csrfTokenFromCookie(cookie);
     }

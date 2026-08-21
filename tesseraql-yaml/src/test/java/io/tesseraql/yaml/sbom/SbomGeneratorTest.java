@@ -20,7 +20,7 @@ class SbomGeneratorTest {
     private static final List<MavenComponent> DEPENDENCIES = List.of(
             new MavenComponent("org.postgresql", "postgresql", "42.7.4", "ab12".repeat(16),
                     List.of("BSD-2-Clause")),
-            new MavenComponent("org.apache.camel", "camel-core", "4.18.0", null, List.of()));
+            new MavenComponent("io.vertx", "vertx-core", "4.18.0", null, List.of()));
 
     @Test
     void dependenciesBecomeLibraryComponentsWithPurlHashAndLicense() {
@@ -29,7 +29,7 @@ class SbomGeneratorTest {
 
         assertThat(sbom)
                 .contains("\"purl\" : \"pkg:maven/org.postgresql/postgresql@42.7.4\"")
-                .contains("\"purl\" : \"pkg:maven/org.apache.camel/camel-core@4.18.0\"")
+                .contains("\"purl\" : \"pkg:maven/io.vertx/vertx-core@4.18.0\"")
                 .contains("\"name\" : \"BSD-2-Clause\"")
                 .contains("\"type\" : \"library\"")
                 // Source file components are still present alongside the libraries.

@@ -11,6 +11,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.runtime.SseRoutes;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.CopilotFragments;
@@ -19,7 +20,6 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.apache.camel.CamelContext;
 
 /**
  * The copilot panel's send and stream endpoints (docs/copilot.md, "Why these are Java
@@ -48,7 +48,7 @@ final class CopilotRouteBuilder {
         return "/_tesseraql/studio/" + member + "/ui/copilot";
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
@@ -94,7 +94,7 @@ final class CopilotRouteBuilder {
      * opens), then run the tool loop on the SSE producer — deltas as chunk events, tool
      * markers in between, and done carrying the final transcript markup.
      */
-    static void registerStream(org.apache.camel.CamelContext context, int port,
+    static void registerStream(io.tesseraql.pipeline.RuntimeContext context, int port,
             CopilotService copilot, StudioEdit studioEdit, String member) {
         SseRoutes.register(context, port, pageOf(member) + "/stream", (principal, query) -> {
             if (copilot == null) {

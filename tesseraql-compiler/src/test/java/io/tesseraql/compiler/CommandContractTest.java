@@ -3,11 +3,11 @@ package io.tesseraql.compiler;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -98,7 +98,7 @@ class CommandContractTest {
 
     private static void compile(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
-        try (DefaultCamelContext context = new DefaultCamelContext()) {
+        try (RuntimeContext context = new RuntimeContext()) {
             new RouteCompiler().appName("command-contract-test")
                     .compile(context, manifest, false, null);
         }

@@ -235,8 +235,8 @@ class HttpThreadingIntegrationTest {
      */
     @Test
     void anUndeclaredPoolTakesTesseraqlsDefaults() {
-        com.zaxxer.hikari.HikariDataSource main = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", com.zaxxer.hikari.HikariDataSource.class);
+        com.zaxxer.hikari.HikariDataSource main = runtime.context().lookup("main",
+                com.zaxxer.hikari.HikariDataSource.class);
 
         assertThat(main).isNotNull();
         assertThat(main.getMaximumPoolSize()).isEqualTo(10);

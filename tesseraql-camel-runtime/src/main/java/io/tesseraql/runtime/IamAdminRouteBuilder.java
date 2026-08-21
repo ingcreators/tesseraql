@@ -13,6 +13,7 @@ import io.tesseraql.identity.IdentityContracts;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -20,7 +21,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.CamelContext;
 
 /**
  * The IAM Admin bulk endpoint (docs/hypermedia-ui.md, "Bulk actions"): one action against
@@ -38,7 +38,7 @@ final class IamAdminRouteBuilder {
 
     private static final String USERS = "/_tesseraql/admin/users";
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),

@@ -1,9 +1,8 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
-import org.apache.camel.CamelContext;
-import org.apache.camel.spi.HeaderFilterStrategy;
 
 /**
  * The three things every hand-written HTTP surface needs, held by the runtime rather than by a
@@ -24,24 +23,18 @@ final class HttpEdgeBeans {
     static final String BODY_HANDLER = "tesseraqlHttpBodyHandler";
 
     /** Which headers cross the boundary, in either direction. */
-    static final String HEADER_FILTER = "tesseraqlHttpHeaderFilter";
 
     private HttpEdgeBeans() {
     }
 
     /** The router this runtime serves on. */
-    static Router router(CamelContext context) {
-        return context.getRegistry().lookupByNameAndType(ROUTER, Router.class);
+    static Router router(RuntimeContext context) {
+        return context.lookup(ROUTER, Router.class);
     }
 
     /** The body handler, configured once and shared by every route that can carry a body. */
-    static BodyHandler bodyHandler(CamelContext context) {
-        return context.getRegistry().lookupByNameAndType(BODY_HANDLER, BodyHandler.class);
-    }
-
-    /** The header filter, or null when nothing configured one. */
-    static HeaderFilterStrategy headerFilter(CamelContext context) {
-        return context.getRegistry().lookupByNameAndType(HEADER_FILTER, HeaderFilterStrategy.class);
+    static BodyHandler bodyHandler(RuntimeContext context) {
+        return context.lookup(BODY_HANDLER, BodyHandler.class);
     }
 
     /**

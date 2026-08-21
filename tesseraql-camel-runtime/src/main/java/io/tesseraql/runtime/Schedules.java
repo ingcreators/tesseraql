@@ -1,12 +1,11 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.function.Consumer;
-import org.apache.camel.CamelContext;
-import org.apache.camel.support.service.ServiceSupport;
 import org.quartz.CronExpression;
 
 /**
@@ -30,7 +29,7 @@ import org.quartz.CronExpression;
  * the same expression and time zone — so the property survives, and what leaves is a scheduler,
  * its thread pool, its job store and the connection pool the job store brought with it.
  */
-final class Schedules extends ServiceSupport {
+final class Schedules implements RuntimeContext.Service {
 
     private static final System.Logger LOG = System.getLogger(Schedules.class.getName());
 
@@ -47,13 +46,13 @@ final class Schedules extends ServiceSupport {
     }
 
     /** The runtime's schedules, created and registered as a service on first use. */
-    static Schedules of(CamelContext context) {
-        Schedules existing = context.getRegistry().lookupByNameAndType(BEAN, Schedules.class);
+    static Schedules of(RuntimeContext context) {
+        Schedules existing = context.lookup(BEAN, Schedules.class);
         if (existing != null) {
             return existing;
         }
         Schedules created = new Schedules();
-        context.getRegistry().bind(BEAN, created);
+        context.bind(BEAN, created);
         try {
             // As a service, so every schedule stops when the context does.
             context.addService(created);
@@ -154,7 +153,8 @@ final class Schedules extends ServiceSupport {
     }
 
     @Override
-    protected void doStop() {
+    public void stop() {
+        running = false;
         running = false;
         List<Thread> stopping;
         synchronized (workers) {

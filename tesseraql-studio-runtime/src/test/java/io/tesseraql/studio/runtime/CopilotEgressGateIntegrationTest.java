@@ -78,7 +78,9 @@ class CopilotEgressGateIntegrationTest {
                         - api.example.com
                 """);
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, freePort())) {
-            assertThat(runtime.camelContext().getStatus().isStarted()).isTrue();
+            // Booting at all is the assertion: an egress allow-list the runtime
+            // refused would have thrown out of start().
+            assertThat(runtime.port()).isPositive();
         } finally {
             delete(appHome);
         }

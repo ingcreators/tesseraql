@@ -107,8 +107,8 @@ class QueryJsonIntegrationTest {
 
     @Test
     void htmxFragmentRendersTableWithSession() throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        SessionStore sessions = runtime.context().lookup(TesseraqlProperties.SESSION_STORE_BEAN,
+                SessionStore.class);
         String sid = sessions.create(new Principal("u001", "sato", "Sato", "tenant-a",
                 List.of(), List.of("USER_READ"), List.of(), Map.of()),
                 SessionStore.ClientInfo.NONE);
@@ -210,8 +210,7 @@ class QueryJsonIntegrationTest {
     }
 
     private SessionStore sessionStore() {
-        return runtime.camelContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        return runtime.context().lookup(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
     }
 
     private static Principal writer() {

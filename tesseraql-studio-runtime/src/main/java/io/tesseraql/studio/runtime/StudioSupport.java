@@ -1,6 +1,7 @@
 package io.tesseraql.studio.runtime;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.runtime.SecurityConfigFactory;
 import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.security.policy.PolicyEngine;
@@ -8,7 +9,6 @@ import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,10 +63,10 @@ final class StudioSupport {
      * without a restart — the auth producer looks the engine up by name per request, so the rebind
      * takes effect immediately. Only the policy engine is rebound; the authenticators are unchanged.
      */
-    static void rebindPolicyEngine(CamelContext context, Path appHome) {
+    static void rebindPolicyEngine(RuntimeContext context, Path appHome) {
         SecurityConfig fresh = SecurityConfigFactory
                 .build(new ManifestLoader().load(appHome).config());
-        context.getRegistry().bind(TesseraqlProperties.POLICY_ENGINE_BEAN, new PolicyEngine(fresh));
+        context.bind(TesseraqlProperties.POLICY_ENGINE_BEAN, new PolicyEngine(fresh));
     }
 
     /**

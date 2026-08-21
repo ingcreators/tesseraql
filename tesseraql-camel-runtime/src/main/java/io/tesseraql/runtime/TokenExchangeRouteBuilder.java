@@ -9,10 +9,10 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
-import org.apache.camel.CamelContext;
 
 /**
  * Exchanges an authenticated session for a short-lived bearer token
@@ -80,7 +80,7 @@ final class TokenExchangeRouteBuilder {
                         + " security.oauth.enabled");
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class,

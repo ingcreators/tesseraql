@@ -67,11 +67,10 @@ class HttpEdgeDispatchIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        DataSource dataSource = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", DataSource.class);
-        io.vertx.ext.web.Router router = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("tesseraqlHttpRouter", io.vertx.ext.web.Router.class);
-        Vertx vertx = runtime.camelContext().getRegistry().findSingleByType(Vertx.class);
+        DataSource dataSource = runtime.context().lookup("main", DataSource.class);
+        io.vertx.ext.web.Router router = runtime.context().lookup("tesseraqlHttpRouter",
+                io.vertx.ext.web.Router.class);
+        Vertx vertx = runtime.context().findSingleByType(Vertx.class);
 
         CompletableFuture<Context> deployed = new CompletableFuture<>();
         vertx.deployVerticle(new AbstractVerticle() {

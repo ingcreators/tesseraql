@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.RouteCompiler;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.RouteFile;
@@ -12,7 +13,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.CamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +49,7 @@ public final class RouteReloader {
      */
     private static final String COMPILE_FAILED = "TQL-CAMEL-3103";
 
-    private final CamelContext context;
+    private final RuntimeContext context;
     private final Path appHome;
     private final String appName;
     private final List<SystemApps.MountedApp> mountedApps;
@@ -71,7 +71,7 @@ public final class RouteReloader {
     /** The workflow/ tree; a change rebuilds the synthesized transition routes. */
     private String workflowFingerprint;
 
-    RouteReloader(CamelContext context, Path appHome, AppManifest current,
+    RouteReloader(RuntimeContext context, Path appHome, AppManifest current,
             String appName, List<SystemApps.MountedApp> mountedApps,
             io.tesseraql.core.expr.ExpressionFunctions functions) {
         this.context = context;
@@ -266,7 +266,7 @@ public final class RouteReloader {
         // holds the old one until it is told (docs/http-edge.md decision 1). Refreshed here,
         // after every route in this reload has been rebuilt, so the swap is one step rather than
         // a race with the rebuild.
-        RouteEdge edge = context.getRegistry().lookupByNameAndType(RouteEdge.BEAN, RouteEdge.class);
+        RouteEdge edge = context.lookup(RouteEdge.BEAN, RouteEdge.class);
         if (edge != null) {
             edge.refreshAll();
         }
@@ -426,19 +426,15 @@ public final class RouteReloader {
     /**
      * Takes a route out of service, whichever kind it is.
      *
-     * <p>An application route is a pipeline now (docs/camel-removal.md decision 1), so removing it
-     * is dropping a map entry — the operation Camel's stop-then-remove was standing in for. The
-     * route lookup stays for the framework's own builders, which still declare consumers.
+     * <p>Every route is a pipeline now (docs/camel-removal.md decision 1), so removing one is
+     * dropping two map entries — the compiled pipeline, and the resolved copy that a run may have
+     * left behind. Camel's stop-then-remove was standing in for exactly this.
      */
-    private void stopAndRemove(String id) throws Exception {
+    private void stopAndRemove(String id) {
         io.tesseraql.compiler.pipeline.Pipelines.of(context).remove(id);
         // And the resolved copy: a pipeline that has been run holds started producers, and the
         // replacement compiled behind it is a different list of processor instances.
         RoutePipelines.of(context).evict(id);
-        if (context.getRoute(id) != null) {
-            context.getRouteController().stopRoute(id);
-            context.removeRoute(id);
-        }
     }
 
     /**

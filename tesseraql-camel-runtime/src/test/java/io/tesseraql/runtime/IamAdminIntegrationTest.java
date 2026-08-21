@@ -58,9 +58,9 @@ class IamAdminIntegrationTest {
         seedDatabase();
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
-                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
-                        io.tesseraql.security.session.SessionStore.class);
+        io.tesseraql.security.session.SessionStore sessions = runtime.context().lookup(
+                io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal("iam-admin", "iam-admin",
                 "IAM Admin", null, List.of(), List.of("ADMIN"),
                 List.of("tql.iam.admin.view", "tql.iam.admin.write"), Map.of()),
@@ -164,8 +164,8 @@ class IamAdminIntegrationTest {
      */
     @Test
     void sessionsPanelRevokesAndDisableEndsSessions() throws Exception {
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(
+        io.tesseraql.security.session.SessionStore sessions = runtime.context()
+                .lookup(
                         io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         try {
@@ -203,8 +203,8 @@ class IamAdminIntegrationTest {
      */
     @Test
     void sessionsPanelSignsOutOneDevice() throws Exception {
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(
+        io.tesseraql.security.session.SessionStore sessions = runtime.context()
+                .lookup(
                         io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         String laptop = sessions.create(bob(),
@@ -246,8 +246,8 @@ class IamAdminIntegrationTest {
      */
     @Test
     void sessionsPageListsFiltersAndRevokesAcrossSubjects() throws Exception {
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(
+        io.tesseraql.security.session.SessionStore sessions = runtime.context()
+                .lookup(
                         io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         String bobPhone = sessions.create(bob(),
@@ -597,9 +597,9 @@ class IamAdminIntegrationTest {
     }
 
     private static Session session(String login, List<String> permissions) {
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
-                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
-                        io.tesseraql.security.session.SessionStore.class);
+        io.tesseraql.security.session.SessionStore sessions = runtime.context().lookup(
+                io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal(login, login, login,
                 null, List.of(), List.of(), permissions, Map.of()),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
