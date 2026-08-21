@@ -210,16 +210,25 @@
       <artifactId>camel-mdc</artifactId>
     </dependency>
     <!-- SMTP notification channels (roadmap Phase 20). -->
-    <!-- Managed connectors: directory polling for file-import (roadmap Phase 26). camel-file
-         drives local-directory polling; camel-ftp adds the SFTP/FTPS consumers. Both stay an
-         implementation detail behind the poll: trigger recipe. -->
-    <dependency>
-      <groupId>org.apache.camel</groupId>
-      <artifactId>camel-file</artifactId>
-    </dependency>
+    <!-- Managed connectors: directory polling for file-import (roadmap Phase 26). Only the FTPS
+         consumer is still Camel's (docs/camel-removal.md slice 1); local and SFTP are the
+         runtime's own poll cycle. camel-file is no longer declared here because nothing resolves
+         the file: component any more — it arrives under camel-ftp, which is built on it, and
+         declaring a component this framework does not use is the camel-rest mistake slice 0
+         found. Both stay an implementation detail behind the poll: trigger recipe. -->
     <dependency>
       <groupId>org.apache.camel</groupId>
       <artifactId>camel-ftp</artifactId>
+    </dependency>
+    <!--
+      The SFTP client the poll cycle drives itself (docs/camel-removal.md slice 1). It arrived
+      under camel-ftp, and using it from there would have been the borrowed-dependency mistake the
+      HTTP edge campaign already paid for once: the artifact leaves with the component that
+      brought it, and a compile is the only warning you get.
+    -->
+    <dependency>
+      <groupId>com.github.mwiede</groupId>
+      <artifactId>jsch</artifactId>
     </dependency>
 
     <dependency>

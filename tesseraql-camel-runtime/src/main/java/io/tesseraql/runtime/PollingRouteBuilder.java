@@ -29,6 +29,16 @@ final class PollingRouteBuilder extends RouteBuilder {
     private static final System.Logger LOG = System
             .getLogger(PollingRouteBuilder.class.getName());
 
+    /**
+     * The transports still served by a Camel consumer.
+     *
+     * <p>{@code local} and {@code sftp} moved to the runtime's own poll cycle in
+     * docs/camel-removal.md slice 1; FTPS follows in slice 5, once the transport settings its own
+     * integration test pins — {@code PBSZ 0}/{@code PROT P}, the trust store, passive binary mode
+     * — have a home outside an endpoint URI.
+     */
+    private static final java.util.Set<String> CAMEL_TRANSPORTS = java.util.Set.of("ftps");
+
     private final List<JobFile> jobs;
     private final FileConnectors connectors;
     private final String appName;
@@ -98,25 +108,71 @@ final class PollingRouteBuilder extends RouteBuilder {
             return;
         }
 
+        String transport = poll.effectiveTransport();
+        // Validated for both paths, before either is built: the constraint is on what a
+        // move: may name, and it does not become weaker because one transport no longer
+        // spells it into a URI.
+        String move = archiveDirectory("move", poll.effectiveMove());
+        String moveFailed = archiveDirectory("moveFailed", poll.effectiveMoveFailed());
         if (poll.consumesOnce()) {
             consumedStore.ensureSchema();
-            getContext().getRegistry().bind(repositoryBeanName(jobId),
-                    new PollConsumedRepository(consumedStore, jobId));
+            if (CAMEL_TRANSPORTS.contains(transport)) {
+                getContext().getRegistry().bind(repositoryBeanName(jobId),
+                        new PollConsumedRepository(consumedStore, jobId));
+            }
         }
-        String uri = endpointUri(jobId, poll);
         Path rowSqlFile = job.source().getParent().resolve(rowStep.file()).normalize();
         String owner = jobOwners.getOrDefault(jobId, appName);
         io.tesseraql.core.files.FileReadSpec readSpec = importSpec.toReadSpec()
                 .withLocale(importSpec.locale());
-        from(uri).routeId("poll." + jobId).process(new PollImportProcessor(
-                jobId, owner, importSpec.format(), readSpec, rowSqlFile,
-                importSpec.effectiveOnError(), status));
-        status.polling(jobId, poll.effectiveTransport());
-        LOG.log(System.Logger.Level.INFO, "Polling {0} source for job {1}",
-                poll.effectiveTransport(), jobId);
+        PollImportProcessor importer = new PollImportProcessor(jobId, owner,
+                importSpec.format(), readSpec, rowSqlFile, importSpec.effectiveOnError(), status);
+        if (CAMEL_TRANSPORTS.contains(transport)) {
+            from(endpointUri(jobId, poll)).routeId("poll." + jobId).process(importer);
+            status.polling(jobId, transport);
+            LOG.log(System.Logger.Level.INFO, "Polling {0} source for job {1}", transport, jobId);
+            return;
+        }
+        // Started and stopped with the context, the same lifecycle a consumer had
+        // (docs/camel-removal.md slice 1). The loop reports itself as polling when it starts.
+        PollLoop loop = new PollLoop(jobId, transport, sourceFor(jobId, poll), importer,
+                getContext(), poll.include(), move, moveFailed,
+                Durations.toMillis(poll.effectiveDelay()),
+                poll.consumesOnce() ? consumedStore : null, status);
+        try {
+            getContext().addService(loop);
+        } catch (Exception ex) {
+            // Surfaced as the wiring failure it is, so this job is skipped and recorded like any
+            // other bad poll declaration rather than taking the whole app down.
+            throw new IllegalStateException("Poll loop for job " + jobId + " did not start: "
+                    + ex.getMessage(), ex);
+        }
     }
 
-    /** Builds the Camel consumer URI for the source, keeping the component name out of the YAML. */
+    /**
+     * The directory this job polls, resolved and validated the way its transport requires.
+     *
+     * <p>Package-private for the same reason {@link #endpointUri} is: the anchoring and
+     * credential rules are the part worth pinning, and they are decided here.
+     */
+    PollSource sourceFor(String jobId, PollSpec poll) {
+        return switch (poll.effectiveTransport()) {
+            case "sftp" -> new SftpPollSource(SftpPollSource.settings(connectors, poll, appHome),
+                    workHome.resolve("poll").resolve(jobId));
+            case "local" -> new LocalPollSource(
+                    connectors.requireAllowedPath(appHome, poll.path()));
+            default -> throw new IllegalArgumentException(
+                    "Unsupported poll transport '" + poll.transport() + "'");
+        };
+    }
+
+    /**
+     * Builds the Camel consumer URI for the transports that still have one.
+     *
+     * <p>{@code local} and {@code sftp} are served by {@link PollLoop} over
+     * {@link PollSource} (docs/camel-removal.md slice 1); FTPS joins them in slice 5, and until
+     * it does this is the whole of what an endpoint URI is still assembled for.
+     */
     String endpointUri(String jobId, PollSpec poll) {
         String options = "delay=" + Durations.toMillis(poll.effectiveDelay())
                 + "&move=" + archiveDirectory("move", poll.effectiveMove())
@@ -132,12 +188,6 @@ final class PollingRouteBuilder extends RouteBuilder {
                         // whatever follows as extra consumer options.
                         : "&antInclude=RAW(" + poll.include() + ")");
         return switch (poll.effectiveTransport()) {
-            case "local" -> "file://"
-                    + connectors.requireAllowedPath(appHome, poll.path()) + "?" + options;
-            case "sftp" -> RemoteFileUris.remoteUri("sftp", connectors, poll.host(),
-                    poll.port(), 22, poll.path(), poll.credential(),
-                    options + remoteStreamingOptions()
-                            + RemoteFileUris.sftpHostKeyOptions(connectors, appHome));
             case "ftps" -> RemoteFileUris.remoteUri("ftps", connectors, poll.host(),
                     poll.port(), 21, poll.path(), poll.credential(),
                     options + remoteStreamingOptions()

@@ -224,6 +224,11 @@ the campaign stops here**: Camel stays as the connector engine, this document re
 loop needed that was not worth writing, and slices 2 to 5 are re-scoped as "Camel serves the
 connectors and nothing else". Nothing later depends on being able to abandon this one.
 
+**Done, and the abort clause did not fire.** All four connector suites pass unchanged — local,
+SFTP, FTPS and push — against **644 lines** of new main code and 66 changed lines of wiring. What
+the section below records is what the loop turned out to be, and the two ways its behaviour now
+differs from the component's.
+
 **2. The pipeline model and the registry.** The compiler emits pipelines; `RoutePipeline` stops
 reading `RouteDefinition`; the four `ProducerTemplate` callers move to the registry. Measure
 runtime start time here, before and after, because it is the one number nobody has.
@@ -240,6 +245,60 @@ leave; `jsch` and `commons-net` become declared dependencies rather than inherit
 **6. Camel leaves the build.** `camel-core-engine` and the rest go; the component guard and its
 config are retired; the modules are renamed; the CHANGELOG records the breaking change and the
 jar count is re-measured the way slice 0 measured it.
+
+## What slice 1 found
+
+**A file consumer is four operations and six rules.** The operations are per transport — list the
+directory, re-read one file's fingerprint, put its bytes on local disk, move it aside — and they
+are the whole of `PollSource`. Everything else is the same for every transport and lives in one
+loop: the `include:` glob, the write-stability check, the cross-replica claim, the archive
+directories, the wait for the import to resolve, and what to do when even the archive fails.
+**That split is the point rather than tidiness**: the FTPS data channel stayed unencrypted for a
+year because one transport's settings lived somewhere the other's did not, and a rule that exists
+once cannot hold for one transport and not the other.
+
+**Removing the URI removed a class of defect with it.** Every value that needed `RAW(...)`
+wrapping — a password containing an `&`, an `include:` glob that could bind further consumer
+options if it were read as query text — is now an argument to a method call. There is no query
+string for a secret to be re-encoded in and nothing for a glob to smuggle, which is asserted
+rather than asserted-about: the test that used to check for correct wrapping now checks that a
+glob containing `&` matches a file name containing `&`, and nothing else happens.
+
+**The security rules became checkable without a server.** Host-key strictness, the
+exactly-one-authentication-method rule and the remote path grammar were asserted against the
+endpoint URI, which is to say against a string whose meaning lived in another project's bytecode.
+`SftpPollSource.settings` resolves them before anything connects, with the same error codes
+(`TQL-SEC-4088`, `TQL-SEC-4089`), and nine unit tests now assert the rules themselves.
+
+**Two deliberate differences from the component**, recorded because neither is visible in a test
+that passes:
+
+- **The write-stability wait is per cycle, not per file.** `readLock=changed` re-reads each
+  candidate's fingerprint after a wait; this collects the candidates, waits once, then re-reads
+  all of them. A directory holding fifty files costs one wait rather than fifty. The wait is
+  bounded by the declared poll interval, so a source polling every 500 ms does not spend a second
+  on it.
+- **The `consumeOnce:` key is spelled by this framework now.** It is still name, size and
+  modification time — the property that matters, and the reason it is not the path alone — but not
+  character-for-character what Camel's `${file:modified}` rendered. A file consumed before the
+  upgrade and still inside the retention window can therefore be imported once more. Pre-1.0, so
+  it is recorded rather than shimmed.
+
+**One dependency rule applied before it bit.** JSch was already on the classpath, under
+`camel-ftp`, and using it from there is exactly the borrowed-dependency mistake
+[http-edge.md](http-edge.md) paid for once when a component left and took a type converter with
+it. It is declared. In the other direction, `camel-file`'s direct declaration left with the local
+consumer: nothing resolves the `file:` component any more, and it remains only as the base
+`camel-ftp` is built on — the same reasoning that found `camel-rest` outliving the REST DSL.
+
+**What did not change**, which is most of it: the `poll:` and `push:` YAML, the import pipeline,
+`PollImportProcessor`, the consumption store, the poll-source registry the console and the
+Prometheus gauges read, and the FTPS transport, which keeps its consumer until slice 5.
+
+**No performance claim is made here.** The suites' wall-clock times moved, in both directions, on
+a path that did not change as much as on the paths that did — which is what machine variance looks
+like. Slice 1 was about behaviour, and the number that would matter (time from a file landing to
+its rows being visible) has not been measured on either implementation.
 
 ## What this does not buy, said before anyone expects it
 

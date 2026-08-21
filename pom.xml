@@ -115,6 +115,12 @@
       same day because nothing was holding it back any more.
     -->
     <vertx.version>5.1.6</vertx.version>
+    <!--
+      The SFTP client the poll connector drives directly (docs/camel-removal.md slice 1). It has
+      been on the classpath all along, under camel-ftp, which is exactly why it is declared here:
+      a borrowed type is a borrowed dependency, and camel-ftp is on its way out.
+    -->
+    <jsch.version>2.28.6</jsch.version>
     <jackson.version>2.22.1</jackson.version>
     <hikaricp.version>7.1.0</hikaricp.version>
     <postgresql.version>42.7.13</postgresql.version>
@@ -185,6 +191,12 @@
         <version>${camel.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.github.mwiede</groupId>
+        <artifactId>jsch</artifactId>
+        <version>${jsch.version}</version>
       </dependency>
 
       <!-- Jackson (imported BOM) -->
