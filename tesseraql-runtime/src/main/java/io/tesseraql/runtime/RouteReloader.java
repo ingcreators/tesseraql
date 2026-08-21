@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Each reload re-reads the manifest, re-runs the cross-app route-conflict guard, and diffs
  * the web routes against the last good manifest: kept ids are rebuilt in place, <b>new ids
- * mount</b> (Camel inlines each REST consumer with its body into one addable route), and
+ * mount</b> (a compiled route declares where it answers, so building it is what mounts it), and
  * <b>removed ids un-mount</b>. Every route compiles individually, so one broken definition takes
  * only itself out — it serves a clear 500 carrying its compile error while its neighbors keep
  * serving. A manifest that fails to <i>load</i> (malformed YAML) still aborts the reload as a
@@ -55,13 +55,6 @@ public final class RouteReloader {
     private final List<SystemApps.MountedApp> mountedApps;
     /** Ran after every successful reload — the workshop extension hooks its cache epochs here. */
     private final List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
-    /**
-     * The app's base path, resolved once. Restated on every REST configuration this class
-     * builds: a reloaded or stubbed route re-enters the context-wide configuration, and a hot
-     * reload must not quietly move a route out from under the app's prefix
-     * (docs/base-path.md).
-     */
-    private final String basePath;
     private final io.tesseraql.core.expr.ExpressionFunctions functions;
     private AppManifest current;
     /** Per-route content fingerprints (source-directory digests) from the last good reload. */
@@ -80,8 +73,6 @@ public final class RouteReloader {
         this.current = current;
         this.appName = appName;
         this.mountedApps = List.copyOf(mountedApps);
-        this.basePath = io.tesseraql.core.http.BasePaths.normalize(
-                current.config().getString("tesseraql.http.basePath").orElse(null));
         this.fingerprints = fingerprintsOf(current);
         this.appFingerprint = appFingerprintOf(appHome);
         this.workflowFingerprint = workflowFingerprintOf(appHome);

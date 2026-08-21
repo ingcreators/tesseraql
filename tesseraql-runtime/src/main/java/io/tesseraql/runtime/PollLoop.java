@@ -106,10 +106,10 @@ final class PollLoop implements RuntimeContext.Service {
     @Override
     public void stop() throws Exception {
         running = false;
-        Thread running = worker;
-        if (running != null) {
-            running.interrupt();
-            running.join(java.time.Duration.ofSeconds(10));
+        Thread current = worker;
+        if (current != null) {
+            current.interrupt();
+            current.join(java.time.Duration.ofSeconds(10));
             worker = null;
         }
         source.close();

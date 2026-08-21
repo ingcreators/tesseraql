@@ -27,9 +27,6 @@ import org.slf4j.LoggerFactory;
  */
 final class TesseraqlHttpServer implements RuntimeContext.Service {
 
-    /** Whether this service is running; a stop is asked for, not waited on. */
-    private volatile boolean running;
-
     private static final Logger LOG = LoggerFactory.getLogger(TesseraqlHttpServer.class);
 
     private static final long BIND_TIMEOUT_SECONDS = 30;
@@ -49,7 +46,6 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
 
     @Override
     public void start() throws Exception {
-        running = true;
         vertx = runtimeContext.findSingleByType(Vertx.class);
         if (vertx == null) {
             VertxOptions options = runtimeContext.findSingleByType(VertxOptions.class);
@@ -73,7 +69,6 @@ final class TesseraqlHttpServer implements RuntimeContext.Service {
 
     @Override
     public void stop() throws Exception {
-        running = false;
         if (server != null) {
             server.close().toCompletionStage().toCompletableFuture()
                     .get(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
