@@ -118,7 +118,12 @@ jobs:
           # would miss it. Capturing and grepping the output guards that regression.
           out=$("$LAUNCHER" routes --app examples/scaffold-demo-app)
           printf '%s\n' "$out"
-          printf '%s' "$out" | grep -q '[^[:space:]]' \
+          # A here-string rather than a pipe into grep: with pipefail set, `grep -q` exits on the
+          # first match and closes the pipe, so the printf feeding it dies of SIGPIPE and the
+          # pipeline reports *that* as its status — the assertion fails precisely when the output
+          # it is checking for arrives promptly. Observed on ubuntu-latest with the routes listing
+          # already printed above it.
+          grep -q '[^[:space:]]' <<<"$out" \
             || { echo "launcher produced no stdout (Windows console subsystem?)" >&2; exit 1; }
 
       - name: Upload the app image
@@ -241,7 +246,7 @@ jobs:
         run: |
           out=$(build/jpackage/tesseraql-host/tesseraql-host.exe routes --app examples/scaffold-demo-app)
           printf '%s\n' "$out"
-          printf '%s' "$out" | grep -q 'items.search' \
+          grep -q 'items.search' <<<"$out" \
             || { echo "the host launcher listed no routes" >&2; exit 1; }
 
       # docs/module-channel.md decision 6: a framework database that is not PostgreSQL needs its
