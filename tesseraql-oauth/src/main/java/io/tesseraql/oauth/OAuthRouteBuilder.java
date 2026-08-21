@@ -10,7 +10,7 @@ import io.tesseraql.security.session.SessionStore;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The authorization server's HTTP surface, growing slice by slice (docs/token-issuance.md).
@@ -20,7 +20,7 @@ import org.apache.camel.builder.RouteBuilder;
  * is the auth-ui page between them, and every answer that carries a code or an error to a
  * client rides a redirect this class builds — never a page.
  */
-final class OAuthRouteBuilder extends RouteBuilder {
+final class OAuthRouteBuilder {
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -53,36 +53,35 @@ final class OAuthRouteBuilder extends RouteBuilder {
         refreshGrant.setDataProvider(provider);
     }
 
-    @Override
-    public void configure() {
+    void install(CamelContext context) {
         // The error envelope every other framework surface carries, which these seven did not:
         // an unexpected failure on an OAuth endpoint left the caller holding an open connection
         // rather than answering (docs/camel-removal.md slice 2b).
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(io.tesseraql.core.error.TqlException.class,
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class,
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/jwks", "system.oauth.jwks");
+        HttpMounts.mount(context, "GET", "/_tesseraql/oauth/jwks", "system.oauth.jwks");
         pipelines.pipeline("system.oauth.jwks").process(this::jwks);
         if (flow != null && sessions != null) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/authorize",
+            HttpMounts.mount(context, "GET", "/_tesseraql/oauth/authorize",
                     "system.oauth.authorize");
             pipelines.pipeline("system.oauth.authorize")
                     .process(this::authorize);
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/decision",
+            HttpMounts.mount(context, "POST", "/_tesseraql/oauth/decision",
                     "system.oauth.consent");
             pipelines.pipeline("system.oauth.consent")
                     .process(this::consent);
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/token",
+            HttpMounts.mount(context, "POST", "/_tesseraql/oauth/token",
                     "system.oauth.token");
             pipelines.pipeline("system.oauth.token").process(this::token);
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/register",
+            HttpMounts.mount(context, "POST", "/_tesseraql/oauth/register",
                     "system.oauth.register");
             pipelines.pipeline("system.oauth.register")
                     .process(this::register);
-            HttpMounts.mount(getContext(), "GET", "/.well-known/oauth-authorization-server",
+            HttpMounts.mount(context, "GET", "/.well-known/oauth-authorization-server",
                     "system.oauth.metadata");
             pipelines.pipeline("system.oauth.metadata")
                     .process(this::metadata);
@@ -91,7 +90,7 @@ final class OAuthRouteBuilder extends RouteBuilder {
             // per member's MCP surface; the surface serves them because it is what holds the
             // member list and the origin, and the fence already owns /.well-known/*.
             for (String basePath : flow.memberAddresses().values()) {
-                HttpMounts.mount(getContext(), "GET",
+                HttpMounts.mount(context, "GET",
                         "/.well-known/oauth-protected-resource" + basePath + "/_tesseraql/mcp",
                         "system.oauth.resourceMetadata");
             }

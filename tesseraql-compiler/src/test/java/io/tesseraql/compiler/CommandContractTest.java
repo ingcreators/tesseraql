@@ -99,8 +99,8 @@ class CommandContractTest {
     private static void compile(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (DefaultCamelContext context = new DefaultCamelContext()) {
-            context.addRoutes(new RouteCompiler().appName("command-contract-test")
-                    .compile(manifest, false, null));
+            new RouteCompiler().appName("command-contract-test")
+                    .compile(context, manifest, false, null);
         }
     }
 

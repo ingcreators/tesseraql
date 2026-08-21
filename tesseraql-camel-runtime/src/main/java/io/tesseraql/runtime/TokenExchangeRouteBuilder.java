@@ -12,7 +12,7 @@ import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * Exchanges an authenticated session for a short-lived bearer token
@@ -31,7 +31,7 @@ import org.apache.camel.builder.RouteBuilder;
  * <p>This is the JSON face. The console's issue-token page is the other one, and both mint through
  * {@link SessionTokens} so the two cannot drift.
  */
-final class TokenExchangeRouteBuilder extends RouteBuilder {
+final class TokenExchangeRouteBuilder {
 
     /**
      * TQL-SEC-4146: issuing was enabled and there is nothing to sign with — neither an HS256
@@ -80,16 +80,15 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
                         + " security.oauth.enabled");
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class,
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class,
                                 new io.tesseraql.compiler.binding.ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/token", "system.token");
+        HttpMounts.mount(context, "POST", "/_tesseraql/token", "system.token");
         pipelines.pipeline("system.token").process(this::exchange);
     }
 

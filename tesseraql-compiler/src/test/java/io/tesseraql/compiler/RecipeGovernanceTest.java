@@ -92,8 +92,8 @@ class RecipeGovernanceTest {
         writeApp(dir);
         AppManifest manifest = new ManifestLoader().load(dir);
         try (DefaultCamelContext context = new DefaultCamelContext()) {
-            context.addRoutes(new RouteCompiler().appName("governance-test")
-                    .compile(manifest, false, null));
+            new RouteCompiler().appName("governance-test")
+                    .compile(context, manifest, false, null);
             return CompiledPipelines.stepsById(context);
         }
     }

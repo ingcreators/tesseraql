@@ -136,6 +136,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A route builder that builds no routes stops being one** (docs/camel-removal.md slice 6a). The
+  framework's 18 `RouteBuilder` subclasses existed so that `context.addRoutes(...)` would call
+  their `configure()`; with their routes compiled into pipelines, that was ceremony around a
+  method call. Each takes an `install(context)` now, and `RouteCompiler` writes into the context
+  directly rather than returning an anonymous builder for the caller to hand back to it.
+  `RouteBuilder` and `addRoutes` appear nowhere. What is left of Camel in this framework is three
+  roles: a registry, a service lifecycle, and a header filter.
+
 - **`Exchange`, `Message` and `Processor` are this framework's own types** (docs/camel-removal.md
   structural decision 2, slice 3b). What an exchange carries was counted rather than copied: a
   message, exchange properties, the exception, the route id, the stop flag, the uploaded parts and

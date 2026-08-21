@@ -29,7 +29,7 @@ import io.tesseraql.yaml.model.IdempotencySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
 import java.nio.file.Path;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * Compiles a TesseraQL {@link AppManifest} into Camel routes (design ch. 7).
@@ -98,18 +98,17 @@ public final class RouteCompiler {
      */
     private Pipelines.Compilation pipelines;
 
-    /** Builds a Camel {@link RouteBuilder} mounting the REST transport and all routes. */
-    public RouteBuilder compile(AppManifest manifest) {
-        return compile(manifest, true, null);
+    /** Compiles every route of {@code manifest} into {@code context}'s pipeline registry. */
+    public void compile(CamelContext context, AppManifest manifest) {
+        compile(context, manifest, true, null);
     }
 
     /**
-     * Builds a {@link RouteBuilder} for the manifest. When {@code mountRest} is false only the
-     * {@code direct:} business routes are produced (no REST consumers) — used to hot-reload route
-     * bodies in place. When {@code onlyRouteIds} is non-null only those route ids are built
+     * Compiles the manifest into {@code context}. When {@code mountRest} is false the pipelines
+     * are built without their HTTP mounts — used to hot-reload route bodies in place. When {@code onlyRouteIds} is non-null only those route ids are built
      * (design ch. 16.8 live reload).
      */
-    public RouteBuilder compile(AppManifest manifest, boolean mountRest,
+    public void compile(CamelContext context, AppManifest manifest, boolean mountRest,
             java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
         this.manifest = manifest;
@@ -121,103 +120,98 @@ public final class RouteCompiler {
         if (this.appName == null) {
             this.appName = config.getString("tesseraql.app.name").orElse("app");
         }
-        return new RouteBuilder() {
-            @Override
-            public void configure() {
-                if (mountRest) {
-                    // inlineRoutes is pinned, not inherited (docs/transition-engine.md track E):
-                    // it decides whether from(direct:) transition routes keep their own
-                    // consumers, and a Camel default flip must not silently rewire the topology
-                    // (the dispatch selector's 30s DirectComponent.getConsumer hang).
-                    // contextPath carries the app's base path (docs/base-path.md). It is set
-                    // once, on the context-wide REST configuration, so every REST route the
-                    // runtime mounts inherits it — the application's own, and the framework's
-                    // hand-written /_tesseraql/** endpoints in the runtime's route builders
-                    // alike. Concatenating the prefix per route would have had to find all of
-                    // them; this cannot miss one.
-                }
-                // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
-                // time from the failing route id; the error renderer is one shared exception handler.
-                java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute = onErrorByRoute(
-                        manifest);
-                // The same header block every successful HTML response carries. The error path
-                // short-circuits the render that merged it, so an error page and an htmx error
-                // fragment - both HTML the browser renders like any other - used to arrive with
-                // no CSP and no X-Frame-Options at all.
-                java.util.Map<String, String> errorHeaders = responseHeaders.headers();
-                // Every pipeline this run builds inherits both clauses, most specific first.
-                // The DSL used to arrange that by side effect — an onException declared in a
-                // builder's configure() was copied into each route it went on to create — and
-                // here it is an argument, so a reload cannot accumulate a second copy.
-                pipelines = Pipelines.of(getContext()).compiling(java.util.List.of(
-                        new Pipeline.Handler(java.util.List.of(TqlException.class.getName()),
-                                new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                        manifest.appHome(), errorHeaders)),
-                        new Pipeline.Handler(java.util.List.of(Exception.class.getName()),
-                                new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                        manifest.appHome(), errorHeaders))));
-                for (RouteFile routeFile : manifest.routes()) {
-                    if (onlyRouteIds == null
-                            || onlyRouteIds.contains(routeFile.definition().id())) {
-                        buildRoute(this, manifest.appHome(), routeFile);
-                    }
-                }
-                // Application-declared MCP tools (roadmap Phase 24): each compiles to a direct:
-                // route consumed by the runtime's MCP endpoint, never mounted on HTTP.
-                for (ToolFile toolFile : manifest.tools()) {
-                    if (onlyRouteIds == null
-                            || onlyRouteIds.contains(toolFile.definition().id())) {
-                        buildMcpTool(this, toolFile);
-                    }
-                }
-                // Application-declared MCP resources (roadmap Phase 24): read-only context, served
-                // over the same MCP endpoint; each compiles to a read-only direct: route.
-                for (ResourceFile resourceFile : manifest.resources()) {
-                    if (onlyRouteIds == null
-                            || onlyRouteIds.contains(resourceFile.definition().id())) {
-                        buildMcpResource(this, resourceFile);
-                    }
-                }
-                // Application-declared MCP Apps UI resources (roadmap Phase 24): each renders an
-                // hc-* fragment, served as a ui:// resource over the same MCP endpoint.
-                for (UiResourceFile uiFile : manifest.uiResources()) {
-                    if (onlyRouteIds == null
-                            || onlyRouteIds.contains(uiFile.definition().id())) {
-                        buildMcpUi(this, manifest.appHome(), uiFile);
-                    }
-                }
-                // Application-declared MCP prompts (docs/prompt-as-recipe.md): each compiles to a
-                // read-only direct: route whose response.text: renders the message.
-                for (io.tesseraql.yaml.manifest.PromptFile promptFile : manifest.prompts()) {
-                    if (onlyRouteIds == null
-                            || onlyRouteIds.contains(promptFile.definition().id())) {
-                        buildMcpPrompt(this, promptFile);
-                    }
-                }
-                // Messaging consumers (roadmap Phase 27): each queue-consume route compiles to a
-                // direct:queue.<id> route the runtime's channel consumer drives, never mounted on
-                // HTTP — so they live outside the REST surface, like MCP tools.
-                for (RouteFile consumerFile : manifest.consumers()) {
-                    if (onlyRouteIds == null
-                            || onlyRouteIds.contains(consumerFile.definition().id())) {
-                        buildQueueConsume(this, consumerFile);
-                    }
-                }
-                // Approval workflows (roadmap Phase 28): each workflow synthesizes one
-                // transactional-command route per transition, mounted on HTTP — the author declares
-                // states and transitions, not a route per transition.
-                for (io.tesseraql.yaml.manifest.WorkflowFile workflowFile : manifest.workflows()) {
-                    buildWorkflow(this, workflowFile, onlyRouteIds);
-                }
-                // Attachments (roadmap Phase 30): each attachment document synthesizes an off-heap
-                // upload route, a list route, and a download route, mounted on HTTP under its
-                // basePath — the author declares the owning record and limits, not a route apiece.
-                for (io.tesseraql.yaml.manifest.AttachmentFile attachmentFile : manifest
-                        .attachments()) {
-                    buildAttachment(this, attachmentFile, onlyRouteIds);
-                }
+        if (mountRest) {
+            // inlineRoutes is pinned, not inherited (docs/transition-engine.md track E):
+            // it decides whether from(direct:) transition routes keep their own
+            // consumers, and a Camel default flip must not silently rewire the topology
+            // (the dispatch selector's 30s DirectComponent.getConsumer hang).
+            // contextPath carries the app's base path (docs/base-path.md). It is set
+            // once, on the context-wide REST configuration, so every REST route the
+            // runtime mounts inherits it — the application's own, and the framework's
+            // hand-written /_tesseraql/** endpoints in the runtime's route builders
+            // alike. Concatenating the prefix per route would have had to find all of
+            // them; this cannot miss one.
+        }
+        // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
+        // time from the failing route id; the error renderer is one shared exception handler.
+        java.util.Map<String, io.tesseraql.yaml.model.ResponseSpec.OnError> onErrorByRoute = onErrorByRoute(
+                manifest);
+        // The same header block every successful HTML response carries. The error path
+        // short-circuits the render that merged it, so an error page and an htmx error
+        // fragment - both HTML the browser renders like any other - used to arrive with
+        // no CSP and no X-Frame-Options at all.
+        java.util.Map<String, String> errorHeaders = responseHeaders.headers();
+        // Every pipeline this run builds inherits both clauses, most specific first.
+        // The DSL used to arrange that by side effect — an onException declared in a
+        // builder's configure() was copied into each route it went on to create — and
+        // here it is an argument, so a reload cannot accumulate a second copy.
+        pipelines = Pipelines.of(context).compiling(java.util.List.of(
+                new Pipeline.Handler(java.util.List.of(TqlException.class.getName()),
+                        new ErrorResponseRenderer(i18n, onErrorByRoute,
+                                manifest.appHome(), errorHeaders)),
+                new Pipeline.Handler(java.util.List.of(Exception.class.getName()),
+                        new ErrorResponseRenderer(i18n, onErrorByRoute,
+                                manifest.appHome(), errorHeaders))));
+        for (RouteFile routeFile : manifest.routes()) {
+            if (onlyRouteIds == null
+                    || onlyRouteIds.contains(routeFile.definition().id())) {
+                buildRoute(context, manifest.appHome(), routeFile);
             }
-        };
+        }
+        // Application-declared MCP tools (roadmap Phase 24): each compiles to a direct:
+        // route consumed by the runtime's MCP endpoint, never mounted on HTTP.
+        for (ToolFile toolFile : manifest.tools()) {
+            if (onlyRouteIds == null
+                    || onlyRouteIds.contains(toolFile.definition().id())) {
+                buildMcpTool(context, toolFile);
+            }
+        }
+        // Application-declared MCP resources (roadmap Phase 24): read-only context, served
+        // over the same MCP endpoint; each compiles to a read-only direct: route.
+        for (ResourceFile resourceFile : manifest.resources()) {
+            if (onlyRouteIds == null
+                    || onlyRouteIds.contains(resourceFile.definition().id())) {
+                buildMcpResource(context, resourceFile);
+            }
+        }
+        // Application-declared MCP Apps UI resources (roadmap Phase 24): each renders an
+        // hc-* fragment, served as a ui:// resource over the same MCP endpoint.
+        for (UiResourceFile uiFile : manifest.uiResources()) {
+            if (onlyRouteIds == null
+                    || onlyRouteIds.contains(uiFile.definition().id())) {
+                buildMcpUi(context, manifest.appHome(), uiFile);
+            }
+        }
+        // Application-declared MCP prompts (docs/prompt-as-recipe.md): each compiles to a
+        // read-only direct: route whose response.text: renders the message.
+        for (io.tesseraql.yaml.manifest.PromptFile promptFile : manifest.prompts()) {
+            if (onlyRouteIds == null
+                    || onlyRouteIds.contains(promptFile.definition().id())) {
+                buildMcpPrompt(context, promptFile);
+            }
+        }
+        // Messaging consumers (roadmap Phase 27): each queue-consume route compiles to a
+        // direct:queue.<id> route the runtime's channel consumer drives, never mounted on
+        // HTTP — so they live outside the REST surface, like MCP tools.
+        for (RouteFile consumerFile : manifest.consumers()) {
+            if (onlyRouteIds == null
+                    || onlyRouteIds.contains(consumerFile.definition().id())) {
+                buildQueueConsume(context, consumerFile);
+            }
+        }
+        // Approval workflows (roadmap Phase 28): each workflow synthesizes one
+        // transactional-command route per transition, mounted on HTTP — the author declares
+        // states and transitions, not a route per transition.
+        for (io.tesseraql.yaml.manifest.WorkflowFile workflowFile : manifest.workflows()) {
+            buildWorkflow(context, workflowFile, onlyRouteIds);
+        }
+        // Attachments (roadmap Phase 30): each attachment document synthesizes an off-heap
+        // upload route, a list route, and a download route, mounted on HTTP under its
+        // basePath — the author declares the owning record and limits, not a route apiece.
+        for (io.tesseraql.yaml.manifest.AttachmentFile attachmentFile : manifest
+                .attachments()) {
+            buildAttachment(context, attachmentFile, onlyRouteIds);
+        }
     }
 
     /**
@@ -226,7 +220,7 @@ public final class RouteCompiler {
      * {@code GET basePath/{attachmentId}}. Each carries the document's {@code security:}; the owning
      * record key in {@code basePath} scopes list and download to that record.
      */
-    private void buildAttachment(RouteBuilder builder,
+    private void buildAttachment(CamelContext context,
             io.tesseraql.yaml.manifest.AttachmentFile attachmentFile,
             java.util.Set<String> onlyRouteIds) {
         io.tesseraql.yaml.model.AttachmentDefinition def = attachmentFile.definition();
@@ -246,7 +240,7 @@ public final class RouteCompiler {
         if (onlyRouteIds == null || onlyRouteIds.contains(uploadId)) {
             String served = uploadId;
             if (mountRest) {
-                mount(builder, "POST", basePath, served);
+                mount(context, "POST", basePath, served);
             }
             PipelineBuilder route = pipelines.pipeline(uploadId);
             applyAttachmentGovernance(route, uploadId, "POST", basePath, security);
@@ -258,7 +252,7 @@ public final class RouteCompiler {
         if (onlyRouteIds == null || onlyRouteIds.contains(listId)) {
             String served = listId;
             if (mountRest) {
-                mount(builder, "GET", basePath, served);
+                mount(context, "GET", basePath, served);
             }
             PipelineBuilder route = pipelines.pipeline(listId);
             applyAttachmentGovernance(route, listId, "GET", basePath, security);
@@ -271,7 +265,7 @@ public final class RouteCompiler {
             String urlPath = basePath + "/{" + idParam + "}";
             String served = downloadId;
             if (mountRest) {
-                mount(builder, "GET", urlPath, served);
+                mount(context, "GET", urlPath, served);
             }
             PipelineBuilder route = pipelines.pipeline(downloadId);
             applyAttachmentGovernance(route, downloadId, "GET", urlPath, security);
@@ -280,15 +274,15 @@ public final class RouteCompiler {
         }
     }
 
-    private void buildRoute(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+    private void buildRoute(CamelContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         switch (definition.recipe()) {
-            case "query-json", "command-json" -> buildJson(builder, routeFile);
-            case "query-html", "page" -> buildTemplatePage(builder, appHome, routeFile);
-            case "query-export" -> buildQueryExport(builder, appHome, routeFile);
-            case "file-import" -> buildFileImport(builder, routeFile);
-            case "file-export" -> buildFileExport(builder, appHome, routeFile);
-            case "webhook" -> buildWebhook(builder, routeFile);
+            case "query-json", "command-json" -> buildJson(context, routeFile);
+            case "query-html", "page" -> buildTemplatePage(context, appHome, routeFile);
+            case "query-export" -> buildQueryExport(context, appHome, routeFile);
+            case "file-import" -> buildFileImport(context, routeFile);
+            case "file-export" -> buildFileExport(context, appHome, routeFile);
+            case "webhook" -> buildWebhook(context, routeFile);
             // queue-consume routes live under consume/, compiled from manifest.consumers(), not here.
             // Every designed recipe is implemented, so an unknown one is a typo: fail fast
             // instead of silently dropping the route from the served surface (design ch. 20.14).
@@ -297,13 +291,13 @@ public final class RouteCompiler {
         }
     }
 
-    private void buildJson(RouteBuilder builder, RouteFile routeFile) {
+    private void buildJson(CamelContext context, RouteFile routeFile) {
         if (usesTransactionalCommand(routeFile.definition())) {
-            buildTransactionalCommand(builder, routeFile);
+            buildTransactionalCommand(context, routeFile);
             return;
         }
         PipelineBuilder route = applySessionRotation(
-                pipelineThroughSql(builder, routeFile), routeFile.definition())
+                pipelineThroughSql(context, routeFile), routeFile.definition())
                 .process(responseRenderer(routeFile.definition()));
         applyHttpCache(route, routeFile.definition());
         applyIdempotencyComplete(route, routeFile.definition());
@@ -384,13 +378,13 @@ public final class RouteCompiler {
      * atomically in one transaction. Dialect-specific SQL variants resolve per step, like the
      * standard execution pipeline.
      */
-    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile) {
-        buildTransactionalCommand(builder, routeFile, null, null);
+    private void buildTransactionalCommand(CamelContext context, RouteFile routeFile) {
+        buildTransactionalCommand(context, routeFile, null, null);
     }
 
-    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
+    private void buildTransactionalCommand(CamelContext context, RouteFile routeFile,
             io.tesseraql.pipeline.Step preCommand) {
-        buildTransactionalCommand(builder, routeFile, preCommand, null);
+        buildTransactionalCommand(context, routeFile, preCommand, null);
     }
 
     /**
@@ -401,14 +395,14 @@ public final class RouteCompiler {
      * processor advances the document's state, checks the guard, and appends history in the same
      * transaction.
      */
-    private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
+    private void buildTransactionalCommand(CamelContext context, RouteFile routeFile,
             io.tesseraql.pipeline.Step preCommand,
             io.tesseraql.compiler.binding.WorkflowBinding workflow) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
+            mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
 
         PipelineBuilder route = pipelines.pipeline(routeId);
@@ -515,7 +509,7 @@ public final class RouteCompiler {
      * a column on the business table — selected per workflow, defaulting to the app-wide
      * {@code tesseraql.workflow.mode}.
      */
-    private void buildWorkflow(RouteBuilder builder,
+    private void buildWorkflow(CamelContext context,
             io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
             java.util.Set<String> onlyRouteIds) {
         io.tesseraql.yaml.model.WorkflowDefinition def = workflowFile.definition();
@@ -534,7 +528,7 @@ public final class RouteCompiler {
             if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
                 continue;
             }
-            buildTransactionalCommand(builder,
+            buildTransactionalCommand(context,
                     transitionRouteFile(workflowFile, def, transition, basePath),
                     null, transitionBinding(workflowFile, def, transition, managed, appStore));
         }
@@ -572,7 +566,7 @@ public final class RouteCompiler {
                     null, java.util.Map.of(), dispatchResponse());
             String served = routeId;
             if (mountRest) {
-                mount(builder, "POST", urlPath, served);
+                mount(context, "POST", urlPath, served);
             }
             String dialect = datasourceDialect(DEFAULT_DATASOURCE);
             PipelineBuilder route = pipelines.pipeline(routeId);
@@ -590,7 +584,7 @@ public final class RouteCompiler {
                                     : commandBounds().timeoutSeconds()))
                     .process(responseRenderer(definition));
         }
-        buildWorkflowDelegate(builder, def, basePath, onlyRouteIds);
+        buildWorkflowDelegate(context, def, basePath, onlyRouteIds);
     }
 
     /** The synthesized route file a transition compiles to (roadmap Phase 28). */
@@ -666,7 +660,7 @@ public final class RouteCompiler {
      * slice 3): {@code POST {basePath}/{key}/delegate/{to}} reassigns the caller's open task to the
      * delegate, who then sees it in their inbox. Only the current assignee may delegate.
      */
-    private void buildWorkflowDelegate(RouteBuilder builder,
+    private void buildWorkflowDelegate(CamelContext context,
             io.tesseraql.yaml.model.WorkflowDefinition def, String basePath,
             java.util.Set<String> onlyRouteIds) {
         boolean usesTasks = def.transitions().stream()
@@ -681,7 +675,7 @@ public final class RouteCompiler {
         String served = routeId;
         String urlPath = basePath + "/{key}/delegate/{to}";
         if (mountRest) {
-            mount(builder, "POST", urlPath, served);
+            mount(context, "POST", urlPath, served);
         }
         RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, def.security(),
                 null, java.util.Map.of(), workflowResponse());
@@ -763,7 +757,7 @@ public final class RouteCompiler {
      * replay is rejected before a single row is written. The named verifier must be configured —
      * a webhook with no verifier would be unauthenticated, so an unknown provider fails the build.
      */
-    private void buildWebhook(RouteBuilder builder, RouteFile routeFile) {
+    private void buildWebhook(CamelContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         if (definition.webhook() == null || definition.webhook().provider() == null
                 || definition.webhook().provider().isBlank()) {
@@ -772,7 +766,7 @@ public final class RouteCompiler {
         }
         io.tesseraql.yaml.webhook.WebhookVerifiers.Verifier verifier = webhookVerifiers()
                 .require(definition.webhook().provider());
-        buildTransactionalCommand(builder, routeFile,
+        buildTransactionalCommand(context, routeFile,
                 new io.tesseraql.compiler.binding.WebhookVerifyProcessor(definition.id(),
                         verifier));
     }
@@ -793,7 +787,7 @@ public final class RouteCompiler {
      * At-least-once delivery comes from the durable channel and the consumer's claim/ack, not this
      * route.
      */
-    private void buildQueueConsume(RouteBuilder builder, RouteFile routeFile) {
+    private void buildQueueConsume(CamelContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ConsumeSpec consume = definition.consume();
         if (consume == null || consume.channel() == null || consume.channel().isBlank()
@@ -841,7 +835,7 @@ public final class RouteCompiler {
      * and follow-up statements ({@code after:}) need the asynchronous {@code file-export}
      * recipe.
      */
-    private void buildQueryExport(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+    private void buildQueryExport(CamelContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
@@ -864,7 +858,7 @@ public final class RouteCompiler {
 
         String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
+            mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
         Path sqlPath = routeDir.resolve(definition.main().file()).normalize();
         // The export URI is hand-built because its mode and filename are not a binding's, but it
@@ -904,7 +898,7 @@ public final class RouteCompiler {
      * file-import (design ch. 28): POST of the raw file body starts an asynchronous import
      * applying the per-row statement; GET {path}/{transferId} reports its state.
      */
-    private void buildFileImport(RouteBuilder builder, RouteFile routeFile) {
+    private void buildFileImport(CamelContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
         String routeId = definition.id();
@@ -913,7 +907,7 @@ public final class RouteCompiler {
 
         String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
+            mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -921,7 +915,7 @@ public final class RouteCompiler {
                 routeId, routeFile.urlPath(), appName, spec.format(),
                 spec.toReadSpec(), formatDeclaration(spec.locale(), "tesseraql.files.locale"),
                 rowSql, spec.effectiveOnError()));
-        mountTransferStatus(builder, routeFile, routeId);
+        mountTransferStatus(context, routeFile, routeId);
     }
 
     /**
@@ -929,7 +923,7 @@ public final class RouteCompiler {
      * generated file; GET {path}/{transferId} reports its state and GET {path}/{transferId}/file
      * streams the result (triggering a download-timed follow-up statement on first fetch).
      */
-    private void buildFileExport(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+    private void buildFileExport(CamelContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
@@ -947,7 +941,7 @@ public final class RouteCompiler {
 
         String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
+            mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -969,10 +963,10 @@ public final class RouteCompiler {
                 declaredExportRowCap(spec, spec.format()),
                 exportQueries(definition, routeDir), httpSourceNames(definition),
                 enrichProcessors(routeDir, definition)));
-        mountTransferStatus(builder, routeFile, routeId);
+        mountTransferStatus(context, routeFile, routeId);
 
         if (mountRest) {
-            mount(builder, "GET", routeFile.urlPath() + "/{transferId}/file", routeId + ".file");
+            mount(context, "GET", routeFile.urlPath() + "/{transferId}/file", routeId + ".file");
         }
         PipelineBuilder fileRoute = pipelines.pipeline(routeId + ".file");
         applySecurity(fileRoute, definition.security(), "GET",
@@ -988,9 +982,9 @@ public final class RouteCompiler {
     }
 
     /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */
-    private void mountTransferStatus(RouteBuilder builder, RouteFile routeFile, String routeId) {
+    private void mountTransferStatus(CamelContext context, RouteFile routeFile, String routeId) {
         if (mountRest) {
-            mount(builder, "GET", routeFile.urlPath() + "/{transferId}", routeId + ".status");
+            mount(context, "GET", routeFile.urlPath() + "/{transferId}", routeId + ".status");
         }
         PipelineBuilder route = pipelines.pipeline(routeId + ".status");
         applySecurity(route, routeFile.definition().security(), "GET",
@@ -1017,9 +1011,9 @@ public final class RouteCompiler {
      * forms and static pages, design ch. 6.4). When {@code response.file} is declared the template
      * renders as a text file response (e.g. a generated config download) instead of HTML.
      */
-    private void buildTemplatePage(RouteBuilder builder, Path appHome, RouteFile routeFile) {
+    private void buildTemplatePage(CamelContext context, Path appHome, RouteFile routeFile) {
         Path routeDir = routeFile.source().getParent();
-        PipelineBuilder route = pipelineThroughSql(builder, routeFile);
+        PipelineBuilder route = pipelineThroughSql(context, routeFile);
         if (routeFile.definition().response().file() != null) {
             route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
                     routeFile.definition().response().file(), appHome, routeDir));
@@ -1073,13 +1067,13 @@ public final class RouteCompiler {
     }
 
     /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */
-    private PipelineBuilder pipelineThroughSql(RouteBuilder builder, RouteFile routeFile) {
+    private PipelineBuilder pipelineThroughSql(CamelContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String served = routeId;
 
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
+            mount(context, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
 
         PipelineBuilder route = pipelines.pipeline(routeId);
@@ -1228,7 +1222,7 @@ public final class RouteCompiler {
      * binding and validation, SQL or the transactional command - so a tool is governed exactly like
      * a route. The runtime's MCP endpoint sends to {@code direct:mcp.<id>} and reads the JSON result.
      */
-    private void buildMcpTool(RouteBuilder builder, ToolFile toolFile) {
+    private void buildMcpTool(CamelContext context, ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
@@ -1291,7 +1285,7 @@ public final class RouteCompiler {
      * uri), so the binder runs with no path or request parameters; idempotency does not apply to a
      * read.
      */
-    private void buildMcpResource(RouteBuilder builder, ResourceFile resourceFile) {
+    private void buildMcpResource(CamelContext context, ResourceFile resourceFile) {
         RouteDefinition definition = resourceFile.definition();
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
@@ -1327,7 +1321,7 @@ public final class RouteCompiler {
      * resource contents. A UI resource declares no {@code input:} (it is addressed only by its
      * {@code ui://} uri), so the binder runs with no parameters.
      */
-    private void buildMcpUi(RouteBuilder builder, Path appHome, UiResourceFile uiFile) {
+    private void buildMcpUi(CamelContext context, Path appHome, UiResourceFile uiFile) {
         RouteDefinition definition = uiFile.definition();
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
@@ -1367,7 +1361,7 @@ public final class RouteCompiler {
      * <p>The recipe is a read: {@code prompts/get} is a read in the protocol's own vocabulary, so
      * a command step is refused rather than compiled into a prompt that writes.
      */
-    private void buildMcpPrompt(RouteBuilder builder,
+    private void buildMcpPrompt(CamelContext context,
             io.tesseraql.yaml.manifest.PromptFile promptFile) {
         RouteDefinition definition = promptFile.definition();
         Path promptDir = promptFile.source().getParent();
@@ -1893,11 +1887,11 @@ public final class RouteCompiler {
      * edge applies it at the mount, which is the one place that now knows about URLs at all
      * (docs/base-path.md decision 5).
      */
-    private void mount(RouteBuilder builder, String method, String path, String pipeline) {
+    private void mount(CamelContext context, String method, String path, String pipeline) {
         String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         switch (method) {
             case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
-                    .mount(builder.getContext(), method, wirePath, pipeline);
+                    .mount(context, method, wirePath, pipeline);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
         }

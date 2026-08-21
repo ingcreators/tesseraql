@@ -28,7 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * SAML 2.0 SP web endpoints under {@code /_tesseraql/saml} (design ch. 10.14): the Assertion Consumer
@@ -37,7 +37,7 @@ import org.apache.camel.builder.RouteBuilder;
  * /logout}), and SP metadata ({@code GET /metadata}). A validation failure returns 401 without
  * leaking assertion contents.
  */
-final class SamlAcsRouteBuilder extends RouteBuilder {
+final class SamlAcsRouteBuilder {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(SamlAcsRouteBuilder.class);
@@ -98,32 +98,31 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         this.throttle = throttle;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(SamlException.class, this::unauthorized),
                         Pipeline.Handler.catching(Exception.class, this::badRequest)));
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/saml/acs", "system.saml.acs");
+        HttpMounts.mount(context, "POST", "/_tesseraql/saml/acs", "system.saml.acs");
         pipelines.pipeline("system.saml.acs").process(this::consume);
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/logout", "system.saml.logout");
+        HttpMounts.mount(context, "GET", "/_tesseraql/saml/logout", "system.saml.logout");
         pipelines.pipeline("system.saml.logout").process(this::logout);
 
         if (metadata != null) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/metadata",
+            HttpMounts.mount(context, "GET", "/_tesseraql/saml/metadata",
                     "system.saml.metadata");
             pipelines.pipeline("system.saml.metadata")
                     .process(this::serveMetadata);
         }
         if (endpoints != null && endpoints.idpSsoUrl() != null && endpoints.acsUrl() != null) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/login",
+            HttpMounts.mount(context, "GET", "/_tesseraql/saml/login",
                     "system.saml.login");
             pipelines.pipeline("system.saml.login").process(this::login);
         }
         if (endpoints != null && endpoints.idpSloUrl() != null) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/saml/slo", "system.saml.slo");
+            HttpMounts.mount(context, "GET", "/_tesseraql/saml/slo", "system.saml.slo");
             pipelines.pipeline("system.saml.slo").process(this::inboundLogout);
         }
     }

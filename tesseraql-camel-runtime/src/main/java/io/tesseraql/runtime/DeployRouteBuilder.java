@@ -25,7 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * The stack's authenticated deploy endpoint (docs/stack-shells.md, the deploy surface;
@@ -46,7 +46,7 @@ import org.apache.camel.builder.RouteBuilder;
  * contract. The authority is an operational guardrail, not isolation between distrusting teams
  * (docs/runtime-replace.md states the boundary): those get separate stacks.
  */
-final class DeployRouteBuilder extends RouteBuilder {
+final class DeployRouteBuilder {
 
     /** TQL-FIELD-2001: the deploy request carried no package bytes in its body. */
     private static final TqlErrorCode EMPTY_BODY = new TqlErrorCode(TqlDomain.FIELD, 2001);
@@ -61,14 +61,13 @@ final class DeployRouteBuilder extends RouteBuilder {
         this.sessions = sessions;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/deploy", "system.deploy");
+        HttpMounts.mount(context, "POST", "/_tesseraql/deploy", "system.deploy");
         pipelines.pipeline("system.deploy").process(this::deploy);
     }
 

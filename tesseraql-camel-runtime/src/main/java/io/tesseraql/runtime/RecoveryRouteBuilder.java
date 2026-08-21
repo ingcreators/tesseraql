@@ -19,7 +19,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * Password-reset endpoints (roadmap Phase 50 slice 1, design in docs/credential-lifecycle.md):
@@ -36,7 +36,7 @@ import org.apache.camel.builder.RouteBuilder;
  * The pages themselves are the bundled auth-ui app's; only the state changes live here,
  * beside login/logout.
  */
-final class RecoveryRouteBuilder extends RouteBuilder {
+final class RecoveryRouteBuilder {
 
     private static final System.Logger LOG = System.getLogger(RecoveryRouteBuilder.class.getName());
 
@@ -72,19 +72,18 @@ final class RecoveryRouteBuilder extends RouteBuilder {
 
     private final io.tesseraql.security.throttle.CredentialThrottle throttle;
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         if (channel != null && confirmUrl != null) {
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset", "system.reset.request");
+            HttpMounts.mount(context, "POST", "/_tesseraql/reset", "system.reset.request");
             pipelines.pipeline("system.reset.request")
                     .process(this::request);
 
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/reset/confirm",
+            HttpMounts.mount(context, "POST", "/_tesseraql/reset/confirm",
                     "system.reset.confirm");
             pipelines.pipeline("system.reset.confirm")
                     .process(this::confirm);
@@ -92,7 +91,7 @@ final class RecoveryRouteBuilder extends RouteBuilder {
         if (inviteEnabled) {
             // The invite accept leg (roadmap Phase 50 slice 2): same token machinery,
             // purpose invite, plus the enable-user flip to ACTIVE.
-            HttpMounts.mount(getContext(), "POST", "/_tesseraql/invite",
+            HttpMounts.mount(context, "POST", "/_tesseraql/invite",
                     "system.invite.accept");
             pipelines.pipeline("system.invite.accept")
                     .process(this::acceptInvite);

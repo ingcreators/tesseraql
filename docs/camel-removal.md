@@ -263,7 +263,24 @@ leave; `jsch` and `commons-net` become declared dependencies rather than inherit
 
 **6. Camel leaves the build.** `camel-core-engine` and the rest go; the component guard and its
 config are retired; the modules are renamed; the CHANGELOG records the breaking change and the
-jar count is re-measured the way slice 0 measured it.
+jar count is re-measured the way slice 0 measured it. Split in three, because the last slice turned
+out to hold three separate changes:
+
+**6a done: a route builder that builds no routes stops being one.** The framework's 18
+`RouteBuilder` subclasses existed so that `context.addRoutes(...)` would call their
+`configure()` — ceremony around a method call, once the routes inside them became pipelines. Each
+takes an `install(context)` now, and `RouteCompiler` writes into the context directly instead of
+returning an anonymous builder to be handed back to it. **`RouteBuilder` and `addRoutes` appear
+zero times.** What is left of Camel is three roles: a registry, a service lifecycle, and a header
+filter.
+
+**6b: the context itself** — the registry and the service list become the runtime's own, the header
+filter is rewritten, the component guard retires with the mechanism it guarded, and Camel leaves
+the build.
+
+**6c: the names** — the `tesseraql-camel-*` modules, the `io.tesseraql.camel` package, and the
+header *values*, which still read `CamelHttpResponseCode` because slice 3b changed where a name
+comes from and deliberately not what it is.
 
 ## What slice 1 found
 
@@ -522,6 +539,17 @@ that cannot be written is not a reason to leak a permit.
 longer has. `DefaultHeaderFilterStrategy#doFiltering` never loads its third argument — `aload 3`
 appears zero times — so passing null is not a guess. The catalogue is the advertisement; the
 bytecode is the contract.
+
+## What slice 6a found
+
+**The header filter's real contract, found before it was needed.** Slice 6b has to replace
+`DefaultHeaderFilterStrategy`, and reading it first turned up the part no call site mentions:
+`outFilterStartsWith` is `{"Camel", "camel"}` by default, on top of the common set
+(`content-length`, `content-type`, `host`, `connection`, `date`, `pragma`, minus the
+`cache-control` this runtime removes). A replacement written from the call sites alone would have
+sent `CamelHttpResponseCode: 200` back to every caller as a response header. **The fifth borrowed
+property, and the first one found before it broke something** — because this time the campaign
+looked at the bytecode before writing the replacement rather than after the suite complained.
 
 ## What this does not buy, said before anyone expects it
 

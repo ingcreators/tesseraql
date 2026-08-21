@@ -14,7 +14,7 @@ import io.tesseraql.scim.ScimGroup;
 import io.tesseraql.scim.ScimGroupService;
 import io.tesseraql.scim.ScimUser;
 import io.tesseraql.scim.ScimUserService;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * Serves SCIM 2.0 inbound provisioning under {@code /scim/v2} (design ch. 10.15): users at
@@ -22,7 +22,7 @@ import org.apache.camel.builder.RouteBuilder;
  * require a bearer principal with the {@code scim.manage} policy; responses use the SCIM media type
  * and SCIM error envelope.
  */
-public final class ScimRouteBuilder extends RouteBuilder {
+public final class ScimRouteBuilder {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
     private static final AuthStep AUTHORIZE = new AuthStep("authorize", null, "scim.manage", null);
@@ -49,19 +49,18 @@ public final class ScimRouteBuilder extends RouteBuilder {
         this.capture = capture;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(ScimException.class, this::scimError),
                         Pipeline.Handler.catching(Exception.class, this::genericError)));
 
-        HttpMounts.mount(getContext(), "POST", "/scim/v2/Users", "scim.createUser");
-        HttpMounts.mount(getContext(), "GET", "/scim/v2/Users/{id}", "scim.getUser");
-        HttpMounts.mount(getContext(), "GET", "/scim/v2/Users", "scim.listUsers");
-        HttpMounts.mount(getContext(), "PUT", "/scim/v2/Users/{id}", "scim.replaceUser");
-        HttpMounts.mount(getContext(), "PATCH", "/scim/v2/Users/{id}", "scim.patchUser");
-        HttpMounts.mount(getContext(), "DELETE", "/scim/v2/Users/{id}", "scim.deleteUser");
+        HttpMounts.mount(context, "POST", "/scim/v2/Users", "scim.createUser");
+        HttpMounts.mount(context, "GET", "/scim/v2/Users/{id}", "scim.getUser");
+        HttpMounts.mount(context, "GET", "/scim/v2/Users", "scim.listUsers");
+        HttpMounts.mount(context, "PUT", "/scim/v2/Users/{id}", "scim.replaceUser");
+        HttpMounts.mount(context, "PATCH", "/scim/v2/Users/{id}", "scim.patchUser");
+        HttpMounts.mount(context, "DELETE", "/scim/v2/Users/{id}", "scim.deleteUser");
 
         pipelines.pipeline("scim.createUser")
                 .process(AUTH).process(AUTHORIZE).process(this::createUser);
@@ -77,17 +76,17 @@ public final class ScimRouteBuilder extends RouteBuilder {
                 .process(AUTH).process(AUTHORIZE).process(this::deleteUser);
 
         if (groups != null) {
-            configureGroups(pipelines);
+            configureGroups(context, pipelines);
         }
     }
 
-    private void configureGroups(Pipelines.Compilation pipelines) {
-        HttpMounts.mount(getContext(), "POST", "/scim/v2/Groups", "scim.createGroup");
-        HttpMounts.mount(getContext(), "GET", "/scim/v2/Groups/{id}", "scim.getGroup");
-        HttpMounts.mount(getContext(), "GET", "/scim/v2/Groups", "scim.listGroups");
-        HttpMounts.mount(getContext(), "PUT", "/scim/v2/Groups/{id}", "scim.replaceGroup");
-        HttpMounts.mount(getContext(), "PATCH", "/scim/v2/Groups/{id}", "scim.patchGroup");
-        HttpMounts.mount(getContext(), "DELETE", "/scim/v2/Groups/{id}", "scim.deleteGroup");
+    private void configureGroups(CamelContext context, Pipelines.Compilation pipelines) {
+        HttpMounts.mount(context, "POST", "/scim/v2/Groups", "scim.createGroup");
+        HttpMounts.mount(context, "GET", "/scim/v2/Groups/{id}", "scim.getGroup");
+        HttpMounts.mount(context, "GET", "/scim/v2/Groups", "scim.listGroups");
+        HttpMounts.mount(context, "PUT", "/scim/v2/Groups/{id}", "scim.replaceGroup");
+        HttpMounts.mount(context, "PATCH", "/scim/v2/Groups/{id}", "scim.patchGroup");
+        HttpMounts.mount(context, "DELETE", "/scim/v2/Groups/{id}", "scim.deleteGroup");
 
         pipelines.pipeline("scim.createGroup")
                 .process(AUTH).process(AUTHORIZE).process(this::createGroup);

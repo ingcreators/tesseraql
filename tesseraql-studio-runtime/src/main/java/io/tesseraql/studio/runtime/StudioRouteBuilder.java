@@ -18,7 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.CamelContext;
 
 /**
  * Serves the TesseraQL Studio JSON API under {@code /_tesseraql/studio} (design ch. 16). Endpoints
@@ -26,7 +26,7 @@ import org.apache.camel.builder.RouteBuilder;
  * {@code tql.studio.edit.<name>} atom (docs/studio-shell.md structural decision 4).
  * The browser UI (explorer, editor, setup wizards) is served by the bundled studio app (ch. 32).
  */
-final class StudioRouteBuilder extends RouteBuilder {
+final class StudioRouteBuilder {
 
     private static final AuthStep AUTH = new AuthStep("authenticate", "bearer", null, null);
 
@@ -52,32 +52,31 @@ final class StudioRouteBuilder extends RouteBuilder {
         this.studioPdf = studioPdf;
     }
 
-    @Override
-    public void configure() {
-        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+    void install(CamelContext context) {
+        Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
                         Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/explorer",
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/explorer",
                 "studio.explorer");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/source", "studio.source");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/drafts", "studio.drafts");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/drafts", "studio.draft");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/preview",
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/source", "studio.source");
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/drafts", "studio.drafts");
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/drafts", "studio.draft");
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/preview",
                 "studio.preview");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/render", "studio.render");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/runTests",
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/render", "studio.render");
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/runTests",
                 "studio.runTests");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/scaffold/tables",
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/scaffold/tables",
                 "studio.scaffold.tables");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/scaffold/preview",
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/scaffold/preview",
                 "studio.scaffold.preview");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/scaffold/apply",
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/scaffold/apply",
                 "studio.scaffold.apply");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/audit", "studio.audit");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/apply", "studio.apply");
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/reload", "studio.reload");
+        HttpMounts.mount(context, "GET", "/_tesseraql/studio/audit", "studio.audit");
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/apply", "studio.apply");
+        HttpMounts.mount(context, "POST", "/_tesseraql/studio/reload", "studio.reload");
 
         pipelines.pipeline("studio.explorer")
                 .process(AUTH).process(json(exchange -> studio
