@@ -143,7 +143,11 @@ final class RouteEdge {
             return false;
         }
         pipelines.put(routeId, pipeline);
+        // The body handler is the router's own — the instance the Camel consumer would have used,
+        // with whatever the server configured on it — so an upload spools where it already
+        // spooled and a form parses the way it already parsed.
         mounted.put(routeId, router.route(method, path).order(AFTER_THE_GATE)
+                .handler(router.bodyHandler())
                 .handler(ctx -> serve(ctx, routeId)));
         return true;
     }
@@ -196,7 +200,7 @@ final class RouteEdge {
 
     private void serve(RoutingContext ctx, String routeId) {
         RoutePipeline pipeline = pipelines.get(routeId);
-        if (pipeline == null || carriesABody(ctx)) {
+        if (pipeline == null) {
             ctx.next();
             return;
         }
@@ -218,20 +222,6 @@ final class RouteEdge {
                 inflight.remove(exchange, routeId);
             }
         });
-    }
-
-    /**
-     * Whether this request has a body, and therefore belongs to Camel for now.
-     *
-     * <p>Form posts reach a route as parsed attributes today, and reproducing that faithfully —
-     * urlencoded and multipart, merged into headers the way {@code platform-http} merges them — is
-     * its own change with its own tests. Reading the body here to find out would consume the
-     * stream the handler behind us needs, so the question is answered from headers alone.
-     */
-    private static boolean carriesABody(RoutingContext ctx) {
-        String length = ctx.request().getHeader("Content-Length");
-        return ctx.request().getHeader("Transfer-Encoding") != null
-                || (length != null && !"0".equals(length.trim()));
     }
 
     /**
@@ -278,8 +268,72 @@ final class RouteEdge {
         headers.put(Exchange.HTTP_URI, request.uri());
         headers.put(Exchange.HTTP_QUERY, request.query());
         headers.put(Exchange.HTTP_RAW_QUERY, request.query());
+        body(ctx, exchange, message, headers, filter);
         message.setHeaders(headers);
+        attachments(ctx, message);
         return exchange;
+    }
+
+    /**
+     * The body a route expects, which is three different things.
+     *
+     * <p>A form — urlencoded or the non-file parts of a multipart — arrives as a {@code Map} body
+     * <em>and</em> as headers, both appended so a repeated field is a list. That duplication is
+     * not tidiness: one binder reads the map and another reads the header, and a route written
+     * against either has to keep working. Everything else is the raw buffer, which is what a JSON
+     * body has always been.
+     */
+    private static void body(RoutingContext ctx, Exchange exchange,
+            org.apache.camel.Message message, Map<String, Object> headers,
+            org.apache.camel.spi.HeaderFilterStrategy filter) {
+        if (isForm(ctx)) {
+            Map<String, Object> form = new java.util.LinkedHashMap<>();
+            io.vertx.core.MultiMap attributes = ctx.request().formAttributes();
+            for (String name : attributes.names()) {
+                for (String value : attributes.getAll(name)) {
+                    if (filter != null
+                            && filter.applyFilterToExternalHeaders(name, value, exchange)) {
+                        continue;
+                    }
+                    org.apache.camel.util.CollectionHelper.appendEntry(headers, name, value);
+                    org.apache.camel.util.CollectionHelper.appendEntry(form, name, value);
+                }
+            }
+            if (!form.isEmpty()) {
+                message.setBody(form);
+            }
+            return;
+        }
+        if (ctx.body() != null && ctx.body().buffer() != null) {
+            message.setBody(ctx.body().buffer());
+        }
+    }
+
+    /** Uploaded parts, as the attachments three processors already read them off the message. */
+    private static void attachments(RoutingContext ctx, org.apache.camel.Message message) {
+        java.util.List<io.vertx.ext.web.FileUpload> uploads = ctx.fileUploads();
+        if (uploads.isEmpty()) {
+            return;
+        }
+        message.setHeader("CamelAttachmentsSize", uploads.size());
+        org.apache.camel.attachment.AttachmentMessage attachments = message.getExchange()
+                .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
+        for (io.vertx.ext.web.FileUpload upload : uploads) {
+            attachments.addAttachment(upload.name(), new jakarta.activation.DataHandler(
+                    new org.apache.camel.attachment.CamelFileDataSource(
+                            new java.io.File(upload.uploadedFileName()), upload.fileName())));
+        }
+    }
+
+    /** A form post, by the content type the body handler parsed it as. */
+    private static boolean isForm(RoutingContext ctx) {
+        String contentType = ctx.request().getHeader("Content-Type");
+        if (contentType == null) {
+            return false;
+        }
+        String lower = contentType.toLowerCase(java.util.Locale.ROOT);
+        return lower.startsWith("multipart/form-data")
+                || lower.startsWith("application/x-www-form-urlencoded");
     }
 
     /** Request headers and query parameters, filtered and appended the way a consumer does it. */

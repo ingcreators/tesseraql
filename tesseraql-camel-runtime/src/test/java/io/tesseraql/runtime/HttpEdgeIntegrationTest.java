@@ -88,16 +88,16 @@ class HttpEdgeIntegrationTest {
     }
 
     /**
-     * A request carrying a body is handed back to Camel, and the caller cannot tell.
+     * A form post is served here too, and it reads its fields.
      *
-     * <p>Form and multipart parsing is Camel's today, and reading the body here to find out what
-     * kind it is would consume the stream the handler behind us needs — so the question is
-     * answered from headers and the request falls through. The point of this test is that falling
-     * through is invisible: the command runs, the redirect comes back, nothing about the route
-     * changed.
+     * <p>This is what the hand-back used to cover. A form arrives as a {@code Map} body and as
+     * headers, both appended so a repeated field is a list, because one binder reads the map and
+     * another reads the header and a route written against either has to keep working. The
+     * command runs, the redirect comes back with the field's value in it, and nothing about the
+     * route changed.
      */
     @Test
-    void aRequestWithABodyIsHandedBackToCamelAndStillWorks() throws Exception {
+    void aFormPostIsServedOnTheRouterAndReadsItsFields() throws Exception {
         HttpRequest post = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/touch"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
@@ -110,6 +110,46 @@ class HttpEdgeIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(303);
         assertThat(response.headers().firstValue("Location")).hasValue("/api/nap?n=7");
+    }
+
+    /**
+     * A form post is not bounded by the worker pool either.
+     *
+     * <p>The GET half moved first and a request carrying a body was handed back to Camel while
+     * the adapter was still learning what a form looks like. With that gone, the assertion is the
+     * same one and it covers every request the runtime serves: eight one-second commands against
+     * two workers take one wave, not four.
+     */
+    @Test
+    void aFormPostIsNotBoundedByTheWorkerPoolEither() {
+        long startedAt = System.currentTimeMillis();
+        List<CompletableFuture<HttpResponse<String>>> inFlight = Stream
+                .generate(() -> CompletableFuture.supplyAsync(() -> postForm("n=3")))
+                .limit(CONCURRENT)
+                .toList();
+        inFlight.forEach(CompletableFuture::join);
+        long elapsedMs = System.currentTimeMillis() - startedAt;
+
+        System.out.println("EDGE " + CONCURRENT + " concurrent 1s form posts, 2 workers, "
+                + "8 connections: " + elapsedMs + " ms");
+        for (CompletableFuture<HttpResponse<String>> request : inFlight) {
+            assertThat(request.join().statusCode()).isEqualTo(303);
+        }
+        assertThat(elapsedMs).isLessThan(2_500);
+    }
+
+    private static HttpResponse<String> postForm(String body) {
+        try {
+            HttpRequest post = HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + runtime.port() + "/api/touch"))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+                    .send(post, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 
     private static HttpResponse<String> get(String path) {
@@ -193,8 +233,9 @@ class HttpEdgeIntegrationTest {
                   redirect:
                     location: /api/nap?n={params.n}
                 """);
+        // Slow on purpose: the form post has to be shown leaving the worker pool too.
         Files.writeString(touch.resolve("touch.sql"),
-                "insert into touched (n) values (/* n */ -1)\n;\n");
+                "insert into touched (n) select /* n */ -1 from pg_sleep(1)\n;\n");
         return target;
     }
 

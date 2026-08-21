@@ -153,6 +153,15 @@
       <artifactId>camel-platform-http-vertx</artifactId>
     </dependency>
     <!--
+      Uploaded parts reach a route as attachments (docs/http-edge.md decision 1). The runtime's
+      own edge builds them now rather than inheriting them from the platform-http consumer, so
+      the dependency is declared here instead of arriving through one.
+    -->
+    <dependency>
+      <groupId>org.apache.camel</groupId>
+      <artifactId>camel-attachments</artifactId>
+    </dependency>
+    <!--
       The gateway's relay (docs/stack-architecture.md decision 13). Vert.x is already here through
       camel-platform-http-vertx, so this adds one jar at a version the runtime already resolves;
       its only transitive dependency is the vertx-core already on the classpath. A hand-rolled
