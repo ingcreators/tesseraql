@@ -30,23 +30,15 @@ public record Pipeline(String id, List<Step> steps, List<Handler> handlers, int 
     }
 
     /**
-     * One step.
+     * One step: a processor the compiler built.
      *
-     * <p>Two kinds, because the compiler emits two: a processor it constructed, and an endpoint it
-     * names — {@code tesseraql-sql:}, {@code tesseraql-auth:} and their siblings, which are
-     * resolved to a producer by whoever runs the pipeline. Naming rather than resolving keeps the
-     * compiler free of a running context, which is what lets a route be compiled by the linter and
-     * the Studio as well as by a runtime.
+     * <p>It used to have a second kind — an endpoint the compiler <em>named</em>, as
+     * {@code tesseraql-sql:file:...?mode=query&maxRows=200}, resolved to a producer wherever the
+     * pipeline ran. The framework's own components stopped being components
+     * (docs/camel-removal.md decision 2), so a step that was a URI built from typed values and
+     * parsed back into typed fields is now the object those values describe.
      */
-    public sealed interface Step {
-
-        /** A processor the compiler built. */
-        record Run(Processor processor) implements Step {
-        }
-
-        /** An endpoint the compiler named, resolved to a producer where the pipeline runs. */
-        record Send(String uri) implements Step {
-        }
+    public record Step(Processor processor) {
     }
 
     /**

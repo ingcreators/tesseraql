@@ -32,14 +32,14 @@ import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.apache.camel.Exchange;
-import org.apache.camel.support.DefaultProducer;
+import org.apache.camel.Processor;
 
 /**
  * Executes a 2-way SQL file against JDBC and publishes the result into the execution context
  * (design ch. 9.1). The SQL is parsed once at startup and rendered per exchange with the resolved
  * bind parameters held in the {@link TesseraqlProperties#SQL_PARAMS} property.
  */
-public class TesseraqlSqlProducer extends DefaultProducer {
+public class SqlStep implements Processor {
 
     /**
      * The document's primary source. Declarative pagination is main-bound
@@ -62,31 +62,57 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private static final TqlErrorCode SERIALIZATION_CODE = new TqlErrorCode(TqlDomain.SQL, 4093);
     /** TQL-LD-0001: result materialization exceeded the configured maxRows. */
     private static final TqlErrorCode MATERIALIZATION_OVERFLOW = new TqlErrorCode(TqlDomain.LD, 1);
-    private static final System.Logger LOG = System.getLogger(TesseraqlSqlProducer.class.getName());
+    private static final System.Logger LOG = System.getLogger(SqlStep.class.getName());
 
-    private final TesseraqlSqlEndpoint endpoint;
     private final Map<Path, List<SqlNode>> exportQueryNodes = new java.util.concurrent.ConcurrentHashMap<>();
     private List<SqlNode> nodes;
 
-    public TesseraqlSqlProducer(TesseraqlSqlEndpoint endpoint) {
-        super(endpoint);
-        this.endpoint = endpoint;
+    private final String sqlPath;
+    private final String datasource;
+    private final String mode;
+    private final String resultKey;
+    private final int maxRows;
+    private final int queryTimeoutSeconds;
+    private final String onOverflow;
+    private final String filename;
+    private final String dialect;
+
+    /** One SQL execution, with the settings its endpoint URI used to carry. */
+    public SqlStep(String sqlPath, String datasource, String mode, String resultKey, int maxRows,
+            int queryTimeoutSeconds, String onOverflow, String filename, String dialect) {
+        this.sqlPath = sqlPath;
+        this.datasource = datasource == null ? "main" : datasource;
+        this.mode = mode == null ? "query" : mode;
+        this.resultKey = resultKey == null ? "main" : resultKey;
+        this.maxRows = maxRows;
+        this.queryTimeoutSeconds = queryTimeoutSeconds;
+        this.onOverflow = onOverflow == null ? "fail" : onOverflow;
+        this.filename = filename == null ? "export.csv" : filename;
+        this.dialect = dialect;
     }
 
-    @Override
-    protected void doStart() throws Exception {
-        super.doStart();
-        Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
-                Path.of(endpoint.getSqlPath()), endpoint.getDialect());
-        this.nodes = Sql2WayParser.parse(Files.readString(file), functions());
+    /**
+     * The parsed statement, read and parsed once.
+     *
+     * <p>A producer parsed it in {@code doStart}, which is the lifecycle a service has and a step
+     * does not. Parsing on first use keeps the property that matters — the file is read once, not
+     * per request — without inventing a lifecycle for it (docs/camel-removal.md decision 2).
+     */
+    private synchronized List<SqlNode> nodes(Exchange exchange) throws Exception {
+        if (nodes == null) {
+            Path file = io.tesseraql.core.dialect.DialectSqlResolver.resolve(
+                    Path.of(sqlPath), dialect);
+            nodes = Sql2WayParser.parse(Files.readString(file), functions(exchange));
+        }
+        return nodes;
     }
 
     /**
      * This runtime's function set, bound beside the tracer and lanes; a hand-built context
      * without the bean falls back to the process default (docs/module-scope.md).
      */
-    private io.tesseraql.core.expr.ExpressionFunctions functions() {
-        io.tesseraql.core.expr.ExpressionFunctions bound = endpoint.getCamelContext()
+    private io.tesseraql.core.expr.ExpressionFunctions functions(Exchange exchange) {
+        io.tesseraql.core.expr.ExpressionFunctions bound = exchange.getContext()
                 .getRegistry().lookupByNameAndType(TesseraqlProperties.FUNCTIONS_BEAN,
                         io.tesseraql.core.expr.ExpressionFunctions.class);
         return bound != null
@@ -98,19 +124,18 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     @Override
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) throws Exception {
-        String mode = endpoint.getMode();
         io.tesseraql.core.telemetry.SpanContext parent = exchange.getProperty(
                 TesseraqlProperties.TRACE_CONTEXT, io.tesseraql.core.telemetry.SpanContext.class);
         io.tesseraql.core.telemetry.Span span = tracer(exchange)
                 .start("tesseraql.sql.execute", parent)
-                .attribute("sqlId", endpoint.getSqlPath())
+                .attribute("sqlId", sqlPath)
                 .attribute("mode", mode);
         try {
             Map<String, Object> params = exchange.getProperty(
                     TesseraqlProperties.SQL_PARAMS, Map.of(), Map.class);
             Map<String, Object> scopeContext = exchange.getProperty(
                     TesseraqlProperties.CONTEXT, Map.of(), Map.class);
-            BoundSql bound = SqlRenderer.render(nodes, params, scopeResolver(exchange),
+            BoundSql bound = SqlRenderer.render(nodes(exchange), params, scopeResolver(exchange),
                     scopeContext, filePathResolver(exchange));
             DataSource dataSource = dataSource(exchange);
 
@@ -133,7 +158,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             io.tesseraql.camel.PageRequest page = exchange.getProperty(TesseraqlProperties.PAGE,
                     io.tesseraql.camel.PageRequest.class);
             boolean paged = page != null && "query".equals(mode)
-                    && MAIN.equals(endpoint.getResultKey());
+                    && MAIN.equals(resultKey);
             Map<String, Object> result;
             if (paged) {
                 result = executeQuery(dataSource, paginated(bound, page));
@@ -173,9 +198,9 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
             long rows = count instanceof Number number ? number.longValue() : 0L;
             slowSqlLog(exchange).record(new io.tesseraql.core.diag.SqlExecution(
-                    endpoint.getSqlPath(), mode, durationMs, rows, startedAt));
+                    sqlPath, mode, durationMs, rows, startedAt));
             if (context != null) {
-                io.tesseraql.camel.ContextResults.put(context, endpoint.getResultKey(), result);
+                io.tesseraql.camel.ContextResults.put(context, resultKey, result);
             }
             exchange.getMessage().setBody(result);
         } catch (RuntimeException ex) {
@@ -211,7 +236,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
      * {@code ${scope.*}} outside an analytics datasource fails loudly.
      */
     private io.tesseraql.core.sql.FilePathResolver filePathResolver(Exchange exchange) {
-        if (!"duckdb".equals(endpoint.getDialect())) {
+        if (!"duckdb".equals(dialect)) {
             return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
         }
         DatasourceFilePathResolver resolver = exchange.getContext().getRegistry()
@@ -221,7 +246,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             return io.tesseraql.core.sql.FilePathResolver.UNSUPPORTED;
         }
         return (channel, name, suffix, context) -> resolver.resolve(
-                endpoint.getDatasource(), channel, name, suffix, context);
+                datasource, channel, name, suffix, context);
     }
 
     private io.tesseraql.core.diag.SqlExecutionLog slowSqlLog(Exchange exchange) {
@@ -246,14 +271,14 @@ public class TesseraqlSqlProducer extends DefaultProducer {
             throw new TqlException(UNSUPPORTED_MODE,
                     "query-export requires the compiled export binding (codec and write spec)");
         }
-        TempStore tempStore = tempStore();
+        TempStore tempStore = tempStore(exchange);
         // The named results outlive the codec's write and nothing else.
         List<SpooledRows> spools = new java.util.ArrayList<>();
         SpoolRef ref;
         // Stream large exports per the dialect's profile so the driver uses a cursor instead of
         // buffering the whole result set in memory (design ch. 42, 28).
         io.tesseraql.core.dialect.StreamingProfile profile = io.tesseraql.core.dialect.StreamingProfiles
-                .forDialect(endpoint.getDialect());
+                .forDialect(dialect);
         try (Connection connection = dataSource.getConnection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             if (profile.autoCommitOff()) {
@@ -275,13 +300,13 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     Map<String, Object> values = composedValues(exchange, connection, tempStore,
                             cap, spools);
                     io.tesseraql.core.files.ResultSetRows extraction = new io.tesseraql.core.files.ResultSetRows(
-                            resultSet, endpoint.getDialect(), cap, EXECUTION_ERROR);
+                            resultSet, dialect, cap, EXECUTION_ERROR);
                     io.tesseraql.core.files.ExportWrite.write(codec, spec, tempStore, extraction,
                             exchange.getProperty(TesseraqlProperties.EXPORT_ENRICHER,
                                     io.tesseraql.core.files.RowEnricher.class),
                             exchange.getProperty(TesseraqlProperties.EXPORT_ENRICH_WINDOW, 0,
                                     Integer.class),
-                            values, endpoint.getFilename(),
+                            values, filename,
                             new io.tesseraql.core.spool.SpoolOutput(writer));
                     writer.incrementRows(extraction.count());
                 }
@@ -311,8 +336,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 split ? "application/zip" : codec.contentType());
         exchange.getMessage().setHeader("Content-Disposition",
                 "attachment; filename=\"" + (split
-                        ? zipName(endpoint.getFilename())
-                        : endpoint.getFilename()) + "\"");
+                        ? zipName(filename)
+                        : filename) + "\"");
         exchange.getExchangeExtension().addOnCompletion(new org.apache.camel.spi.Synchronization() {
             @Override
             public void onComplete(Exchange completed) {
@@ -348,7 +373,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                 Map.class);
         Map<String, Object> values = new LinkedHashMap<>(resolved);
         for (io.tesseraql.core.files.ExportQuery query : queries) {
-            BoundSql bound = SqlRenderer.render(exportQueryNodes(query), params);
+            BoundSql bound = SqlRenderer.render(exportQueryNodes(exchange, query), params);
             try (PreparedStatement statement = connection.prepareStatement(bound.sql())) {
                 applyTimeout(statement);
                 bindParameters(statement, bound.parameters());
@@ -358,7 +383,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
                     // (docs/export-pipeline.md, decision 15).
                     values.put(query.name(), io.tesseraql.core.files.ExportWrite.namedResult(
                             tempStore, new io.tesseraql.core.files.ResultSetRows(resultSet,
-                                    endpoint.getDialect(), cap, EXECUTION_ERROR),
+                                    dialect, cap, EXECUTION_ERROR),
                             spools));
                 }
             } catch (java.sql.SQLException ex) {
@@ -368,14 +393,15 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         return Map.copyOf(values);
     }
 
-    /** An export query's parsed SQL, read once per file and kept for the endpoint's lifetime. */
-    private List<SqlNode> exportQueryNodes(io.tesseraql.core.files.ExportQuery query) {
+    /** An export query's parsed SQL, read once per file and kept for this step's lifetime. */
+    private List<SqlNode> exportQueryNodes(Exchange exchange,
+            io.tesseraql.core.files.ExportQuery query) {
         return exportQueryNodes.computeIfAbsent(query.sqlFile(), file -> {
             try {
                 return Sql2WayParser.parse(Files.readString(
                         io.tesseraql.core.dialect.DialectSqlResolver.resolve(file,
-                                endpoint.getDialect())),
-                        functions());
+                                dialect)),
+                        functions(exchange));
             } catch (java.io.IOException ex) {
                 throw new TqlException(EXECUTION_ERROR,
                         "Cannot read export query '" + query.name() + "': " + ex.getMessage());
@@ -392,8 +418,8 @@ public class TesseraqlSqlProducer extends DefaultProducer {
         return (stem.isBlank() ? "export" : stem) + ".zip";
     }
 
-    private TempStore tempStore() {
-        TempStore bean = endpoint.getCamelContext().getRegistry()
+    private TempStore tempStore(Exchange exchange) {
+        TempStore bean = exchange.getContext().getRegistry()
                 .lookupByNameAndType(TesseraqlProperties.TEMP_STORE_BEAN, TempStore.class);
         return bean != null
                 ? bean
@@ -404,10 +430,10 @@ public class TesseraqlSqlProducer extends DefaultProducer {
 
     /** The bound statement with the dialect's pagination clause (size+1 rows) appended. */
     private BoundSql paginated(BoundSql bound, io.tesseraql.camel.PageRequest page) {
-        io.tesseraql.core.dialect.Dialect dialect = io.tesseraql.core.dialect.Dialect
-                .fromId(endpoint.getDialect()).orElse(io.tesseraql.core.dialect.Dialect.POSTGRES);
+        io.tesseraql.core.dialect.Dialect paginating = io.tesseraql.core.dialect.Dialect
+                .fromId(dialect).orElse(io.tesseraql.core.dialect.Dialect.POSTGRES);
         io.tesseraql.core.dialect.Pagination.Clause clause = io.tesseraql.core.dialect.Pagination
-                .clause(dialect, page.size() + 1L, page.offset());
+                .clause(paginating, page.size() + 1L, page.offset());
         List<io.tesseraql.core.sql.BoundParameter> parameters = new java.util.ArrayList<>(
                 bound.parameters());
         for (Object value : clause.parameters()) {
@@ -469,13 +495,13 @@ public class TesseraqlSqlProducer extends DefaultProducer {
 
     /** Resolves the datasource for the exchange; see {@link TenantRouting} for the routing rule. */
     private DataSource dataSource(Exchange exchange) {
-        return TenantRouting.dataSource(exchange, endpoint.getDatasource());
+        return TenantRouting.dataSource(exchange, datasource);
     }
 
     private TqlException executionError(Exception ex) {
         return TqlException.builder(classifyCode(ex))
                 .message("SQL execution failed: " + ex.getMessage())
-                .source(endpoint.getSqlPath())
+                .source(sqlPath)
                 .cause(ex)
                 .build();
     }
@@ -504,7 +530,7 @@ public class TesseraqlSqlProducer extends DefaultProducer {
      * driver instead of holding a pool connection forever. 0 = unbounded (explicit opt-out).
      */
     private void applyTimeout(PreparedStatement statement) throws SQLException {
-        int seconds = endpoint.getQueryTimeoutSeconds();
+        int seconds = queryTimeoutSeconds;
         if (seconds > 0) {
             statement.setQueryTimeout(seconds);
         }
@@ -520,27 +546,26 @@ public class TesseraqlSqlProducer extends DefaultProducer {
     private List<Map<String, Object>> readRows(ResultSet resultSet) throws java.sql.SQLException {
         ResultSetMetaData metaData = resultSet.getMetaData();
         int columnCount = metaData.getColumnCount();
-        int maxRows = endpoint.getMaxRows();
-        boolean warn = "warn".equals(endpoint.getOnOverflow());
+        boolean warn = "warn".equals(onOverflow);
         List<Map<String, Object>> rows = new ArrayList<>();
         while (resultSet.next()) {
             if (maxRows >= 0 && rows.size() >= maxRows) {
                 if (warn) {
                     LOG.log(System.Logger.Level.WARNING,
                             "Result truncated at maxRows={0} for {1}", maxRows,
-                            endpoint.getSqlPath());
+                            sqlPath);
                     break;
                 }
                 throw TqlException.builder(MATERIALIZATION_OVERFLOW)
                         .message("Result exceeds maxRows=" + maxRows
                                 + " (use pagination or query-export)")
-                        .source(endpoint.getSqlPath())
+                        .source(sqlPath)
                         .build();
             }
             Map<String, Object> row = new LinkedHashMap<>();
             for (int col = 1; col <= columnCount; col++) {
                 row.put(io.tesseraql.core.dialect.Labels.normalize(
-                        endpoint.getDialect(), metaData.getColumnLabel(col)),
+                        dialect, metaData.getColumnLabel(col)),
                         normalize(resultSet.getObject(col)));
             }
             rows.add(row);

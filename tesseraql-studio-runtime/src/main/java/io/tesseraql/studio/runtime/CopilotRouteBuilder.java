@@ -2,6 +2,7 @@ package io.tesseraql.studio.runtime;
 
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -29,7 +30,7 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class CopilotRouteBuilder extends RouteBuilder {
 
-    private static final String AUTH = "tesseraql-auth:authenticate?auth=browser";
+    private static final AuthStep AUTH = new AuthStep("authenticate", "browser", null, null);
 
     private final CopilotService copilot;
     private final StudioEdit studioEdit;
@@ -60,7 +61,7 @@ final class CopilotRouteBuilder extends RouteBuilder {
         // blocking loop and lands back on the page (post/redirect/get) — the old behavior,
         // now the fallback.
         pipelines.pipeline("tql.copilot.send")
-                .to(AUTH).to("tesseraql-auth:csrf").process(exchange -> {
+                .process(AUTH).process(new AuthStep("csrf")).process(exchange -> {
                     requireCopilot();
                     String message = requireMessage(exchange);
                     String actor = actor(exchange);

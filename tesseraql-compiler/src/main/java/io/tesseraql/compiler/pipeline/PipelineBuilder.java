@@ -33,13 +33,7 @@ public final class PipelineBuilder {
 
     /** Appends a processor. */
     public PipelineBuilder process(Processor processor) {
-        steps.add(new Pipeline.Step.Run(processor));
-        return this;
-    }
-
-    /** Appends an endpoint the runtime resolves to a producer. */
-    public PipelineBuilder to(String uri) {
-        steps.add(new Pipeline.Step.Send(uri));
+        steps.add(new Pipeline.Step(processor));
         return this;
     }
 

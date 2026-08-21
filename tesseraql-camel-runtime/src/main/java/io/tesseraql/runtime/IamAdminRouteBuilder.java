@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -50,9 +51,9 @@ final class IamAdminRouteBuilder extends RouteBuilder {
         // recipe (the htmx tbody-swap enhancement needs HX-Request negotiation and can
         // layer on later without changing this contract).
         pipelines.pipeline("tql.iamAdmin.users.bulk")
-                .to("tesseraql-auth:authenticate?auth=browser")
-                .to("tesseraql-auth:csrf")
-                .to("tesseraql-auth:authorize?policy=tql.iam.admin.write")
+                .process(new AuthStep("authenticate", "browser", null, null))
+                .process(new AuthStep("csrf"))
+                .process(new AuthStep("authorize", null, "tql.iam.admin.write", null))
                 .process(exchange -> {
                     String action = formValues(exchange, "action").stream()
                             .findFirst().orElse("");

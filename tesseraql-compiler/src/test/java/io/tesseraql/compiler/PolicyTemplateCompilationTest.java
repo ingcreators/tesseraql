@@ -30,41 +30,42 @@ class PolicyTemplateCompilationTest {
         Files.createDirectories(dir.resolve("web/admin/applications/{name}"));
         writeApp(dir, "web/admin/applications/{name}", "tql.iam.write.{path.name}");
 
-        assertThat(authorizeUris(dir)).containsExactly("tesseraql-auth:authorize?policy="
-                + "tql.iam.write.%7Bname%7D&pathTemplate="
-                + "%2Fadmin%2Fapplications%2F%7Bname%7D");
+        assertThat(authorizeGates(dir)).singleElement().satisfies(gate -> {
+            assertThat(gate.policy()).isEqualTo("tql.iam.write.{name}");
+            assertThat(gate.pathTemplate()).isEqualTo("/admin/applications/{name}");
+        });
     }
 
     @Test
-    void aFixedPolicyIdIsUnchangedOnTheUri(@TempDir Path dir) throws Exception {
+    void aFixedPolicyIdReachesTheGateUnchanged(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("web/admin/applications/{name}"));
         writeApp(dir, "web/admin/applications/{name}", "tql.iam.admin.write");
 
-        assertThat(authorizeUris(dir))
-                .containsExactly("tesseraql-auth:authorize?policy=tql.iam.admin.write");
+        assertThat(authorizeGates(dir)).singleElement().satisfies(gate -> {
+            assertThat(gate.policy()).isEqualTo("tql.iam.admin.write");
+            // A fixed atom needs no template: there is no parameter to read off the URL.
+            assertThat(gate.pathTemplate()).isNull();
+        });
     }
 
     /**
-     * The braces survive the URI and reach the endpoint intact. They are percent-encoded on
-     * the way out because they are not URI characters, and this is the assertion that the
-     * decode on the way in gives the producer the template back rather than an escaped string
-     * it would try to resolve literally.
+     * The braces need no escaping, because there is nothing left to escape them into.
+     *
+     * <p>This used to be the round-trip assertion: the template was percent-encoded into a query
+     * string on the way out and decoded on the way in, and a mismatch would have handed the gate
+     * an escaped string it would try to resolve literally. The gate takes the value as an argument
+     * now (docs/camel-removal.md decision 2), so the encoding — and the class of defect that comes
+     * with an encoding — is gone rather than tested.
      */
     @Test
-    void thePercentEncodedTemplateRoundTripsToTheEndpoint(@TempDir Path dir) throws Exception {
+    void theTemplateReachesTheGateWithNothingEncodedOnTheWay(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("web/admin/applications/{name}"));
         writeApp(dir, "web/admin/applications/{name}", "tql.iam.write.{path.name}");
-        String uri = authorizeUris(dir).get(0);
 
-        try (DefaultCamelContext context = new DefaultCamelContext()) {
-            assertThat(context.getEndpoint(uri,
-                    io.tesseraql.camel.auth.TesseraqlAuthEndpoint.class))
-                    .satisfies(endpoint -> {
-                        assertThat(endpoint.getPolicy()).isEqualTo("tql.iam.write.{name}");
-                        assertThat(endpoint.getPathTemplate())
-                                .isEqualTo("/admin/applications/{name}");
-                    });
-        }
+        assertThat(authorizeGates(dir)).singleElement().satisfies(gate -> {
+            assertThat(gate.policy()).doesNotContain("%");
+            assertThat(gate.pathTemplate()).doesNotContain("%");
+        });
     }
 
     /** A reference the route's own path does not declare would resolve to nothing, always. */
@@ -73,7 +74,7 @@ class PolicyTemplateCompilationTest {
         Files.createDirectories(dir.resolve("web/admin/applications/{name}"));
         writeApp(dir, "web/admin/applications/{name}", "tql.iam.write.{path.nope}");
 
-        assertThatThrownBy(() -> authorizeUris(dir))
+        assertThatThrownBy(() -> authorizeGates(dir))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-YAML-1409")
                 .hasMessageContaining("[name]");
@@ -85,7 +86,7 @@ class PolicyTemplateCompilationTest {
         Files.createDirectories(dir.resolve("web/admin/applications/{name}"));
         writeApp(dir, "web/admin/applications/{name}", "tql.iam.write.{query.name}");
 
-        assertThatThrownBy(() -> authorizeUris(dir))
+        assertThatThrownBy(() -> authorizeGates(dir))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-YAML-1409")
                 .hasMessageContaining("own path");
@@ -97,19 +98,21 @@ class PolicyTemplateCompilationTest {
         Files.createDirectories(dir.resolve("web/admin/applications/{name}"));
         writeApp(dir, "web/admin/applications/{name}", "orders.admin.{path.name}");
 
-        assertThatThrownBy(() -> authorizeUris(dir))
+        assertThatThrownBy(() -> authorizeGates(dir))
                 .isInstanceOf(TqlException.class)
                 .hasMessageContaining("TQL-YAML-1409")
                 .hasMessageContaining("names no policy at all");
     }
 
     /** Every {@code tesseraql-auth:authorize} endpoint the fixture app compiles to. */
-    private static List<String> authorizeUris(Path dir) throws Exception {
+    private static List<io.tesseraql.camel.auth.AuthStep> authorizeGates(Path dir)
+            throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             context.addRoutes(new RouteCompiler().appName("policy-template-test")
                     .compile(manifest, false, null));
-            return CompiledPipelines.endpoints(context, "tesseraql-auth:authorize");
+            return CompiledPipelines.steps(context, io.tesseraql.camel.auth.AuthStep.class)
+                    .stream().filter(step -> "authorize".equals(step.operation())).toList();
         }
     }
 

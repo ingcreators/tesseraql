@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -35,9 +36,9 @@ import org.apache.camel.builder.RouteBuilder;
  */
 final class OperationsRouteBuilder extends RouteBuilder {
 
-    private static final String VIEW = "tesseraql-auth:authenticate?auth=bearer";
-    private static final String BROWSER = "tesseraql-auth:authenticate?auth=browser";
-    private static final String CSRF = "tesseraql-auth:csrf";
+    private static final AuthStep VIEW = new AuthStep("authenticate", "bearer", null, null);
+    private static final AuthStep BROWSER = new AuthStep("authenticate", "browser", null, null);
+    private static final AuthStep CSRF = new AuthStep("csrf");
 
     /** The app's code catalogs, or null when it declares none (docs/lookups.md, decision 14). */
     private static io.tesseraql.core.catalog.CatalogStore catalogStore(
@@ -145,7 +146,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         if (routeAudit != null) {
             HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/audit", "ops.audit");
             pipelines.pipeline("ops.audit")
-                    .to(VIEW).process(requireAnyOpsView())
+                    .process(VIEW).process(requireAnyOpsView())
                     .process(jsonProcessor(
                             exchange -> routeAudit.recent(200, viewScope(exchange))));
         }
@@ -182,8 +183,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
             HttpMounts.mount(getContext(), "GET", "/_tesseraql/metrics", "ops.metrics");
             var metricsRoute = pipelines.pipeline("ops.metrics");
             if (!metrics.unauthenticated()) {
-                metricsRoute = metricsRoute.to(VIEW)
-                        .to("tesseraql-auth:authorize?policy=ops.metrics.view");
+                metricsRoute = metricsRoute.process(VIEW)
+                        .process(new AuthStep("authorize", null, "ops.metrics.view", null));
             }
             metricsRoute.process(exchange -> {
                 exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
@@ -201,7 +202,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
         }
 
         pipelines.pipeline("ops.batch.jobs")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     Predicate<String> scope = viewScope(exchange);
                     // Objects since 0.11 (docs/jobs.md): the trigger story and the
@@ -213,7 +214,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         pipelines.pipeline("ops.batch.executions")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     Predicate<String> scope = viewScope(exchange);
                     return repository.listExecutions(50).stream()
@@ -223,17 +224,17 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         pipelines.pipeline("ops.batch.executionDetail")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(this::executionDetail));
 
         pipelines.pipeline("ops.batch.run")
-                .to(VIEW)
+                .process(VIEW)
                 .process(jsonProcessor(this::runJob));
 
         // The cooperative stop (docs/jobs.md "Stopping a run"): sets the flag the running
         // executor polls at step and chunk-commit boundaries; gated like starting a run.
         pipelines.pipeline("ops.batch.cancel")
-                .to(VIEW)
+                .process(VIEW)
                 .process(jsonProcessor(this::cancelExecution));
 
         // A job-produced export has no route-scoped download URL, so it is fetched here
@@ -242,55 +243,55 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // faces, one handler: the API for machine callers, the console for the browser
         // session behind the transfers page.
         pipelines.pipeline("ops.batch.transferFile")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(this::transferFile);
         pipelines.pipeline("ops.console.transferFile")
-                .to(BROWSER).process(requireAnyOpsView())
+                .process(BROWSER).process(requireAnyOpsView())
                 .process(this::transferFile);
 
         pipelines.pipeline("ops.overview")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.overview(20, viewScope(exchange))));
 
         pipelines.pipeline("ops.lanes")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.overview(0).lanes()));
 
         pipelines.pipeline("ops.slowSql")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.slowSql(),
                         OperationsRouteBuilder::sqlExecutionWire)));
 
         pipelines.pipeline("ops.traces")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.traces(viewScope(exchange)),
                         OperationsRouteBuilder::spanWire)));
 
         pipelines.pipeline("ops.traceTree")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(viewScope(exchange)),
                         OperationsRouteBuilder::traceNodeWire)));
 
         pipelines.pipeline("ops.traceSummary")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceSummaries(
                         exchange.getMessage().getHeader("filter", String.class),
                         viewScope(exchange))));
 
         pipelines.pipeline("ops.traceMetrics")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceMetrics()));
 
         pipelines.pipeline("ops.alerts")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.alerts()));
 
         pipelines.pipeline("ops.pinning")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> pinningWire(dashboard.pinning())));
 
         pipelines.pipeline("ops.catalogs")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
                     return store == null
@@ -300,7 +301,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         pipelines.pipeline("ops.catalogs.refresh")
-                .to(VIEW)
+                .process(VIEW)
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
                     String name = exchange.getMessage().getHeader("name", String.class);
@@ -323,21 +324,21 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 }));
 
         pipelines.pipeline("ops.outbox")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(
                         actions.recentOutbox(viewScope(exchange)), this::outboxEventMap)));
 
         pipelines.pipeline("ops.outbox.redeliver")
-                .to(VIEW)
+                .process(VIEW)
                 .process(jsonProcessor(this::redeliverOutboxEvent));
 
         pipelines.pipeline("ops.events")
-                .to(VIEW).process(requireAnyOpsView())
+                .process(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(
                         actions.recentEvents(viewScope(exchange)), this::channelEventMap)));
 
         pipelines.pipeline("ops.events.redeliver")
-                .to(VIEW)
+                .process(VIEW)
                 .process(jsonProcessor(this::redeliverChannelEvent));
 
         // --- The stack shell's delegation face (docs/stack-shells.md structural decision 2) ---
@@ -371,42 +372,42 @@ final class OperationsRouteBuilder extends RouteBuilder {
                 "ops.data.eventsRedeliver");
 
         pipelines.pipeline("ops.data.overview")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.overview", Map.of())));
         pipelines.pipeline("ops.data.jobs")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.jobs", Map.of())));
         pipelines.pipeline("ops.data.traces")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.traces", Map.of())));
         pipelines.pipeline("ops.data.transfers")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.transfers", Map.of())));
         pipelines.pipeline("ops.data.outbox")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.outbox", Map.of())));
         pipelines.pipeline("ops.data.events")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.events", Map.of())));
         pipelines.pipeline("ops.data.audit")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(exchange -> invokeProvider(exchange, "ops.audit",
                         headerParams(exchange, "route", "actor", "status"))));
         pipelines.pipeline("ops.data.execution")
-                .to(BROWSER).process(requireMemberView())
+                .process(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(exchange -> invokeProvider(exchange, "ops.execution",
                         headerParams(exchange, "id"))));
         // Actions: CSRF-validated (the shell forwards the caller's X-CSRF-Token beside the
         // cookie), and the tql.ops.run.<name> check lives in the provider's run scope — out of
         // scope reads exactly like unknown.
         pipelines.pipeline("ops.data.jobRun")
-                .to(BROWSER).to(CSRF)
+                .process(BROWSER).process(CSRF)
                 .process(jsonProcessor(exchange -> {
                     Map<String, Object> values = new LinkedHashMap<>();
                     if (exchange.getMessage().getBody() instanceof Map<?, ?> form) {
@@ -421,11 +422,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
                     return invokeProvider(exchange, "ops.jobRun", params);
                 }));
         pipelines.pipeline("ops.data.outboxRedeliver")
-                .to(BROWSER).to(CSRF)
+                .process(BROWSER).process(CSRF)
                 .process(jsonProcessor(exchange -> invokeProvider(exchange,
                         "ops.outboxRedeliver", headerParams(exchange, "id"))));
         pipelines.pipeline("ops.data.eventsRedeliver")
-                .to(BROWSER).to(CSRF)
+                .process(BROWSER).process(CSRF)
                 .process(jsonProcessor(exchange -> invokeProvider(exchange,
                         "ops.eventsRedeliver", headerParams(exchange, "id"))));
     }

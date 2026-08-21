@@ -311,7 +311,7 @@ class FrameworkSurfaceGuardTest {
         return mounted;
     }
 
-    /** The authentication steps a pipeline runs, read from what the compiler emitted. */
+    /** The authentication gates a pipeline runs, read from what the compiler emitted. */
     private static List<String> authSteps(String routeId) {
         List<String> found = new ArrayList<>();
         io.tesseraql.compiler.pipeline.Pipeline compiled = pipelines().find(routeId).orElse(null);
@@ -319,9 +319,8 @@ class FrameworkSurfaceGuardTest {
             return found;
         }
         for (io.tesseraql.compiler.pipeline.Pipeline.Step step : compiled.steps()) {
-            if (step instanceof io.tesseraql.compiler.pipeline.Pipeline.Step.Send send
-                    && send.uri().startsWith("tesseraql-auth:")) {
-                found.add(send.uri().substring("tesseraql-auth:".length()));
+            if (step.processor() instanceof io.tesseraql.camel.auth.AuthStep gate) {
+                found.add(gate.operation());
             }
         }
         return found;

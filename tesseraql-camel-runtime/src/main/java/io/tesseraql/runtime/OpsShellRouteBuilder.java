@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.camel.auth.AuthStep;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -39,7 +40,7 @@ final class OpsShellRouteBuilder extends RouteBuilder {
                 "/_tesseraql/ops/console/{member}/transfers/{id}/file",
                 "ops.shell.transferFile");
         pipelines.pipeline("ops.shell.transferFile")
-                .to("tesseraql-auth:authenticate?auth=browser")
+                .process(new AuthStep("authenticate", "browser", null, null))
                 .process(this::download);
     }
 
