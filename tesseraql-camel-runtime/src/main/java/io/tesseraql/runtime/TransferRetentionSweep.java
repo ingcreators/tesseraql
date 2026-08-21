@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import io.tesseraql.core.files.FileTransferService;
 import java.time.Clock;
 import java.time.Duration;
-import org.apache.camel.builder.RouteBuilder;
 
 /**
  * The timer that reclaims expired transfer files (docs/file-transfers.md, retention):
@@ -13,17 +12,17 @@ import org.apache.camel.builder.RouteBuilder;
  * stance: the policy belongs to the app). Every node may sweep — reclaiming is idempotent,
  * and a node-local file spool is each node's own to free.
  */
-final class TransferRetentionRoutes extends RouteBuilder {
+final class TransferRetentionSweep {
 
     private static final System.Logger LOG = System
-            .getLogger(TransferRetentionRoutes.class.getName());
+            .getLogger(TransferRetentionSweep.class.getName());
 
     private final FileTransferService transfers;
     private final int retentionDays;
     private final long periodMillis;
     private final Clock clock;
 
-    TransferRetentionRoutes(FileTransferService transfers, int retentionDays, long periodMillis,
+    TransferRetentionSweep(FileTransferService transfers, int retentionDays, long periodMillis,
             Clock clock) {
         this.transfers = transfers;
         this.retentionDays = retentionDays;
@@ -31,18 +30,15 @@ final class TransferRetentionRoutes extends RouteBuilder {
         this.clock = clock;
     }
 
-    @Override
-    public void configure() {
-        from("timer:tql-transfer-retention?period=" + periodMillis + "&delay=" + periodMillis)
-                .routeId("tql.transfers.retention")
-                .process(exchange -> {
-                    int expired = transfers.expireTransfersOlderThan(
-                            clock.instant().minus(Duration.ofDays(retentionDays)));
-                    if (expired > 0) {
-                        LOG.log(System.Logger.Level.INFO,
-                                "Reclaimed {0} transfer file(s) older than {1} day(s)",
-                                expired, retentionDays);
-                    }
-                });
+    void schedule(Schedules schedules) {
+        schedules.every("tql.transfers.retention", periodMillis, () -> {
+            int expired = transfers.expireTransfersOlderThan(
+                    clock.instant().minus(Duration.ofDays(retentionDays)));
+            if (expired > 0) {
+                LOG.log(System.Logger.Level.INFO,
+                        "Reclaimed {0} transfer file(s) older than {1} day(s)",
+                        expired, retentionDays);
+            }
+        });
     }
 }

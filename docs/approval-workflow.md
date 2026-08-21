@@ -23,7 +23,7 @@ It builds on subsystems already in the framework:
   (`OrgUnitStore`) that scope resolution reads is the substrate workflow assignee resolution reads.
 - **The core expression language** (`io.tesseraql.core.expr`) — whitelist-only, side-effect-free, no
   method calls — evaluates transition guards.
-- **The scheduler** ([jobs](jobs.md) — quartz/timer routes with cluster-safe claiming) — fires
+- **The scheduler** ([jobs](jobs.md) — cron and fixed-delay schedules with cluster-safe claiming) — fires
   deadlines, escalations, and reminders exactly once across a cluster.
 - **The outbox** ([notifications](notifications.md), [messaging](messaging.md)) — assignment and
   escalation notifications ride the existing at-least-once delivery, visible in the operations
@@ -449,7 +449,7 @@ necessary but not sufficient — the write still confirms authority server-side.
 ## Deadlines, escalation, and delegation
 
 A workflow declares deadlines per state; the opened task carries a `due_at` set from the `to` state's
-`within` (e.g. `within: 48h`). A managed **sweeper** — a fixed-delay timer route claimed through the
+`within` (e.g. `within: 48h`). A managed **sweeper** — a fixed-delay schedule claimed through the
 cluster-safe job claim ([jobs](jobs.md)), at the `tesseraql.workflow.sweep.interval` (default 60s) —
 sweeps the overdue tasks and applies each breached state's `onBreach`, **exactly once** even across
 nodes:

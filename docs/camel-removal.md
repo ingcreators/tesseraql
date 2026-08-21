@@ -252,7 +252,10 @@ always about — rather than on a number nobody had checked.
 five completions and the leak test as the acceptance.
 
 **4. The sweeps and the cron.** `ScheduledExecutorService`, `CronExpression` over the existing
-claim; `camel-quartz`, `c3p0` and `mchange-commons-java` leave.
+claim; `camel-quartz`, `c3p0` and `mchange-commons-java` leave. **Done**, and one virtual thread
+per schedule rather than a pool — the same shape slice 1's poll cycle took, for the same reason:
+a pool is another number to pick and these threads spend their lives asleep. `from("timer:` and
+`from("quartz:` are gone; **181 jars to 178, 46 MB to 45**. What it found is below.
 
 **5. The connectors cut over.** FTPS and push join local and SFTP; `camel-file` and `camel-ftp`
 leave; `jsch` and `commons-net` become declared dependencies rather than inherited ones.
@@ -379,6 +382,42 @@ resolver is gone with the reader it used.
 `pipeline()`, and a repository-wide rename also hit `ModelFieldConsumerScan.Consumers.direct()` —
 an unrelated type about which code reads a model field. The compiler caught it; it is recorded
 because the next mechanical rename in this campaign will look just as safe.
+
+## What slice 4 found
+
+**A Camel dependency was installed and doing nothing, for the third time in this campaign.**
+`camel-mdc`'s `MDCService` carries the trace ids across a thread handoff by wrapping every
+processor **a route reifies** — and a pipeline reifies nothing. So it stopped working when the edge
+started running pipelines, which means a step handed to an execution lane had been logging without
+the request's ids since the HTTP edge campaign, and nothing said so. The lane handoff carries them
+explicitly now, through one method that also **clears** the MDC afterwards: a lane is a pool, and a
+thread that kept the last request's ids would attribute the next request's log lines to it.
+
+**The test that guarded it proved the mechanism, not the property.** `MdcAcrossThreadsTest` built
+its own Camel route and asserted that `MDCService` bridged it — so it kept passing while production
+had no routes for the service to wrap. It is rewritten against what actually runs. **And it stayed
+in the CLI module**, where its own docstring says it must: the runtime's tests run on
+`slf4j-simple`, whose MDC adapter is a no-op, so the same test moved one module over would pass
+without proving anything.
+
+**Quartz's scheduler leaves and Quartz's cron expression stays**, which is the whole of decision 5
+in one sentence. What makes a cron firing safe across replicas is not the scheduler: it is that
+every node computes the *same* fire time and exactly one wins the claim in `tql_job_claim`.
+`CronExpression.getNextValidTimeAfter` is that computation. What leaves with the scheduler is its
+thread pool, its JDBC job store, and `c3p0` — a second connection pool, in a runtime that declares
+its own.
+
+**The component floor shrank to one entry, and two tests argued the change into shape.**
+`direct`, `timer`, `quartz`, `rest`, `rest-api`, `log`, `seda` and `platform-http` are no longer
+components this framework registers, so they left `ComponentPolicy.FRAMEWORK_FLOOR`.
+`ComponentGuardTest` failed first — it had used `direct` as its example of a component the floor
+always admits. Then the first replacement floor put the remote file transports on it, and
+`ComponentPolicyTest` failed on a fixture that denies `ftp`: **a deny list beats the floor**, so a
+floor entry that is also deniable is not "always admitted" at all. That argument settled the
+question the right way round: a remote transport is admitted by *the job that declares it*, which
+the guard already does, and an app declaring no SFTP source should not have SFTP resolvable. What
+is left on the floor is `properties`, which Camel registers on every context whether anybody asked
+or not.
 
 ## What this does not buy, said before anyone expects it
 

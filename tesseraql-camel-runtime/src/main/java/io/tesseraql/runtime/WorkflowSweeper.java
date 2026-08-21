@@ -35,8 +35,8 @@ import javax.sql.DataSource;
  *
  * Either way a history row records the breach, and the sweep runs in one transaction.
  *
- * <p>The cluster-safe firing — only one node sweeps per interval — is the {@link WorkflowSweepRoutes}
- * timer's job (the same {@code tql_job_claim} mechanism scheduled jobs use); this class is the work.
+ * <p>The cluster-safe firing — only one node sweeps per interval — is the {@link WorkflowSweep}
+ * schedule's job (the same {@code tql_job_claim} mechanism scheduled jobs use); this class is the work.
  */
 final class WorkflowSweeper {
 

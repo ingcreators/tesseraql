@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import io.tesseraql.core.outbox.OutboxEventSink;
 import io.tesseraql.core.outbox.OutboxStore;
 import io.tesseraql.operations.outbox.OutboxDispatcher;
-import org.apache.camel.builder.RouteBuilder;
 
 /**
  * Periodically delivers pending outbox events on a timer (design ch. 39.2.2). Enabled when
@@ -11,7 +10,7 @@ import org.apache.camel.builder.RouteBuilder;
  * runtime hosts, so runtimes of different apps sharing one database never deliver each other's
  * events to the wrong sinks.
  */
-final class OutboxDispatchRouteBuilder extends RouteBuilder {
+final class OutboxDispatchSweep {
 
     private static final int BATCH_SIZE = 500;
 
@@ -21,7 +20,7 @@ final class OutboxDispatchRouteBuilder extends RouteBuilder {
     private final java.util.Set<String> hostedApps;
     private final int maxAttempts;
 
-    OutboxDispatchRouteBuilder(OutboxStore store, OutboxEventSink sink, long periodMs,
+    OutboxDispatchSweep(OutboxStore store, OutboxEventSink sink, long periodMs,
             java.util.Set<String> hostedApps, int maxAttempts) {
         this.store = store;
         this.sink = sink;
@@ -30,11 +29,9 @@ final class OutboxDispatchRouteBuilder extends RouteBuilder {
         this.maxAttempts = maxAttempts;
     }
 
-    @Override
-    public void configure() {
+    void schedule(Schedules schedules) {
         OutboxDispatcher dispatcher = new OutboxDispatcher(store, sink, hostedApps, maxAttempts);
-        from("timer:tql-outbox-dispatch?period=" + periodMs + "&delay=" + periodMs)
-                .routeId("system.outbox.dispatcher")
-                .process(exchange -> dispatcher.dispatch(BATCH_SIZE));
+        schedules.every("system.outbox.dispatcher", periodMs,
+                () -> dispatcher.dispatch(BATCH_SIZE));
     }
 }

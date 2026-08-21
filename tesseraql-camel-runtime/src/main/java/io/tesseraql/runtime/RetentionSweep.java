@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.operations.retention.RetentionSweeper;
 import java.time.Duration;
-import org.apache.camel.builder.RouteBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,9 +18,9 @@ import org.slf4j.LoggerFactory;
  *     attachments: 365d  # attachments older than this are removed (absent = no attachment sweep)
  * </pre>
  */
-final class RetentionRouteBuilder extends RouteBuilder {
+final class RetentionSweep {
 
-    private static final Logger LOG = LoggerFactory.getLogger(RetentionRouteBuilder.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RetentionSweep.class);
 
     private final RetentionSweeper sweeper;
     private final long sweepMillis;
@@ -29,7 +28,7 @@ final class RetentionRouteBuilder extends RouteBuilder {
     private final Duration jobRetention;
     private final Duration attachmentRetention;
 
-    RetentionRouteBuilder(RetentionSweeper sweeper, long sweepMillis,
+    RetentionSweep(RetentionSweeper sweeper, long sweepMillis,
             Duration outboxRetention, Duration jobRetention, Duration attachmentRetention) {
         this.sweeper = sweeper;
         this.sweepMillis = sweepMillis;
@@ -38,20 +37,17 @@ final class RetentionRouteBuilder extends RouteBuilder {
         this.attachmentRetention = attachmentRetention;
     }
 
-    @Override
-    public void configure() {
-        from("timer:tql-retention?period=" + sweepMillis + "&delay=" + sweepMillis)
-                .routeId("tql.retention")
-                .process(exchange -> {
-                    RetentionSweeper.Result result = sweeper.sweep(outboxRetention, jobRetention,
-                            attachmentRetention);
-                    if (result.outboxEvents() > 0 || result.jobExecutions() > 0
-                            || result.attachments() > 0) {
-                        LOG.info("Retention sweep removed {} outbox event(s), {} execution(s), "
-                                + "{} step(s), {} attachment(s)", result.outboxEvents(),
-                                result.jobExecutions(), result.stepExecutions(),
-                                result.attachments());
-                    }
-                });
+    void schedule(Schedules schedules) {
+        schedules.every("tql.retention", sweepMillis, () -> {
+            RetentionSweeper.Result result = sweeper.sweep(outboxRetention, jobRetention,
+                    attachmentRetention);
+            if (result.outboxEvents() > 0 || result.jobExecutions() > 0
+                    || result.attachments() > 0) {
+                LOG.info("Retention sweep removed {} outbox event(s), {} execution(s), "
+                        + "{} step(s), {} attachment(s)", result.outboxEvents(),
+                        result.jobExecutions(), result.stepExecutions(),
+                        result.attachments());
+            }
+        });
     }
 }

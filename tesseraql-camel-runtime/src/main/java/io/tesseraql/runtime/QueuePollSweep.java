@@ -1,7 +1,5 @@
 package io.tesseraql.runtime;
 
-import org.apache.camel.builder.RouteBuilder;
-
 /**
  * Drives the {@code db-poll} messaging transport (roadmap Phase 27): a timer drains every
  * subscribed channel on the backstop interval, claiming messages with {@code SKIP LOCKED} off the
@@ -10,20 +8,17 @@ import org.apache.camel.builder.RouteBuilder;
  * proxy that breaks {@code LISTEN}). Latency is the poll period; correctness and at-least-once
  * delivery are identical, because durability lives in the table either way.
  */
-final class QueuePollRouteBuilder extends RouteBuilder {
+final class QueuePollSweep {
 
     private final QueueConsumer consumer;
     private final long periodMs;
 
-    QueuePollRouteBuilder(QueueConsumer consumer, long periodMs) {
+    QueuePollSweep(QueueConsumer consumer, long periodMs) {
         this.consumer = consumer;
         this.periodMs = periodMs;
     }
 
-    @Override
-    public void configure() {
-        from("timer:tql-queue-poll?period=" + periodMs + "&delay=" + periodMs)
-                .routeId("system.queue.poll")
-                .process(exchange -> consumer.drainAll());
+    void schedule(Schedules schedules) {
+        schedules.every("system.queue.poll", periodMs, () -> consumer.drainAll());
     }
 }

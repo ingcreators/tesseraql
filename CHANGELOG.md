@@ -136,6 +136,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The runtime's schedules are its own: eleven sweeps and one cron, without a scheduler**
+  (docs/camel-removal.md structural decision 5). A `timer:` route is a consumer, a route and an
+  exchange for something that is a loop with a sleep in it; the `quartz:` route was a whole
+  scheduler for one expression. Each schedule is one virtual thread now, waiting its period after
+  each run — the same fixed-delay behaviour the timer consumer had, without a pool to size.
+  **Quartz's cron expression stays and Quartz's scheduler goes**: what makes a cron firing safe
+  across replicas is that every node computes the same fire time and exactly one wins the claim in
+  `tql_job_claim`, and `CronExpression` is that computation. `camel-quartz`, `camel-timer`,
+  `camel-direct`, `c3p0` and `mchange-commons-java` leave the build — 181 jars to 178.
+
+- **A step handed to an execution lane logs with its request's ids again.** `camel-mdc` carried
+  them by wrapping every processor a route reified, and a pipeline reifies nothing — so the
+  wrapping stopped happening when the edge began running pipelines, and lane-dispatched steps had
+  been logging without them since. The handoff carries them explicitly now and clears them
+  afterwards, because a lane is a pool and a thread that kept the last request's ids would
+  attribute the next request's lines to it. `camel-mdc` leaves.
+
 - **Every framework HTTP surface is a pipeline too, and a mount names it directly**
   (docs/camel-removal.md structural decision 1, slice 2b). The 95 routes across the framework's 16
   route builders join the compiler's: `from("direct:` appears nowhere in the framework any more,
