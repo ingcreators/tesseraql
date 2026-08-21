@@ -1495,7 +1495,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     && manifest.config().getString("tesseraql.mcp.enabled")
                             .map(Boolean::parseBoolean).orElse(true)) {
                 io.tesseraql.mcp.McpServer mcpServer = AppMcpServer.build(appName, mcpApps,
-                        context.createProducerTemplate());
+                        RoutePipelines.of(context));
                 // The MCP transport gate (docs/audit-hardening.md decision 2, delivered with
                 // the authorization-server campaign's resource slice): tesseraql.mcp.auth is
                 // public by default — nothing changes without opting in — and `bearer` demands
@@ -3129,6 +3129,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // force-cut it. The force timeout stays, unchanged, as the last resort for a run that
         // ignores the flag.
         closeQuietly(() -> jobExecutor.requestDrainStop(drainReason));
+        // The requests the edge is serving, drained before the context stops (docs/runtime-replace.md,
+        // docs/camel-removal.md decision 1). Camel's shutdown strategy drains what it can count,
+        // and a compiled route is no longer one of its routes — so the edge counts its own and is
+        // asked here, under the same declared bound the strategy uses.
+        RouteEdge edge = camelContext.getRegistry()
+                .lookupByNameAndType(RouteEdge.BEAN, RouteEdge.class);
+        if (edge != null) {
+            closeQuietly(() -> edge.drain(camelContext.getShutdownStrategy().getTimeUnit()
+                    .toMillis(camelContext.getShutdownStrategy().getTimeout())));
+        }
         try {
             camelContext.stop();
         } finally {

@@ -8,11 +8,8 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.model.ProcessorDefinition;
-import org.apache.camel.model.ToDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -109,24 +106,10 @@ class PolicyTemplateCompilationTest {
     /** Every {@code tesseraql-auth:authorize} endpoint the fixture app compiles to. */
     private static List<String> authorizeUris(Path dir) throws Exception {
         AppManifest manifest = new ManifestLoader().load(dir);
-        List<String> uris = new ArrayList<>();
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             context.addRoutes(new RouteCompiler().appName("policy-template-test")
                     .compile(manifest, false, null));
-            for (org.apache.camel.model.RouteDefinition route : context.getRouteDefinitions()) {
-                collectAuthorize(route.getOutputs(), uris);
-            }
-        }
-        return uris;
-    }
-
-    private static void collectAuthorize(List<ProcessorDefinition<?>> outputs, List<String> uris) {
-        for (ProcessorDefinition<?> output : outputs) {
-            if (output instanceof ToDefinition to && to.getUri() != null
-                    && to.getUri().startsWith("tesseraql-auth:authorize")) {
-                uris.add(to.getUri());
-            }
-            collectAuthorize(output.getOutputs(), uris);
+            return CompiledPipelines.endpoints(context, "tesseraql-auth:authorize");
         }
     }
 

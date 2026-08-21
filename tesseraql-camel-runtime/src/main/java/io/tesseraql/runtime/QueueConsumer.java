@@ -6,14 +6,12 @@ import io.tesseraql.core.messaging.EventMessage;
 import java.util.List;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
-import org.apache.camel.ProducerTemplate;
-import org.apache.camel.support.DefaultExchange;
 
 /**
  * Drains a messaging channel's durable log into the {@code queue-consume} routes that subscribe to
  * it (roadmap Phase 27). It claims a batch of messages ({@code FOR UPDATE SKIP LOCKED}, so several
- * nodes never deliver the same message), sends each into the route's {@code direct:queue.<id>}
- * pipeline, and on success marks it consumed together with its idempotency key — at-least-once
+ * nodes never deliver the same message), runs each through the route's
+ * {@code queue.<id>} pipeline, and on success marks it consumed together with its idempotency key — at-least-once
  * delivery, deduplicated to effectively exactly-once per business key. A failed delivery is recorded
  * for a later retry until the dead-letter ceiling.
  *
@@ -40,9 +38,8 @@ final class QueueConsumer {
     private final List<Subscription> subscriptions;
     private final int maxAttempts;
     private io.tesseraql.core.telemetry.Meter meter = io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
-    private volatile ProducerTemplate template;
 
-    /** One queue-consume route subscribing to a channel/topic, fed via its direct: endpoint. */
+    /** One queue-consume route subscribing to a channel/topic, run by pipeline id. */
     record Subscription(String channel, String topic, String routeId) {
     }
 
@@ -95,10 +92,15 @@ final class QueueConsumer {
 
     private void deliver(Subscription subscription, EventMessage message) {
         try {
-            Exchange exchange = new DefaultExchange(context);
-            exchange.getMessage().setBody(message.payloadJson());
-            exchange.getMessage().setHeader(TesseraqlProperties.QUEUE_MESSAGE_KEY, message.key());
-            Exchange result = template().send("direct:queue." + subscription.routeId(), exchange);
+            Exchange result = pipelines()
+                    .run("queue." + subscription.routeId(), exchange -> {
+                        exchange.getMessage().setBody(message.payloadJson());
+                        exchange.getMessage().setHeader(TesseraqlProperties.QUEUE_MESSAGE_KEY,
+                                message.key());
+                    })
+                    .orElseThrow(() -> new IllegalStateException(
+                            "No compiled route behind queue consumer '"
+                                    + subscription.routeId() + "'"));
             if (result.getException() != null) {
                 failed(subscription, message, result.getException().getMessage());
                 return;
@@ -133,29 +135,14 @@ final class QueueConsumer {
     }
 
     /**
-     * The send template, created once and owned by the context.
+     * The runtime's pipeline runner (docs/camel-removal.md decision 1).
      *
-     * <p>It was created lazily and never stopped: a template holds a producer cache, so an app
-     * close or a reload left its endpoints and their connections behind. Handing it to the
-     * context as a service is the fix that needs no close path in either owner — a
-     * {@code PgNotifyListener} and a route builder — because stopping the context stops it.
-     *
-     * <p>Synchronized because the check-then-create was not: two threads reaching an unset field
-     * both built a template, and whichever lost the race was leaked silently — the same object
-     * that was already never being closed.
+     * <p>This was a {@code ProducerTemplate}, created lazily so that one call could address a route
+     * by URI. The template had to be handed to the context as a service because it holds a producer
+     * cache that an app close or a reload would otherwise leave behind, with connections in it —
+     * the runner owns that lifecycle now, for every caller rather than for this one.
      */
-    private synchronized ProducerTemplate template() {
-        if (template == null) {
-            ProducerTemplate created = context.createProducerTemplate();
-            try {
-                context.addService(created);
-            } catch (Exception cannotRegister) {
-                throw new IllegalStateException(
-                        "Could not register the queue consumer's producer template",
-                        cannotRegister);
-            }
-            template = created;
-        }
-        return template;
+    private RoutePipelines pipelines() {
+        return RoutePipelines.of(context);
     }
 }

@@ -8,6 +8,9 @@ import io.tesseraql.compiler.binding.IdempotencyProcessors;
 import io.tesseraql.compiler.binding.JsonResponseRenderer;
 import io.tesseraql.compiler.binding.RateLimiter;
 import io.tesseraql.compiler.binding.RequestBinder;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.PipelineBuilder;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -26,7 +29,6 @@ import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
 import java.nio.file.Path;
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.model.ProcessorDefinition;
 
 /**
  * Compiles a TesseraQL {@link AppManifest} into Camel routes (design ch. 7).
@@ -87,6 +89,14 @@ public final class RouteCompiler {
         return this;
     }
 
+    /**
+     * The pipelines this run is building (docs/camel-removal.md structural decision 1).
+     *
+     * <p>Set when {@code configure()} runs, because that is when a context — and therefore the
+     * runtime's registry — is in hand. A compiler instance compiles once.
+     */
+    private Pipelines.Compilation pipelines;
+
     /** Builds a Camel {@link RouteBuilder} mounting the REST transport and all routes. */
     public RouteBuilder compile(AppManifest manifest) {
         return compile(manifest, true, null);
@@ -134,12 +144,17 @@ public final class RouteCompiler {
                 // fragment - both HTML the browser renders like any other - used to arrive with
                 // no CSP and no X-Frame-Options at all.
                 java.util.Map<String, String> errorHeaders = responseHeaders.headers();
-                onException(TqlException.class).handled(true)
-                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                manifest.appHome(), errorHeaders));
-                onException(Exception.class).handled(true)
-                        .process(new ErrorResponseRenderer(i18n, onErrorByRoute,
-                                manifest.appHome(), errorHeaders));
+                // Every pipeline this run builds inherits both clauses, most specific first.
+                // The DSL used to arrange that by side effect — an onException declared in a
+                // builder's configure() was copied into each route it went on to create — and
+                // here it is an argument, so a reload cannot accumulate a second copy.
+                pipelines = Pipelines.of(getContext()).compiling(java.util.List.of(
+                        new Pipeline.Handler(java.util.List.of(TqlException.class.getName()),
+                                new ErrorResponseRenderer(i18n, onErrorByRoute,
+                                        manifest.appHome(), errorHeaders)),
+                        new Pipeline.Handler(java.util.List.of(Exception.class.getName()),
+                                new ErrorResponseRenderer(i18n, onErrorByRoute,
+                                        manifest.appHome(), errorHeaders))));
                 for (RouteFile routeFile : manifest.routes()) {
                     if (onlyRouteIds == null
                             || onlyRouteIds.contains(routeFile.definition().id())) {
@@ -232,7 +247,7 @@ public final class RouteCompiler {
             if (mountRest) {
                 mount(builder, "POST", basePath, direct);
             }
-            ProcessorDefinition<?> route = builder.from(direct).routeId(uploadId);
+            PipelineBuilder route = pipelines.pipeline(uploadId);
             applyAttachmentGovernance(route, uploadId, "POST", basePath, security);
             route.process(new io.tesseraql.compiler.binding.AttachmentUploadProcessor(
                     entity, recordKey, def.bucket(), maxBytes, contentTypes));
@@ -244,7 +259,7 @@ public final class RouteCompiler {
             if (mountRest) {
                 mount(builder, "GET", basePath, direct);
             }
-            ProcessorDefinition<?> route = builder.from(direct).routeId(listId);
+            PipelineBuilder route = pipelines.pipeline(listId);
             applyAttachmentGovernance(route, listId, "GET", basePath, security);
             route.process(new io.tesseraql.compiler.binding.AttachmentListProcessor(entity,
                     recordKey));
@@ -257,7 +272,7 @@ public final class RouteCompiler {
             if (mountRest) {
                 mount(builder, "GET", urlPath, direct);
             }
-            ProcessorDefinition<?> route = builder.from(direct).routeId(downloadId);
+            PipelineBuilder route = pipelines.pipeline(downloadId);
             applyAttachmentGovernance(route, downloadId, "GET", urlPath, security);
             route.process(new io.tesseraql.compiler.binding.AttachmentDownloadProcessor(entity,
                     recordKey, idParam));
@@ -286,7 +301,7 @@ public final class RouteCompiler {
             buildTransactionalCommand(builder, routeFile);
             return;
         }
-        ProcessorDefinition<?> route = applySessionRotation(
+        PipelineBuilder route = applySessionRotation(
                 pipelineThroughSql(builder, routeFile), routeFile.definition())
                 .process(responseRenderer(routeFile.definition()));
         applyHttpCache(route, routeFile.definition());
@@ -294,7 +309,7 @@ public final class RouteCompiler {
     }
 
     /** Declarative HTTP caching for query responses (docs/response-shaping.md). */
-    private void applyHttpCache(ProcessorDefinition<?> route, RouteDefinition definition) {
+    private void applyHttpCache(PipelineBuilder route, RouteDefinition definition) {
         if (definition.cache() != null) {
             route.process(new io.tesseraql.compiler.binding.HttpCacheProcessor(
                     definition.cache()));
@@ -343,7 +358,7 @@ public final class RouteCompiler {
      * to the error renderer first, so a failed command never half-rotates. Session
      * mechanics stay in the auth component beside authenticate/authorize.
      */
-    private ProcessorDefinition<?> applySessionRotation(ProcessorDefinition<?> route,
+    private PipelineBuilder applySessionRotation(PipelineBuilder route,
             RouteDefinition definition) {
         if (definition.response() != null && definition.response().session() != null
                 && definition.response().session().rotates()) {
@@ -395,13 +410,13 @@ public final class RouteCompiler {
             mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
         applyIdempotencyBegin(route, definition);
         if (preCommand != null) {
             route.process(preCommand);
         }
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -446,9 +461,9 @@ public final class RouteCompiler {
      * mounts the remaining sources afterwards must skip the {@code http:} entries, or each
      * partner is called twice per request.
      */
-    private static ProcessorDefinition<?> httpSourcesFirst(ProcessorDefinition<?> step,
+    private static PipelineBuilder httpSourcesFirst(PipelineBuilder step,
             RouteDefinition definition) {
-        ProcessorDefinition<?> fetched = step;
+        PipelineBuilder fetched = step;
         for (var entry : definition.sources().entrySet()) {
             if (entry.getValue().isHttp()) {
                 fetched = fetched.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
@@ -559,7 +574,7 @@ public final class RouteCompiler {
                 mount(builder, "POST", urlPath, direct);
             }
             String dialect = datasourceDialect(DEFAULT_DATASOURCE);
-            ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+            PipelineBuilder route = pipelines.pipeline(routeId);
             applyCommonGovernance(route, routeId, "POST", urlPath, definition);
             route.process(new RequestBinder(definition, urlPath, compiledAppHome,
                     functions))
@@ -669,7 +684,7 @@ public final class RouteCompiler {
         }
         RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, def.security(),
                 null, java.util.Map.of(), workflowResponse());
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeId, "POST", urlPath, definition);
         route.process(new RequestBinder(definition, urlPath, compiledAppHome,
                 functions))
@@ -794,7 +809,7 @@ public final class RouteCompiler {
         }
         String routeId = "queue." + definition.id();
         String direct = "direct:" + routeId;
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
                 definition);
         route.process(new RequestBinder(definition, null, compiledAppHome,
@@ -864,9 +879,9 @@ public final class RouteCompiler {
                 + "&mode=query-export&filename=" + exportFilename(definition, codec)
                 + executionParams(exportDatasource, definition.main());
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder(
@@ -898,7 +913,7 @@ public final class RouteCompiler {
         if (mountRest) {
             mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
         route.process(new io.tesseraql.compiler.binding.FileImportProcessor(
                 routeId, routeFile.urlPath(), appName, spec.format(),
@@ -932,9 +947,9 @@ public final class RouteCompiler {
         if (mountRest) {
             mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
-        ProcessorDefinition<?> exportStep = route
+        PipelineBuilder exportStep = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 // The export's own locale, not the requesting browser's (docs/lookups.md,
@@ -958,7 +973,7 @@ public final class RouteCompiler {
         if (mountRest) {
             mount(builder, "GET", routeFile.urlPath() + "/{transferId}/file", fileDirect);
         }
-        ProcessorDefinition<?> fileRoute = builder.from(fileDirect).routeId(routeId + ".file");
+        PipelineBuilder fileRoute = pipelines.pipeline(routeId + ".file");
         applySecurity(fileRoute, definition.security(), "GET",
                 routeFile.urlPath() + "/{transferId}/file");
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor());
@@ -977,7 +992,7 @@ public final class RouteCompiler {
         if (mountRest) {
             mount(builder, "GET", routeFile.urlPath() + "/{transferId}", direct);
         }
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId + ".status");
+        PipelineBuilder route = pipelines.pipeline(routeId + ".status");
         applySecurity(route, routeFile.definition().security(), "GET",
                 routeFile.urlPath() + "/{transferId}");
         route.process(new io.tesseraql.compiler.binding.FileTransferStatusProcessor(
@@ -1004,7 +1019,7 @@ public final class RouteCompiler {
      */
     private void buildTemplatePage(RouteBuilder builder, Path appHome, RouteFile routeFile) {
         Path routeDir = routeFile.source().getParent();
-        ProcessorDefinition<?> route = pipelineThroughSql(builder, routeFile);
+        PipelineBuilder route = pipelineThroughSql(builder, routeFile);
         if (routeFile.definition().response().file() != null) {
             route.process(new io.tesseraql.compiler.binding.FileResponseRenderer(
                     routeFile.definition().response().file(), appHome, routeDir));
@@ -1058,7 +1073,7 @@ public final class RouteCompiler {
     }
 
     /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */
-    private ProcessorDefinition<?> pipelineThroughSql(RouteBuilder builder, RouteFile routeFile) {
+    private PipelineBuilder pipelineThroughSql(RouteBuilder builder, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String direct = "direct:" + routeId;
@@ -1067,10 +1082,10 @@ public final class RouteCompiler {
             mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
         applyIdempotencyBegin(route, definition);
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, routeFile.urlPath(),
                         compiledAppHome, functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -1124,7 +1139,7 @@ public final class RouteCompiler {
      * the source's name, which is what lets a response, a view or a later source refer to one
      * without knowing how it was fetched.
      */
-    private ProcessorDefinition<?> source(ProcessorDefinition<?> step, RouteFile routeFile,
+    private PipelineBuilder source(PipelineBuilder step, RouteFile routeFile,
             String name, io.tesseraql.yaml.model.Binding binding) {
         if (binding.isHttp()) {
             return step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
@@ -1136,7 +1151,7 @@ public final class RouteCompiler {
     }
 
     /** The same, for the {@code direct:} pipelines that carry a directory instead of a route. */
-    private ProcessorDefinition<?> source(ProcessorDefinition<?> step, Path dir, String name,
+    private PipelineBuilder source(PipelineBuilder step, Path dir, String name,
             io.tesseraql.yaml.model.Binding binding, String datasource) {
         if (binding.isHttp()) {
             return step.process(new io.tesseraql.compiler.binding.HttpSourceProcessor(
@@ -1152,9 +1167,9 @@ public final class RouteCompiler {
      * the result it names (docs/lookups.md). Entries run in authored order, so one may enrich a
      * result an earlier one already enriched.
      */
-    private ProcessorDefinition<?> enrichments(ProcessorDefinition<?> step, Path routeDir,
+    private PipelineBuilder enrichments(PipelineBuilder step, Path routeDir,
             RouteDefinition definition) {
-        ProcessorDefinition<?> enriched = step;
+        PipelineBuilder enriched = step;
         for (var processor : enrichProcessors(routeDir, definition)) {
             enriched = enriched.process(processor);
         }
@@ -1219,10 +1234,10 @@ public final class RouteCompiler {
         String routeId = "mcp." + definition.id();
         String direct = "direct:" + routeId;
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "MCP", "/" + definition.id(), definition);
         applyIdempotencyBegin(route, definition);
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -1282,7 +1297,7 @@ public final class RouteCompiler {
         String routeId = "mcp.resource." + definition.id();
         String direct = "direct:" + routeId;
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
                 definition.id(), "MCP-RESOURCE", "/" + definition.id(), appName));
         applyConcurrency(route, definition);
@@ -1290,7 +1305,7 @@ public final class RouteCompiler {
         applySecurity(route, definition.security(), "GET", null);
         applyTenancy(route);
         applyI18n(route);
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -1318,7 +1333,7 @@ public final class RouteCompiler {
         String routeId = "mcp.ui." + definition.id();
         String direct = "direct:" + routeId;
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
                 definition.id(), "MCP-UI", "/" + definition.id(), appName));
         applyConcurrency(route, definition);
@@ -1326,7 +1341,7 @@ public final class RouteCompiler {
         applySecurity(route, definition.security(), "GET", null);
         applyTenancy(route);
         applyI18n(route);
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -1374,10 +1389,10 @@ public final class RouteCompiler {
         String routeId = "mcp.prompt." + definition.id();
         String direct = "direct:" + routeId;
 
-        ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
+        PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "MCP-PROMPT", "/" + definition.id(),
                 definition);
-        ProcessorDefinition<?> step = route
+        PipelineBuilder step = route
                 .process(new RequestBinder(definition, null, compiledAppHome,
                         functions))
                 .process(new io.tesseraql.compiler.binding.CatalogBinder());
@@ -1543,7 +1558,7 @@ public final class RouteCompiler {
      * <p>A recipe that genuinely must skip a step does not call this — it declares the skip at
      * its own call site, where a reviewer sees the reason.
      */
-    private void applyCommonGovernance(ProcessorDefinition<?> route, String id, String method,
+    private void applyCommonGovernance(PipelineBuilder route, String id, String method,
             String path, RouteDefinition definition) {
         applyTelemetry(route, id, method, path);
         applyAudit(route, id, method, path, definition);
@@ -1561,7 +1576,7 @@ public final class RouteCompiler {
      * attachment routes used to skip. i18n was applied to upload only, so a list or download
      * error rendered in the default locale while an upload error localized.
      */
-    private void applyAttachmentGovernance(ProcessorDefinition<?> route, String id, String method,
+    private void applyAttachmentGovernance(PipelineBuilder route, String id, String method,
             String path, SecuritySpec security) {
         applyTelemetry(route, id, method, path);
         applySecurity(route, security, method, path);
@@ -1569,7 +1584,7 @@ public final class RouteCompiler {
         applyI18n(route);
     }
 
-    private void applyCommonGovernance(ProcessorDefinition<?> route, RouteFile routeFile) {
+    private void applyCommonGovernance(PipelineBuilder route, RouteFile routeFile) {
         applyCommonGovernance(route, routeFile.definition().id(), routeFile.httpMethod(),
                 routeFile.urlPath(), routeFile.definition());
     }
@@ -1586,7 +1601,7 @@ public final class RouteCompiler {
             "LocaleResolution");
 
     /** Inserts the route telemetry step (span + invocation counter) at the route head (ch. 25). */
-    private void applyTelemetry(ProcessorDefinition<?> route, String id, String method,
+    private void applyTelemetry(PipelineBuilder route, String id, String method,
             String path) {
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
                 id, method, path, appName, accessLogEnabled()));
@@ -1602,7 +1617,7 @@ public final class RouteCompiler {
      * The opt-in business-route audit trail (roadmap Phase 45): appended only when
      * {@code tesseraql.audit.routes.enabled} is set, so un-audited apps pay nothing.
      */
-    private void applyAudit(ProcessorDefinition<?> route, String id, String method, String path,
+    private void applyAudit(PipelineBuilder route, String id, String method, String path,
             RouteDefinition definition) {
         if (!config.getString("tesseraql.audit.routes.enabled")
                 .map(Boolean::parseBoolean).orElse(false)) {
@@ -1617,30 +1632,29 @@ public final class RouteCompiler {
      * followed by a {@code threads()} handoff to the lane's executor, so the remaining steps run on
      * a virtual (or platform) thread.
      */
-    private void applyLane(ProcessorDefinition<?> route, RouteDefinition definition) {
+    private void applyLane(PipelineBuilder route, RouteDefinition definition) {
         if (definition.admission() == null || definition.admission().lane() == null) {
             return;
         }
         String lane = definition.admission().lane();
         route.process(new io.tesseraql.compiler.binding.LaneGate(lane));
-        route.threads().executorService(TesseraqlProperties.laneExecutorRef(lane))
-                .callerRunsWhenRejected(false);
+        route.lane(TesseraqlProperties.laneExecutorRef(lane));
     }
 
     /** Resolves and propagates the request tenant when tenancy is enabled (design ch. 30). */
-    private void applyTenancy(ProcessorDefinition<?> route) {
+    private void applyTenancy(PipelineBuilder route) {
         if (tenancy.enabled()) {
             route.process(new io.tesseraql.compiler.binding.TenantResolution(tenancy));
         }
     }
 
     /** Resolves the request locale after authentication, before binding (roadmap Phase 22). */
-    private void applyI18n(ProcessorDefinition<?> route) {
+    private void applyI18n(PipelineBuilder route) {
         route.process(new io.tesseraql.compiler.binding.LocaleResolution(i18n));
     }
 
     /** Inserts per-route rate limit and concurrency guards when declared (design ch. 36.1). */
-    private void applyConcurrency(ProcessorDefinition<?> route, RouteDefinition definition) {
+    private void applyConcurrency(PipelineBuilder route, RouteDefinition definition) {
         if (definition.admission() == null) {
             return;
         }
@@ -1664,7 +1678,7 @@ public final class RouteCompiler {
     }
 
     /** Inserts the idempotency begin step and a short-circuit for replays (design ch. 39.5). */
-    private void applyIdempotencyBegin(ProcessorDefinition<?> route, RouteDefinition definition) {
+    private void applyIdempotencyBegin(PipelineBuilder route, RouteDefinition definition) {
         IdempotencySpec idempotency = definition.idempotency();
         if (idempotency == null) {
             return;
@@ -1687,7 +1701,7 @@ public final class RouteCompiler {
     }
 
     /** Appends the idempotency complete step after the response is rendered. */
-    private void applyIdempotencyComplete(ProcessorDefinition<?> route,
+    private void applyIdempotencyComplete(PipelineBuilder route,
             RouteDefinition definition) {
         IdempotencySpec idempotency = definition.idempotency();
         if (idempotency != null) {
@@ -1800,7 +1814,7 @@ public final class RouteCompiler {
     }
 
     /** Inserts authenticate/authorize steps before binding when the route declares security. */
-    private void applySecurity(ProcessorDefinition<?> route, SecuritySpec security,
+    private void applySecurity(PipelineBuilder route, SecuritySpec security,
             String httpMethod, String urlPath) {
         if (security == null) {
             return;

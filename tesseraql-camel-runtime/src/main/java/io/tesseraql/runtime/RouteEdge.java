@@ -14,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.model.ModelCamelContext;
@@ -70,6 +71,9 @@ final class RouteEdge {
     /** What each mounted route was mounted as, so a reload can tell a moved URL from a stable one. */
     private final Map<String, io.tesseraql.camel.HttpMounts.Mount> at = new ConcurrentHashMap<>();
     private volatile io.vertx.ext.web.Router router;
+    /** Requests being served right now, and the monitor a drain waits on. */
+    private final AtomicInteger inFlight = new AtomicInteger();
+    private final Object idle = new Object();
 
     private RouteEdge(CamelContext camelContext) {
         this.camelContext = camelContext;
@@ -224,6 +228,12 @@ final class RouteEdge {
      */
     private String routeIdOf(String direct) {
         String name = direct.substring(direct.indexOf(':') + 1).replaceFirst("^//", "");
+        // A compiled pipeline is addressed by the id the mount already names, so there is nothing
+        // to resolve (docs/camel-removal.md decision 1). The scan below is for the framework's own
+        // route builders, which still declare a consumer.
+        if (io.tesseraql.compiler.pipeline.Pipelines.of(camelContext).contains(name)) {
+            return name;
+        }
         for (RouteDefinition definition : ((ModelCamelContext) camelContext)
                 .getRouteDefinitions()) {
             String from = definition.getInput().getEndpointUri();
@@ -267,22 +277,58 @@ final class RouteEdge {
         }
         Context connection = ctx.vertx().getOrCreateContext();
         Exchange exchange = request(ctx, routeId);
-        // Counted where the drain already looks (docs/runtime-replace.md). A request served off a
-        // route is not an in-flight exchange as far as Camel's shutdown strategy is concerned, so
-        // replacing a runtime cut it mid-answer instead of waiting for it — the drain contract
-        // holding for every request except the ones this edge had taken over. Registering the
-        // exchange under its route id puts it back where the strategy counts, rather than adding
-        // a second thing for a stop to wait on.
-        org.apache.camel.spi.InflightRepository inflight = camelContext.getInflightRepository();
-        inflight.add(exchange, routeId);
+        // Counted here, because this is the only place that knows (docs/camel-removal.md
+        // decision 1). It used to be registered in Camel's inflight repository under the route
+        // id, so the shutdown strategy would wait for it — and that worked exactly as long as
+        // there was a route by that id to wait on. A compiled route is a pipeline now, the
+        // strategy has nothing to count, and replacing a runtime went back to cutting an
+        // in-flight request mid-answer. The suite said so before anybody had to guess.
+        inFlight.incrementAndGet();
         Thread.ofVirtual().name("tql-route-" + routeId).start(() -> {
             try {
                 pipeline.run(exchange);
                 respond(ctx, connection, exchange);
             } finally {
-                inflight.remove(exchange, routeId);
+                if (inFlight.decrementAndGet() == 0) {
+                    synchronized (idle) {
+                        idle.notifyAll();
+                    }
+                }
             }
         });
+    }
+
+    /**
+     * Waits for the requests this edge is serving, up to {@code millis}.
+     *
+     * <p>The drain contract (docs/runtime-replace.md): replacing a runtime lets what is in flight
+     * finish rather than cutting it. The bound is the declared {@code tesseraql.shutdown.timeout},
+     * the same one Camel's strategy uses for everything else, so a stop still has one number.
+     *
+     * @return whether everything finished inside the bound
+     */
+    boolean drain(long millis) {
+        long deadline = System.currentTimeMillis() + millis;
+        synchronized (idle) {
+            while (inFlight.get() > 0) {
+                long left = deadline - System.currentTimeMillis();
+                if (left <= 0) {
+                    break;
+                }
+                try {
+                    idle.wait(left);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        int left = inFlight.get();
+        if (left > 0) {
+            LOG.warn("{} request(s) still in flight after {} ms; the stop stops waiting", left,
+                    millis);
+        }
+        return left == 0;
     }
 
     /**

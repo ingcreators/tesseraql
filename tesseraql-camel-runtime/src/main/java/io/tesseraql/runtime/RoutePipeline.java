@@ -1,5 +1,7 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -79,6 +81,10 @@ final class RoutePipeline {
      * place to find out that it half-ran one.
      */
     static Optional<RoutePipeline> of(CamelContext camelContext, String routeId) {
+        Optional<Pipeline> compiled = Pipelines.of(camelContext).find(routeId);
+        if (compiled.isPresent()) {
+            return of(camelContext, compiled.get());
+        }
         RouteDefinition definition = ((ModelCamelContext) camelContext).getRouteDefinition(routeId);
         if (definition == null) {
             return Optional.empty();
@@ -126,6 +132,43 @@ final class RoutePipeline {
                 ? Optional.empty()
                 : Optional.of(new RoutePipeline(steps, handlers, owned, handoffAt,
                         laneExecutor));
+    }
+
+    /**
+     * A compiled pipeline, which needs no reading back (docs/camel-removal.md decision 1).
+     *
+     * <p>The chain is the artifact now, so there is no shape to decline: what the compiler emitted
+     * is a list of steps and a list of clauses, and the only work left is resolving the endpoints
+     * it named to producers this pipeline then owns.
+     */
+    static Optional<RoutePipeline> of(CamelContext camelContext,
+            Pipeline compiled) {
+        List<Processor> steps = new ArrayList<>();
+        List<org.apache.camel.Producer> owned = new ArrayList<>();
+        for (Pipeline.Step step : compiled.steps()) {
+            switch (step) {
+                case Pipeline.Step.Run run ->
+                    steps.add(run.processor());
+                case Pipeline.Step.Send send -> {
+                    try {
+                        org.apache.camel.Producer producer = camelContext
+                                .getEndpoint(send.uri()).createProducer();
+                        owned.add(producer);
+                        steps.add(producer);
+                    } catch (Exception unusable) {
+                        LOG.warn("Pipeline {} names endpoint {}, which cannot be resolved",
+                                compiled.id(), send.uri(), unusable);
+                        return Optional.empty();
+                    }
+                }
+            }
+        }
+        List<Handler> handlers = new ArrayList<>();
+        for (Pipeline.Handler handler : compiled.handlers()) {
+            handlers.add(new Handler(handler.caught(), handler.renderer()));
+        }
+        return Optional.of(new RoutePipeline(steps, handlers, owned, compiled.handoffAt(),
+                compiled.laneExecutor()));
     }
 
     private static Processor single(List<ProcessorDefinition<?>> outputs) {

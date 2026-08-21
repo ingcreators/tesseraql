@@ -6,13 +6,9 @@ import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.model.ProcessDefinition;
-import org.apache.camel.model.ProcessorDefinition;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
  * commit — a second partner call whose failure turned a committed write into an error response
  * — and a non-transactional MCP tool executed its whole read pipeline twice per invocation.
  *
- * <p>Like {@link RecipeGovernanceTest}, the assertion reads the compiled Camel model rather
+ * <p>Like {@link RecipeGovernanceTest}, the assertion reads the compiled pipeline rather
  * than the compiler's source: a repeated SQL read is idempotent, so no behavioral test notices
  * the second mount — counting processors does.
  */
@@ -81,28 +77,11 @@ class SourceMountingTest {
     private static Map<String, List<String>> compile(Path dir) throws Exception {
         writeApp(dir);
         AppManifest manifest = new ManifestLoader().load(dir);
-        Map<String, List<String>> byRoute = new LinkedHashMap<>();
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             context.addRoutes(new RouteCompiler().appName("source-mounting-test")
                     .compile(manifest, false, null));
-            for (org.apache.camel.model.RouteDefinition route : context.getRouteDefinitions()) {
-                byRoute.put(route.getRouteId(), processorNames(route.getOutputs()));
-            }
+            return CompiledPipelines.stepsById(context);
         }
-        return byRoute;
-    }
-
-    private static List<String> processorNames(List<ProcessorDefinition<?>> outputs) {
-        List<String> names = new ArrayList<>();
-        for (ProcessorDefinition<?> output : outputs) {
-            if (output instanceof ProcessDefinition process && process.getProcessor() != null) {
-                names.add(process.getProcessor().getClass().getSimpleName());
-            } else {
-                names.add(output.getClass().getSimpleName());
-            }
-            names.addAll(processorNames(output.getOutputs()));
-        }
-        return names;
     }
 
     private static void writeApp(Path dir) throws Exception {

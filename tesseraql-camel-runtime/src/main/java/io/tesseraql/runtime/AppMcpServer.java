@@ -19,14 +19,13 @@ import io.tesseraql.yaml.model.UiSpec;
 import java.util.List;
 import java.util.Map;
 import org.apache.camel.Exchange;
-import org.apache.camel.ProducerTemplate;
 
 /**
  * Builds the {@link McpServer} that serves an application's declared MCP tools, resources, and MCP
  * Apps UI resources (roadmap Phase 24). Each tool's handler bridges to its compiled
  * {@code direct:mcp.<id>} route, each resource's reader to its {@code direct:mcp.resource.<id>}
  * route, and each UI resource's reader to its {@code direct:mcp.ui.<id>} route, through a
- * {@link ProducerTemplate}, passing the call's {@code Authorization} header so the route's own
+ * {@link RoutePipelines}, passing the call's {@code Authorization} header so the route's own
  * authentication, authorization, input validation, and SQL all run unchanged - a tool/resource is
  * governed exactly like a route. A tool/resource route renders a JSON body and a UI route an
  * {@code hc-*} HTML fragment; a non-2xx response (an auth, validation, or conflict failure handled
@@ -62,7 +61,7 @@ final class AppMcpServer {
      * then each mounted app). The server's name and version come from the main app; mounted apps
      * share its config, so they carry the same version.
      */
-    static McpServer build(String appName, List<AppManifest> apps, ProducerTemplate producer) {
+    static McpServer build(String appName, List<AppManifest> apps, RoutePipelines pipelines) {
         McpServer.Builder builder = McpServer.builder(appName, appVersion(apps.get(0)))
                 .instructions("MCP tools and resources served by the " + appName + " application.");
         // Negotiate the MCP Apps UI extension when any hosted app serves a ui:// resource (SEP-1865).
@@ -72,21 +71,21 @@ final class AppMcpServer {
             builder.extension("io.modelcontextprotocol/ui", capability);
         }
         for (AppManifest manifest : apps) {
-            register(builder, manifest, producer);
+            register(builder, manifest, pipelines);
         }
         return builder.build();
     }
 
     /** Registers one app's tools, resources, and UI resources on the server builder. */
     private static void register(McpServer.Builder builder, AppManifest manifest,
-            ProducerTemplate producer) {
+            RoutePipelines pipelines) {
         for (ToolFile tool : manifest.tools()) {
-            String endpoint = "direct:mcp." + tool.definition().id();
+            String routeId = "mcp." + tool.definition().id();
             McpTool.Builder toolBuilder = McpTool.builder(tool.definition().id())
                     .description(tool.description())
                     .inputSchema(McpInputSchema.fromInputs(tool.definition().input()))
                     .handler(
-                            (arguments, context) -> invoke(producer, endpoint, arguments, context));
+                            (arguments, context) -> invoke(pipelines, routeId, arguments, context));
             // A tool that renders into a UI resource advertises the link as _meta.ui.resourceUri.
             if (tool.uiResource() != null && !tool.uiResource().isBlank()) {
                 toolBuilder.meta(toolMeta(tool.uiResource()));
@@ -94,20 +93,20 @@ final class AppMcpServer {
             builder.tool(toolBuilder.build());
         }
         for (ResourceFile resource : manifest.resources()) {
-            String endpoint = "direct:mcp.resource." + resource.definition().id();
+            String routeId = "mcp.resource." + resource.definition().id();
             builder.resource(McpResource.builder(resource.uri(), resource.definition().id())
                     .description(resource.description())
                     .mimeType(resource.effectiveMimeType())
-                    .reader(context -> read(producer, endpoint, context))
+                    .reader(context -> read(pipelines, routeId, context))
                     .build());
         }
         for (UiResourceFile ui : manifest.uiResources()) {
-            String endpoint = "direct:mcp.ui." + ui.definition().id();
+            String routeId = "mcp.ui." + ui.definition().id();
             McpResource.Builder resourceBuilder = McpResource
                     .builder(ui.uri(), ui.definition().id())
                     .description(ui.description())
                     .mimeType(ui.mimeType())
-                    .reader(context -> read(producer, endpoint, context));
+                    .reader(context -> read(pipelines, routeId, context));
             ObjectNode meta = uiMeta(ui.ui());
             if (meta != null) {
                 resourceBuilder.meta(meta);
@@ -123,9 +122,9 @@ final class AppMcpServer {
             }
             // A prompt is a route like its three siblings (docs/prompt-as-recipe.md): the message
             // comes from the compiled route, which runs its own security, binding and SQL.
-            String endpoint = "direct:mcp.prompt." + prompt.definition().id();
+            String routeId = "mcp.prompt." + prompt.definition().id();
             promptBuilder.handler(
-                    (arguments, context) -> getPrompt(producer, endpoint, arguments, context));
+                    (arguments, context) -> getPrompt(pipelines, routeId, arguments, context));
             builder.prompt(promptBuilder.build());
         }
     }
@@ -136,9 +135,9 @@ final class AppMcpServer {
      * send failed, or the route's error renderer set a non-2xx status) propagates to the server,
      * which turns it into a {@code prompts/get} JSON-RPC error.
      */
-    private static McpPromptResult getPrompt(ProducerTemplate producer, String endpoint,
+    private static McpPromptResult getPrompt(RoutePipelines pipelines, String routeId,
             Map<String, String> arguments, McpCallContext context) {
-        return McpPromptResult.user(requireOk(call(producer, endpoint, arguments, context),
+        return McpPromptResult.user(requireOk(call(pipelines, routeId, arguments, context),
                 "prompt"));
     }
 
@@ -178,17 +177,17 @@ final class AppMcpServer {
      * thrown exception (the route's error renderer set a non-2xx status, or the send itself failed)
      * propagates to the server, which turns it into a {@code resources/read} JSON-RPC error.
      */
-    private static String read(ProducerTemplate producer, String endpoint, McpCallContext context) {
-        return requireOk(call(producer, endpoint, Map.of(), context), "resource");
+    private static String read(RoutePipelines pipelines, String routeId, McpCallContext context) {
+        return requireOk(call(pipelines, routeId, Map.of(), context), "resource");
     }
 
     @SuppressWarnings("unchecked")
-    private static McpToolResult invoke(ProducerTemplate producer, String endpoint,
+    private static McpToolResult invoke(RoutePipelines pipelines, String routeId,
             JsonNode arguments, McpCallContext context) {
         Map<String, Object> input = arguments == null || arguments.isNull()
                 ? Map.of()
                 : MAPPER.convertValue(arguments, Map.class);
-        Outcome outcome = call(producer, endpoint, input, context);
+        Outcome outcome = call(pipelines, routeId, input, context);
         if (outcome.failed()) {
             return McpToolResult.error(outcome.failure());
         }
@@ -216,14 +215,18 @@ final class AppMcpServer {
      * routeless form passed no {@code Authorization} anywhere, having no route to pass it to
      * (docs/prompt-as-recipe.md decision 7).
      */
-    private static Outcome call(ProducerTemplate producer, String endpoint, Object body,
+    private static Outcome call(RoutePipelines pipelines, String routeId, Object body,
             McpCallContext context) {
-        Exchange out = producer.send(endpoint, exchange -> {
+        Exchange out = pipelines.run(routeId, exchange -> {
             exchange.getMessage().setBody(body);
             if (context.authorization() != null) {
                 exchange.getMessage().setHeader("Authorization", context.authorization());
             }
-        });
+        }).orElse(null);
+        if (out == null) {
+            return new Outcome(null, null, new IllegalStateException(
+                    "No compiled route '" + routeId + "' behind this MCP primitive"));
+        }
         if (out.getException() != null) {
             return new Outcome(null, null, out.getException());
         }
