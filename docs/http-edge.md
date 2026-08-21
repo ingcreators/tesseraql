@@ -309,6 +309,39 @@ Three things came out of that, and none of them would have been found by reading
 that cannot mount one route logs it and leaves the others serving. Nobody is watching a reload, and
 a runtime that exits on a bad save takes the good routes with it.
 
+### The component leaves, and the last thing it was holding
+
+What was left of `camel-platform-http-vertx` after the REST DSL went was **11 references across
+five types**: the router, the body handler, the header filter, the server bootstrap, and
+`HttpMessage`. Owning them is a smaller thing than it sounds — a server, a router, and knowing
+which of them this runtime created.
+
+- **The Vert.x instance rule is unchanged**: a shared one is used and never closed, because the
+  host binds one for every application it runs (http-threading decision 4); one created here is
+  closed with the context. That is the property that keeps a canary activation from taking the
+  other members' event loops with it.
+- **`HttpMessage` was carrying the raw request and response so a processor could reach them, and
+  nothing in this framework ever did.** A plain message replaces it.
+- **The body handler's settings stop being another component's defaults and become this
+  framework's**: uploads handled and deleted when the exchange ends, form attributes merged, the
+  body buffer preallocated — written down rather than inherited, which is the same move
+  http-threading decision 2 made for the connection pool.
+
+**Removing a dependency removed a type converter, and that is the finding worth keeping.** The
+adapter handed a request body over as a Vert.x `Buffer`, because that is what the consumer did —
+and the converter that turns a `Buffer` into a `String` shipped **inside the same component**. It
+left with it. Fifteen failures that looked unrelated were one missing conversion: a webhook could
+not verify a signature over its raw body, a multipart deploy could not read its part, and an export
+could not read its own response. The fix is not to keep the converter but to hand over a type the
+framework already knows:
+
+```java
+message.setBody(ctx.body().buffer().getBytes());
+```
+
+A borrowed type is a borrowed dependency. It was invisible while the component was there to make
+it work.
+
 ## Structural decisions
 
 ### 1. The request pipeline runs on a virtual thread per request
@@ -417,10 +450,9 @@ Slice 2 counted them — five, all `addOnCompletion` — and proved the drain by
    1040 ms.
 5b-1. **Done**: the REST DSL leaves; mounts are a table; a surface the edge cannot serve fails the
    boot; a reload reconciles the router.
-5b-2. **Remains**: `camel-platform-http-vertx` leaves the build, which means TesseraQL owns the
-   HTTP server, the router and the body handler rather than borrowing them. Ordering is forced —
-   the REST consumers had to leave the platform router before anything else could own it — and
-   folding them would have made the reversible half irreversible.
+5b-2. **Done**: `camel-platform-http-vertx` leaves the build; the runtime owns its HTTP server,
+   router, body handler and header filter. Ordering was forced — the REST consumers had to leave
+   the platform router before anything else could own it.
 6. **Sweeps and cron — declined, and here is why.** Written when this document expected Camel to
    leave, and decision 4 then decided the connectors keep it, so camel-core stays and the
    `timer:` and `quartz:` routes do not have to go. What replacing them would actually buy is

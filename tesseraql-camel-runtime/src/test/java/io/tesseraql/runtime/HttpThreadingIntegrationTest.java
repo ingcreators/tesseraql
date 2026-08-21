@@ -26,11 +26,13 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * The HTTP worker pool is this runtime's ceiling on concurrent route execution, and it is a
  * declared number (docs/http-threading.md decision 1).
  *
- * <p>It was inherited. {@code camel-platform-http-vertx} hands every exchange to
- * {@code executeBlocking}, so requests run on the Vert.x worker pool — and with no
+ * <p>It was inherited. {@code camel-platform-http-vertx} handed every exchange to
+ * {@code executeBlocking}, so requests ran on the Vert.x worker pool — and with no
  * {@code VertxOptions} in the registry that pool was Vert.x's default of 20, a size chosen for a
  * framework where blocking is the exception. Against the connection pool's default of 10, half
- * those workers could only ever wait in {@code getConnection()}.
+ * those workers could only ever wait in {@code getConnection()}. The consumer has since left the
+ * build (docs/http-edge.md); the pool it sized is still a declared number, and still the one
+ * Vert.x reads and writes files on.
  */
 @Testcontainers
 class HttpThreadingIntegrationTest {

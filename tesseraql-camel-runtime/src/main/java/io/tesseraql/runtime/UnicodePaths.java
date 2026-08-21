@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import org.apache.camel.CamelContext;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 
 /**
  * Request-path decoding for Unicode route templates (docs/unicode-identifiers.md): route
@@ -24,8 +23,7 @@ final class UnicodePaths {
 
     /** Installs the decoder as the first route on the started platform router. */
     static void install(CamelContext camelContext, int port) {
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
-                VertxPlatformHttpRouter.getRouterNameFromPort(port));
+        io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         router.route().order(Integer.MIN_VALUE).handler(ctx -> {
             String path = ctx.request().path();
             String decoded = decodeNonAscii(path);

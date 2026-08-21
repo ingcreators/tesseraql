@@ -5,7 +5,6 @@ import io.tesseraql.core.error.TqlErrorCode;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.camel.CamelContext;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,8 +61,7 @@ final class HttpAdmission {
      * the HTTP server service starts, so there is nothing to register on before that.
      */
     static void install(CamelContext camelContext, int port, int maxInFlight) {
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
-                VertxPlatformHttpRouter.getRouterNameFromPort(port));
+        io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         HttpAdmission gate = new HttpAdmission(maxInFlight,
                 io.tesseraql.camel.BasePath.of(camelContext) + "/_tesseraql/health",
                 AssetRoutes.mountOf(camelContext));

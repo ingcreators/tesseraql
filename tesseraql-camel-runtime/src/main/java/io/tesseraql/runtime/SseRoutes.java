@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.apache.camel.CamelContext;
-import org.apache.camel.component.platform.http.vertx.VertxPlatformHttpRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,19 +73,18 @@ public final class SseRoutes {
      * framework endpoint at once — does not apply to them.
      */
     public static void register(CamelContext camelContext, int port, String path, Handler handler) {
-        VertxPlatformHttpRouter router = VertxPlatformHttpRouter.lookup(camelContext,
-                VertxPlatformHttpRouter.getRouterNameFromPort(port));
+        io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         String mounted = io.tesseraql.camel.BasePath.of(camelContext) + path;
         router.route(HttpMethod.GET, mounted)
                 .handler(ctx -> serve(camelContext, router, ctx, mounted, handler));
     }
 
-    private static void serve(CamelContext camelContext, VertxPlatformHttpRouter router,
+    private static void serve(CamelContext camelContext, io.vertx.ext.web.Router router,
             RoutingContext ctx, String path, Handler handler) {
         HttpServerResponse response = ctx.response();
         // The connection's event-loop context — captured here, on it — is where every
         // response mutation is dispatched; the queue preserves write order.
-        Context connection = router.vertx().getOrCreateContext();
+        Context connection = ctx.vertx().getOrCreateContext();
         AtomicBoolean gone = new AtomicBoolean();
         response.closeHandler(closed -> gone.set(true));
         response.exceptionHandler(failure -> gone.set(true));
