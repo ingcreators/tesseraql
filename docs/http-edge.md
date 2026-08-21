@@ -376,7 +376,26 @@ Whether to grow TesseraQL's own request type later is a separate question, delib
 answered here. Answering it now would double the size of the first change and halve the confidence
 in what any measurement afterwards meant.
 
-### 3. Vert.x stays at 4.5.31 until the edge is off Camel
+### 3. Vert.x stays at 4.5.31 until the edge is off Camel — and then moves
+
+**Done, the same day the edge came off Camel.** The upgrade cost **one API break**: Vert.x 5 moved
+connection pooling out of `HttpClientOptions` into `PoolOptions`, so the gateway's per-member bound
+moved with it. The split suits the decision it implements — one declared number taken in the relay
+now has somewhere of its own to be declared — and it closed something decision 5 of
+[http-threading.md](http-threading.md) had left open: **the outbound wait queue is bounded to the
+same number**, where before it was contained by a permit and left unbounded underneath, because
+`maxWaitQueueSize` was a client setting nothing else was touching.
+
+Everything else compiled unchanged, main and tests, across the reactor. The Future-only API was the
+expected cost and turned out not to be one: this codebase had already stopped using callback
+overloads.
+
+**What the upgrade did not buy is worth stating as plainly as what it did.** `AsyncFileImpl` still
+dispatches to the worker pool in 5.1.6 — checked against the artifact before the upgrade and true
+after it — so nothing about file I/O changed. The coupling that mattered was already gone by
+evacuation, not by version.
+
+
 
 Camel 4.22's `camel-platform-http-vertx` pins `vertx-web` **4.5.31**, so Vert.x 5 is unreachable
 while the Camel edge is in the build. It is not an independent choice, and it is not urgent

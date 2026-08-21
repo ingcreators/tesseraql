@@ -136,6 +136,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Vert.x moves to 5.1.6** (docs/http-edge.md decision 3). Camel used to pin it transitively
+  through `camel-platform-http-vertx`; that component left the build, and this followed the same
+  day because nothing was holding it back. The upgrade cost one API break — connection pooling
+  moved out of `HttpClientOptions` into `PoolOptions` — and closed something that had been left
+  open with it: **the gateway's outbound wait queue is bounded to the same per-member number**,
+  where it was previously contained by a permit and left unbounded underneath. Nothing about file
+  I/O changed: Vert.x still dispatches it to the worker pool, which by now has no other tenants.
+
 - **The runtime owns its HTTP server and router** (docs/http-edge.md decision 1), and
   `camel-platform-http-vertx` leaves the build. Nothing routed through that component any more —
   the REST DSL that created its consumers is gone — so what remained was a place to keep a server,

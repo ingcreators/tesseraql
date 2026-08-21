@@ -130,7 +130,7 @@ final class StackRelay {
     static HttpClientOptions outboundOptions(boolean http2, int maxConcurrentPerMember,
             int readIdleSeconds) {
         int limit = Math.max(1, maxConcurrentPerMember);
-        HttpClientOptions options = new HttpClientOptions().setMaxPoolSize(limit);
+        HttpClientOptions options = new HttpClientOptions();
         if (readIdleSeconds > 0) {
             options.setReadIdleTimeout(readIdleSeconds);
         }
@@ -139,6 +139,28 @@ final class StackRelay {
                         .setHttp2ClearTextUpgrade(true)
                         .setHttp2MultiplexingLimit(limit)
                 : options;
+    }
+
+    /**
+     * The per-member bound, which is a pool setting rather than a client setting.
+     *
+     * <p>Vert.x 5 moved connection pooling out of {@code HttpClientOptions} into its own object,
+     * and the split suits this: the number is one declared bound taken in the relay
+     * (docs/http-threading.md decision 5), and it now has somewhere of its own to be declared.
+     * Both protocol modes are sized to it, so turning on h2c still cannot change a capacity.
+     *
+     * <p><strong>The wait queue is bounded to the same number.</strong> Decision 5 named an
+     * unbounded outbound queue as one of the three things wrong at the front door and contained it
+     * with a permit rather than closing it, because {@code maxWaitQueueSize} was a client setting
+     * nothing else was touching. It is a pool setting now, and an unbounded queue in front of a
+     * bound is the queue this campaign removed inside a runtime, one hop earlier.
+     */
+    static io.vertx.core.http.PoolOptions outboundPool(int maxConcurrentPerMember) {
+        int limit = Math.max(1, maxConcurrentPerMember);
+        return new io.vertx.core.http.PoolOptions()
+                .setHttp1MaxSize(limit)
+                .setHttp2MaxSize(limit)
+                .setMaxWaitQueueSize(limit);
     }
 
     /** The default tenant header checked for app entitlement at the front door (ch. 32.8). */

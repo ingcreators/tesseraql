@@ -107,14 +107,14 @@
     -->
     <cxf.version>4.2.3</cxf.version>
     <!--
-      Vert.x arrives transitively through camel-platform-http-vertx; the gateway's relay
-      (docs/stack-architecture.md decision 13) adds vertx-http-proxy on top of it. The two must be
-      the same version, so both are managed from this one property rather than one being pinned
-      and the other inherited — a split is how a proxy ends up loaded beside a core it was not
-      built against. Bumping camel.version means checking what vertx-core it resolves and moving
-      this with it.
+      Vert.x is the runtime's own now: the HTTP server and router it serves on (docs/http-edge.md
+      decision 1), the gateway's relay (docs/stack-architecture.md decision 13), and the web layer
+      under both. Every artifact is managed from this one property — a split is how a proxy ends
+      up loaded beside a core it was not built against. Camel used to pin it, transitively,
+      through camel-platform-http-vertx; that component left the build, and this moved to 5 the
+      same day because nothing was holding it back any more.
     -->
-    <vertx.version>4.5.31</vertx.version>
+    <vertx.version>5.1.6</vertx.version>
     <jackson.version>2.22.1</jackson.version>
     <hikaricp.version>7.1.0</hikaricp.version>
     <postgresql.version>42.7.13</postgresql.version>
