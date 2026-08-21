@@ -5,11 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.model.ResponseSpec;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,7 +30,7 @@ class JsonResponseHeadersTest {
     private static Exchange render(ResponseSpec.JsonResponse response,
             Map<String, Object> context) throws Exception {
         Exchange exchange = new Exchange(
-                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
+                new RuntimeContext().beans());
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         new JsonResponseRenderer(response).process(exchange);
         return exchange;

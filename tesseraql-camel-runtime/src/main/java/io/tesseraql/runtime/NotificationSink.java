@@ -2,12 +2,12 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxEventSink;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.notify.MailNotifier;
 import io.tesseraql.yaml.notify.NotificationChannels;
 import io.tesseraql.yaml.notify.NotifyEvents;
 import io.tesseraql.yaml.notify.WebhookNotifier;
 import java.nio.file.Path;
-import org.apache.camel.CamelContext;
 
 /**
  * Delivers {@code NOTIFICATION} outbox events through the configured channels (roadmap Phase 20):
@@ -23,13 +23,13 @@ final class NotificationSink implements OutboxEventSink {
     private final InboxNotifier inboxNotifier = new InboxNotifier();
     private final io.tesseraql.core.inbox.InboxStore inbox;
 
-    NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
+    NotificationSink(NotificationChannels channels, Path appHome, RuntimeContext camelContext,
             io.tesseraql.core.inbox.InboxStore inbox,
             io.tesseraql.yaml.http.OutboundGateway gateway) {
         this(channels, appHome, camelContext, inbox, null, gateway);
     }
 
-    NotificationSink(NotificationChannels channels, Path appHome, CamelContext camelContext,
+    NotificationSink(NotificationChannels channels, Path appHome, RuntimeContext camelContext,
             io.tesseraql.core.inbox.InboxStore inbox,
             io.tesseraql.core.files.FileTransferService transfers,
             io.tesseraql.yaml.http.OutboundGateway gateway) {

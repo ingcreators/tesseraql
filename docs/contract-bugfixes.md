@@ -52,7 +52,7 @@ authentication-failure namespace; the default currently classifies server faults
 "Unauthorized": PBKDF2 failure (5001), unsupported stored hash (5002), unsupported
 `auth=` mode — a config error (4000), IdP call failure (4140), SAML metadata host
 denied (4086/4087), remote source without credential (4088/4089), invite surface
-unconfigured (4120), component-guard refusal (4138), egress host not allow-listed
+unconfigured (4120), egress host not allow-listed
 (4141). The sharpest instance: `OidcRouteBuilder` carries a comment explaining that
 collapsing server faults into caller-fault statuses "told an operator their request
 was wrong when the truth was that the server failed" — and the SEC default silently
@@ -78,7 +78,7 @@ code (slice 1):
 | 401 | 4011 (unauthenticated), 4012 (webhook signature), 4013 (webhook timestamp stale) | the caller's credential material is wrong or stale |
 | 403 | 4031 (forbidden), 4032 (CSRF) | unchanged |
 | 409 | 4014 (webhook replay) | unchanged |
-| 500 | 4000 (unsupported `auth=` mode), 4001 (the authenticator the route needs is not configured), 4085 (copilot endpoint/egress config), 4086/4087 (SAML metadata host/URL), 4088/4089 (remote credential missing/method), 4120 (invite surface unconfigured), 4132/4135 (invalid defaults documents), 4138 (component-guard refusal), 4140 (federation failure), 4141 (push egress host), 5001/5002 (password crypto) | configuration and server faults — none are the caller's |
+| 500 | 4000 (unsupported `auth=` mode), 4001 (the authenticator the route needs is not configured), 4085 (copilot endpoint/egress config), 4086/4087 (SAML metadata host/URL), 4088/4089 (remote credential missing/method), 4120 (invite surface unconfigured), 4132/4135 (invalid defaults documents), 4140 (federation failure), 4141 (push egress host), 5001/5002 (password crypto) | configuration and server faults — none are the caller's |
 
 No test asserted 401 for any code in the 500 row (most surface at boot or lint
 time); the OIDC/SAML integration tests' 401 assertions are all on the 4011 path

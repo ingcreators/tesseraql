@@ -2,6 +2,7 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.compiler.binding.InboxBadge;
 import io.tesseraql.core.inbox.InboxStore;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -9,7 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.CamelContext;
 
 /**
  * The framework's per-session event stream, {@code GET /_tesseraql/events} (docs/inbox.md
@@ -33,7 +33,7 @@ final class LiveEvents {
     }
 
     /** {@code inbox} is null when no inbox channel is configured (topics-only apps). */
-    static void register(CamelContext context, int port, LiveStreams streams, InboxStore inbox,
+    static void register(RuntimeContext context, int port, LiveStreams streams, InboxStore inbox,
             Set<String> declaredTopics) {
         SseRoutes.register(context, port, "/_tesseraql/events", (principal, query) -> {
             String tenant = principal.tenantId();

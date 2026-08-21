@@ -113,9 +113,8 @@ class MultiAppHostIntegrationTest {
     }
 
     private static io.vertx.core.Vertx vertxOf(String appId) {
-        return host.app(appId).camelContext().getRegistry()
-                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.VERTX_BEAN,
-                        io.vertx.core.Vertx.class);
+        return host.app(appId).context().lookup(io.tesseraql.camel.TesseraqlProperties.VERTX_BEAN,
+                io.vertx.core.Vertx.class);
     }
 
     /**

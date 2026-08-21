@@ -5,11 +5,11 @@ import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Completion;
 import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import org.apache.camel.CamelContext;
 
 /**
  * A compiled route as a list of processors, run without a route (docs/http-edge.md decision 2).
@@ -56,7 +56,7 @@ final class RoutePipeline {
     }
 
     /** The pipeline compiled under {@code routeId}, resolved for running. */
-    static Optional<RoutePipeline> of(CamelContext camelContext, String routeId) {
+    static Optional<RoutePipeline> of(RuntimeContext camelContext, String routeId) {
         return Pipelines.of(camelContext).find(routeId)
                 .flatMap(compiled -> of(camelContext, compiled));
     }
@@ -69,7 +69,7 @@ final class RoutePipeline {
      * turning an endpoint URI into a producer, which is what the framework's own components
      * stopped being (docs/camel-removal.md decision 2).
      */
-    static Optional<RoutePipeline> of(CamelContext camelContext, Pipeline compiled) {
+    static Optional<RoutePipeline> of(RuntimeContext camelContext, Pipeline compiled) {
         List<Step> steps = new ArrayList<>();
         steps.addAll(compiled.steps());
         List<Handler> handlers = new ArrayList<>();

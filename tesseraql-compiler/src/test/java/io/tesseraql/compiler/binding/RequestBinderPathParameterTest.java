@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.model.RouteDefinition;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -26,17 +26,17 @@ import org.junit.jupiter.api.Test;
  */
 class RequestBinderPathParameterTest {
 
-    private static DefaultCamelContext camel;
+    private static RuntimeContext camel;
 
     @BeforeAll
-    static void start() {
-        camel = new DefaultCamelContext();
+    static void start() throws Exception {
+        camel = new RuntimeContext();
         camel.start();
     }
 
     @AfterAll
     static void stop() {
-        camel.stop();
+        camel.close();
     }
 
     private static final RouteDefinition UNTYPED = route("""
@@ -70,7 +70,7 @@ class RequestBinderPathParameterTest {
     }
 
     private static Exchange request(String uri, String body, Map<String, Object> headers) {
-        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(camel));
+        Exchange exchange = new Exchange(camel.beans());
         if (uri != null) {
             exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
         }

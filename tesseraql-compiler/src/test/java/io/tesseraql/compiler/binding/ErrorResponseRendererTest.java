@@ -8,11 +8,11 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.model.ResponseSpec.OnError;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 class ErrorResponseRendererTest {
@@ -300,7 +300,7 @@ class ErrorResponseRendererTest {
 
     private static Exchange exchangeWith(Throwable cause) {
         Exchange exchange = new Exchange(
-                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
+                new RuntimeContext().beans());
         exchange.setProperty(TesseraqlProperties.EXCEPTION_CAUGHT, cause);
         return exchange;
     }

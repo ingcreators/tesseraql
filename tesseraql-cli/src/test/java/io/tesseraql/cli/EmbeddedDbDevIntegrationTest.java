@@ -133,9 +133,8 @@ class EmbeddedDbDevIntegrationTest {
                     .startsWith("/_tesseraql/login?redirect=");
 
             // A valid browser session (any of password/OIDC/SAML would create one) grants access.
-            io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
-                    .getRegistry()
-                    .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+            io.tesseraql.security.session.SessionStore sessions = runtime.context()
+                    .lookup(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                             io.tesseraql.security.session.SessionStore.class);
             String sid = sessions.create(new io.tesseraql.security.Principal("dev", "dev", "Dev",
                     null, java.util.List.of(), java.util.List.of("ADMIN"),

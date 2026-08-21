@@ -136,6 +136,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Apache Camel is out of the build** (docs/camel-removal.md slice 6b). The last two jobs it held
+  were a registry keyed by name and a list of services started and stopped with the process: of
+  the 64 calls this framework ever made on the Camel context, 63 were a lookup and the rest were
+  `addService`, `start` and `stop`. **205 jars and 48 MB at the start of the campaign; 153 and
+  38 MB now**, with no Apache Camel artifact among them.
+
+- **The Camel component guard is retired** (`tesseraql.camel.components`, `TQL-SEC-4138`,
+  `TQL-SEC-4139`, and the lint rule behind them). It existed because Camel registers whatever
+  component it finds on the classpath; nothing resolves a component by name any more, so there is
+  nothing left for it to refuse. **Breaking:** an application declaring `tesseraql.camel.components`
+  should delete the block — per rule 10 it is removed rather than tolerated. The health detail
+  listing routes that are not started goes the same way, for the same reason: there are no routes.
+
 - **A route builder that builds no routes stops being one** (docs/camel-removal.md slice 6a). The
   framework's 18 `RouteBuilder` subclasses existed so that `context.addRoutes(...)` would call
   their `configure()`; with their routes compiled into pipelines, that was ceremony around a

@@ -6,10 +6,10 @@ import io.tesseraql.core.messaging.ChannelEvent;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
 import io.tesseraql.core.telemetry.AggregatingMeter;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -93,7 +93,7 @@ class QueueConsumerDeadLetterTest {
     private static OneMessageStore drainOnce(int attempts, AggregatingMeter meter)
             throws Exception {
         OneMessageStore store = new OneMessageStore(attempts);
-        DefaultCamelContext context = new DefaultCamelContext();
+        RuntimeContext context = new RuntimeContext();
         context.start();
         try {
             new QueueConsumer(context,
@@ -104,7 +104,7 @@ class QueueConsumerDeadLetterTest {
                     .meter(meter)
                     .drainAll();
         } finally {
-            context.stop();
+            context.close();
         }
         return store;
     }

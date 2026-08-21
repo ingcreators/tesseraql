@@ -1,11 +1,11 @@
 package io.tesseraql.compiler.pipeline;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.camel.CamelContext;
 
 /**
  * Every compiled pipeline, by id (docs/camel-removal.md structural decision 1).
@@ -27,13 +27,13 @@ public final class Pipelines {
     private final Map<String, PipelineBuilder> byId = new ConcurrentHashMap<>();
 
     /** The runtime's registry, created on first use. */
-    public static Pipelines of(CamelContext context) {
-        Pipelines existing = context.getRegistry().lookupByNameAndType(BEAN, Pipelines.class);
+    public static Pipelines of(RuntimeContext context) {
+        Pipelines existing = context.lookup(BEAN, Pipelines.class);
         if (existing != null) {
             return existing;
         }
         Pipelines created = new Pipelines();
-        context.getRegistry().bind(BEAN, created);
+        context.bind(BEAN, created);
         return created;
     }
 

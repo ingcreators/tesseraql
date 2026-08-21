@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.pipeline.RuntimeContext;
 import io.vertx.core.Context;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpMethod;
@@ -19,8 +20,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.camel.CamelContext;
-import org.apache.camel.support.service.ServiceSupport;
 
 /**
  * Serves static assets under {@code GET /assets/**} directly on the platform router
@@ -62,7 +61,13 @@ import org.apache.camel.support.service.ServiceSupport;
  * 304, {@code Cache-Control}, {@code nosniff}, the CORS opening for Studio's sandboxed preview,
  * and the app's {@code security.responseHeaders}.
  */
-final class AssetRoutes extends ServiceSupport {
+final class AssetRoutes implements RuntimeContext.Service {
+
+    /**
+     * Running from the moment it exists: this service has nothing to start, and is registered so
+     * that something stops it (docs/camel-removal.md decision 2).
+     */
+    private volatile boolean running = true;
 
     /**
      * After the admission gate, before every route Camel registered.
@@ -113,7 +118,7 @@ final class AssetRoutes extends ServiceSupport {
     private record Asked(String path, String ifNoneMatch, String locale) {
     }
 
-    private final CamelContext camelContext;
+    private final RuntimeContext camelContext;
     private final Path mainAssets;
     private final Map<String, Path> appAssets;
     private final ClientMessages clientMessages;
@@ -144,7 +149,7 @@ final class AssetRoutes extends ServiceSupport {
     private final ExecutorService storage = Executors.newThreadPerTaskExecutor(
             Thread.ofVirtual().name("tql-asset-io-", 0).factory());
 
-    private AssetRoutes(CamelContext camelContext, Path mainAssets, Map<String, Path> appAssets,
+    private AssetRoutes(RuntimeContext camelContext, Path mainAssets, Map<String, Path> appAssets,
             ClientMessages clientMessages) {
         this.camelContext = camelContext;
         this.mainAssets = mainAssets.toAbsolutePath().normalize();
@@ -153,7 +158,7 @@ final class AssetRoutes extends ServiceSupport {
     }
 
     /** Mounts the asset tree on the started platform router, under the app's base path. */
-    static void install(CamelContext camelContext, int port, Path mainAssets,
+    static void install(RuntimeContext camelContext, int port, Path mainAssets,
             Map<String, Path> appAssets, ClientMessages clientMessages) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         AssetRoutes assets = new AssetRoutes(camelContext, mainAssets, appAssets, clientMessages);
@@ -163,19 +168,20 @@ final class AssetRoutes extends ServiceSupport {
             throw new IllegalStateException("Static asset serving could not be started", refused);
         }
         String mount = io.tesseraql.camel.BasePath
-                .of(io.tesseraql.camel.CamelBeans.of(camelContext)) + "/assets";
+                .of(camelContext.beans()) + "/assets";
         router.route(HttpMethod.GET, mount + "/*").order(AFTER_THE_GATE)
                 .handler(ctx -> assets.serve(ctx, mount));
     }
 
     /** The mount an admission gate must let through untouched. */
-    static String mountOf(CamelContext camelContext) {
-        return io.tesseraql.camel.BasePath.of(io.tesseraql.camel.CamelBeans.of(camelContext))
+    static String mountOf(RuntimeContext camelContext) {
+        return io.tesseraql.camel.BasePath.of(camelContext.beans())
                 + "/assets";
     }
 
     @Override
-    protected void doStop() {
+    public void stop() {
+        running = false;
         storage.shutdownNow();
     }
 
@@ -393,7 +399,7 @@ final class AssetRoutes extends ServiceSupport {
 
     @SuppressWarnings("unchecked")
     private Map<String, String> securityHeaders() {
-        Map<String, String> headers = camelContext.getRegistry().lookupByNameAndType(
+        Map<String, String> headers = camelContext.lookup(
                 io.tesseraql.camel.TesseraqlProperties.RESPONSE_HEADERS_BEAN, Map.class);
         return headers == null ? Map.of() : headers;
     }

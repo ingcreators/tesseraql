@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.List;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -79,7 +79,7 @@ class RoutePipelinesLifecycleTest {
 
     @Test
     void stoppingTheContextStopsTheRunner() throws Exception {
-        DefaultCamelContext context = new DefaultCamelContext();
+        RuntimeContext context = new RuntimeContext();
         context.start();
         QueueConsumer consumer = new QueueConsumer(context, EMPTY,
                 List.of(new QueueConsumer.Subscription("events", "items.changed", "items.route")),
@@ -87,18 +87,14 @@ class RoutePipelinesLifecycleTest {
 
         consumer.drainAll();
 
-        RoutePipelines runner = context.getCamelContextExtension().getServices().stream()
-                .filter(RoutePipelines.class::isInstance)
-                .map(RoutePipelines.class::cast)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError(
-                        "the pipeline runner is not a service of the context, so nothing will"
-                                + " ever stop the producers it resolved"));
-        assertThat(runner.isStarted()).isTrue();
+        // The runner registered itself as a service of the context, which is what makes the
+        // pipelines it resolved somebody's job to stop.
+        RoutePipelines runner = RoutePipelines.of(context);
+        assertThat(runner.isRunning()).isTrue();
 
-        context.stop();
+        context.close();
 
-        assertThat(runner.isStarted())
+        assertThat(runner.isRunning())
                 .as("the runner must stop with the context that owns it")
                 .isFalse();
     }

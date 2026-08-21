@@ -1,13 +1,13 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.operations.messaging.JdbcEventChannelStore;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.sql.DataSource;
-import org.apache.camel.support.service.ServiceSupport;
 import org.postgresql.PGConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,10 @@ import org.slf4j.LoggerFactory;
  * connection loss (a database restart) it reconnects, re-listens, and drains to catch up — the same
  * recovery the backstop would eventually provide, only sooner.
  */
-final class PgNotifyListener extends ServiceSupport {
+final class PgNotifyListener implements RuntimeContext.Service {
+
+    /** Whether this service is running; a stop is asked for, not waited on. */
+    private volatile boolean running;
 
     private static final Logger LOG = LoggerFactory.getLogger(PgNotifyListener.class);
     private static final long RECONNECT_DELAY_MS = 5_000;
@@ -32,7 +35,6 @@ final class PgNotifyListener extends ServiceSupport {
     private final QueueConsumer consumer;
     private final long backstopMillis;
     private final Set<String> channels = new LinkedHashSet<>();
-    private volatile boolean running;
     private volatile Thread thread;
     private volatile Connection connection;
 
@@ -44,7 +46,8 @@ final class PgNotifyListener extends ServiceSupport {
     }
 
     @Override
-    protected void doStart() {
+    public void start() {
+        running = true;
         running = true;
         thread = new Thread(this::run, "tql-pg-notify");
         thread.setDaemon(true);
@@ -53,7 +56,8 @@ final class PgNotifyListener extends ServiceSupport {
     }
 
     @Override
-    protected void doStop() {
+    public void stop() {
+        running = false;
         running = false;
         Thread current = thread;
         if (current != null) {

@@ -56,8 +56,8 @@ class ScaffoldedCrudIntegrationTest {
     static void startRuntime() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        SessionStore sessions = runtime.camelContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        SessionStore sessions = runtime.context().lookup(TesseraqlProperties.SESSION_STORE_BEAN,
+                SessionStore.class);
         String sid = sessions.create(new Principal("u001", "sato", "Sato", null,
                 List.of(), List.of("APP_READ", "APP_WRITE"), List.of(), Map.of()),
                 SessionStore.ClientInfo.NONE);

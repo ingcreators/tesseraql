@@ -64,9 +64,9 @@ class StudioIntegrationTest {
 
     /** Creates browser sessions for an editor (ADMIN) and a read-only viewer, used by the UI tests. */
     private static void establishSessions() {
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext().getRegistry()
-                .lookupByNameAndType(io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
-                        io.tesseraql.security.session.SessionStore.class);
+        io.tesseraql.security.session.SessionStore sessions = runtime.context().lookup(
+                io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
+                io.tesseraql.security.session.SessionStore.class);
         String adminSid = sessions.create(
                 principal(List.of("ADMIN"), List.of("tql.studio.edit.*")),
                 io.tesseraql.security.session.SessionStore.ClientInfo.NONE);
@@ -687,19 +687,6 @@ class StudioIntegrationTest {
                     .contains("/assets/_tesseraql/icons.svg#compass")
                     .contains("hc-shell__label").contains("data-collapsible")
                     .contains("hc-shell__toggle");
-        }
-    }
-
-    @Test
-    void everyRegisteredComponentSatisfiesTheComponentPolicy() {
-        // The floor drift-check (docs/component-guard.md): this boot mounts the main app and
-        // every bundled app, so the registered component set is the framework's real footprint.
-        // A component neither framework-implicit nor declared by the app config would have
-        // failed boot already; this assertion keeps the failure readable when the floor drifts.
-        io.tesseraql.yaml.config.ComponentPolicy policy = io.tesseraql.yaml.config.ComponentPolicy
-                .from(new io.tesseraql.yaml.manifest.ManifestLoader().load(appHome).config());
-        for (String name : runtime.camelContext().getComponentNames()) {
-            assertThat(policy.refusal(name)).as(name).isEmpty();
         }
     }
 
@@ -3368,7 +3355,7 @@ class StudioIntegrationTest {
     }
 
     private static io.tesseraql.security.policy.PolicyEngine currentPolicyEngine() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 io.tesseraql.camel.TesseraqlProperties.POLICY_ENGINE_BEAN,
                 io.tesseraql.security.policy.PolicyEngine.class);
     }

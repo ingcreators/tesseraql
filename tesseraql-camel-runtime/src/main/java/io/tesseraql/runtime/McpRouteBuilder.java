@@ -5,8 +5,8 @@ import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.mcp.McpHttpHandler;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
-import org.apache.camel.CamelContext;
 
 /**
  * Serves an application's declared MCP tools over the Streamable HTTP transport at
@@ -24,7 +24,7 @@ final class McpRouteBuilder {
         this.handler = handler;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         // The error envelope every other framework surface carries. These three had none: the
         // handler catches what it expects, and anything it did not left the caller holding an
         // open connection (docs/camel-removal.md slice 2b).

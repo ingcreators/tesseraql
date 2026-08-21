@@ -1,6 +1,14 @@
 # Camel component guard
 
-> **Status: shipped.** `ComponentPolicy` (baseline + narrowing config) is enforced at
+> **Status: retired 2026-08-21 with its subject** ([camel-removal.md](camel-removal.md)
+> slice 6b). Nothing resolves a component by name off the classpath any more — Apache Camel is
+> out of the build — so there is no registration for a policy to refuse. `ComponentGuard`,
+> `ComponentPolicy`, `ComponentPolicyRules`, the `tesseraql.camel.components` block and the
+> `TQL-SEC-4138`/`TQL-SEC-4139` codes are all deleted. The record below is kept for its threat
+> model, which is what made the removal defensible: the guard existed because Camel arms
+> whatever component lands on the classpath, and that premise is what went away.
+>
+> **Status when shipped:** `ComponentPolicy` (baseline + narrowing config) is enforced at
 > registration time by `ComponentGuard` via the context lifecycle strategy; a refused component
 > fails boot with `TQL-SEC-4138`, re-allow attempts are linted (`TQL-SEC-4139`), and the
 > framework floor is the `FRAMEWORK_FLOOR` set plus the `tesseraql-*` namespace, drift-checked

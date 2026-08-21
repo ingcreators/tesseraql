@@ -1,7 +1,8 @@
 # Scaffolded-config consumer audit
 
 > **Status: complete.** The retire set is shipped, `db.main.maximumPoolSize` is wired through
-> to the pool, the component guard is enforced ([component-guard.md](component-guard.md)),
+> to the pool, the component guard was enforced and has since been retired with its subject
+> ([component-guard.md](component-guard.md), [camel-removal.md](camel-removal.md)),
 > `tesseraql.app.work` is honored everywhere through the shared `WorkHome` resolver (manifest
 > index pruning, mounted-app materialization, packaging, reports, module and extension caches,
 > the embedded-db marker), and the scaffold⇄consumer drift test (`ScaffoldedConfigKeys` +
@@ -34,7 +35,7 @@ placeholder into `datasources.main.*`), `app.name`,
 | --- | --- | --- | --- |
 | `db.main.maximumPoolSize` | "I sized the connection pool" | `DataSources` reads `datasources.main.maximumPoolSize`, but the scaffold never maps the `db.main` value through — the `10` is dead and the pool runs on driver defaults | **Wire** (one mapping line in the scaffolded `datasources` block) |
 | `tesseraql.runtime.profile` (`${TESSERAQL_PROFILE:local}`) | "this switches my environment profile" | The real mechanism is `TESSERAQL_ENV`/`tesseraql.env` + `config/env/<profile>.yml` (`ManifestLoader.activeProfile`); `TESSERAQL_PROFILE` is read by nothing — an actively misleading twin | **Retire** from the scaffold; the emitted comment points at the `TESSERAQL_ENV` overlays instead |
-| `tesseraql.camel.components.allowed/denied` | "dangerous components are locked out" | No consumer | **Wire** — [component-guard.md](component-guard.md) |
+| `tesseraql.camel.components.allowed/denied` | "dangerous components are locked out" | No consumer | **Wired**, then **retired** with the component registry it guarded — [camel-removal.md](camel-removal.md) |
 | `tesseraql.app.work` (`${TESSERAQL_WORK_HOME:…}`) | "I can relocate the work dir" | Every consumer hardcodes `home/work`; neither the key nor the env var is read | **Wire** (the work-dir resolution honors it; the `AppConfig` javadoc already documents the placeholder as a contract) |
 | `tesseraql.runtime.engine: camel` | engine selection | Camel is the only engine, hardwired | **Retire** from the scaffold |
 | `tesseraql.java.baseline` / `.compatibility` | toolchain declaration something checks | Read by no goal in the Maven plugin or CLI | **Retire** (the wrapper POM already carries the toolchain truth) |
@@ -61,8 +62,7 @@ against it):
    consumer class for a literal reference to its path segment, so the registry cannot rot into
    the same lie it guards against.
 
-The registry is also where the [component guard](component-guard.md) and future config
-features declare themselves, so the table above never needs to be re-derived by hand.
+The registry is also where config features declare themselves, so the table above never needs to be re-derived by hand.
 
 ## Out of scope
 

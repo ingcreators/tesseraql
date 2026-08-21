@@ -6,13 +6,13 @@ import io.tesseraql.compiler.ext.RuntimeExtension;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.runtime.RouteReloader;
 import io.tesseraql.runtime.RuntimeSeams;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import java.nio.file.Path;
-import org.apache.camel.CamelContext;
 
 /**
  * Installs the workshop — Studio's runtime-side machinery — into a starting runtime
@@ -38,7 +38,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
 
     @Override
     public void install(ExtensionContext extension) throws Exception {
-        CamelContext context = extension.camel();
+        RuntimeContext context = extension.camel();
         AppManifest manifest = extension.manifest();
         Path appHome = manifest.appHome();
         RuntimeSeams seams = extension.bean(TesseraqlProperties.RUNTIME_SEAMS_BEAN,
@@ -103,7 +103,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 .getString("tesseraql.studio.testRunner.maxRows")
                 .map(Integer::parseInt).orElse(1000);
         StudioTestService studioTests = new StudioTestService(
-                name -> context.getRegistry().lookupByNameAndType(name,
+                name -> context.lookup(name,
                         javax.sql.DataSource.class),
                 appHome, realm, seams.mainDatasourceDialect(),
                 testRunnerEnabled, testTimeout, testMaxRows, functions);
@@ -114,7 +114,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                 .getString("tesseraql.studio.scaffold.enabled")
                 .map(Boolean::parseBoolean).orElse(false);
         StudioScaffoldService studioScaffold = new StudioScaffoldService(
-                name -> context.getRegistry().lookupByNameAndType(name,
+                name -> context.lookup(name,
                         javax.sql.DataSource.class),
                 "main", studio, scaffoldEnabled);
         // The Studio data browser: read-only, paginated row access over the dev datasource.
@@ -148,7 +148,7 @@ public final class StudioRuntimeExtension implements RuntimeExtension {
                                         .map(Integer::parseInt).orElse(6))
                         : null;
         StudioDataService studioData = new StudioDataService(
-                name -> context.getRegistry().lookupByNameAndType(name,
+                name -> context.lookup(name,
                         javax.sql.DataSource.class),
                 java.util.List.copyOf(seams.dataSources().keySet()),
                 dataBrowserEnabled, dataEditEnabled, testTimeout, testMaxRows);

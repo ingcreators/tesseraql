@@ -48,13 +48,12 @@ class InviteIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        javax.sql.DataSource main = runtime.camelContext().getRegistry()
-                .lookupByNameAndType("main", javax.sql.DataSource.class);
+        javax.sql.DataSource main = runtime.context().lookup("main", javax.sql.DataSource.class);
         try (java.sql.Connection connection = main.getConnection();
                 java.sql.Statement statement = connection.createStatement()) {
             statement.execute(io.tesseraql.identity.DefaultIdentityPack.schema("postgres"));
         }
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("iam-admin", "iam-admin", "IAM Admin",
                 null, List.of(), List.of("ADMIN"),
@@ -127,7 +126,7 @@ class InviteIntegrationTest {
     /** The invite action sits behind the tql.iam.admin.write atom. */
     @Test
     void aSessionWithoutTheRoleIsRefused() throws Exception {
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("mortal", "mortal", "Mortal", null,
                 List.of(), List.of(), List.of(), Map.of()), SessionStore.ClientInfo.NONE);
@@ -161,7 +160,7 @@ class InviteIntegrationTest {
     }
 
     private static long inviteMailCount(String loginId) {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.OUTBOX_STORE_BEAN,
                 io.tesseraql.operations.outbox.JdbcOutboxStore.class)
                 .recent(200).stream()
@@ -173,7 +172,7 @@ class InviteIntegrationTest {
     }
 
     private static String latestAcceptUrl(String loginId) {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 TesseraqlProperties.OUTBOX_STORE_BEAN,
                 io.tesseraql.operations.outbox.JdbcOutboxStore.class)
                 .recent(200).stream()

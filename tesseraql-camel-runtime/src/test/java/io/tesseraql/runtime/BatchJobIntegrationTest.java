@@ -260,8 +260,8 @@ class BatchJobIntegrationTest {
         send("POST", "/_tesseraql/ops/batch/jobs/user.exportReport/run", token,
                 "{\"businessDate\": \"2026-05-01\"}");
         String transferId = transferIdOf("user.exportReport#extract");
-        io.tesseraql.core.files.FileTransferService transfers = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(
+        io.tesseraql.core.files.FileTransferService transfers = runtime.context()
+                .lookup(
                         io.tesseraql.camel.TesseraqlProperties.FILE_TRANSFER_BEAN,
                         io.tesseraql.core.files.FileTransferService.class);
 

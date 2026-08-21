@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.core.util.Durations;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.connectors.FileConnectors;
 import io.tesseraql.yaml.manifest.JobFile;
 import io.tesseraql.yaml.model.ImportSpec;
@@ -9,7 +10,6 @@ import io.tesseraql.yaml.model.TriggerSpec;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * Wires the directory-polling consumers for {@code poll:}-triggered file-import jobs (roadmap
@@ -59,7 +59,7 @@ final class PollSources {
     }
 
     /** Starts a poll cycle for every job that declares one. */
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         for (JobFile job : jobs) {
             TriggerSpec trigger = job.definition().trigger();
             if (trigger == null || trigger.poll() == null) {
@@ -78,7 +78,7 @@ final class PollSources {
         }
     }
 
-    private void wire(CamelContext context, JobFile job, PollSpec poll) {
+    private void wire(RuntimeContext context, JobFile job, PollSpec poll) {
         String jobId = job.definition().id();
         ImportSpec importSpec = job.definition().fileImport();
         io.tesseraql.yaml.model.Binding rowStep = job.definition().rowStep();

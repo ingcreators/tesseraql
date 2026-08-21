@@ -66,8 +66,8 @@ class FrameworkDataSourceIntegrationTest {
 
     @Test
     void sessionsLiveOnTheFrameworkDatabaseNotOnMain() throws Exception {
-        io.tesseraql.security.session.SessionStore sessions = runtime.camelContext()
-                .getRegistry().lookupByNameAndType(
+        io.tesseraql.security.session.SessionStore sessions = runtime.context()
+                .lookup(
                         io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                         io.tesseraql.security.session.SessionStore.class);
         String sid = sessions.create(new io.tesseraql.security.Principal(

@@ -79,8 +79,8 @@ class OrgUnitScopingIntegrationTest {
     }
 
     private static OrgUnitStore orgUnitStore() {
-        return runtime.camelContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.ORG_UNIT_STORE_BEAN, OrgUnitStore.class);
+        return runtime.context().lookup(TesseraqlProperties.ORG_UNIT_STORE_BEAN,
+                OrgUnitStore.class);
     }
 
     @Test

@@ -10,6 +10,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.federation.FederationErrors;
 import io.tesseraql.security.session.LoginRedirects;
@@ -22,7 +23,6 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.camel.CamelContext;
 
 /**
  * The OIDC relying-party web endpoints under {@code /_tesseraql/oidc} (design ch. 10.14, roadmap
@@ -89,7 +89,7 @@ final class OidcRouteBuilder {
         throttle.recordFailure(null, address == null ? null : String.valueOf(address));
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(OidcException.class, this::unauthorized),

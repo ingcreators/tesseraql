@@ -423,7 +423,7 @@ public final class ErrorResponseRenderer implements Step {
                 case 4014 -> 409; // an inbound webhook replay (roadmap Phase 26)
                 // The SEC domain is the whole security namespace, not an auth-failure one:
                 // everything else is a server-side fault — config errors (4000, 4001, 4085-4089,
-                // 4120, 4132, 4135), guard/egress refusals (4138, 4141), federation failures
+                // 4120, 4132, 4135), egress refusals (4141), federation failures
                 // (4140), and crypto errors (5001, 5002). A 401 here invites clients into
                 // token-refresh retries against a genuinely broken server
                 // (docs/contract-bugfixes.md track B).

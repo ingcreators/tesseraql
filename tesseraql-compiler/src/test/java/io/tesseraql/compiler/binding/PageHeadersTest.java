@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.Map;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /** The automatic pagination headers (roadmap Phase 41). */
@@ -14,7 +14,7 @@ class PageHeadersTest {
 
     private static Exchange exchange(Map<String, Object> page, String uri, String query) {
         Exchange exchange = new Exchange(
-                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
+                new RuntimeContext().beans());
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("page", page));
         exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
         exchange.getMessage().setHeader(Headers.HTTP_QUERY, query);

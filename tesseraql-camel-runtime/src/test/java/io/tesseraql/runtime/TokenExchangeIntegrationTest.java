@@ -145,7 +145,7 @@ class TokenExchangeIntegrationTest {
     }
 
     private static SessionStore sessions() {
-        return runtime.camelContext().getRegistry().lookupByNameAndType(
+        return runtime.context().lookup(
                 io.tesseraql.camel.TesseraqlProperties.SESSION_STORE_BEAN,
                 SessionStore.class);
     }

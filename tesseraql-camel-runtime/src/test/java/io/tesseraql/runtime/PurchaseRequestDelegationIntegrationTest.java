@@ -61,7 +61,7 @@ class PurchaseRequestDelegationIntegrationTest {
         appHome = copyGalleryApp();
         // The runtime applies the app's own db/migration at boot - no manual step.
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        SessionStore sessions = runtime.camelContext().getRegistry().lookupByNameAndType(
+        SessionStore sessions = runtime.context().lookup(
                 TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
         String sid = sessions.create(new Principal("approver-1", "approver-1", "Approver",
                 null, List.of(), List.of("APPROVER"), List.of(), Map.of()),

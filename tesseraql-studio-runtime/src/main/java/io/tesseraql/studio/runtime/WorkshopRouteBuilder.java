@@ -11,10 +11,10 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.service.ServiceProviders;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * A member's workshop API (docs/studio-shell.md structural decision 2):
@@ -38,7 +38,7 @@ final class WorkshopRouteBuilder {
         this.studioEdit = studioEdit;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),

@@ -2,9 +2,9 @@ package io.tesseraql.runtime;
 
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.camel.CamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,10 +60,10 @@ final class HttpAdmission {
      * <p>Called from the same post-start hook the SSE endpoints use: the router is created when
      * the HTTP server service starts, so there is nothing to register on before that.
      */
-    static void install(CamelContext camelContext, int port, int maxInFlight) {
+    static void install(RuntimeContext camelContext, int port, int maxInFlight) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         HttpAdmission gate = new HttpAdmission(maxInFlight,
-                io.tesseraql.camel.BasePath.of(io.tesseraql.camel.CamelBeans.of(camelContext))
+                io.tesseraql.camel.BasePath.of(camelContext.beans())
                         + "/_tesseraql/health",
                 AssetRoutes.mountOf(camelContext));
         router.route().order(BEFORE_EVERY_ROUTE).handler(gate::admit);

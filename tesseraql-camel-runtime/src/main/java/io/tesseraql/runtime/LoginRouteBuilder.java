@@ -10,6 +10,7 @@ import io.tesseraql.identity.PasswordAuthenticator;
 import io.tesseraql.identity.RealmConfig;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.policy.PolicyEngine;
 import io.tesseraql.security.session.LoginRedirects;
@@ -20,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.camel.CamelContext;
 
 /**
  * Password login/logout endpoints (design ch. 10.8, 11.2):
@@ -94,7 +94,7 @@ final class LoginRouteBuilder {
                 "message", "Too many attempts; retry later"))));
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),

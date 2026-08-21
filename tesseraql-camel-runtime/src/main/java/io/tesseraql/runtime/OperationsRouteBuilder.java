@@ -13,6 +13,7 @@ import io.tesseraql.operations.batch.JobRepository;
 import io.tesseraql.operations.batch.StepExecution;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import java.util.ArrayList;
@@ -20,7 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
-import org.apache.camel.CamelContext;
 
 /**
  * Builds the Operations API for batch jobs under {@code /_tesseraql/ops/batch} (design ch. 26.7,
@@ -109,7 +109,7 @@ final class OperationsRouteBuilder {
         this.routeAudit = routeAudit;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),

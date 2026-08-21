@@ -7,13 +7,13 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.messaging.EventChannelStore;
 import io.tesseraql.core.messaging.EventMessage;
+import io.tesseraql.pipeline.RuntimeContext;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
-import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -71,7 +71,7 @@ class PgNotifyListenerTest {
                     }
                     return method.getReturnType() == List.class ? List.<EventMessage>of() : null;
                 });
-        return new QueueConsumer(new DefaultCamelContext(), store,
+        return new QueueConsumer(new RuntimeContext(), store,
                 List.of(new QueueConsumer.Subscription("orders", null, "queue.orders")), 3);
     }
 

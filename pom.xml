@@ -98,11 +98,11 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <!-- Third-party library versions -->
-    <camel.version>4.22.0</camel.version>
     <!--
-      The authorization server's grant layer (docs/token-issuance.md decision 1). camel-cxf-rest
-      at this Camel LTS manages the same CXF line, so the two stay aligned from one property.
-      The campaign's standing rule: track this version against the CXF advisory list at every
+      The authorization server's grant layer (docs/token-issuance.md decision 1). The version used
+      to be whatever camel-cxf-rest's Camel LTS managed; Camel has left the build
+      (docs/camel-removal.md), so this property is now the only thing choosing it. The campaign's
+      standing rule outlives the alignment: track this against the CXF advisory list at every
       slice rather than pinning and forgetting it — the 2026 OAuth2 advisory batch is why.
     -->
     <cxf.version>4.2.3</cxf.version>
@@ -195,14 +195,6 @@
 
   <dependencyManagement>
     <dependencies>
-      <!-- Apache Camel runtime (imported BOM) -->
-      <dependency>
-        <groupId>org.apache.camel</groupId>
-        <artifactId>camel-bom</artifactId>
-        <version>${camel.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
 
       <dependency>
         <groupId>com.github.mwiede</groupId>

@@ -17,6 +17,7 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.util.Durations;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ResourceFile;
@@ -29,7 +30,6 @@ import io.tesseraql.yaml.model.IdempotencySpec;
 import io.tesseraql.yaml.model.RouteDefinition;
 import io.tesseraql.yaml.model.SecuritySpec;
 import java.nio.file.Path;
-import org.apache.camel.CamelContext;
 
 /**
  * Compiles a TesseraQL {@link AppManifest} into Camel routes (design ch. 7).
@@ -99,7 +99,7 @@ public final class RouteCompiler {
     private Pipelines.Compilation pipelines;
 
     /** Compiles every route of {@code manifest} into {@code context}'s pipeline registry. */
-    public void compile(CamelContext context, AppManifest manifest) {
+    public void compile(RuntimeContext context, AppManifest manifest) {
         compile(context, manifest, true, null);
     }
 
@@ -108,7 +108,7 @@ public final class RouteCompiler {
      * are built without their HTTP mounts — used to hot-reload route bodies in place. When {@code onlyRouteIds} is non-null only those route ids are built
      * (design ch. 16.8 live reload).
      */
-    public void compile(CamelContext context, AppManifest manifest, boolean mountRest,
+    public void compile(RuntimeContext context, AppManifest manifest, boolean mountRest,
             java.util.Set<String> onlyRouteIds) {
         this.config = manifest.config();
         this.manifest = manifest;
@@ -220,7 +220,7 @@ public final class RouteCompiler {
      * {@code GET basePath/{attachmentId}}. Each carries the document's {@code security:}; the owning
      * record key in {@code basePath} scopes list and download to that record.
      */
-    private void buildAttachment(CamelContext context,
+    private void buildAttachment(RuntimeContext context,
             io.tesseraql.yaml.manifest.AttachmentFile attachmentFile,
             java.util.Set<String> onlyRouteIds) {
         io.tesseraql.yaml.model.AttachmentDefinition def = attachmentFile.definition();
@@ -274,7 +274,7 @@ public final class RouteCompiler {
         }
     }
 
-    private void buildRoute(CamelContext context, Path appHome, RouteFile routeFile) {
+    private void buildRoute(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         switch (definition.recipe()) {
             case "query-json", "command-json" -> buildJson(context, routeFile);
@@ -291,7 +291,7 @@ public final class RouteCompiler {
         }
     }
 
-    private void buildJson(CamelContext context, RouteFile routeFile) {
+    private void buildJson(RuntimeContext context, RouteFile routeFile) {
         if (usesTransactionalCommand(routeFile.definition())) {
             buildTransactionalCommand(context, routeFile);
             return;
@@ -378,11 +378,11 @@ public final class RouteCompiler {
      * atomically in one transaction. Dialect-specific SQL variants resolve per step, like the
      * standard execution pipeline.
      */
-    private void buildTransactionalCommand(CamelContext context, RouteFile routeFile) {
+    private void buildTransactionalCommand(RuntimeContext context, RouteFile routeFile) {
         buildTransactionalCommand(context, routeFile, null, null);
     }
 
-    private void buildTransactionalCommand(CamelContext context, RouteFile routeFile,
+    private void buildTransactionalCommand(RuntimeContext context, RouteFile routeFile,
             io.tesseraql.pipeline.Step preCommand) {
         buildTransactionalCommand(context, routeFile, preCommand, null);
     }
@@ -395,7 +395,7 @@ public final class RouteCompiler {
      * processor advances the document's state, checks the guard, and appends history in the same
      * transaction.
      */
-    private void buildTransactionalCommand(CamelContext context, RouteFile routeFile,
+    private void buildTransactionalCommand(RuntimeContext context, RouteFile routeFile,
             io.tesseraql.pipeline.Step preCommand,
             io.tesseraql.compiler.binding.WorkflowBinding workflow) {
         RouteDefinition definition = routeFile.definition();
@@ -509,7 +509,7 @@ public final class RouteCompiler {
      * a column on the business table — selected per workflow, defaulting to the app-wide
      * {@code tesseraql.workflow.mode}.
      */
-    private void buildWorkflow(CamelContext context,
+    private void buildWorkflow(RuntimeContext context,
             io.tesseraql.yaml.manifest.WorkflowFile workflowFile,
             java.util.Set<String> onlyRouteIds) {
         io.tesseraql.yaml.model.WorkflowDefinition def = workflowFile.definition();
@@ -660,7 +660,7 @@ public final class RouteCompiler {
      * slice 3): {@code POST {basePath}/{key}/delegate/{to}} reassigns the caller's open task to the
      * delegate, who then sees it in their inbox. Only the current assignee may delegate.
      */
-    private void buildWorkflowDelegate(CamelContext context,
+    private void buildWorkflowDelegate(RuntimeContext context,
             io.tesseraql.yaml.model.WorkflowDefinition def, String basePath,
             java.util.Set<String> onlyRouteIds) {
         boolean usesTasks = def.transitions().stream()
@@ -757,7 +757,7 @@ public final class RouteCompiler {
      * replay is rejected before a single row is written. The named verifier must be configured —
      * a webhook with no verifier would be unauthenticated, so an unknown provider fails the build.
      */
-    private void buildWebhook(CamelContext context, RouteFile routeFile) {
+    private void buildWebhook(RuntimeContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         if (definition.webhook() == null || definition.webhook().provider() == null
                 || definition.webhook().provider().isBlank()) {
@@ -787,7 +787,7 @@ public final class RouteCompiler {
      * At-least-once delivery comes from the durable channel and the consumer's claim/ack, not this
      * route.
      */
-    private void buildQueueConsume(CamelContext context, RouteFile routeFile) {
+    private void buildQueueConsume(RuntimeContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ConsumeSpec consume = definition.consume();
         if (consume == null || consume.channel() == null || consume.channel().isBlank()
@@ -835,7 +835,7 @@ public final class RouteCompiler {
      * and follow-up statements ({@code after:}) need the asynchronous {@code file-export}
      * recipe.
      */
-    private void buildQueryExport(CamelContext context, Path appHome, RouteFile routeFile) {
+    private void buildQueryExport(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
@@ -898,7 +898,7 @@ public final class RouteCompiler {
      * file-import (design ch. 28): POST of the raw file body starts an asynchronous import
      * applying the per-row statement; GET {path}/{transferId} reports its state.
      */
-    private void buildFileImport(CamelContext context, RouteFile routeFile) {
+    private void buildFileImport(RuntimeContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ImportSpec spec = definition.fileImport();
         String routeId = definition.id();
@@ -923,7 +923,7 @@ public final class RouteCompiler {
      * generated file; GET {path}/{transferId} reports its state and GET {path}/{transferId}/file
      * streams the result (triggering a download-timed follow-up statement on first fetch).
      */
-    private void buildFileExport(CamelContext context, Path appHome, RouteFile routeFile) {
+    private void buildFileExport(RuntimeContext context, Path appHome, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         io.tesseraql.yaml.model.ExportSpec spec = definition.fileExport();
         String routeId = definition.id();
@@ -982,7 +982,7 @@ public final class RouteCompiler {
     }
 
     /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */
-    private void mountTransferStatus(CamelContext context, RouteFile routeFile, String routeId) {
+    private void mountTransferStatus(RuntimeContext context, RouteFile routeFile, String routeId) {
         if (mountRest) {
             mount(context, "GET", routeFile.urlPath() + "/{transferId}", routeId + ".status");
         }
@@ -1011,7 +1011,7 @@ public final class RouteCompiler {
      * forms and static pages, design ch. 6.4). When {@code response.file} is declared the template
      * renders as a text file response (e.g. a generated config download) instead of HTML.
      */
-    private void buildTemplatePage(CamelContext context, Path appHome, RouteFile routeFile) {
+    private void buildTemplatePage(RuntimeContext context, Path appHome, RouteFile routeFile) {
         Path routeDir = routeFile.source().getParent();
         PipelineBuilder route = pipelineThroughSql(context, routeFile);
         if (routeFile.definition().response().file() != null) {
@@ -1067,7 +1067,7 @@ public final class RouteCompiler {
     }
 
     /** Builds the common route head: REST endpoint, security, request binding, SQL execution. */
-    private PipelineBuilder pipelineThroughSql(CamelContext context, RouteFile routeFile) {
+    private PipelineBuilder pipelineThroughSql(RuntimeContext context, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
         String served = routeId;
@@ -1222,7 +1222,7 @@ public final class RouteCompiler {
      * binding and validation, SQL or the transactional command - so a tool is governed exactly like
      * a route. The runtime's MCP endpoint sends to {@code direct:mcp.<id>} and reads the JSON result.
      */
-    private void buildMcpTool(CamelContext context, ToolFile toolFile) {
+    private void buildMcpTool(RuntimeContext context, ToolFile toolFile) {
         RouteDefinition definition = toolFile.definition();
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
@@ -1285,7 +1285,7 @@ public final class RouteCompiler {
      * uri), so the binder runs with no path or request parameters; idempotency does not apply to a
      * read.
      */
-    private void buildMcpResource(CamelContext context, ResourceFile resourceFile) {
+    private void buildMcpResource(RuntimeContext context, ResourceFile resourceFile) {
         RouteDefinition definition = resourceFile.definition();
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
@@ -1321,7 +1321,7 @@ public final class RouteCompiler {
      * resource contents. A UI resource declares no {@code input:} (it is addressed only by its
      * {@code ui://} uri), so the binder runs with no parameters.
      */
-    private void buildMcpUi(CamelContext context, Path appHome, UiResourceFile uiFile) {
+    private void buildMcpUi(RuntimeContext context, Path appHome, UiResourceFile uiFile) {
         RouteDefinition definition = uiFile.definition();
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
@@ -1361,7 +1361,7 @@ public final class RouteCompiler {
      * <p>The recipe is a read: {@code prompts/get} is a read in the protocol's own vocabulary, so
      * a command step is refused rather than compiled into a prompt that writes.
      */
-    private void buildMcpPrompt(CamelContext context,
+    private void buildMcpPrompt(RuntimeContext context,
             io.tesseraql.yaml.manifest.PromptFile promptFile) {
         RouteDefinition definition = promptFile.definition();
         Path promptDir = promptFile.source().getParent();
@@ -1887,7 +1887,7 @@ public final class RouteCompiler {
      * edge applies it at the mount, which is the one place that now knows about URLs at all
      * (docs/base-path.md decision 5).
      */
-    private void mount(CamelContext context, String method, String path, String pipeline) {
+    private void mount(RuntimeContext context, String method, String path, String pipeline) {
         String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         switch (method) {
             case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts

@@ -3,6 +3,7 @@ package io.tesseraql.runtime;
 import io.tesseraql.opsui.PollSourceStatus;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.Step;
 import java.io.InputStream;
 import java.nio.file.FileSystems;
@@ -12,8 +13,6 @@ import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import org.apache.camel.CamelContext;
-import org.apache.camel.support.service.ServiceSupport;
 
 /**
  * One poll job's cycle, run without a Camel consumer (docs/camel-removal.md slice 1).
@@ -30,7 +29,10 @@ import org.apache.camel.support.service.ServiceSupport;
  * says they mean — so a poll job processes one file at a time and the file's fate is settled
  * before the next one starts. It is a virtual thread, so the waiting costs nothing to hold.
  */
-final class PollLoop extends ServiceSupport {
+final class PollLoop implements RuntimeContext.Service {
+
+    /** Whether this service is running; a stop is asked for, not waited on. */
+    private volatile boolean running;
 
     /**
      * The cross-replica claim a {@code consumeOnce:} source makes before it imports.
@@ -61,7 +63,7 @@ final class PollLoop extends ServiceSupport {
     private final String jobId;
     private final PollSource source;
     private final Step importer;
-    private final CamelContext context;
+    private final RuntimeContext context;
     private final PathMatcher include;
     private final String move;
     private final String moveFailed;
@@ -73,7 +75,7 @@ final class PollLoop extends ServiceSupport {
     private volatile Thread worker;
 
     PollLoop(String jobId, String transport, PollSource source, Step importer,
-            CamelContext context, String include, String move, String moveFailed,
+            RuntimeContext context, String include, String move, String moveFailed,
             long delayMillis, Claim consumed, PollSourceStatus status) {
         this.jobId = jobId;
         this.transport = transport;
@@ -94,14 +96,16 @@ final class PollLoop extends ServiceSupport {
     }
 
     @Override
-    protected void doStart() {
+    public void start() {
+        running = true;
         worker = Thread.ofVirtual().name("tesseraql-poll-" + jobId).start(this::run);
         status.polling(jobId, transport);
         LOG.log(System.Logger.Level.INFO, "Polling {0} source for job {1}", transport, jobId);
     }
 
     @Override
-    protected void doStop() throws Exception {
+    public void stop() throws Exception {
+        running = false;
         Thread running = worker;
         if (running != null) {
             running.interrupt();
@@ -112,7 +116,7 @@ final class PollLoop extends ServiceSupport {
     }
 
     private void run() {
-        while (isRunAllowed() && !Thread.currentThread().isInterrupted()) {
+        while (running && !Thread.currentThread().isInterrupted()) {
             try {
                 cycle();
             } catch (InterruptedException interrupted) {
@@ -150,7 +154,7 @@ final class PollLoop extends ServiceSupport {
             return;
         }
         for (PollSource.PolledFile file : candidates) {
-            if (!isRunAllowed() || Thread.currentThread().isInterrupted()) {
+            if (!running || Thread.currentThread().isInterrupted()) {
                 return;
             }
             Optional<PollSource.PolledFile> now = source.stat(file.name());
@@ -172,7 +176,7 @@ final class PollLoop extends ServiceSupport {
         PollSource.Fetched fetched = null;
         try {
             fetched = source.fetch(file);
-            Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
+            Exchange exchange = new Exchange(context.beans());
             exchange.getMessage().setHeader(Headers.FILE_NAME, file.name());
             try (InputStream content = Files.newInputStream(fetched.path())) {
                 exchange.getMessage().setBody(content);
@@ -210,7 +214,7 @@ final class PollLoop extends ServiceSupport {
     private boolean sleep(long millis) {
         try {
             Thread.sleep(millis);
-            return isRunAllowed();
+            return running;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return false;

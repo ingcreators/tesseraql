@@ -13,6 +13,7 @@ import io.tesseraql.operations.app.AppInstaller;
 import io.tesseraql.operations.app.AppUpgrader;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.Atoms;
@@ -25,7 +26,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.CamelContext;
 
 /**
  * The stack's authenticated deploy endpoint (docs/stack-shells.md, the deploy surface;
@@ -61,7 +61,7 @@ final class DeployRouteBuilder {
         this.sessions = sessions;
     }
 
-    void install(CamelContext context) {
+    void install(RuntimeContext context) {
         Pipelines.Compilation pipelines = Pipelines.of(context)
                 .compiling(java.util.List.of(
                         Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),

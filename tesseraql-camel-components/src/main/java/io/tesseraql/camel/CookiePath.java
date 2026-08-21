@@ -1,7 +1,7 @@
 package io.tesseraql.camel;
 
 import io.tesseraql.pipeline.Exchange;
-import org.apache.camel.CamelContext;
+import io.tesseraql.pipeline.RuntimeContext;
 
 /**
  * The {@code Path} this runtime's session cookie is issued with, as the host that started it
@@ -21,8 +21,8 @@ public final class CookiePath {
     }
 
     /** Publishes the cookie path for every surface that issues or expires a session cookie. */
-    public static void bind(CamelContext context, String cookiePath) {
-        context.getRegistry().bind(TesseraqlProperties.COOKIE_PATH_BEAN,
+    public static void bind(RuntimeContext context, String cookiePath) {
+        context.bind(TesseraqlProperties.COOKIE_PATH_BEAN,
                 cookiePath == null || cookiePath.isBlank() ? "/" : cookiePath);
     }
 
