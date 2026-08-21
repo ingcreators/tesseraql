@@ -16,30 +16,42 @@ import org.apache.camel.spi.Synchronization;
 import org.apache.camel.support.UnitOfWorkHelper;
 
 /**
- * A compiled route as a list of processors, run without a route (docs/http-edge.md slice 1).
+ * A compiled route as a list of processors, run without a route (docs/http-edge.md decision 2).
  *
- * <p>This is a prototype and it lives in test sources on purpose. Slice 1 exists to produce a
- * number and to be abandoned cheaply if the number does not hold, so nothing in the shipped
- * runtime installs it and deleting it costs one file.
+ * <p>What a compiled route contains is two {@code onException} handlers, a run of {@code process}
+ * steps and a {@code to} — the {@code tesseraql-sql:} producer. Every one of those is a
+ * {@link Processor} or resolves to one, so running them in order is a loop, and the thread that
+ * runs the loop is a choice rather than something {@code camel-platform-http-vertx} makes for the
+ * framework. Measured on a real runtime: <strong>138 HTTP routes, none declined</strong>.
  *
- * <p><strong>The point it proves is that the pipeline is not the problem.</strong> What a
- * compiled route contains is two {@code onException} handlers, a run of {@code process} steps and
- * a {@code to} — the {@code tesseraql-sql:} producer. Every one of those is a {@link Processor}
- * or resolves to one, so running them in order is a loop, and the thread that runs the loop is a
- * choice rather than something {@code camel-platform-http-vertx} makes for the framework.
+ * <p>The route model stays the source of truth. This reads it rather than replacing it, so the
+ * compiler keeps emitting exactly what it emits and a route that is not a plain chain is declined
+ * rather than half-run.
  */
-final class EdgePipeline {
+final class RoutePipeline {
 
     private final List<Processor> steps;
     private final List<Handler> handlers;
+    /**
+     * The producers this pipeline created, and therefore owns.
+     *
+     * <p>Kept apart from {@link #steps} because the two have opposite lifecycles: the processors
+     * belong to the route model and are shared with the Camel route still mounted behind this
+     * one, so stopping them would stop that route too. The producers are this pipeline's own —
+     * {@code createProducer()} makes a new one per call — and a hot reload that replaced a
+     * pipeline without stopping them would leak one per route per reload.
+     */
+    private final List<org.apache.camel.Producer> owned = new ArrayList<>();
 
     /** One {@code onException} clause: what it catches, and what it does about it. */
     private record Handler(List<String> caught, Processor renderer) {
     }
 
-    private EdgePipeline(List<Processor> steps, List<Handler> handlers) {
+    private RoutePipeline(List<Processor> steps, List<Handler> handlers,
+            List<org.apache.camel.Producer> owned) {
         this.steps = steps;
         this.handlers = handlers;
+        this.owned.addAll(owned);
     }
 
     /**
@@ -49,13 +61,14 @@ final class EdgePipeline {
      * {@code threads} is not something this prototype pretends to run, and slice 1 is not the
      * place to find out that it half-ran one.
      */
-    static Optional<EdgePipeline> of(CamelContext camelContext, String routeId) {
+    static Optional<RoutePipeline> of(CamelContext camelContext, String routeId) {
         RouteDefinition definition = ((ModelCamelContext) camelContext).getRouteDefinition(routeId);
         if (definition == null) {
             return Optional.empty();
         }
         List<Processor> steps = new ArrayList<>();
         List<Handler> handlers = new ArrayList<>();
+        List<org.apache.camel.Producer> owned = new ArrayList<>();
         for (ProcessorDefinition<?> output : definition.getOutputs()) {
             switch (output) {
                 case OnExceptionDefinition onException -> {
@@ -68,7 +81,10 @@ final class EdgePipeline {
                 case ProcessDefinition process -> steps.add(process.getProcessor());
                 case ToDefinition to -> {
                     try {
-                        steps.add(camelContext.getEndpoint(to.getUri()).createProducer());
+                        org.apache.camel.Producer producer = camelContext.getEndpoint(to.getUri())
+                                .createProducer();
+                        owned.add(producer);
+                        steps.add(producer);
                     } catch (Exception unusable) {
                         return Optional.empty();
                     }
@@ -80,7 +96,7 @@ final class EdgePipeline {
         }
         return steps.stream().anyMatch(java.util.Objects::isNull)
                 ? Optional.empty()
-                : Optional.of(new EdgePipeline(steps, handlers));
+                : Optional.of(new RoutePipeline(steps, handlers, owned));
     }
 
     private static Processor single(List<ProcessorDefinition<?>> outputs) {
@@ -91,9 +107,19 @@ final class EdgePipeline {
 
     /** Starts the producers the {@code to} steps resolved to; they are services like any other. */
     void start() throws Exception {
-        for (Processor step : steps) {
-            if (step instanceof org.apache.camel.Service service) {
-                service.start();
+        for (org.apache.camel.Producer producer : owned) {
+            producer.start();
+        }
+    }
+
+    /** Stops what this pipeline created, and nothing the route model owns. */
+    void stop() {
+        for (org.apache.camel.Producer producer : owned) {
+            try {
+                producer.stop();
+            } catch (Exception ignored) {
+                // Best effort on a replaced pipeline: one producer failing to stop must not
+                // strand the ones after it, and the replacement is already serving.
             }
         }
     }
@@ -111,6 +137,13 @@ final class EdgePipeline {
                 step.process(exchange);
                 if (exchange.getException() != null) {
                     throw exchange.getException();
+                }
+                if (exchange.isRouteStop()) {
+                    // A step that has already answered — the role-activation redirect is the one
+                    // that does this — ends the route here. Running the renderer behind it would
+                    // overwrite a 302 with the page the caller was being redirected away from,
+                    // which is exactly what happened before this line existed.
+                    break;
                 }
             }
         } catch (Exception failure) {

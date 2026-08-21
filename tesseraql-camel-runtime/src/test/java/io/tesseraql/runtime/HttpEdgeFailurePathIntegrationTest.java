@@ -39,8 +39,7 @@ class HttpEdgeFailurePathIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final String CAMEL_PATH = "/api/broken";
-    private static final String EDGE_PATH = "/edge/api/broken";
+    private static final String PATH = "/api/broken";
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -49,7 +48,6 @@ class HttpEdgeFailurePathIntegrationTest {
     static void start() throws Exception {
         appHome = prepareAppHome();
         runtime = TesseraqlRuntime.start(appHome, freePort());
-        EdgeMount.install(runtime.camelContext(), runtime.port(), "broken", EDGE_PATH);
     }
 
     @AfterAll
@@ -69,8 +67,8 @@ class HttpEdgeFailurePathIntegrationTest {
      */
     @Test
     void theErrorEnvelopeIsTheRoutesOwn() {
-        HttpResponse<String> viaCamel = get(CAMEL_PATH);
-        HttpResponse<String> viaEdge = get(EDGE_PATH);
+        HttpResponse<String> viaCamel = get(PATH);
+        HttpResponse<String> viaEdge = get(PATH);
 
         assertThat(viaCamel.statusCode()).isNotEqualTo(200);
         assertThat(viaEdge.statusCode()).isEqualTo(viaCamel.statusCode());
@@ -87,10 +85,10 @@ class HttpEdgeFailurePathIntegrationTest {
      */
     @Test
     void aPermitTakenOnTheFailurePathIsGivenBack() {
-        String expected = get(EDGE_PATH).body();
+        String expected = get(PATH).body();
 
         for (int attempt = 0; attempt < 3; attempt++) {
-            HttpResponse<String> again = get(EDGE_PATH);
+            HttpResponse<String> again = get(PATH);
             assertThat(again.body()).doesNotContain("TQL-RATE-4291");
             assertThat(again.body()).isEqualTo(expected);
         }

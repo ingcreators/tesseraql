@@ -56,14 +56,20 @@ class HttpThreadingIntegrationTest {
     }
 
     /**
-     * Six concurrent requests against two workers run two at a time.
+     * The worker pool is the declared size, and it is no longer what a route waits for.
      *
-     * <p>The thread census is the direct evidence — no more worker threads exist than were asked
-     * for. The elapsed floor is the consequence, and it is what a reader actually cares about:
-     * the pool size is the concurrency ceiling, not a hint.
+     * <p>This test used to assert the opposite half: six one-second requests against two workers
+     * took three waves, which was decision 1's evidence that the pool size is a ceiling rather
+     * than a hint. The census still proves the size — no more worker threads exist than were
+     * asked for — but the waves are gone, because a route is served on the router now
+     * (docs/http-edge.md decision 1) and the only bound left on it is the connection pool.
+     *
+     * <p>The ceiling claim did not stop being true; it moved to the mechanism it was ever about.
+     * {@code HttpEdgeDispatchIntegrationTest} measures {@code executeBlocking} directly and finds
+     * exactly the four seconds this used to find here.
      */
     @Test
-    void theWorkerPoolIsTheConcurrencyCeiling() throws Exception {
+    void theWorkerPoolIsTheDeclaredSizeAndNoLongerWhatARouteWaitsFor() throws Exception {
         long startedAt = System.currentTimeMillis();
         List<CompletableFuture<HttpResponse<String>>> inFlight = Stream
                 .generate(() -> CompletableFuture.supplyAsync(() -> get("/api/nap")))
@@ -74,9 +80,8 @@ class HttpThreadingIntegrationTest {
         }
         long elapsedMs = System.currentTimeMillis() - startedAt;
 
-        // Six one-second statements, two at a time: three waves. Twenty workers would have run
-        // them in one.
-        assertThat(elapsedMs).isGreaterThan(2_500);
+        // One wave. Two workers would have made it three.
+        assertThat(elapsedMs).isLessThan(2_500);
 
         long workers = Thread.getAllStackTraces().keySet().stream()
                 .filter(thread -> thread.getName().startsWith("vert.x-worker-thread"))

@@ -136,6 +136,26 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A route is served on the HTTP router rather than through Camel's `executeBlocking`**
+  (docs/http-edge.md decision 1). `camel-platform-http-vertx` hands every exchange to the Vert.x
+  worker pool, so a request ran on ten platform threads whether or not it needed anything those
+  threads protect — the coupling the HTTP threading campaign spent eight slices working around,
+  one surface at a time. A compiled route turns out to be a plain list of processors (measured:
+  138 routes on a real runtime, none declined), so the route's own steps now run on a virtual
+  thread and the only bound left on work that needs a connection is the connection pool. Eight
+  concurrent one-second routes against two workers went from about four seconds to **1046 ms**.
+
+  **A request carrying a body is handed back to the Camel route still mounted behind it**, because
+  form and multipart arrive at a route as parsed attributes today and reproducing that faithfully
+  is its own change. The route model is unchanged and both paths exist, which is what makes this
+  reversible; the answer, the error envelope, the audit row and every permit are the route's own
+  either way. `tesseraql.http.maxInFlight` becomes the runtime-wide ceiling it was always going to
+  be, rather than a floor under a pool.
+
+  **A download stops paying twice.** A response body that is a stream is streamed on that same
+  virtual thread, so an attachment or an export costs neither a worker nor the heap it used to be
+  read into.
+
 - **The IAM admin applications list no longer carries a policy id**, and narrows its rows by
   the caller's grants instead — every member for `tql.iam.admin.view`, their own for
   `tql.iam.view.<name>`, none for neither. It is the one page in that family with no

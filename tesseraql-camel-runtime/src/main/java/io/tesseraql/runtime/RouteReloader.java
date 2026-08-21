@@ -262,6 +262,14 @@ public final class RouteReloader {
         this.fingerprints = prints;
         this.appFingerprint = appNow;
         this.workflowFingerprint = workflowNow;
+        // A recompiled route is a new list of processor instances, and the router-mounted edge
+        // holds the old one until it is told (docs/http-edge.md decision 1). Refreshed here,
+        // after every route in this reload has been rebuilt, so the swap is one step rather than
+        // a race with the rebuild.
+        RouteEdge edge = context.getRegistry().lookupByNameAndType(RouteEdge.BEAN, RouteEdge.class);
+        if (edge != null) {
+            edge.refreshAll();
+        }
         // The reload's scope includes the shared definitions Studio's memoized lookups read
         // (decisions/ for the data browser's column contracts), so a reload is their epoch —
         // the workshop extension's listeners drop those caches and refresh the explorer here.

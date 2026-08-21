@@ -158,6 +158,79 @@ The envelope itself needs no reimplementation: the `onException` clauses are the
 compiler put in the model, so a refusal produced here is the framework's refusal, and the response
 is identical through both edges.
 
+### The cutover
+
+Slices 3 and 4 are one change, and the reason is that neither is worth anything alone: a registry
+that nothing serves from and a mount that has nothing to mount are both machinery waiting for the
+other. Folded, they are the first slice that carries traffic.
+
+**Every compiled HTTP route is a plain processor chain.** Measured on a real runtime with the
+bundled system applications: **138 routes, none declined**. The "servlet chain" reading of this
+codebase is not an impression from the compiler's source, it is a property of every route it
+produces.
+
+**The edge takes what it can and hands the rest back.** A request carrying a body falls through to
+the Camel route still mounted behind it, because form and multipart arrive at a route as parsed
+attributes today and reproducing that faithfully is its own change with its own tests. The
+question is answered from headers alone — reading the body to find out what kind it is would
+consume the stream the handler behind us needs. **That fall-through is what makes the cutover
+reversible**: the route model is unchanged, both paths exist, and the whole integration suite
+drives them over real HTTP either way.
+
+| Two workers, eight connections, eight concurrent one-second routes | Elapsed |
+| --- | --- |
+| Before: the worker pool is the ceiling | ~4000 ms |
+| After: the connection pool is | **1046 ms** |
+
+Three details that are load-bearing rather than tidy:
+
+- **The base path goes back on by hand.** It lives on the context-wide REST configuration
+  (`restConfiguration().contextPath`), which is the one thing the REST DSL was doing that a router
+  mount does not do by itself, so the mount re-applies it and Camel's `{name}` parameters are
+  spelled the way this router spells them.
+- **The response header filter is Camel's own.** The request's headers are on the message — they
+  were put there so the route could read `Cookie` and `Accept` — so copying the message's headers
+  out untouched would echo a caller's cookie back as a response header. The component's
+  `HeaderFilterStrategy` already knows which headers leave a runtime, including this framework's
+  one amendment to it, so it is asked rather than reimplemented.
+- **Hot reload is a swap.** A recompiled route is a new list of processor instances; the mounted
+  handler looks its pipeline up by id per request, so a reload replaces an entry rather than
+  performing router surgery. A route that appears, disappears or moves is served by Camel until
+  the next restart, which is recorded rather than hidden — live router surgery buys nothing a
+  restart does not.
+
+**What the adapter had to get right, found by running the suite rather than by reading.** The
+first cut passed its own tests and failed twenty-five of everyone else's, and each failure named
+something the consumer had been doing silently:
+
+- **`Exchange.CONTENT_TYPE` is written on its own.** Camel's header filter strips it from the
+  generic copy because the consumer writes it explicitly; copying headers through the filter and
+  stopping there left every JSON and HTML response with no content type at all.
+- **`CamelHttpPath` is the normalized path, not the raw one**, the peer addresses are exchange
+  headers a route resolves a role's network condition against, and request headers and query
+  parameters go through the *inbound* filter and are appended rather than assigned, so a repeated
+  name becomes a list. Path parameters land after query parameters because that is the order a
+  route already reads them in.
+- **`exchange.setRouteStop(true)` ends the route.** One processor uses it — the role-activation
+  redirect — and a loop that does not check it ran the renderer behind the redirect, overwriting a
+  302 with the page the caller was being redirected away from. A 200 where a 302 belonged, on the
+  authentication path, from four lines that looked complete.
+
+- **A request served here is still an in-flight exchange.** Camel's shutdown strategy drains by
+  counting what the inflight repository holds, and a pipeline run outside a route is not in it —
+  so replacing a runtime cut an edge request mid-answer while the drain contract held for every
+  request the edge had not taken over. Registering the exchange under its route id puts it back
+  where the strategy already looks, rather than giving a stop a second thing to wait on.
+
+That last pair is the argument for the fall-through and against a big-bang cutover, in two lines:
+the adapter is small, and small is not the same as obvious. Both were found by the existing suite,
+which is the point of having one that drives every route over real HTTP.
+
+**Downloads stop paying twice as a side effect.** A route whose body is an `InputStream` is
+streamed here on the virtual thread that is already ours, so an attachment or an export costs
+neither a worker nor the heap it used to be read into. Decision 1 expected that coupling to die by
+evacuation when the worker pool emptied; it dies earlier, by ownership.
+
 ## Structural decisions
 
 ### 1. The request pipeline runs on a virtual thread per request
@@ -255,17 +328,19 @@ Slice 2 counted them — five, all `addOnCompletion` — and proved the drain by
    and an explicit completion hook with a test that proves it runs on the failure path. **Done:
    the envelope is the route's own instances, and the drain is proven by a route that always fails
    under `maxInFlight: 1` — remove it and the second request is refused with `TQL-RATE-4291`.**
-3. **The route registry** — pipelines by id, replacing `direct:`; `ProducerTemplate` callers move
-   to it; hot reload becomes a swap.
-4. **The mount and the base path** — REST DSL's `contextPath` replaced by the router mount every
-   other framework surface already uses.
-5. **The edge becomes the only edge** — `camel-platform-http-vertx` leaves the build; the worker
-   pool is left to file I/O, and the download and upload coupling is re-measured to confirm it
-   died.
+3. **and 4. The cutover** — folded, because neither pays off alone. Pipelines by id, the router
+   mount under the base path, hot reload as a swap, and a request carrying a body handed back to
+   Camel. **Done: 138 routes served, none declined; eight concurrent one-second routes in 1046 ms
+   against two workers.** `direct:` and `ProducerTemplate` turned out not to need replacing at
+   all — camel-core stays, and of the external callers exactly one addresses an HTTP route
+   pipeline.
+5. **The edge becomes the only edge** — request bodies (form and multipart) move across, the REST
+   DSL and `camel-platform-http-vertx` leave the build, and the upload coupling is re-measured to
+   confirm it died. The download half already has.
 6. **Sweeps and cron** — the `timer:` and `quartz:` routes.
 
-Slices 2 and 3 are independent of each other. Slice 5 must not land before 2, 3 and 4: it removes
-the mechanism they replace.
+Slice 5 must not land before the rest: it removes the mechanism they replace, and the hand-back it
+removes is what has been keeping the cutover reversible.
 
 **Deliberately not a slice:** the connectors, `Exchange`/`Processor`, and the Vert.x 5 upgrade.
 Each is a decision this document declines to make, not work it forgot.
