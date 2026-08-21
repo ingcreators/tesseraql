@@ -15,22 +15,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * What a {@code poll:} block means for SFTP, resolved before anything connects
- * (docs/camel-removal.md slice 1).
+ * What a {@code poll:} or {@code push:} block means for SFTP, resolved before anything
+ * connects (docs/camel-removal.md slice 1, decision 4).
  *
  * <p>These rules were asserted against an endpoint URI until the poll cycle stopped building one.
  * They are the same rules, with the same error codes, asserted against the settings the client is
  * given instead — which is the point of computing them apart from the connection: a security rule
  * nobody can check without a server is a security rule nobody checks.
  */
-class SftpPollSourceTest {
+class SftpClientTest {
 
     @TempDir
     Path home;
 
     @Test
     void aConfiguredKnownHostsFileMakesTheServerIdentityChecked() {
-        SftpPollSource.Settings settings = settings(Map.of(
+        SftpClient.Settings settings = settings(Map.of(
                 "allowedHosts", List.of("sftp.partner.example"),
                 "knownHostsFile", "security/known_hosts"), sftp());
 
@@ -44,7 +44,7 @@ class SftpPollSourceTest {
     void anAbsoluteKnownHostsFilePassesThroughUnchanged() {
         Path pinned = home.resolve("etc/ssh/known_hosts").toAbsolutePath();
 
-        SftpPollSource.Settings settings = settings(Map.of("knownHostsFile", pinned.toString()),
+        SftpClient.Settings settings = settings(Map.of("knownHostsFile", pinned.toString()),
                 sftp());
 
         assertThat(settings.knownHostsFile()).isEqualTo(pinned);
@@ -54,7 +54,7 @@ class SftpPollSourceTest {
     /** Without one there is nothing to check against, and existing apps keep polling. */
     @Test
     void withoutAKnownHostsFileTheHostKeyStaysUnchecked() {
-        SftpPollSource.Settings settings = settings(
+        SftpClient.Settings settings = settings(
                 Map.of("allowedHosts", List.of("sftp.partner.example")), sftp());
 
         assertThat(settings.knownHostsFile()).isNull();
@@ -80,7 +80,7 @@ class SftpPollSourceTest {
 
     @Test
     void aDeclaredPrivateKeyAuthenticatesInsteadOfAPassword() {
-        SftpPollSource.Settings settings = withCredential(Map.of("username", "svc",
+        SftpClient.Settings settings = withCredential(Map.of("username", "svc",
                 "privateKeyFile", "/keys/id_ed25519", "privateKeyPassphrase", "pp"));
 
         assertThat(settings.username()).isEqualTo("svc");
@@ -131,17 +131,18 @@ class SftpPollSourceTest {
         assertThat(settings(Map.of(), onAnotherPort).port()).isEqualTo(2222);
     }
 
-    private SftpPollSource.Settings settings(Map<String, Object> poll, PollSpec spec) {
+    private SftpClient.Settings settings(Map<String, Object> poll, PollSpec spec) {
         Map<String, Object> withCredential = new LinkedHashMap<>(poll);
         withCredential.putIfAbsent("credentials",
                 Map.of("partner", Map.of("username", "svc", "password", "s3cr3t")));
         AppConfig config = new AppConfig(
                 Map.of("tesseraql", Map.of("connectors", Map.of("poll", withCredential))),
                 name -> null);
-        return SftpPollSource.settings(FileConnectors.poll(config), spec, home);
+        return SftpClient.settings(FileConnectors.poll(config), spec.host(), spec.port(),
+                spec.path(), spec.credential(), home);
     }
 
-    private SftpPollSource.Settings withCredential(Map<String, Object> credential) {
+    private SftpClient.Settings withCredential(Map<String, Object> credential) {
         return settings(new LinkedHashMap<>(Map.of("credentials", Map.of("partner", credential))),
                 sftp());
     }

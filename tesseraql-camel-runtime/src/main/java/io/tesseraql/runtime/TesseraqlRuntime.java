@@ -1016,8 +1016,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // push: pipeline steps deliver a produced transfer to a partner drop — local, or
         // SFTP/FTPS under the push policy block's deny-by-default allow-list
         // (docs/analytics-experience.md).
-        @SuppressWarnings("resource") // shares the runtime's Camel context, closed with it
-        FilePushService filePush = new FilePushService(context,
+        @SuppressWarnings("resource") // holds nothing between deliveries; closed with the runtime
+        FilePushService filePush = new FilePushService(
                 io.tesseraql.yaml.connectors.FileConnectors.push(manifest.config()), appHome);
         JobExecutor jobExecutor = new JobExecutor(jobRepository, tempStore, slowSqlLog, tracer,
                 modules.functions())
@@ -2399,10 +2399,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
                                 .sweepIntervalMillis(manifest.config()),
                         appName).schedule(Schedules.of(context));
             }
-            // Directory-polling consumers for poll-triggered file-import jobs (roadmap Phase 26):
+            // Directory polling for poll-triggered file-import jobs (roadmap Phase 26):
             // local/SFTP/FTPS sources feed the file-import pipeline, under a deny-by-default host
-            // allow-list. The Camel file/ftp endpoint stays an implementation detail.
-            context.addRoutes(new PollingRouteBuilder(List.copyOf(jobs.values()),
+            // allow-list. How a directory is reached is an implementation detail.
+            new PollSources(List.copyOf(jobs.values()),
                     io.tesseraql.yaml.connectors.FileConnectors.poll(manifest.config()), appName,
                     jobOwners, appHome,
                     io.tesseraql.yaml.config.WorkHome.resolve(appHome, manifest.config()),
@@ -2410,7 +2410,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     new io.tesseraql.operations.poll.JdbcPollConsumedStore(dataSource,
                             io.tesseraql.core.util.Durations.parse(manifest.config()
                                     .getString("tesseraql.connectors.poll.consumedRetention")
-                                    .orElse("30d")))));
+                                    .orElse("30d"))))
+                    .install(context);
             // Messaging consumers (roadmap Phase 27): each queue-consume route drains its channel
             // off the durable tql_event table — that table is what makes delivery at-least-once.
             // The wake mechanism depends on the channel's transport: pg-notify adds low-latency

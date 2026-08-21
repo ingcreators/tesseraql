@@ -258,7 +258,8 @@ a pool is another number to pick and these threads spend their lives asleep. `fr
 `from("quartz:` are gone; **181 jars to 178, 46 MB to 45**. What it found is below.
 
 **5. The connectors cut over.** FTPS and push join local and SFTP; `camel-file` and `camel-ftp`
-leave; `jsch` and `commons-net` become declared dependencies rather than inherited ones.
+leave; `jsch` and `commons-net` become declared dependencies rather than inherited ones. **Done:
+178 jars to 168, 45 MB to 44 — and Camel is down to 15 jars with no component among them.**
 
 **6. Camel leaves the build.** `camel-core-engine` and the rest go; the component guard and its
 config are retired; the modules are renamed; the CHANGELOG records the breaking change and the
@@ -418,6 +419,35 @@ question the right way round: a remote transport is admitted by *the job that de
 the guard already does, and an app declaring no SFTP source should not have SFTP resolvable. What
 is left on the floor is `properties`, which Camel registers on every context whether anybody asked
 or not.
+
+## What slice 5 found
+
+**Both directions call one client per protocol, and that is the finding rather than the tidiness.**
+The poll consumers and the push producers were assembled from one endpoint-URI builder because the
+FTPS data channel had already stayed unencrypted for a year when that logic had a consumer home and
+a lookalike copy. Take the URI away and the temptation returns immediately: a poll source and a
+push target look like different things. They are one `RemoteFiles` implementation per protocol, so
+the host-key check, `PBSZ 0`/`PROT P`, the trust-store refusal and the
+exactly-one-authentication-method rule are written once and true in both directions by
+construction.
+
+**`FilePushService` stopped owning a Camel context.** It kept one — the runtime's, or its own for a
+CLI `job run` — because a `ProducerTemplate` was how a file got uploaded. A push connects when it
+delivers and disconnects afterwards, so nothing is held between deliveries and a job with no push
+step costs nothing.
+
+**A URI test's disappearance took a real property with it, and it had to be put back somewhere.**
+The `consumeOnce:` assertions were about `idempotent=true&idempotentEager=true` and the
+`name-size-modified` key — options, not behaviour. The behaviour they stood for is that a file is
+**claimed before it is imported**, because two replicas can both pass a "have I seen this?" check
+and only the insert settles it. `PollLoop` now takes that claim as a one-method interface, so the
+rule is asserted with a fake instead of a database, and the property outlived the option that used
+to imply it.
+
+**Camel has no components left.** Fifteen jars remain and every one is engine, model or support:
+`camel-api`, `camel-core-engine`, `camel-support`, and what they drag in. What is still using them
+is `Exchange`, `Processor` and a `CamelContext` that holds a registry and a service lifecycle —
+which is exactly the list slice 3 exists to replace.
 
 ## What this does not buy, said before anyone expects it
 

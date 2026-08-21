@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import io.tesseraql.operations.poll.JdbcPollConsumedStore;
 import io.tesseraql.opsui.PollSourceStatus;
 import java.io.InputStream;
 import java.nio.file.FileSystems;
@@ -33,6 +32,20 @@ import org.apache.camel.support.service.ServiceSupport;
  */
 final class PollLoop extends ServiceSupport {
 
+    /**
+     * The cross-replica claim a {@code consumeOnce:} source makes before it imports.
+     *
+     * <p>An interface rather than the JDBC store, because what the cycle needs is the answer to
+     * "is this file mine to take" — and a rule this load-bearing should be assertable without a
+     * database. {@code JdbcPollConsumedStore::claim} is the implementation.
+     */
+    @FunctionalInterface
+    interface Claim {
+
+        /** Claims {@code fileKey} for {@code jobId}, answering false when another replica has it. */
+        boolean claim(String jobId, String fileKey);
+    }
+
     private static final System.Logger LOG = System.getLogger(PollLoop.class.getName());
 
     /**
@@ -53,7 +66,7 @@ final class PollLoop extends ServiceSupport {
     private final String move;
     private final String moveFailed;
     private final long delayMillis;
-    private final JdbcPollConsumedStore consumed;
+    private final Claim consumed;
     private final PollSourceStatus status;
     private final String transport;
 
@@ -61,7 +74,7 @@ final class PollLoop extends ServiceSupport {
 
     PollLoop(String jobId, String transport, PollSource source, Processor importer,
             CamelContext context, String include, String move, String moveFailed,
-            long delayMillis, JdbcPollConsumedStore consumed, PollSourceStatus status) {
+            long delayMillis, Claim consumed, PollSourceStatus status) {
         this.jobId = jobId;
         this.transport = transport;
         this.source = source;

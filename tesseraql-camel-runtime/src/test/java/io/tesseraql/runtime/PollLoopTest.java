@@ -132,6 +132,37 @@ class PollLoopTest {
         assertThat(imports).hasValue(0);
     }
 
+    /**
+     * A {@code consumeOnce:} source claims a file before importing it, and skips what it loses.
+     *
+     * <p>Claiming before rather than remembering after is the whole mechanism: two replicas can
+     * both pass a "have I seen this?" check and both import, and only the insert settles it. This
+     * was pinned against the endpoint's {@code idempotentEager=true} option until the cycle stopped
+     * having endpoints (docs/camel-removal.md decision 4).
+     */
+    @Test
+    void aFileAnotherReplicaHasClaimedIsNotImported() throws Exception {
+        Files.writeString(inbound.resolve("orders.csv"), "orderNo\nA-1\n");
+        List<String> imported = new CopyOnWriteArrayList<>();
+        List<String> claimed = new CopyOnWriteArrayList<>();
+
+        loop = new PollLoop("orders.intake", "local", new LocalPollSource(inbound),
+                record(imported), context, "*.csv", ".done", ".error", 200,
+                (jobId, key) -> {
+                    claimed.add(key);
+                    return false;
+                }, status);
+        loop.start();
+
+        await(() -> !claimed.isEmpty());
+        Thread.sleep(400);
+        assertThat(imported).isEmpty();
+        assertThat(Files.exists(inbound.resolve("orders.csv"))).isTrue();
+        // Name, size and modification time: a partner re-sending a file under a name it has used
+        // before is suppressed only while the bytes are identical.
+        assertThat(claimed.get(0)).startsWith("orders.csv-");
+    }
+
     private void start(Processor importer, String include) throws Exception {
         loop = new PollLoop("orders.intake", "local", new LocalPollSource(inbound), importer,
                 context, include, ".done", ".error", 200, null, status);
