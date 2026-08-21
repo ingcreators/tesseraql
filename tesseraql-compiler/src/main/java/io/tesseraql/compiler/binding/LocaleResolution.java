@@ -1,11 +1,11 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import java.util.List;
 import java.util.Locale;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Resolves the request locale (roadmap Phase 22): user preference, then {@code Accept-Language}
@@ -18,7 +18,7 @@ import org.apache.camel.Processor;
  * locales (RFC 4647 lookup, so {@code ja-JP} matches a supported {@code ja}); an unsupported
  * preference falls through to the next source rather than serving an untranslated locale.
  */
-public final class LocaleResolution implements Processor {
+public final class LocaleResolution implements Step {
 
     private final I18nSettings settings;
 
@@ -55,10 +55,9 @@ public final class LocaleResolution implements Processor {
             // cached store for the authenticated principal. Anonymous requests, and apps
             // without the account surface, simply fall through to the next source.
             Object principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL);
-            io.tesseraql.core.account.PreferenceStore store = exchange.getContext()
-                    .getRegistry().lookupByNameAndType(
-                            TesseraqlProperties.PREFERENCE_STORE_BEAN,
-                            io.tesseraql.core.account.PreferenceStore.class);
+            io.tesseraql.core.account.PreferenceStore store = exchange.beans().lookup(
+                    TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                    io.tesseraql.core.account.PreferenceStore.class);
             if (principal instanceof io.tesseraql.security.Principal p && store != null) {
                 return store.preferences(p.tenantId(), p.subject())
                         .get(source.substring("preference.".length()));

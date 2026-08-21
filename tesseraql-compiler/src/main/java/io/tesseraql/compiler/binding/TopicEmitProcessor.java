@@ -2,10 +2,10 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.events.TopicBus;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import java.util.List;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Broadcasts a command route's {@code emit:} topics after its transaction committed
@@ -15,7 +15,7 @@ import org.apache.camel.Processor;
  * is scoped to the requesting principal's tenant. Without a bound {@link TopicBus} (embedded
  * setups, tests) emitting is a no-op.
  */
-public final class TopicEmitProcessor implements Processor {
+public final class TopicEmitProcessor implements Step {
 
     private final List<String> topics;
 
@@ -25,8 +25,7 @@ public final class TopicEmitProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) {
-        TopicBus bus = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.TOPIC_BUS_BEAN, TopicBus.class);
+        TopicBus bus = exchange.beans().lookup(TesseraqlProperties.TOPIC_BUS_BEAN, TopicBus.class);
         if (bus == null) {
             return;
         }

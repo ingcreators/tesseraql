@@ -6,6 +6,8 @@ import io.tesseraql.core.account.PreferenceStore;
 import io.tesseraql.core.account.ShortcutStore;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.inbox.InboxStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.menu.MenuSpec;
 import io.tesseraql.yaml.menu.MenuSpec.MenuItem;
@@ -14,7 +16,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 
 /**
  * The shell chrome contributors: the reserved {@code _menu}, {@code _account}, {@code _theme},
@@ -52,8 +53,7 @@ final class ShellChrome {
      * link (docs/stack-shells.md structural decision 2).
      */
     void system() {
-        Object nav = exchange.getContext().getRegistry()
-                .lookupByName(TesseraqlProperties.SYSTEM_NAV_BEAN);
+        Object nav = exchange.beans().lookup(TesseraqlProperties.SYSTEM_NAV_BEAN);
         if (nav instanceof Map<?, ?> links && !links.isEmpty()) {
             model.put("_system", links);
         }
@@ -132,8 +132,8 @@ final class ShellChrome {
                 // the shell, so the unhosted form carries its prefix here.
                 if (hostedMember()) {
                     account.put("accountHref", "/_tesseraql/account");
-                } else if (exchange.getContext().getRegistry()
-                        .lookupByName(TesseraqlProperties.ACCOUNT_SURFACE_BEAN) != null) {
+                } else if (exchange.beans()
+                        .lookup(TesseraqlProperties.ACCOUNT_SURFACE_BEAN) != null) {
                     account.put("accountHref",
                             io.tesseraql.camel.BasePath.url(exchange, "/_tesseraql/account"));
                 }
@@ -159,23 +159,23 @@ final class ShellChrome {
         if (principal == null || !hostedMember()) {
             return;
         }
-        String member = String.valueOf(exchange.getContext().getRegistry()
-                .lookupByName(TesseraqlProperties.STACK_MEMBER_BEAN));
+        String member = String
+                .valueOf(exchange.beans().lookup(TesseraqlProperties.STACK_MEMBER_BEAN));
         List<io.tesseraql.security.Principal.RoleGrant> held = io.tesseraql.security.Activation
                 .grantsFor(principal, member);
         if (held.isEmpty()) {
             return;
         }
         String active = io.tesseraql.security.Activation.actingRole(principal);
-        String base = io.tesseraql.camel.BasePath.of(exchange.getContext());
-        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String base = io.tesseraql.camel.BasePath.of(exchange.beans());
+        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         String path = uri == null
                 ? "/"
                 : uri.indexOf('?') < 0
                         ? uri
                         : uri.substring(0, uri.indexOf('?'));
         String within = path.startsWith(base) ? path.substring(base.length()) : path;
-        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
         String suffix = query == null || query.isBlank() ? "" : "?" + query;
         List<Map<String, Object>> options = new ArrayList<>();
         for (io.tesseraql.security.Principal.RoleGrant grant : held) {
@@ -208,9 +208,9 @@ final class ShellChrome {
         storedTheme = null;
         Principal principal = sessionPrincipal();
         if (principal != null) {
-            PreferenceStore preferences = exchange.getContext().getRegistry()
-                    .lookupByNameAndType(TesseraqlProperties.PREFERENCE_STORE_BEAN,
-                            PreferenceStore.class);
+            PreferenceStore preferences = exchange.beans().lookup(
+                    TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                    PreferenceStore.class);
             if (preferences != null) {
                 storedTheme = validTheme(preferences
                         .preferences(principal.tenantId(), principal.subject())
@@ -227,8 +227,8 @@ final class ShellChrome {
     void inbox() {
         Principal principal = sessionPrincipal();
         if (principal != null) {
-            InboxStore inbox = exchange.getContext().getRegistry()
-                    .lookupByNameAndType(TesseraqlProperties.INBOX_STORE_BEAN, InboxStore.class);
+            InboxStore inbox = exchange.beans().lookup(TesseraqlProperties.INBOX_STORE_BEAN,
+                    InboxStore.class);
             if (inbox != null) {
                 int unread = inbox.unreadCount(principal.tenantId(), principal.subject());
                 // The badge is pre-rendered (InboxBadge, the single markup source shared
@@ -257,11 +257,11 @@ final class ShellChrome {
     void shortcuts(ViewBinding viewBinding) {
         Principal principal = sessionPrincipal();
         if (principal != null) {
-            ShortcutStore shortcutStore = exchange.getContext().getRegistry()
-                    .lookupByNameAndType(TesseraqlProperties.SHORTCUT_STORE_BEAN,
-                            ShortcutStore.class);
+            ShortcutStore shortcutStore = exchange.beans().lookup(
+                    TesseraqlProperties.SHORTCUT_STORE_BEAN,
+                    ShortcutStore.class);
             if (shortcutStore != null) {
-                String currentHref = exchange.getMessage().getHeader(Exchange.HTTP_URI,
+                String currentHref = exchange.getMessage().getHeader(Headers.HTTP_URI,
                         String.class);
                 List<Map<String, Object>> pins = new ArrayList<>();
                 boolean pinnedCurrent = false;
@@ -324,12 +324,12 @@ final class ShellChrome {
                 ? storedTheme
                 : cookieTheme != null
                         ? cookieTheme
-                        : validTheme(exchange.getContext().getRegistry().lookupByNameAndType(
+                        : validTheme(exchange.beans().lookup(
                                 TesseraqlProperties.UI_THEME_BEAN, String.class));
         if (theme != null) {
             model.put("_theme", theme);
         }
-        String neutral = validNeutral(exchange.getContext().getRegistry().lookupByNameAndType(
+        String neutral = validNeutral(exchange.beans().lookup(
                 TesseraqlProperties.UI_NEUTRAL_BEAN, String.class));
         if (neutral == null) {
             neutral = "slate";
@@ -337,7 +337,7 @@ final class ShellChrome {
         if (!"neutral".equals(neutral)) {
             model.put("_neutral", neutral);
         }
-        String density = validDensity(exchange.getContext().getRegistry().lookupByNameAndType(
+        String density = validDensity(exchange.beans().lookup(
                 TesseraqlProperties.UI_DENSITY_BEAN, String.class));
         if (density == null) {
             density = "compact";
@@ -361,8 +361,7 @@ final class ShellChrome {
      * stack's origin scope, and their links leave this member's prefix behind.
      */
     private boolean hostedMember() {
-        return exchange.getContext().getRegistry()
-                .lookupByName(TesseraqlProperties.STACK_MEMBER_BEAN) != null;
+        return exchange.beans().lookup(TesseraqlProperties.STACK_MEMBER_BEAN) != null;
     }
 
     /** Coerces a resolved {@code principal.roles}/{@code permissions} value to a string list. */

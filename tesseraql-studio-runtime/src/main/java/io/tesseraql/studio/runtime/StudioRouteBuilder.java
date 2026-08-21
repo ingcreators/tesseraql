@@ -8,6 +8,9 @@ import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.runtime.RouteReloader;
 import io.tesseraql.security.Principal;
 import io.tesseraql.studio.StudioService;
@@ -15,8 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -265,10 +266,10 @@ final class StudioRouteBuilder extends RouteBuilder {
         return value == null || value.isNull() ? null : value.asText();
     }
 
-    private Processor json(Function<Exchange, Object> handler) {
+    private Step json(Function<Exchange, Object> handler) {
         return exchange -> {
             Object result = handler.apply(exchange);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+            exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                     "application/json; charset=utf-8");
             exchange.getMessage().setBody(mapper.writeValueAsString(result));
         };

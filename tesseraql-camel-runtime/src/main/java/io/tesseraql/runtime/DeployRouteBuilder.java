@@ -11,6 +11,8 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.app.AppInstaller;
 import io.tesseraql.operations.app.AppUpgrader;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.jwt.JwtAuthenticator;
 import io.tesseraql.security.policy.Atoms;
@@ -23,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -105,7 +106,7 @@ final class DeployRouteBuilder extends RouteBuilder {
         String authorization = exchange.getMessage().getHeader("Authorization", String.class);
         if (authorization != null
                 && authorization.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
-            JwtAuthenticator jwt = exchange.getContext().getRegistry().lookupByNameAndType(
+            JwtAuthenticator jwt = exchange.beans().lookup(
                     TesseraqlProperties.JWT_AUTHENTICATOR_BEAN, JwtAuthenticator.class);
             if (jwt == null) {
                 throw new TqlException(PolicyEngine.UNAUTHORIZED, "A bearer was presented but"
@@ -150,15 +151,15 @@ final class DeployRouteBuilder extends RouteBuilder {
                             + "&fromVersion=" + encode(result.fromVersion())
                             + "&toVersion=" + encode(result.toVersion())
                             + (canary ? "&canary=true" : ""));
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
+            exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
             exchange.getMessage().setBody("");
             if (htmx) {
                 // htmx surfaces a redirect status to the XHR, not the tab; HX-Redirect on a 200
                 // is its full-navigation signal.
-                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
+                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
                 exchange.getMessage().setHeader("HX-Redirect", target);
             } else {
-                exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 303);
+                exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 303);
                 exchange.getMessage().setHeader("Location", target);
             }
             return;
@@ -168,8 +169,8 @@ final class DeployRouteBuilder extends RouteBuilder {
         body.put("fromVersion", result.fromVersion());
         body.put("toVersion", result.toVersion());
         body.put("canary", canary);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                 "application/json; charset=utf-8");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
     }
@@ -182,16 +183,16 @@ final class DeployRouteBuilder extends RouteBuilder {
      * envelope bytes as if they were a package.
      */
     private static InputStream packageStream(Exchange exchange) throws Exception {
-        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         if (contentType != null
                 && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
-            org.apache.camel.attachment.AttachmentMessage attachments = exchange
-                    .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
+            java.util.Map<String, jakarta.activation.DataHandler> attachments = exchange
+                    .getMessage().attachments();
             jakarta.activation.DataHandler part = null;
-            if (attachments != null && attachments.hasAttachments()) {
-                part = attachments.getAttachment("file") != null
-                        ? attachments.getAttachment("file")
-                        : attachments.getAttachments().values().iterator().next();
+            if (attachments != null && !attachments.isEmpty()) {
+                part = attachments.get("file") != null
+                        ? attachments.get("file")
+                        : attachments.values().iterator().next();
             }
             if (part == null) {
                 throw new TqlException(EMPTY_BODY, "The multipart deploy request carried no"

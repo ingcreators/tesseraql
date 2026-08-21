@@ -4,15 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -87,7 +86,8 @@ class HtmlResponseRendererTest {
                 dir,
                 dir);
 
-        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
+        Exchange exchange = new Exchange(
+                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
         exchange.setProperty(TesseraqlProperties.CONTEXT,
                 Map.of("result", Map.of("message", "Saved")));
         renderer.process(exchange);
@@ -121,7 +121,8 @@ class HtmlResponseRendererTest {
 
     private static Exchange exchange(Path dir, Map<String, Object> context,
             HtmlResponseRenderer renderer) throws Exception {
-        Exchange exchange = new DefaultExchange(new DefaultCamelContext());
+        Exchange exchange = new Exchange(
+                io.tesseraql.camel.CamelBeans.of(new DefaultCamelContext()));
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         renderer.process(exchange);
         return exchange;

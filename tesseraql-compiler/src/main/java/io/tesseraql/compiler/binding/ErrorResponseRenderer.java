@@ -5,6 +5,9 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import io.tesseraql.yaml.model.ResponseSpec.OnError;
@@ -13,8 +16,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Renders a caught exception into a JSON error response (design ch. 37.2, 37.4).
@@ -34,7 +35,7 @@ import org.apache.camel.Processor;
  * resolved human text — falling back to {@code tql.constraint.<code>} for mapped constraint
  * violations, and degrading to the key itself when no translation exists.
  */
-public final class ErrorResponseRenderer implements Processor {
+public final class ErrorResponseRenderer implements Step {
 
     /**
      * TQL-CAMEL-5000: an unexpected internal error — the failure carried no TesseraQL error
@@ -98,7 +99,8 @@ public final class ErrorResponseRenderer implements Processor {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        Throwable cause = exchange.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                Throwable.class);
         TqlErrorCode code = cause instanceof TqlException tql
                 ? tql.code()
                 : INTERNAL_ERROR;
@@ -123,7 +125,7 @@ public final class ErrorResponseRenderer implements Processor {
                 .removeIf(entry -> entry.getValue() instanceof String value
                         && (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0));
 
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
         // Capacity refusals are retryable; every 429/503 the envelope renders says so
         // (docs/vocabulary-cleanup.md slice 3) — the login throttle was the only surface
         // that did.
@@ -143,7 +145,7 @@ public final class ErrorResponseRenderer implements Processor {
         if (appHome != null && status != 401 && wantsHtmlLoginRedirect(exchange)) {
             String page = errorPage(status, error, tag);
             if (page != null) {
-                exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+                exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                         "text/html; charset=utf-8");
                 applySecurityHeaders(exchange);
                 exchange.getMessage().setBody(page);
@@ -151,13 +153,13 @@ public final class ErrorResponseRenderer implements Processor {
             }
         }
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
+            exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
             applySecurityHeaders(exchange);
             applyOnError(exchange);
             exchange.getMessage().setBody(htmxFragment(error));
             return;
         }
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(body));
     }
 
@@ -175,7 +177,7 @@ public final class ErrorResponseRenderer implements Processor {
         if ("true".equals(exchange.getMessage().getHeader("HX-Request", String.class))) {
             return false;
         }
-        Object method = exchange.getMessage().getHeader(Exchange.HTTP_METHOD);
+        Object method = exchange.getMessage().getHeader(Headers.HTTP_METHOD);
         if (method != null && !"GET".equalsIgnoreCase(String.valueOf(method))) {
             return false;
         }
@@ -185,8 +187,8 @@ public final class ErrorResponseRenderer implements Processor {
 
     /** Emits a 302 to the login page, preserving the original target as a sanitized {@code redirect}. */
     private static void redirectToLogin(Exchange exchange) {
-        String path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
-        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String path = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
+        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
         String wirePath = path == null || !path.startsWith("/") || path.startsWith("//")
                 ? "/"
                 : path;
@@ -199,8 +201,8 @@ public final class ErrorResponseRenderer implements Processor {
         // prefix, and `redirect` is handed back to the redirect helper after sign-in, which
         // prefixes it again, so it is stored base-relative like every other URL inside the
         // runtime (docs/base-path.md).
-        boolean hostedMember = exchange.getContext().getRegistry()
-                .lookupByName(io.tesseraql.camel.TesseraqlProperties.STACK_MEMBER_BEAN) != null;
+        boolean hostedMember = exchange.beans()
+                .lookup(io.tesseraql.camel.TesseraqlProperties.STACK_MEMBER_BEAN) != null;
         String target;
         String location;
         if (hostedMember) {
@@ -210,10 +212,10 @@ public final class ErrorResponseRenderer implements Processor {
             target = io.tesseraql.camel.BasePath.relative(exchange, wirePath) + suffix;
             location = io.tesseraql.camel.BasePath.url(exchange, LOGIN_PATH);
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
         exchange.getMessage().setHeader("Location", location + "?redirect="
                 + java.net.URLEncoder.encode(target, java.nio.charset.StandardCharsets.UTF_8));
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/plain; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/plain; charset=utf-8");
         exchange.getMessage().setBody("");
     }
 
@@ -223,7 +225,7 @@ public final class ErrorResponseRenderer implements Processor {
      * instead of the form's own target. Routes without {@code onError} are unaffected.
      */
     private void applyOnError(Exchange exchange) {
-        String routeId = exchange.getProperty(Exchange.FAILURE_ROUTE_ID, String.class);
+        String routeId = exchange.getProperty(TesseraqlProperties.FAILURE_ROUTE_ID, String.class);
         OnError onError = routeId == null ? null : onErrorByRoute.get(routeId);
         if (onError == null) {
             return;

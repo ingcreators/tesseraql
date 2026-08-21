@@ -6,13 +6,14 @@ import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.runtime.HostContext;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -68,9 +69,9 @@ final class CopilotProxyRouteBuilder extends RouteBuilder {
         copyHeader(exchange, request, "HX-Request");
         HttpResponse<String> response = client.send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.statusCode());
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.statusCode());
         response.headers().firstValue("Content-Type").ifPresent(value -> exchange.getMessage()
-                .setHeader(Exchange.CONTENT_TYPE, value));
+                .setHeader(Headers.CONTENT_TYPE, value));
         response.headers().firstValue("Location").ifPresent(value -> exchange.getMessage()
                 .setHeader("Location", value));
         exchange.getMessage().setBody(response.body());

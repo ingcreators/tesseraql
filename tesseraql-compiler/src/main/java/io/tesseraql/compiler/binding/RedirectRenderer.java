@@ -2,6 +2,9 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.ResponseSpec.RedirectResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -9,8 +12,6 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Renders a redirect response (design ch. 6.4, post/redirect/get): resolves the
@@ -25,7 +26,7 @@ import org.apache.camel.Processor;
  * {@code Location} redirect with the configured status (303 by default), which the browser follows
  * natively.
  */
-public final class RedirectRenderer implements Processor {
+public final class RedirectRenderer implements Step {
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{([^}]+)}");
 
@@ -93,10 +94,10 @@ public final class RedirectRenderer implements Processor {
         String target = io.tesseraql.camel.BasePath.url(exchange,
                 withStudioMember(exchange, location));
         if (isHtmxRequest(exchange)) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 204);
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 204);
             exchange.getMessage().setHeader("HX-Redirect", target);
         } else {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
             exchange.getMessage().setHeader("Location", target);
         }
         exchange.getMessage().setBody("");

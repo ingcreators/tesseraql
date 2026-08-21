@@ -6,19 +6,20 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.FileReadSpec;
 import io.tesseraql.core.files.FileTransferService;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Accepts an uploaded file body and starts its asynchronous import (design ch. 28): the raw
  * request body is the file content, the response is 202 with the transfer id and status URL.
  */
-public final class FileImportProcessor implements Processor {
+public final class FileImportProcessor implements Step {
 
     private static final TqlErrorCode EMPTY_BODY = new TqlErrorCode(TqlDomain.LD, 2820);
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2821);
@@ -46,9 +47,9 @@ public final class FileImportProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        FileTransferService transfers = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.FILE_TRANSFER_BEAN,
-                        FileTransferService.class);
+        FileTransferService transfers = exchange.beans().lookup(
+                TesseraqlProperties.FILE_TRANSFER_BEAN,
+                FileTransferService.class);
         if (transfers == null) {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }
@@ -73,15 +74,15 @@ public final class FileImportProcessor implements Processor {
      * raw request body.
      */
     private static InputStream body(Exchange exchange) throws Exception {
-        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         if (contentType != null
                 && contentType.toLowerCase(java.util.Locale.ROOT).startsWith("multipart/")) {
-            org.apache.camel.attachment.AttachmentMessage attachments = exchange
-                    .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
-            if (attachments != null && attachments.hasAttachments()) {
-                jakarta.activation.DataHandler part = attachments.getAttachment("file");
+            java.util.Map<String, jakarta.activation.DataHandler> attachments = exchange
+                    .getMessage().attachments();
+            if (attachments != null && !attachments.isEmpty()) {
+                jakarta.activation.DataHandler part = attachments.get("file");
                 if (part == null) {
-                    part = attachments.getAttachments().values().iterator().next();
+                    part = attachments.values().iterator().next();
                 }
                 return part.getInputStream();
             }
@@ -112,12 +113,12 @@ public final class FileImportProcessor implements Processor {
         if (withFileUrl) {
             body.put("fileUrl", statusUrl + "/file");
         }
-        exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 202);
+        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 202);
         // 202 points at the status resource (docs/vocabulary-cleanup.md slice 3); the body
         // keeps statusUrl/fileUrl for existing consumers.
         exchange.getMessage().setHeader("Location", statusUrl);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
             exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {

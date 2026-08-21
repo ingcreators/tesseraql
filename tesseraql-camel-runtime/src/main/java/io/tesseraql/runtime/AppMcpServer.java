@@ -10,6 +10,8 @@ import io.tesseraql.mcp.McpResource;
 import io.tesseraql.mcp.McpServer;
 import io.tesseraql.mcp.McpTool;
 import io.tesseraql.mcp.McpToolResult;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.PromptFile;
 import io.tesseraql.yaml.manifest.ResourceFile;
@@ -18,7 +20,6 @@ import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.UiSpec;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 
 /**
  * Builds the {@link McpServer} that serves an application's declared MCP tools, resources, and MCP
@@ -231,7 +232,7 @@ final class AppMcpServer {
             return new Outcome(null, null, out.getException());
         }
         return new Outcome(out.getMessage().getBody(String.class),
-                out.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class), null);
+                out.getMessage().getHeader(Headers.HTTP_RESPONSE_CODE, Integer.class), null);
     }
 
     /**

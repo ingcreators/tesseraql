@@ -1,11 +1,10 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.pipeline.Exchange;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
-import org.apache.camel.support.DefaultExchange;
 import org.apache.camel.support.service.ServiceSupport;
 
 /**
@@ -64,7 +63,7 @@ final class RoutePipelines extends ServiceSupport {
         if (pipeline == null) {
             return Optional.empty();
         }
-        Exchange exchange = new DefaultExchange(context);
+        Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
         prepare.accept(exchange);
         try {
             pipeline.run(exchange);

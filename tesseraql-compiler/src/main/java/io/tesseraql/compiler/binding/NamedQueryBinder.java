@@ -2,12 +2,12 @@ package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.Binding;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Rebinds the SQL parameters for one additional named query of a route (the {@code queries:} block,
@@ -15,7 +15,7 @@ import org.apache.camel.Processor;
  * results (for example {@code main.rows}) as well as the request context ({@code path.id},
  * {@code query.q}, {@code principal.*}).
  */
-public final class NamedQueryBinder implements Processor {
+public final class NamedQueryBinder implements Step {
 
     private final Binding binding;
 

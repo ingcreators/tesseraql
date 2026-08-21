@@ -6,6 +6,9 @@ import io.tesseraql.core.attachment.AttachmentStore;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -13,8 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Handles an attachment upload (roadmap Phase 30 slice 1): reads the multipart file part (or raw
@@ -22,7 +23,7 @@ import org.apache.camel.Processor;
  * which spools it off-heap into the blob store and records its metadata against the owning record.
  * Responds {@code 201} with the stored attachment's id and checksum.
  */
-public final class AttachmentUploadProcessor implements Processor {
+public final class AttachmentUploadProcessor implements Step {
 
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2840);
     private static final TqlErrorCode EMPTY = new TqlErrorCode(TqlDomain.LD, 2841);
@@ -45,9 +46,9 @@ public final class AttachmentUploadProcessor implements Processor {
 
     @Override
     public void process(Exchange exchange) throws Exception {
-        AttachmentService service = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
-                        AttachmentService.class);
+        AttachmentService service = exchange.beans().lookup(
+                TesseraqlProperties.ATTACHMENT_SERVICE_BEAN,
+                AttachmentService.class);
         if (service == null) {
             throw new TqlException(NO_SERVICE, "Attachment service is not configured");
         }
@@ -98,29 +99,29 @@ public final class AttachmentUploadProcessor implements Processor {
         body.put("contentType", a.contentType());
         body.put("byteSize", a.byteSize());
         body.put("checksum", a.checksum());
-        exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 201);
+        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 201);
         // 201 identifies what it created (docs/vocabulary-cleanup.md slice 3): the
         // attachment's own subtree URL under the upload path.
-        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         if (uri != null && !uri.isBlank()) {
             exchange.getMessage().setHeader("Location", uri + "/" + a.id());
         }
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FileImportProcessor.MAPPER.writeValueAsString(body));
     }
 
     /** The uploaded part: the first multipart file part (preferring {@code file}), or the raw body. */
     private static UploadPart resolvePart(Exchange exchange) throws Exception {
-        String contentType = exchange.getMessage().getHeader(Exchange.CONTENT_TYPE, String.class);
+        String contentType = exchange.getMessage().getHeader(Headers.CONTENT_TYPE, String.class);
         if (contentType != null
                 && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/")) {
-            org.apache.camel.attachment.AttachmentMessage attachments = exchange
-                    .getMessage(org.apache.camel.attachment.AttachmentMessage.class);
-            if (attachments != null && attachments.hasAttachments()) {
-                jakarta.activation.DataHandler handler = attachments.getAttachment("file");
+            java.util.Map<String, jakarta.activation.DataHandler> attachments = exchange
+                    .getMessage().attachments();
+            if (attachments != null && !attachments.isEmpty()) {
+                jakarta.activation.DataHandler handler = attachments.get("file");
                 if (handler == null) {
-                    handler = attachments.getAttachments().values().iterator().next();
+                    handler = attachments.values().iterator().next();
                 }
                 return new UploadPart(handler.getName(), handler.getContentType(),
                         handler.getInputStream());

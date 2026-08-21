@@ -3,12 +3,13 @@ package io.tesseraql.oauth;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -102,9 +103,9 @@ final class OAuthRouteBuilder extends RouteBuilder {
     /** The document behind one member's path-inserted well-known: its resource id, and the
      * issuer as the one entry in {@code authorization_servers}. */
     private void resourceMetadata(Exchange exchange) throws Exception {
-        String path = exchange.getMessage().getHeader(Exchange.HTTP_PATH, String.class);
+        String path = exchange.getMessage().getHeader(Headers.HTTP_PATH, String.class);
         if (path == null || path.isBlank()) {
-            path = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+            path = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         }
         String resource = flow.issuer()
                 + path.substring("/.well-known/oauth-protected-resource".length());
@@ -112,8 +113,8 @@ final class OAuthRouteBuilder extends RouteBuilder {
         document.put("resource", resource);
         document.put("authorization_servers", java.util.List.of(flow.issuer()));
         document.put("bearer_methods_supported", java.util.List.of("header"));
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
     }
 
@@ -138,8 +139,8 @@ final class OAuthRouteBuilder extends RouteBuilder {
         document.put("code_challenge_methods_supported", java.util.List.of("S256"));
         document.put("token_endpoint_auth_methods_supported",
                 java.util.List.of("none", "client_secret_basic"));
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(document));
     }
 
@@ -209,8 +210,8 @@ final class OAuthRouteBuilder extends RouteBuilder {
         if (metadata.hasNonNull("client_name")) {
             answer.put("client_name", metadata.get("client_name").asText());
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 201);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 201);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setHeader("Cache-Control", "no-store");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(answer));
     }
@@ -262,8 +263,8 @@ final class OAuthRouteBuilder extends RouteBuilder {
             body.put("token_type", "Bearer");
             body.put("expires_in", token.getExpiresIn());
             body.put("refresh_token", token.getRefreshToken());
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-            exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+            exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
             exchange.getMessage().setHeader("Cache-Control", "no-store");
             exchange.getMessage().setBody(MAPPER.writeValueAsString(body));
         } catch (org.apache.cxf.rs.security.oauth2.provider.OAuthServiceException refused) {
@@ -287,8 +288,8 @@ final class OAuthRouteBuilder extends RouteBuilder {
     }
 
     private static void error(Exchange exchange, int status, String code) throws Exception {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setHeader("Cache-Control", "no-store");
         exchange.getMessage().setBody(MAPPER.writeValueAsString(
                 java.util.Map.of("error", code)));
@@ -306,7 +307,7 @@ final class OAuthRouteBuilder extends RouteBuilder {
     }
 
     private void jwks(Exchange exchange) {
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(JwksDocuments.render(keys.published(accessTokenLifetime)));
     }
 
@@ -316,7 +317,7 @@ final class OAuthRouteBuilder extends RouteBuilder {
      * everything else lands on the consent page with the request echoed in the query.
      */
     private void authorize(Exchange exchange) {
-        String query = exchange.getMessage().getHeader(Exchange.HTTP_QUERY, String.class);
+        String query = exchange.getMessage().getHeader(Headers.HTTP_QUERY, String.class);
         SessionStore.Session session = session(exchange);
         if (session == null) {
             redirect(exchange, 302, "/_tesseraql/login?redirect="
@@ -353,7 +354,7 @@ final class OAuthRouteBuilder extends RouteBuilder {
         }
         String expected = session.csrfToken();
         if (expected == null || !expected.equals(form.get("_csrf"))) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 403);
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 403);
             exchange.getMessage().setBody("");
             return;
         }
@@ -384,7 +385,7 @@ final class OAuthRouteBuilder extends RouteBuilder {
     }
 
     private static void redirect(Exchange exchange, int status, String location) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
         exchange.getMessage().setHeader("Location", location);
         exchange.getMessage().setBody("");
     }

@@ -33,9 +33,9 @@ final class CompiledPipelines {
     static <T> List<T> steps(CamelContext context, Class<T> type) {
         List<T> found = new ArrayList<>();
         for (Pipeline pipeline : Pipelines.of(context).all().values()) {
-            for (Pipeline.Step step : pipeline.steps()) {
-                if (type.isInstance(step.processor())) {
-                    found.add(type.cast(step.processor()));
+            for (io.tesseraql.pipeline.Step step : pipeline.steps()) {
+                if (type.isInstance(step)) {
+                    found.add(type.cast(step));
                 }
             }
         }
@@ -44,8 +44,8 @@ final class CompiledPipelines {
 
     private static List<String> names(Pipeline pipeline) {
         List<String> names = new ArrayList<>();
-        for (Pipeline.Step step : pipeline.steps()) {
-            names.add(step.processor().getClass().getSimpleName());
+        for (io.tesseraql.pipeline.Step step : pipeline.steps()) {
+            names.add(step.getClass().getSimpleName());
         }
         return names;
     }

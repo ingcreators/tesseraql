@@ -2,11 +2,14 @@ package io.tesseraql.oidc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.federation.FederationErrors;
 import io.tesseraql.security.session.LoginRedirects;
@@ -19,7 +22,6 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -269,15 +271,15 @@ final class OidcRouteBuilder extends RouteBuilder {
      * decision 7).
      */
     private void redirect(Exchange exchange, String location) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
         exchange.getMessage().setHeader("Location",
                 io.tesseraql.camel.BasePath.url(exchange, location));
         exchange.getMessage().setBody(null);
     }
 
     private void ok(Exchange exchange) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody("{\"ok\":true}");
     }
 
@@ -294,7 +296,8 @@ final class OidcRouteBuilder extends RouteBuilder {
      * is a server-side failure and says so.
      */
     private void badRequest(Exchange exchange) {
-        Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        Throwable cause = exchange.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                Throwable.class);
         if (cause instanceof TqlException tql) {
             respondError(exchange, tql.code(), "OIDC request refused");
             return;
@@ -305,9 +308,9 @@ final class OidcRouteBuilder extends RouteBuilder {
 
     /** The framework envelope, so a federation error reads like every other error. */
     private void respondError(Exchange exchange, TqlErrorCode code, String message) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE,
                 ErrorResponseRenderer.httpStatus(code));
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FederationErrors.body(code, message));
     }
 

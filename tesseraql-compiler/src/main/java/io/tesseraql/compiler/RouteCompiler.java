@@ -369,7 +369,7 @@ public final class RouteCompiler {
     }
 
     /** The terminal renderer: a redirect when declared, otherwise the JSON response. */
-    private org.apache.camel.Processor responseRenderer(RouteDefinition definition) {
+    private io.tesseraql.pipeline.Step responseRenderer(RouteDefinition definition) {
         if (definition.response() != null && definition.response().redirect() != null) {
             return new io.tesseraql.compiler.binding.RedirectRenderer(
                     definition.response().redirect());
@@ -389,7 +389,7 @@ public final class RouteCompiler {
     }
 
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
-            org.apache.camel.Processor preCommand) {
+            io.tesseraql.pipeline.Step preCommand) {
         buildTransactionalCommand(builder, routeFile, preCommand, null);
     }
 
@@ -402,7 +402,7 @@ public final class RouteCompiler {
      * transaction.
      */
     private void buildTransactionalCommand(RouteBuilder builder, RouteFile routeFile,
-            org.apache.camel.Processor preCommand,
+            io.tesseraql.pipeline.Step preCommand,
             io.tesseraql.compiler.binding.WorkflowBinding workflow) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
@@ -823,7 +823,7 @@ public final class RouteCompiler {
         route.process(exchange -> {
             if (Boolean.TRUE.equals(
                     exchange.getProperty(TesseraqlProperties.QUEUE_DUPLICATE))) {
-                exchange.getExchangeExtension().setRouteStop(true);
+                exchange.setRouteStop(true);
             }
         });
         // The projection pattern (docs/multi-datasource.md): the consumer's apply transaction may
@@ -1406,7 +1406,7 @@ public final class RouteCompiler {
     }
 
     /** A tool's result renderer: its declared JSON shape, or the raw SQL/command result. */
-    private org.apache.camel.Processor mcpToolRenderer(RouteDefinition definition) {
+    private io.tesseraql.pipeline.Step mcpToolRenderer(RouteDefinition definition) {
         if (definition.response() != null && definition.response().json() != null) {
             return new JsonResponseRenderer(withDefaultHeaders(definition.response().json()),
                     functions);
@@ -1426,7 +1426,7 @@ public final class RouteCompiler {
     }
 
     /** Builds an execution step URI: a service provider, a tesseraql-iam contract or a SQL file. */
-    private org.apache.camel.Processor execution(RouteFile routeFile,
+    private io.tesseraql.pipeline.Step execution(RouteFile routeFile,
             io.tesseraql.yaml.model.Binding binding, String resultKey) {
         return execution(routeFile.source().getParent(), binding, resultKey,
                 routeFile.definition().effectiveDatasource());
@@ -1436,7 +1436,7 @@ public final class RouteCompiler {
      * SQL files relative to {@code sourceDir} (shared by routes and MCP tools). The binding's own
      * {@code datasource:} wins over {@code routeDatasource}, the route-level connector (roadmap
      * Phase 53); the baked dialect follows the connector the SQL actually runs on. */
-    private org.apache.camel.Processor execution(Path sourceDir,
+    private io.tesseraql.pipeline.Step execution(Path sourceDir,
             io.tesseraql.yaml.model.Binding binding, String resultKey, String routeDatasource) {
         if (binding.isService()) {
             return new io.tesseraql.camel.service.ServiceStep("call", binding.service(), resultKey);
@@ -1683,7 +1683,7 @@ public final class RouteCompiler {
         route.process(exchange -> {
             if (Boolean.TRUE.equals(
                     exchange.getProperty(IdempotencyProcessors.REPLAY_PROPERTY))) {
-                exchange.getExchangeExtension().setRouteStop(true);
+                exchange.setRouteStop(true);
             }
         });
     }

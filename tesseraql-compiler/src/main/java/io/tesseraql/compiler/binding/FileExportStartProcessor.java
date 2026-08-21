@@ -6,16 +6,16 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.core.files.FileWriteSpec;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.nio.file.Path;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Starts an asynchronous file export (design ch. 28): the route-bound parameters feed the
  * extraction query, the response is 202 with the transfer id, status URL and file URL.
  */
-public final class FileExportStartProcessor implements Processor {
+public final class FileExportStartProcessor implements Step {
 
     private static final TqlErrorCode NO_SERVICE = new TqlErrorCode(TqlDomain.LD, 2821);
 
@@ -63,9 +63,9 @@ public final class FileExportStartProcessor implements Processor {
     @Override
     @SuppressWarnings("unchecked")
     public void process(Exchange exchange) {
-        FileTransferService transfers = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.FILE_TRANSFER_BEAN,
-                        FileTransferService.class);
+        FileTransferService transfers = exchange.beans().lookup(
+                TesseraqlProperties.FILE_TRANSFER_BEAN,
+                FileTransferService.class);
         if (transfers == null) {
             throw new TqlException(NO_SERVICE, "File transfer service is not configured");
         }

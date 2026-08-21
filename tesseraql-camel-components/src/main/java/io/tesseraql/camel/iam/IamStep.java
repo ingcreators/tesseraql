@@ -6,17 +6,17 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Executes an Identity SQL Contract and publishes the rows into the execution context, mirroring
  * the {@code tesseraql-sql} result shape so the same response renderers apply (design ch. 9.3).
  */
-public class IamStep implements Processor {
+public class IamStep implements Step {
 
     private static final TqlErrorCode UNSUPPORTED = new TqlErrorCode(TqlDomain.IAM, 2000);
     private static final TqlErrorCode NOT_CONFIGURED = new TqlErrorCode(TqlDomain.IAM, 2001);
@@ -71,7 +71,7 @@ public class IamStep implements Processor {
     }
 
     private <T> T bean(Exchange exchange, Class<T> type, String name) {
-        T bean = exchange.getContext().getRegistry().lookupByNameAndType(name, type);
+        T bean = exchange.beans().lookup(name, type);
         if (bean == null) {
             throw new TqlException(NOT_CONFIGURED,
                     "Identity bean '" + name + "' is not configured");

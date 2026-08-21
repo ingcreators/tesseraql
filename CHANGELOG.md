@@ -136,6 +136,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **`Exchange`, `Message` and `Processor` are this framework's own types** (docs/camel-removal.md
+  structural decision 2, slice 3b). What an exchange carries was counted rather than copied: a
+  message, exchange properties, the exception, the route id, the stop flag, the uploaded parts and
+  the completions that must run whether a request succeeded or failed. Nothing else in Camel's
+  exchange was called here — no in/out pair, no unit of work, and no type-converter registry that
+  could find a conversion nobody wrote down. Conversion is a declared table now: bytes or a stream
+  to text, a cast, and null for anything else. A step reaches the runtime's services through a
+  `Beans` lookup, which is the only thing 63 of the 64 calls on the Camel context ever were.
+  Behaviour is unchanged, including the two that had to be rebuilt because they were load-bearing
+  rather than incidental — a repeated form field still becomes a list, and every completion still
+  runs even when one of them throws.
+
 - **The framework's own four components stop being Camel components** (docs/camel-removal.md
   structural decision 2, slice 3a). `tesseraql-sql:`, `tesseraql-auth:`, `tesseraql-iam:` and
   `tesseraql-service:` were `Component`/`Endpoint`/`Producer` implementations, so the compiler

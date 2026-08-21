@@ -1,22 +1,22 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.pipeline.Completion;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.apache.camel.spi.Synchronization;
-import org.apache.camel.support.UnitOfWorkHelper;
 
 /**
  * A compiled route as a list of processors, run without a route (docs/http-edge.md decision 2).
  *
  * <p>What a compiled route contains is two {@code onException} handlers, a run of {@code process}
  * steps and a {@code to} — the {@code tesseraql-sql:} producer. Every one of those is a
- * {@link Processor} or resolves to one, so running them in order is a loop, and the thread that
+ * {@link Step} or resolves to one, so running them in order is a loop, and the thread that
  * runs the loop is a choice rather than something {@code camel-platform-http-vertx} makes for the
  * framework. Measured on a real runtime: <strong>138 HTTP routes, none declined</strong>.
  *
@@ -29,7 +29,7 @@ final class RoutePipeline {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory
             .getLogger(RoutePipeline.class);
 
-    private final List<Processor> steps;
+    private final List<Step> steps;
     private final List<Handler> handlers;
     /**
      * Where the declared execution lane takes over, and the executor it takes over on.
@@ -44,10 +44,10 @@ final class RoutePipeline {
     private final String laneExecutor;
 
     /** One {@code onException} clause: what it catches, and what it does about it. */
-    private record Handler(List<String> caught, Processor renderer) {
+    private record Handler(List<String> caught, Step renderer) {
     }
 
-    private RoutePipeline(List<Processor> steps, List<Handler> handlers, int handoffAt,
+    private RoutePipeline(List<Step> steps, List<Handler> handlers, int handoffAt,
             String laneExecutor) {
         this.steps = steps;
         this.handlers = handlers;
@@ -70,10 +70,8 @@ final class RoutePipeline {
      * stopped being (docs/camel-removal.md decision 2).
      */
     static Optional<RoutePipeline> of(CamelContext camelContext, Pipeline compiled) {
-        List<Processor> steps = new ArrayList<>();
-        for (Pipeline.Step step : compiled.steps()) {
-            steps.add(step.processor());
-        }
+        List<Step> steps = new ArrayList<>();
+        steps.addAll(compiled.steps());
         List<Handler> handlers = new ArrayList<>();
         for (Pipeline.Handler handler : compiled.handlers()) {
             handlers.add(new Handler(handler.caught(), handler.renderer()));
@@ -113,7 +111,7 @@ final class RoutePipeline {
                     onLane(exchange, at);
                     return;
                 }
-                Processor step = steps.get(at);
+                Step step = steps.get(at);
                 step.process(exchange);
                 if (exchange.getException() != null) {
                     throw exchange.getException();
@@ -131,8 +129,8 @@ final class RoutePipeline {
             // property, so the completions below run as completions rather than as failures —
             // which is what the audit row and the released permit are recorded against.
             exchange.setException(null);
-            exchange.setProperty(Exchange.EXCEPTION_CAUGHT, failure);
-            Processor renderer = rendererFor(failure);
+            exchange.setProperty(TesseraqlProperties.EXCEPTION_CAUGHT, failure);
+            Step renderer = rendererFor(failure);
             if (renderer == null) {
                 throw new IllegalStateException(failure);
             }
@@ -148,8 +146,8 @@ final class RoutePipeline {
 
     /** Runs the steps from {@code from} on the lane's executor, and waits for them. */
     private void onLane(Exchange exchange, int from) throws Exception {
-        java.util.concurrent.ExecutorService lane = exchange.getContext().getRegistry()
-                .lookupByNameAndType(laneExecutor, java.util.concurrent.ExecutorService.class);
+        java.util.concurrent.ExecutorService lane = exchange.beans().lookup(laneExecutor,
+                java.util.concurrent.ExecutorService.class);
         if (lane == null) {
             throw new IllegalStateException("Execution lane '" + laneExecutor + "' is not bound");
         }
@@ -194,9 +192,20 @@ final class RoutePipeline {
      * envelope above has already answered for it.
      */
     private static void done(Exchange exchange) {
-        List<Synchronization> completions = exchange.getExchangeExtension().handoverCompletions();
-        if (completions != null && !completions.isEmpty()) {
-            UnitOfWorkHelper.doneSynchronizations(exchange, completions);
+        boolean failed = exchange.getException() != null;
+        for (Completion completion : exchange.handoverCompletions()) {
+            try {
+                if (failed) {
+                    completion.onFailure(exchange);
+                } else {
+                    completion.onComplete(exchange);
+                }
+            } catch (RuntimeException ignored) {
+                // One completion failing must not strand the ones after it: an audit row that
+                // cannot be written is not a reason to leak a permit. Camel's helper made the
+                // same choice, and it is the reason this loop is a loop rather than a stream.
+                LOG.warn("A completion of route {} failed", exchange.getFromRouteId(), ignored);
+            }
         }
     }
 
@@ -207,7 +216,7 @@ final class RoutePipeline {
      * failure's own hierarchy — which is also how a reader checks it, and close enough for a
      * prototype whose routes declare exactly two clauses.
      */
-    private Processor rendererFor(Exception failure) {
+    private Step rendererFor(Exception failure) {
         for (Class<?> type = failure.getClass(); type != null; type = type.getSuperclass()) {
             for (Handler handler : handlers) {
                 if (handler.caught().contains(type.getName())) {

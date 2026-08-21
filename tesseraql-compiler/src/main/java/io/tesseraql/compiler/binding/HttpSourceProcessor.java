@@ -1,13 +1,13 @@
 package io.tesseraql.compiler.binding;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.http.OutboundGateway;
 import io.tesseraql.yaml.model.HttpSourceSpec;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Executes one named {@code http:} source of a query route (docs/connectors.md, "HTTP
@@ -24,7 +24,7 @@ import org.apache.camel.Processor;
  * degrades to zero rows plus {@code <name>.error}, and the page still renders.</li>
  * </ul>
  */
-public final class HttpSourceProcessor implements Processor {
+public final class HttpSourceProcessor implements Step {
 
     private static final System.Logger LOG = System.getLogger(HttpSourceProcessor.class.getName());
 
@@ -41,9 +41,8 @@ public final class HttpSourceProcessor implements Processor {
         @SuppressWarnings("unchecked")
         Map<String, Object> context = exchange.getProperty(
                 TesseraqlProperties.CONTEXT, Map.of(), Map.class);
-        OutboundGateway gateway = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
-                        OutboundGateway.class);
+        OutboundGateway gateway = exchange.beans().lookup(TesseraqlProperties.OUTBOUND_GATEWAY_BEAN,
+                OutboundGateway.class);
         if (gateway == null) {
             throw new IllegalStateException("http: source '" + name
                     + "' declared but no outbound gateway is bound");
@@ -72,9 +71,9 @@ public final class HttpSourceProcessor implements Processor {
     }
 
     private static io.tesseraql.core.telemetry.Meter meter(Exchange exchange) {
-        io.tesseraql.core.telemetry.Meter meter = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.METER_BEAN,
-                        io.tesseraql.core.telemetry.Meter.class);
+        io.tesseraql.core.telemetry.Meter meter = exchange.beans().lookup(
+                TesseraqlProperties.METER_BEAN,
+                io.tesseraql.core.telemetry.Meter.class);
         return meter != null ? meter : io.tesseraql.core.telemetry.NoopMeter.INSTANCE;
     }
 

@@ -4,9 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.RouteTelemetry;
-import org.apache.camel.Exchange;
+import io.tesseraql.pipeline.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -28,7 +27,7 @@ class RouteTelemetryMdcTest {
         try (DefaultCamelContext context = new DefaultCamelContext()) {
             context.getRegistry().bind(TesseraqlProperties.TRACER_BEAN,
                     new io.tesseraql.core.telemetry.RingTracer(10));
-            Exchange exchange = new DefaultExchange(context);
+            Exchange exchange = new Exchange(io.tesseraql.camel.CamelBeans.of(context));
             new RouteTelemetry("users.search", "GET", "/api/users", "app", false)
                     .process(exchange);
 

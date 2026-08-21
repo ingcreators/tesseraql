@@ -7,10 +7,11 @@ import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.Principal;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -58,7 +59,7 @@ final class OpsShellRouteBuilder extends RouteBuilder {
             // The unhosted boot: the member is this runtime, so the local handler answers. Run
             // rather than send: what this ever wanted was the pipeline behind that address
             // (docs/camel-removal.md decision 1), and a template was the only way to ask for it.
-            RoutePipelines.of(exchange.getContext())
+            exchange.beans().lookup(RoutePipelines.BEAN, RoutePipelines.class)
                     .run("ops.console.transferFile", target -> {
                         target.getMessage().setHeaders(exchange.getMessage().getHeaders());
                         target.getMessage().setBody(exchange.getMessage().getBody());
@@ -88,9 +89,9 @@ final class OpsShellRouteBuilder extends RouteBuilder {
             throw new java.io.IOException("interrupted", ex);
         }
         exchange.getMessage().removeHeaders("*");
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, response.statusCode());
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, response.statusCode());
         response.headers().firstValue("Content-Type").ifPresent(value -> exchange.getMessage()
-                .setHeader(Exchange.CONTENT_TYPE, value));
+                .setHeader(Headers.CONTENT_TYPE, value));
         response.headers().firstValue("Content-Disposition").ifPresent(value -> exchange
                 .getMessage().setHeader("Content-Disposition", value));
         exchange.getMessage().setBody(response.body());

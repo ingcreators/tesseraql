@@ -12,6 +12,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.IdentityContracts;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.pipeline.Exchange;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -19,7 +20,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -66,16 +66,15 @@ final class IamAdminRouteBuilder extends RouteBuilder {
                         throw new TqlException(new TqlErrorCode(TqlDomain.FIELD, 2001),
                                 "Select at least one user");
                     }
-                    IdentityService identity = exchange.getContext().getRegistry()
-                            .lookupByNameAndType(TesseraqlProperties.IDENTITY_SERVICE_BEAN,
-                                    IdentityService.class);
-                    RealmConfig realm = exchange.getContext().getRegistry()
-                            .lookupByNameAndType(TesseraqlProperties.IDENTITY_REALM_BEAN,
-                                    RealmConfig.class);
-                    io.tesseraql.security.session.SessionStore sessions = exchange.getContext()
-                            .getRegistry().lookupByNameAndType(
-                                    TesseraqlProperties.SESSION_STORE_BEAN,
-                                    io.tesseraql.security.session.SessionStore.class);
+                    IdentityService identity = exchange.beans().lookup(
+                            TesseraqlProperties.IDENTITY_SERVICE_BEAN,
+                            IdentityService.class);
+                    RealmConfig realm = exchange.beans().lookup(
+                            TesseraqlProperties.IDENTITY_REALM_BEAN,
+                            RealmConfig.class);
+                    io.tesseraql.security.session.SessionStore sessions = exchange.beans().lookup(
+                            TesseraqlProperties.SESSION_STORE_BEAN,
+                            io.tesseraql.security.session.SessionStore.class);
                     // The same contract the per-user route runs, once per selected id. Disabled
                     // means disabled (docs/session-administration.md): every session of each
                     // subject ends now, not at cookie expiry.

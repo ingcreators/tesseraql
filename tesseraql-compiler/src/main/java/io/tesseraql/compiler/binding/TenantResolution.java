@@ -6,10 +6,10 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.tenant.TenantContext;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.Arrays;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Resolves the request's tenant and publishes it into the execution context (design ch. 30).
@@ -20,7 +20,7 @@ import org.apache.camel.Processor;
  * stored as the {@link TesseraqlProperties#TENANT} property (read into the context by the request
  * binder) and recorded on the route telemetry span.
  */
-public final class TenantResolution implements Processor {
+public final class TenantResolution implements Step {
 
     private static final TqlErrorCode MISSING_TENANT = new TqlErrorCode(TqlDomain.TENANT, 4001);
 

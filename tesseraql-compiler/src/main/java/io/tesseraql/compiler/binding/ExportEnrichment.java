@@ -5,9 +5,9 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.RowEnricher;
+import io.tesseraql.pipeline.Exchange;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 
 /**
  * Builds an export's {@link RowEnricher} from its {@code enrich:} declarations

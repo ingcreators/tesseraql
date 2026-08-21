@@ -5,14 +5,14 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Delegates a workflow task to another principal (roadmap Phase 28 slice 3): the caller — who must
@@ -20,7 +20,7 @@ import org.apache.camel.Processor;
  * delegate is the {@code {to}} path segment; only the current assignee (or a candidate-group member)
  * may delegate, else {@code TQL-WORKFLOW-3203} (403).
  */
-public final class WorkflowDelegateProcessor implements Processor {
+public final class WorkflowDelegateProcessor implements Step {
 
     /** TQL-WORKFLOW-3203: the caller holds no actionable task for the document (HTTP 403). */
     private static final TqlErrorCode NOT_ASSIGNED = new TqlErrorCode(TqlDomain.WORKFLOW, 3203);
@@ -52,7 +52,7 @@ public final class WorkflowDelegateProcessor implements Processor {
         String subject = principal == null ? null : principal.subject();
         List<String> groups = principal == null ? List.of() : principal.groups();
 
-        WorkflowTaskStore taskStore = exchange.getContext().getRegistry().lookupByNameAndType(
+        WorkflowTaskStore taskStore = exchange.beans().lookup(
                 TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, WorkflowTaskStore.class);
         if (taskStore == null) {
             throw new TqlException(NO_TASK_STORE,
@@ -71,7 +71,7 @@ public final class WorkflowDelegateProcessor implements Processor {
                 // Handing a task to someone absent forwards it once (roadmap Phase 52) -
                 // the same one-hop rule as assignment; the task records who it was meant for.
                 io.tesseraql.core.workflow.Delegations.Resolved resolved = io.tesseraql.core.workflow.Delegations
-                        .resolve(exchange.getContext().getRegistry().lookupByNameAndType(
+                        .resolve(exchange.beans().lookup(
                                 TesseraqlProperties.DELEGATION_STORE_BEAN,
                                 io.tesseraql.core.workflow.DelegationStore.class),
                                 tenantOf(exchange), to);
@@ -90,7 +90,7 @@ public final class WorkflowDelegateProcessor implements Processor {
         exchange.getMessage().setBody(Map.of("ok", true));
     }
 
-    private static String tenantOf(org.apache.camel.Exchange exchange) {
+    private static String tenantOf(io.tesseraql.pipeline.Exchange exchange) {
         Principal principal = exchange.getProperty(TesseraqlProperties.PRINCIPAL,
                 Principal.class);
         return principal == null ? null : principal.tenantId();

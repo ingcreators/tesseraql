@@ -162,14 +162,16 @@ final class AssetRoutes extends ServiceSupport {
         } catch (Exception refused) {
             throw new IllegalStateException("Static asset serving could not be started", refused);
         }
-        String mount = io.tesseraql.camel.BasePath.of(camelContext) + "/assets";
+        String mount = io.tesseraql.camel.BasePath
+                .of(io.tesseraql.camel.CamelBeans.of(camelContext)) + "/assets";
         router.route(HttpMethod.GET, mount + "/*").order(AFTER_THE_GATE)
                 .handler(ctx -> assets.serve(ctx, mount));
     }
 
     /** The mount an admission gate must let through untouched. */
     static String mountOf(CamelContext camelContext) {
-        return io.tesseraql.camel.BasePath.of(camelContext) + "/assets";
+        return io.tesseraql.camel.BasePath.of(io.tesseraql.camel.CamelBeans.of(camelContext))
+                + "/assets";
     }
 
     @Override

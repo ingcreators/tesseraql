@@ -6,9 +6,9 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.threading.ExecutionLanes;
 import io.tesseraql.core.threading.Lane;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.apache.camel.spi.Synchronization;
+import io.tesseraql.pipeline.Completion;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 
 /**
  * Admits a request onto a named execution lane, applying backpressure (design ch. 24).
@@ -18,7 +18,7 @@ import org.apache.camel.spi.Synchronization;
  * service unavailable) rather than queued. The permit is released when the exchange completes. When
  * no lanes are configured the gate is a no-op so apps without threading config behave unchanged.
  */
-public final class LaneGate implements Processor {
+public final class LaneGate implements Step {
 
     private static final TqlErrorCode CAPACITY = new TqlErrorCode(TqlDomain.LANE, 5031);
 
@@ -30,8 +30,8 @@ public final class LaneGate implements Processor {
 
     @Override
     public void process(Exchange exchange) {
-        ExecutionLanes lanes = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.LANES_BEAN, ExecutionLanes.class);
+        ExecutionLanes lanes = exchange.beans().lookup(TesseraqlProperties.LANES_BEAN,
+                ExecutionLanes.class);
         if (lanes == null || !lanes.has(laneName)) {
             return;
         }
@@ -39,7 +39,7 @@ public final class LaneGate implements Processor {
         if (!lane.tryAdmit()) {
             throw new TqlException(CAPACITY, "Execution lane '" + laneName + "' is at capacity");
         }
-        exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
+        exchange.addOnCompletion(new Completion() {
             @Override
             public void onComplete(Exchange completed) {
                 lane.release();

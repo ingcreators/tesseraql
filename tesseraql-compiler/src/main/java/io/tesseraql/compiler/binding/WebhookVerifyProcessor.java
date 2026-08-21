@@ -6,10 +6,10 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.notify.HmacSignatures;
 import io.tesseraql.core.webhook.WebhookReplayStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.webhook.WebhookVerifiers;
 import java.time.Instant;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Verifies an inbound webhook before its SQL pipeline runs (roadmap Phase 26): it authenticates
@@ -22,7 +22,7 @@ import org.apache.camel.Processor;
  * (unique per signed payload). An id is retained only until its timestamp's tolerance lapses,
  * after which the timestamp check alone would reject the delivery.
  */
-public final class WebhookVerifyProcessor implements Processor {
+public final class WebhookVerifyProcessor implements Step {
 
     /** TQL-SEC-4012: the webhook signature is missing or does not verify (HTTP 401). */
     private static final TqlErrorCode INVALID_SIGNATURE = new TqlErrorCode(TqlDomain.SEC, 4012);
@@ -77,7 +77,7 @@ public final class WebhookVerifyProcessor implements Processor {
                     + "' timestamp is outside the " + verifier.tolerance() + " tolerance");
         }
 
-        WebhookReplayStore store = exchange.getContext().getRegistry().lookupByNameAndType(
+        WebhookReplayStore store = exchange.beans().lookup(
                 TesseraqlProperties.WEBHOOK_REPLAY_STORE_BEAN, WebhookReplayStore.class);
         if (store == null) {
             throw new TqlException(NO_STORE, "Webhook replay store is not configured");

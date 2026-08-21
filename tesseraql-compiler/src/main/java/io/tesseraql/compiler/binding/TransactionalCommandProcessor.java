@@ -19,6 +19,8 @@ import io.tesseraql.core.sql.SqlRenderer;
 import io.tesseraql.core.validation.ValidationRules;
 import io.tesseraql.core.workflow.WorkflowStore;
 import io.tesseraql.core.workflow.WorkflowTaskStore;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.model.Binding;
 import io.tesseraql.yaml.model.ErrorsSpec;
@@ -40,8 +42,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Executes a command's SQL steps and its outbox event in one transaction (design ch. 39.2,
@@ -75,7 +75,7 @@ import org.apache.camel.Processor;
  * a command emitting events to another system keeps the all-or-nothing guarantee. Its id publishes
  * into the context as {@code publish.eventId}.
  */
-public final class TransactionalCommandProcessor implements Processor {
+public final class TransactionalCommandProcessor implements Step {
 
     private static final TqlErrorCode TX_ERROR = new TqlErrorCode(TqlDomain.SQL, 2600);
     private static final TqlErrorCode NO_STORE = new TqlErrorCode(TqlDomain.SQL, 2601);
@@ -337,9 +337,9 @@ public final class TransactionalCommandProcessor implements Processor {
      * writing unscoped rows.
      */
     private static io.tesseraql.core.sql.ScopeResolver scopeResolver(Exchange exchange) {
-        io.tesseraql.core.sql.ScopeResolver resolver = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SCOPE_RESOLVER_BEAN,
-                        io.tesseraql.core.sql.ScopeResolver.class);
+        io.tesseraql.core.sql.ScopeResolver resolver = exchange.beans().lookup(
+                TesseraqlProperties.SCOPE_RESOLVER_BEAN,
+                io.tesseraql.core.sql.ScopeResolver.class);
         return resolver != null ? resolver : io.tesseraql.core.sql.ScopeResolver.UNSUPPORTED;
     }
 
@@ -367,7 +367,7 @@ public final class TransactionalCommandProcessor implements Processor {
         boolean needsStore = outboxEvents != null || !notifications.isEmpty() || publish != null;
         OutboxStore store = !needsStore
                 ? null
-                : exchange.getContext().getRegistry().lookupByNameAndType(
+                : exchange.beans().lookup(
                         TesseraqlProperties.OUTBOX_STORE_BEAN, OutboxStore.class);
         if (needsStore && store == null) {
             throw new TqlException(NO_STORE, "Outbox store is not configured");
@@ -467,10 +467,9 @@ public final class TransactionalCommandProcessor implements Processor {
                     // naming its recipient honors that subject's per-channel opt-out (roadmap
                     // Phase 48) — decided at enqueue, so no outbox row exists: nothing to
                     // retry, nothing half-delivered.
-                    io.tesseraql.core.account.PreferenceStore preferences = exchange.getContext()
-                            .getRegistry().lookupByNameAndType(
-                                    TesseraqlProperties.PREFERENCE_STORE_BEAN,
-                                    io.tesseraql.core.account.PreferenceStore.class);
+                    io.tesseraql.core.account.PreferenceStore preferences = exchange.beans().lookup(
+                            TesseraqlProperties.PREFERENCE_STORE_BEAN,
+                            io.tesseraql.core.account.PreferenceStore.class);
                     String tenantId = context.get("principal") instanceof Principal p
                             ? p.tenantId()
                             : null;
@@ -549,8 +548,8 @@ public final class TransactionalCommandProcessor implements Processor {
     }
 
     private WorkflowStore lookupWorkflowStore(Exchange exchange) {
-        WorkflowStore store = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.WORKFLOW_STORE_BEAN, WorkflowStore.class);
+        WorkflowStore store = exchange.beans().lookup(TesseraqlProperties.WORKFLOW_STORE_BEAN,
+                WorkflowStore.class);
         if (store == null) {
             throw new TqlException(NO_WORKFLOW_STORE,
                     "Workflow '" + workflow.transition().workflowId()
@@ -561,7 +560,7 @@ public final class TransactionalCommandProcessor implements Processor {
 
     /** The task inbox store, bound when any workflow assigns tasks, or {@code null} otherwise. */
     private static WorkflowTaskStore lookupTaskStore(Exchange exchange) {
-        return exchange.getContext().getRegistry().lookupByNameAndType(
+        return exchange.beans().lookup(
                 TesseraqlProperties.WORKFLOW_TASK_STORE_BEAN, WorkflowTaskStore.class);
     }
 
@@ -611,7 +610,7 @@ public final class TransactionalCommandProcessor implements Processor {
                 // Absence resolution (roadmap Phase 52): one hop at assignment time; the task
                 // records who it was meant for, and the reminder targets who must act.
                 io.tesseraql.core.workflow.Delegations.Resolved resolved = io.tesseraql.core.workflow.Delegations
-                        .resolve(exchange.getContext().getRegistry().lookupByNameAndType(
+                        .resolve(exchange.beans().lookup(
                                 TesseraqlProperties.DELEGATION_STORE_BEAN,
                                 io.tesseraql.core.workflow.DelegationStore.class),
                                 wf.tenant(), assignee);
@@ -642,7 +641,7 @@ public final class TransactionalCommandProcessor implements Processor {
         if (!workflow.assignNotify().fires(reminderContext)) {
             return;
         }
-        OutboxStore store = exchange.getContext().getRegistry().lookupByNameAndType(
+        OutboxStore store = exchange.beans().lookup(
                 TesseraqlProperties.OUTBOX_STORE_BEAN, OutboxStore.class);
         if (store != null) {
             store.insert(connection, workflow.assignNotify().build(reminderContext, appName));
@@ -651,9 +650,9 @@ public final class TransactionalCommandProcessor implements Processor {
 
     private Map<String, Object> allocateSequence(Exchange exchange, Connection connection,
             Step step) {
-        DocumentSequences sequences = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN,
-                        DocumentSequences.class);
+        DocumentSequences sequences = exchange.beans().lookup(
+                TesseraqlProperties.DOCUMENT_SEQUENCES_BEAN,
+                DocumentSequences.class);
         if (sequences == null) {
             throw new TqlException(NO_SEQUENCES, "Route '" + routeId
                     + "': document sequences are not configured in this runtime");
@@ -904,9 +903,9 @@ public final class TransactionalCommandProcessor implements Processor {
 
     private void recordExecution(Exchange exchange, Step step, Map<String, Object> result,
             long startNanos, long startedAt) {
-        io.tesseraql.core.diag.SqlExecutionLog log = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.SLOW_SQL_LOG_BEAN,
-                        io.tesseraql.core.diag.SqlExecutionLog.class);
+        io.tesseraql.core.diag.SqlExecutionLog log = exchange.beans().lookup(
+                TesseraqlProperties.SLOW_SQL_LOG_BEAN,
+                io.tesseraql.core.diag.SqlExecutionLog.class);
         if (log == null) {
             return;
         }

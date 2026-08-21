@@ -3,10 +3,10 @@ package io.tesseraql.compiler.binding;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Completion;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import java.util.concurrent.Semaphore;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
-import org.apache.camel.spi.Synchronization;
 
 /**
  * Limits the number of in-flight requests for a route (design ch. 36.1). Each route has its own
@@ -24,18 +24,18 @@ public final class ConcurrencyLimiter {
     }
 
     /** Returns a processor that acquires a permit and releases it when the exchange completes. */
-    public Processor acquire() {
+    public Step acquire() {
         return new Gate();
     }
 
     /** Named so the recipe-governance matrix test can read it back off the compiled route. */
-    final class Gate implements Processor {
+    final class Gate implements Step {
         @Override
         public void process(Exchange exchange) {
             if (!semaphore.tryAcquire()) {
                 throw new TqlException(RATE_LIMIT, "Too many concurrent requests");
             }
-            exchange.getExchangeExtension().addOnCompletion(new Synchronization() {
+            exchange.addOnCompletion(new Completion() {
                 @Override
                 public void onComplete(Exchange completed) {
                     semaphore.release();

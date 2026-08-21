@@ -63,7 +63,8 @@ final class HttpAdmission {
     static void install(CamelContext camelContext, int port, int maxInFlight) {
         io.vertx.ext.web.Router router = HttpEdgeBeans.router(camelContext);
         HttpAdmission gate = new HttpAdmission(maxInFlight,
-                io.tesseraql.camel.BasePath.of(camelContext) + "/_tesseraql/health",
+                io.tesseraql.camel.BasePath.of(io.tesseraql.camel.CamelBeans.of(camelContext))
+                        + "/_tesseraql/health",
                 AssetRoutes.mountOf(camelContext));
         router.route().order(BEFORE_EVERY_ROUTE).handler(gate::admit);
         LOG.debug("HTTP admission installed: {} requests in flight", maxInFlight);

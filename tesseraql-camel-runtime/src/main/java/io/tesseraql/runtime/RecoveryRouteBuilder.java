@@ -9,6 +9,7 @@ import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.IdentityContracts;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
+import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
 import io.tesseraql.security.session.SessionStore;
 import io.tesseraql.yaml.notify.NotifyEvents;
@@ -18,7 +19,6 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**

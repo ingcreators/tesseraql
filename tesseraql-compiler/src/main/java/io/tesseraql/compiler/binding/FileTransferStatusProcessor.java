@@ -5,14 +5,15 @@ import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.files.FileTransferService;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /** Renders one transfer's state as JSON (design ch. 28); unknown ids are 404. */
-public final class FileTransferStatusProcessor implements Processor {
+public final class FileTransferStatusProcessor implements Step {
 
     private static final TqlErrorCode UNKNOWN = new TqlErrorCode(TqlDomain.LD, 2822);
 
@@ -25,9 +26,9 @@ public final class FileTransferStatusProcessor implements Processor {
     @Override
     public void process(Exchange exchange) throws Exception {
         String transferId = exchange.getMessage().getHeader("transferId", String.class);
-        FileTransferService transfers = exchange.getContext().getRegistry()
-                .lookupByNameAndType(TesseraqlProperties.FILE_TRANSFER_BEAN,
-                        FileTransferService.class);
+        FileTransferService transfers = exchange.beans().lookup(
+                TesseraqlProperties.FILE_TRANSFER_BEAN,
+                FileTransferService.class);
         FileTransferService.TransferStatus status = transfers == null
                 ? null
                 : transfers.status(transferId).orElse(null);
@@ -52,9 +53,9 @@ public final class FileTransferStatusProcessor implements Processor {
                 body.put("fileUrl", urlPath + "/" + status.transferId() + "/file");
             }
         }
-        exchange.getMessage().removeHeaders("*", Exchange.CONTENT_TYPE);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().removeHeaders("*", Headers.CONTENT_TYPE);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(
                 FileImportProcessor.MAPPER.writeValueAsString(body));
     }

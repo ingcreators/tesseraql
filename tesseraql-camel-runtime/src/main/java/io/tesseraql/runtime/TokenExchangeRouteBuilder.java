@@ -7,10 +7,11 @@ import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -125,8 +126,8 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
         principal = tokens.narrowed(principal, appName,
                 acting == null ? null : String.valueOf(acting));
 
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json");
         exchange.getMessage().setBody(
                 MAPPER.writeValueAsString(tokens.mint(principal, appName)));
     }

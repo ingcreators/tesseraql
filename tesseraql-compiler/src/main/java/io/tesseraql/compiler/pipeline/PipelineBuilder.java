@@ -1,8 +1,8 @@
 package io.tesseraql.compiler.pipeline;
 
+import io.tesseraql.pipeline.Step;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.camel.Processor;
 
 /**
  * Collects one pipeline's steps (docs/camel-removal.md structural decision 1).
@@ -16,7 +16,7 @@ import org.apache.camel.Processor;
 public final class PipelineBuilder {
 
     private final String id;
-    private final List<Pipeline.Step> steps = new ArrayList<>();
+    private final List<Step> steps = new ArrayList<>();
     private final List<Pipeline.Handler> handlers = new ArrayList<>();
     private int handoffAt = -1;
     private String laneExecutor;
@@ -32,8 +32,8 @@ public final class PipelineBuilder {
     }
 
     /** Appends a processor. */
-    public PipelineBuilder process(Processor processor) {
-        steps.add(new Pipeline.Step(processor));
+    public PipelineBuilder process(Step processor) {
+        steps.add(processor);
         return this;
     }
 
@@ -54,7 +54,7 @@ public final class PipelineBuilder {
     }
 
     /** Adds an error clause ahead of the inherited ones, so the more specific match wins. */
-    public PipelineBuilder onException(List<String> caught, Processor renderer) {
+    public PipelineBuilder onException(List<String> caught, Step renderer) {
         handlers.add(0, new Pipeline.Handler(caught, renderer));
         return this;
     }

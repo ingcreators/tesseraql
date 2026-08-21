@@ -8,6 +8,8 @@ import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.sql.AmbientBinds;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.workflow.TransitionExecutor;
 import java.sql.Connection;
 import java.util.ArrayList;
@@ -15,8 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * The one-action dispatch, engine-level (docs/transition-engine.md track B): tries its
@@ -41,13 +41,13 @@ import org.apache.camel.Processor;
  * loaded document; members that declare no {@code decide:} of their own inherit the
  * results as {@code decision.*}.
  */
-public final class WorkflowDispatchProcessor implements Processor {
+public final class WorkflowDispatchProcessor implements Step {
 
     /** TQL-WORKFLOW-3202: no dispatch member transition holds (HTTP 422). */
     private static final TqlErrorCode NONE_HELD = new TqlErrorCode(TqlDomain.WORKFLOW, 3202);
 
     /** A member transition and the command processor running its full pipeline. */
-    public record Member(String id, Processor processor) {
+    public record Member(String id, Step processor) {
     }
 
     private final String workflowId;

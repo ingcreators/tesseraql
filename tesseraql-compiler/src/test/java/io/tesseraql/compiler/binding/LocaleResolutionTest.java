@@ -3,14 +3,13 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.camel.TesseraqlProperties;
+import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.security.Principal;
 import io.tesseraql.yaml.i18n.I18nSettings;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -34,7 +33,7 @@ class LocaleResolutionTest {
             List.of("principal.claim.locale"), MessageCatalog.empty());
 
     private static Exchange exchange() {
-        return new DefaultExchange(camel);
+        return new Exchange(io.tesseraql.camel.CamelBeans.of(camel));
     }
 
     private static String resolved(Exchange exchange) {

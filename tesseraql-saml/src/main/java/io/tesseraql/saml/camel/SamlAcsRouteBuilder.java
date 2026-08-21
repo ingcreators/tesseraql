@@ -2,8 +2,11 @@ package io.tesseraql.saml.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
+import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
 import io.tesseraql.saml.AuthnRequest;
 import io.tesseraql.saml.LogoutRequest;
 import io.tesseraql.saml.LogoutResponse;
@@ -25,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 /**
@@ -196,8 +198,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                     SamlRedirect.deflateAndEncode(xml), null);
             return;
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
             exchange.getMessage().setBody(mapper.writeValueAsString(Map.of("ok", true)));
         } catch (Exception ex) {
@@ -212,7 +214,7 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
                 ? SamlRedirect.signedQuery(paramName, encodedMessage, relayState,
                         security.spSigningKey())
                 : SamlRedirect.query(paramName, encodedMessage, relayState);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
         exchange.getMessage().setHeader("Location", idpUrl + separator + query);
         exchange.getMessage().setBody(null);
     }
@@ -231,8 +233,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     }
 
     private void serveMetadata(Exchange exchange) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE,
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE,
                 "application/samlmetadata+xml; charset=utf-8");
         exchange.getMessage().setBody(metadata.toXml());
     }
@@ -295,7 +297,7 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
         // JSON acknowledgement.
         String target = LoginRedirects.sanitize(returnedRelayState(exchange), null);
         if (target != null) {
-            exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 302);
+            exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 302);
             // Base-relative, like every other URL inside the runtime (docs/base-path.md
             // decision 7): the prefix goes on here, where it becomes a wire URL.
             exchange.getMessage().setHeader("Location",
@@ -303,8 +305,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
             exchange.getMessage().setBody(null);
             return;
         }
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 200);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, 200);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(mapper.writeValueAsString(
                 Map.of("ok", true, "loginId", principal.loginId(), "subject",
                         principal.subject())));
@@ -447,7 +449,8 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
      * request was wrong when the truth was that the server failed.
      */
     private void badRequest(Exchange exchange) {
-        Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+        Throwable cause = exchange.getProperty(TesseraqlProperties.EXCEPTION_CAUGHT,
+                Throwable.class);
         if (cause instanceof io.tesseraql.core.error.TqlException tql) {
             respondError(exchange, tql.code(), "SAML request refused");
             return;
@@ -459,9 +462,9 @@ final class SamlAcsRouteBuilder extends RouteBuilder {
     /** The framework envelope, so a federation error reads like every other error. */
     private void respondError(Exchange exchange, io.tesseraql.core.error.TqlErrorCode code,
             String message) {
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE,
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE,
                 io.tesseraql.compiler.binding.ErrorResponseRenderer.httpStatus(code));
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "application/json; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         exchange.getMessage().setBody(FederationErrors.body(code, message));
     }
 }

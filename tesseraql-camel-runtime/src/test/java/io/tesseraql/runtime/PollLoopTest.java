@@ -3,6 +3,8 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.opsui.PollSourceStatus;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -13,8 +15,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.apache.camel.CamelContext;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -163,16 +163,16 @@ class PollLoopTest {
         assertThat(claimed.get(0)).startsWith("orders.csv-");
     }
 
-    private void start(Processor importer, String include) throws Exception {
+    private void start(Step importer, String include) throws Exception {
         loop = new PollLoop("orders.intake", "local", new LocalPollSource(inbound), importer,
                 context, include, ".done", ".error", 200, null, status);
         loop.start();
     }
 
     /** An importer that records what it was handed, name and content. */
-    private static Processor record(List<String> imported) {
+    private static Step record(List<String> imported) {
         return exchange -> {
-            String name = (String) exchange.getMessage().getHeader(Exchange.FILE_NAME);
+            String name = (String) exchange.getMessage().getHeader(Headers.FILE_NAME);
             try (InputStream body = (InputStream) exchange.getMessage().getBody()) {
                 imported.add(name + ":" + new String(body.readAllBytes()));
             }

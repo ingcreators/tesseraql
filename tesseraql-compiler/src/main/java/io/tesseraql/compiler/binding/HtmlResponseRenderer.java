@@ -8,14 +8,15 @@ import io.tesseraql.core.expr.EvaluationContext;
 import io.tesseraql.core.expr.Expr;
 import io.tesseraql.core.expr.ExpressionFunctions;
 import io.tesseraql.core.expr.ExpressionParser;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Headers;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import io.tesseraql.yaml.template.Templates;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Renders an HTML page or fragment response from a Thymeleaf template and model (design ch. 6.4,
@@ -28,7 +29,7 @@ import org.apache.camel.Processor;
  * contributed by {@link ShellChrome}; template resolution and placeholder interpolation live in
  * {@link TemplateResolution} and {@link Interpolation}.
  */
-public final class HtmlResponseRenderer implements Processor {
+public final class HtmlResponseRenderer implements Step {
 
     /** TQL-VIEW-3317: response.html.shell must be auto, always, or never. */
     static final TqlErrorCode INVALID_SHELL = new TqlErrorCode(TqlDomain.VIEW, 3317);
@@ -172,7 +173,7 @@ public final class HtmlResponseRenderer implements Processor {
         // to be discarded on view: routes); `v` and `views` are reserved names the constructor
         // refuses, so the view models below can never be shadowed.
         compiledModel.forEach((key, expr) -> model.put(key, expr.eval(evaluation)));
-        String uri = exchange.getMessage().getHeader(Exchange.HTTP_URI, String.class);
+        String uri = exchange.getMessage().getHeader(Headers.HTTP_URI, String.class);
         String pagePath = uri == null
                 ? ""
                 : uri.indexOf('?') < 0 ? uri : uri.substring(0, uri.indexOf('?'));
@@ -186,9 +187,9 @@ public final class HtmlResponseRenderer implements Processor {
         }
         boundViews.values().forEach(binding -> readPolicies.putAll(binding.readPolicies()));
         Map<String, Object> viewContext = context;
-        io.tesseraql.security.policy.PolicyEngine policyEngine = exchange.getContext()
-                .getRegistry().lookupByNameAndType(TesseraqlProperties.POLICY_ENGINE_BEAN,
-                        io.tesseraql.security.policy.PolicyEngine.class);
+        io.tesseraql.security.policy.PolicyEngine policyEngine = exchange.beans().lookup(
+                TesseraqlProperties.POLICY_ENGINE_BEAN,
+                io.tesseraql.security.policy.PolicyEngine.class);
         io.tesseraql.security.Principal requestPrincipal = exchange.getProperty(
                 TesseraqlProperties.PRINCIPAL, io.tesseraql.security.Principal.class);
         if (!readPolicies.isEmpty()) {
@@ -281,8 +282,8 @@ public final class HtmlResponseRenderer implements Processor {
 
         int status = JsonResponseRenderer.CompiledStatus.resolve(statusWhen,
                 response.effectiveStatus(), evaluation);
-        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
-        exchange.getMessage().setHeader(Exchange.CONTENT_TYPE, "text/html; charset=utf-8");
+        exchange.getMessage().setHeader(Headers.HTTP_RESPONSE_CODE, status);
+        exchange.getMessage().setHeader(Headers.CONTENT_TYPE, "text/html; charset=utf-8");
         headers.apply(exchange, evaluation);
         if ("auto".equals(shellMode)) {
             // The negotiated response differs by HX-Request, so caches must key on it.

@@ -7,12 +7,11 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.TenancySettings.ResolverType;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.tenant.TenantContext;
+import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.security.Principal;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
 import org.apache.camel.impl.DefaultCamelContext;
-import org.apache.camel.support.DefaultExchange;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,7 +32,7 @@ class TenantResolutionTest {
     }
 
     private static Exchange exchange() {
-        return new DefaultExchange(camel);
+        return new Exchange(io.tesseraql.camel.CamelBeans.of(camel));
     }
 
     @Test

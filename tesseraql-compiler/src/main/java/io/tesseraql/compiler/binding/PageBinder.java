@@ -5,12 +5,12 @@ import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Exchange;
+import io.tesseraql.pipeline.Step;
 import io.tesseraql.yaml.model.PageSpec;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.camel.Exchange;
-import org.apache.camel.Processor;
 
 /**
  * Computes the page window a paginated query executes under (roadmap Phase 41). The
@@ -19,7 +19,7 @@ import org.apache.camel.Processor;
  * Rejections are the standard field-scoped {@code TQL-FIELD-2001} shape, so a bad page number
  * renders like any other input error.
  */
-public final class PageBinder implements Processor {
+public final class PageBinder implements Step {
 
     private static final TqlErrorCode VALIDATION = new TqlErrorCode(TqlDomain.FIELD, 2001);
 
