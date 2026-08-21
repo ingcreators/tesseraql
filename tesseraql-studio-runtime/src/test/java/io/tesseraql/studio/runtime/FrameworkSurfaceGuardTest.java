@@ -12,8 +12,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.apache.camel.model.ModelCamelContext;
@@ -274,46 +276,62 @@ class FrameworkSurfaceGuardTest {
 
     /** Framework-mounted HTTP routes: the app's own routes are the compiler's contract, not this. */
     private static List<RouteDefinition> frameworkRoutes() {
+        return new ArrayList<>(frameworkMounts().keySet());
+    }
+
+    /**
+     * The framework's mounted routes, and where each one answers.
+     *
+     * <p>Read off the mount table rather than off a {@code rest://} endpoint URI: routes are
+     * served on the router now (docs/http-edge.md decision 1), so the declaration is the mount and
+     * the route is what consumes the {@code direct:} endpoint it names. That is a better source
+     * than the URI ever was — it is the same table the runtime mounts from, so this guard and the
+     * server cannot disagree about where a surface answers.
+     */
+    private static Map<RouteDefinition, Mounted> frameworkMounts() {
         ModelCamelContext model = runtime.camelContext().getCamelContextExtension()
                 .getContextPlugin(ModelCamelContext.class);
-        List<RouteDefinition> framework = new ArrayList<>();
+        Map<String, RouteDefinition> byDirect = new LinkedHashMap<>();
         for (RouteDefinition route : model.getRouteDefinitions()) {
             if (route.getInput() == null) {
                 continue;
             }
             String uri = route.getInput().getEndpointUri();
-            if (!uri.startsWith("rest://") && !uri.startsWith("platform-http:")) {
+            if (uri != null && uri.startsWith("direct:")) {
+                byDirect.put(directName(uri), route);
+            }
+        }
+        Map<RouteDefinition, Mounted> framework = new LinkedHashMap<>();
+        for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
+                .all(runtime.camelContext())) {
+            RouteDefinition route = byDirect.get(directName(mount.direct()));
+            if (route == null) {
                 continue;
             }
-            String path = java.net.URLDecoder.decode(uri, java.nio.charset.StandardCharsets.UTF_8);
-            if (FRAMEWORK_PATHS.stream().anyMatch(prefix -> path.contains(":" + prefix)
-                    || path.contains("/" + prefix.substring(1)))) {
-                framework.add(route);
+            String path = java.net.URLDecoder.decode(mount.path(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            if (FRAMEWORK_PATHS.stream().anyMatch(path::startsWith)) {
+                framework.put(route, new Mounted(mount.method(), path));
             }
         }
         return framework;
+    }
+
+    private static String directName(String uri) {
+        return uri.substring(uri.indexOf(':') + 1).replaceFirst("^//", "");
     }
 
     /** The verb and path a framework route actually answers on. */
     private record Mounted(String method, String path) {
     }
 
-    /**
-     * Reads the verb and path off the mounted route.
-     *
-     * <p>The rest DSL is configured with {@code inlineRoutes(true)}, so the route carrying the
-     * {@code routeId} is the same one whose input is {@code rest://<verb>:<path>} — there is no
-     * second definition to correlate, and nothing to keep in step by hand.
-     */
+    /** Where a framework route answers, as its own mount declares it. */
     private static Mounted mountedAt(RouteDefinition route) {
-        String uri = java.net.URLDecoder.decode(route.getInput().getEndpointUri(),
-                java.nio.charset.StandardCharsets.UTF_8);
-        String remaining = uri.substring(uri.indexOf("://") + 3);
-        int separator = remaining.indexOf(':');
-        String method = remaining.substring(0, separator).toUpperCase(java.util.Locale.ROOT);
-        String path = remaining.substring(separator + 1);
-        int query = path.indexOf('?');
-        return new Mounted(method, query < 0 ? path : path.substring(0, query));
+        Mounted mounted = frameworkMounts().get(route);
+        if (mounted == null) {
+            throw new IllegalStateException("Route " + route.getRouteId() + " is not mounted");
+        }
+        return mounted;
     }
 
     private static List<String> authSteps(RouteDefinition route) {

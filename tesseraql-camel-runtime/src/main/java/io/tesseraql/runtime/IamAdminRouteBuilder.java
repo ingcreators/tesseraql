@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlDomain;
@@ -39,7 +40,7 @@ final class IamAdminRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().post(USERS + "/bulk").to("direct:tql.iamAdmin.users.bulk");
+        HttpMounts.mount(getContext(), "POST", USERS + "/bulk", "direct:tql.iamAdmin.users.bulk");
 
         // Post/redirect/get like the per-user disable: the no-JS-first shape of the
         // recipe (the htmx tbody-swap enhancement needs HX-Request negotiation and can

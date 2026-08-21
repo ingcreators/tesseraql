@@ -451,15 +451,12 @@ public final class RouteReloader {
                     // is restated for the same reason: a reloaded route re-enters the same
                     // REST configuration, and a hot reload must not quietly move a route out
                     // from under the app's prefix (docs/base-path.md).
-                    restConfiguration().component("platform-http").inlineRoutes(true)
-                            .contextPath(basePath.isEmpty() ? null : basePath);
                     String direct = "direct:" + id;
                     switch (route.httpMethod() == null ? "GET" : route.httpMethod()) {
-                        case "POST" -> rest().post(route.urlPath()).to(direct);
-                        case "PUT" -> rest().put(route.urlPath()).to(direct);
-                        case "PATCH" -> rest().patch(route.urlPath()).to(direct);
-                        case "DELETE" -> rest().delete(route.urlPath()).to(direct);
-                        default -> rest().get(route.urlPath()).to(direct);
+                        case "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
+                                .mount(getContext(), route.httpMethod(), route.urlPath(), direct);
+                        default -> io.tesseraql.camel.HttpMounts.mount(getContext(), "GET",
+                                route.urlPath(), direct);
                     }
                     from(direct).routeId(id).process(exchange -> {
                         exchange.getMessage().setHeader(

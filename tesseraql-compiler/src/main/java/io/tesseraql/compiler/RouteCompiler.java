@@ -27,7 +27,6 @@ import io.tesseraql.yaml.model.SecuritySpec;
 import java.nio.file.Path;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.ProcessorDefinition;
-import org.apache.camel.model.rest.RestDefinition;
 
 /**
  * Compiles a TesseraQL {@link AppManifest} into Camel routes (design ch. 7).
@@ -125,8 +124,6 @@ public final class RouteCompiler {
                     // hand-written /_tesseraql/** endpoints in the runtime's route builders
                     // alike. Concatenating the prefix per route would have had to find all of
                     // them; this cannot miss one.
-                    restConfiguration().component("platform-http").inlineRoutes(true)
-                            .contextPath(basePath().isEmpty() ? null : basePath());
                 }
                 // Per-route response.onError steering (HX-Retarget/HX-Reswap), resolved at error
                 // time from the failing route id; the error renderer is one shared exception handler.
@@ -233,7 +230,7 @@ public final class RouteCompiler {
         if (onlyRouteIds == null || onlyRouteIds.contains(uploadId)) {
             String direct = "direct:" + uploadId;
             if (mountRest) {
-                restEndpoint(builder, "POST", basePath).to(direct);
+                mount(builder, "POST", basePath, direct);
             }
             ProcessorDefinition<?> route = builder.from(direct).routeId(uploadId);
             applyAttachmentGovernance(route, uploadId, "POST", basePath, security);
@@ -245,7 +242,7 @@ public final class RouteCompiler {
         if (onlyRouteIds == null || onlyRouteIds.contains(listId)) {
             String direct = "direct:" + listId;
             if (mountRest) {
-                restEndpoint(builder, "GET", basePath).to(direct);
+                mount(builder, "GET", basePath, direct);
             }
             ProcessorDefinition<?> route = builder.from(direct).routeId(listId);
             applyAttachmentGovernance(route, listId, "GET", basePath, security);
@@ -258,7 +255,7 @@ public final class RouteCompiler {
             String urlPath = basePath + "/{" + idParam + "}";
             String direct = "direct:" + downloadId;
             if (mountRest) {
-                restEndpoint(builder, "GET", urlPath).to(direct);
+                mount(builder, "GET", urlPath, direct);
             }
             ProcessorDefinition<?> route = builder.from(direct).routeId(downloadId);
             applyAttachmentGovernance(route, downloadId, "GET", urlPath, security);
@@ -395,7 +392,7 @@ public final class RouteCompiler {
         String routeId = definition.id();
         String direct = "direct:" + routeId;
         if (mountRest) {
-            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
@@ -559,7 +556,7 @@ public final class RouteCompiler {
                     null, java.util.Map.of(), dispatchResponse());
             String direct = "direct:" + routeId;
             if (mountRest) {
-                restEndpoint(builder, "POST", urlPath).to(direct);
+                mount(builder, "POST", urlPath, direct);
             }
             String dialect = datasourceDialect(DEFAULT_DATASOURCE);
             ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
@@ -668,7 +665,7 @@ public final class RouteCompiler {
         String direct = "direct:" + routeId;
         String urlPath = basePath + "/{key}/delegate/{to}";
         if (mountRest) {
-            restEndpoint(builder, "POST", urlPath).to(direct);
+            mount(builder, "POST", urlPath, direct);
         }
         RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, def.security(),
                 null, java.util.Map.of(), workflowResponse());
@@ -807,11 +804,12 @@ public final class RouteCompiler {
                 consume.channel(), consume.topic(), consume.idempotencyKey()));
         // A deduplicated redelivery stops here, before the pipeline writes a row; the consumer
         // still acknowledges it (the dedup record already records the business key as consumed).
-        route.choice()
-                .when((org.apache.camel.Predicate) exchange -> Boolean.TRUE
-                        .equals(exchange.getProperty(TesseraqlProperties.QUEUE_DUPLICATE)))
-                .stop()
-                .end();
+        route.process(exchange -> {
+            if (Boolean.TRUE.equals(
+                    exchange.getProperty(TesseraqlProperties.QUEUE_DUPLICATE))) {
+                exchange.getExchangeExtension().setRouteStop(true);
+            }
+        });
         // The projection pattern (docs/multi-datasource.md): the consumer's apply transaction may
         // run on a named connector, while the channel, its claim, and the dedup records stay on
         // main - only where the SQL commits moves.
@@ -850,7 +848,7 @@ public final class RouteCompiler {
 
         String direct = "direct:" + routeId;
         if (mountRest) {
-            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
         Path sqlPath = routeDir.resolve(definition.main().file()).normalize();
         // The export URI is hand-built because its mode and filename are not a binding's, but it
@@ -898,7 +896,7 @@ public final class RouteCompiler {
 
         String direct = "direct:" + routeId;
         if (mountRest) {
-            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
@@ -932,7 +930,7 @@ public final class RouteCompiler {
 
         String direct = "direct:" + routeId;
         if (mountRest) {
-            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
         applyCommonGovernance(route, routeFile);
@@ -958,8 +956,7 @@ public final class RouteCompiler {
 
         String fileDirect = "direct:" + routeId + ".file";
         if (mountRest) {
-            restEndpoint(builder, "GET", routeFile.urlPath() + "/{transferId}/file")
-                    .to(fileDirect);
+            mount(builder, "GET", routeFile.urlPath() + "/{transferId}/file", fileDirect);
         }
         ProcessorDefinition<?> fileRoute = builder.from(fileDirect).routeId(routeId + ".file");
         applySecurity(fileRoute, definition.security(), "GET",
@@ -978,7 +975,7 @@ public final class RouteCompiler {
     private void mountTransferStatus(RouteBuilder builder, RouteFile routeFile, String routeId) {
         String direct = "direct:" + routeId + ".status";
         if (mountRest) {
-            restEndpoint(builder, "GET", routeFile.urlPath() + "/{transferId}").to(direct);
+            mount(builder, "GET", routeFile.urlPath() + "/{transferId}", direct);
         }
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId + ".status");
         applySecurity(route, routeFile.definition().security(), "GET",
@@ -1067,7 +1064,7 @@ public final class RouteCompiler {
         String direct = "direct:" + routeId;
 
         if (mountRest) {
-            restEndpoint(builder, routeFile.httpMethod(), routeFile.urlPath()).to(direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
         }
 
         ProcessorDefinition<?> route = builder.from(direct).routeId(routeId);
@@ -1677,11 +1674,16 @@ public final class RouteCompiler {
                 ? Durations.toMillis(idempotency.ttl())
                 : DEFAULT_IDEMPOTENCY_TTL;
         route.process(IdempotencyProcessors.begin(scope, ttl, idempotency.isRequired()));
-        route.choice()
-                .when((org.apache.camel.Predicate) exchange -> Boolean.TRUE
-                        .equals(exchange.getProperty(IdempotencyProcessors.REPLAY_PROPERTY)))
-                .stop()
-                .end();
+        // A replay has already been answered: stop here rather than re-running the write. Said
+        // as "stop the route" rather than as a one-armed choice, because that is what it means
+        // and because a route that is a plain chain is one the runtime's edge can run
+        // (docs/http-edge.md decision 2).
+        route.process(exchange -> {
+            if (Boolean.TRUE.equals(
+                    exchange.getProperty(IdempotencyProcessors.REPLAY_PROPERTY))) {
+                exchange.getExchangeExtension().setRouteStop(true);
+            }
+        });
     }
 
     /** Appends the idempotency complete step after the response is rendered. */
@@ -1883,20 +1885,22 @@ public final class RouteCompiler {
         return basePath;
     }
 
-    private RestDefinition restEndpoint(RouteBuilder builder, String method, String path) {
-        // The router-facing template swaps non-wire-safe parameter names for positional
-        // stand-ins; the RequestBinder maps them back to the declared names (WireNames).
-        // The base path goes on first, so an application served under a prefix answers at the
-        // URLs it emits rather than only advertising them (docs/base-path.md decision 5).
+    /**
+     * Records where a route answers (docs/http-edge.md decision 1).
+     *
+     * <p>The router-facing template swaps non-wire-safe parameter names for positional stand-ins;
+     * the RequestBinder maps them back to the declared names (WireNames). The base path is not
+     * put on here: it used to arrive from the REST configuration this replaces, and the runtime's
+     * edge applies it at the mount, which is the one place that now knows about URLs at all
+     * (docs/base-path.md decision 5).
+     */
+    private void mount(RouteBuilder builder, String method, String path, String direct) {
         String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
-        return switch (method) {
-            case "GET" -> builder.rest().get(wirePath);
-            case "POST" -> builder.rest().post(wirePath);
-            case "PUT" -> builder.rest().put(wirePath);
-            case "PATCH" -> builder.rest().patch(wirePath);
-            case "DELETE" -> builder.rest().delete(wirePath);
+        switch (method) {
+            case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
+                    .mount(builder.getContext(), method, wirePath, direct);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
-        };
+        }
     }
 }

@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.mcp.McpHttpHandler;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -25,9 +26,9 @@ final class McpRouteBuilder extends RouteBuilder {
     public void configure() {
         // Each verb routes to its own direct endpoint (one shared bridge): a single direct target
         // for all three would collide on the derived route id.
-        rest().post("/_tesseraql/mcp").to("direct:mcp.endpoint.post");
-        rest().get("/_tesseraql/mcp").to("direct:mcp.endpoint.get");
-        rest().delete("/_tesseraql/mcp").to("direct:mcp.endpoint.delete");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/mcp", "direct:mcp.endpoint.post");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/mcp", "direct:mcp.endpoint.get");
+        HttpMounts.mount(getContext(), "DELETE", "/_tesseraql/mcp", "direct:mcp.endpoint.delete");
 
         Processor bridge = bridge();
         from("direct:mcp.endpoint.post").routeId("mcp.endpoint.post").process(bridge);

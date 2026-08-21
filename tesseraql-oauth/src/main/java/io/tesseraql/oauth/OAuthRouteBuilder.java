@@ -1,5 +1,6 @@
 package io.tesseraql.oauth;
 
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.net.URLEncoder;
@@ -51,22 +52,26 @@ final class OAuthRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        rest().get("/_tesseraql/oauth/jwks").to("direct:tql.oauth.jwks");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/jwks", "direct:tql.oauth.jwks");
         from("direct:tql.oauth.jwks").routeId("system.oauth.jwks").process(this::jwks);
         if (flow != null && sessions != null) {
-            rest().get("/_tesseraql/oauth/authorize").to("direct:tql.oauth.authorize");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/oauth/authorize",
+                    "direct:tql.oauth.authorize");
             from("direct:tql.oauth.authorize").routeId("system.oauth.authorize")
                     .process(this::authorize);
-            rest().post("/_tesseraql/oauth/decision").to("direct:tql.oauth.consent");
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/decision",
+                    "direct:tql.oauth.consent");
             from("direct:tql.oauth.consent").routeId("system.oauth.consent")
                     .process(this::consent);
-            rest().post("/_tesseraql/oauth/token").to("direct:tql.oauth.token");
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/token",
+                    "direct:tql.oauth.token");
             from("direct:tql.oauth.token").routeId("system.oauth.token").process(this::token);
-            rest().post("/_tesseraql/oauth/register").to("direct:tql.oauth.register");
+            HttpMounts.mount(getContext(), "POST", "/_tesseraql/oauth/register",
+                    "direct:tql.oauth.register");
             from("direct:tql.oauth.register").routeId("system.oauth.register")
                     .process(this::register);
-            rest().get("/.well-known/oauth-authorization-server")
-                    .to("direct:tql.oauth.metadata");
+            HttpMounts.mount(getContext(), "GET", "/.well-known/oauth-authorization-server",
+                    "direct:tql.oauth.metadata");
             from("direct:tql.oauth.metadata").routeId("system.oauth.metadata")
                     .process(this::metadata);
             // RFC 9728 protected-resource metadata, path-inserted per member — the probe the
@@ -74,8 +79,9 @@ final class OAuthRouteBuilder extends RouteBuilder {
             // per member's MCP surface; the surface serves them because it is what holds the
             // member list and the origin, and the fence already owns /.well-known/*.
             for (String basePath : flow.memberAddresses().values()) {
-                rest().get("/.well-known/oauth-protected-resource" + basePath
-                        + "/_tesseraql/mcp").to("direct:tql.oauth.resourceMetadata");
+                HttpMounts.mount(getContext(), "GET",
+                        "/.well-known/oauth-protected-resource" + basePath + "/_tesseraql/mcp",
+                        "direct:tql.oauth.resourceMetadata");
             }
             from("direct:tql.oauth.resourceMetadata").routeId("system.oauth.resourceMetadata")
                     .process(this::resourceMetadata);

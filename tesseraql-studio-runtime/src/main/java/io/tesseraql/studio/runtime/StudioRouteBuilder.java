@@ -1,6 +1,7 @@
 package io.tesseraql.studio.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
@@ -52,19 +53,25 @@ final class StudioRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().get("/_tesseraql/studio/explorer").to("direct:studio.explorer");
-        rest().get("/_tesseraql/studio/source").to("direct:studio.source");
-        rest().get("/_tesseraql/studio/drafts").to("direct:studio.drafts");
-        rest().post("/_tesseraql/studio/drafts").to("direct:studio.draft");
-        rest().post("/_tesseraql/studio/preview").to("direct:studio.preview");
-        rest().post("/_tesseraql/studio/render").to("direct:studio.render");
-        rest().post("/_tesseraql/studio/runTests").to("direct:studio.runTests");
-        rest().get("/_tesseraql/studio/scaffold/tables").to("direct:studio.scaffold.tables");
-        rest().post("/_tesseraql/studio/scaffold/preview").to("direct:studio.scaffold.preview");
-        rest().post("/_tesseraql/studio/scaffold/apply").to("direct:studio.scaffold.apply");
-        rest().get("/_tesseraql/studio/audit").to("direct:studio.audit");
-        rest().post("/_tesseraql/studio/apply").to("direct:studio.apply");
-        rest().post("/_tesseraql/studio/reload").to("direct:studio.reload");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/explorer",
+                "direct:studio.explorer");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/source", "direct:studio.source");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/drafts", "direct:studio.drafts");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/drafts", "direct:studio.draft");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/preview",
+                "direct:studio.preview");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/render", "direct:studio.render");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/runTests",
+                "direct:studio.runTests");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/scaffold/tables",
+                "direct:studio.scaffold.tables");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/scaffold/preview",
+                "direct:studio.scaffold.preview");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/scaffold/apply",
+                "direct:studio.scaffold.apply");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/studio/audit", "direct:studio.audit");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/apply", "direct:studio.apply");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/studio/reload", "direct:studio.reload");
 
         from("direct:studio.explorer").routeId("studio.explorer")
                 .to(AUTH).process(json(exchange -> studio

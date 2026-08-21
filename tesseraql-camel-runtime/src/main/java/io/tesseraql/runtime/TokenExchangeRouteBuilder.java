@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -83,7 +84,7 @@ final class TokenExchangeRouteBuilder extends RouteBuilder {
         onException(Exception.class).handled(true)
                 .process(new io.tesseraql.compiler.binding.ErrorResponseRenderer());
 
-        rest().post("/_tesseraql/token").to("direct:tql.token");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/token", "direct:tql.token");
         from("direct:tql.token").routeId("system.token").process(this::exchange);
     }
 

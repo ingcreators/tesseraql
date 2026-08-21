@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlDomain;
@@ -62,7 +63,7 @@ final class DeployRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().post("/_tesseraql/deploy").to("direct:tql.deploy");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/deploy", "direct:tql.deploy");
         from("direct:tql.deploy").routeId("system.deploy").process(this::deploy);
     }
 

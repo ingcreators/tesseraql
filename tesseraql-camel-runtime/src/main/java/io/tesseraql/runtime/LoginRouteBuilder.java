@@ -1,6 +1,7 @@
 package io.tesseraql.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.PasswordAuthenticator;
@@ -95,13 +96,13 @@ final class LoginRouteBuilder extends RouteBuilder {
         onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
         onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
 
-        rest().post(LOGIN_PATH).to("direct:tql.login");
+        HttpMounts.mount(getContext(), "POST", LOGIN_PATH, "direct:tql.login");
         from("direct:tql.login").routeId("system.login").process(this::login);
 
         // Sign-out is a state change: a POST with the CSRF token, like its logout-device
         // and logout-others siblings — the CSRF-exempt GET is gone
         // (docs/vocabulary-cleanup.md slice 3).
-        rest().post("/_tesseraql/logout").to("direct:tql.logout");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout", "direct:tql.logout");
         from("direct:tql.logout").routeId("system.logout").process(this::logout);
 
         // Sign out every session but this one (roadmap Phase 48, the account surface). A
@@ -110,11 +111,13 @@ final class LoginRouteBuilder extends RouteBuilder {
         // Per-device sign-out (docs/session-visibility.md): ends the caller's session
         // named by its handle. A Java route like logout-others, because only this layer
         // can read the cookie - and clear it when the revoked device was this one.
-        rest().post("/_tesseraql/logout-device").to("direct:tql.logoutDevice");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout-device",
+                "direct:tql.logoutDevice");
         from("direct:tql.logoutDevice").routeId("system.logout.device")
                 .process(this::logoutDevice);
 
-        rest().post("/_tesseraql/logout-others").to("direct:tql.logoutOthers");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout-others",
+                "direct:tql.logoutOthers");
         from("direct:tql.logoutOthers").routeId("system.logout.others")
                 .process(this::logoutOthers);
 
@@ -123,7 +126,7 @@ final class LoginRouteBuilder extends RouteBuilder {
         // cookie, and taking an eligible role has to reach the caller's own session — a
         // principal frozen at sign-in would otherwise hold the new role only after a
         // re-login, which makes the feature useless for its purpose.
-        rest().post("/_tesseraql/account/elevate").to("direct:tql.elevate");
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/account/elevate", "direct:tql.elevate");
         from("direct:tql.elevate").routeId("system.account.elevate")
                 .process(this::elevate);
     }
