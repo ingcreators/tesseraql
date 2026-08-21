@@ -1,5 +1,6 @@
 package io.tesseraql.runtime;
 
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.vertx.core.Context;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpMethod;
@@ -17,8 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
-import org.apache.camel.model.ModelCamelContext;
-import org.apache.camel.model.RouteDefinition;
 import org.apache.camel.support.DefaultExchange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,11 +33,11 @@ import org.slf4j.LoggerFactory;
  * and the only bound left on work that needs a connection is the connection pool — measured at
  * <strong>3629 ms against 1046 ms</strong> for the same route under the same saturation.
  *
- * <p><strong>It takes what it can and hands the rest back.</strong> A request whose shape this
- * adapter does not reproduce faithfully — anything carrying a body, because form and multipart
- * parsing is Camel's today — falls through to the Camel route still mounted behind it. That is
- * what makes this reversible: the route model is unchanged, both paths exist, and the whole
- * integration suite drives them over real HTTP either way.
+ * <p><strong>Every request the runtime serves is served here.</strong> The hand-back to a Camel
+ * route behind this one went with slice 5 of that campaign, and the route behind it went with
+ * docs/camel-removal.md decision 1 — a mount names the pipeline that answers, and there is nothing
+ * else to fall through to. What keeps it checkable is unchanged: the whole integration suite
+ * drives every route over real HTTP.
  */
 final class RouteEdge {
 
@@ -58,6 +57,9 @@ final class RouteEdge {
 
     /** Large enough that an ordinary response is one chunk, small enough to bound a large one. */
     private static final int CHUNK_BYTES = 64 * 1024;
+
+    /** TQL-CAMEL-5000, the code {@code ErrorResponseRenderer} uses for a failure it cannot map. */
+    private static final String UNRENDERED_FAILURE = "{\"error\":{\"code\":\"TQL-CAMEL-5000\",\"message\":\"Internal error\"}}";
 
     private final CamelContext camelContext;
     /**
@@ -113,8 +115,8 @@ final class RouteEdge {
         java.util.Set<String> declared = new java.util.HashSet<>();
         for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
                 .all(camelContext)) {
-            String routeId = routeIdOf(mount.direct());
-            if (routeId == null) {
+            String routeId = mount.pipeline();
+            if (!Pipelines.of(camelContext).contains(routeId)) {
                 // Declared but not built: a save that did not compile and left no stub. The
                 // watcher has to survive that, which is why a reload is tolerant where a boot is
                 // strict — nobody is watching a reload, and a runtime that exits on a bad save
@@ -193,10 +195,10 @@ final class RouteEdge {
 
     private void mount(io.vertx.ext.web.Router router,
             io.tesseraql.camel.HttpMounts.Mount mount) {
-        String routeId = routeIdOf(mount.direct());
-        if (routeId == null) {
+        String routeId = mount.pipeline();
+        if (!Pipelines.of(camelContext).contains(routeId)) {
             throw new IllegalStateException("The HTTP surface " + mount.method() + " "
-                    + mount.path() + " names " + mount.direct() + ", which no route consumes");
+                    + mount.path() + " names pipeline " + routeId + ", which was not compiled");
         }
         RoutePipeline pipeline = RoutePipeline.of(camelContext, routeId)
                 .orElseThrow(() -> new IllegalStateException("Route " + routeId
@@ -217,32 +219,6 @@ final class RouteEdge {
                 .order(AFTER_THE_GATE)
                 .handler(HttpEdgeBeans.bodyHandler(camelContext))
                 .handler(ctx -> serve(ctx, routeId)));
-    }
-
-    /**
-     * The route that consumes a mount's {@code direct:} endpoint.
-     *
-     * <p>A mount names the endpoint rather than the route id because that is what the declaring
-     * line had in its hand; the id is on the {@code from(...)} beside it. Camel normalises
-     * {@code direct:x} to {@code direct://x}, so the comparison is on what follows the scheme.
-     */
-    private String routeIdOf(String direct) {
-        String name = direct.substring(direct.indexOf(':') + 1).replaceFirst("^//", "");
-        // A compiled pipeline is addressed by the id the mount already names, so there is nothing
-        // to resolve (docs/camel-removal.md decision 1). The scan below is for the framework's own
-        // route builders, which still declare a consumer.
-        if (io.tesseraql.compiler.pipeline.Pipelines.of(camelContext).contains(name)) {
-            return name;
-        }
-        for (RouteDefinition definition : ((ModelCamelContext) camelContext)
-                .getRouteDefinitions()) {
-            String from = definition.getInput().getEndpointUri();
-            if (from != null && from.startsWith("direct:")
-                    && from.substring(from.indexOf(':') + 1).replaceFirst("^//", "").equals(name)) {
-                return definition.getRouteId();
-            }
-        }
-        return null;
     }
 
     /**
@@ -288,6 +264,14 @@ final class RouteEdge {
             try {
                 pipeline.run(exchange);
                 respond(ctx, connection, exchange);
+            } catch (Throwable unrendered) {
+                // A failure no clause claimed. The pipeline's envelope answers everything a route
+                // declares a handler for, and a route that declares none left the caller holding
+                // an open connection until it timed out — silence being the one answer an HTTP
+                // surface must never give. Found while giving every framework pipeline its clauses
+                // explicitly (docs/camel-removal.md slice 2b).
+                LOG.error("Route {} failed with nothing to render it", routeId, unrendered);
+                failed(ctx, connection);
             } finally {
                 if (inFlight.decrementAndGet() == 0) {
                     synchronized (idle) {
@@ -465,6 +449,24 @@ final class RouteEdge {
 
     private org.apache.camel.spi.HeaderFilterStrategy headerFilter() {
         return HttpEdgeBeans.headerFilter(camelContext);
+    }
+
+    /**
+     * The last-resort answer, so a hung connection is never the outcome.
+     *
+     * <p>Deliberately without detail: the failure that got here is by definition one nothing was
+     * written to describe, and the log is where its message belongs — the same rule
+     * {@code ErrorResponseRenderer} follows for every other failure.
+     */
+    private void failed(RoutingContext ctx, Context connection) {
+        connection.runOnContext(reply -> {
+            if (ctx.response().ended()) {
+                return;
+            }
+            ctx.response().setStatusCode(500)
+                    .putHeader("Content-Type", "application/json; charset=utf-8")
+                    .end(UNRENDERED_FAILURE);
+        });
     }
 
     private void respond(RoutingContext ctx, Context connection, Exchange exchange) {

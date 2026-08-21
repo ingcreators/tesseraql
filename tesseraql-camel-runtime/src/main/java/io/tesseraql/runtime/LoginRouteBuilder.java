@@ -3,6 +3,8 @@ package io.tesseraql.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.identity.PasswordAuthenticator;
 import io.tesseraql.identity.RealmConfig;
@@ -93,17 +95,19 @@ final class LoginRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", LOGIN_PATH, "direct:tql.login");
-        from("direct:tql.login").routeId("system.login").process(this::login);
+        HttpMounts.mount(getContext(), "POST", LOGIN_PATH, "system.login");
+        pipelines.pipeline("system.login").process(this::login);
 
         // Sign-out is a state change: a POST with the CSRF token, like its logout-device
         // and logout-others siblings — the CSRF-exempt GET is gone
         // (docs/vocabulary-cleanup.md slice 3).
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout", "direct:tql.logout");
-        from("direct:tql.logout").routeId("system.logout").process(this::logout);
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout", "system.logout");
+        pipelines.pipeline("system.logout").process(this::logout);
 
         // Sign out every session but this one (roadmap Phase 48, the account surface). A
         // state-changing browser POST outside the compiled route pipeline, so the CSRF check
@@ -112,13 +116,13 @@ final class LoginRouteBuilder extends RouteBuilder {
         // named by its handle. A Java route like logout-others, because only this layer
         // can read the cookie - and clear it when the revoked device was this one.
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout-device",
-                "direct:tql.logoutDevice");
-        from("direct:tql.logoutDevice").routeId("system.logout.device")
+                "system.logout.device");
+        pipelines.pipeline("system.logout.device")
                 .process(this::logoutDevice);
 
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/logout-others",
-                "direct:tql.logoutOthers");
-        from("direct:tql.logoutOthers").routeId("system.logout.others")
+                "system.logout.others");
+        pipelines.pipeline("system.logout.others")
                 .process(this::logoutOthers);
 
         // Just-in-time elevation (docs/access-governance.md structural decision 3). A Java
@@ -126,8 +130,9 @@ final class LoginRouteBuilder extends RouteBuilder {
         // cookie, and taking an eligible role has to reach the caller's own session — a
         // principal frozen at sign-in would otherwise hold the new role only after a
         // re-login, which makes the feature useless for its purpose.
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/account/elevate", "direct:tql.elevate");
-        from("direct:tql.elevate").routeId("system.account.elevate")
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/account/elevate",
+                "system.account.elevate");
+        pipelines.pipeline("system.account.elevate")
                 .process(this::elevate);
     }
 

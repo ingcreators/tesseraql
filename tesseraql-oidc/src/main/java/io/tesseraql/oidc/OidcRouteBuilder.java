@@ -3,6 +3,8 @@ package io.tesseraql.oidc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
@@ -87,18 +89,20 @@ final class OidcRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(OidcException.class).handled(true).process(this::unauthorized);
-        onException(Exception.class).handled(true).process(this::badRequest);
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(OidcException.class, this::unauthorized),
+                        Pipeline.Handler.catching(Exception.class, this::badRequest)));
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/login", "direct:tql.oidc.login");
-        from("direct:tql.oidc.login").routeId("system.oidc.login").process(this::login);
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/login", "system.oidc.login");
+        pipelines.pipeline("system.oidc.login").process(this::login);
 
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/callback",
-                "direct:tql.oidc.callback");
-        from("direct:tql.oidc.callback").routeId("system.oidc.callback").process(this::callback);
+                "system.oidc.callback");
+        pipelines.pipeline("system.oidc.callback").process(this::callback);
 
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/logout", "direct:tql.oidc.logout");
-        from("direct:tql.oidc.logout").routeId("system.oidc.logout").process(this::logout);
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/oidc/logout", "system.oidc.logout");
+        pipelines.pipeline("system.oidc.logout").process(this::logout);
     }
 
     /** Starts the flow: record state/nonce/PKCE and redirect to the OP authorization endpoint. */

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobRepository;
@@ -107,40 +109,42 @@ final class OperationsRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/jobs",
-                "direct:ops.batch.jobs");
+                "ops.batch.jobs");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/executions",
-                "direct:ops.batch.executions");
+                "ops.batch.executions");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/executions/{id}",
-                "direct:ops.batch.executionDetail");
+                "ops.batch.executionDetail");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/batch/jobs/{jobId}/run",
-                "direct:ops.batch.run");
+                "ops.batch.run");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/batch/executions/{id}/cancel",
-                "direct:ops.batch.cancel");
+                "ops.batch.cancel");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/batch/transfers/{id}/file",
-                "direct:ops.batch.transferFile");
+                "ops.batch.transferFile");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/console/transfers/{id}/file",
-                "direct:ops.console.transferFile");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/overview", "direct:ops.overview");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/lanes", "direct:ops.lanes");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/slow-sql", "direct:ops.slowSql");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces", "direct:ops.traces");
+                "ops.console.transferFile");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/overview", "ops.overview");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/lanes", "ops.lanes");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/slow-sql", "ops.slowSql");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces", "ops.traces");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces/tree",
-                "direct:ops.traceTree");
+                "ops.traceTree");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces/summary",
-                "direct:ops.traceSummary");
+                "ops.traceSummary");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/traces/metrics",
-                "direct:ops.traceMetrics");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/alerts", "direct:ops.alerts");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/pinning", "direct:ops.pinning");
+                "ops.traceMetrics");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/alerts", "ops.alerts");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/pinning", "ops.pinning");
         // The business-route audit trail read surface (roadmap Phase 45): bearer-gated and
         // narrowed to the caller's tql.ops.view.<name> grants like every ops read.
         if (routeAudit != null) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/audit", "direct:ops.audit");
-            from("direct:ops.audit").routeId("ops.audit")
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/audit", "ops.audit");
+            pipelines.pipeline("ops.audit")
                     .to(VIEW).process(requireAnyOpsView())
                     .process(jsonProcessor(
                             exchange -> routeAudit.recent(200, viewScope(exchange))));
@@ -149,18 +153,18 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // What each code catalog holds and a manual refresh (docs/lookups.md, decision 14).
         // The store is looked up per request rather than injected: an app with no catalogs/
         // simply answers an empty list, and the endpoints do not depend on start-up order.
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/catalogs", "direct:ops.catalogs");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/catalogs", "ops.catalogs");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/catalogs/{name}/refresh",
-                "direct:ops.catalogs.refresh");
+                "ops.catalogs.refresh");
         // The outbox delivery log and dead-letter redelivery (roadmap Phase 20).
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/outbox", "direct:ops.outbox");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/outbox", "ops.outbox");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/outbox/{id}/redeliver",
-                "direct:ops.outbox.redeliver");
+                "ops.outbox.redeliver");
         // The messaging-channel queue event log and dead-letter redelivery, mirroring the
         // outbox surface (docs/silent-tolerance.md O1).
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/events", "direct:ops.events");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/events", "ops.events");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/events/{id}/redeliver",
-                "direct:ops.events.redeliver");
+                "ops.events.redeliver");
         // Health for load balancers and deploy tooling (roadmap Phase 45): unauthenticated by
         // design, exposing only the status word - details stay behind the authorized ops API.
         // /health/live is pure liveness (the process answers; never touches a dependency);
@@ -175,8 +179,8 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // the scrape is authorized like the rest of the ops API unless the operator
         // explicitly opts a cluster-internal scraper out of auth.
         if (metrics != null && metrics.enabled()) {
-            HttpMounts.mount(getContext(), "GET", "/_tesseraql/metrics", "direct:ops.metrics");
-            var metricsRoute = from("direct:ops.metrics").routeId("ops.metrics");
+            HttpMounts.mount(getContext(), "GET", "/_tesseraql/metrics", "ops.metrics");
+            var metricsRoute = pipelines.pipeline("ops.metrics");
             if (!metrics.unauthenticated()) {
                 metricsRoute = metricsRoute.to(VIEW)
                         .to("tesseraql-auth:authorize?policy=ops.metrics.view");
@@ -196,7 +200,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
             });
         }
 
-        from("direct:ops.batch.jobs").routeId("ops.batch.jobs")
+        pipelines.pipeline("ops.batch.jobs")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     Predicate<String> scope = viewScope(exchange);
@@ -208,7 +212,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                             .toList();
                 }));
 
-        from("direct:ops.batch.executions").routeId("ops.batch.executions")
+        pipelines.pipeline("ops.batch.executions")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     Predicate<String> scope = viewScope(exchange);
@@ -218,17 +222,17 @@ final class OperationsRouteBuilder extends RouteBuilder {
                             .toList();
                 }));
 
-        from("direct:ops.batch.executionDetail").routeId("ops.batch.executionDetail")
+        pipelines.pipeline("ops.batch.executionDetail")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(this::executionDetail));
 
-        from("direct:ops.batch.run").routeId("ops.batch.run")
+        pipelines.pipeline("ops.batch.run")
                 .to(VIEW)
                 .process(jsonProcessor(this::runJob));
 
         // The cooperative stop (docs/jobs.md "Stopping a run"): sets the flag the running
         // executor polls at step and chunk-commit boundaries; gated like starting a run.
-        from("direct:ops.batch.cancel").routeId("ops.batch.cancel")
+        pipelines.pipeline("ops.batch.cancel")
                 .to(VIEW)
                 .process(jsonProcessor(this::cancelExecution));
 
@@ -237,55 +241,55 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // transfers listing; unknown and out-of-scope read the same (TQL-BATCH-4040). Two
         // faces, one handler: the API for machine callers, the console for the browser
         // session behind the transfers page.
-        from("direct:ops.batch.transferFile").routeId("ops.batch.transferFile")
+        pipelines.pipeline("ops.batch.transferFile")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(this::transferFile);
-        from("direct:ops.console.transferFile").routeId("ops.console.transferFile")
+        pipelines.pipeline("ops.console.transferFile")
                 .to(BROWSER).process(requireAnyOpsView())
                 .process(this::transferFile);
 
-        from("direct:ops.overview").routeId("ops.overview")
+        pipelines.pipeline("ops.overview")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.overview(20, viewScope(exchange))));
 
-        from("direct:ops.lanes").routeId("ops.lanes")
+        pipelines.pipeline("ops.lanes")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.overview(0).lanes()));
 
-        from("direct:ops.slowSql").routeId("ops.slowSql")
+        pipelines.pipeline("ops.slowSql")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.slowSql(),
                         OperationsRouteBuilder::sqlExecutionWire)));
 
-        from("direct:ops.traces").routeId("ops.traces")
+        pipelines.pipeline("ops.traces")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.traces(viewScope(exchange)),
                         OperationsRouteBuilder::spanWire)));
 
-        from("direct:ops.traceTree").routeId("ops.traceTree")
+        pipelines.pipeline("ops.traceTree")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(dashboard.traceTree(viewScope(exchange)),
                         OperationsRouteBuilder::traceNodeWire)));
 
-        from("direct:ops.traceSummary").routeId("ops.traceSummary")
+        pipelines.pipeline("ops.traceSummary")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceSummaries(
                         exchange.getMessage().getHeader("filter", String.class),
                         viewScope(exchange))));
 
-        from("direct:ops.traceMetrics").routeId("ops.traceMetrics")
+        pipelines.pipeline("ops.traceMetrics")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.traceMetrics()));
 
-        from("direct:ops.alerts").routeId("ops.alerts")
+        pipelines.pipeline("ops.alerts")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> dashboard.alerts()));
 
-        from("direct:ops.pinning").routeId("ops.pinning")
+        pipelines.pipeline("ops.pinning")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> pinningWire(dashboard.pinning())));
 
-        from("direct:ops.catalogs").routeId("ops.catalogs")
+        pipelines.pipeline("ops.catalogs")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
@@ -295,7 +299,7 @@ final class OperationsRouteBuilder extends RouteBuilder {
                                     .map(OperationsRouteBuilder::catalogStatusMap).toList();
                 }));
 
-        from("direct:ops.catalogs.refresh").routeId("ops.catalogs.refresh")
+        pipelines.pipeline("ops.catalogs.refresh")
                 .to(VIEW)
                 .process(jsonProcessor(exchange -> {
                     io.tesseraql.core.catalog.CatalogStore store = catalogStore(exchange);
@@ -318,21 +322,21 @@ final class OperationsRouteBuilder extends RouteBuilder {
                             .orElseThrow();
                 }));
 
-        from("direct:ops.outbox").routeId("ops.outbox")
+        pipelines.pipeline("ops.outbox")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(
                         actions.recentOutbox(viewScope(exchange)), this::outboxEventMap)));
 
-        from("direct:ops.outbox.redeliver").routeId("ops.outbox.redeliver")
+        pipelines.pipeline("ops.outbox.redeliver")
                 .to(VIEW)
                 .process(jsonProcessor(this::redeliverOutboxEvent));
 
-        from("direct:ops.events").routeId("ops.events")
+        pipelines.pipeline("ops.events")
                 .to(VIEW).process(requireAnyOpsView())
                 .process(jsonProcessor(exchange -> mapList(
                         actions.recentEvents(viewScope(exchange)), this::channelEventMap)));
 
-        from("direct:ops.events.redeliver").routeId("ops.events.redeliver")
+        pipelines.pipeline("ops.events.redeliver")
                 .to(VIEW)
                 .process(jsonProcessor(this::redeliverChannelEvent));
 
@@ -345,63 +349,63 @@ final class OperationsRouteBuilder extends RouteBuilder {
         // reach, never authority. A caller without tql.ops.view.<thisApp> is refused with the
         // 404-shaped TQL-BATCH-4040, the same answer an unknown resource gives.
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/overview",
-                "direct:ops.data.overview");
-        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/jobs", "direct:ops.data.jobs");
+                "ops.data.overview");
+        HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/jobs", "ops.data.jobs");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/traces",
-                "direct:ops.data.traces");
+                "ops.data.traces");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/transfers",
-                "direct:ops.data.transfers");
+                "ops.data.transfers");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/outbox",
-                "direct:ops.data.outbox");
+                "ops.data.outbox");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/events",
-                "direct:ops.data.events");
+                "ops.data.events");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/audit",
-                "direct:ops.data.audit");
+                "ops.data.audit");
         HttpMounts.mount(getContext(), "GET", "/_tesseraql/ops/data/executions/{id}",
-                "direct:ops.data.execution");
+                "ops.data.execution");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/data/jobs/run",
-                "direct:ops.data.jobRun");
+                "ops.data.jobRun");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/data/outbox/{id}/redeliver",
-                "direct:ops.data.outboxRedeliver");
+                "ops.data.outboxRedeliver");
         HttpMounts.mount(getContext(), "POST", "/_tesseraql/ops/data/events/{id}/redeliver",
-                "direct:ops.data.eventsRedeliver");
+                "ops.data.eventsRedeliver");
 
-        from("direct:ops.data.overview").routeId("ops.data.overview")
+        pipelines.pipeline("ops.data.overview")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.overview", Map.of())));
-        from("direct:ops.data.jobs").routeId("ops.data.jobs")
+        pipelines.pipeline("ops.data.jobs")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.jobs", Map.of())));
-        from("direct:ops.data.traces").routeId("ops.data.traces")
+        pipelines.pipeline("ops.data.traces")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.traces", Map.of())));
-        from("direct:ops.data.transfers").routeId("ops.data.transfers")
+        pipelines.pipeline("ops.data.transfers")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.transfers", Map.of())));
-        from("direct:ops.data.outbox").routeId("ops.data.outbox")
+        pipelines.pipeline("ops.data.outbox")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.outbox", Map.of())));
-        from("direct:ops.data.events").routeId("ops.data.events")
+        pipelines.pipeline("ops.data.events")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(
                         exchange -> invokeProvider(exchange, "ops.events", Map.of())));
-        from("direct:ops.data.audit").routeId("ops.data.audit")
+        pipelines.pipeline("ops.data.audit")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(exchange -> invokeProvider(exchange, "ops.audit",
                         headerParams(exchange, "route", "actor", "status"))));
-        from("direct:ops.data.execution").routeId("ops.data.execution")
+        pipelines.pipeline("ops.data.execution")
                 .to(BROWSER).process(requireMemberView())
                 .process(jsonProcessor(exchange -> invokeProvider(exchange, "ops.execution",
                         headerParams(exchange, "id"))));
         // Actions: CSRF-validated (the shell forwards the caller's X-CSRF-Token beside the
         // cookie), and the tql.ops.run.<name> check lives in the provider's run scope — out of
         // scope reads exactly like unknown.
-        from("direct:ops.data.jobRun").routeId("ops.data.jobRun")
+        pipelines.pipeline("ops.data.jobRun")
                 .to(BROWSER).to(CSRF)
                 .process(jsonProcessor(exchange -> {
                     Map<String, Object> values = new LinkedHashMap<>();
@@ -416,11 +420,11 @@ final class OperationsRouteBuilder extends RouteBuilder {
                     params.put("actor", principal == null ? null : principal.loginId());
                     return invokeProvider(exchange, "ops.jobRun", params);
                 }));
-        from("direct:ops.data.outboxRedeliver").routeId("ops.data.outboxRedeliver")
+        pipelines.pipeline("ops.data.outboxRedeliver")
                 .to(BROWSER).to(CSRF)
                 .process(jsonProcessor(exchange -> invokeProvider(exchange,
                         "ops.outboxRedeliver", headerParams(exchange, "id"))));
-        from("direct:ops.data.eventsRedeliver").routeId("ops.data.eventsRedeliver")
+        pipelines.pipeline("ops.data.eventsRedeliver")
                 .to(BROWSER).to(CSRF)
                 .process(jsonProcessor(exchange -> invokeProvider(exchange,
                         "ops.eventsRedeliver", headerParams(exchange, "id"))));

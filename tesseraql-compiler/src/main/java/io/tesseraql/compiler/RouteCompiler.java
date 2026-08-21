@@ -243,9 +243,9 @@ public final class RouteCompiler {
 
         String uploadId = def.id() + ".upload";
         if (onlyRouteIds == null || onlyRouteIds.contains(uploadId)) {
-            String direct = "direct:" + uploadId;
+            String served = uploadId;
             if (mountRest) {
-                mount(builder, "POST", basePath, direct);
+                mount(builder, "POST", basePath, served);
             }
             PipelineBuilder route = pipelines.pipeline(uploadId);
             applyAttachmentGovernance(route, uploadId, "POST", basePath, security);
@@ -255,9 +255,9 @@ public final class RouteCompiler {
 
         String listId = def.id() + ".list";
         if (onlyRouteIds == null || onlyRouteIds.contains(listId)) {
-            String direct = "direct:" + listId;
+            String served = listId;
             if (mountRest) {
-                mount(builder, "GET", basePath, direct);
+                mount(builder, "GET", basePath, served);
             }
             PipelineBuilder route = pipelines.pipeline(listId);
             applyAttachmentGovernance(route, listId, "GET", basePath, security);
@@ -268,9 +268,9 @@ public final class RouteCompiler {
         String downloadId = def.id() + ".download";
         if (onlyRouteIds == null || onlyRouteIds.contains(downloadId)) {
             String urlPath = basePath + "/{" + idParam + "}";
-            String direct = "direct:" + downloadId;
+            String served = downloadId;
             if (mountRest) {
-                mount(builder, "GET", urlPath, direct);
+                mount(builder, "GET", urlPath, served);
             }
             PipelineBuilder route = pipelines.pipeline(downloadId);
             applyAttachmentGovernance(route, downloadId, "GET", urlPath, security);
@@ -405,9 +405,9 @@ public final class RouteCompiler {
             io.tesseraql.compiler.binding.WorkflowBinding workflow) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
 
         PipelineBuilder route = pipelines.pipeline(routeId);
@@ -569,9 +569,9 @@ public final class RouteCompiler {
             }
             RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, security,
                     null, java.util.Map.of(), dispatchResponse());
-            String direct = "direct:" + routeId;
+            String served = routeId;
             if (mountRest) {
-                mount(builder, "POST", urlPath, direct);
+                mount(builder, "POST", urlPath, served);
             }
             String dialect = datasourceDialect(DEFAULT_DATASOURCE);
             PipelineBuilder route = pipelines.pipeline(routeId);
@@ -677,10 +677,10 @@ public final class RouteCompiler {
         if (onlyRouteIds != null && !onlyRouteIds.contains(routeId)) {
             return;
         }
-        String direct = "direct:" + routeId;
+        String served = routeId;
         String urlPath = basePath + "/{key}/delegate/{to}";
         if (mountRest) {
-            mount(builder, "POST", urlPath, direct);
+            mount(builder, "POST", urlPath, served);
         }
         RouteDefinition definition = RouteDefinition.synthesizedCommand(routeId, def.security(),
                 null, java.util.Map.of(), workflowResponse());
@@ -808,7 +808,7 @@ public final class RouteCompiler {
                     + "': queue-consume mounts no sources: — the pipeline is its steps:");
         }
         String routeId = "queue." + definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
                 definition);
@@ -861,9 +861,9 @@ public final class RouteCompiler {
                         appHome, null, null)
                 : spec.toWriteSpec(template, appHome);
 
-        String direct = "direct:" + routeId;
+        String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
         Path sqlPath = routeDir.resolve(definition.main().file()).normalize();
         // The export URI is hand-built because its mode and filename are not a binding's, but it
@@ -909,9 +909,9 @@ public final class RouteCompiler {
         Path rowSql = routeFile.source().getParent()
                 .resolve(definition.rowStep().file()).normalize();
 
-        String direct = "direct:" + routeId;
+        String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -943,9 +943,9 @@ public final class RouteCompiler {
                 ? null
                 : routeDir.resolve(spec.template()).normalize();
 
-        String direct = "direct:" + routeId;
+        String served = routeId;
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, routeFile);
@@ -969,9 +969,8 @@ public final class RouteCompiler {
                 enrichProcessors(routeDir, definition)));
         mountTransferStatus(builder, routeFile, routeId);
 
-        String fileDirect = "direct:" + routeId + ".file";
         if (mountRest) {
-            mount(builder, "GET", routeFile.urlPath() + "/{transferId}/file", fileDirect);
+            mount(builder, "GET", routeFile.urlPath() + "/{transferId}/file", routeId + ".file");
         }
         PipelineBuilder fileRoute = pipelines.pipeline(routeId + ".file");
         applySecurity(fileRoute, definition.security(), "GET",
@@ -988,9 +987,8 @@ public final class RouteCompiler {
 
     /** GET {path}/{transferId}: the shared status endpoint, secured like its parent route. */
     private void mountTransferStatus(RouteBuilder builder, RouteFile routeFile, String routeId) {
-        String direct = "direct:" + routeId + ".status";
         if (mountRest) {
-            mount(builder, "GET", routeFile.urlPath() + "/{transferId}", direct);
+            mount(builder, "GET", routeFile.urlPath() + "/{transferId}", routeId + ".status");
         }
         PipelineBuilder route = pipelines.pipeline(routeId + ".status");
         applySecurity(route, routeFile.definition().security(), "GET",
@@ -1076,10 +1074,10 @@ public final class RouteCompiler {
     private PipelineBuilder pipelineThroughSql(RouteBuilder builder, RouteFile routeFile) {
         RouteDefinition definition = routeFile.definition();
         String routeId = definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
 
         if (mountRest) {
-            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), direct);
+            mount(builder, routeFile.httpMethod(), routeFile.urlPath(), served);
         }
 
         PipelineBuilder route = pipelines.pipeline(routeId);
@@ -1232,7 +1230,7 @@ public final class RouteCompiler {
         RouteDefinition definition = toolFile.definition();
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "MCP", "/" + definition.id(), definition);
@@ -1295,7 +1293,7 @@ public final class RouteCompiler {
         RouteDefinition definition = resourceFile.definition();
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
@@ -1331,7 +1329,7 @@ public final class RouteCompiler {
         RouteDefinition definition = uiFile.definition();
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
@@ -1387,7 +1385,7 @@ public final class RouteCompiler {
                     + " returns, so there is nothing to answer with");
         }
         String routeId = "mcp.prompt." + definition.id();
-        String direct = "direct:" + routeId;
+        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "MCP-PROMPT", "/" + definition.id(),
@@ -1908,11 +1906,11 @@ public final class RouteCompiler {
      * edge applies it at the mount, which is the one place that now knows about URLs at all
      * (docs/base-path.md decision 5).
      */
-    private void mount(RouteBuilder builder, String method, String path, String direct) {
+    private void mount(RouteBuilder builder, String method, String path, String pipeline) {
         String wirePath = io.tesseraql.compiler.binding.WireNames.wirePath(path);
         switch (method) {
             case "GET", "POST", "PUT", "PATCH", "DELETE" -> io.tesseraql.camel.HttpMounts
-                    .mount(builder.getContext(), method, wirePath, direct);
+                    .mount(builder.getContext(), method, wirePath, pipeline);
             default ->
                 throw new TqlException(UNSUPPORTED_RECIPE, "Unsupported HTTP method: " + method);
         }

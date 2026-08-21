@@ -3,6 +3,8 @@ package io.tesseraql.studio.runtime;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -46,16 +48,18 @@ final class CopilotRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", page + "/send", "direct:tql.copilot.send");
+        HttpMounts.mount(getContext(), "POST", page + "/send", "tql.copilot.send");
 
         // The chat-messages recipe's dual-path send: an htmx caller gets the user item, the
         // streaming placeholder, and an out-of-band composer clear; a no-JS post runs the
         // blocking loop and lands back on the page (post/redirect/get) — the old behavior,
         // now the fallback.
-        from("direct:tql.copilot.send").routeId("tql.copilot.send")
+        pipelines.pipeline("tql.copilot.send")
                 .to(AUTH).to("tesseraql-auth:csrf").process(exchange -> {
                     requireCopilot();
                     String message = requireMessage(exchange);

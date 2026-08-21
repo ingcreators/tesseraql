@@ -60,5 +60,10 @@ public record Pipeline(String id, List<Step> steps, List<Handler> handlers, int 
         public Handler {
             caught = List.copyOf(caught);
         }
+
+        /** One clause, spelled the way a route builder spells it. */
+        public static Handler catching(Class<? extends Throwable> type, Processor renderer) {
+            return new Handler(List.of(type.getName()), renderer);
+        }
     }
 }

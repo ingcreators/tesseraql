@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.camel.HttpMounts;
 import io.tesseraql.camel.TesseraqlProperties;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
+import io.tesseraql.compiler.pipeline.Pipeline;
+import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -60,11 +62,13 @@ final class DeployRouteBuilder extends RouteBuilder {
 
     @Override
     public void configure() {
-        onException(TqlException.class).handled(true).process(new ErrorResponseRenderer());
-        onException(Exception.class).handled(true).process(new ErrorResponseRenderer());
+        Pipelines.Compilation pipelines = Pipelines.of(getContext())
+                .compiling(java.util.List.of(
+                        Pipeline.Handler.catching(TqlException.class, new ErrorResponseRenderer()),
+                        Pipeline.Handler.catching(Exception.class, new ErrorResponseRenderer())));
 
-        HttpMounts.mount(getContext(), "POST", "/_tesseraql/deploy", "direct:tql.deploy");
-        from("direct:tql.deploy").routeId("system.deploy").process(this::deploy);
+        HttpMounts.mount(getContext(), "POST", "/_tesseraql/deploy", "system.deploy");
+        pipelines.pipeline("system.deploy").process(this::deploy);
     }
 
     private void deploy(Exchange exchange) throws Exception {

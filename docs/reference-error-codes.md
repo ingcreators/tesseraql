@@ -135,7 +135,7 @@ All 556 `TQL-*` codes, scanned from the framework sources on every refresh and g
 | `TQL-CAMEL-3115` | the target of an enrich: is not a result set with rows. | — | [EnrichProcessor.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/EnrichProcessor.java) |
 | `TQL-CAMEL-3116` | a prompt-text recipe declares command steps, and prompts/get is a read. | [app-mcp](app-mcp.md) | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) |
 | `TQL-CAMEL-3117` | a prompt-text recipe declares no response.text: to render its message. | — | [RouteCompiler.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java) |
-| `TQL-CAMEL-5000` | an unexpected internal error — the failure carried no TesseraQL error code (HTTP 500). | — | [ErrorResponseRenderer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/ErrorResponseRenderer.java) |
+| `TQL-CAMEL-5000` | an unexpected internal error — the failure carried no TesseraQL error code (HTTP 500). | — | [RouteEdge.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-camel-runtime/src/main/java/io/tesseraql/runtime/RouteEdge.java), [ErrorResponseRenderer.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-compiler/src/main/java/io/tesseraql/compiler/binding/ErrorResponseRenderer.java) |
 
 ## DECISION
 

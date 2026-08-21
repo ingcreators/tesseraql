@@ -18,10 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
-import org.apache.camel.model.ModelCamelContext;
-import org.apache.camel.model.ProcessorDefinition;
-import org.apache.camel.model.RouteDefinition;
-import org.apache.camel.model.ToDefinition;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -286,34 +282,13 @@ class FrameworkSurfaceGuardTest {
      * server cannot disagree about where a surface answers.
      */
     private static Map<String, Mounted> frameworkMounts() {
-        ModelCamelContext model = runtime.camelContext().getCamelContextExtension()
-                .getContextPlugin(ModelCamelContext.class);
-        Map<String, String> byDirect = new LinkedHashMap<>();
-        for (RouteDefinition route : model.getRouteDefinitions()) {
-            if (route.getInput() == null) {
-                continue;
-            }
-            String uri = route.getInput().getEndpointUri();
-            if (uri != null && uri.startsWith("direct:")) {
-                byDirect.put(directName(uri), route.getRouteId());
-            }
-        }
         Map<String, Mounted> framework = new LinkedHashMap<>();
         for (io.tesseraql.camel.HttpMounts.Mount mount : io.tesseraql.camel.HttpMounts
                 .all(runtime.camelContext())) {
-            String name = directName(mount.direct());
-            // Either kind: the framework's own builders still declare a consumer, and a bundled
-            // system app's routes are compiled pipelines addressed by the id the mount names
-            // (docs/camel-removal.md decision 1). Reading only one of the two is how this guard
-            // would quietly stop covering a surface that had merely changed how it is served.
-            String routeId = pipelines().contains(name) ? name : byDirect.get(name);
-            if (routeId == null) {
-                continue;
-            }
             String path = java.net.URLDecoder.decode(mount.path(),
                     java.nio.charset.StandardCharsets.UTF_8);
             if (FRAMEWORK_PATHS.stream().anyMatch(path::startsWith)) {
-                framework.put(routeId, new Mounted(mount.method(), path));
+                framework.put(mount.pipeline(), new Mounted(mount.method(), path));
             }
         }
         return framework;
@@ -321,10 +296,6 @@ class FrameworkSurfaceGuardTest {
 
     private static io.tesseraql.compiler.pipeline.Pipelines pipelines() {
         return io.tesseraql.compiler.pipeline.Pipelines.of(runtime.camelContext());
-    }
-
-    private static String directName(String uri) {
-        return uri.substring(uri.indexOf(':') + 1).replaceFirst("^//", "");
     }
 
     /** The verb and path a framework route actually answers on. */
@@ -340,38 +311,20 @@ class FrameworkSurfaceGuardTest {
         return mounted;
     }
 
-    /** The authentication steps a route runs, read from whichever model holds its chain. */
+    /** The authentication steps a pipeline runs, read from what the compiler emitted. */
     private static List<String> authSteps(String routeId) {
-        java.util.Optional<io.tesseraql.compiler.pipeline.Pipeline> compiled = pipelines()
-                .find(routeId);
-        if (compiled.isPresent()) {
-            List<String> found = new ArrayList<>();
-            for (io.tesseraql.compiler.pipeline.Pipeline.Step step : compiled.get().steps()) {
-                if (step instanceof io.tesseraql.compiler.pipeline.Pipeline.Step.Send send
-                        && send.uri().startsWith("tesseraql-auth:")) {
-                    found.add(send.uri().substring("tesseraql-auth:".length()));
-                }
-            }
+        List<String> found = new ArrayList<>();
+        io.tesseraql.compiler.pipeline.Pipeline compiled = pipelines().find(routeId).orElse(null);
+        if (compiled == null) {
             return found;
         }
-        ModelCamelContext model = runtime.camelContext().getCamelContextExtension()
-                .getContextPlugin(ModelCamelContext.class);
-        RouteDefinition route = model.getRouteDefinition(routeId);
-        List<String> found = new ArrayList<>();
-        if (route != null) {
-            collectAuth(route.getOutputs(), found);
+        for (io.tesseraql.compiler.pipeline.Pipeline.Step step : compiled.steps()) {
+            if (step instanceof io.tesseraql.compiler.pipeline.Pipeline.Step.Send send
+                    && send.uri().startsWith("tesseraql-auth:")) {
+                found.add(send.uri().substring("tesseraql-auth:".length()));
+            }
         }
         return found;
-    }
-
-    private static void collectAuth(List<ProcessorDefinition<?>> outputs, List<String> found) {
-        for (ProcessorDefinition<?> output : outputs) {
-            if (output instanceof ToDefinition to && to.getEndpointUri() != null
-                    && to.getEndpointUri().startsWith("tesseraql-auth:")) {
-                found.add(to.getEndpointUri().substring("tesseraql-auth:".length()));
-            }
-            collectAuth(output.getOutputs(), found);
-        }
     }
 
     private static void copy(Path source, Path target, Path path) {
