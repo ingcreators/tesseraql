@@ -2,9 +2,9 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
-import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -14,7 +14,7 @@ class PageHeadersTest {
 
     private static Exchange exchange(Map<String, Object> page, String uri, String query) {
         Exchange exchange = new Exchange(
-                new RuntimeContext().beans());
+                Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of("page", page));
         exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
         exchange.getMessage().setHeader(Headers.HTTP_QUERY, query);

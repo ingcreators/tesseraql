@@ -114,7 +114,7 @@ public final class OAuthRuntimeExtension implements RuntimeExtension {
             registerConsentReview(context, flow);
         }
         new OAuthRouteBuilder(keys, accessTokenLifetime, flow,
-                sessions, provider, store).install(context.camel());
+                sessions, provider, store).install(context.runtime());
     }
 
     /**

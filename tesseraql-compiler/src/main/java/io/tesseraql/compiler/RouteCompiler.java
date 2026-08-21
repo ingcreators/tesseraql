@@ -803,7 +803,6 @@ public final class RouteCompiler {
                     + "': queue-consume mounts no sources: — the pipeline is its steps:");
         }
         String routeId = "queue." + definition.id();
-        String served = routeId;
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "QUEUE", "/" + definition.id(),
                 definition);
@@ -1226,7 +1225,6 @@ public final class RouteCompiler {
         RouteDefinition definition = toolFile.definition();
         Path toolDir = toolFile.source().getParent();
         String routeId = "mcp." + definition.id();
-        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "MCP", "/" + definition.id(), definition);
@@ -1289,7 +1287,6 @@ public final class RouteCompiler {
         RouteDefinition definition = resourceFile.definition();
         Path resourceDir = resourceFile.source().getParent();
         String routeId = "mcp.resource." + definition.id();
-        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
@@ -1325,7 +1322,6 @@ public final class RouteCompiler {
         RouteDefinition definition = uiFile.definition();
         Path uiDir = uiFile.source().getParent();
         String routeId = "mcp.ui." + definition.id();
-        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         route.process(new io.tesseraql.compiler.binding.RouteTelemetry(
@@ -1381,7 +1377,6 @@ public final class RouteCompiler {
                     + " returns, so there is nothing to answer with");
         }
         String routeId = "mcp.prompt." + definition.id();
-        String served = routeId;
 
         PipelineBuilder route = pipelines.pipeline(routeId);
         applyCommonGovernance(route, definition.id(), "MCP-PROMPT", "/" + definition.id(),

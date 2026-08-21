@@ -106,7 +106,7 @@ public final class SamlRuntimeExtension implements RuntimeExtension {
                 validator, mapping, sessions, linker, metadata, endpoints, security,
                 context.bean(TesseraqlProperties.CREDENTIAL_THROTTLE_BEAN,
                         io.tesseraql.security.throttle.CredentialThrottle.class))
-                .install(context.camel());
+                .install(context.runtime());
     }
 
     /**

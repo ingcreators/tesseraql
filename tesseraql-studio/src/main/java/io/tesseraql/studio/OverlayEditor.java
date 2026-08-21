@@ -427,7 +427,7 @@ final class OverlayEditor {
 
     /**
      * The curated set of settings the Studio config editor may change. Deliberately limited to safe,
-     * scalar, restart-to-apply keys — engine-critical sections (datasources, camel, security auth)
+     * scalar, restart-to-apply keys — engine-critical sections (datasources, connectors, security auth)
      * are never editable here.
      */
     private static final List<ConfigSetting> EDITABLE_SETTINGS = List.of(

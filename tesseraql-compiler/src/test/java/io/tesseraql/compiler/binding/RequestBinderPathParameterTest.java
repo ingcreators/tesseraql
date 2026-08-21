@@ -26,17 +26,17 @@ import org.junit.jupiter.api.Test;
  */
 class RequestBinderPathParameterTest {
 
-    private static RuntimeContext camel;
+    private static RuntimeContext context;
 
     @BeforeAll
     static void start() throws Exception {
-        camel = new RuntimeContext();
-        camel.start();
+        context = new RuntimeContext();
+        context.start();
     }
 
     @AfterAll
     static void stop() {
-        camel.close();
+        context.close();
     }
 
     private static final RouteDefinition UNTYPED = route("""
@@ -70,7 +70,7 @@ class RequestBinderPathParameterTest {
     }
 
     private static Exchange request(String uri, String body, Map<String, Object> headers) {
-        Exchange exchange = new Exchange(camel.beans());
+        Exchange exchange = new Exchange(context.beans());
         if (uri != null) {
             exchange.getMessage().setHeader(Headers.HTTP_URI, uri);
         }

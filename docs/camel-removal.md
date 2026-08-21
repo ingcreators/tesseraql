@@ -313,6 +313,18 @@ when the reason for the absence disappears.** It now asserts both halves — cla
 unclaimed ones warned — and what surfaced the defect was not a test at all but a *comment*
 explaining the exemption, read while renaming the word `Camel` out of it.
 
+**The scaffold told every new application about a control that no longer exists, and the guard
+against exactly that could not see it.** `tesseraql new` wrote a comment into each generated
+`application.yml` promising that dangerous components "are refused by a built-in baseline whether
+or not anything is configured", pointing at a design doc for a control retired in 6b. Not a stale
+string — a false security promise, in the one file an author reads first.
+
+`ScaffoldedConfigKeysTest` exists to make "emitted but never read" configuration unrepresentable
+(docs/config-consumers.md). It renders the real templates and parses them **as YAML**, so a
+commented-out key is invisible to it. The most reliable way to ship configuration that lies is to
+ship it as a comment. Recorded rather than fixed with a new guard: the registry checks live keys,
+and widening it to prose is a different design than this campaign should decide.
+
 **Then the same defect caught me, inside the slice that documented it.** The package rename was
 verified by a compiler across 146 source files — and left two `RuntimeExtension` descriptors
 naming the old package, because descriptors are resources. It surfaced as a

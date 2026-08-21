@@ -284,14 +284,6 @@ public final class AppScaffolder {
                 # (docs/studio-shell.md), and a hosted production stack mounts no Studio at all.
                 enabled: ${TESSERAQL_STUDIO_ENABLED:true}
 
-              # Camel components: dangerous ones (exec, script, groovy, class, ...) are refused
-              # by a built-in baseline whether or not anything is configured
-              # (docs/component-guard.md). To NARROW further, declare an allow list:
-              #
-              # camel:
-              #   components:
-              #     allowed: [smtp]   # beyond the framework's own components
-
               sessions:
                 # Browser-session posture (docs/session-visibility.md): the absolute lifetime
                 # defaults to 12h; idleTimeout additionally ends a session unseen for this

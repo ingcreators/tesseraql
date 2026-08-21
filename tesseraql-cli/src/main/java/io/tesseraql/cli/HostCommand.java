@@ -17,7 +17,7 @@ import picocli.CommandLine.Option;
  * there is no {@code --app} here: serving an application "on its own" gave it a second address,
  * and one application has one address (docs/stack-architecture.md decision 12).
  *
- * <p>Each app keeps its own Camel context, datasource set, Studio, and traces; what they share is
+ * <p>Each app keeps its own runtime context, datasource set, Studio, and traces; what they share is
  * the process and whatever database their configurations happen to name — the framework enables
  * that separation and never guarantees it, because an application's configuration is not the
  * authority on its connection (docs/app-isolation-model.md decision 3).

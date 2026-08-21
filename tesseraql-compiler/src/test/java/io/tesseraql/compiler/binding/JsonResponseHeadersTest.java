@@ -2,9 +2,9 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
-import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec;
 import java.util.LinkedHashMap;
@@ -30,7 +30,7 @@ class JsonResponseHeadersTest {
     private static Exchange render(ResponseSpec.JsonResponse response,
             Map<String, Object> context) throws Exception {
         Exchange exchange = new Exchange(
-                new RuntimeContext().beans());
+                Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         new JsonResponseRenderer(response).process(exchange);
         return exchange;

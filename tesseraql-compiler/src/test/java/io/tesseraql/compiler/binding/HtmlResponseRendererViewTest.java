@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import io.tesseraql.yaml.model.RouteDefinition;
@@ -63,7 +63,7 @@ class HtmlResponseRendererViewTest {
     private static Exchange exchangeFor(HtmlResponseRenderer renderer,
             Map<String, Object> context, Map<String, String> requestHeaders) throws Exception {
         Exchange exchange = new Exchange(
-                new RuntimeContext().beans());
+                Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         requestHeaders.forEach((name, value) -> exchange.getMessage().setHeader(name, value));
         renderer.process(exchange);

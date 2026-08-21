@@ -3,8 +3,8 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.core.expr.EvaluationContext;
+import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
-import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.yaml.model.ResponseSpec.HtmlResponse;
 import java.nio.file.Files;
@@ -87,7 +87,7 @@ class HtmlResponseRendererTest {
                 dir);
 
         Exchange exchange = new Exchange(
-                new RuntimeContext().beans());
+                Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT,
                 Map.of("result", Map.of("message", "Saved")));
         renderer.process(exchange);
@@ -122,7 +122,7 @@ class HtmlResponseRendererTest {
     private static Exchange exchange(Path dir, Map<String, Object> context,
             HtmlResponseRenderer renderer) throws Exception {
         Exchange exchange = new Exchange(
-                new RuntimeContext().beans());
+                Beans.NONE);
         exchange.setProperty(TesseraqlProperties.CONTEXT, context);
         renderer.process(exchange);
         return exchange;

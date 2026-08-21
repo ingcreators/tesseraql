@@ -18,21 +18,21 @@ import org.junit.jupiter.api.Test;
 
 class TenantResolutionTest {
 
-    private static RuntimeContext camel;
+    private static RuntimeContext context;
 
     @BeforeAll
     static void start() throws Exception {
-        camel = new RuntimeContext();
-        camel.start();
+        context = new RuntimeContext();
+        context.start();
     }
 
     @AfterAll
     static void stop() {
-        camel.close();
+        context.close();
     }
 
     private static Exchange exchange() {
-        return new Exchange(camel.beans());
+        return new Exchange(context.beans());
     }
 
     @Test

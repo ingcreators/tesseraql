@@ -16,24 +16,24 @@ import org.junit.jupiter.api.Test;
 
 class LocaleResolutionTest {
 
-    private static RuntimeContext camel;
+    private static RuntimeContext context;
 
     @BeforeAll
     static void start() throws Exception {
-        camel = new RuntimeContext();
-        camel.start();
+        context = new RuntimeContext();
+        context.start();
     }
 
     @AfterAll
     static void stop() {
-        camel.close();
+        context.close();
     }
 
     private static final I18nSettings SETTINGS = new I18nSettings("en", List.of("en", "ja"),
             List.of("principal.claim.locale"), MessageCatalog.empty());
 
     private static Exchange exchange() {
-        return new Exchange(camel.beans());
+        return new Exchange(context.beans());
     }
 
     private static String resolved(Exchange exchange) {
@@ -91,7 +91,7 @@ class LocaleResolutionTest {
     /** The stored account preference (roadmap Phase 48) beats the IdP claim in default order. */
     @Test
     void storedPreferenceBeatsThePrincipalClaim() {
-        camel.bind(TesseraqlProperties.PREFERENCE_STORE_BEAN,
+        context.bind(TesseraqlProperties.PREFERENCE_STORE_BEAN,
                 new io.tesseraql.core.account.PreferenceStore() {
                     @Override
                     public Map<String, String> preferences(String tenantId, String subject) {
@@ -120,7 +120,7 @@ class LocaleResolutionTest {
             assertThat(exchange.getProperty(TesseraqlProperties.LOCALE, String.class))
                     .isEqualTo("ja");
         } finally {
-            camel.unbind(TesseraqlProperties.PREFERENCE_STORE_BEAN);
+            context.unbind(TesseraqlProperties.PREFERENCE_STORE_BEAN);
         }
     }
 
