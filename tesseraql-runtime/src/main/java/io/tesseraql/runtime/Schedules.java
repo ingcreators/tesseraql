@@ -155,7 +155,6 @@ final class Schedules implements RuntimeContext.Service {
     @Override
     public void stop() {
         running = false;
-        running = false;
         List<Thread> stopping;
         synchronized (workers) {
             stopping = List.copyOf(workers);

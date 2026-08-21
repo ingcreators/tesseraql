@@ -64,12 +64,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class AssetRoutes implements RuntimeContext.Service {
 
     /**
-     * Running from the moment it exists: this service has nothing to start, and is registered so
-     * that something stops it (docs/camel-removal.md decision 2).
-     */
-    private volatile boolean running = true;
-
-    /**
      * After the admission gate, before every route Camel registered.
      *
      * <p>The gate skips this prefix: it bounds work that occupies a worker, and an asset no longer
@@ -143,8 +137,10 @@ final class AssetRoutes implements RuntimeContext.Service {
      * and the JDK compensates its carriers rather than letting the blocking spread. No second permit guards it — the admission gate deliberately
      * does not bound assets, and a bound here would be that refusal under another name.
      *
-     * <p>Registered as a Camel service so it is shut down when the context is, which matters to a
-     * host that stops and replaces one application while the process keeps running.
+     * <p>This executor is the whole reason the class is a service: there is nothing here to start,
+     * and it is registered so that something shuts these threads down when the context goes
+     * (docs/camel-removal.md decision 2), which matters to a host that stops and replaces one
+     * application while the process keeps running.
      */
     private final ExecutorService storage = Executors.newThreadPerTaskExecutor(
             Thread.ofVirtual().name("tql-asset-io-", 0).factory());
@@ -181,7 +177,6 @@ final class AssetRoutes implements RuntimeContext.Service {
 
     @Override
     public void stop() {
-        running = false;
         storage.shutdownNow();
     }
 

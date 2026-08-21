@@ -28,7 +28,6 @@ class PgNotifyListenerTest {
     private static final TqlErrorCode BOOM = new TqlErrorCode(TqlDomain.BATCH, 5312);
 
     @Test
-    @SuppressWarnings("resource") // the listener is released through stop(), in the finally
     void aFailingDrainReleasesTheListenConnection() throws Exception {
         AtomicInteger opened = new AtomicInteger();
         AtomicInteger closed = new AtomicInteger();

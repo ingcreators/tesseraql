@@ -48,7 +48,6 @@ final class PgNotifyListener implements RuntimeContext.Service {
     @Override
     public void start() {
         running = true;
-        running = true;
         thread = new Thread(this::run, "tql-pg-notify");
         thread.setDaemon(true);
         thread.start();
@@ -57,7 +56,6 @@ final class PgNotifyListener implements RuntimeContext.Service {
 
     @Override
     public void stop() {
-        running = false;
         running = false;
         Thread current = thread;
         if (current != null) {
