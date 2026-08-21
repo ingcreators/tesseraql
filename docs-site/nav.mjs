@@ -265,4 +265,6 @@ export const EXCLUDED = [
   'contract-sql-execution.md',
   // Which library owns the socket and which thread a request pipeline runs on, 2026-08-20.
   'http-edge.md',
+  // Taking Camel out of the build entirely: pipelines, schedules, connectors, 2026-08-21.
+  'camel-removal.md',
 ];
