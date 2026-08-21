@@ -548,7 +548,7 @@ final class ErrorIndex {
             "module-scope.md", "runtime-replace.md", "stack-shells.md",
             "application-roles.md", "studio-shell.md", "module-channel.md",
             "access-governance.md", "http-threading.md", "contract-sql-execution.md",
-            "http-edge.md");
+            "http-edge.md", "camel-removal.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
